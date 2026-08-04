@@ -1,10 +1,10 @@
 <div class="data-requirements-viewer">
   @if (!hasData) {
-    <div class="empty-state">
-      <i class="fas fa-database"></i>
-      <h3>No Data Requirements</h3>
-      <p>This component doesn't have any data requirements defined.</p>
-    </div>
+    <mj-empty-state
+      Icon="fa-solid fa-database"
+      Title="No Data Requirements"
+      Message="This component doesn't have any data requirements defined."
+      Size="compact" />
   } @else {
     <!-- Header Summary -->
     <div class="summary-header">

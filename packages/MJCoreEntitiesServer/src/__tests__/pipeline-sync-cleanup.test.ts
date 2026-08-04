@@ -97,28 +97,38 @@ describe('Pipeline sync stage — stale record cleanup', () => {
     });
 
     describe('when extraction produces no fields (finalFields is null)', () => {
-        it('should call RemoveAllRecords for Query Fields', async () => {
-            // LLM returns no selectClause → finalFields will be null
+        it('should preserve existing fields (NOT call RemoveAllRecords) when finalFields is null', async () => {
+            // Use a SQL statement that produces no parseable SELECT columns (e.g., EXEC)
+            // so that both deterministic extraction AND LLM return null.
             mockRunLLMEnrichment.mockResolvedValue(null);
 
-            const ctx = buildCtx('SELECT col1 FROM SomeTable WHERE x = 1');
+            const ctx = buildCtx('EXEC sp_SomeStoredProc @Param1 = 1');
             await RunExtractionPipeline(ctx);
 
-            // Verify RemoveAllRecords was called for fields
+            // With the fix: when finalFields is null, existing fields are preserved
             const fieldCleanupCall = mockRemoveAllRecords.mock.calls.find(
                 (call: unknown[]) => call[1] === 'MJ: Query Fields'
             );
-            expect(fieldCleanupCall).toBeDefined();
-            expect(fieldCleanupCall![0]).toBe(QUERY_ID);
+            expect(fieldCleanupCall).toBeUndefined();
+            expect(mockSyncFields).not.toHaveBeenCalled();
         });
+    });
 
-        it('should NOT call SyncFields when there are no fields to sync', async () => {
+    describe('when deterministic extraction produces fields (even without LLM)', () => {
+        it('should call SyncFields with deterministic fields when LLM is null', async () => {
+            // SELECT col1 produces deterministic fields via BuildFieldsFromSelectColumns
             mockRunLLMEnrichment.mockResolvedValue(null);
 
             const ctx = buildCtx('SELECT col1 FROM SomeTable WHERE x = 1');
             await RunExtractionPipeline(ctx);
 
-            expect(mockSyncFields).not.toHaveBeenCalled();
+            expect(mockSyncFields).toHaveBeenCalled();
+
+            // RemoveAllRecords should NOT be called for fields
+            const fieldCleanupCall = mockRemoveAllRecords.mock.calls.find(
+                (call: unknown[]) => call[1] === 'MJ: Query Fields'
+            );
+            expect(fieldCleanupCall).toBeUndefined();
         });
     });
 

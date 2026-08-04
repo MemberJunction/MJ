@@ -1,4 +1,13 @@
-@if (loading) {
-  <mj-loading [showText]="false" size="large"></mj-loading>
-}
-<ng-template mjContainer></ng-template>
+<mj-entity-form-host
+  [EntityName]="entityName"
+  [PrimaryKey]="PrimaryKey"
+  [NewRecordValues]="newRecordValues"
+  [Provider]="Provider"
+  (LoadComplete)="onLoadComplete()"
+  (LoadError)="onLoadComplete()"
+  (RecordReady)="onRecordReady($event)"
+  (Saved)="onSaved($event)"
+  (Navigate)="handleNavigation($event)"
+  (Notification)="onNotification($event)"
+  (Dismissed)="recordDismissed.emit()">
+</mj-entity-form-host>

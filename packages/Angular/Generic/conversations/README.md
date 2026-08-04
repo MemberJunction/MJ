@@ -2,6 +2,20 @@
 
 A comprehensive Angular component library for building conversation-based interfaces in MemberJunction, including messaging, artifact management, collections, projects, tasks, agent interaction panels, and collaboration features.
 
+> **Layering note.** The orchestration logic (agent dispatch, default-agent resolution, mention parsing, bridge state, streaming, client tools, sessions observability) lives in **`@memberjunction/conversations-runtime`** — a pure-TS, framework-agnostic package. This widget is one consumer of the runtime; React/Vue/Node hosts are also intended consumers. The widget is automatically wired to the runtime via `ConversationsRuntimeBootstrap` (registered `providedIn: 'root'`), which injects adapters for notifications, active-task tracking, and realtime sessions. See [`guides/CONVERSATIONS_UX_STACK_GUIDE.md`](../../../../guides/CONVERSATIONS_UX_STACK_GUIDE.md) for the full architecture.
+
+## Customization without forking
+
+The widget exposes three layers of extension:
+
+| Surface | What it lets you do |
+|---|---|
+| **7 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates — or ADD to the default header with `headerActions` (renders inside the default header's action strip, after the stock buttons; suppressed when a full `header` replacement is projected). Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
+| **Before/After cancelable events** | `(beforeAgentTurn)`, `(beforeToolInvoked)`, `(beforeResponseFormSubmitted)` let you observe AND veto (`event.Cancel = true`) before the action runs. Plus informational `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` for realtime lifecycle. |
+| **`--mj-chat-*` design tokens** | Override bubble colors, composer chrome, character accents, and voice-state hues via standard CSS custom-property overrides. Defaults adapt to dark mode through semantic `--mj-*` tokens. |
+
+Slot interfaces + cloneable default components + the `ChatSlotDirective` are exported — see the public API.
+
 ## Overview
 
 The `@memberjunction/ng-conversations` package is a large, feature-rich module that powers MemberJunction's conversation UI. It provides 40+ components covering the entire conversation lifecycle: message composition and rendering (with markdown, mentions, code blocks, and artifacts), conversation navigation and history, threaded discussions, artifact collections and libraries, project/task management, agent execution panels, sharing/permission modals, search, notifications, and export.
@@ -97,6 +111,104 @@ The chat area handles message display, input, and agent interactions:
 </mj-conversation-chat-area>
 ```
 
+#### Feature toggles
+
+Embedding products (white-labeled end-user apps, embedded widgets) can pare the chat surface down through the component contract — no CSS overrides on internal class names. All default to `true`, so existing consumers are unaffected. Set to `false` to remove the feature entirely (the affordance is not rendered, not merely disabled):
+
+| Input | Gates |
+|---|---|
+| `allowMentions` | MASTER switch for the composer's mention/command triggers (`@` agents, `#` entities, `/` skills). When `false`, all are off regardless of the per-type flags below |
+| `allowAgentMentions` | The `@` agent/user mention trigger (under `allowMentions`). Set `false` on a surface pinned to a default agent that wants `/` skills but not `@` — an `@` overrides the pinned agent in message routing |
+| `allowEntityMentions` | The `#` entity/query mention trigger (under `allowMentions`) |
+| `allowSkillCommands` | The `/` skill-command trigger (under `allowMentions`) |
+| `allowAttachments` | The file-attachment button |
+| `allowPlanMode` | The composer's Plan Mode toggle button |
+| `allowRealtime` | The composer's real-time voice (co-agent) launcher button |
+| `showEmptyFill` | The message list's built-in "No messages yet" filler |
+| `showLoadingState` | The centered loading spinner (loading still short-circuits rendering, so hiding it does not flash the empty state) |
+| `showAgentPicker` | The agent picker |
+| `showAgentModePicker` | The agent-mode picker |
+| `showExportButton` | The conversation export button |
+| `showShareButton` | The conversation share button |
+| `showArtifactIndicator` | The artifact indicator |
+| `showAgentRunDetails` | The per-message agent run-details section — the expander header AND its grid (run ID, step/token counts, **$ cost**) — developer/observability data most end-user surfaces hide. The gear button that opens the panel is itself hidden when nothing would be left in it (no run details, no associated tasks, and no delete/pin/rating overflow), so an end-user surface gets no dead control rather than one that opens an empty popup |
+| `showReactions` | The per-message reaction buttons (like / comment) |
+| `showMessageRating` | The per-message thumbs rating control |
+| `allowPinning` | Message pinning (per-message pin button, header pin chip, pinned-messages panel) |
+| `allowMessageEdit` | The per-message edit button (owner's own messages) |
+| `allowMessageDelete` | The per-message delete button (owner's own messages) |
+| `showSuggestedPrompts` | The empty-state's built-in suggested-prompt chips |
+| `showDateNavigation` | The message list's sticky date header + jump-to-date navigation |
+
+```html
+<!-- e.g. a minimal, single-agent end-user surface -->
+<mj-conversation-chat-area
+  [conversationId]="conversationId"
+  [allowPlanMode]="false"
+  [allowRealtime]="false"
+  [showEmptyFill]="false"
+  [showAgentPicker]="false">
+</mj-conversation-chat-area>
+```
+
+#### Header customization
+
+Beyond the boolean toggles, the header's Export button is re-brandable and the action strip is extensible:
+
+- `exportButtonLabel` (default `'Export'`) and `exportButtonIcon` (default `'fas fa-download'`) — relabel/re-icon the Export button (e.g. a white-label "Download").
+- The **`headerActions` slot** adds host buttons INSIDE the default header's action strip, after the stock buttons — unlike the `header` slot, which replaces the whole header (and therefore suppresses `headerActions`). Context carries the conversation, its ID, and `isProcessing`. Use `mjButton variant="flat" size="sm"` for visual parity:
+
+```html
+<mj-conversation-chat-area [conversationId]="conversationId">
+  <ng-template mjChatSlot="headerActions" let-conversation let-isProcessing="isProcessing">
+    <button mjButton variant="flat" size="sm" [disabled]="isProcessing" (click)="printConversation(conversation)">
+      <i class="fas fa-print"></i>
+      <span class="btn-label">Print</span>
+    </button>
+  </ng-template>
+</mj-conversation-chat-area>
+```
+
+#### Branded export
+
+Branding applies to **every** export format. HTML gets the full treatment (theme colors, an inlined logo, the title, and a trademark footer); JSON/markdown/text carry the title and trademark, markdown also references the logo, and JSON emits a `branding` block. Supply `exportBranding` on the chat area (forwarded to the export modal, where it defaults the "Include branding" checkbox on):
+
+```typescript
+// ExportBranding (from the export service)
+{
+  brandTokens?: Record<string, string>;  // HTML only: ':root{}' block baked into the file; when omitted
+                                         // and includeTheme is on, DEFAULT_EXPORT_THEME_TOKENS are
+                                         // auto-snapshotted from the live document at export time
+  logoUrl?: string;                      // HTML: inlined as a data URI above the title (raw URL on fetch
+                                         // failure); markdown: referenced by URL; JSON: carried as a string
+  title?: string;                        // overrides the document title (defaults to the conversation name)
+  trademark?: string;                    // short attribution line rendered at the foot of every format
+                                         // (styled HTML footer, markdown/text trailer, JSON branding field)
+}
+```
+
+Color theming (`brandTokens`) is HTML-only — it has no meaning in the data/plain-text formats, and those formats never serialize the tokens. Without branding the exported file is unchanged from previous releases: the HTML stylesheet reads `var(--mj-…, legacyHex)` so every color resolves to the exact prior value when no `:root` block is emitted, and JSON/markdown/text are byte-identical to before. Programmatic consumers can build export content without a download via `ExportService.BuildExportContent(...)` and snapshot the live theme via `ExportService.SnapshotBrandTokens()`.
+
+Two gating rules are worth knowing:
+
+- **`includeCSS` is an HTML-only concern.** In HTML the logo and the trademark footer each need their stylesheet rule, so both are suppressed when `includeCSS` is false — an unstyled full-size logo is worse than none. The `title` override has no stylesheet dependency and always applies. Markdown/text/JSON ignore `includeCSS` entirely.
+- **The theme snapshot captures a CHOSEN mode, not the live one.** `ExportOptions.themeMode` (`'light'` | `'dark'`, default `'light'`; surfaced as a Theme dropdown in the modal) decides which palette is baked in. Without it, exporting from a dark session put dark text on the export's white page. The exported `body` carries `--mj-bg-page` and `--mj-text-primary`, so a dark export is coherent rather than inverted.
+- **`includeTheme` gates only the token AUTO-SNAPSHOT.** An explicitly supplied `brandTokens` map, plus `logoUrl` / `title` / `trademark`, apply whenever `branding` is present. In the modal, "Include branding" is the single user-facing switch for all of it, and it sits with the general options because it affects every format — not just HTML.
+
+`trademark` and `title` are **not** markdown-escaped; a value containing `_`, `]`, `)`, or a newline can break the surrounding markdown. Supply plain text (the HTML and JSON paths are escaped).
+#### Assistant identity
+
+White-label hosts can brand the AI side of the message feed through the component contract (no CSS on `.message-sender` / `.avatar-circle` internals). Both default to `null` — the engine-resolved agent identity, today's behavior:
+
+| Input | Overrides |
+|---|---|
+| `assistantDisplayName` | The display name on AI messages (e.g. a per-tenant persona like "Betty the Teacher"). Display-only: internal logic such as the conversation-manager check keeps comparing the real agent name |
+| `assistantAvatarUrl` | The AI message avatar — an image replaces the agent's Font Awesome icon |
+
+These complement `agentCharacterConfig`, which drives only the `agentPresence` strip — the two inputs extend the same identity into every message bubble. Runtime changes propagate to already-rendered messages (branding configs that resolve after first render, per-conversation persona switches), and a broken/whitespace avatar URL degrades to the agent icon rather than a broken-image glyph.
+
+**Scope — what the override deliberately does NOT cover:** the run-details expander header and its record link (they describe the *real* agent's diagnostics), the role tooltip (the agent record's `Description`), and realtime session cards. Hosts needing those surfaces hidden from end users gate them with `showAgentRunDetails` / their own chrome rather than relabeling internal data.
+
 ### Chat Overlay
 
 A floating chat panel (bottom-right corner) that wraps the chat area for persistent agent access across the application. Collapses to a bubble icon, expands to a full chat panel.
@@ -113,9 +225,9 @@ A floating chat panel (bottom-right corner) that wraps the chat area for persist
 The overlay is generic — it raises events for navigation and tool execution. The consuming application (e.g., MJExplorer) handles those events with app-specific logic like `NavigationService.OpenEntityRecord()`.
 
 **Related packages:**
-- [`@memberjunction/ai-agent-client`](../../AI/AgentsClient/README.md) — Core agent SDK (framework-agnostic, GraphQL transport, tool registry)
+- [`@memberjunction/ai-agent-client`](../../../AI/AgentsClient/README.md) — Core agent SDK (framework-agnostic, GraphQL transport, tool registry)
 - [`@memberjunction/ng-agent-client`](../agent-client/README.md) — Angular wrapper for the agent SDK
-- [`@memberjunction/core-entities`](../../../MJCoreEntities/README.md) — ConversationEngine for centralized conversation data
+- [`@memberjunction/core-entities`](../../../MJCoreEntities/readme.md) — ConversationEngine for centralized conversation data
 
 ### Message Components
 
@@ -191,6 +303,31 @@ The overlay is generic — it raises events for navigation and tool execution. T
   [isActive]="agentIsRunning">
 </mj-active-agent-indicator>
 ```
+
+### Real-Time Voice (Co-Agent) UX
+
+The package hosts the full client UX for MJ's real-time co-agent sessions — live voice calls with the conversation's agent, with interactive channel surfaces (the live Whiteboard) docked beside the call. Architecture background: [guides/REALTIME_CO_AGENTS_GUIDE.md](../../../../guides/REALTIME_CO_AGENTS_GUIDE.md).
+
+**`RealtimeSessionService`** (`services/realtime-session.service.ts`) is the provider-agnostic orchestrator, injectable at root. It drives a **client-direct** session: it calls the `StartRealtimeClientSession` mutation to mint a server-scoped ephemeral credential, resolves the matching `BaseRealtimeClient` driver (from `@memberjunction/ai-realtime-client` — OpenAI, Gemini, ElevenLabs, or AssemblyAI) through the ClassFactory by the server-reported `Provider` key, and connects the browser **directly** to the realtime provider — audio frames never transit the MJ server; only tool calls, final transcripts, channel state, and usage telemetry relay back over GraphQL. It exposes the reactive session state hosts consume: `ConnectionState$` (`connecting | listening | speaking | thinking | error | closed`), `Captions$`, `Active$`, `DelegationProgress$` / `DelegationResult$` / `DelegationNarration$`, `ActiveChannels$`, `ChannelFocus$`, `Minimized$`, plus `SendText` (typed input into the live call), `ToggleMute`, `RegisterClientToolHandler` (prefix-routed, client-executed UI tools), and the explicit delegation cancel channel — `CancelDelegation(callId)` / `CancelInFlightDelegations()` call the `CancelRealtimeSessionTool` mutation and flip the card to "Cancelled by user" (deliberate policy: **true barge-in never aborts delegated work** — only the per-card ✕ does). The client driver's `OnUsage` token deltas are accumulated and relayed onto the co-agent's observability prompt run via `RelayRealtimeUsage`, debounced (10 s) plus a teardown flush.
+
+**Co-agent selection, pairing constraints & authorization-gated overrides**: the composer's voice picker (`mj-voice-agent-picker`, opened by the caret next to the phone button — or automatically on a conversation with no prior agent participation) lets every user choose which **co-agent** (ACTIVE Realtime-type agent, from the same run-permission-filtered cache the @mention routing uses) fronts the call when more than one exists; the choice rides the mint's `coAgentId` and persists cross-device via `UserInfoEngine` (`mj.realtimeVoice.coAgent.v1`), so the friction-free instant start honors it too. A co-agent with rows in `MJ: AI Agent Paired Agents` may only front its paired targets — the picker constrains the target list to those rows (Sequence order, `IsDefault` preselected; pure helpers in `services/voice-pairing.ts`) — while a co-agent with zero rows stays universal (today's flow untouched; pairings constrain a chosen co-agent, they never mandate one). The **voice-model selector** (and any future session-config override, carried as the mint's `configOverridesJson`, e.g. `{"realtime":{"modelPreference":…}}`) renders only for users holding the **`Realtime: Advanced Session Controls`** MJ Authorization — evaluated client-side by the pure `UserHoldsAuthorization` helper (`services/user-authorization.ts`) from cached metadata as a *disclosure* gate; the server independently enforces the authorization on the mint, and unauthorized users silently get server defaults. (The gear popover's interface-density control is UX disclosure, not session config — it is not gated.)
+
+**The call overlay** (`components/realtime/`): `RealtimeSessionOverlayComponent` (`mj-realtime-session-overlay`) fills the conversation panel in place while a session is active — hosted by `ConversationChatAreaComponent` behind `Active$`, started from the mic button in `MessageInputComponent`. Two columns:
+
+- **Main column** — the unified APP-BAR (`RealtimeAgentBannerComponent`: identity + turn state + model name + the disclosure-gated action cluster — captions, the gear popover hosting the interface-density escape hatch and developer links, minimize, End call; in review the Start-live + Close actions live here too), then the pure-audio hero orb OR the unified session thread (`RealtimeSessionThreadComponent`, fed by the shared `RealtimeSessionState` merge of caption/delegation/narration streams), the channel strip, and the bottom dock (`RealtimeComposerComponent`: phone-call strip at low disclosure levels ⇄ fused mute/captions minis + typed composer at level 2+; typed turns behave identically to spoken ones).
+- **Right panel** — `RealtimeSurfaceTabsComponent`, the tabbed surface panel (`RealtimeSurfaceTabsModel` is the framework-free, unit-tested tab state): channel tabs lead the strip, then **one tab per artifact** a delegated run produces (added UNFOCUSED with a persistent violet "unseen" glow until visited — content never steals the screen), with the Activity rail pinned LAST.
+
+**Progressive disclosure** (`realtime-disclosure.ts`): the console *grows with the user*. A first-ever call is PURE AUDIO — a breathing hero orb, mute / Details / End, nothing to read; the caption thread, composer dock, surface panel and gear unlock by level (0–4) as the user acts (the hero's "Show the conversation", the T-to-type hotkey, the Details peek) or across sessions via the per-user milestones ratchet (UserInfoEngine, `mj.realtimeVoice.uxMilestones.v1`; the gear's Simple/Standard/Pro/Auto density control is the manual escape hatch). Content never flips the console open — **the one auto-reveal is a channel's first agent activity** (`RealtimeSessionService.ChannelActivity$`): the panel opens as a peek with that channel's tab focused + flashed, while the left column stays exactly as it was. Review mode bypasses disclosure entirely.
+
+**Audio-reactive visuals** (`realtime-audio-visuals.ts`): when the active driver meters its audio planes (`BaseRealtimeClient.GetAudioActivity()` — all four current drivers do, both directions), the overlay samples it on a requestAnimationFrame loop *outside Angular* and writes CSS variables directly: the hero orb scales with the smoothed output envelope (speaker-cone attack/decay), the EQ bars render the true 9-bin spectrum, and the visuals recolor by speaking direction (agent = brand, user = green) with hysteresis so syllable gaps never flicker. Un-metered drivers gracefully keep the turn-state-driven animations. See the guide's §11 for the full pipeline.
+
+**Interactive channels are plugins** — the shell is channel-agnostic. `BaseRealtimeChannelClient` (`components/realtime/channels/base-realtime-channel-client.ts`) is the contract: a client-executed tool set declared to the realtime model at session mint, a perception serializer feeding coalesced state deltas into the model as context notes, a dynamically-created Angular surface component the plugin binds itself, a persisted state of record, prior-session restore (`RestoreState`), artifact snapshots (`SaveAsArtifact`), and focus-mode layout requests. Plugins resolve at session start from the `MJ: AI Agent Channels` registry by `ClientPluginClass` key.
+
+**The live Whiteboard is a thin consumer of [`@memberjunction/ng-whiteboard`](../whiteboard/README.md)** — the board itself (the `WhiteboardState` engine, the `Whiteboard_*` tool API, the host/board/toolbar/zoom/popover/snapshot components, exports, the sandboxed-HTML-widget input bridge, the context menu) lives in that generic package; read its README for whiteboard details. This package contributes only the integration glue (`components/realtime/whiteboard/`): `RealtimeWhiteboardChannel`, the ~200-line channel plugin that declares `WHITEBOARD_TOOL_DEFINITIONS` to the model, routes `Whiteboard_*` calls to the bound host (or the pure engine call when the pane is collapsed), pipes the coalesced `SceneDelta` stream into the model as `[whiteboard]` context notes (with do-not-narrate-minor-edits etiquette inline), forwards widget submissions (`MJWhiteboard.submit` — the tutoring loop) and agent-undo events, persists/restores the board as the channel's state of record, and snapshots it to versioned `MJ: Artifacts`; plus `WhiteboardArtifactViewerPlugin` (`mj-whiteboard-artifact-viewer`), the saved-board artifact viewer rendered through the package's read-only snapshot component.
+
+**Session review & resume carryover**: a past session replays through the same overlay in review mode — `ConversationChatAreaComponent.OpenRealtimeSessionReview(agentSessionId)` loads a `RealtimeSessionReview` via `RealtimeSessionReviewService`. The loader is **chain-aware**: a session resumed via `lastSessionId` chains legs, and the loader walks the chain backwards (capped, cycle-guarded), rendering every leg chronologically with a divider between legs that carries the previous leg's `CloseReason` as a chip; the chain's conversation-history artifacts load as unfocused artifact tabs, and a read-only Whiteboard tab appears when a board was saved. "Start live session" resumes as a new session chained via `lastSessionId` — saved channel states restore *and* the prior legs' transcript is hydrated into the new model's prompt server-side. The conversations resource also accepts a `realtimeSessionId` query param (the deep link the custom `MJ: AI Agent Sessions` form emits) and opens review mode directly.
+
+This package never navigates (no Router): developer links emit a `RealtimeNavigateRequest` the host converts onto its `openEntityRecord` chain, and minimizing the call shows the host's floating "on call" pill while the session stays live.
 
 ### Collaboration
 
@@ -272,6 +409,22 @@ The overlay is generic — it raises events for navigation and tool execution. T
 | `ActiveAgentIndicatorComponent` | `mj-active-agent-indicator` | Active processing indicator |
 | `ActiveTasksPanelComponent` | `mj-active-tasks-panel` | Active tasks panel |
 
+### Real-Time Voice Components
+
+| Component | Selector | Description |
+|-----------|----------|-------------|
+| `RealtimeSessionOverlayComponent` | `mj-realtime-session-overlay` | The in-place "call mode" overlay for a live voice session (progressive-disclosure console: pure-audio hero → full two-column; audio-reactive orb/EQ) |
+| `RealtimeAgentBannerComponent` | `mj-realtime-agent-banner` | The unified app-bar: identity + turn-state + disclosure-gated actions (captions, gear popover w/ density + dev links, minimize, End; review Start-live + Close) |
+| `RealtimeSessionThreadComponent` | `mj-realtime-session-thread` | Unified live thread (captions, delegation cards, ephemeral narration) |
+| `RealtimeActivityRailComponent` | `mj-realtime-activity-rail` | Session activity rail (the surface panel's pinned-last tab) |
+| `RealtimeDelegationCardComponent` | `mj-realtime-delegation-card` | "Working on it" → result card for a delegated agent run |
+| `RealtimeChannelStripComponent` | `mj-realtime-channel-strip` | Chip-per-channel strip |
+| `RealtimeComposerComponent` | `mj-realtime-composer` | The bottom dock: phone-call strip (levels 0–1: mute / captions / Details peek / End) ⇄ fused minis + typed composer (level 2+) |
+| `RealtimeSurfaceTabsComponent` | `mj-realtime-surface-tabs` | Tabbed surface panel: channel tabs first, glowing unfocused artifact tabs, Activity pinned last (backed by the framework-free, unit-tested `RealtimeSurfaceTabsModel`) |
+| `WhiteboardArtifactViewerComponent` | `mj-whiteboard-artifact-viewer` | Saved-board artifact viewer (registered as `WhiteboardArtifactViewerPlugin`); renders via `@memberjunction/ng-whiteboard`'s snapshot component |
+
+> The live whiteboard surface itself (`mj-realtime-whiteboard-host`, board, toolbar, zoom, "What the agent sees" popover) ships in [`@memberjunction/ng-whiteboard`](../whiteboard/README.md); the `RealtimeWhiteboardChannel` plugin here creates it dynamically in a channel tab.
+
 ### Utility Components
 
 | Component | Selector | Description |
@@ -325,6 +478,8 @@ RxJS `BehaviorSubject` instances for all state, with derived observables using `
 | `@memberjunction/ng-markdown` | Markdown rendering |
 | `@memberjunction/ng-shared-generic` | Shared generic components |
 | `@memberjunction/ng-testing` | Testing framework components |
+| `@memberjunction/ng-whiteboard` | The generic collaborative whiteboard (consumed by the realtime Whiteboard channel + artifact viewer) |
+| `@memberjunction/ai-realtime-client` | Browser-side realtime drivers (OpenAI / Gemini / ElevenLabs / AssemblyAI) used by `RealtimeSessionService` |
 
 ### Kendo UI Packages
 

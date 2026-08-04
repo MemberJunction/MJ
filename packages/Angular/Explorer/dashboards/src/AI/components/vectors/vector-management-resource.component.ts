@@ -22,14 +22,21 @@ import {
     KnowledgeHubMetadataEngine
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
+import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 import { KPICardData } from '../widgets/kpi-card.component';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJScheduledActionEntity, MJScheduledActionParamEntity } from '@memberjunction/core-entities';
-import { CronToHumanReadable } from '../autotagging/autotagging-pipeline-resource.component';
+import { CronToHumanReadable } from '../autotagging/shared/classify.format';
+import {
+    buildVectorAgentContext,
+    resolveSyncRow,
+    VectorSyncRowCandidate,
+} from './vector-management-agent-context';
+import { validateStringParam } from '../../../shared/agent-tool-validation';
 
 /** Flattened row for the entity sync table */
 interface EntitySyncRow {
@@ -70,6 +77,7 @@ interface DocumentSuggestionResult {
 })
 export class VectorManagementResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private activityService = inject(ActivityService);
     protected override navigationService = inject(NavigationService);
     protected override destroy$ = new Subject<void>();
 
@@ -77,8 +85,16 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
      *  'operations' = Option C (operations monitoring with real-time sync status) */
     public ViewMode: 'index' | 'operations' = 'index';
 
-    /** Whether this component is embedded inside the Knowledge Hub shell */
-    @Input() EmbeddedMode = false;
+    public readonly VectorViewOptions: ViewToggleOption[] = [
+        { key: 'index', icon: 'fa-solid fa-cubes', title: 'Index View' },
+        { key: 'operations', icon: 'fa-solid fa-gauge-high', title: 'Operations View' }
+    ];
+
+    /**
+     * When true, renders only the body content (no chrome). Set by parent shells
+     * that embed this resource. See plans/explorer-chrome-conventions.md Section 5.
+     */
+    @Input() HideToolbar = false;
 
     /** Toggle between view modes */
     public ToggleViewMode(): void {
@@ -99,6 +115,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     // --- Sidebar data ---
     public VectorDBName = '';
     public VectorDBStatus: 'Healthy' | 'Degraded' | 'Offline' = 'Healthy';
+    /** Human-readable explanation of the current health status (shown as helper text / tooltip). */
+    public VectorDBStatusReason = '';
     public EmbeddingModel: EmbeddingModelInfo = { Name: '', Dimensions: null };
     public StorageUsagePercent = 0;
     public TotalVectors = 0;
@@ -382,7 +400,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     private async findVectorizeActionID(): Promise<string | null> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ ID: string }>({
-            EntityName: 'Actions',
+            EntityName: 'MJ: Actions',
             ExtraFilter: `Name = '__VectorizeEntity'`,
             Fields: ['ID'],
             ResultType: 'simple',
@@ -398,7 +416,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     private async createVectorizeScheduleParam(scheduledActionID: string, actionID: string, entityDocumentID: string): Promise<void> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const paramResult = await rv.RunView<{ ID: string; Name: string }>({
-            EntityName: 'Action Params',
+            EntityName: 'MJ: Action Params',
             ExtraFilter: `ActionID = '${actionID}' AND Name = 'entityDocumentID'`,
             Fields: ['ID', 'Name'],
             ResultType: 'simple',
@@ -493,11 +511,154 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     async ngAfterViewInit(): Promise<void> {
         await this.LoadData();
-        this.navigationService.SetAgentContext(this, {
-            TotalVectors: this.TotalVectors,
-            KPICount: this.KPICards.length,
-        });
+        // When embedded in a parent shell, that host owns agent reporting.
+        if (!this.HideToolbar) {
+            this.emitAgentContext();
+            this.registerAgentTools();
+        }
         this.NotifyLoadComplete();
+    }
+
+    // ================================================================
+    // Agent context + client tools
+    // ================================================================
+
+    /**
+     * Publish the vector-management surface state to the AI agent. Re-emitted on
+     * every data refresh and whenever an entity's sync starts or finishes, so the
+     * streamed context tracks live vectorization. No-op when embedded (the host
+     * owns reporting).
+     */
+    private emitAgentContext(): void {
+        if (this.HideToolbar) {
+            return;
+        }
+        this.navigationService.SetAgentContext(this, buildVectorAgentContext({
+            TotalVectors: this.TotalVectors,
+            EntityDocumentCount: this.SyncRows.length,
+            SyncingCount: this.SyncingIds.size,
+            VectorDBName: this.VectorDBName,
+            VectorDBStatus: this.VectorDBStatus,
+            EmbeddingModelName: this.EmbeddingModel.Name,
+            PrerequisitesMet: this.PrerequisitesMet,
+            ViewMode: this.ViewMode,
+            EntitySearchText: this.EntitySearchText,
+            Entities: this.SyncRows.map(r => ({
+                EntityName: r.EntityName,
+                DocumentName: r.DocumentName,
+                VectorCount: r.VectorCount,
+                Status: r.Status,
+            })),
+        }));
+    }
+
+    /** Build the resolver candidate list from the loaded sync rows. */
+    private getSyncRowCandidates(): VectorSyncRowCandidate[] {
+        return this.SyncRows.map(r => ({
+            EntityDocumentID: r.EntityDocumentID,
+            EntityName: r.EntityName,
+            DocumentName: r.DocumentName,
+            VectorCount: r.VectorCount,
+            Status: r.Status,
+        }));
+    }
+
+    /**
+     * 🚨 SAFETY BOUNDARY 🚨
+     * Register the safe, agent-actionable operations. Exposed:
+     *  - RefreshVectors (read-only reload)
+     *  - SyncVectorsForEntity (idempotent embedding sync — guards already-syncing; re-vectorizing
+     *    is the documented happy path, not destructive: it re-embeds existing records)
+     *  - SetVectorViewMode (read-only Index/Operations toggle)
+     *  - OpenVectorEntityDocument (id/name resolution → opens the edit panel for VIEWING config)
+     *  - GoToVectorConfiguration (navigation to the Config nav item)
+     *
+     * INTENTIONALLY NOT EXPOSED (gated):
+     *  - DeleteEntityDocument / vector purge — destructive, irreversible removal of an entity's
+     *    vector index + document.
+     *  - SaveEditedDocument / SaveAsEntityDocument / RegenerateTemplate — write entity-document
+     *    config (template, model, DB) the user should review and commit themselves.
+     *  - SaveScheduleSync — creates a scheduled job (a persistent side effect).
+     */
+    private registerAgentTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'RefreshVectors',
+                Description: 'Reload the vector management dashboard (vector counts, sync rows, KPIs) from the server.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.LoadData();
+                    this.emitAgentContext();
+                    return { Success: true, Data: { TotalVectors: this.TotalVectors } };
+                },
+            },
+            {
+                Name: 'SyncVectorsForEntity',
+                Description: 'Start vectorization (embedding sync) for an entity. Accepts the entity name, document name, or entity document ID. The entity must already have a vector entity document configured.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { entityName: { type: 'string', description: 'Entity name, document name, or entity document ID to vectorize' } },
+                    required: ['entityName'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const v = validateStringParam(params['entityName'], 'entityName');
+                    if (!v.ok) return v.result;
+                    const resolved = resolveSyncRow(v.value, this.getSyncRowCandidates());
+                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
+                    if (this.SyncingIds.has(resolved.value.EntityDocumentID)) {
+                        return { Success: false, ErrorMessage: `"${resolved.value.EntityName}" is already syncing` };
+                    }
+                    await this.SyncEntity(resolved.value.EntityDocumentID);
+                    return { Success: true, Data: { EntityName: resolved.value.EntityName } };
+                },
+            },
+            {
+                Name: 'SetVectorViewMode',
+                Description: 'Switch the vector dashboard between the Index view and the Operations (real-time sync) view.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { mode: { type: 'string', enum: ['index', 'operations'], description: 'index or operations' } },
+                    required: ['mode'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const mode = String(params['mode'] ?? '');
+                    if (mode !== 'index' && mode !== 'operations') {
+                        return { Success: false, ErrorMessage: 'Invalid mode. Expected "index" or "operations".' };
+                    }
+                    if (this.ViewMode !== mode) {
+                        this.ToggleViewMode();
+                    }
+                    this.emitAgentContext();
+                    return { Success: true, Data: { ViewMode: this.ViewMode } };
+                },
+            },
+            {
+                Name: 'OpenVectorEntityDocument',
+                Description: 'Open the configuration panel for an entity document (for viewing its template, model, and vector DB). Accepts the entity name, document name, or entity document ID.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { document: { type: 'string', description: 'Entity name, document name, or entity document ID' } },
+                    required: ['document'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const v = validateStringParam(params['document'], 'document');
+                    if (!v.ok) return v.result;
+                    const resolved = resolveSyncRow(v.value, this.getSyncRowCandidates());
+                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
+                    await this.OpenEditPanel(resolved.value.EntityDocumentID);
+                    return { Success: true, Data: { EntityName: resolved.value.EntityName, DocumentName: resolved.value.DocumentName } };
+                },
+            },
+            {
+                Name: 'GoToVectorConfiguration',
+                Description: 'Navigate to the Knowledge Hub Configuration page to set up the vector database and embedding model.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.GoToConfiguration();
+                    return { Success: true };
+                },
+            },
+        ]);
     }
 
     ngOnDestroy(): void {
@@ -533,6 +694,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             this.buildKPICards();
             this.buildSidebarData();
             this.checkPrerequisites();
+            this.emitAgentContext();
         } catch (error) {
             console.error('[VectorManagement] Error loading data:', error);
         } finally {
@@ -619,10 +781,13 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         `;
 
         let idleTimer: ReturnType<typeof setTimeout> | null = null;
+        const activityID = this.activityService.Start('Vector sync', { icon: 'fa-solid fa-cubes', detail: entityName, progress: 0 });
 
         const finishSync = (success: boolean) => {
             if (idleTimer) clearTimeout(idleTimer);
             rxSub?.unsubscribe();
+            this.activityService.Complete(activityID, success ? 'success' : 'error',
+                success ? `${entityName} vectorized` : `Failed for ${entityName}`);
 
             // Use setTimeout to defer state changes to the next macrotask,
             // avoiding ExpressionChangedAfterItHasBeenCheckedError.
@@ -696,6 +861,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
      */
     private addSyncingId(id: string): void {
         this.SyncingIds = new Set([...this.SyncingIds, id]);
+        this.emitAgentContext();
     }
 
     /**
@@ -707,6 +873,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             const next = new Set(this.SyncingIds);
             next.delete(id);
             this.SyncingIds = next;
+            this.emitAgentContext();
         }
     }
 
@@ -1159,12 +1326,18 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (this.vectorDatabases.length > 0) {
             const db = this.vectorDatabases[0];
             this.VectorDBName = db.Name;
-            // Determine health based on whether we have records with vectors
+            // "Degraded" here doesn't mean the database is unhealthy — it means no
+            // records have been vectorized yet. Say that plainly so users don't
+            // chase a phantom outage.
             const hasVectors = this.TotalVectors > 0;
             this.VectorDBStatus = hasVectors ? 'Healthy' : 'Degraded';
+            this.VectorDBStatusReason = hasVectors
+                ? `${this.TotalVectors.toLocaleString()} vector(s) stored and queryable.`
+                : `Connected, but no records have been vectorized yet. Run a sync below to populate the index.`;
         } else {
             this.VectorDBName = 'Not configured';
             this.VectorDBStatus = 'Offline';
+            this.VectorDBStatusReason = 'No vector database is configured for this environment.';
         }
     }
 

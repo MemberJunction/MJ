@@ -120,10 +120,11 @@ export function MergeParametersWithLLM(
     deterministicParams: MJParameterInfo[],
     llmResult: ParameterExtractionResult | null,
     passthroughContext: Map<string, PassthroughParamContext> = new Map(),
+    parameterHints: Map<string, string> = new Map(),
 ): ExtractedParameter[] {
     const llmParams = llmResult?.parameters ?? [];
 
-    return deterministicParams.map(dp => BuildMergedParameter(dp, llmParams, passthroughContext));
+    return deterministicParams.map(dp => BuildMergedParameter(dp, llmParams, passthroughContext, parameterHints));
 }
 
 /**
@@ -133,9 +134,11 @@ function BuildMergedParameter(
     dp: MJParameterInfo,
     llmParams: ExtractedParameter[],
     passthroughContext: Map<string, PassthroughParamContext>,
+    parameterHints: Map<string, string>,
 ): ExtractedParameter {
     const llmMatch = FindLLMMatch(dp.name, llmParams);
     const ptContext = passthroughContext.get(dp.name.toLowerCase());
+    const hintValue = parameterHints.get(dp.name) ?? parameterHints.get(dp.name.toLowerCase());
 
     const inheritedDescription = ptContext
         ? BuildPassthroughDescription(dp, ptContext)
@@ -148,7 +151,7 @@ function BuildMergedParameter(
         description: llmMatch?.description ?? inheritedDescription ?? GenerateParameterDescription(dp),
         usage: llmMatch?.usage ?? dp.usageLocations,
         defaultValue: ResolveDefaultValue(dp, llmMatch),
-        sampleValue: llmMatch?.sampleValue ?? ptContext?.sampleValue ?? GenerateSampleValue(dp),
+        sampleValue: hintValue ?? llmMatch?.sampleValue ?? ptContext?.sampleValue ?? GenerateSampleValue(dp),
     };
 }
 

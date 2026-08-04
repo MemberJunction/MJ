@@ -14,7 +14,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=o4-mini",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -22,8 +22,8 @@
             "ID": "54AC32BB-3FE2-42D4-90C7-12E27BDB0496"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:49:10.685Z",
-            "checksum": "c525bf497120f3cca6f24902280c86662b793971d69e3d2f03ad976ea83d44b2"
+            "lastModified": "2026-05-29T19:49:20.612Z",
+            "checksum": "0fbff8e055836faf4ae3e96e5e5a26f1a2665442185baa35f76e4675c832ada6"
           }
         },
         {
@@ -45,7 +45,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 4.6",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 4.7",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "ConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
             "Priority": 2
@@ -54,8 +54,8 @@
             "ID": "CAEA0AE0-B422-4522-B596-FD8B65D45C16"
           },
           "sync": {
-            "lastModified": "2026-04-06T11:01:32.848Z",
-            "checksum": "997e40b6d00442934a368e82032a42f05094478732f9a33487308b0f5cef1d43"
+            "lastModified": "2026-05-29T19:49:20.629Z",
+            "checksum": "7d3fcbf0414e790c19246f10515f7d075b3ece859268a2761e1cfaf4b5ea64f8"
           }
         },
         {
@@ -73,7 +73,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.4",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "ConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
             "Priority": 1
@@ -82,8 +82,8 @@
             "ID": "AA48A0DD-5F77-4600-9127-8764A28E0C5C"
           },
           "sync": {
-            "lastModified": "2026-03-11T21:21:23.620Z",
-            "checksum": "2b87744d9172473083501f107d359bc9d270aa61d65ca0b571e427399c297e7a"
+            "lastModified": "2026-05-29T19:49:20.645Z",
+            "checksum": "96dfed27ac618e3c27d2ce3af5a3064ef175d017c6017eb85fd8523f3f6d298a"
           }
         },
         {
@@ -119,7 +119,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 4
           },
@@ -127,8 +127,23 @@
             "ID": "4002E7F6-2720-4ADD-AA6D-189A7A1BA63B"
           },
           "sync": {
-            "lastModified": "2026-03-11T21:21:23.529Z",
-            "checksum": "456546ff62e16fa5bac477bd90c97c59a34b7e3f16aede23d4cfc9985d3ff0fd"
+            "lastModified": "2026-05-29T19:49:20.659Z",
+            "checksum": "1cc714ce453ddb29598e22ca8b95f06ea99afa85b37a178e4394652939025c48"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "DAF9B385-0212-4D85-ABE6-211AB46D9967"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:49:20.674Z",
+            "checksum": "0a856cd46a0e7e2c1891c0678b536005faa4ed96a1c28db4ee43361a4996b43f"
           }
         }
       ]

@@ -1,18 +1,19 @@
 import { MJArtifactEntity, MJArtifactVersionEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
-import { Metadata, UserInfo } from '@memberjunction/core';
+import { Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 /**
  * Represents artifact information with lazy-loading capabilities.
  * Stores minimal display data initially (from query) and loads full entities on-demand.
  *
- * For full entity access, delegates to {@link ArtifactMetadataEngine} which is kept
- * in sync automatically via BaseEngine's MJGlobal event listener. When any
- * BaseEntity save/delete fires in the same process, the engine's in-memory
- * arrays are updated immediately — so callers always get the freshest data
- * without tight coupling between the conversation layer and artifact editors.
+ * For full entity access, this first checks {@link ArtifactMetadataEngine}'s
+ * on-demand caches (populated when an artifact's versions were loaded earlier
+ * this session) and otherwise loads the single artifact/version directly from
+ * the database. Artifacts and versions are no longer bulk-loaded at boot — a
+ * version's `Content` can be arbitrarily large — so a direct load is the normal
+ * path here, not just a fallback.
  *
- * A one-time direct load fallback is used when the engine hasn't loaded yet
- * or the entity is brand-new and hasn't propagated to the engine's cache.
+ * The direct load is coalesced via a shared promise so concurrent callers issue
+ * a single query.
  */
 export class LazyArtifactInfo {
   // Display data (always available from initial query - no lazy loading needed)
@@ -38,7 +39,13 @@ export class LazyArtifactInfo {
     queryResult: Record<string, unknown>,
     private currentUser: UserInfo,
     preloadedArtifact?: MJArtifactEntity,
-    preloadedVersion?: MJArtifactVersionEntity
+    preloadedVersion?: MJArtifactVersionEntity,
+    /**
+     * The provider the fallback load reads through. A component constructing this in a
+     * multi-provider tree passes its own `ProviderToUse`; omitting it falls back to the global
+     * default, named explicitly rather than reached for via `new Metadata()`.
+     */
+    private provider?: IMetadataProvider
   ) {
     // Populate display data from query result
     // These fields come from GetConversationComplete query
@@ -72,7 +79,7 @@ export class LazyArtifactInfo {
     // Try the engine first — it stays in sync via BaseEntity events
     const engine = ArtifactMetadataEngine.Instance;
     if (engine.Loaded) {
-      const fromEngine = engine.FindArtifactByID(this.artifactId);
+      const fromEngine = engine.FindCachedArtifactByID(this.artifactId);
       if (fromEngine) {
         return fromEngine;
       }
@@ -90,7 +97,7 @@ export class LazyArtifactInfo {
     // Try the engine first — it stays in sync via BaseEntity events
     const engine = ArtifactMetadataEngine.Instance;
     if (engine.Loaded) {
-      const fromEngine = engine.FindArtifactVersionByID(this.artifactVersionId);
+      const fromEngine = engine.FindCachedArtifactVersionByID(this.artifactVersionId);
       if (fromEngine) {
         return fromEngine;
       }
@@ -107,8 +114,8 @@ export class LazyArtifactInfo {
   get isLoaded(): boolean {
     const engine = ArtifactMetadataEngine.Instance;
     if (engine.Loaded) {
-      const hasArtifact = !!engine.FindArtifactByID(this.artifactId);
-      const hasVersion = !!engine.FindArtifactVersionByID(this.artifactVersionId);
+      const hasArtifact = !!engine.FindCachedArtifactByID(this.artifactId);
+      const hasVersion = !!engine.FindCachedArtifactVersionByID(this.artifactVersionId);
       if (hasArtifact && hasVersion) {
         return true;
       }
@@ -174,7 +181,7 @@ export class LazyArtifactInfo {
 
   private async doFallbackLoad(): Promise<void> {
     try {
-      const md = new Metadata(); // global-provider-ok: utility — single-provider context
+      const md = this.provider ?? Metadata.Provider;
       const [artifact, version] = await Promise.all([
         this._fallbackArtifact ? Promise.resolve(this._fallbackArtifact) : this.loadSingleArtifact(md),
         this._fallbackVersion ? Promise.resolve(this._fallbackVersion) : this.loadSingleVersion(md)
@@ -187,13 +194,13 @@ export class LazyArtifactInfo {
     }
   }
 
-  private async loadSingleArtifact(md: Metadata): Promise<MJArtifactEntity> {
+  private async loadSingleArtifact(md: IMetadataProvider): Promise<MJArtifactEntity> {
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
     await artifact.Load(this.artifactId);
     return artifact;
   }
 
-  private async loadSingleVersion(md: Metadata): Promise<MJArtifactVersionEntity> {
+  private async loadSingleVersion(md: IMetadataProvider): Promise<MJArtifactVersionEntity> {
     const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
     await version.Load(this.artifactVersionId);
     return version;

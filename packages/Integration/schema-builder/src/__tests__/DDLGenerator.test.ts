@@ -108,12 +108,14 @@ describe('DDLGenerator', () => {
             expect(sql).toContain('[Notes] NVARCHAR(MAX) NULL');
         });
 
-        it('should include UNIQUE constraint on PK fields', () => {
+        it('emits NO DB constraint for the PK — soft-only (PK-ness lives in additionalSchemaInfo)', () => {
             const config = MakeTableConfig();
             const sql = gen.GenerateCreateTable(config, 'sqlserver');
-            expect(sql).toContain('CONSTRAINT [UQ_hubspot_Contact_PK] UNIQUE ([ContactID])');
-            // Should NOT contain old PK constraint
-            expect(sql).not.toContain('PRIMARY KEY ([ID])');
+            // There is NO enforced key: not a PRIMARY KEY, and (now) not a UNIQUE either.
+            // Integration PKs are inferred, so enforcing one could reject valid rows on a wrong guess —
+            // PK-ness lives only in additionalSchemaInfo, which CodeGen reads for the entity's metadata PK.
+            expect(sql).not.toContain('PRIMARY KEY');
+            expect(sql).not.toContain('UNIQUE');
         });
 
         it('should include default values when specified', () => {
@@ -128,22 +130,53 @@ describe('DDLGenerator', () => {
             const config = MakeTableConfig({ TableName: 'bad table!' });
             expect(() => gen.GenerateCreateTable(config, 'sqlserver')).toThrow('Invalid table name');
         });
+
+        it('should be idempotent on SQL Server via an IF OBJECT_ID guard before CREATE TABLE', () => {
+            const config = MakeTableConfig();
+            const sql = gen.GenerateCreateTable(config, 'sqlserver');
+            expect(sql).toContain("IF OBJECT_ID(N'[hubspot].[Contact]', N'U') IS NULL");
+            // The guard must precede CREATE TABLE so it governs it (single-statement IF).
+            expect(sql.indexOf("IF OBJECT_ID")).toBeGreaterThanOrEqual(0);
+            expect(sql.indexOf("IF OBJECT_ID")).toBeLessThan(sql.indexOf('CREATE TABLE'));
+        });
+
+        it('should be idempotent on PostgreSQL via native CREATE TABLE IF NOT EXISTS (NOT the SQL Server guard)', () => {
+            const config = MakeTableConfig();
+            const sql = gen.GenerateCreateTable(config, 'postgresql');
+            expect(sql).toContain('CREATE TABLE IF NOT EXISTS "hubspot"."Contact"');
+            // Postgres must never receive the SQL Server OBJECT_ID guard — explicit per-platform handling.
+            expect(sql).not.toContain('OBJECT_ID');
+        });
+
+        it('should guard extended properties so a re-run does not re-add descriptions (SQL Server)', () => {
+            const config = MakeTableConfig({ Description: 'Contacts from HubSpot' });
+            const sql = gen.GenerateCreateTable(config, 'sqlserver');
+            // Table-level guard uses NULL, NULL for the level-2 (column) args.
+            expect(sql).toContain("sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Contact', NULL, NULL)");
+            // Standard column description is guarded at the column level.
+            expect(sql).toContain("sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'hubspot', N'TABLE', N'Contact', N'COLUMN', N'__mj_integration_SyncStatus')");
+            expect(sql).toContain('IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty');
+        });
     });
 
     describe('GenerateAlterTableAddColumn', () => {
-        it('should generate SQL Server ADD column', () => {
+        it('should generate SQL Server ADD column guarded by IF NOT EXISTS (idempotent re-apply)', () => {
             const col = MakeColumn({ TargetColumnName: 'Phone', TargetSqlType: 'NVARCHAR(50)', IsNullable: true });
             const sql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', col, 'sqlserver');
             expect(sql).toContain('ALTER TABLE [hubspot].[Contact]');
             expect(sql).toContain('ADD [Phone] NVARCHAR(50) NULL');
             expect(sql).not.toContain('ADD COLUMN');
+            // Idempotency guard: re-applying after a partial run must not throw "column already exists" (SQL Server 2705).
+            expect(sql).toContain('IF NOT EXISTS (SELECT 1 FROM sys.columns');
+            expect(sql).toContain("OBJECT_ID(N'[hubspot].[Contact]')");
+            expect(sql).toContain("name = N'Phone'");
         });
 
-        it('should generate PostgreSQL ADD COLUMN', () => {
+        it('should generate PostgreSQL ADD COLUMN with native IF NOT EXISTS (idempotent re-apply)', () => {
             const col = MakeColumn({ TargetColumnName: 'Phone', TargetSqlType: 'VARCHAR(50)', IsNullable: true });
             const sql = gen.GenerateAlterTableAddColumn('hubspot', 'Contact', col, 'postgresql');
             expect(sql).toContain('ALTER TABLE "hubspot"."Contact"');
-            expect(sql).toContain('ADD COLUMN "Phone" VARCHAR(50) NULL');
+            expect(sql).toContain('ADD COLUMN IF NOT EXISTS "Phone" VARCHAR(50) NULL');
         });
     });
 
@@ -171,6 +204,29 @@ describe('DDLGenerator', () => {
             const sql = gen.GenerateAlterTableAlterColumn('hubspot', 'Contact', mod, 'postgresql');
             expect(sql).toContain('ALTER COLUMN "Email" TYPE VARCHAR(255)');
             expect(sql).toContain('ALTER COLUMN "Email" SET NOT NULL');
+        });
+
+        it('Bug 5a: PostgreSQL ALTER COLUMN drops dependent views first (named-tag DO block)', () => {
+            const mod: ColumnModification = {
+                ColumnName: 'Email', OldType: 'TEXT', NewType: 'BOOLEAN', OldNullable: true, NewNullable: true,
+            };
+            const sql = gen.GenerateAlterTableAlterColumn('hubspot', 'Contact', mod, 'postgresql');
+            // A DO block that discovers + drops views depending on this table precedes the ALTER, so
+            // PG won't reject the type change with "cannot alter type of a column used by a view".
+            expect(sql).toContain('DO $mj_dropviews$');
+            expect(sql).toContain('$mj_dropviews$;');
+            expect(sql).toContain("WHERE sn.nspname = 'hubspot' AND st.relname = 'Contact'");
+            expect(sql).toContain('DROP VIEW IF EXISTS %I.%I CASCADE');
+            // The DO block comes BEFORE the ALTER.
+            expect(sql.indexOf('DO $mj_dropviews$')).toBeLessThan(sql.indexOf('ALTER COLUMN "Email" TYPE BOOLEAN'));
+        });
+
+        it('SQL Server ALTER COLUMN does NOT emit the PG view-drop block', () => {
+            const mod: ColumnModification = {
+                ColumnName: 'Email', OldType: 'NVARCHAR(100)', NewType: 'NVARCHAR(255)', OldNullable: true, NewNullable: true,
+            };
+            const sql = gen.GenerateAlterTableAlterColumn('hubspot', 'Contact', mod, 'sqlserver');
+            expect(sql).not.toContain('mj_dropviews');
         });
 
         it('should generate PostgreSQL DROP NOT NULL when making nullable', () => {

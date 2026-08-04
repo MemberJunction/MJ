@@ -5,6 +5,8 @@
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
 
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
@@ -118,6 +120,8 @@
 
     </mj-collapsible-panel>
 
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
     <!-- ========================================
          RELATED ENTITY PANELS
          ======================================== -->
@@ -197,6 +201,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- AI Prompt Run Medias Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIPromptRunMedias"
+        SectionName="AI Prompt Run Medias"
+        Icon="fa fa-image"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIPromptRunMedias')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Run Medias','ModalityID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Run Medias')"
+                [AllowLoad]="IsSectionExpanded('mJAIPromptRunMedias')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIPromptRunMedias', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Conversation Detail Attachments Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationDetailAttachments"
@@ -222,25 +251,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Prompt Run Medias Section -->
+    <!-- AI Agent Run Medias Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIPromptRunMedias"
-        SectionName="AI Prompt Run Medias"
-        Icon="fa fa-image"
+        SectionKey="mJAIAgentRunMedias"
+        SectionName="AI Agent Run Medias"
+        Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIPromptRunMedias')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentRunMedias')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Run Medias','ModalityID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Run Medias')"
-                [AllowLoad]="IsSectionExpanded('mJAIPromptRunMedias')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Medias','ModalityID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Medias')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRunMedias')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIPromptRunMedias', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunMedias', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -272,29 +301,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Agent Run Medias Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIAgentRunMedias"
-        SectionName="AI Agent Run Medias"
-        Icon="fa fa-robot"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentRunMedias')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Medias','ModalityID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Medias')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentRunMedias')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunMedias', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

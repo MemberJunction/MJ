@@ -37,6 +37,15 @@ export class DeclareDmlBlockRule implements IConversionRule {
     const simplified = this.simplifyDefaultConstraintBlock(result);
     if (simplified) return simplified + '\n';
 
+    // Rewrite the T-SQL "look up a system-named CHECK constraint by table (+ column),
+    // then DROP it" catalog query. sys.check_constraints / sys.columns / OBJECT_ID /
+    // COL_NAME have no PG equivalent; map the lookup onto pg_constraint + pg_attribute.
+    // Runs on the raw T-SQL (before identifier quoting) so it can parse the bracketed
+    // OBJECT_ID('[schema].[Table]') argument directly. The surrounding
+    // `IF @x IS NOT NULL ... EXEC('... DROP CONSTRAINT ' + @x)` block is handled by the
+    // generic transforms below (convertSelectInto / convertVariableRefs / convertDynamicExec).
+    result = this.convertCheckConstraintLookup(result);
+
     // Strip SET NOCOUNT ON (may still be present if it wasn't the first line)
     result = result.replace(/^\s*SET\s+NOCOUNT\s+ON\s*;?\s*\n?/gim, '');
 
@@ -63,6 +72,10 @@ export class DeclareDmlBlockRule implements IConversionRule {
       /\bRAISERROR\s*\(\s*N?'([^']*)'\s*,\s*\d+\s*,\s*\d+\s*\)\s*;?/gi,
       "RAISE EXCEPTION '$1';"
     );
+
+    // Convert PRINT → RAISE NOTICE. PL/pgSQL has no PRINT statement; left alone it
+    // would be mangled into a quoted identifier ("PRINT") by the PascalCase pass below.
+    result = this.convertPrint(result);
 
     // Convert EXEC('str' + v_var + 'str') → EXECUTE format('str %I str', v_var).
     // Must run BEFORE quotePascalCaseIdentifiers (so EXEC isn't already quoted to "EXEC").
@@ -134,6 +147,25 @@ export class DeclareDmlBlockRule implements IConversionRule {
   }
 
   /**
+   * Convert T-SQL PRINT to PL/pgSQL RAISE NOTICE.
+   *
+   *   PRINT 'msg';                    → RAISE NOTICE '%', 'msg';
+   *   PRINT 'msg: ' + v_var;          → RAISE NOTICE '%', 'msg: ' || v_var;
+   *
+   * The + → || rewrite is segment-aware so a literal `+` inside a quoted string
+   * is left alone. Runs after variable renaming (@x → v_x) and before the
+   * PascalCase-identifier quoting pass (which would otherwise emit "PRINT").
+   */
+  private convertPrint(sql: string): string {
+    return sql.replace(/^(\s*)PRINT\s+([^;]+);/gim, (_match, indent: string, expr: string) => {
+      const concatenated = this.segmentSQL(expr.trim())
+        .map(seg => (seg.type === 'code' ? seg.text.replace(/\+/g, '||') : seg.text))
+        .join('');
+      return `${indent}RAISE NOTICE '%', ${concatenated};`;
+    });
+  }
+
+  /**
    * Convert dynamic T-SQL EXEC('str' + @var + 'str') to PG EXECUTE format('str %I str', v_var).
    *
    * T-SQL uses string concatenation with `+`. PG uses `format()` with `%I` for identifiers
@@ -150,8 +182,16 @@ export class DeclareDmlBlockRule implements IConversionRule {
         const args: string[] = [];
         for (const part of parts) {
           if (/^'.*'$/.test(part)) {
-            // String literal — strip quotes, escape % for format()
-            fmtParts.push(part.slice(1, -1).replace(/%/g, '%%'));
+            // String literal — strip quotes, convert bracketed identifiers, escape %
+            // for format(). Bracket conversion must happen here: string-literal content
+            // is (correctly) opaque to the earlier convertIdentifiers pass, but this
+            // literal is dynamic SQL that PG will EXECUTE, so [s].[T] must become s."T".
+            const inner = part
+              .slice(1, -1)
+              .replace(/\[([^\]]+)\]\.\[([^\]]+)\]/g, '$1."$2"')
+              .replace(/\[([^\]]+)\]/g, '"$1"')
+              .replace(/%/g, '%%');
+            fmtParts.push(inner);
           } else if (/^v_\w+$/.test(part)) {
             // Variable reference — use %I (identifier quoting).
             // %I already wraps the value in double quotes, so the surrounding
@@ -203,8 +243,10 @@ export class DeclareDmlBlockRule implements IConversionRule {
       return `IF ${cond.trim()} THEN`;
     });
     // Convert standalone END (that closes IF) → END IF;
-    // This is tricky — need to be careful not to break nested blocks
-    result = result.replace(/\bEND\b\s*(?=\s*\n\s*(?:--|UPDATE|DELETE|INSERT|$))/gi, 'END IF;');
+    // This is tricky — need to be careful not to break nested blocks. The trailing
+    // `\s*$` alternative catches an END that closes the whole block (no newline after
+    // it) — common when the IF block is the last statement of the batch.
+    result = result.replace(/\bEND\b\s*(?=\s*\n\s*(?:--|UPDATE|DELETE|INSERT|$)|\s*$)/gi, 'END IF;');
     return result;
   }
 
@@ -417,5 +459,93 @@ export class DeclareDmlBlockRule implements IConversionRule {
     }
 
     return lines.join('\n');
+  }
+
+  /**
+   * Rewrite the T-SQL dynamic CHECK-constraint lookup query to PostgreSQL.
+   *
+   * SQL Server discovers a system-generated CHECK constraint's name via
+   * sys.check_constraints (+ optionally sys.columns) keyed on OBJECT_ID / column,
+   * so it can DROP it before re-adding a widened constraint. Two source shapes appear:
+   *
+   *   Form A (COL_NAME):
+   *     SELECT @c = name FROM sys.check_constraints
+   *     WHERE parent_object_id = OBJECT_ID('[schema].[Tbl]')
+   *       AND COL_NAME(parent_object_id, parent_column_id) = 'Col';
+   *
+   *   Form B (aliased JOIN sys.columns):
+   *     SELECT @c = cc.name FROM sys.check_constraints cc
+   *     JOIN sys.columns c ON cc.parent_object_id = c.object_id AND cc.parent_column_id = c.column_id
+   *     WHERE c.name = 'Col' AND cc.parent_object_id = OBJECT_ID('schema.Tbl');
+   *
+   * Both map to pg_constraint (contype='c') joined to pg_attribute on conkey:
+   *
+   *     SELECT @c = con.conname FROM pg_constraint con
+   *     JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = ANY(con.conkey)
+   *     WHERE con.conrelid = 'schema."Tbl"'::regclass AND a.attname = 'Col' AND con.contype = 'c';
+   *
+   * The `@var =` assignment is preserved so the generic convertSelectInto /
+   * convertVariableRefs passes rename it to `SELECT ... INTO v_var`. If no column
+   * filter is present the pg_attribute join is omitted (any CHECK on the table).
+   * Returns the SQL unchanged when the pattern isn't present or can't be parsed.
+   */
+  private convertCheckConstraintLookup(sql: string): string {
+    if (!/sys\.check_constraints/i.test(sql)) return sql;
+
+    // Capture the whole `SELECT @var = [alias.]name ... FROM sys.check_constraints ... ;` statement.
+    const stmtRe = /SELECT\s+(?:TOP\s+\d+\s+)?(@\w+)\s*=\s*[\w.]*\bname\b[\s\S]*?FROM\s+sys\.check_constraints\b[\s\S]*?;/i;
+    const m = sql.match(stmtRe);
+    if (!m) return sql;
+    const stmt = m[0];
+    const varName = m[1];
+
+    // Target table from OBJECT_ID('<tableref>').
+    const objIdM = stmt.match(/OBJECT_ID\s*\(\s*'([^']+)'\s*\)/i);
+    if (!objIdM) return sql;
+    const regclass = this.tableRefToRegclassLiteral(objIdM[1]);
+
+    // Target column: Form A uses COL_NAME(...) = '<col>'; Form B compares the
+    // sys.columns alias's `name` to '<col>'.
+    let col: string | null = null;
+    const colNameM = stmt.match(/COL_NAME\s*\([^)]*\)\s*=\s*'([^']+)'/i);
+    if (colNameM) {
+      col = colNameM[1];
+    } else {
+      const joinAliasM = stmt.match(/JOIN\s+sys\.columns\s+(\w+)\b/i);
+      if (joinAliasM) {
+        const alias = joinAliasM[1];
+        const cM =
+          stmt.match(new RegExp(`\\b${alias}\\.name\\s*=\\s*'([^']+)'`, 'i')) ||
+          stmt.match(new RegExp(`'([^']+)'\\s*=\\s*\\b${alias}\\.name`, 'i'));
+        if (cM) col = cM[1];
+      }
+    }
+
+    const lines = [`SELECT ${varName} = con.conname`, `FROM pg_constraint con`];
+    if (col) {
+      // lowercase `any` so the later PascalCase-identifier quoting pass doesn't turn
+      // `= ANY(...)` into a `"ANY"(...)` function call (which has no such function in PG).
+      lines.push(`JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = any(con.conkey)`);
+      lines.push(`WHERE con.conrelid = ${regclass}::regclass`);
+      lines.push(`  AND a.attname = '${col}'`);
+      lines.push(`  AND con.contype = 'c';`);
+    } else {
+      lines.push(`WHERE con.conrelid = ${regclass}::regclass`);
+      lines.push(`  AND con.contype = 'c';`);
+    }
+    return sql.replace(stmt, lines.join('\n'));
+  }
+
+  /**
+   * Convert an OBJECT_ID table argument (`[schema].[Table]`, `schema.Table`, or bare
+   * `Table`) to a PG regclass string literal: `'schema."Table"'`. The table is double-
+   * quoted to preserve PascalCase; the schema is left as-is (already lowercase `__mj`).
+   */
+  private tableRefToRegclassLiteral(ref: string): string {
+    const cleaned = ref.replace(/[[\]]/g, '').trim();
+    const parts = cleaned.split('.').map(p => p.trim()).filter(Boolean);
+    const schema = parts.length >= 2 ? parts[0] : '__mj';
+    const table = parts.length >= 2 ? parts[1] : parts[0];
+    return `'${schema}."${table}"'`;
   }
 }

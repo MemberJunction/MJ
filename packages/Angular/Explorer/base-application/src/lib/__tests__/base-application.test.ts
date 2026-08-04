@@ -287,6 +287,58 @@ describe('WorkspaceStateManager', () => {
     });
   });
 
+  describe('UpdateTabResourceRecordId', () => {
+    it('should re-key a new-record tab to its saved record id', async () => {
+      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+
+      // Simulate "Create New Record" — empty resourceRecordId, isNew flag in configuration
+      const tabId = manager.OpenTab(
+        {
+          ApplicationId: 'app-1',
+          Title: 'New Entities',
+          IsPinned: true,
+          Configuration: { resourceType: 'Records', Entity: 'Entities', recordId: '', isNew: true },
+          ResourceRecordId: ''
+        },
+        '#ff0000'
+      );
+
+      const newId = 'abc-123-uuid';
+      manager.UpdateTabResourceRecordId(tabId, newId);
+
+      const tab = manager.GetTab(tabId)!;
+      expect(tab.resourceRecordId).toBe(newId);
+      expect(tab.configuration.recordId).toBe(newId);
+      expect(tab.configuration.isNew).toBeUndefined();
+    });
+
+    it('should be a no-op when configuration is not initialized', () => {
+      // No throw, no crash — just silently does nothing.
+      expect(() => manager.UpdateTabResourceRecordId('nonexistent', 'xyz')).not.toThrow();
+    });
+
+    it('should leave OTHER tabs untouched when re-keying one tab', async () => {
+      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+
+      // Use OpenTabForced to create separate pinned tabs (OpenTab replaces temp tabs)
+      const newRecordTabId = manager.OpenTabForced(
+        { ApplicationId: 'app-1', Title: 'New', IsPinned: true, Configuration: { resourceType: 'Records', Entity: 'Foo' }, ResourceRecordId: '' },
+        '#ff0000'
+      );
+      const otherTabId = manager.OpenTabForced(
+        { ApplicationId: 'app-1', Title: 'Other', IsPinned: true, Configuration: { resourceType: 'Records', Entity: 'Bar' }, ResourceRecordId: 'bar-id' },
+        '#ff0000'
+      );
+
+      manager.UpdateTabResourceRecordId(newRecordTabId, 'foo-saved');
+
+      expect(manager.GetTab(newRecordTabId)!.resourceRecordId).toBe('foo-saved');
+      expect(manager.GetTab(otherTabId)!.resourceRecordId).toBe('bar-id');
+    });
+  });
+
   describe('CloseOtherTabs', () => {
     it('should close all tabs except specified one', async () => {
       const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');

@@ -4,6 +4,7 @@
  * for CodeGen orchestration code.
  */
 import sql from 'mssql';
+import { SQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
 import { CodeGenConnection, CodeGenQueryResult, CodeGenTransaction } from '../../codeGenDatabaseProvider';
 
 /**
@@ -52,10 +53,16 @@ class SQLServerCodeGenTransaction implements CodeGenTransaction {
  * ```
  */
 export class SQLServerCodeGenConnection implements CodeGenConnection {
+    private static readonly _dialect: SQLDialect = new SQLServerDialect();
     private _pool: sql.ConnectionPool;
 
     constructor(pool: sql.ConnectionPool) {
         this._pool = pool;
+    }
+
+    /** @inheritdoc */
+    public get Dialect(): SQLDialect {
+        return SQLServerCodeGenConnection._dialect;
     }
 
     /**

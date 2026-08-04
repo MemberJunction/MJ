@@ -17,7 +17,7 @@ export class MJAIAgentPromptFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'technicalIdentification', sectionName: 'Technical Identification', isExpanded: true },
             { sectionKey: 'executionConfiguration', sectionName: 'Execution Configuration', isExpanded: true },
-            { sectionKey: 'descriptiveLabels', sectionName: 'Descriptive Labels', isExpanded: false },
+            { sectionKey: 'descriptiveLabels', sectionName: 'Descriptive Labels', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

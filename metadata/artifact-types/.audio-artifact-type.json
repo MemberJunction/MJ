@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Audio",
+      "Description": "Audio content (MP3, WAV, OGG, etc.). Delivered inline as audio_url where the model supports the modality.",
+      "ParentID": null,
+      "ContentType": "audio/*",
+      "ToolLibraryClass": null,
+      "IsEnabled": true,
+      "Priority": 0,
+      "DefaultDeliveryMode": "Inline",
+      "SystemSupplied": true,
+      "Icon": "fa-solid fa-volume-high"
+    },
+    "primaryKey": {
+      "ID": "84E1EE5D-52EC-4B8C-A7A2-DF57631337E6"
+    },
+    "sync": {
+      "lastModified": "2026-05-20T01:27:07.756Z",
+      "checksum": "9e1b85e22a48cfb812867607f5964df4f53483e81a5404431e710b41a563a541"
+    }
+  }
+]

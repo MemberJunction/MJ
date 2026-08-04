@@ -1,0 +1,20 @@
+{
+  "version": "1.0.0",
+  "push": {
+    "autoCreateMissingRecords": true
+  },
+  "directoryOrder": [
+    "tests",
+    "test-suites",
+    "roles",
+    "entity-permissions",
+    "users",
+    "ai-prompt-categories",
+    "ai-agent-categories",
+    "ai-prompts",
+    "ai-skills",
+    "ai-search",
+    "ai-agents"
+  ],
+  "emitSyncNotes": false
+}

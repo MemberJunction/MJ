@@ -1,7 +1,21 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJPageHeaderComponent,
+  MJPageLayoutComponent,
+  MJPageBodyComponent,
+  MJPageSearchComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJViewToggleComponent,
+  MJStatBadgeComponent,
+  MJRefreshButtonComponent,
+  MJEmptyStateComponent,
+  MJAlertComponent,
+  MJAccordionModule
+} from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
@@ -34,6 +48,18 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     FormsModule,
     ReactiveFormsModule,
     MJButtonDirective,
+    MJPageHeaderComponent,
+    MJPageLayoutComponent,
+    MJPageBodyComponent,
+    MJPageSearchComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJViewToggleComponent,
+    MJStatBadgeComponent,
+    MJRefreshButtonComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent,
+    MJAccordionModule,
     ContainerDirectivesModule,
     SharedGenericModule,
     CredentialsModule

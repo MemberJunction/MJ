@@ -22,7 +22,7 @@ export type GeocodeStatus = 'success' | 'failed' | 'pending';
 /**
  * Source that produced the geocode.
  */
-export type GeocodingSource = 'google' | 'reference_data' | 'manual' | 'ip_geolocation' | 'native' | 'reverse';
+export type GeocodingSource = 'google' | 'geocodio' | 'here' | 'reference_data' | 'manual' | 'ip_geolocation' | 'native' | 'reverse';
 
 /**
  * Result from a geocoding operation.

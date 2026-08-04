@@ -60,8 +60,9 @@ export abstract class BaseDashboard extends BaseResourceComponent implements OnI
   /**
    * This method will result in the dashboard being reloaded.
    */
-  public Refresh(): void {
-    this.loadData();
+  public async Refresh(): Promise<void> {
+    await this.loadData();
+    this.NotifyLoadComplete();
   }
 
   private _visible: boolean = false;

@@ -1,0 +1,76 @@
+# Mode D overlay template — boots YOUR app on the regression network so the
+# test-runner can reach it at http://byo-app:3000, and points the runner at
+# the BYO suite via env vars.
+#
+# Run from the MJ repo root with the base compose + this overlay:
+#
+#   docker compose \
+#     -f docker/regression/docker-compose.test.yml \
+#     -f <path/to/this/overlay>.yml \
+#     --env-file docker/regression/.env.test \
+#     --profile full \
+#     up --abort-on-container-exit --exit-code-from test-runner
+#
+# Or via the CLI:
+#
+#   mj test regression remote \
+#     --target=./<your-init-folder>/target.json \
+#     --overlay=./<your-init-folder>/docker-compose.app.yml
+#
+# What this overlay does vs. the base compose:
+#   - Adds a `byo-app` service (YOUR app under test)
+#   - Mounts your BYO tests + suite into the test-runner
+#   - Sets TEST_SUITE_NAME so the runner executes your BYO suite (not the MJ suite)
+#   - Sets EXTRA_METADATA_DIRS so the runner pushes your tests + suite to the DB
+#   - Sets MJ_TEST_VAR_* env vars that flow into {{baseUrl}} / {{allowedDomains}}
+#     placeholders in your BYO test JSONs
+
+services:
+  byo-app:
+    # The base compose is profile-gated; the BYO app must join the `full` profile.
+    profiles: ["full"]
+    # TODO: Replace EITHER `build:` or `image:` with how YOUR app gets into a
+    # container. The test-runner reaches this service at http://byo-app:3000.
+    #
+    # Option A — build from source (compose builds your image at `up` time):
+    #   build:
+    #     context: ../path/to/your/app    # relative to the FIRST `-f` file (the base compose)
+    #     dockerfile: Dockerfile
+    #
+    # Option B — pull an already-built image:
+    image: your-app-image:latest
+    container_name: mj-regression-byo-app
+    environment:
+      PORT: "3000"
+      NODE_ENV: "production"
+    healthcheck:
+      # TODO: Replace with a healthcheck that confirms YOUR app is ready.
+      # Example for an HTTP service with a /health endpoint:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  test-runner:
+    depends_on:
+      byo-app:
+        condition: service_healthy
+    environment:
+      # Run YOUR suite, not the MJ Explorer suite.
+      TEST_SUITE_NAME: "BYO Regression Suite"
+      # Push your BYO metadata (tests + suite) to the runner's DB before tests run.
+      EXTRA_METADATA_DIRS: "/app/byo-metadata"
+      # Drive {{baseUrl}} and {{allowedDomains}} substitution in your test JSONs.
+      MJ_TEST_VAR_baseUrl: "http://byo-app:3000"
+      MJ_TEST_VAR_allowedDomains: "[\"byo-app\"]"
+      # Archive flow (optional): inherit ARCHIVE_DB_* from .env.test and tag your
+      # run distinctly so BYO rows are recognizable in the archive DB.
+      ARCHIVE_TAG: "byo-app"
+      ARCHIVE_SOURCE: "mode-d-byo"
+    volumes:
+      # NOT read-only: mj-sync writes auto-generated primaryKey + sync state back
+      # to your JSON files after first push so subsequent runs are idempotent.
+      # Path is relative to the FIRST `-f` file (the base compose); adjust if
+      # your scaffold lives somewhere else than `docker/regression/`.
+      - ./<your-init-folder>/byo-metadata:/app/byo-metadata

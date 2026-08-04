@@ -1,28 +1,26 @@
 <div class="mj-inspector mj-inspector--solo">
-    <div class="mj-inspector__header">
-        <div class="mj-inspector__header-icon"><i class="fa-solid fa-bolt"></i></div>
-        <div>
-            <h3 class="mj-inspector__header-title">Event Monitor</h3>
-            <div class="mj-inspector__header-sub">Live tail of MJGlobal events with filter and pause</div>
-        </div>
-        <span class="mj-inspector__header-spacer"></span>
-        <div class="mj-inspector__header-actions">
-            <button class="mj-inspector__btn"
-                    [class.mj-inspector__btn--success]="!Paused"
-                    [class.em-paused]="Paused"
-                    type="button" (click)="TogglePause()"
+    <mj-page-header-interior
+        Role="region"
+        AriaLabel="Event monitor"
+        Title="Event Monitor"
+        Subtitle="Live tail of MJGlobal events with filter and pause">
+        <div actions>
+            <button mjButton
+                    variant="secondary"
+                    size="sm"
+                    (click)="TogglePause()"
                     [title]="Paused ? 'Resume capture' : 'Pause capture'">
                 @if (Paused) {
-                    <i class="fa-solid fa-play"></i> Resume
+                    <i class="fa-solid fa-play" aria-hidden="true"></i> <span class="mj-action-label">Resume</span>
                 } @else {
-                    <i class="fa-solid fa-pause"></i> Pause
+                    <i class="fa-solid fa-pause" aria-hidden="true"></i> <span class="mj-action-label">Pause</span>
                 }
             </button>
-            <button class="mj-inspector__btn" type="button" (click)="Clear()" title="Clear all captured events">
-                <i class="fa-solid fa-broom"></i> Clear
+            <button mjButton variant="secondary" size="sm" (click)="Clear()" title="Clear all captured events">
+                <i class="fa-solid fa-broom" aria-hidden="true"></i> <span class="mj-action-label">Clear</span>
             </button>
         </div>
-    </div>
+    </mj-page-header-interior>
 
     <div class="em-stats">
         <div class="em-stat">
@@ -155,21 +153,8 @@
         </div>
 
         @if (FilteredEvents.length === 0) {
-            <div class="em-empty">
-                @if (Stats.captured === 0) {
-                    <i class="fa-solid fa-radio em-empty-icon"></i>
-                    <div class="em-empty-title">Listening for events…</div>
-                    <div class="em-empty-sub">Trigger an action — saves, navigation, AI events all show up here.</div>
-                } @else if (Paused) {
-                    <i class="fa-solid fa-pause em-empty-icon"></i>
-                    <div class="em-empty-title">Capture is paused</div>
-                    <div class="em-empty-sub">{{ Stats.captured }} events fired since you paused. Click Resume to start collecting again.</div>
-                } @else {
-                    <i class="fa-solid fa-filter em-empty-icon"></i>
-                    <div class="em-empty-title">No events match your filter</div>
-                    <div class="em-empty-sub">{{ Stats.kept }} events in buffer · clear filters to see them.</div>
-                }
-            </div>
+            <mj-empty-state [Variant]="EmptyVariant" [Icon]="EmptyIcon"
+                [Title]="EmptyTitle" [Message]="EmptyMessage" />
         } @else {
             @for (evt of FilteredEvents; track TrackBySeq($index, evt)) {
                 <div class="em-row" [class.em-row--expanded]="evt.expanded">

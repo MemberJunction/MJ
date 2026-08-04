@@ -118,6 +118,10 @@ See [`@memberjunction/aiengine` README](../AI/Engine/README.md#vector-store-inva
 
 Companion to `MJAIAgentNoteEntityServer` — maintains the parallel invariant for the agent example vector store on `Save`/`Delete`.
 
+### MJRemoteOperationEntityServer (v5.43.x+)
+
+The **AI-from-Description** half of the [Remote Operations](../../guides/REMOTE_OPERATIONS_GUIDE.md) primitive (RO-4). For a `MJ: Remote Operations` row with `GenerationType='AI'`, the `Save` hook calls the `Generate Remote Operation Code` prompt to author the body of the operation's `InternalExecute` — against the ambient `input` / `provider` / `user` / `context` contract — stores it in `Code`, records the libraries it used in the JSONType `LibrariesObject`, and resets `CodeApprovalStatus='Pending'` for human review (skipped when `CodeLocked`). CodeGen then emits a complete registered class from the approved code. Mirrors `MJActionEntityServer`; transactional; no junction CRUD (the library list is a JSONType field).
+
 ## Architecture
 
 ### Entity Registration

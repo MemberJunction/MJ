@@ -40,15 +40,16 @@ describe('ActionMetadataGenerator', () => {
     const generator = new ActionMetadataGenerator();
 
     describe('Generate', () => {
-        it('should produce 6 actions per writable object (Get/Create/Update/Delete/Search/List)', () => {
+        it('should produce 7 actions per writable object (Get/Create/Update/Delete/Upsert/Search/List)', () => {
             const result = generator.Generate(createConfig());
-            expect(result.ActionRecords).toHaveLength(6);
+            expect(result.ActionRecords).toHaveLength(7);
 
             const names = result.ActionRecords.map(a => a.fields['Name'] as string);
             expect(names).toContain('TestCRM - Get Contact');
             expect(names).toContain('TestCRM - Create Contact');
             expect(names).toContain('TestCRM - Update Contact');
             expect(names).toContain('TestCRM - Delete Contact');
+            expect(names).toContain('TestCRM - Upsert Contact');
             expect(names).toContain('TestCRM - Search Contact');
             expect(names).toContain('TestCRM - List Contact');
         });
@@ -67,12 +68,13 @@ describe('ActionMetadataGenerator', () => {
             expect(names).not.toContain('TestCRM - Create Contact');
             expect(names).not.toContain('TestCRM - Update Contact');
             expect(names).not.toContain('TestCRM - Delete Contact');
+            expect(names).not.toContain('TestCRM - Upsert Contact');
         });
 
         it('should skip Search and List when disabled', () => {
             const config = createConfig({ IncludeSearch: false, IncludeList: false });
             const result = generator.Generate(config);
-            expect(result.ActionRecords).toHaveLength(4); // Get, Create, Update, Delete
+            expect(result.ActionRecords).toHaveLength(5); // Get, Create, Update, Delete, Upsert
 
             const names = result.ActionRecords.map(a => a.fields['Name'] as string);
             expect(names).not.toContain('TestCRM - Search Contact');
@@ -87,7 +89,7 @@ describe('ActionMetadataGenerator', () => {
                 ],
             });
             const result = generator.Generate(config);
-            expect(result.ActionRecords).toHaveLength(12); // 6 verbs × 2 objects
+            expect(result.ActionRecords).toHaveLength(14); // 7 verbs × 2 objects
         });
 
         it('should return empty actions for empty object list', () => {
@@ -231,6 +233,81 @@ describe('ActionMetadataGenerator', () => {
 
             const firstnameParam = inputParams.find(p => p.fields['Name'] === 'firstname');
             expect(firstnameParam!.fields['IsRequired']).toBe(false);
+        });
+    });
+
+    describe('Upsert action params', () => {
+        it('should generate an Upsert action for a write-supporting object', () => {
+            const result = generator.Generate(createConfig());
+            const upsertAction = result.ActionRecords.find(a => a.fields['Name'] === 'TestCRM - Upsert Contact');
+            expect(upsertAction).toBeDefined();
+
+            const config = upsertAction!.fields['Config'] as Record<string, unknown>;
+            expect(config.Verb).toBe('Upsert');
+            expect(config.ObjectName).toBe('contacts');
+        });
+
+        it('should not generate an Upsert action for read-only objects', () => {
+            const config = createConfig({
+                Objects: [createMinimalObject({ SupportsWrite: false })],
+            });
+            const result = generator.Generate(config);
+            const names = result.ActionRecords.map(a => a.fields['Name'] as string);
+            expect(names).not.toContain('TestCRM - Upsert Contact');
+        });
+
+        it('should include an optional IDProperty input describing the match key', () => {
+            const result = generator.Generate(createConfig());
+            const upsertAction = result.ActionRecords.find(a => a.fields['Name'] === 'TestCRM - Upsert Contact');
+            const params = upsertAction!.relatedEntities['MJ: Action Params'];
+
+            const idProperty = params.find(p => p.fields['Name'] === 'IDProperty' && p.fields['Type'] === 'Input');
+            expect(idProperty).toBeDefined();
+            expect(idProperty!.fields['IsRequired']).toBe(false);
+        });
+
+        it('should reference the object UpsertKey in the IDProperty description when set', () => {
+            const config = createConfig({
+                Objects: [createMinimalObject({ UpsertKey: 'email' })],
+            });
+            const result = generator.Generate(config);
+            const upsertAction = result.ActionRecords.find(a => a.fields['Name'] === 'TestCRM - Upsert Contact');
+            const idProperty = upsertAction!.relatedEntities['MJ: Action Params'].find(
+                p => p.fields['Name'] === 'IDProperty'
+            );
+            expect(idProperty!.fields['Description']).toContain('email');
+        });
+
+        it('should include writable fields as optional input params (none required)', () => {
+            const result = generator.Generate(createConfig());
+            const upsertAction = result.ActionRecords.find(a => a.fields['Name'] === 'TestCRM - Upsert Contact');
+            const inputParams = upsertAction!.relatedEntities['MJ: Action Params'].filter(p => p.fields['Type'] === 'Input');
+
+            const paramNames = inputParams.map(p => p.fields['Name'] as string);
+            expect(paramNames).toContain('email');
+            expect(paramNames).toContain('firstname');
+            expect(paramNames).not.toContain('hs_object_id'); // PK
+            expect(paramNames).not.toContain('createdate'); // read-only
+
+            const emailParam = inputParams.find(p => p.fields['Name'] === 'email');
+            expect(emailParam!.fields['IsRequired']).toBe(false);
+        });
+
+        it('should include ExternalID as an output param', () => {
+            const result = generator.Generate(createConfig());
+            const upsertAction = result.ActionRecords.find(a => a.fields['Name'] === 'TestCRM - Upsert Contact');
+            const outputParams = upsertAction!.relatedEntities['MJ: Action Params'].filter(p => p.fields['Type'] === 'Output');
+
+            const externalId = outputParams.find(p => p.fields['Name'] === 'ExternalID');
+            expect(externalId).toBeDefined();
+        });
+
+        it('should include UPSERT_FAILED and NOT_SUPPORTED result codes', () => {
+            const result = generator.Generate(createConfig());
+            const upsertAction = result.ActionRecords.find(a => a.fields['Name'] === 'TestCRM - Upsert Contact');
+            const codes = upsertAction!.relatedEntities['MJ: Action Result Codes'];
+            expect(codes.find(c => c.fields['ResultCode'] === 'UPSERT_FAILED')).toBeDefined();
+            expect(codes.find(c => c.fields['ResultCode'] === 'NOT_SUPPORTED')).toBeDefined();
         });
     });
 

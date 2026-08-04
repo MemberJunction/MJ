@@ -20,7 +20,12 @@ vi.mock('@sendgrid/mail', () => ({
   },
 }));
 
-vi.mock('@memberjunction/communication-types', () => ({
+vi.mock('@memberjunction/communication-types', async () => ({
+  // Real address-list parser (pure module) — the provider imports it by name, and Vitest
+  // rejects named imports missing from a mock factory even when the test never calls them.
+  ...(await vi.importActual<{ ParseEmailAddressList: (headerValue: string | null | undefined) => string[] }>(
+    '../../../../base-types/src/AddressUtils'
+  )),
   BaseCommunicationProvider: class {
     getSupportedOperations() { return []; }
   },
@@ -74,9 +79,9 @@ describe('SendGridProvider', () => {
   });
 
   describe('getSupportedOperations', () => {
-    it('should only support SendSingleMessage', () => {
+    it('should support SendSingleMessage plus the Inbound Parse operations', () => {
       const ops = provider.getSupportedOperations();
-      expect(ops).toEqual(['SendSingleMessage']);
+      expect(ops).toEqual(['SendSingleMessage', 'CreateSubscription', 'DeleteSubscription', 'ParseNotification']);
     });
   });
 

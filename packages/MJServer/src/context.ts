@@ -1,5 +1,5 @@
 import { IncomingMessage } from 'http';
-import * as url from 'url';
+import { createHash, timingSafeEqual } from 'crypto';
 import { default as jwt } from 'jsonwebtoken';
 import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
@@ -9,34 +9,306 @@ import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, 
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { authCache } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema } from './config.js';
+import { buildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
+import { StartupLogger } from './logging/StartupLogger.js';
 import { DataSourceInfo, UserPayload } from './types.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
-import { DatabaseProviderBase } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
+// ── Session / login audit (Phase 3) ───────────────────────────────────────────
+// Writes one `MJ: Audit Logs` row per session establishment (and per auth failure),
+// across EVERY provider, hooked at token validation below. Deduped by (iss, sub, iat)
+// in a bounded, no-TTL map so a given issued token logs ONCE per process — not per
+// request. (We deliberately do NOT reuse authCache for this: its 1h TTL would re-log
+// long-lived sessions every hour.) Reviewers asked to audit all user access with
+// timestamp/IP/browser — that payload lives in the Details JSON; the table has no
+// dedicated columns. Best-effort throughout: an audit failure NEVER blocks auth.
 /**
- * Renders a value for one-line console logging without Node's `[Object]` truncation.
- * Arrays keep their structure; non-array objects collapse to JSON, truncated at `maxLen`.
- * Objects whose JSON exceeds `maxLen` and contain nested structure are recursed into so
- * outer keys remain visible.
+ * Memoized "is the server log level `debug`?" check for the per-request log
+ * gates below. Resolved once from `telemetry.level` (the single log-level knob)
+ * — config is immutable after boot, so caching is safe and keeps the hot request
+ * path free of repeated config reads.
  */
-function shortenForLog(value: unknown, maxLen = 300): unknown {
-  if (value === null || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map((v) => shortenForLog(v, maxLen));
-  const json = JSON.stringify(value);
-  if (json.length <= maxLen) return json;
-  const result: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    result[k] = shortenForLog(v, maxLen);
+let isDebugLevelCache: boolean | undefined;
+function isDebugLogLevel(): boolean {
+  if (isDebugLevelCache === undefined) {
+    isDebugLevelCache = StartupLogger.resolveLevelFromConfig() === 'debug';
   }
-  return result;
+  return isDebugLevelCache;
+}
+
+const SESSION_AUDIT_TYPE = 'Session Established';
+const LOGIN_FAILED_AUDIT_TYPE = 'Login Failed';
+const SESSION_AUDIT_CACHE_MAX = 50_000;
+const sessionAuditSeen = new Map<string, number>(); // insertion-ordered → evict oldest
+
+function sessionAuditKey(prefix: string, payload: jwt.JwtPayload | null): string {
+  return `${prefix}|${payload?.iss ?? 'unknown'}|${payload?.sub ?? 'nosub'}|${payload?.iat ?? 0}`;
+}
+
+/** First-seen guard: true the first time a key is seen this process; bounds the map. */
+function markSessionAuditSeen(key: string): boolean {
+  if (sessionAuditSeen.has(key)) {
+    return false;
+  }
+  if (sessionAuditSeen.size >= SESSION_AUDIT_CACHE_MAX) {
+    const oldest = sessionAuditSeen.keys().next().value;
+    if (oldest !== undefined) {
+      sessionAuditSeen.delete(oldest);
+    }
+  }
+  sessionAuditSeen.set(key, Date.now());
+  return true;
+}
+
+let _usersEntityId: string | null | undefined; // resolved lazily; null once known-missing
+function resolveUsersEntityId(): string | null {
+  if (_usersEntityId === undefined) {
+    const md = Metadata.Provider; // global-provider-ok: server auth path; Users entity ID is process-global metadata
+    _usersEntityId = md?.EntityByName('Users')?.ID ?? md?.EntityByName('MJ: Users')?.ID ?? null;
+  }
+  return _usersEntityId;
+}
+
+/**
+ * Writes one session/login audit row via the provider's CreateAuditLogRecord helper
+ * (resolves the audit-log type by name from the in-memory cache, fire-and-forget save).
+ * EntityID points at the Users entity + the user's ID as RecordID — a session event
+ * is "about" the user. Full IP/UA/origin go in Details (per reviewer request); a
+ * deployment may later truncate/hash them via an audit-policy knob.
+ */
+async function writeSessionAudit(args: {
+  user: UserInfo;
+  auditTypeName: string;
+  status: 'Success' | 'Failed';
+  payload: jwt.JwtPayload | null;
+  requestContext: RequestContext | undefined;
+  requestDomain: string | undefined;
+  description: string;
+  extraDetails?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    // global-provider-ok: pre-context auth path; the audit-log-type cache is process-global metadata.
+    const provider = Metadata.Provider as unknown as DatabaseProviderBase; // global-provider-ok: server auth audit path; runs under the server's single default provider
+    const usersEntityId = resolveUsersEntityId();
+    if (!provider || !usersEntityId) {
+      return;
+    }
+    // Audit rows MUST be saved under a PRIVILEGED context. The session user may be a
+    // permission-less magic-link guest with no create rights on MJ: Audit Logs — saving
+    // as them silently fails the permission check (this is exactly why the built-in
+    // CreateAuditLogRecord, which saves as `user`, drops guest session rows). We record
+    // the real session user in UserID but write the row as the system user.
+    const writer = await getSystemUser();
+    const auditType = provider.AuditLogTypes?.find(
+      (t) => t?.Name?.trim().toLowerCase() === args.auditTypeName.trim().toLowerCase(),
+    );
+    if (!writer || !auditType) {
+      return;
+    }
+    const details = JSON.stringify({
+      provider: args.payload?.iss ?? null,
+      sub: args.payload?.sub ?? null,
+      iat: args.payload?.iat ?? null,
+      ipAddress: args.requestContext?.ipAddress ?? null,
+      userAgent: args.requestContext?.userAgent ?? null,
+      origin: args.requestDomain ?? null,
+      endpoint: args.requestContext?.endpoint ?? null,
+      ...(args.extraDetails ?? {}),
+    });
+    const row = await provider.GetEntityObject('MJ: Audit Logs', writer);
+    row.NewRecord();
+    row.Set('UserID', args.user.ID);
+    row.Set('AuditLogTypeID', auditType.ID);
+    row.Set('Status', args.status);
+    row.Set('EntityID', usersEntityId);
+    row.Set('RecordID', args.user.ID);
+    row.Set('Details', details);
+    row.Set('Description', args.description);
+    if (!(await row.Save())) {
+      console.warn('[SessionAudit] audit row save returned false:', row.LatestResult?.CompleteMessage ?? 'unknown');
+    }
+  } catch (e) {
+    console.warn('[SessionAudit] failed to write audit row:', e instanceof Error ? e.message : String(e));
+  }
+}
+
+/** Best-effort failure audit: decodes the attempted identity, dedupes, attributes to the system user. */
+async function auditLoginFailure(
+  bearerToken: string | undefined,
+  error: unknown,
+  requestContext: RequestContext | undefined,
+  requestDomain: string | undefined,
+): Promise<void> {
+  try {
+    const token = bearerToken ? bearerToken.replace('Bearer ', '') : '';
+    if (!token) {
+      // No credential was presented — a public/unauthenticated request (favicon, health
+      // checks, anonymous GraphQL), NOT a failed login. Auditing these is pure noise.
+      return;
+    }
+    let payload: jwt.JwtPayload | null = null;
+    const decoded = jwt.decode(token);
+    if (decoded && typeof decoded !== 'string') {
+      payload = decoded;
+    }
+    // Dedup by (iss,sub,iat) when the token decodes; otherwise by the token tail so that
+    // a scan presenting many DIFFERENT garbage tokens doesn't collapse into a single row.
+    const key = payload ? sessionAuditKey('fail', payload) : `fail|raw|${token.slice(-24)}`;
+    if (!markSessionAuditSeen(key)) {
+      return; // already logged this failing identity/token — don't let a retry loop spam
+    }
+    // No-arg: getSystemUser pulls from the process-global UserCache (no ConnectionPool needed here).
+    const systemUser = await getSystemUser();
+    if (!systemUser) {
+      return;
+    }
+    await writeSessionAudit({
+      user: systemUser,
+      auditTypeName: LOGIN_FAILED_AUDIT_TYPE,
+      status: 'Failed',
+      payload,
+      requestContext,
+      requestDomain,
+      description: 'Authentication failed during token validation',
+      extraDetails: {
+        attemptedEmail: payload && typeof payload === 'object' ? (payload as Record<string, unknown>)['email'] ?? null : null,
+        reason: error instanceof Error ? error.message : String(error),
+      },
+    });
+  } catch (e) {
+    console.warn('[SessionAudit] failed to write login-failure row:', e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ── Phase 5: magic-link session scoping (resource scope + anonymous role synthesis) ──
+// Builds the per-request UserInfo for a magic-link session, carrying:
+//   • a per-session RESOURCE scope (ResourceID/ResourceType from the verified claims) so
+//     resource-pinned RLS (`{{ScopeResourceID}}`) confines a share to one resource + its
+//     FK-reachable dependents — the granted role stays narrow. Applies to named AND anon.
+//   • for ANONYMOUS sessions only, the claimed role(s) synthesized in memory (the shared
+//     Anonymous principal holds no DB roles, by design — so anon sessions can't accrete).
+// Always returns a FRESH UserInfo when it sets per-session state, because the resolved
+// userRecord may be a SHARED cached instance (e.g. multiple recruiters on one per-company
+// link) — mutating it would leak one session's scope to another. Non-magic-link sessions,
+// and named sessions with no resource scope, are returned untouched.
+function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload): UserInfo {
+  if (payload['mj_magic_link'] !== true) {
+    return userRecord;
+  }
+  const md = Metadata.Provider; // global-provider-ok: server-side magic-link session built under the server's single default provider
+  const isAnon = payload['mj_anon'] === true;
+  const scopes = payload['mj_scopes'];
+
+  // Per-session resource scope (single-resource share; multi-resource union is a follow-on).
+  let scope: MagicLinkScope | undefined;
+  if (Array.isArray(scopes)) {
+    const withResource = scopes.find((s) => s && typeof s.resourceId === 'string' && s.resourceId);
+    if (withResource) {
+      scope = {
+        ResourceID: withResource.resourceId,
+        ResourceType: typeof withResource.resourceType === 'string' ? withResource.resourceType : undefined,
+      };
+    }
+  }
+
+  // Anonymous: synthesize the claimed role(s) (persisted nowhere). Named: keep real DB roles.
+  let synthesizedRoles: { UserID: string; RoleID: string; RoleName: string }[] | undefined;
+  if (isAnon) {
+    const roleNames = new Set<string>();
+    if (Array.isArray(scopes)) {
+      for (const s of scopes) {
+        if (s && typeof s.role === 'string') {
+          roleNames.add(s.role);
+        }
+      }
+    }
+    if (typeof payload['mj_role'] === 'string') {
+      roleNames.add(payload['mj_role'] as string);
+    }
+    synthesizedRoles = [];
+    for (const rn of roleNames) {
+      const role = md?.Roles.find((r) => r.Name?.trim().toLowerCase() === rn.trim().toLowerCase());
+      if (role) {
+        synthesizedRoles.push({ UserID: userRecord.ID, RoleID: role.ID, RoleName: role.Name });
+      }
+    }
+  }
+
+  // Returning-visitor context (RV1/RV2/RV4): carried on a widget guest token so the voice path
+  // (server-created conversation) stamps the same returning-visitor anchor + resolved identity.
+  const visitorContext = extractReturningVisitorContext(payload);
+
+  // Widget-instance identity (mj_widget_id): present on every public web-widget guest token. The
+  // privileged agent-dispatch path reads it to resolve the AUTHORITATIVE pinned agent for the guest
+  // (so a guest can never run an arbitrary agent under the elevated server principal).
+  const widgetGuestContext = extractWidgetGuestContext(payload);
+
+  // Named session with no resource scope and no widget/visitor context → no per-request state needed.
+  if (!isAnon && !scope && !visitorContext && !widgetGuestContext) {
+    return userRecord;
+  }
+
+  const sessionUser = new UserInfo(md, {
+    ...userRecord,
+    _UserRoles: undefined,
+    UserRoles: isAnon ? synthesizedRoles : userRecord.UserRoles,
+  });
+  if (scope) {
+    sessionUser.MagicLinkScope = scope;
+  }
+  if (visitorContext) {
+    sessionUser.ReturningVisitorContext = visitorContext;
+  }
+  if (widgetGuestContext) {
+    sessionUser.WidgetGuestContext = widgetGuestContext;
+  }
+  if (isAnon) {
+    // Mark the session so the CurrentUser field resolver serves these synthesized roles
+    // (the shared Anonymous principal holds none in the DB). See UserInfo.IsMagicLinkAnonymous.
+    sessionUser.IsMagicLinkAnonymous = true;
+  }
+  return sessionUser;
+}
+
+/**
+ * Extracts the returning-visitor context (RV1/RV2/RV4) from a widget guest token's claims, or
+ * undefined when the token carries no VisitorKey (the default, remembering-off case). Used so the
+ * voice path can stamp the conversation with the same anchor/identity the text path stamps client-side.
+ */
+function extractReturningVisitorContext(payload: jwt.JwtPayload): ReturningVisitorContext | undefined {
+  const visitorKey = payload['mj_visitor_key'];
+  if (typeof visitorKey !== 'string' || !visitorKey) {
+    return undefined;
+  }
+  const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
+  return {
+    VisitorKey: visitorKey,
+    LastConversationID: str(payload['mj_last_conversation_id']),
+    LinkedEntityID: str(payload['mj_linked_entity_id']),
+    LinkedRecordID: str(payload['mj_linked_record_id']),
+  };
+}
+
+/**
+ * Extracts the widget-instance identity (`mj_widget_id`) from a public web-widget guest token, or
+ * undefined when the token carries none (every non-widget session). Carried so the privileged
+ * agent-dispatch path can resolve the authoritative pinned agent for the guest from the trusted token.
+ */
+function extractWidgetGuestContext(payload: jwt.JwtPayload): WidgetGuestContext | undefined {
+  const widgetId = payload['mj_widget_id'];
+  if (typeof widgetId !== 'string' || !widgetId) {
+    return undefined;
+  }
+  return { WidgetID: widgetId };
 }
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
@@ -48,7 +320,13 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
       return;
     }
 
-    const verifyOptions: jwt.VerifyOptions = {};
+    const verifyOptions: jwt.VerifyOptions = {
+      // SECURITY: explicitly pin the accepted signature algorithms to the asymmetric family.
+      // The signing key here comes from the issuer's JWKS (an RSA/EC public key), so without an
+      // explicit allow-list a future key-format change or library regression could reintroduce
+      // classic `alg=none` / RS256->HS256 confusion attacks. Pinning fails such tokens closed.
+      algorithms: ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'PS256'],
+    };
     if (Array.isArray(options.audience)) {
       verifyOptions.audience = options.audience as [string, ...string[]];
     } else {
@@ -59,9 +337,12 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
       if (jwt && typeof jwt !== 'string' && !err) {
         const payload = jwt.payload ?? jwt;
 
-        // Use provider to extract user info for logging
-        const userInfo = extractUserInfoFromPayload(payload);
-        console.log(`Valid token: ${userInfo.fullName || 'Unknown'} (${userInfo.email || userInfo.preferredUsername || 'Unknown'})`);
+        // Per-request token confirmation — debug-only (one of the worst
+        // "constantly on" offenders on an authenticated server).
+        if (isDebugLogLevel()) {
+          const userInfo = extractUserInfoFromPayload(payload);
+          console.log(`Valid token: ${userInfo.fullName || 'Unknown'} (${userInfo.email || userInfo.preferredUsername || 'Unknown'})`);
+        }
         resolve(payload);
       } else {
         console.warn('Invalid token');
@@ -146,7 +427,13 @@ export const getUserPayload = async (
     // Check for system API key (x-mj-api-key header)
     // This authenticates as the system user for system-level operations
     if (systemApiKey && systemApiKey != String(undefined)) {
-      if (systemApiKey === apiKey) {
+      // SECURITY: compare the superadmin system API key in constant time. A plain `===`
+      // short-circuits on the first differing byte, leaking a timing side-channel that could
+      // be used to recover the key byte-by-byte. Hash both sides to fixed-length digests so
+      // timingSafeEqual never throws on length mismatch and the comparison is length-agnostic.
+      const systemKeyDigest = createHash('sha256').update(String(systemApiKey)).digest();
+      const providedKeyDigest = createHash('sha256').update(String(apiKey)).digest();
+      if (timingSafeEqual(systemKeyDigest, providedKeyDigest)) {
         const systemUser = await getSystemUser(readOnlyDataSource);
         return {
           userRecord: systemUser,
@@ -162,7 +449,10 @@ export const getUserPayload = async (
     const token = bearerToken.replace('Bearer ', '');
 
     if (!token) {
-      console.warn('No token to validate');
+      // No log here — an anonymous/unauthenticated request is routine (a health check, a
+      // CORS preflight-adjacent probe, a client that hasn't finished its auth handshake
+      // yet), not exceptional. `createUnifiedAuthMiddleware`'s catch block below is the
+      // single place that decides how (and whether) to log this — same as `TokenExpiredError`.
       throw new AuthenticationError('Missing token');
     }
 
@@ -216,11 +506,45 @@ export const getUserPayload = async (
       throw new AuthorizationError();
     }
 
-    return { userRecord, email: userRecord.Email, sessionId };
+    // Claims authorizer: for anonymous magic-link sessions, replace the role-less
+    // Anonymous principal with an in-memory UserInfo carrying the claimed role(s), so
+    // the session enforces exactly the link's granted scope (no DB accretion). No-op
+    // for everything else.
+    const sessionUser = buildMagicLinkSessionUser(userRecord, payload);
+
+    // Session-established audit — once per issued token (deduped), fire-and-forget so
+    // it never adds latency to the request. The dedup mark is set synchronously here.
+    if (markSessionAuditSeen(sessionAuditKey('sess', payload))) {
+      void writeSessionAudit({
+        user: sessionUser,
+        auditTypeName: SESSION_AUDIT_TYPE,
+        status: 'Success',
+        payload,
+        requestContext,
+        requestDomain,
+        description: `Session established via ${payload.iss ?? 'unknown provider'}`,
+      });
+    }
+
+    return { userRecord: sessionUser, email: sessionUser.Email, sessionId };
   } catch (error) {
-    console.error(error);
+    // An anonymous request presenting no credentials at all (a health check, a CORS
+    // preflight-adjacent probe, a client mid-handshake) is routine, same as an expired
+    // long-lived session — neither is a bug worth a raw console dump here. Both still
+    // propagate (audited below, in the "missing token" case) so the single call site
+    // that actually decides final logging/response policy — createUnifiedAuthMiddleware's
+    // catch block — sees the real error instead of a generic, indistinguishable one.
+    const isMissingToken = error instanceof Error && error.message === 'Missing token';
+    if (!(error instanceof TokenExpiredError) && !isMissingToken) {
+      console.error(error);
+    }
     if (error instanceof TokenExpiredError) {
-      throw error;
+      throw error; // expected for long-lived sessions; not a failure worth auditing
+    }
+    // Best-effort failure audit (token scanning / brute-force signal). Never blocks auth.
+    void auditLoginFailure(bearerToken, error, requestContext, requestDomain);
+    if (isMissingToken) {
+      throw error; // preserve the original message — see comment above
     }
     throw new AuthenticationError('Unable to authenticate user');
   }
@@ -230,6 +554,22 @@ export const getUserPayload = async (
  * Extracts auth headers and builds a RequestContext from an Express request.
  * Shared by both the unified auth middleware and the WebSocket context.
  */
+/**
+ * Extracts the hostname from a request `Origin` header using the WHATWG `URL` API (replacing the
+ * deprecated, security-flagged `url.parse()` — Node DEP0169). Returns `undefined` for a missing,
+ * empty, or unparseable origin, matching the prior `url.parse().hostname ?? undefined` semantics.
+ */
+function parseRequestHostname(origin: string | undefined): string | undefined {
+  if (!origin) {
+    return undefined;
+  }
+  try {
+    return new URL(origin).hostname || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function extractAuthInputs(req: IncomingMessage): {
   bearerToken: string;
   sessionId: string;
@@ -239,7 +579,7 @@ function extractAuthInputs(req: IncomingMessage): {
   requestContext: RequestContext;
 } {
   const sessionIdRaw = req.headers['x-session-id'];
-  const requestDomain = url.parse(req.headers.origin || '');
+  const requestDomain = parseRequestHostname(req.headers.origin);
   const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
   const bearerToken = req.headers.authorization ?? '';
   const systemApiKey = String(req.headers['x-mj-api-key']);
@@ -257,7 +597,7 @@ function extractAuthInputs(req: IncomingMessage): {
   return {
     bearerToken,
     sessionId,
-    requestDomain: requestDomain?.hostname ?? undefined,
+    requestDomain,
     systemApiKey,
     userApiKey,
     requestContext,
@@ -320,6 +660,17 @@ export function createUnifiedAuthMiddleware(
         });
         return;
       }
+      // An unauthenticated request presenting no credentials at all is routine (health
+      // checks, CORS preflight-adjacent probes, a client mid-handshake) — same category as
+      // TokenExpiredError above, not a bug to surface with a full stack trace. Anything else
+      // (a malformed/tampered token, an invalid system API key) is still logged in full below,
+      // since those ARE worth a human's attention. Checked by message rather than
+      // `instanceof AuthenticationError` — `type-graphql`'s class can resolve to a distinct
+      // copy across module/bundler boundaries, where `instanceof` silently never matches.
+      if (error instanceof Error && error.message === 'Missing token') {
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+      }
       console.error('Auth error:', error);
       res.status(401).json({ error: 'Authentication failed' });
     }
@@ -341,8 +692,10 @@ export const contextFunction =
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const reqAny = req as any;
     const operationName: string | undefined = reqAny.body?.operationName;
-    if (operationName !== 'IntrospectionQuery') {
-      console.dir({ operationName, variables: shortenForLog(reqAny.body?.variables) }, { depth: null, breakLength: 200 });
+    // Per-request GraphQL boundary line — debug-only. Kept (not deleted) so the
+    // data is available when an operator opts into debug, but off by default.
+    if (operationName !== 'IntrospectionQuery' && isDebugLogLevel()) {
+      console.dir(buildBoundaryLogPayload(operationName), { depth: null, breakLength: 200 });
     }
 
     // Auth already happened in the unified auth middleware — just read the result
@@ -391,7 +744,12 @@ async function createPerRequestProviders(
     { provider: p, type: 'Read-Write' }
   ];
 
-  if (!isPostgres) {
+  if (isPostgres) {
+    const rp = await tryCreateReadOnlyPostgresProvider();
+    if (rp) {
+      providers.push({ provider: rp, type: 'Read-Only' });
+    }
+  } else {
     const rp = await tryCreateReadOnlyProvider(dataSources);
     if (rp) {
       providers.push({ provider: rp, type: 'Read-Only' });
@@ -432,6 +790,46 @@ async function createPostgresProvider(): Promise<DatabaseProviderBase> {
   }
 
   return pgProvider;
+}
+
+/**
+ * Attempts to create a read-only PostgreSQL provider using DB_READ_ONLY_USERNAME/PASSWORD.
+ * Shares the connection pool from the primary provider. Returns null if no read-only credentials are configured.
+ */
+async function tryCreateReadOnlyPostgresProvider(): Promise<DatabaseProviderBase | null> {
+  const roUser = process.env.PG_READ_ONLY_USERNAME || process.env.DB_READ_ONLY_USERNAME;
+  const roPass = process.env.PG_READ_ONLY_PASSWORD || process.env.DB_READ_ONLY_PASSWORD;
+  if (!roUser || !roPass) {
+    return null;
+  }
+
+  try {
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+    const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
+    const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
+    const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
+
+    const roProvider = new PostgreSQLDataProvider();
+    const roConfig = new PostgreSQLProviderConfigData(
+      { Host: pgHost, Port: pgPort, Database: pgDatabase, User: roUser, Password: roPass },
+      mj_core_schema,
+      0,
+      undefined,
+      undefined,
+      false,
+    );
+
+    const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (share primary provider's PG pool with the read-only provider)
+    if (primaryProvider?.DatabaseConnection) {
+      await roProvider.ConfigWithSharedPool(roConfig, primaryProvider.DatabaseConnection);
+    } else {
+      await roProvider.Config(roConfig);
+    }
+
+    return roProvider;
+  } catch (_err) {
+    return null;
+  }
 }
 
 /**

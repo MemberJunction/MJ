@@ -1,11 +1,23 @@
 import { Component, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { RunView, Metadata } from '@memberjunction/core';
+import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 import { MJUserEntity, MJRoleEntity, MJUserRoleEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
+import {
+  buildUserManagementAgentContext,
+  isValidUserStatusFilter,
+  resolveUserByIDOrName,
+  resolveRoleByIDOrName,
+  UserManagementAgentContextInput,
+} from './user-management-agent-context';
+
+/** Sortable user columns + direction the agent can request via SortUsers. */
+type UserSortField = 'name' | 'email' | 'status' | 'type';
+type UserSortDirection = 'asc' | 'desc';
 
 interface UserStats {
   totalUsers: number;
@@ -28,7 +40,7 @@ interface FilterOptions {
 })
 @RegisterClass(BaseDashboard, 'UserManagement')
 export class UserManagementComponent extends BaseDashboard implements OnDestroy {
-  
+
   // State management
   public users: MJUserEntity[] = [];
   public filteredUsers: MJUserEntity[] = [];
@@ -69,7 +81,6 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public showCreateDialog = false;
   public showEditDialog = false;
   public showDeleteConfirm = false;
-  public showMobileFilters = false;
 
   // Mobile expansion state
   private expandedUserIds = new Set<string>();
@@ -96,10 +107,247 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
 
   protected initDashboard(): void {
     this.setupFilterSubscription();
+    this.registerAgentClientTools();
   }
 
   protected loadData(): void {
     this.loadInitialData();
+  }
+
+  // ================================================================
+  // AI Agent Context & Client Tools
+  //
+  // 🚨 SAFETY BOUNDARY — READ-ONLY / GOVERNANCE SURFACE 🚨
+  // User Management is a security-sensitive admin surface. The agent context
+  // and client tools registered here are strictly READ-ONLY / navigational:
+  // status/role filters, free-text search, SELECTING a user (view), SORTING the
+  // list, clearing filters, refreshing, CSV export of already-visible rows, and
+  // navigating to a user's record for viewing. The mutating operations on this
+  // component — create/edit/delete users, toggle status, bulk enable/disable/
+  // delete, AND bulk role assignment (a role GRANT) — are DELIBERATELY NOT
+  // exposed to the agent; they remain human-initiated. Context exposes only
+  // counts, active filter selections, and on-screen display names/emails —
+  // NEVER passwords, tokens, or other secrets.
+  // ================================================================
+
+  /** Active agent-requested sort (defaults to the grid's Name/asc). */
+  private agentSortField: UserSortField = 'name';
+  private agentSortDirection: UserSortDirection = 'asc';
+
+  /**
+   * Publish the current user-management state to the AI agent. Re-invoked on
+   * every meaningful state change (data load, filter, selection, sort) so the
+   * agent sees a fresh, read-only, NON-SENSITIVE snapshot. Shaped by the pure
+   * {@link buildUserManagementAgentContext} helper (unit-tested in isolation).
+   */
+  private publishAgentContext(): void {
+    const filters = this.filters$.value;
+    const roleFilter = filters.role ? this.roles.find(r => UUIDsEqual(r.ID, filters.role)) : null;
+    const input: UserManagementAgentContextInput = {
+      TotalUserCount: this.users.length,
+      FilteredUserCount: this.filteredUsers.length,
+      ActiveUserCount: this.stats.activeUsers,
+      InactiveUserCount: this.stats.inactiveUsers,
+      StatusFilter: filters.status,
+      RoleFilterId: filters.role || null,
+      RoleFilterName: roleFilter?.Name ?? null,
+      SearchText: filters.search,
+      SelectedUserId: this.selectedUser?.ID ?? null,
+      SelectedUserName: this.selectedUser?.Name ?? null,
+      VisibleUserNames: this.filteredUsers.map(u => u.Name ?? '').filter(n => n !== ''),
+      VisibleUserEmails: this.filteredUsers.map(u => u.Email ?? '').filter(e => e !== ''),
+      AvailableRoleNames: this.roles.map(r => r.Name ?? '').filter(n => n !== ''),
+      VisibleColumns: ['Name', 'Email', 'Type', 'Status', 'Roles'],
+    };
+    this.navigationService.SetAgentContext(this, buildUserManagementAgentContext(input));
+  }
+
+  /**
+   * Register the read-only / navigational client tools the agent may invoke.
+   * Every Handler is tolerant: validates input and returns
+   * `{ Success: false, ErrorMessage }` rather than throwing.
+   */
+  private registerAgentClientTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SwitchUserStatusFilter',
+        Description: 'Filter the user list by status. Valid values: all, active, inactive.',
+        ParameterSchema: { type: 'object', properties: { status: { type: 'string', enum: ['all', 'active', 'inactive'] } }, required: ['status'] },
+        Handler: async (params: Record<string, unknown>) => this.handleSwitchStatusFilterTool(params),
+      },
+      {
+        Name: 'FilterUsersByRole',
+        Description: 'Filter the user list by role. Accepts a role name OR a role ID; pass an empty string to clear the role filter. Available role names are published in AvailableRoleNames.',
+        ParameterSchema: { type: 'object', properties: { role: { type: 'string' } }, required: ['role'] },
+        Handler: async (params: Record<string, unknown>) => this.handleFilterByRoleTool(params),
+      },
+      {
+        Name: 'SearchUsers',
+        Description: 'Free-text search across user name, email, first name, and last name.',
+        ParameterSchema: { type: 'object', properties: { searchText: { type: 'string' } }, required: ['searchText'] },
+        Handler: async (params: Record<string, unknown>) => this.handleSearchTool(params),
+      },
+      {
+        Name: 'SelectUser',
+        Description: 'Select a user for VIEWING by ID or name (exact ID → exact name/email → partial match). Read-only — does not edit the user. Updates SelectedUserId/SelectedUserName in context.',
+        ParameterSchema: { type: 'object', properties: { user: { type: 'string' } }, required: ['user'] },
+        Handler: async (params: Record<string, unknown>) => this.handleSelectUserTool(params),
+      },
+      {
+        Name: 'SortUsers',
+        Description: 'Sort the visible user list. field: name | email | status | type. direction: asc | desc (default asc).',
+        ParameterSchema: { type: 'object', properties: { field: { type: 'string', enum: ['name', 'email', 'status', 'type'] }, direction: { type: 'string', enum: ['asc', 'desc'] } }, required: ['field'] },
+        Handler: async (params: Record<string, unknown>) => this.handleSortUsersTool(params),
+      },
+      {
+        Name: 'NavigateToUserRecord',
+        Description: 'Open the record for a user (by ID or name) in a tab for VIEWING. Read-only navigation — does not edit the user.',
+        ParameterSchema: { type: 'object', properties: { user: { type: 'string' } }, required: ['user'] },
+        Handler: async (params: Record<string, unknown>) => this.handleNavigateToUserRecordTool(params),
+      },
+      {
+        Name: 'ClearAllFilters',
+        Description: 'Clear all user filters (status, role, and search) and show the full list.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.handleClearFiltersTool(),
+      },
+      {
+        Name: 'RefreshUserList',
+        Description: 'Reload the user list from the server. Read-only — does not mutate any data.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.handleRefreshTool(),
+      },
+      {
+        Name: 'ExportUsers',
+        Description: 'Export the currently filtered users as a CSV file.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.handleExportTool(),
+      },
+    ]);
+  }
+
+  private handleSwitchStatusFilterTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const status = params?.['status'];
+    if (!isValidUserStatusFilter(status)) {
+      return { Success: false, ErrorMessage: `Invalid status "${String(status)}". Expected one of: all, active, inactive.` };
+    }
+    this.onStatusFilterChange(status);
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  private handleFilterByRoleTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const raw = String(params?.['role'] ?? '');
+    if (!raw.trim()) {
+      // Empty string explicitly clears the role filter.
+      this.updateFilter({ role: '' });
+      this.publishAgentContext();
+      return { Success: true };
+    }
+    const resolved = resolveRoleByIDOrName(raw, this.roles.map(r => ({ ID: r.ID, Name: r.Name ?? '' })));
+    if (!resolved.ok) {
+      return { Success: false, ErrorMessage: resolved.error };
+    }
+    this.updateFilter({ role: resolved.match.ID });
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  private handleSearchTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const searchText = params?.['searchText'];
+    if (typeof searchText !== 'string') {
+      return { Success: false, ErrorMessage: 'searchText must be a string.' };
+    }
+    this.updateFilter({ search: searchText });
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  private handleSelectUserTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const raw = String(params?.['user'] ?? '');
+    const resolved = resolveUserByIDOrName(raw, this.users.map(u => ({
+      ID: u.ID, Name: u.Name ?? '', Email: u.Email, FirstName: u.FirstName, LastName: u.LastName,
+    })));
+    if (!resolved.ok) {
+      return { Success: false, ErrorMessage: resolved.error };
+    }
+    const match = this.users.find(u => UUIDsEqual(u.ID, resolved.match.ID)) ?? null;
+    this.selectedUser = match;
+    this.cdr.markForCheck();
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  private handleSortUsersTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const field = String(params?.['field'] ?? '');
+    if (field !== 'name' && field !== 'email' && field !== 'status' && field !== 'type') {
+      return { Success: false, ErrorMessage: `Invalid sort field "${field}". Expected one of: name, email, status, type.` };
+    }
+    const dirRaw = params?.['direction'];
+    const direction: UserSortDirection = dirRaw === 'desc' ? 'desc' : 'asc';
+    this.agentSortField = field;
+    this.agentSortDirection = direction;
+    this.applySortToVisibleUsers();
+    this.cdr.markForCheck();
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  private handleNavigateToUserRecordTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const raw = String(params?.['user'] ?? '');
+    const resolved = resolveUserByIDOrName(raw, this.users.map(u => ({
+      ID: u.ID, Name: u.Name ?? '', Email: u.Email, FirstName: u.FirstName, LastName: u.LastName,
+    })));
+    if (!resolved.ok) {
+      return { Success: false, ErrorMessage: resolved.error };
+    }
+    this.navigationService.OpenEntityRecord('MJ: Users', CompositeKey.FromID(resolved.match.ID));
+    return { Success: true };
+  }
+
+  /** Sort filteredUsers in place per the active agent-requested sort. Read-only display ordering. */
+  private applySortToVisibleUsers(): void {
+    const dir = this.agentSortDirection === 'desc' ? -1 : 1;
+    const field = this.agentSortField;
+    this.filteredUsers = [...this.filteredUsers].sort((a, b) => {
+      const av = this.sortKeyForUser(a, field);
+      const bv = this.sortKeyForUser(b, field);
+      return av.localeCompare(bv) * dir;
+    });
+  }
+
+  private sortKeyForUser(user: MJUserEntity, field: UserSortField): string {
+    switch (field) {
+      case 'email': return (user.Email ?? '').toLowerCase();
+      case 'status': return user.IsActive ? 'active' : 'inactive';
+      case 'type': return (user.Type ?? '').toLowerCase();
+      case 'name':
+      default: return (user.Name ?? '').toLowerCase();
+    }
+  }
+
+  private handleClearFiltersTool(): { Success: boolean } {
+    this.resetAllFiltersAndSearch();
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  private async handleRefreshTool(): Promise<{ Success: boolean; ErrorMessage?: string }> {
+    try {
+      await this.loadInitialData();
+      this.publishAgentContext();
+      return { Success: true };
+    } catch (e) {
+      return { Success: false, ErrorMessage: e instanceof Error ? e.message : 'Refresh failed.' };
+    }
+  }
+
+  private handleExportTool(): { Success: boolean; ErrorMessage?: string } {
+    if (this.filteredUsers.length === 0) {
+      return { Success: false, ErrorMessage: 'No users to export.' };
+    }
+    this.exportUsers();
+    return { Success: true };
   }
 
   override ngOnDestroy(): void {
@@ -136,6 +384,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       this.ngZone.run(() => {
         this.isLoading = false;
         this.cdr.markForCheck();
+        this.publishAgentContext();
       });
     }
   }
@@ -195,13 +444,14 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       )
       .subscribe(() => {
         this.applyFilters();
+        this.publishAgentContext();
       });
   }
-  
+
   private applyFilters(): void {
     const filters = this.filters$.value;
     let filtered = [...this.users];
-    
+
     // Apply status filter
     if (filters.status !== 'all') {
       filtered = filtered.filter(user => 
@@ -229,8 +479,10 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     }
     
     this.filteredUsers = filtered;
+    // Preserve any agent-requested sort across filter changes (read-only display ordering).
+    this.applySortToVisibleUsers();
   }
-  
+
   private calculateStats(): void {
     this.stats = {
       totalUsers: this.users.length,
@@ -241,24 +493,22 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
   
   // Public methods for template
-  public onSearchChange(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.updateFilter({ search: value });
-  }
-  
   public onStatusFilterChange(status: 'all' | 'active' | 'inactive'): void {
     this.updateFilter({ status });
   }
-  
-  public onRoleFilterChange(role: string): void {
-    this.updateFilter({ role });
-  }
-  
+
   public updateFilter(partial: Partial<FilterOptions>): void {
     this.filters$.next({
       ...this.filters$.value,
       ...partial
     });
+    // Discrete changes (chips, popover dropdowns) apply immediately. Text search
+    // still goes through the 300ms debounce in setupFilterSubscription so we
+    // don't re-filter on every keystroke.
+    if (!('search' in partial)) {
+      this.applyFilters();
+      this.cdr.markForCheck();
+    }
   }
   
   public selectUser(user: MJUserEntity): void {
@@ -464,7 +714,90 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       status: 'all',
       role: ''
     });
-    this.showMobileFilters = false;
+    this.applyFilters();
+    this.cdr.markForCheck();
+  }
+
+  // -- Filter panel binding (mj-filter-panel inside the popover) -------------
+  //
+  // Only Role lives inside the popover — Status is exposed as visible chips
+  // in the filter card alongside search (the standardized "quick toggle"
+  // pattern used by Scheduling's exterior chrome). The popover badge counts
+  // only popover-resident filters (Role), so Status changes don't ghost
+  // the badge.
+
+  /**
+   * FilterFieldConfig[] describing the popover's Role field. Driven off
+   * `roles[]` so the dropdown stays in sync as roles load.
+   */
+  public get filterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'status',
+        type: 'chips',
+        label: 'Status',
+        chipOptions: [
+          { text: 'All', value: 'all' },
+          { text: 'Active', value: 'active' },
+          { text: 'Inactive', value: 'inactive' },
+        ],
+      },
+      {
+        key: 'role',
+        type: 'dropdown',
+        label: 'Role',
+        icon: 'fa-solid fa-user-shield',
+        placeholder: 'All Roles',
+        filterable: this.roles.length > 10,
+        options: [
+          { text: 'All Roles', value: '' },
+          ...this.roles.map(r => ({ text: r.Name ?? '', value: r.ID }))
+        ]
+      }
+    ];
+  }
+
+  /** Current popover field values keyed by FilterFieldConfig.key. */
+  public get filterValues(): Record<string, unknown> {
+    return { status: this.filters$.value.status, role: this.filters$.value.role };
+  }
+
+  /** Total active filters (Status + Role) — drives the Filter button badge. */
+  public get TotalActiveFilterCount(): number {
+    const f = this.filters$.value;
+    return (f.status !== 'all' ? 1 : 0) + (f.role !== '' ? 1 : 0);
+  }
+
+  /** Apply a value change from <mj-filter-panel>. */
+  public onFilterPanelChange(values: Record<string, unknown>): void {
+    const partial: Partial<FilterOptions> = {};
+    if ('status' in values) {
+      partial.status = (values['status'] as FilterOptions['status']) || 'all';
+    }
+    if ('role' in values) {
+      partial.role = (values['role'] as string) ?? '';
+    }
+    this.updateFilter(partial);
+  }
+
+  /** Clear all filters (Status + Role); search persists. */
+  public clearAllAppliedFilters(): void {
+    this.updateFilter({ status: 'all', role: '' });
+  }
+
+  /** True when search and/or panel filters are narrowing the list — gates the
+   *  no-results empty-state "Reset filters" CTA. */
+  public get IsListNarrowed(): boolean {
+    return this.filters$.value.search !== '' || this.TotalActiveFilterCount > 0;
+  }
+
+  /** Reset everything narrowing the list (search + Status + Role) and refresh
+   *  immediately. Wired to the no-results empty-state CTA. Unlike
+   *  clearAllAppliedFilters(), this also clears the search box. */
+  public resetAllFiltersAndSearch(): void {
+    this.filters$.next({ status: 'all', role: '', search: '' });
+    this.applyFilters();
+    this.cdr.markForCheck();
   }
 
   public toggleSelectAll(): void {

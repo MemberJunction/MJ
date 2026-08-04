@@ -1,0 +1,109 @@
+# Bacpac standalone — run the FULL MJ stack from PUBLISHED images (no monorepo)
+# against a database imported from a .bacpac. Driven by `mj test regression up
+# --bacpac=<file>` when outside the monorepo.
+#
+# ┌─ sqlserver ──┐
+# │              └─ bacpac-import (one-shot, amd64) ── SqlPackage import into DB
+# │                    └─ api (memberjunction/api) ── boots → mj migrate + codegen (= upgrade)
+# │                         └─ explorer (memberjunction/explorer) ── nginx, /api→api, runtime Auth0
+# │                              └─ test-runner ── push prompts+suite, drive explorer URL, reports
+#
+# PREREQUISITE: `memberjunction/explorer` is not published yet (a separate
+# workstream — runtime-configurable Explorer image). Until it exists, the
+# `explorer` service can't pull and external bacpac stays dormant. Everything
+# else (Mode B/C/D via docker-compose.standalone.yml) is independent of it.
+name: mj-regression-bacpac
+
+x-db: &db-conn
+  DB_HOST: sqlserver
+  DB_PORT: "1433"
+  DB_USERNAME: sa
+  DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+  DB_DATABASE: "${DB_DATABASE:-MemberJunction_Imported}"
+  DB_TRUST_SERVER_CERTIFICATE: "true"
+  MJ_BASE_ENCRYPTION_KEY: "${MJ_BASE_ENCRYPTION_KEY:-}"
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C -No
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  bacpac-import:
+    image: ${MJ_IMAGE:-memberjunction/agentic-test-runner:latest}
+    platform: linux/amd64          # SqlPackage is x64-only
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      <<: *db-conn
+      BACPAC_FILE: "/app/bacpac/${BACPAC_FILE:-db.bacpac}"
+      BACPAC_UPGRADE: "${BACPAC_UPGRADE:-true}"
+    volumes:
+      - ${BACPAC_DIR:-./bacpac}:/app/bacpac:ro
+    command: ["import-bacpac"]
+
+  api:
+    image: ${MJ_API_IMAGE:-memberjunction/api:latest}
+    depends_on:
+      bacpac-import:
+        condition: service_completed_successfully
+    # MJAPI's entrypoint runs `mj migrate` + `mj codegen` on boot → this IS the
+    # bacpac "upgrade" step. (BACPAC_UPGRADE=false is advisory here; skipping
+    # migrate needs a SKIP_MIGRATIONS flag on the api image — see plan.)
+    environment:
+      <<: *db-conn
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:4000/healthcheck || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  explorer:
+    image: ${MJ_EXPLORER_IMAGE:-memberjunction/explorer:latest}   # ⟵ PREREQUISITE
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      # Runtime config consumed by the (future) runtime-configurable Explorer image.
+      AUTH0_DOMAIN: "${AUTH0_DOMAIN:-}"
+      AUTH0_CLIENTID: "${AUTH0_CLIENTID:-}"
+      API_SERVICE: "api"            # nginx proxies /api/ → http://api:4000
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:4200/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  test-runner:
+    image: ${MJ_IMAGE:-memberjunction/agentic-test-runner:latest}
+    depends_on:
+      explorer:
+        condition: service_healthy
+    env_file:
+      - path: ${USER_ENV_FILE:-/dev/null}
+        required: false
+    environment:
+      <<: *db-conn
+      # AI vendor keys (Gemini is the primary model; Anthropic is failover).
+      AI_VENDOR_API_KEY__GeminiLLM: "${AI_VENDOR_API_KEY__GeminiLLM:-}"
+      AI_VENDOR_API_KEY__AnthropicLLM: "${AI_VENDOR_API_KEY__AnthropicLLM:-}"
+      TEST_SUITE_NAME: "${TEST_SUITE_NAME:-}"
+      EXTRA_METADATA_DIRS: "/work/metadata"
+      MAX_PARALLEL_WORKERS: "${MAX_PARALLEL_WORKERS:-4}"
+    shm_size: '2gb'
+    volumes:
+      - ${TARGET_DIR:-./bacpac}:/work:ro
+      - ./test-results:/app/test-results
+    # baseUrl comes from the target; default points at the in-network explorer.
+    command: ["run", "--target=/work/${TARGET_FILE:-target.json}"]

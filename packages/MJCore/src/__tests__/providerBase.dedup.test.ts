@@ -146,10 +146,14 @@ describe('ProviderBase Request Deduplication', () => {
             expect(provider.internalRunViewsCallCount).toBe(2);
         });
 
-        it('should dedup requests with different Fields (cache stores full entity width)', async () => {
-            // Fields is excluded from the dedup key because the cache always
-            // fetches all fields and filters on return. Different Fields values
-            // are effectively the same underlying query.
+        it('should NOT dedup requests with different Fields (results are projected per-caller)', async () => {
+            // The dedup layer shares the FINAL pipeline output — rows already
+            // projected down to one caller's Fields. If callers with different
+            // Fields shared a slot, the second caller would silently receive the
+            // first caller's column shape (missing the extra columns it asked
+            // for). Fields is therefore part of the dedup key. (The CACHE
+            // fingerprint still excludes Fields — the cache stores the full
+            // superset and projects per-read, so it can be shared safely.)
             const params1 = makeParams({ Fields: ['ID', 'Name'] });
             const params2 = makeParams({ Fields: ['ID'] });
 
@@ -158,7 +162,50 @@ describe('ProviderBase Request Deduplication', () => {
                 provider.RunViews([params2])
             ]);
 
+            expect(provider.internalRunViewsCallCount).toBe(2);
+        });
+
+        it('should still dedup requests whose Fields differ only in order, case, or whitespace', async () => {
+            // The key normalizes Fields the same way projection matches them
+            // (trim + lowercase) plus sorts, so semantically identical requests
+            // keep sharing one execution.
+            const params1 = makeParams({ Fields: ['ID', 'Name'] });
+            const params2 = makeParams({ Fields: [' name ', 'id'] });
+
+            const [r1, r2] = await Promise.all([
+                provider.RunViews([params1]),
+                provider.RunViews([params2])
+            ]);
+
             expect(provider.internalRunViewsCallCount).toBe(1);
+        });
+
+        it('should NOT dedup requests with different ResultType (transformed output is not interchangeable)', async () => {
+            // An entity_object caller receives BaseEntity instances; a simple
+            // caller receives plain rows; a count_only caller receives no rows.
+            // Sharing one slot across ResultTypes hands the wrong representation
+            // to the later caller, so ResultType is part of the dedup key.
+            const params1 = makeParams({ ResultType: 'simple' });
+            const params2 = makeParams({ ResultType: 'count_only' });
+
+            const [r1, r2] = await Promise.all([
+                provider.RunViews([params1]),
+                provider.RunViews([params2])
+            ]);
+
+            expect(provider.internalRunViewsCallCount).toBe(2);
+        });
+
+        it('should NOT serve a linger hit to a caller with different Fields', async () => {
+            const params1 = makeParams({ Fields: ['ID'] });
+            await provider.RunViews([params1]);
+            expect(provider.internalRunViewsCallCount).toBe(1);
+
+            // Within the linger window, a different-Fields caller must execute
+            // fresh rather than receive params1's projected rows.
+            const params2 = makeParams({ Fields: ['ID', 'Name'] });
+            await provider.RunViews([params2]);
+            expect(provider.internalRunViewsCallCount).toBe(2);
         });
     });
 

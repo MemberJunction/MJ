@@ -17,7 +17,7 @@ export class MJKnowledgeHubSavedSearchFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'ownership', sectionName: 'Ownership', isExpanded: true },
             { sectionKey: 'searchCriteria', sectionName: 'Search Criteria', isExpanded: true },
-            { sectionKey: 'resultsAndNotifications', sectionName: 'Results and Notifications', isExpanded: false },
+            { sectionKey: 'resultsAndNotifications', sectionName: 'Results and Notifications', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -1,5 +1,217 @@
 # @memberjunction/ai-cohere
 
+## 6.0.0
+
+### Patch Changes
+
+- @memberjunction/ai@6.0.0
+- @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.51.0
+- @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [c221553]
+- Updated dependencies [0ba33b3]
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- ea945da: Expand optional embedding `dimensions` support to the remaining drivers whose underlying APIs support output-dimension control. `params.dimensions` (added to `EmbedTextParams`/`EmbedTextsParams`/`EmbedContentParams` in `@memberjunction/ai`) is opt-in everywhere: when unset, prior behavior is unchanged.
+  - **`@memberjunction/ai-cohere`** — forwarded as `outputDimension` on the v2 embed API (`EmbedText`, `embedBatch`, and multimodal `EmbedContent`). Supported by `embed-v4.0` (256/512/1024/1536).
+  - **`@memberjunction/ai-gemini`** — forwarded as `config.outputDimensionality` (`EmbedText`, the per-text concurrent `EmbedTexts` path, and multimodal `EmbedContent`).
+  - **`@memberjunction/ai-mistral`** — forwarded as `outputDimension`; only effective on models supporting output truncation (e.g. `codestral-embed`).
+  - **`@memberjunction/ai-azure`** — the REST body previously hardcoded `dimensions: 1536` on every request; `dimensions` is now sent only when the caller explicitly provides it. This fixes a latent bug: older models (e.g. `text-embedding-ada-002`, the driver's default) don't accept the parameter, and models with larger native outputs (e.g. `text-embedding-3-large` at 3072) were being silently truncated to 1536. Omitting it lets the selected model produce its native dimensionality. Note: deployments that relied on the implicit 1536 truncation with `text-embedding-3-*` models should now set the dimension explicitly via `VectorIndex.Dimensions`.
+  - **`@memberjunction/ai-bedrock`** — forwarded as `dimensions` for `amazon.titan-embed*` models (supported by Titan Embed Text V2: 256/512/1024; V1 rejects it, so it is only sent on explicit opt-in). Also threaded through the per-text batch fallback loop.
+
+  Not applicable (unchanged): Ollama (no output-dimension API parameter) and LocalEmbeddings (transformers.js has no output truncation).
+
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [15e3017]
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [c20723a]
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.47.0
+- @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.46.0
+- @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [c1f2d3d]
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- 89ea055: feat(ai): SupportsBatchEmbeddings + safe default EmbedTexts on BaseEmbeddings; rename GeminiEmbedding2 → GeminiEmbedding
+
+  `BaseEmbeddings.EmbedTexts` is now a concrete dispatcher on a new `SupportsBatchEmbeddings` getter (default `false`): providers with a native batch endpoint return `true` and implement `embedBatch()`; everyone else inherits a safe per-text fallback (`embedPerText` — bounded concurrency, per-text retry-with-backoff, a hard 1:1 count guard, and a graceful empty-on-failure contract) that can never silently collapse a batch into fewer/blended vectors. A provider that claims batch support but doesn't implement `embedBatch()` throws, keeping the flag and the implementation honest.
+
+  Per-text embedding on the fallback path (and in Gemini's own `EmbedTexts`) now retries transient failures with bounded exponential backoff before giving up, so one transient 429/500 among N texts no longer degrades the whole batch — addressing the failure-rate-scales-with-N concern from review.
+
+  The OpenAI, Azure, Cohere, and Mistral embedding providers declare `SupportsBatchEmbeddings = true` and move their array call into `embedBatch()`. This generalizes the `GeminiEmbedding2` batch-collapse fix to the whole embedding layer and prevents the class of bug for any future provider that only implements single-text `EmbedText`.
+
+  Also renames the `GeminiEmbedding2` class (and its `@RegisterClass` key / `DriverClass`) to `GeminiEmbedding` — the class outlives any single model version. The `DriverClass` change is carried by the AI-models metadata (`metadata/ai-models/.ai-models.json`) and the regenerated class-registration manifests in the bootstrap packages; no hand-written migration.
+
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [9f6aa87]
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [0fa3cbc]
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ai@5.42.0
+
+## 5.41.0
+
+### Minor Changes
+
+- 84089ae: Add multimodal embeddings: new EmbedContent method + GetFileCapabilities on BaseEmbeddings, GeminiEmbedding2 and CohereEmbedding providers, AIEngine.EmbedContent, and the @google/genai 2.x bump (Gemini + Vertex).
+
+### Patch Changes
+
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [15b743b]
+- Updated dependencies [1568bae]
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.2
+- @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.1
+- @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.0
+- @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [30f598d]
+- Updated dependencies [3d739a3]
+  - @memberjunction/global@5.38.0
+  - @memberjunction/ai@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.37.0
+- @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.36.0
+- @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/global@5.35.0
+  - @memberjunction/ai@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.34.1
+- @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [389d356]
+  - @memberjunction/global@5.34.0
+  - @memberjunction/ai@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

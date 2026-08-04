@@ -1,0 +1,109 @@
+@if (Visible && Delta) {
+  <mj-dialog
+    [Visible]="true"
+    [Width]="720"
+    [Title]="hasDrops ? 'Confirm List Update — Records Will Be Removed' : 'Confirm List Update'"
+    (Close)="OnCancel()">
+    <div class="delta-confirm-body" [class.delta-confirm-body--danger]="hasDrops">
+      <div class="delta-confirm-intro">
+        @if (hasDrops) {
+          Refreshing <strong>{{ targetDisplayName }}</strong> will reconcile against the source.
+          Records that are no longer present in the source will be removed.
+        } @else {
+          You're about to apply this change to <strong>{{ targetDisplayName }}</strong>.
+        }
+      </div>
+
+      <div class="delta-summary">
+        <div class="delta-tile delta-tile--add">
+          <div class="delta-tile__count">+{{ Delta.Counts.Add }}</div>
+          <div class="delta-tile__label">To Add</div>
+        </div>
+        <div class="delta-tile delta-tile--keep">
+          <div class="delta-tile__count">{{ Delta.Counts.Unchanged }}</div>
+          <div class="delta-tile__label">Unchanged</div>
+        </div>
+        <div class="delta-tile"
+             [class.delta-tile--remove]="hasDrops"
+             [class.delta-tile--remove-empty]="!hasDrops">
+          <div class="delta-tile__count">{{ hasDrops ? '−' : '' }}{{ Delta.Counts.Remove }}</div>
+          <div class="delta-tile__label">To Remove</div>
+        </div>
+      </div>
+
+      @if (!hasDrops) {
+        <mj-alert Variant="success">Safe operation — no records will be removed from the list.</mj-alert>
+      } @else {
+        <mj-alert Variant="error">
+          <div class="delta-banner__copy">
+            <div>
+              <strong>{{ Delta.Counts.Remove }} record(s) will be removed from this list.</strong>
+              @if (SourceLabel) {
+                These records are members today but are no longer matched by the source
+                <em>"{{ SourceLabel }}"</em>.
+              } @else {
+                These records are members today but are no longer matched by the configured source.
+              }
+            </div>
+            <label class="delta-banner__ack">
+              <input type="checkbox"
+                     [checked]="dropAcknowledged"
+                     (change)="OnAcknowledgementToggle($any($event.target).checked)">
+              <span>I understand {{ Delta.Counts.Remove }} record(s) will be removed</span>
+            </label>
+          </div>
+        </mj-alert>
+      }
+
+      @if (previewAdds.length > 0) {
+        <div class="delta-section-label">
+          Preview — records being added (first {{ previewAdds.length }} of {{ Delta.Counts.Add }})
+        </div>
+        <ul class="delta-preview">
+          @for (id of previewAdds; track id) {
+            <li class="delta-preview__row delta-preview__row--add">
+              <i class="fa-solid fa-user-plus"></i>
+              <span class="delta-preview__id">{{ id }}</span>
+            </li>
+          }
+        </ul>
+      }
+
+      @if (previewRemoves.length > 0) {
+        <div class="delta-section-label">
+          Preview — records being removed (first {{ previewRemoves.length }} of {{ Delta.Counts.Remove }})
+        </div>
+        <ul class="delta-preview">
+          @for (id of previewRemoves; track id) {
+            <li class="delta-preview__row delta-preview__row--remove">
+              <i class="fa-solid fa-user-minus"></i>
+              <span class="delta-preview__id">{{ id }}</span>
+            </li>
+          }
+        </ul>
+        <div class="delta-footnote">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          Removed records are logged in the audit log and can be re-added manually if needed.
+        </div>
+      }
+    </div>
+
+    <mj-dialog-actions>
+      <button mjButton
+              [variant]="hasDrops ? 'danger' : 'primary'"
+              [disabled]="!canConfirm"
+              (click)="OnConfirm()">
+        <i class="fa-solid fa-check"></i>
+        {{ confirmButtonLabel }}
+      </button>
+      <button mjButton variant="outline" (click)="OnCancel()">Cancel</button>
+      <span class="delta-token-hint">
+        @if (hasDrops && !dropAcknowledged) {
+          Confirm button unlocks after acknowledgement
+        } @else {
+          Delta token valid for 5 min
+        }
+      </span>
+    </mj-dialog-actions>
+  </mj-dialog>
+}

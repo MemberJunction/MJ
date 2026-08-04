@@ -19,11 +19,12 @@ export class MJCompanyFormComponent extends BaseFormComponent {
             { sectionKey: 'coreCompanyInfo', sectionName: 'Core Company Info', isExpanded: true },
             { sectionKey: 'brandingDigitalPresence', sectionName: 'Branding & Digital Presence', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJEmployees', sectionName: 'Employees', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false },
+            { sectionKey: 'mJEmployees', sectionName: 'Employees', isExpanded: false },
             { sectionKey: 'mJMCPServerConnections', sectionName: 'MCP Server Connections', isExpanded: false },
             { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
-            { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false }
+            { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
+            { sectionKey: 'mJSignatureAccounts', sectionName: 'Signature Accounts', isExpanded: false }
         ]);
     }
 }

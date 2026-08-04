@@ -1,17 +1,21 @@
-import { Directive, OnInit, OnDestroy, Input, inject } from "@angular/core";
+import { ChangeDetectorRef, Directive, OnInit, OnDestroy, Input, inject } from "@angular/core";
 import { Subject } from "rxjs";
 import { filter, takeUntil } from "rxjs/operators";
 import { BaseEntity } from "@memberjunction/core";
 import { BaseNavigationComponent } from "./base-navigation-component";
 import { ResourceData } from "@memberjunction/core-entities";
-import { NavigationService } from "./navigation.service";
+import { NavigationService, TabQueryParamUpdateGuard } from "./navigation.service";
 
 @Directive()
 export abstract class BaseResourceComponent extends BaseNavigationComponent implements OnInit, OnDestroy {
     private _data: ResourceData = new ResourceData();
     private _suppressQueryParamSync = false;
+    /** Stable key of the most recently delivered query params, used to de-duplicate
+     *  delivery across the reactive (initial/deep-link) and popstate paths. */
+    private _lastDeliveredParamsKey: string | null = null;
     protected destroy$ = new Subject<void>();
     protected navigationService = inject(NavigationService);
+    private changeDetectorRef = inject(ChangeDetectorRef, { optional: true });
 
     /**
      * Tab ID for query param notification scoping. Set by resource wrappers
@@ -31,6 +35,15 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     public get LoadComplete(): boolean {
         return this._loadComplete;
     }
+
+    /**
+     * Watchdog window: if a resource component hasn't called {@link NotifyLoadComplete} within this
+     * time, we log a warning naming the offending class. The app loading screen waits on
+     * NotifyLoadComplete, so a resource that never calls it hangs the screen forever — this makes the
+     * culprit obvious in the console instead of leaving a mystery "stuck loading" state.
+     */
+    private static readonly LOAD_COMPLETE_WATCHDOG_MS = 15_000;
+    private _loadCompleteWatchdog: ReturnType<typeof setTimeout> | null = null;
 
     private _loadStarted: boolean = false;
     public get LoadStarted(): boolean {
@@ -62,6 +75,14 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         this._resourceRecordSavedEvent = value;
     }
 
+    private _resourceCloseRequestedEvent: (() => void) | null = null;
+    public get ResourceCloseRequestedEvent(): (() => void) | null {
+        return this._resourceCloseRequestedEvent;
+    }
+    public set ResourceCloseRequestedEvent(value: (() => void) | null) {
+        this._resourceCloseRequestedEvent = value;
+    }
+
     private _displayNameChangedEvent: ((newName: string) => void) | null = null;
     public get DisplayNameChangedEvent(): ((newName: string) => void) | null {
         return this._displayNameChangedEvent;
@@ -71,10 +92,32 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     }
 
     ngOnInit(): void {
+        // Order matters: set up the popstate subscription first (a plain Subject — emits
+        // nothing on subscribe), then the reactive initial-delivery subscription (backed by
+        // a BehaviorSubject — emits the current params synchronously). This lets the initial
+        // emission claim the 'deeplink' source before any later popstate event.
         this.setupQueryParamSubscription();
+        this.setupInitialParamDelivery();
+
+        // Start the NotifyLoadComplete watchdog (no-op once it fires or load completes).
+        this._loadCompleteWatchdog = setTimeout(() => {
+            if (!this._loadComplete) {
+                // eslint-disable-next-line no-console
+                console.warn(
+                    `[LoadComplete WATCHDOG] ${this.constructor.name} has NOT called NotifyLoadComplete() ` +
+                    `within ${BaseResourceComponent.LOAD_COMPLETE_WATCHDOG_MS / 1000}s. The app loading screen ` +
+                    `waits on this signal — if the screen is stuck, this resource is the likely cause. ` +
+                    `(tabId=${this.getTabId() || 'n/a'})`
+                );
+            }
+        }, BaseResourceComponent.LOAD_COMPLETE_WATCHDOG_MS);
     }
 
     ngOnDestroy(): void {
+        if (this._loadCompleteWatchdog) {
+            clearTimeout(this._loadCompleteWatchdog);
+            this._loadCompleteWatchdog = null;
+        }
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -96,7 +139,13 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      */
     protected UpdateQueryParams(params: Record<string, string | null>): void {
         if (this._suppressQueryParamSync) return;
-        this.navigationService.UpdateActiveTabQueryParams(params);
+        const tabId = this.getTabId();
+        if (!tabId) {
+            this.navigationService.UpdateActiveTabQueryParams(params);
+            return;
+        }
+
+        this.navigationService.UpdateTabQueryParams(tabId, params, this.getQueryParamUpdateGuard());
     }
 
     /**
@@ -110,6 +159,7 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     /**
      * Internal: subscribe to NavigationService query param notifications.
      * Filters to only this component's tab to prevent cross-tab leakage.
+     * This is the explicit back/forward (popstate) path.
      */
     private setupQueryParamSubscription(): void {
         this.navigationService.QueryParamChanged$
@@ -120,16 +170,67 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
                 }),
                 takeUntil(this.destroy$)
             )
-            .subscribe(event => {
-                // try/finally ensures suppression flag is always cleared,
-                // even if OnQueryParamsChanged throws
-                this._suppressQueryParamSync = true;
-                try {
-                    this.OnQueryParamsChanged(event.Params, 'popstate');
-                } finally {
-                    this._suppressQueryParamSync = false;
-                }
-            });
+            .subscribe(event => this.deliverQueryParams(event.Params));
+    }
+
+    /**
+     * Internal: reactively deliver this tab's query params from the workspace
+     * BehaviorSubject. Because the source replays the current value on subscribe and
+     * emits future changes, this delivers initial deep-link params even when the
+     * component mounts (e.g. from workspace restoration) before the URL params have
+     * been merged into the tab configuration — closing the cold-load race that the
+     * popstate-only path could not.
+     */
+    private setupInitialParamDelivery(): void {
+        const tabId = this.getTabId();
+        if (!tabId) {
+            return; // No tab scope (e.g. embedded usage) — nothing to observe.
+        }
+        this.navigationService.ObserveTabQueryParams(tabId)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(params => this.deliverQueryParams(params));
+    }
+
+    /**
+     * Internal: funnel point for both the reactive and popstate paths. De-duplicates
+     * identical deliveries (the two paths overlap on back/forward) and labels the first
+     * meaningful delivery as a 'deeplink', subsequent ones as 'popstate'.
+     */
+    private deliverQueryParams(params: Record<string, string>): void {
+        const key = this.queryParamsKey(params);
+        if (key === this._lastDeliveredParamsKey) {
+            return; // Already delivered these exact params.
+        }
+        const isInitial = this._lastDeliveredParamsKey === null;
+        // Don't fire an initial no-op: a component entered without deep-link params has
+        // nothing to apply. Leave _lastDeliveredParamsKey null so the first real params
+        // (whenever they arrive) are still treated as the deep-link entry.
+        if (isInitial && Object.keys(params).length === 0) {
+            return;
+        }
+        this._lastDeliveredParamsKey = key;
+        const source: 'popstate' | 'deeplink' = isInitial ? 'deeplink' : 'popstate';
+        // try/finally ensures the suppression flag is always cleared, and the view is always
+        // refreshed, even if OnQueryParamsChanged throws.
+        this._suppressQueryParamSync = true;
+        try {
+            this.OnQueryParamsChanged(params, source);
+        } finally {
+            this._suppressQueryParamSync = false;
+            // Query params arrive via RxJS (workspace stream / popstate), not via a template event —
+            // state a subclass changed in OnQueryParamsChanged needs an explicit re-render request
+            // for dynamically-attached views (see RefreshView). Inside `finally` so a subclass
+            // override that throws still renders whatever partial state it applied before throwing.
+            this.RefreshView();
+        }
+    }
+
+    /** Stable, order-independent string key for a query param record. */
+    private queryParamsKey(params: Record<string, string>): string {
+        return Object.keys(params)
+            .sort()
+            .map(k => `${k}=${params[k]}`)
+            .join('&');
     }
 
     /**
@@ -140,11 +241,30 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         return this.ParentTabId || this.Data?.Configuration?.['tabId'] as string || '';
     }
 
+    private getQueryParamUpdateGuard(): TabQueryParamUpdateGuard {
+        const config = this.Data?.Configuration || {};
+        return {
+            resourceType: config['resourceType'] as string | undefined,
+            driverClass: (config['resourceTypeDriverClass'] || config['driverClass']) as string | undefined,
+            recordId: (this.Data?.ResourceRecordID || config['recordId']) as string | undefined,
+            navItemName: config['navItemName'] as string | undefined,
+            entity: (config['Entity'] || config['entity']) as string | undefined
+        };
+    }
+
     protected NotifyLoadComplete() {
         this._loadComplete = true;
+        if (this._loadCompleteWatchdog) {
+            clearTimeout(this._loadCompleteWatchdog);
+            this._loadCompleteWatchdog = null;
+        }
         if (this._loadCompleteEvent) {
             this._loadCompleteEvent();
         }
+        // Load completion almost always follows async work (RunView/fetch continuations) that
+        // Angular's tick will NOT pick up on its own for dynamically-attached views — re-render
+        // must be requested explicitly. See RefreshView() for the full explanation.
+        this.RefreshView();
     }
 
     protected NotifyLoadStarted() {
@@ -152,6 +272,28 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         if (this._loadStartedEvent) {
             this._loadStartedEvent();
         }
+        this.RefreshView();
+    }
+
+    /**
+     * Marks this component's view (and its ancestors) as needing change detection and schedules
+     * a tick — the reliable way for a resource component to re-render after updating state from
+     * async work (RunView/RunQuery continuations, timers, websocket pushes, RxJS subscriptions).
+     *
+     * WHY THIS EXISTS: the Explorer shell hosts resource components dynamically — `createComponent()`
+     * + `ApplicationRef.attachView()` — because tab content mounts into Golden Layout / cached DOM
+     * containers, not into an Angular template. Since Angular 18's change-detection scheduler
+     * rework (Explorer is on Angular 21), `ApplicationRef.tick()` only refreshes attached views
+     * that are FLAGGED dirty; a root-level attached view whose component mutates plain fields from
+     * an async continuation is never flagged, so the view silently never re-renders — even though
+     * the component uses default (non-OnPush) change detection (issue #3106).
+     *
+     * The framework calls this automatically from NotifyLoadStarted() / NotifyLoadComplete(), so
+     * the standard load lifecycle re-renders without any subclass action. Call it yourself after
+     * any LATER async state change that must reach the DOM outside those signals.
+     */
+    protected RefreshView(): void {
+        this.changeDetectorRef?.markForCheck();
     }
 
 
@@ -167,9 +309,27 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     }
 
     protected ResourceRecordSaved(resourceRecordEntity: BaseEntity) {
-        this.Data.ResourceRecordID = resourceRecordEntity.PrimaryKey.ToString();
+        // Use ToURLSegment, NOT ToString. ResourceRecordID is consumed by
+        // EntityRecordResource.GetPrimaryKey → CompositeKey.LoadFromURLSegment, which
+        // expects URL-segment format (e.g. "ID|<uuid>"). ToString produces "ID=<uuid>",
+        // which LoadFromURLSegment treats as a raw value and double-prefixes —
+        // breaking any code path that re-reads this field after save.
+        this.Data.ResourceRecordID = resourceRecordEntity.PrimaryKey.ToURLSegment();
         if (this._resourceRecordSavedEvent) {
             this._resourceRecordSavedEvent(resourceRecordEntity);
+        }
+    }
+
+    /**
+     * Ask the host shell to close/dismiss this resource (typically: close the tab).
+     * Called by subclasses that hosted a form that emitted a 'dismiss' navigation
+     * event — most often, a brand-new record where the user clicked Discard. The
+     * record was never saved, the form is empty, and leaving it open serves no
+     * purpose. The tab-container listens for this and closes the workspace tab.
+     */
+    protected NotifyCloseRequested(): void {
+        if (this._resourceCloseRequestedEvent) {
+            this._resourceCloseRequestedEvent();
         }
     }
 

@@ -2,11 +2,13 @@ import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef,
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
-import { MJListEntity, MJListCategoryEntity, MJListDetailEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListEntityExtended, MJListCategoryEntity, MJListDetailEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
+import { buildListBrowseAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
 interface ListViewModel {
   list: MJListEntity;
   itemCount: number;
@@ -25,34 +27,30 @@ interface CategoryNode {
   standalone: false,
   selector: 'mj-lists-my-lists-resource',
   template: `
-    <div class="lists-my-lists-container">
-      <!-- Header -->
-      <div class="lists-header">
-        <div class="header-title">
-          <i class="fa-solid fa-list-check"></i>
-          <h2>My Lists</h2>
+    <mj-page-layout>
+      <mj-page-header
+        Title="My Lists"
+        Icon="fa-solid fa-list-check"
+        Subtitle="Lists you've created or have access to">
+        <div meta>
+          <mj-stat-badge [Count]="filteredLists.length" [Total]="allLists.length" Label="lists"></mj-stat-badge>
         </div>
-        <div class="header-actions">
-          <div class="search-box">
-            <i class="fa-solid fa-search"></i>
-            <input
-              type="text"
-              placeholder="Search lists..."
-              [(ngModel)]="searchTerm"
-              (ngModelChange)="onSearchChange($event)" />
-            @if (searchTerm) {
-              <button class="clear-search" (click)="clearSearch()">
-                <i class="fa-solid fa-times"></i>
-              </button>
-            }
-          </div>
-          <button class="btn-create" (click)="createNewList()">
-            <i class="fa-solid fa-plus"></i>
-            <span>New List</span>
+        <div actions>
+          <button mjButton variant="primary" size="sm" (click)="createNewList()">
+            <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New List</span>
           </button>
         </div>
-      </div>
-    
+        <div toolbar>
+          <mj-page-search
+            Placeholder="Search lists..."
+            [Value]="searchTerm"
+            (ValueChange)="onSearchChange($event)">
+          </mj-page-search>
+        </div>
+      </mj-page-header>
+
+      <mj-page-body>
+
       <!-- Loading State -->
       @if (isLoading) {
         <div class="loading-container">
@@ -62,13 +60,13 @@ interface CategoryNode {
     
       <!-- Empty State -->
       @if (!isLoading && filteredLists.length === 0 && !searchTerm) {
-        <div class="empty-state">
-          <div class="empty-state-icon-wrapper">
-            <div class="icon-bg"></div>
-            <i class="fa-solid fa-list-check"></i>
-          </div>
-          <h3>No Lists Yet</h3>
-          <p>Lists help you organize and track groups of records across your data.</p>
+        <mj-empty-state Size="large"
+          Icon="fa-solid fa-list-check"
+          Title="No Lists Yet"
+          Message="Lists help you organize and track groups of records across your data."
+          ActionText="Create Your First List"
+          ActionIcon="fa-solid fa-plus"
+          (Action)="createNewList()">
           <div class="empty-state-features">
             <div class="feature-item">
               <i class="fa-solid fa-check-circle"></i>
@@ -83,24 +81,17 @@ interface CategoryNode {
               <span>Quick access from any view</span>
             </div>
           </div>
-          <button class="btn-create-large" (click)="createNewList()">
-            <i class="fa-solid fa-plus"></i>
-            Create Your First List
-          </button>
-        </div>
+        </mj-empty-state>
       }
-    
+
       <!-- No Results State -->
       @if (!isLoading && filteredLists.length === 0 && searchTerm) {
-        <div class="empty-state search-empty">
-          <div class="empty-state-icon-wrapper search">
-            <i class="fa-solid fa-search"></i>
-          </div>
-          <h3>No Results Found</h3>
-          <p>No lists match "<strong>{{searchTerm}}</strong>"</p>
-          <p class="empty-hint">Try a different search term or clear your search.</p>
-          <button class="btn-clear" (click)="clearSearch()">Clear Search</button>
-        </div>
+        <mj-empty-state Variant="no-results"
+          Title="No Results Found"
+          [Message]="NoResultsMessage"
+          ActionText="Clear search"
+          ActionIcon="fa-solid fa-rotate-left"
+          (Action)="clearSearch()" />
       }
     
       <!-- Lists Grid -->
@@ -111,14 +102,14 @@ interface CategoryNode {
             <button
               class="view-toggle"
               [class.active]="viewMode === 'grid'"
-              (click)="viewMode = 'grid'"
+              (click)="setViewMode('grid')"
               title="Grid view">
               <i class="fa-solid fa-grip"></i>
             </button>
             <button
               class="view-toggle"
               [class.active]="viewMode === 'list'"
-              (click)="viewMode = 'list'"
+              (click)="setViewMode('list')"
               title="List view">
               <i class="fa-solid fa-list"></i>
             </button>
@@ -265,11 +256,13 @@ interface CategoryNode {
             <i class="fa-solid fa-copy"></i>
             Duplicate
           </button>
-          <div class="menu-divider"></div>
-          <button class="menu-item danger" (click)="confirmDeleteList()">
-            <i class="fa-solid fa-trash"></i>
-            Delete
-          </button>
+          @if (CanDeleteSelectedList) {
+            <div class="menu-divider"></div>
+            <button class="menu-item danger" (click)="confirmDeleteList()">
+              <i class="fa-solid fa-trash"></i>
+              Delete
+            </button>
+          }
         </div>
       }
     
@@ -393,7 +386,8 @@ interface CategoryNode {
           </div>
         </div>
       }
-    </div>
+      </mj-page-body>
+    </mj-page-layout>
     `,
   styles: [`
     :host {
@@ -401,109 +395,6 @@ interface CategoryNode {
       flex-direction: column;
       width: 100%;
       height: 100%;
-    }
-
-    .lists-my-lists-container {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      background: var(--mj-bg-surface);
-      overflow: hidden;
-    }
-
-    /* Header */
-    .lists-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px 24px;
-      background: var(--mj-bg-surface-card);
-      border-bottom: 1px solid var(--mj-border-default);
-      flex-shrink: 0;
-    }
-
-    .header-title {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .header-title i {
-      font-size: 24px;
-      color: var(--mj-brand-primary);
-    }
-
-    .header-title h2 {
-      margin: 0;
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--mj-text-primary);
-    }
-
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .search-box {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-
-    .search-box i.fa-search {
-      position: absolute;
-      left: 12px;
-      color: var(--mj-text-muted);
-    }
-
-    .search-box input {
-      padding: 8px 36px 8px 36px;
-      border: 1px solid var(--mj-border-default);
-      border-radius: 20px;
-      font-size: 14px;
-      width: 250px;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .search-box input:focus {
-      outline: none;
-      border-color: var(--mj-brand-primary);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
-    }
-
-    .clear-search {
-      position: absolute;
-      right: 8px;
-      background: none;
-      border: none;
-      color: var(--mj-text-muted);
-      cursor: pointer;
-      padding: 4px;
-    }
-
-    .clear-search:hover {
-      color: var(--mj-text-secondary);
-    }
-
-    .btn-create {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 16px;
-      background: var(--mj-brand-primary);
-      color: var(--mj-text-inverse);
-      border: none;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .btn-create:hover {
-      background: var(--mj-brand-primary-hover);
     }
 
     /* Loading */
@@ -514,75 +405,12 @@ interface CategoryNode {
       flex: 1;
     }
 
-    /* Empty State */
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      flex: 1;
-      padding: 48px 40px;
-      text-align: center;
-      max-width: 480px;
-      margin: 0 auto;
-    }
-
-    .empty-state-icon-wrapper {
-      position: relative;
-      margin-bottom: 24px;
-    }
-
-    .empty-state-icon-wrapper .icon-bg {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 120px;
-      height: 120px;
-      border-radius: 50%;
-      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    }
-
-    .empty-state-icon-wrapper > i {
-      position: relative;
-      font-size: 56px;
-      color: var(--mj-brand-primary);
-      z-index: 1;
-    }
-
-    .empty-state-icon-wrapper.search > i {
-      font-size: 48px;
-      color: var(--mj-text-disabled);
-    }
-
-    .empty-state h3 {
-      margin: 0 0 12px;
-      font-size: 22px;
-      font-weight: 600;
-      color: var(--mj-text-primary);
-    }
-
-    .empty-state p {
-      margin: 0 0 8px;
-      color: var(--mj-text-secondary);
-      font-size: 15px;
-      line-height: 1.5;
-    }
-
-    .empty-state p:last-of-type {
-      margin-bottom: 24px;
-    }
-
-    .empty-hint {
-      color: var(--mj-text-muted) !important;
-      font-size: 13px !important;
-    }
-
+    /* Onboarding feature checklist — projected into <mj-empty-state>. */
     .empty-state-features {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-bottom: 28px;
+      gap: var(--mj-space-2);
+      margin: var(--mj-space-5) 0 var(--mj-space-2);
       text-align: left;
     }
 
@@ -597,45 +425,6 @@ interface CategoryNode {
     .feature-item i {
       font-size: 14px !important;
       color: var(--mj-status-success) !important;
-    }
-
-    .search-empty .empty-state-icon-wrapper {
-      margin-bottom: 20px;
-    }
-
-    .btn-create-large {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 14px 28px;
-      background: var(--mj-brand-primary);
-      color: var(--mj-text-inverse);
-      border: none;
-      border-radius: 8px;
-      font-size: 15px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-    }
-
-    .btn-create-large:hover {
-      background: var(--mj-brand-primary-hover);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
-    }
-
-    .btn-clear {
-      padding: 10px 20px;
-      background: var(--mj-bg-surface-sunken);
-      border: none;
-      border-radius: 6px;
-      color: var(--mj-text-secondary);
-      cursor: pointer;
-    }
-
-    .btn-clear:hover {
-      background: var(--mj-border-default);
     }
 
     /* Content */
@@ -1288,6 +1077,20 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   contextMenuY = 0;
   selectedContextList: MJListEntity | null = null;
 
+  /**
+   * Whether the current user may DELETE the context-menu's list — the same shared ownership rule
+   * the server enforces (owner, or a Developer/Integration user). This "My Lists" view is
+   * owner-scoped, so for the standard case it's the owner and resolves true; the gate makes it
+   * correct-by-construction (and consistent with the Browse view) rather than an unconditional button.
+   */
+  public get CanDeleteSelectedList(): boolean {
+    const list = this.selectedContextList;
+    if (!list) {
+      return false;
+    }
+    return MJListEntityExtended.UserCanDelete(list.UserID, this.ProviderToUse.CurrentUser);
+  }
+
   // Create/Edit dialog
   showCreateDialog = false;
   editingList: MJListEntity | null = null;
@@ -1348,6 +1151,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   async ngOnInit() {
     super.ngOnInit();
     await this.loadData();
+    this.registerAgentTools();
+    this.publishAgentContext();
     this.NotifyLoadComplete();
   }
 
@@ -1355,6 +1160,94 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  // ================================================================
+  // AI Agent Context & Client Tools
+  //
+  // SAFETY BOUNDARY: SAFE (open / search / view) operations plus ONE
+  // bounded-mutation tool (CreateList) that opens the dialog-validated
+  // create flow. INTENTIONALLY EXCLUDED — must NOT be wired in:
+  //   - EditList   (editList)             — mutates an existing record
+  //   - DeleteList (confirmDeleteList)    — destructive
+  // ================================================================
+
+  /** Report the My-Lists surface's salient state to the AI agent. */
+  private publishAgentContext(): void {
+    this.navigationService.SetAgentContext(this, buildListBrowseAgentContext({
+      SearchTerm: this.searchTerm,
+      ViewMode: this.viewMode,
+      AllListCount: this.allLists.length,
+      FilteredListCount: this.filteredLists.length,
+      // Deep context: the NAMES of the user's currently-visible lists (bounded),
+      // so the agent can open them by name rather than an opaque GUID.
+      VisibleListNames: this.filteredLists.map(i => i.list.Name),
+    }));
+  }
+
+  /**
+   * Resolve an agent-supplied reference (a list ID or NAME, exact or partial) to
+   * one of the user's loaded lists via the pure {@link resolveNamedRecord} helper.
+   */
+  private resolveMyListItem(input: string): ListViewModel | null {
+    const match = resolveNamedRecord(input, this.allLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })));
+    if (!match) {
+      return null;
+    }
+    return this.allLists.find(i => UUIDsEqual(i.list.ID, match.ID)) ?? null;
+  }
+
+  /** Register the My-Lists surface's agent-actionable tools. */
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'OpenList',
+        Description: 'Open one of my lists in a new tab by its ID or name. Pass the list name the user says (see VisibleListNames) — the tool resolves an exact ID, an exact name, or a partial name match.',
+        ParameterSchema: { type: 'object', properties: { list: { type: 'string', description: 'The list ID or name to open' }, listId: { type: 'string', description: 'Deprecated alias for "list".' } } },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateStringParam(params['list'] ?? params['listId'], 'list');
+          if (!check.ok) return check.result;
+          const item = this.resolveMyListItem(check.value);
+          if (!item) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.allLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })), 'list') };
+          this.openList(item.list);
+          return { Success: true, Data: { listName: item.list.Name } };
+        },
+      },
+      {
+        Name: 'SearchLists',
+        Description: 'Set the search term that filters my lists.',
+        ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateStringParam(params['searchTerm'], 'searchTerm');
+          if (!check.ok) return check.result;
+          this.searchTerm = check.value;
+          this.onSearchChange(check.value);
+          this.publishAgentContext();
+          return { Success: true, Data: { resultCount: this.filteredLists.length } };
+        },
+      },
+      {
+        Name: 'SetViewMode',
+        Description: 'Set the view mode: "grid" or "list".',
+        ParameterSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['grid', 'list'] } }, required: ['mode'] },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateEnumParam(params['mode'], ['grid', 'list'] as const, 'mode');
+          if (!check.ok) return check.result;
+          this.setViewMode(check.value);
+          return { Success: true };
+        },
+      },
+      {
+        // BOUNDED MUTATION: opens the dialog-validated create flow only.
+        Name: 'CreateList',
+        Description: 'Open the "Create New List" dialog. Nothing is saved until the user confirms the name and entity.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.createNewList();
+          return { Success: true };
+        },
+      },
+    ]);
   }
 
   async loadData() {
@@ -1370,8 +1263,10 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         return;
       }
 
-      // Load lists, categories, and item counts in parallel
-      const [listsResult, categoriesResult, detailsResult] = await rv.RunViews([
+      // Load lists and categories in parallel; item counts follow as a
+      // batched set of count_only queries (index-seek COUNTs server-side)
+      // instead of transferring every membership row to the client.
+      const [listsResult, categoriesResult] = await rv.RunViews([
         {
           EntityName: 'MJ: Lists',
           ExtraFilter: `UserID = '${userId}'`,
@@ -1382,11 +1277,6 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
           EntityName: 'MJ: List Categories',
           OrderBy: 'Name',
           ResultType: 'entity_object'
-        },
-        {
-          EntityName: 'MJ: List Details',
-          ExtraFilter: `ListID IN (SELECT ID FROM __mj.List WHERE UserID = '${userId}')`,
-          ResultType: 'simple'
         }
       ]);
 
@@ -1397,7 +1287,6 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
       const lists = listsResult.Results as MJListEntity[];
       this.categories = categoriesResult.Results as MJListCategoryEntity[];
-      const details = detailsResult.Results as Array<{ ListID: string }>;
 
       // Build category map
       this.categoryMap.clear();
@@ -1405,11 +1294,17 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         this.categoryMap.set(cat.ID, cat);
       }
 
-      // Count items per list
+      // Count items per list — one batched round trip
       const itemCounts = new Map<string, number>();
-      for (const detail of details) {
-        const count = itemCounts.get(detail.ListID) || 0;
-        itemCounts.set(detail.ListID, count + 1);
+      if (lists.length > 0) {
+        const countResults = await rv.RunViews(lists.map(list => ({
+          EntityName: 'MJ: List Details',
+          ExtraFilter: `ListID = '${list.ID}'`,
+          ResultType: 'count_only' as const
+        })));
+        countResults.forEach((res, idx) => {
+          itemCounts.set(lists[idx].ID, res.Success ? res.TotalRowCount : 0);
+        });
       }
 
       // Build entity info
@@ -1517,12 +1412,24 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   onSearchChange(_term: string) {
     this.applyFilter();
     this.buildCategoryTree();
+    this.publishAgentContext();
+  }
+
+  /** Set the grid/list view mode and refresh agent context. */
+  setViewMode(mode: 'grid' | 'list') {
+    this.viewMode = mode;
+    this.publishAgentContext();
   }
 
   clearSearch() {
     this.searchTerm = '';
     this.applyFilter();
     this.buildCategoryTree();
+  }
+
+  /** Message for the no-results empty state, echoing the active search term. */
+  public get NoResultsMessage(): string {
+    return `No lists match "${this.searchTerm}". Try a different search term or clear your search.`;
   }
 
   private applyFilter() {
@@ -1751,6 +1658,15 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
     const listToDelete = this.listToDelete;
     const listName = listToDelete.Name;
+
+    // Defense-in-depth: re-check the shared ownership rule before deleting (the server is the true
+    // enforcement point, but this fails fast with a clean message).
+    if (!MJListEntityExtended.UserCanDelete(listToDelete.UserID, this.ProviderToUse.CurrentUser)) {
+      this.notificationService.CreateSimpleNotification(
+        `You don't have permission to delete "${listName}".`, 'error', 6000,
+      );
+      return;
+    }
 
     this.isDeleting = true;
     this.cdr.detectChanges();

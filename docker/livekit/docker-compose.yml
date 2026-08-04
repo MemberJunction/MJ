@@ -1,0 +1,20 @@
+# Local LiveKit server for the "Meet" app (the MJ-native LiveKit room bridge). DEV ONLY.
+#
+#   Start:  cd docker/livekit && docker compose up -d
+#   Logs:   docker compose logs -f
+#   Stop:   docker compose down
+#
+# MJAPI never proxies media — it only mints LiveKit access tokens (using the key/secret below,
+# which must match the repo-root .env). Browsers and the agent connect to this server directly.
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: mj-livekit
+    command: --config /etc/livekit/livekit.yaml
+    restart: unless-stopped
+    ports:
+      - "7880:7880"        # signaling (ws)  -> LIVEKIT_URL=ws://localhost:7880
+      - "7881:7881"        # WebRTC over TCP (media fallback — used on Docker/macOS)
+      - "7882:7882/udp"    # WebRTC over UDP (media)
+    volumes:
+      - ./livekit.yaml:/etc/livekit/livekit.yaml:ro

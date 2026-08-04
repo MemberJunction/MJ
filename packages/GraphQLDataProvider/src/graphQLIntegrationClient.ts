@@ -798,12 +798,12 @@ export class GraphQLIntegrationClient {
         } catch (e) { return { Success: false, Message: (e as Error).message }; }
     }
 
-    public async CancelSync(runID: string): Promise<MutationResult> {
+    public async CancelSync(companyIntegrationID: string): Promise<MutationResult> {
         try {
-            const query = gql`mutation IntegrationCancelSync($runID: String!) {
-                IntegrationCancelSync(runID: $runID) { Success Message }
+            const query = gql`mutation IntegrationCancelSync($companyIntegrationID: String!) {
+                IntegrationCancelSync(companyIntegrationID: $companyIntegrationID) { Success Message }
             }`;
-            const result = await this._dataProvider.ExecuteGQL(query, { runID });
+            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID });
             return result?.IntegrationCancelSync ?? { Success: false, Message: 'No response' };
         } catch (e) { return { Success: false, Message: (e as Error).message }; }
     }

@@ -1,12 +1,12 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ResolverBase } from './ResolverBase.js';
-import { LogError, LogStatus, EntityInfo, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult } from '@memberjunction/core';
+import { LogError, LogStatus, EntityInfo, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { KeyValuePairOutputType } from './KeyInputOutputTypes.js';
+import { CompositeKeyInputType, KeyValuePairOutputType } from './KeyInputOutputTypes.js';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 /********************************************************************************
@@ -159,11 +159,24 @@ export class RunViewByIDInput {
   })
   StartRow?: number;
 
+  @Field(() => CompositeKeyInputType, {
+    nullable: true,
+    description: 'Keyset (seek) pagination cursor. When provided, returns the next page of records after the given PK value, ordered by the PK column. Requires a single-column PK on the entity. Cannot be combined with StartRow.',
+  })
+  AfterKey?: CompositeKeyInputType;
+
   @Field(() => [AggregateExpressionInput], {
     nullable: true,
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
+  })
+  BypassCache?: boolean;
 }
 
 @InputType()
@@ -260,11 +273,24 @@ export class RunViewByNameInput {
   })
   StartRow?: number;
 
+  @Field(() => CompositeKeyInputType, {
+    nullable: true,
+    description: 'Keyset (seek) pagination cursor. When provided, returns the next page of records after the given PK value, ordered by the PK column. Requires a single-column PK on the entity. Cannot be combined with StartRow.',
+  })
+  AfterKey?: CompositeKeyInputType;
+
   @Field(() => [AggregateExpressionInput], {
     nullable: true,
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
+  })
+  BypassCache?: boolean;
 }
 
 @InputType()
@@ -347,11 +373,24 @@ export class RunDynamicViewInput {
   })
   StartRow?: number;
 
+  @Field(() => CompositeKeyInputType, {
+    nullable: true,
+    description: 'Keyset (seek) pagination cursor. When provided, returns the next page of records after the given PK value, ordered by the PK column. Requires a single-column PK on the entity. Cannot be combined with StartRow.',
+  })
+  AfterKey?: CompositeKeyInputType;
+
   @Field(() => [AggregateExpressionInput], {
     nullable: true,
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
+  })
+  BypassCache?: boolean;
 }
 
 @InputType()
@@ -463,11 +502,24 @@ export class RunViewGenericInput {
   })
   StartRow?: number;
 
+  @Field(() => CompositeKeyInputType, {
+    nullable: true,
+    description: 'Keyset (seek) pagination cursor. When provided, returns the next page of records after the given PK value, ordered by the PK column. Requires a single-column PK on the entity. Cannot be combined with StartRow.',
+  })
+  AfterKey?: CompositeKeyInputType;
+
   @Field(() => [AggregateExpressionInput], {
     nullable: true,
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
+  })
+  BypassCache?: boolean;
 }
 
 //****************************************************************************
@@ -536,6 +588,12 @@ export class RunViewWithCacheCheckResultOutput {
 
   @Field(() => String, { nullable: true, description: 'Error message if status is error' })
   errorMessage?: string;
+
+  @Field(() => [AggregateResultOutput], {
+    nullable: true,
+    description: 'Aggregate results when status is stale and aggregates were requested (B40 — previously never marshalled, so CacheLocal callers got no aggregates at all)'
+  })
+  aggregateResults?: AggregateResultOutput[];
 }
 
 @ObjectType()
@@ -663,13 +721,14 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:run', input.ViewName, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) 
         return null;
 
       const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { Name: input.ViewName }, userPayload.userRecord));
-      const entity = provider.Entities.find((e) => UUIDsEqual(e.ID, viewInfo.EntityID));
+      const entity = provider.EntityByID(viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
         Results: returnData,
@@ -694,13 +753,14 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:run', input.ViewID, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) 
         return null;
 
       const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
-      const entity = provider.Entities.find((e) => UUIDsEqual(e.ID, viewInfo.EntityID));
+      const entity = provider.EntityByID(viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
         Results: returnData,
@@ -725,11 +785,12 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:run', input.EntityName, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) return null;
 
-      const entity = provider.Entities.find((e) => e.Name === input.EntityName);
+      const entity = provider.EntityByName(input.EntityName);
       const returnData = this.processRawData(rawData.Results, entity.ID, entity);
       return {
         Results: returnData,
@@ -754,6 +815,7 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:batch', '*', userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       // Note: RunViewsGeneric returns the core RunViewResult type, not the GraphQL type
       const rawData = await super.RunViewsGeneric(input, provider, userPayload);
@@ -764,7 +826,7 @@ export class RunViewResolver extends ResolverBase {
       let results: RunViewGenericResult[] = [];
       for (const [index, data] of rawData.entries()) {
         // EntityName is backfilled by RunViewsGeneric when ViewID/ViewName was used
-        const entity = input[index].EntityName ? provider.Entities.find((e) => e.Name === input[index].EntityName) : null;
+        const entity = input[index].EntityName ? provider.EntityByName(input[index].EntityName) : null;
 
         const returnData: any[] = this.processRawData(data.Results, entity ? entity.ID : null, entity);
 
@@ -808,7 +870,7 @@ export class RunViewResolver extends ResolverBase {
         };
       }
 
-      const entity = provider.Entities.find((e) => e.Name === input.ViewName);
+      const entity = provider.EntityByName(input.ViewName);
       const entityId = entity ? entity.ID : null;
       const returnData = this.processRawData(rawData.Results, entityId, entity);
       return {
@@ -856,7 +918,7 @@ export class RunViewResolver extends ResolverBase {
       }
 
       const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
-      const entity = provider.Entities.find((e) => UUIDsEqual(e.ID, viewInfo.EntityID));
+      const entity = provider.EntityByID(viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
         Results: returnData,
@@ -902,7 +964,7 @@ export class RunViewResolver extends ResolverBase {
         };
       }
 
-      const entity = provider.Entities.find((e) => e.Name === input.EntityName);
+      const entity = provider.EntityByName(input.EntityName);
       if (!entity) {
         const errorMsg = `Entity ${input.EntityName} not found in metadata`;
         LogError(new Error(errorMsg));
@@ -955,7 +1017,7 @@ export class RunViewResolver extends ResolverBase {
 
       let results: RunViewGenericResult[] = [];
       for (const [index, data] of rawData.entries()) {
-        const entity = provider.Entities.find((e) => e.Name === input[index].EntityName);
+        const entity = provider.EntityByName(input[index].EntityName);
         if (!entity) {
           LogError(new Error(`Entity with name ${input[index].EntityName} not found`));
           continue;
@@ -1017,6 +1079,12 @@ export class RunViewResolver extends ResolverBase {
           AuditLogDescription: item.params.AuditLogDescription,
           ResultType: (item.params.ResultType || 'simple') as 'simple' | 'entity_object' | 'count_only',
           StartRow: item.params.StartRow,
+          // Forward the aggregate request to the engine (B40) — omitted here as well as in the
+          // client's input map, so aggregates never reached InternalRunView on this transport.
+          Aggregates: item.params.Aggregates,
+          AfterKey: item.params.AfterKey
+            ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
+            : undefined,
         },
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -1029,7 +1097,7 @@ export class RunViewResolver extends ResolverBase {
       // Transform results to include processed data rows
       const transformedResults: RunViewWithCacheCheckResultOutput[] = response.results.map((result, index) => {
         const inputItem = input[index];
-        const entity = provider.Entities.find(e => e.Name === inputItem.params.EntityName);
+        const entity = inputItem.params.EntityName ? provider.EntityByName(inputItem.params.EntityName) : undefined;
 
         // If we have differential data but no entity, that's a configuration error
         if (result.status === 'differential' && result.differentialData && !entity) {
@@ -1071,6 +1139,8 @@ export class RunViewResolver extends ResolverBase {
             maxUpdatedAt: result.maxUpdatedAt,
             rowCount: result.rowCount,
             errorMessage: result.errorMessage,
+            // Same serializer the regular RunView path uses (value → JSON string).
+            aggregateResults: this.processAggregateResults(result.aggregateResults),
           };
         }
 

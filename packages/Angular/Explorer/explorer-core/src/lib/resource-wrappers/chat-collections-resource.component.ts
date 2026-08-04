@@ -24,7 +24,8 @@ import { Subject, takeUntil, distinctUntilChanged, combineLatest } from 'rxjs';
         @if (currentUser) {
           <mj-collections-full-view
             [environmentId]="environmentId"
-            [currentUser]="currentUser">
+            [currentUser]="currentUser"
+            (openConversationRequested)="onOpenConversation($event)">
           </mj-collections-full-view>
         }
       </div>
@@ -192,8 +193,15 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     // Enable URL updates after initialization
     this.initializing = false;
 
-    // Push initial state to URL
-    this.pushStateToUrl();
+    // Push initial state to URL — but only if we actually have state to reflect.
+    // On a cold/direct deep-link load the params may arrive via the reactive
+    // OnQueryParamsChanged delivery slightly after ngOnInit; pushing empty params
+    // here would strip the deep link from the URL before that delivery lands.
+    // Once state is set (synchronously when params are already present, or via the
+    // reactive delivery), subscribeToUrlStateChanges() pushes the normalized URL.
+    if (this.collectionState.activeCollectionId || this.activeArtifactId) {
+      this.pushStateToUrl();
+    }
 
     // Notify load complete after user is set
     setTimeout(() => {
@@ -419,8 +427,32 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
       }
     }
 
+    // Also deliver as query params so an already-open/cached target tab applies them
+    // (configuration alone is only read by a fresh tab's ngOnInit).
+    const queryParams: Record<string, string> = {};
+    for (const [key, value] of Object.entries(params)) {
+      if (value != null) queryParams[key] = String(value);
+    }
+
     // Navigate using the generic nav item method
-    this.navigationService.OpenNavItemByName(navItemName, params);
+    this.navigationService.OpenNavItemByName(navItemName, params, undefined, { queryParams });
+  }
+
+  /**
+   * Open the conversation an artifact was produced in (from the Collections view's
+   * right-click "Open source conversation"). Routes to the Conversations nav item.
+   */
+  onOpenConversation(event: { conversationId: string }): void {
+    // Pass conversationId BOTH as configuration (read by a fresh tab's ngOnInit) AND as
+    // queryParams (drives OnQueryParamsChanged on the already-open/cached Conversations tab).
+    // Without the queryParams, switching to an existing Conversations tab opens the app but
+    // never selects the conversation, since the cached component doesn't re-run ngOnInit.
+    this.navigationService.OpenNavItemByName(
+      'Conversations',
+      { conversationId: event.conversationId },
+      undefined,
+      { queryParams: { conversationId: event.conversationId } }
+    );
   }
 
   /**
@@ -447,9 +479,12 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
         environmentId: this.environmentId,
       });
 
-      await this.navigationService.OpenNavItemByName('Conversations', {
-        conversationId: result.conversationId,
-      });
+      await this.navigationService.OpenNavItemByName(
+        'Conversations',
+        { conversationId: result.conversationId },
+        undefined,
+        { queryParams: { conversationId: result.conversationId } }
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start analysis conversation';
       MJNotificationService.Instance.CreateSimpleNotification(message, 'error', 5000);

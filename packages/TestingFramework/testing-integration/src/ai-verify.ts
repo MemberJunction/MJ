@@ -1,0 +1,153 @@
+/**
+ * ai-verify.ts — deep persistence verifiers for the live-model integration tier (§8 prerequisite).
+ *
+ * Lifted verbatim from integration-test-scripts/lib/ai-bootstrap.ts so the graduated live-model bundles
+ * (prompt-runner, agent-runner, concurrent) read them from the package instead of the tsx harness. After a
+ * real prompt/agent run, these fetch the persisted records and assert the OUTPUT is correct — AI Prompt
+ * Runs, AI Agent Runs, AI Agent Run Steps (each terminal + CompletedAt set, never stuck at 'Running'), and
+ * the Action Execution Logs / child runs the steps point at via TargetLogID. This is the live end-to-end
+ * regression guard for the fire-and-forget BaseEntitySaveQueue.
+ *
+ * `settle` (the fire-and-forget landing delay) lives in test-runner.ts and is re-exported from the barrel.
+ */
+import { RunView } from '@memberjunction/core';
+import type { UserInfo } from '@memberjunction/core';
+import { Assert } from './test-runner';
+
+type Row = Record<string, unknown>;
+/** Truly-finished states whose row MUST carry a CompletedAt (the save-queue finalize guarantee). */
+const TERMINAL = new Set(['Completed', 'Failed', 'Cancelled']);
+/** An agent run "ran without error" if it completed or intentionally suspended (awaiting feedback/paused). */
+const RAN_OK = new Set(['Completed', 'AwaitingFeedback', 'Paused']);
+
+/** Fixed inter-attempt delay (ms) for the bounded poll. */
+const FETCH_POLL_INTERVAL_MS = 500;
+/** Default total poll budget (ms). Overridable per-run via MJ_IT_FETCH_POLL_MS for loaded boxes. */
+const FETCH_POLL_DEFAULT_BUDGET_MS = 12000;
+
+/** Resolve the poll budget from MJ_IT_FETCH_POLL_MS (positive finite ms), else the default. */
+function resolveFetchPollBudgetMs(): number {
+    const raw = Number(process.env.MJ_IT_FETCH_POLL_MS);
+    return Number.isFinite(raw) && raw > 0 ? raw : FETCH_POLL_DEFAULT_BUDGET_MS;
+}
+
+/** Fetches a single row by ID via the real RunView pipeline (BypassCache = true DB state), asserting one match. */
+async function fetchById(entity: string, id: string, user: UserInfo): Promise<Row> {
+    // Bounded poll: the rows this verifies (Action Execution Logs, child AI Prompt Runs) are
+    // written by the agent loop's FIRE-AND-FORGET save queue, which can land AFTER the run
+    // handle returns — especially under the fast server-in-process transport. A single-shot read
+    // raced that write (agent-loop-live AL2). Budget is MJ_IT_FETCH_POLL_MS-tunable (default 12s).
+    const attempts = Math.max(1, Math.round(resolveFetchPollBudgetMs() / FETCH_POLL_INTERVAL_MS));
+    // The bound we ACTUALLY wait is attempts × interval, which can differ from the nominal env
+    // budget when it isn't a multiple of the interval (e.g. 700ms → 1 attempt → 500ms) — report
+    // the real bound, not the configured one.
+    const budgetMs = attempts * FETCH_POLL_INTERVAL_MS;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+        const result = await new RunView().RunView({ EntityName: entity, ExtraFilter: `ID='${id}'`, ResultType: 'simple', BypassCache: true }, user);
+        Assert(result.Success, `RunView('${entity}') failed: ${result.ErrorMessage}`);
+        if (result.Results.length === 1) {
+            return result.Results[0] as Row;
+        }
+        if (result.Results.length > 1) {
+            Assert(false, `${entity} ${id}: expected 1 row, got ${result.Results.length}`);
+        }
+        await new Promise(r => setTimeout(r, FETCH_POLL_INTERVAL_MS));
+    }
+    // NOT a claim of data loss: on a loaded box (MJAPI + runner + SQL Server co-hosted) the
+    // fire-and-forget write commonly commits just after the window closes (verified in the v5.49.0
+    // build: the rows landed, the poll simply closed first). State the bound and name the knob.
+    Assert(false, `${entity} ${id} not found within ${budgetMs}ms bounded poll — the fire-and-forget write may still be in flight on a loaded box; raise MJ_IT_FETCH_POLL_MS (and consider AGENT_LIVE_SETTLE_MS for the pre-poll settle)`);
+    throw new Error('unreachable');
+}
+
+/**
+ * Verifies an `MJ: AI Prompt Runs` row finalized correctly: terminal Status, **CompletedAt set** (the
+ * "stuck at Running" guard the save queue prevents), and on success a non-empty Result + recorded timing.
+ */
+export async function verifyPromptRun(promptRunID: string, user: UserInfo): Promise<Row> {
+    const row = await fetchById('MJ: AI Prompt Runs', promptRunID, user);
+    Assert(TERMINAL.has(String(row.Status)), `Prompt run ${promptRunID}: non-terminal Status '${row.Status}' (stuck at Running?)`);
+    Assert(row.CompletedAt != null, `Prompt run ${promptRunID}: CompletedAt is null while Status='${row.Status}' (finalize save lost)`);
+    if (row.Success === true) {
+        Assert(row.Result != null && String(row.Result).length > 0, `Prompt run ${promptRunID}: succeeded but Result is empty`);
+        Assert(Number(row.ExecutionTimeMS) > 0, `Prompt run ${promptRunID}: succeeded but ExecutionTimeMS not recorded`);
+    }
+    return row;
+}
+
+/** Verifies an `MJ: Action Execution Logs` row finalized: **EndedAt set** + a ResultCode recorded. */
+export async function verifyActionLog(logID: string, user: UserInfo): Promise<Row> {
+    const row = await fetchById('MJ: Action Execution Logs', logID, user);
+    Assert(row.EndedAt != null, `Action log ${logID}: EndedAt is null (stuck 'Running' — the action-log finalize bug class)`);
+    Assert(row.ResultCode != null && String(row.ResultCode).length > 0, `Action log ${logID}: no ResultCode recorded`);
+    return row;
+}
+
+export interface AgentRunVerification {
+    run: Row;
+    stepCount: number;
+    promptRunsVerified: number;
+    actionLogsVerified: number;
+    subAgentRunsVerified: number;
+}
+
+/**
+ * Deep-verifies an agent run end to end: the `MJ: AI Agent Runs` header, every `MJ: AI Agent Run Steps`
+ * row (each terminal + CompletedAt set — never stuck at Running), and the records each step points at via
+ * TargetLogID — Prompt steps → AI Prompt Runs, Actions/Tool steps → Action Execution Logs, Sub-Agent steps
+ * → child AI Agent Runs (recursively). `expectSuccess` asserts the run reached 'Completed'.
+ */
+export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectSuccess = true, opts: { skipActionLogs?: boolean } = {}): Promise<AgentRunVerification> {
+    const run = await fetchById('MJ: AI Agent Runs', agentRunID, user);
+    const status = String(run.Status);
+    // The actual "stuck at Running" guard: a finalized run is anything except still-Running.
+    Assert(status !== 'Running', `Agent run ${agentRunID}: still 'Running' (never finalized — the stuck-at-Running bug)`);
+    // CompletedAt is required only for the truly-done states; AwaitingFeedback/Paused legitimately suspend without it.
+    if (TERMINAL.has(status)) {
+        Assert(run.CompletedAt != null, `Agent run ${agentRunID}: CompletedAt is null while Status='${status}' (finalize save lost)`);
+    }
+    if (expectSuccess) {
+        Assert(RAN_OK.has(status), `Agent run ${agentRunID}: expected Completed/AwaitingFeedback/Paused, got '${status}' (${run.ErrorMessage ?? ''})`);
+    }
+
+    const stepsResult = await new RunView().RunView({
+        EntityName: 'MJ: AI Agent Run Steps',
+        ExtraFilter: `AgentRunID='${agentRunID}'`,
+        OrderBy: 'StepNumber',
+        ResultType: 'simple',
+        BypassCache: true,
+    }, user);
+    Assert(stepsResult.Success, `RunView agent run steps failed: ${stepsResult.ErrorMessage}`);
+    const steps = stepsResult.Results as Row[];
+
+    let promptRunsVerified = 0;
+    let actionLogsVerified = 0;
+    let subAgentRunsVerified = 0;
+    for (const step of steps) {
+        const label = `${step.StepType}/${step.StepName ?? ''}`;
+        // The save-queue guarantee: every step must have finalized, never stuck at Running.
+        Assert(TERMINAL.has(String(step.Status)), `Agent run ${agentRunID} step '${label}': non-terminal Status '${step.Status}' (stuck at Running)`);
+        Assert(step.CompletedAt != null, `Agent run ${agentRunID} step '${label}': CompletedAt is null while Status='${step.Status}' (the exact stuck-at-Running bug)`);
+
+        const target = step.TargetLogID ? String(step.TargetLogID) : null;
+        if (!target) {
+            continue;
+        }
+        if (step.StepType === 'Prompt') {
+            await verifyPromptRun(target, user);
+            promptRunsVerified++;
+        } else if (step.StepType === 'Actions' || step.StepType === 'Tool') {
+            // Action Execution Logs are written by the fire-and-forget queue and can land
+            // arbitrarily late relative to a run handle returning (esp. server-in-process).
+            // Callers that only care about run/step terminality pass skipActionLogs.
+            if (opts.skipActionLogs) { continue; }
+            await verifyActionLog(target, user);
+            actionLogsVerified++;
+        } else if (step.StepType === 'Sub-Agent') {
+            await verifyAgentRun(target, user, false); // child success is the child's own concern
+            subAgentRunsVerified++;
+        }
+    }
+
+    return { run, stepCount: steps.length, promptRunsVerified, actionLogsVerified, subAgentRunsVerified };
+}

@@ -1,0 +1,63 @@
+<!doctype html><html><head><meta charset="utf-8"><title>02 — Browse Cards</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar">
+  <div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div>
+  <div class="nav-section">Apps</div>
+  <div class="nav-item"><i class="fa-solid fa-house"></i> Home</div>
+  <div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div>
+  <div class="nav-item"><i class="fa-solid fa-table-list"></i> Data Explorer</div>
+  <div class="nav-item"><i class="fa-solid fa-message"></i> Communications</div>
+</aside>
+<main class="main">
+  <div class="app-header"><h1><i class="fa-solid fa-list-check"></i> Lists</h1><div class="spacer"></div><button class="mj-btn mj-btn-primary"><i class="fa-solid fa-plus"></i> New List</button></div>
+  <div class="app-tabs"><div class="tab active"><i class="fa-solid fa-list"></i>Browse <span class="badge">142</span></div><div class="tab"><i class="fa-solid fa-diagram-project"></i>Operations</div><div class="tab"><i class="fa-solid fa-folder-tree"></i>Categories</div></div>
+  <div class="toolbar">
+    <div class="mj-search" style="flex: 1; max-width: 360px;"><i class="fa-solid fa-search icon"></i><input class="mj-input" placeholder="Search lists…"></div>
+    <select class="mj-input mj-select" style="width: 160px;"><option>All Owners</option></select>
+    <select class="mj-input mj-select" style="width: 160px;"><option>All Entities</option></select>
+    <div class="spacer"></div>
+    <div class="view-toggle"><button title="Table"><i class="fa-solid fa-table-list"></i></button><button class="active" title="Cards"><i class="fa-solid fa-grip"></i></button><button title="Hierarchy"><i class="fa-solid fa-folder-tree"></i></button></div>
+  </div>
+
+  <div class="list-grid">
+    <div class="list-card">
+      <div class="header-row"><div class="entity-icon"><i class="fa-solid fa-list"></i></div><div class="title">VIP Donors Q4 2026</div><i class="fa-solid fa-ellipsis-vertical menu"></i></div>
+      <div class="description">Top-tier donors flagged for fall outreach</div>
+      <div class="meta"><span><i class="fa-solid fa-database"></i>Contacts</span><span><i class="fa-solid fa-hashtag"></i>348 items</span></div>
+      <div class="footer"><span class="badge badge-info"><i class="fa-solid fa-users"></i> 4 shared</span><span class="muted">Amith Nagarajan</span><span class="muted" style="margin-left:auto;">2h ago</span></div>
+    </div>
+    <div class="list-card">
+      <div class="header-row"><div class="entity-icon"><i class="fa-solid fa-list"></i></div><div class="title">Failed Renewals — March</div><i class="fa-solid fa-ellipsis-vertical menu"></i></div>
+      <div class="description">From recommendations engine error log</div>
+      <div class="meta"><span><i class="fa-solid fa-database"></i>Members</span><span><i class="fa-solid fa-hashtag"></i>27 items</span></div>
+      <div class="footer"><span class="badge badge-muted"><i class="fa-solid fa-lock"></i> Private</span><span class="muted">System</span><span class="muted" style="margin-left:auto;">Yesterday</span></div>
+    </div>
+    <div class="list-card">
+      <div class="header-row"><div class="entity-icon"><i class="fa-solid fa-list"></i></div><div class="title">Conference Attendees 2026</div><i class="fa-solid fa-ellipsis-vertical menu"></i></div>
+      <div class="description">Materialized from registration view 2026-04-30</div>
+      <div class="meta"><span><i class="fa-solid fa-database"></i>Contacts</span><span><i class="fa-solid fa-hashtag"></i>2,847 items</span></div>
+      <div class="footer"><span class="badge badge-info"><i class="fa-solid fa-users"></i> 12 shared</span><span class="muted">Mike Smith</span><span class="muted" style="margin-left:auto;">2w ago</span></div>
+    </div>
+    <div class="list-card">
+      <div class="header-row"><div class="entity-icon"><i class="fa-solid fa-list"></i></div><div class="title">Duplicate Account Candidates</div><i class="fa-solid fa-ellipsis-vertical menu"></i></div>
+      <div class="description">From duplicate detection — needs review</div>
+      <div class="meta"><span><i class="fa-solid fa-database"></i>Accounts</span><span><i class="fa-solid fa-hashtag"></i>84 items</span></div>
+      <div class="footer"><span class="badge badge-muted"><i class="fa-solid fa-lock"></i> Private</span><span class="muted">Amith</span><span class="muted" style="margin-left:auto;">3d ago</span></div>
+    </div>
+    <div class="list-card">
+      <div class="header-row"><div class="entity-icon"><i class="fa-solid fa-list"></i></div><div class="title">Lapsed Members — 90d</div><i class="fa-solid fa-ellipsis-vertical menu"></i></div>
+      <div class="description">Recovery campaign target list</div>
+      <div class="meta"><span><i class="fa-solid fa-database"></i>Members</span><span><i class="fa-solid fa-hashtag"></i>1,204 items</span></div>
+      <div class="footer"><span class="badge badge-info"><i class="fa-solid fa-users"></i> 2 shared</span><span class="muted">Sara Lee</span><span class="muted" style="margin-left:auto;">1w ago</span></div>
+    </div>
+    <div class="list-card">
+      <div class="header-row"><div class="entity-icon"><i class="fa-solid fa-list"></i></div><div class="title">Board of Directors</div><i class="fa-solid fa-ellipsis-vertical menu"></i></div>
+      <div class="description">Current board roster — kept manually</div>
+      <div class="meta"><span><i class="fa-solid fa-database"></i>Contacts</span><span><i class="fa-solid fa-hashtag"></i>18 items</span></div>
+      <div class="footer"><span class="badge badge-info"><i class="fa-solid fa-users"></i> 6 shared</span><span class="muted">Amith</span><span class="muted" style="margin-left:auto;">1mo ago</span></div>
+    </div>
+  </div>
+</main>
+</div></body></html>

@@ -113,6 +113,16 @@ export interface RSUPipelineInput {
   /** Optional: additionalSchemaInfo JSON content for soft FKs. */
   AdditionalSchemaInfo?: string;
 
+  /**
+   * When true, this input's AdditionalSchemaInfo payload represents the FULL current resolution
+   * for each schema it contains (e.g. a schema-evolution refresh that re-resolved the whole
+   * connector). The writer then REPLACES each contained schema's table list wholesale — pruning
+   * entries for tables that vanished from the resolution (rsuplan: "adds new ones, removes old
+   * ones that no longer exist"). Leave false/unset for subset builds (ApplyAll of selected
+   * objects), where pruning would wrongly delete other tables' soft constraints.
+   */
+  AdditionalSchemaInfoAuthoritative?: boolean;
+
   /** Optional: metadata JSON files for mj-sync. */
   MetadataFiles?: Array<{ Path: string; Content: string }>;
 
@@ -138,6 +148,14 @@ export interface RSUPipelineStep {
   Status: 'success' | 'failed' | 'skipped';
   DurationMs: number;
   Message: string;
+  /**
+   * U11 — 1-based position of this step in the pipeline's expected sequence, enabling a
+   * DETERMINATE progress stepper (index of total) instead of an indeterminate spinner.
+   * Optional/additive — absent on steps recorded before the counter engaged.
+   */
+  StepIndex?: number;
+  /** U11 — expected total steps for this pipeline run (see {@link StepIndex}). */
+  StepTotal?: number;
 }
 
 /**
@@ -183,6 +201,18 @@ interface PostMigrationResult {
   ApiRestarted: boolean;
   GitCommitSuccess: boolean;
   BranchName?: string;
+  /**
+   * Whether the run-wide CodeGen step succeeded. Undefined when CodeGen was
+   * skipped (no successful migration). When FALSE the migrations executed but
+   * CodeGen did NOT — so the affected entities may have no stored procedures
+   * (e.g. CODEGEN_DB creds that don't match the target DB platform, or a build
+   * that isn't present), and a sync would silently skip them with
+   * SchemaNotGenerated. A connector must NOT report success when its CodeGen
+   * failed, so this flows into each per-caller result's Success.
+   */
+  CodeGenSucceeded?: boolean;
+  /** The RunCodeGen failure message, surfaced when CodeGenSucceeded is false. */
+  CodeGenError?: string;
 }
 
 /**
@@ -205,6 +235,20 @@ export interface RSUPendingWork {
   SyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
   /** Override sync direction for the created schedule (stored in ScheduledJob.Configuration). */
   ScheduleSyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
+  /**
+   * Remove-as-disable: what the post-restart consumer does with existing entity maps
+   * whose object is NOT in SourceObjectNames. 'disable' (default) = Status='Disabled' +
+   * SyncEnabled=false (+ field maps disabled; data kept, re-selection re-enables);
+   * 'ignore' = leave them untouched (additive/subset apply).
+   */
+  UnselectedAction?: 'disable' | 'ignore';
+  /**
+   * Refresh diff: when true, entity maps + field maps CREATED by this pending work
+   * are born DISABLED (Status='Disabled', SyncEnabled=false) — the schema-evolution default
+   * for newly-appeared objects ("we enable nothing; the user needs to go turn them on").
+   * Existing maps are never force-disabled by this flag.
+   */
+  CreateDisabled?: boolean;
 }
 
 /**
@@ -227,6 +271,12 @@ export interface RSUStatus {
   OutOfSyncSince: Date | null;
   LastRunAt: Date | null;
   LastRunResult: string | null;
+  /** U11 — name of the step currently executing (null when idle). Powers a determinate stepper. */
+  CurrentStepName?: string | null;
+  /** U11 — 1-based index of the current step within the expected sequence (null when idle). */
+  CurrentStepIndex?: number | null;
+  /** U11 — expected total steps for the in-flight pipeline run (null when idle). */
+  StepTotal?: number | null;
 }
 
 /**
@@ -311,6 +361,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   private _ddlProvider: DatabaseProviderBase | null = null;
   private _codeGenRunner: IRSUCodeGenRunner | null = null;
   private _codeGenOutputPaths: string[] = [];
+  private _additionalSchemaInfoPath: string | null = null;
   private _outOfSync = false;
   private _outOfSyncSince: Date | null = null;
   private _lastRunAt: Date | null = null;
@@ -341,6 +392,31 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    */
   public SetCodeGenOutputPaths(paths: string[]): void {
     this._codeGenOutputPaths = paths;
+  }
+
+  /**
+   * Set the additionalSchemaInfo file path that CodeGen reads (from mj.config.cjs
+   * `additionalSchemaInfo`). RSU writes its soft PK/FK config to THIS path so the
+   * subsequent CodeGen run actually finds it. Injected by the server at startup,
+   * mirroring SetCodeGenOutputPaths.
+   *
+   * Without injection, RSU falls back to RSU_ADDITIONAL_SCHEMA_INFO_PATH /
+   * 'additionalSchemaInfo.json' — a path that need not match CodeGen's configured
+   * one. When they diverge, RSU writes soft PKs to a file CodeGen never reads, and
+   * every integration table is skipped with "No primary key found". Keeping the two
+   * in lockstep is the whole point of this setter.
+   */
+  public SetAdditionalSchemaInfoPath(configuredPath: string): void {
+    this._additionalSchemaInfoPath = configuredPath;
+  }
+
+  /**
+   * The additionalSchemaInfo path RSU writes to, relative to WorkDir. Prefers the
+   * CodeGen-configured path (injected at startup) so writer and reader agree; falls
+   * back to the env/default only when nothing was injected.
+   */
+  private get additionalSchemaInfoPath(): string {
+    return this._additionalSchemaInfoPath ?? rsuConfig.AdditionalSchemaInfoPath;
   }
 
   // ─── Pending Work (post-restart tasks) ─────────────────────────
@@ -444,7 +520,42 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       OutOfSyncSince: this._outOfSyncSince,
       LastRunAt: this._lastRunAt,
       LastRunResult: this._lastRunResult,
+      // U11 — live determinate progress (index of total) for the in-flight pipeline run.
+      CurrentStepName: this._currentStepName,
+      CurrentStepIndex: this._currentStepIndex,
+      StepTotal: this._stepTotal,
     };
+  }
+
+  // ── U11 — determinate step progress ────────────────────────────────
+  /**
+   * The expected step sequence of one pipeline run (single-item batch), in execution order.
+   * Used to size the determinate stepper; per-item steps (Write/Execute) repeat per batch
+   * item, so the live total is computed per run in {@link beginStepTracking}.
+   */
+  private static readonly EXPECTED_STEPS_SHARED_PRE = ['ValidateEnvironment', 'ValidateSQL', 'AcquireLock'] as const;
+  private static readonly EXPECTED_STEPS_PER_ITEM = ['WriteMigrationFile', 'ExecuteMigration'] as const;
+  private static readonly EXPECTED_STEPS_SHARED_POST = ['WriteAdditionalSchemaInfo', 'RunCodeGen', 'CompileTypeScript', 'GitCommitAndPR', 'RestartMJAPI'] as const;
+
+  private _currentStepName: string | null = null;
+  private _currentStepIndex: number | null = null;
+  private _stepTotal: number | null = null;
+
+  /** Arms the U11 step counter for a run of `itemCount` migrations. */
+  private beginStepTracking(itemCount: number): void {
+    this._currentStepIndex = 0;
+    this._currentStepName = null;
+    this._stepTotal =
+      RuntimeSchemaManager.EXPECTED_STEPS_SHARED_PRE.length +
+      itemCount * RuntimeSchemaManager.EXPECTED_STEPS_PER_ITEM.length +
+      RuntimeSchemaManager.EXPECTED_STEPS_SHARED_POST.length;
+  }
+
+  /** Clears the U11 step counter when the run finishes (status returns to idle). */
+  private endStepTracking(): void {
+    this._currentStepName = null;
+    this._currentStepIndex = null;
+    this._stepTotal = null;
   }
 
   // ─── Pipeline ────────────────────────────────────────────────────
@@ -487,19 +598,25 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     const sharedSteps: RSUPipelineStep[] = [];
 
-    // Phase 1: Validate
-    const validationFailure = await this.validateBatch(inputs, sharedSteps);
-    if (validationFailure) return validationFailure;
+    // U11 — arm the determinate step counter (index of expected total) for this run.
+    this.beginStepTracking(inputs.length);
+    try {
+      // Phase 1: Validate
+      const validationFailure = await this.validateBatch(inputs, sharedSteps);
+      if (validationFailure) return validationFailure;
 
-    // Phase 2: Execute migrations under lock
-    const itemResults = await this.executeMigrations(inputs, sharedSteps);
+      // Phase 2: Execute migrations under lock
+      const itemResults = await this.executeMigrations(inputs, sharedSteps);
 
-    // Phase 3: Post-migration pipeline (CodeGen, compile, restart, git)
-    const successfulItems = itemResults.filter((r) => r.Success);
-    const postResult = await this.runPostMigrationPipeline(inputs, successfulItems, sharedSteps);
+      // Phase 3: Post-migration pipeline (CodeGen, compile, restart, git)
+      const successfulItems = itemResults.filter((r) => r.Success);
+      const postResult = await this.runPostMigrationPipeline(inputs, successfulItems, sharedSteps);
 
-    // Phase 4: Build per-caller results
-    return this.buildPerCallerResults(itemResults, successfulItems, sharedSteps, postResult);
+      // Phase 4: Build per-caller results
+      return this.buildPerCallerResults(itemResults, successfulItems, sharedSteps, postResult);
+    } finally {
+      this.endStepTracking();
+    }
   }
 
   /** Phase 1: Validate environment and all migration SQL. Returns a batch failure result if validation fails, null on success. */
@@ -580,6 +697,17 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     await this.runStep('WriteAdditionalSchemaInfo', () => this.writeAdditionalSchemaInfo(successfulItems.map((r) => r.Input)), sharedSteps);
 
     const codegenOk = await this.runStep('RunCodeGen', () => this.runCodeGen(), sharedSteps);
+    // Thread the CodeGen success/failure into the post-migration result. A migration
+    // can ExecuteMigration:success yet leave its entity with NO spCreate/spUpdate procs
+    // if RunCodeGen failed — after which a sync silently skips the entity with
+    // SchemaNotGenerated (the connector looks "created" but isn't functional). Surface
+    // it so buildPerCallerResults FAILS the connector instead of passing silently.
+    result.CodeGenSucceeded = !!codegenOk;
+    if (!codegenOk) {
+      result.CodeGenError =
+        sharedSteps.find((s) => s.Name === 'RunCodeGen' && s.Status === 'failed')?.Message ??
+        'CodeGen failed after a successful migration — entities may be missing stored procedures/views';
+    }
     if (codegenOk) {
       const compileOk = await this.runStep('CompileTypeScript', () => this.compileTypeScript(), sharedSteps);
       if (compileOk) {
@@ -622,19 +750,29 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     postResult: PostMigrationResult,
   ): RSUPipelineBatchResult {
     this._lastRunAt = new Date();
-    this._lastRunResult = successfulItems.length > 0 ? 'success' : 'failed';
+    // A run-wide CodeGen failure means the migrations applied but the entities may have
+    // no stored procedures — treat the run as failed, not success.
+    const codeGenFailed = postResult.CodeGenSucceeded === false;
+    this._lastRunResult = successfulItems.length > 0 && !codeGenFailed ? 'success' : 'failed';
 
     const results: RSUPipelineResult[] = itemResults.map((item) => {
       const allSteps = [...sharedSteps, ...item.Steps];
+      // A migration that executed but whose run-wide CodeGen failed is NOT a success —
+      // the entity may have no spCreate/spUpdate procs and would silently skip on sync.
+      const codeGenFailedThisCaller = codeGenFailed && item.Success;
       const result: RSUPipelineResult = {
-        Success: item.Success && successfulItems.length > 0,
+        Success: item.Success && successfulItems.length > 0 && !codeGenFailed,
         MigrationFilePath: item.FilePath,
         APIRestarted: postResult.ApiRestarted,
         GitCommitSuccess: postResult.GitCommitSuccess,
         BranchName: postResult.BranchName,
         Steps: allSteps,
-        ErrorMessage: item.Error,
-        ErrorStep: item.Error ? item.Steps.find((s) => s.Status === 'failed')?.Name : undefined,
+        ErrorMessage: codeGenFailedThisCaller ? postResult.CodeGenError ?? item.Error : item.Error,
+        ErrorStep: codeGenFailedThisCaller
+          ? 'RunCodeGen'
+          : item.Error
+            ? item.Steps.find((s) => s.Status === 'failed')?.Name
+            : undefined,
       };
 
       this.writeAuditLog(item.Input, result).catch((err) => LogError(`[RSU] Audit log failed: ${err instanceof Error ? err.message : String(err)}`));
@@ -676,8 +814,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * @param baseDelayMs Base delay for exponential backoff (default: 5000ms)
    */
   public async RunPipelineWithRetry(input: RSUPipelineInput, maxRetries: number = 2, baseDelayMs: number = 5000): Promise<RSUPipelineResult> {
-    const RETRYABLE_STEPS = new Set(['ExecuteMigration', 'RunCodeGen', 'CompileTypeScript', 'RestartMJAPI']);
-
     let lastResult: RSUPipelineResult | null = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -692,12 +828,9 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
       lastResult = result;
 
-      // Check if the failed step is retryable
-      const failedStep = result.ErrorStep;
-      if (!failedStep || !RETRYABLE_STEPS.has(failedStep)) {
-        console.log(`[RSU] Step '${failedStep}' is not retryable — aborting`);
-        return result;
-      }
+      // A retry re-runs the WHOLE pipeline, migration included. That is only safe while the
+      // migration has not been applied — see `canSafelyRetry`.
+      if (!this.canSafelyRetry(result.ErrorStep, this.migrationWasApplied(result.Steps))) return result;
 
       if (attempt >= maxRetries) {
         console.log(`[RSU] Max retries (${maxRetries}) exhausted — aborting`);
@@ -705,11 +838,86 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       }
 
       const delayMs = baseDelayMs * Math.pow(2, attempt);
-      console.log(`[RSU] Step '${failedStep}' failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delayMs}ms...`);
+      console.log(`[RSU] Step '${result.ErrorStep}' failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delayMs}ms...`);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 
     return lastResult!;
+  }
+
+  /**
+   * Batch equivalent of {@link RunPipelineWithRetry}, for the `ApplyAll` / `ApplyAllBatch`
+   * install path.
+   *
+   * Same transient-step whitelist, same backoff, same safety rule: a retry re-runs every
+   * input's migration, so it is only attempted when NOTHING was applied on the failed pass.
+   * Once even one migration has committed, the batch is returned as-is rather than replayed.
+   */
+  public async RunPipelineBatchWithRetry(
+    inputs: RSUPipelineInput[],
+    maxRetries: number = 2,
+    baseDelayMs: number = 5000
+  ): Promise<RSUPipelineBatchResult> {
+    let lastResult: RSUPipelineBatchResult | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const result = await this.RunPipelineBatch(inputs);
+
+      if (result.FailureCount === 0) {
+        if (attempt > 0) console.log(`[RSU] Pipeline batch succeeded on retry attempt ${attempt}`);
+        return result;
+      }
+
+      lastResult = result;
+
+      // `SuccessCount > 0` means at least one migration committed — replaying the batch would
+      // re-execute it. Report the failure instead of risking a double-apply.
+      const failedStep = result.Results.find(r => !r.Success)?.ErrorStep;
+      if (!this.canSafelyRetry(failedStep, result.SuccessCount > 0)) return result;
+
+      if (attempt >= maxRetries) {
+        console.log(`[RSU] Max retries (${maxRetries}) exhausted — aborting`);
+        return result;
+      }
+
+      const delayMs = baseDelayMs * Math.pow(2, attempt);
+      console.log(`[RSU] Batch step '${failedStep}' failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delayMs}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    return lastResult!;
+  }
+
+  /**
+   * Decides whether a failed pipeline pass may be replayed.
+   *
+   * Two conditions, both required:
+   *  - the failed step is one of the four known-transient ones. Validation and git are
+   *    deterministic — replaying them just burns the backoff and reports the same error.
+   *  - the migration has NOT been applied. Retrying runs the pipeline from the top, so a
+   *    committed `CREATE TABLE` would be re-executed and fail on the replay, which then
+   *    *overwrites* the real error (a RunCodeGen failure gets reported as an ExecuteMigration
+   *    failure) and sends the operator chasing the wrong thing. Post-migration failures are
+   *    exactly the transient ones you'd most want to retry, which is why this is stated
+   *    explicitly rather than left implicit: replaying them is not safe here.
+   */
+  private canSafelyRetry(failedStep: string | undefined, migrationApplied: boolean): boolean {
+    const RETRYABLE_STEPS = new Set(['ExecuteMigration', 'RunCodeGen', 'CompileTypeScript', 'RestartMJAPI']);
+
+    if (!failedStep || !RETRYABLE_STEPS.has(failedStep)) {
+      console.log(`[RSU] Step '${failedStep}' is not retryable — aborting`);
+      return false;
+    }
+    if (migrationApplied) {
+      console.log(`[RSU] Step '${failedStep}' failed after the migration was applied — not retrying (a replay would re-execute committed DDL)`);
+      return false;
+    }
+    return true;
+  }
+
+  /** True when the pass got far enough to commit its migration SQL. */
+  private migrationWasApplied(steps: RSUPipelineStep[] | undefined): boolean {
+    return (steps ?? []).some(s => s.Name === 'ExecuteMigration' && s.Status === 'success');
   }
 
   /**
@@ -767,7 +975,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     const directoriesToCheck = [
       nodePath.join(workDir, rsuConfig.MigrationsPath),
       nodePath.join(workDir, rsuConfig.PendingWorkPath),
-      dirname(nodePath.join(workDir, rsuConfig.AdditionalSchemaInfoPath)),
+      dirname(nodePath.join(workDir, this.additionalSchemaInfoPath)),
       rsuConfig.CodeGenDir,
       workDir, // pipeline log
     ];
@@ -882,13 +1090,15 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * Path comes from RSU_ADDITIONAL_SCHEMA_INFO_PATH config, resolved relative to WorkDir.
    */
   private async writeAdditionalSchemaInfo(inputs: RSUPipelineInput[]): Promise<boolean> {
-    const contents = inputs.map((i) => i.AdditionalSchemaInfo).filter((c): c is string => !!c);
+    const contents = inputs
+      .filter((i): i is RSUPipelineInput & { AdditionalSchemaInfo: string } => !!i.AdditionalSchemaInfo)
+      .map((i) => ({ content: i.AdditionalSchemaInfo, authoritative: i.AdditionalSchemaInfoAuthoritative === true }));
 
     if (contents.length === 0) return true;
 
     const { readFileSync, writeFileSync, existsSync, mkdirSync } = await import('node:fs');
     const { join, dirname } = await import('node:path');
-    const configFilePath = join(rsuConfig.WorkDir, rsuConfig.AdditionalSchemaInfoPath);
+    const configFilePath = join(rsuConfig.WorkDir, this.additionalSchemaInfoPath);
 
     // Load existing config or start fresh
     // Format: { schemaName: [ { TableName, PrimaryKey?, ForeignKeys? }, ... ], ... }
@@ -901,12 +1111,23 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       }
     }
 
-    // Merge each incoming config (keyed by schema name) into existing
-    for (const content of contents) {
+    // Merge each incoming config (keyed by schema name) into existing.
+    // Authoritative payloads (full re-resolution, e.g. schema evolution) REPLACE the schema's
+    // table list wholesale — pruning tables that vanished (rsuplan: "adds new ones, removes old
+    // ones that no longer exist"). Subset payloads upsert per-table, never pruning siblings.
+    for (const { content, authoritative } of contents) {
       try {
         const incoming: Record<string, Array<{ TableName: string }>> = JSON.parse(content);
         for (const [schemaName, tables] of Object.entries(incoming)) {
           if (!Array.isArray(tables)) continue;
+          if (authoritative) {
+            const before = existing[schemaName]?.length ?? 0;
+            existing[schemaName] = [...tables];
+            if (before > tables.length) {
+              this.rsuLog(`additionalSchemaInfo[${schemaName}]: authoritative replace pruned ${before - tables.length} vanished table entr${before - tables.length === 1 ? 'y' : 'ies'}`);
+            }
+            continue;
+          }
           if (!existing[schemaName]) existing[schemaName] = [];
           for (const table of tables) {
             const idx = existing[schemaName].findIndex((t) => t.TableName.toLowerCase() === table.TableName.toLowerCase());
@@ -962,11 +1183,12 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         finalBatches.push(batch);
         continue;
       }
-      // Split on statement-ending `;` (preserve the `;`) and re-group.
-      const statements = batch.split(/;\s*\n/g)
-        .map(s => s.trim())
-        .filter(s => s.length > 0)
-        .map(s => s.endsWith(';') ? s : s + ';');
+      // Split on statement-ending `;` (preserve the `;`) and re-group — but NEVER inside a
+      // PostgreSQL dollar-quoted block (DO $$…$$ / function bodies / the integration view-drop
+      // guard), whose body legitimately contains `;`+newline. A naive split tears those apart.
+      // The dialect owns this: PostgreSQLDialect.SplitStatements is dollar-quote-aware; the
+      // base SplitStatements (SQL Server) is the prior naive `;`+EOL split.
+      const statements = GetDialect(this.Platform).SplitStatements(batch);
       this.rsuLog(`  Oversized batch (${batch.length} chars, ${statements.length} statements) — chunking into groups of ${STATEMENTS_PER_CHUNK}`);
       for (let i = 0; i < statements.length; i += STATEMENTS_PER_CHUNK) {
         finalBatches.push(statements.slice(i, i + STATEMENTS_PER_CHUNK).join('\n'));
@@ -1762,18 +1984,26 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    */
   private async runStep<T>(name: string, fn: () => Promise<T>, steps: RSUPipelineStep[]): Promise<T | undefined> {
     const start = Date.now();
-    this.rsuLog(`▶ Starting step: ${name}`);
+    // U11 — advance the live determinate counter (index of expected total) before executing,
+    // so IntegrationGetRSUProgress / RuntimeSchemaUpdateStatus report "step N of M: <name>".
+    if (this._currentStepIndex !== null) {
+      this._currentStepIndex++;
+      this._currentStepName = name;
+    }
+    const stepIndex = this._currentStepIndex ?? undefined;
+    const stepTotal = this._stepTotal ?? undefined;
+    this.rsuLog(`▶ Starting step${stepIndex && stepTotal ? ` ${stepIndex}/${stepTotal}` : ''}: ${name}`);
     try {
       const result = await fn();
       const durationMs = Date.now() - start;
       const msg = `${name} completed successfully`;
-      steps.push({ Name: name, Status: 'success', DurationMs: durationMs, Message: msg });
+      steps.push({ Name: name, Status: 'success', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
       this.rsuLog(`✓ ${name} — ${durationMs}ms`);
       return result;
     } catch (error: unknown) {
       const durationMs = Date.now() - start;
       const msg = error instanceof Error ? error.message : String(error);
-      steps.push({ Name: name, Status: 'failed', DurationMs: durationMs, Message: msg });
+      steps.push({ Name: name, Status: 'failed', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
       this.rsuLog(`✗ ${name} — FAILED after ${durationMs}ms: ${msg}`);
       return undefined;
     }

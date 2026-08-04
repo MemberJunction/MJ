@@ -12,7 +12,7 @@ interface LineMatch {
  */
 @RegisterClass(BaseArtifactToolLibrary, 'TextToolLibrary')
 export class TextToolLibrary extends BaseArtifactToolLibrary {
-    GetToolList(): ArtifactToolDefinition[] {
+    protected getSubclassToolList(): ArtifactToolDefinition[] {
         return [
             {
                 name: 'grep',
@@ -41,7 +41,7 @@ export class TextToolLibrary extends BaseArtifactToolLibrary {
         ];
     }
 
-    async InvokeTool(
+    protected async invokeSubclassTool(
         toolName: string,
         input: Record<string, unknown>,
         artifactContent: string | Buffer

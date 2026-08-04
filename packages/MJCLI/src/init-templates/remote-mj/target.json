@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0",
+  "name": "remote-mj",
+  "kind": "mj-explorer",
+  "description": "Mode B reference target: drives the canonical MJ Explorer Regression Suite against a remote MJ Explorer deployment. Replace the URL + auth refs with your own values before running.",
+
+  "baseUrl": "https://mj.example.com",
+  "allowedDomains": ["mj.example.com", "*.auth0.com"],
+
+  "auth": {
+    "username": "env:REMOTE_MJ_TEST_USER",
+    "password": "env:REMOTE_MJ_TEST_PASSWORD",
+    "domains": ["mj.example.com", "*.auth0.com"]
+  },
+
+  "suite": "MJ Explorer Regression Suite",
+
+  "archive": {
+    "tag": "remote-mj-nightly",
+    "source": "remote-mj"
+  }
+}

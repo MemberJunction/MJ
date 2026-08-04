@@ -424,12 +424,7 @@ export class ComponentManager {
         }
       }
       
-      // Load dependencies
-      // Prefer the input spec's dependencies over the cached result's dependencies.
-      // When a parent component is served from cache, result.spec contains stale
-      // dependency code. The input spec has the latest dependency code from the caller.
-      // Each dependency still gets its own individual cache check via loadComponent.
-      const dependencies = spec.dependencies || result.spec?.dependencies;
+      const dependencies = this.resolveDependencies(spec.dependencies, result.spec?.dependencies);
       if (dependencies) {
         for (const dep of dependencies) {
           // Normalize dependency spec for local registry lookup
@@ -489,6 +484,29 @@ export class ComponentManager {
     return results;
   }
   
+  /**
+   * Determines which dependency list to use when loading a component's children.
+   *
+   * - Input deps with code take priority (caller has the latest version).
+   * - When input has no deps at all, fall back to fetched/cached deps
+   *   (e.g., a registry reference spec with no dependency list).
+   * - When input has only stubs (no code), prefer fetched deps if they
+   *   contain code (registry-populated hierarchies from Skip where the
+   *   full tree is returned in one response).
+   */
+  private resolveDependencies(
+      inputDeps: ComponentSpec[] | undefined,
+      fetchedDeps: ComponentSpec[] | undefined
+  ): ComponentSpec[] | undefined {
+      const inputHasDeps = inputDeps && inputDeps.length > 0;
+      const inputHasCode = inputHasDeps && inputDeps.some(d => !!d.code);
+
+      if (inputHasCode) return inputDeps;
+      if (!inputHasDeps) return fetchedDeps || inputDeps;
+      if (fetchedDeps?.some(d => !!d.code)) return fetchedDeps;
+      return inputDeps;
+  }
+
   /**
    * Check if a component needs to be fetched from a registry
    */

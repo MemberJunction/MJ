@@ -17,7 +17,7 @@ export class MJAIModelCostFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'modelProvider', sectionName: 'Model & Provider', isExpanded: true },
             { sectionKey: 'validityProcessing', sectionName: 'Validity & Processing', isExpanded: true },
-            { sectionKey: 'pricingDetails', sectionName: 'Pricing Details', isExpanded: false },
+            { sectionKey: 'pricingDetails', sectionName: 'Pricing Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

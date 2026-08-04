@@ -1,38 +1,5 @@
 /* Dashboard Share Dialog - Compact Design */
 
-/* Window Styling - use specific class to override Kendo defaults */
-.mj-share-dialog-window.k-window {
-    border-radius: 12px !important;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
-    overflow: hidden !important;
-}
-
-.mj-share-dialog-window .k-window-titlebar {
-    background: var(--mj-brand-primary) !important;
-    border: none !important;
-    padding: 16px 20px !important;
-}
-
-.mj-share-dialog-window .k-window-titlebar .k-window-title {
-    display: none !important;
-}
-
-.mj-share-dialog-window .k-window-titlebar .k-window-actions .k-button {
-    background: color-mix(in srgb, var(--mj-bg-surface) 15%, transparent) !important;
-    border: none !important;
-    color: var(--mj-text-inverse) !important;
-    border-radius: 4px !important;
-}
-
-.mj-share-dialog-window .k-window-titlebar .k-window-actions .k-button:hover {
-    background: color-mix(in srgb, var(--mj-bg-surface) 25%, transparent) !important;
-}
-
-.mj-share-dialog-window .k-window-content {
-    padding: 0 !important;
-    background: var(--mj-bg-surface) !important;
-}
-
 /* Header */
 .share-dialog-header {
     display: flex;
@@ -53,19 +20,9 @@
     padding: 0;
 }
 
-/* Alert */
-.share-alert {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 20px;
-    font-size: 13px;
-}
-
-.share-alert-error {
-    background: var(--mj-bg-error);
-    color: var(--mj-status-error);
-    border-bottom: 1px solid var(--mj-border-error);
+/* Error alert — positioning only; box chrome owned by <mj-alert> */
+.share-msg-spacing {
+    margin: 16px 20px 0;
 }
 
 /* Sections */

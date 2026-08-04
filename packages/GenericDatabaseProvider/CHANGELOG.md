@@ -1,5 +1,666 @@
 # @memberjunction/generic-database-provider
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/ai-vectors-memory@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/encryption@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/queue@6.0.0
+  - @memberjunction/query-processor@6.0.0
+  - @memberjunction/geo-core@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+  - @memberjunction/sql-parser@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/ai-vectors-memory@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/actions@5.51.0
+  - @memberjunction/encryption@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/queue@5.51.0
+  - @memberjunction/query-processor@5.51.0
+  - @memberjunction/geo-core@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+  - @memberjunction/sql-parser@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/actions@5.50.0
+  - @memberjunction/encryption@5.50.0
+  - @memberjunction/queue@5.50.0
+  - @memberjunction/query-processor@5.50.0
+  - @memberjunction/geo-core@5.50.0
+  - @memberjunction/ai-vectors-memory@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/sql-dialect@5.50.0
+  - @memberjunction/sql-parser@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- 4c441dd: Close out every open cache-audit defect (B39–B44) plus the reachable differential throw found in adversarial round 3.
+  - **B40** — `CacheLocal` + `Aggregates` returned no aggregates at all, even on a cold miss. Three independent drops in one pipe: the client's cache-check input map omitted `Aggregates` from the request, the resolver's coreParams map omitted them again, and the engine's `stale` reply dropped the computed results. All three now forward; the client parses values back to native types. `client-cache` is 13/13 and now registered in the deterministic gate.
+  - **B39** — a `ViewID`-only `RunView` failed for _every_ caller (including the view's owner): the internal `MJ: User Views` lookup ran without a context user, and a miss fell through to `undefined` ("Entity undefined not found in metadata"). The user is now threaded through `EntityStatusCheck` → `GetEntityNameFromRunViewParams`, and a genuine miss throws an error naming the view and the cause.
+  - **B41** — the differential-merge decline path now performs a **real full fetch** (CacheLocal stripped + BypassCache, so re-entry into the smart-cache transport is structurally impossible) instead of throwing away the caller's whole batch; with that fallback in place, the `hasNarrowingSegment` guard is restored on `ApplyDifferentialUpdate`.
+  - **B42** — `OrderBy` (fingerprint segment [2]) joins the maintenance classifier: an in-place upsert appends out of order, so ordered slots invalidate on save (delete still removes in place — removal preserves relative order).
+  - **B43** — the RunQuery TTL cache-hit now checks `UserCanRun` before serving; the fingerprint carries no user segment, so user A's warmed slot was served to user B with no permission check. Deny or unresolvable metadata falls through to normal, authorized execution.
+  - **B44** — an every-field `Fields` list (the `entity_object` widening) now normalizes to `f:*` in the client fingerprint **only**, restoring in-place maintenance for the client's most common slot shape without touching what is fetched.
+
+  Also: the round-3 finding that the "unreachable" differential throw was in fact reachable (aggregate slots and defensive `MaxRows` caps both failed live) is fixed at the server seam — `RunViewsWithCacheCheck` no longer offers a differential for subset/aggregate-shaped params, falling back to the same full-refresh path its own validation already uses.
+
+- 6d0ec83: Run registered PreRunView AND PostRunView data hooks on the `RunViewsWithCacheCheck` path (engaged by `CacheLocal` RunViews and directly invokable by clients over GraphQL). It previously executed via `buildWhereClauseForCacheCheck` / `InternalRunView` without applying either hook, silently skipping BOTH halves of the enforcement seam: **PreRunView** (input scoping filters middleware injects into `ExtraFilter`) and **PostRunView** (output data masking / audit of the returned rows). PreRunView now runs once per item before the cache-currency check and every execution leg; PostRunView runs once per row-bearing item at the outbound boundary — after projection, per request, never baked into the shared cache — so rows returned via any leg (fresh query, server-cache serve, or differential) get the same masking the hooked non-cached path applies. `current` items carry no rows (the client keeps its cache, masked when an earlier response populated it). RLS, applied deeper in the provider, was never affected. Both `RunPreRunViewHooks` and `RunPostRunViewHooks` are made `protected` on `ProviderBase` for this sibling pipeline. `RunQueriesWithCacheCheck` is deliberately untouched — there is no `PreRunQuery`/`PostRunQuery` hook seam.
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [7db8ef5]
+- Updated dependencies [505c8b5]
+- Updated dependencies [6c910ef]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [85575cf]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/actions@5.49.0
+  - @memberjunction/sql-parser@5.49.0
+  - @memberjunction/aiengine@5.49.0
+  - @memberjunction/ai-vectors-memory@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/encryption@5.49.0
+  - @memberjunction/queue@5.49.0
+  - @memberjunction/query-processor@5.49.0
+  - @memberjunction/geo-core@5.49.0
+  - @memberjunction/sql-dialect@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- 09e1b4b: Fix Apply to my Form (resolve spec code, handle Pending overrides, improve # typeahead), auto-add app schemas to excludeSchemas on OpenApp install/upgrade, surface RenderedSQL through RunQueryResult and TestQuerySQL, strip ORDER BY before outer-wrapping unparseable SQL in MaxRows, fix lazy-config loader variable name collisions in codegen manifest, and add read-only provider support and missing SQL function keywords in PostgreSQL provider
+- Updated dependencies [09e1b4b]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/ai-vectors-memory@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/actions@5.48.0
+  - @memberjunction/encryption@5.48.0
+  - @memberjunction/queue@5.48.0
+  - @memberjunction/query-processor@5.48.0
+  - @memberjunction/geo-core@5.48.0
+  - @memberjunction/global@5.48.0
+  - @memberjunction/sql-dialect@5.48.0
+  - @memberjunction/sql-parser@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/ai-vectors-memory@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/actions@5.47.0
+  - @memberjunction/encryption@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/queue@5.47.0
+  - @memberjunction/query-processor@5.47.0
+  - @memberjunction/geo-core@5.47.0
+  - @memberjunction/sql-parser@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-vectors-memory@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/actions@5.46.0
+  - @memberjunction/encryption@5.46.0
+  - @memberjunction/queue@5.46.0
+  - @memberjunction/query-processor@5.46.0
+  - @memberjunction/geo-core@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+  - @memberjunction/sql-parser@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/aiengine@5.45.1
+- @memberjunction/queue@5.45.1
+- @memberjunction/ai-vectors-memory@5.45.1
+- @memberjunction/actions-base@5.45.1
+- @memberjunction/actions@5.45.1
+- @memberjunction/encryption@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+- @memberjunction/query-processor@5.45.1
+- @memberjunction/sql-dialect@5.45.1
+- @memberjunction/sql-parser@5.45.1
+- @memberjunction/geo-core@5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- f4f11fa: External Data Sources — read MJ entities and queries directly from remote systems (Snowflake, MongoDB, PostgreSQL) without replicating their data into the MJ database.
+
+  An Entity (or Query) that carries an `ExternalDataSourceID` is proxied live to a remote system through a pluggable driver, then returned through MJ's standard typed `RunView` / `RunQuery` / `Load` APIs. Behavior is fully additive: any entity/query with a null `ExternalDataSourceID` is unchanged and never touches the new code path.
+  - **`@memberjunction/core`**: new abstract `ExternalDataSourceReadRouter` — the dependency-inversion seam (`RunViewExternal` / `RunQueryExternal` / `GetCacheTTLSeconds`) that lets foundational providers reach the EDS engine via `MJGlobal.ClassFactory` without any compile-time dependency on driver SDKs or the credential subsystem. `EntityInfo` gains `ExternalDataSourceID` / `ExternalObjectName`. `LocalCacheManager.SetRunViewResult` gains an optional `ttlMs` (with read-time expiry) so external reads can be time-bounded like RunQuery already is.
+  - **`@memberjunction/core-entities`**: `ReadOnlyExternalBaseEntity` — `BaseEntity` subclass whose `Save`/`Delete` reject (populating `LatestResult`); MJ is never the system of record for external data.
+  - **`@memberjunction/external-data-sources`**: the server-only engine — `ExternalDataSourceReadRouterImpl` (registered for the ClassFactory), `BaseExternalDataSourceDriver` contract, and `ExternalDataSourceRouter` (per-source driver + connection-pool cache, credential resolution). `BaseExternalDataSourceDriver` now provides `withConnectionRetry` — on an auth/credential failure it evicts the cached connection (forcing a fresh credential resolve) and retries the read once, self-healing rotated/expired credentials without a process restart; each driver implements `invalidateConnection`.
+  - **Drivers** — `@memberjunction/external-data-source-postgres`, `…-snowflake` (PAT auth; `snowflake-sdk` as an optional peer loaded by dynamic import to avoid AWS-SDK version skew), `…-mongodb` (SQL-`WHERE`→Mongo filter translation, document-sampling introspection). Each wraps its read operations in the auth-retry self-heal and closes the evicted connection on the failure path.
+  - **`@memberjunction/generic-database-provider`**: external dispatch for `RunView`, `RunQuery`, and single-record `Load` — guarded by an `ExternalDataSourceID` null check so MJ-DB entities are untouched. Browser/Explorer reads flow through the same provider path, so they route externally transparently. External `RunQuery` results are checked against the query's declared `QueryField` metadata (case-insensitive); when a remote object's columns have drifted, a warning is logged naming the missing field(s) while the rows are still returned (non-fatal, per the plan). External reads (both `RunView` and `RunQuery`) are cached with a TTL sourced from the data source's `DefaultCacheTTLSeconds` — external data can't be event-invalidated, so it's time-bounded instead (mitigating per-query cost on warehouses); external `RunView` writes without a TTL are refused to prevent stale-forever entries. External reads also **refuse rather than silently bypass** Row-Level Security — if RLS would filter a user's rows the read is rejected with a clear error (RLS can't be enforced on a remote system; users exempt from RLS pass through), and the external single-record `Load` primary-key filter single-quote-escapes values to block SQL injection. Unsupported external RunView params (AfterKey/keyset pagination, Aggregates, a non-empty UserSearchString) now hard-fail with a clear error instead of being silently dropped — a dropped AfterKey would otherwise return the same page on every call (an infinite loop in deep-pagination jobs). External read results now run through the same row post-processing MJ-DB reads get (field decryption + datetime normalization), so an Encrypt-flagged external field no longer surfaces as ciphertext.
+  - **`@memberjunction/codegen-lib`**: external-backed entities now generate to extend `ReadOnlyExternalBaseEntity` (explicit custom subclasses still take precedence), and CodeGen skips all SQL-object generation (sprocs/views/permissions/FK-indexes) for them since no MJ table exists. GraphQL Create/Update/Delete mutation resolvers are still generated (gated only by `Allow*API`, like any entity) — they route through `entity.Save()`/`.Delete()`, which `ReadOnlyExternalBaseEntity` rejects before any sproc is reached, so an attempted write **fails loudly** with the read-only reason rather than silently lacking a resolver. (No sproc is generated for these entities, but none is ever called.)
+
+  Additional hardening: the Postgres driver now **verifies TLS server certificates by default** (`sslRejectUnauthorized`, opt-out only for knowingly-accepted self-signed dev endpoints) instead of silently accepting any certificate; an unbounded external `RunView` (no `MaxRows`) is capped to the entity's `UserViewMaxRows` or a 1000-row default so a single read can't pull an entire remote table; caller-supplied `ExtraFilter` / `OrderBy` clauses are screened for forbidden SQL keywords before reaching the driver (the same screen the MJ-DB path applies); and a saved **UserView** over an external entity now has its stored `WhereClause` / `OrderByClause` folded into the remote read (previously the external dispatch returned before they were applied, so a view silently returned unfiltered, unordered rows).
+
+  Dispatch-completeness fixes (an audit found read paths that bypassed external routing): CodeGen's PostgreSQL phased executor now skips external entities (it previously regenerated view/CRUD DDL and would `CREATE VIEW` against a non-existent base table); datasets fail loud per-item for external-backed entities rather than querying a non-existent MJ base view; `RunViewsWithCacheCheck` routes external entities to the standard external-dispatch path instead of issuing MJ-DB `COUNT/MAX` validation SQL; and external saved queries skip the outer `RunQuery` `CacheLocal` layer so only the TTL-correct `runExternalQueryWithCache` caches them. Two further validation tightenings: a saved view's merged `WhereClause`/`OrderByClause` is now re-screened for forbidden SQL keywords before reaching the driver, and non-quoted (numeric/boolean) primary-key values in the external `Load` filter are type-checked to block unquoted injection. Read-only is also enforced at the **provider layer** — `DatabaseProviderBase.Save`/`Delete` refuse any external-data-source entity regardless of its generated base class (a backstop for the edge case where an explicit custom subclass replaces `ReadOnlyExternalBaseEntity`). And the SQL drivers are **secure-by-default on transport**: Postgres/MongoDB refuse a plaintext connection to a non-local host unless TLS is enabled or `allowInsecureTransport: true` is explicitly set (local hosts stay exempt for dev).
+
+  The starter `ExternalDataSourceType` catalog now seeds **PostgreSQL, Snowflake, and MongoDB** (all `Active` — the shipped drivers), and a developer guide ships at `guides/EXTERNAL_DATA_SOURCES_GUIDE.md`.
+
+  Two new metadata tables (`ExternalDataSource`, `ExternalDataSourceType`) and additive `Entity` / `Query` columns ship in migration `v5.42`. Validated live end-to-end against real Snowflake and MongoDB. SQL Server as an external source is a deliberate fast-follow. Comprehensive unit tests across the engine, drivers, and CodeGen, plus CI-runnable Postgres/MongoDB driver integration suites.
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-vectors-memory@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/actions@5.45.0
+  - @memberjunction/encryption@5.45.0
+  - @memberjunction/queue@5.45.0
+  - @memberjunction/query-processor@5.45.0
+  - @memberjunction/geo-core@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+  - @memberjunction/sql-parser@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/aiengine@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai-vectors-memory@5.44.0
+  - @memberjunction/queue@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/actions@5.44.0
+  - @memberjunction/encryption@5.44.0
+  - @memberjunction/query-processor@5.44.0
+  - @memberjunction/geo-core@5.44.0
+  - @memberjunction/sql-dialect@5.44.0
+  - @memberjunction/sql-parser@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/actions@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/aiengine@5.43.0
+  - @memberjunction/ai-vectors-memory@5.43.0
+  - @memberjunction/actions-base@5.43.0
+  - @memberjunction/encryption@5.43.0
+  - @memberjunction/queue@5.43.0
+  - @memberjunction/query-processor@5.43.0
+  - @memberjunction/geo-core@5.43.0
+  - @memberjunction/sql-parser@5.43.0
+
+## 5.42.0
+
+### Minor Changes
+
+- 9b9b484: Field active-status enforcement relocation, plus the "Meet" app rename, quieter operational logging, and a telemetry suppression refinement.
+
+  **Field active-status enforcement (`@memberjunction/core`, `@memberjunction/generic-database-provider`)**
+  - Deprecated-field warnings and disabled-field exceptions are now enforced at the field-access boundary genuine code flows through — `BaseEntity.Get()`, `Set()`, and `SetMany()` (what the generated strongly-typed accessors call) — instead of on the low-level `EntityField.Value` accessor. This flips a leaky blocklist (assert on every `.Value` touch, then suppress at each internal call site) into a precise allowlist, and fixes false deprecation warnings emitted on every load/save of a record that merely _contains_ a deprecated column (e.g. `"MJ: AI Agent Runs".AgentState`) even when no code uses it.
+  - New memoized `EntityInfo.HasInactiveFields` fast-path gate: entities whose fields are all `Active` (the vast majority) pay only a single cached boolean check in the hot read/write paths.
+  - `EntityField.ActiveStatusAssertions` is retained as a `@deprecated` no-op for backward compatibility; the six now-redundant internal suppression toggles were removed. Warning caller strings are now accurate (`BaseEntity.Get`/`Set`) instead of the misleading `"EntityField.Value setter"`.
+
+  **Telemetry (`@memberjunction/core`)**
+  - Suppress "load this into a dedicated engine cache" telemetry suggestions for entities that have explicitly opted out of caching (`EntityInfo.AllowCaching = false`), reusing the existing flag as the single source of truth.
+
+  **Quieter operational logging (`@memberjunction/scheduling-engine`, `@memberjunction/ai-agents`, `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`)**
+  - Scheduled-job no-op runs (e.g. the Agent Memory Manager finding no new activity) now collapse to the engine's `Starting`/`Completed` heartbeat; the per-agent and memory-manager internal traces are verbose-only.
+  - Cleaner server startup logging: transient boot spinner, true total timing, less redundant output, and the `CustomColumnPromoter` registration log demoted to verbose-only.
+
+  **"Meet" app + local LiveKit dev (`@memberjunction/ng-explorer-core`, `@memberjunction/livekit-room-server`, `@memberjunction/auth-providers`, `@memberjunction/server`)**
+  - Renamed the Realtime app to "Meet", with the Live Room now defaulting to the Realtime co-agent instead of starting with no agent, plus a local LiveKit dev server and supporting docs.
+
+### Patch Changes
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [37c73f6]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/actions@5.42.0
+  - @memberjunction/aiengine@5.42.0
+  - @memberjunction/ai-vectors-memory@5.42.0
+  - @memberjunction/actions-base@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/encryption@5.42.0
+  - @memberjunction/queue@5.42.0
+  - @memberjunction/query-processor@5.42.0
+  - @memberjunction/geo-core@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+  - @memberjunction/sql-parser@5.42.0
+
+## 5.41.0
+
+### Minor Changes
+
+- a5f5472: Remote Browser channel + new realtime voice providers + computer-use enrichment.
+  - **Remote Browser channel** (`@memberjunction/remote-browser-*`): an in-house realtime channel where an agent drives a live, CDP-connected browser while it talks (sales demos, support walkthroughs, trainer agents). New `AIRemoteBrowserProvider` registry (migration V202606161000) with JSONType capability gating; a universal `remote-browser-base` (driver family + `RemoteBrowserEngineBase`), a shared `remote-browser-cdp` kit (one lossless action mapper + `CdpRemoteBrowserSession`), a `remote-browser-server` engine + `RemoteBrowserChannel` (control arbiter, control modes AgentOnly/ViewOnly/Collaborative vs strategies ComputerUse/NativeAI), and five thin backends (Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).
+  - **computer-use** enriched additively into a complete browser-I/O + perception engine: CSS-selector-aware actions, CDP screencast, MouseMove, accessibility-snapshot/QueryElement/GetVisibleText/GetTitle/WaitForLoadState — every consumer benefits, existing vision/coordinate path unchanged.
+  - **New realtime model providers**: xAI Grok Voice (`@memberjunction/ai-xai`, OpenAI-Realtime-compatible) and Inworld (`@memberjunction/ai-inworld`), with vendor/model seeds.
+  - **Console logging improvements** across `@memberjunction/ai-core-plus`, `ai-engine-base`, `ai-prompts`, `aiengine`, `cli`, `generic-database-provider`, `metadata-sync`, and the bootstrap/forms packages.
+
+### Patch Changes
+
+- 8c8b658: Realtime UX wave 2 — the progressive-disclosure console (pure-audio-first overlay with the breathing hero orb, disclosure levels 0–4 ratcheted per-user via UserInfoEngine, gear density escape hatch, unified app-bar, fused composer dock; content never flips the console open — the one auto-reveal is a channel's first agent activity, finished artifacts arrive as glowing unfocused tabs, Activity tab pinned last); audio-reactive call visuals (BaseRealtimeClient GetAudioActivity capability — per-direction RMS + 9-bin spectrum metered on all four drivers via a shared RealtimePcmPlayback master-gain tap / WebRTC stream analysers — driving the hero + app-bar orbs and a true-spectrum EQ through a zero-CD rAF loop, with turn-state fallback). Whiteboard: OneNote-style PAGES (v2 JSON with tolerant v1 migration, AddPage/SwitchPage/RenamePage agent tools, page strip with inline rename + right-click Rename/Delete/New-page context menus, agent-authored page garnish), multi-select (marquee, shift-click, single-undo group drag/delete), hold-to-zoom, multi-page HTML/SVG export, shared active-page note on all item tools, UUIDsEqual compliance. ElevenLabs: tool-schema sanitizer (non-string enums + leaf descriptions, fingerprint-stable) and the absorbed-tool-result voice nudge. Conversations: shared auto-naming helper + race-free realtime naming lifecycle on SessionStarted$, slide-panel splitter rework, angular-split dependency removed. Plus integration-test script groundwork (server/client/runquery cache suites) and cache-layer fixes carried on this branch.
+- Updated dependencies [8fd6f59]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/aiengine@5.41.0
+  - @memberjunction/ai-vectors-memory@5.41.0
+  - @memberjunction/actions-base@5.41.0
+  - @memberjunction/actions@5.41.0
+  - @memberjunction/encryption@5.41.0
+  - @memberjunction/queue@5.41.0
+  - @memberjunction/query-processor@5.41.0
+  - @memberjunction/geo-core@5.41.0
+  - @memberjunction/global@5.41.0
+  - @memberjunction/sql-dialect@5.41.0
+  - @memberjunction/sql-parser@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/aiengine@5.40.2
+- @memberjunction/ai-vectors-memory@5.40.2
+- @memberjunction/actions-base@5.40.2
+- @memberjunction/actions@5.40.2
+- @memberjunction/encryption@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/queue@5.40.2
+- @memberjunction/query-processor@5.40.2
+- @memberjunction/sql-dialect@5.40.2
+- @memberjunction/sql-parser@5.40.2
+- @memberjunction/geo-core@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/aiengine@5.40.1
+  - @memberjunction/ai-vectors-memory@5.40.1
+  - @memberjunction/actions-base@5.40.1
+  - @memberjunction/actions@5.40.1
+  - @memberjunction/encryption@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/queue@5.40.1
+  - @memberjunction/query-processor@5.40.1
+  - @memberjunction/geo-core@5.40.1
+  - @memberjunction/global@5.40.1
+  - @memberjunction/sql-dialect@5.40.1
+  - @memberjunction/sql-parser@5.40.1
+
+## 5.40.0
+
+### Minor Changes
+
+- 43e6c0f: MJ-issued magic-link sessions for external, app-scoped users: passwordless, single-use (or multi-use) invite links that sign external users into MJExplorer confined to one application and a per-link role. MJ issues and validates its own RS256 session tokens (published via JWKS, accepted by the standard auth-provider path), so there's no external IdP dependency or per-user IdP cost. Invite scope (app, role, expiry, max uses) is configured per link, with support for per-invite app/role, resource-scoped RLS sharing, and anonymous sessions — a shared Anonymous principal whose scope rides per-session JWT claims rather than DB roles, so concurrent anonymous visitors can't accrete privileges.
+
+  Also includes two framework changes made along the way:
+  - **RunView server-cache RLS fix:** the cache fingerprint now incorporates the per-user Row-Level-Security where-clause, so an RLS-scoped read can no longer be served an unscoped cached result. No-op for users without an RLS filter (byte-identical fingerprint), so normal caching is untouched.
+  - **BaseEngine degrades gracefully under restricted roles:** a config load that fails because the current user lacks Read permission is now treated as a permanent condition — the property loads empty and the engine is marked loaded — instead of looping on "not marking as loaded", which previously hung the MJExplorer shell for least-privilege users (e.g. magic-link guests). Only genuinely transient failures (network, server restart) keep retrying.
+
+### Patch Changes
+
+- 804f9f6: Security audit fixes: parameterize SQL queries in GraphQL resolvers to prevent injection, validate entity read permissions on query execution, centralize permission logic in UserCanRun with recursive dependency checks, and fix UUID/multi-provider compliance violations.
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/aiengine@5.40.0
+  - @memberjunction/ai-vectors-memory@5.40.0
+  - @memberjunction/actions-base@5.40.0
+  - @memberjunction/actions@5.40.0
+  - @memberjunction/encryption@5.40.0
+  - @memberjunction/queue@5.40.0
+  - @memberjunction/query-processor@5.40.0
+  - @memberjunction/geo-core@5.40.0
+  - @memberjunction/global@5.40.0
+  - @memberjunction/sql-dialect@5.40.0
+  - @memberjunction/sql-parser@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- eaee99f: fix: re-throw connection errors from RunView/RunQuery instead of swallowing into Success=false
+
+  Preserve mssql ConnectionError type through executeSQLCore so GenericDatabaseProvider can structurally detect infrastructure failures (DB unreachable, pool closed) and re-throw them from InternalRunView and InternalRunQuery. Previously these were silently converted to { Success: false }, making it impossible for callers to distinguish "database is down" from "query returned no results."
+
+- 2d1b4e1: Use `UUIDsEqual()` instead of `===` for the AIModel ID comparison in `searchEntitiesSemanticPass`, fixing the repo-wide UUID-comparison compliance check.
+- Updated dependencies [26761b8]
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [a2aecc7]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/actions@5.39.0
+  - @memberjunction/core@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/aiengine@5.39.0
+  - @memberjunction/ai-vectors-memory@5.39.0
+  - @memberjunction/actions-base@5.39.0
+  - @memberjunction/encryption@5.39.0
+  - @memberjunction/queue@5.39.0
+  - @memberjunction/query-processor@5.39.0
+  - @memberjunction/geo-core@5.39.0
+  - @memberjunction/sql-dialect@5.39.0
+  - @memberjunction/sql-parser@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- 6a3ac36: Fix AllowUpdateAPI clearing when EntityField transitions to virtual, use subqueries for organic key INSERTs for portable SQL, prevent permanent engine failure when MJAPI is temporarily unavailable, and centralize RLS exemption check in GetUserRowLevelSecurityWhereClause
+- 3d739a3: refactor(sql-parser): instance-based parser with dialect adapters, parse-preprocessing, instance-based count SQL, and a render-pipeline write-statement guard
+  - **`SQLParser` is now instance-based** (`new SQLParser(sql, dialect)`). AST inspection/mutation (`IsValid`, `StatementKind`, `HasWriteStatement`, `OuterCap`, `SetOuterCap`, `ClearOuterCap`, `ClearOrderBy`, `ToSQL`) and extraction (`ExtractCTEs`, `ExtractTableRefs`, `ExtractColumnRefs`, `ExtractSelectColumns`) are instance members; pure string/token utilities (`ParseSQL`, `SqlifyAST`, `StripComments`, `Tokenize`, `Analyze`, `HasUnwrappableTrailingClause`, `HasStackedStatements`, the MJ-template helpers, …) remain static.
+  - **Dialect-neutral row caps via an internal `ASTDialectAdapter`** (keyed by `ParserDialect`). The exported `SQLOuterCap` (with its `kind: 'top' | 'limit'`) is replaced by `RowCapInfo` with an explicit `form: 'numeric' | 'percent' | 'opaque'` discriminant. The `isSQLServerDialect()` quote-probe and the `dialect.PlatformKey === 'sqlserver'` branch in the row-cap path are gone (`outerWrap` now uses `dialect.LimitClause()`).
+  - **Parse-preprocessing fallback** in the constructor: on a direct-parse failure it aliases bracket-quoted identifiers with parser-defeating characters (`[Active People]`, `[my-cte]`) and splits a trailing `OPTION (...)` clause, then restores both on `ToSQL`. This lets Skip-style CTE queries and `OPTION` queries reach the precise AST row-cap path (`TOP N` / `LIMIT N`) instead of the OFFSET/FETCH or outer-wrap fallback.
+  - **Instance-based count SQL**: `QueryPagingEngine`'s count builder is unified onto the instance API (`ExtractCTEs` + `ClearOuterCap` + `ClearOrderBy` + `ToSQL`), removing the last `as unknown as Record<string, unknown>` cast and raw AST field pokes from the engine. The count now strips the outer cap on **both** dialects, so a paged query's `COUNT(*)` reflects the full set — fixing a PostgreSQL inconsistency where an explicit `LIMIT` previously yielded a capped count (SQL Server already stripped `TOP`).
+  - **Render-pipeline safety guard** (`RenderPipeline.Run`): a rendered query must be a single read statement, enforced by two complementary checks. (1) `SQLParser.HasWriteStatement` (AST) rejects a write _type_ anywhere — DML (INSERT/UPDATE/DELETE/MERGE/REPLACE), DDL (DROP/CREATE/ALTER/TRUNCATE/RENAME), or EXEC/CALL/GRANT/REVOKE/USE — catching single writes and parseable stacked writes (`SELECT 1; DROP TABLE x`). (2) `SQLParser.HasStackedStatements` (token scan) rejects any internal statement-separating `;`, catching stacked payloads that don't parse (`SELECT 1; EXEC xp_cmdshell '…'`, `SELECT 1; WAITFOR DELAY '…'`) — the class an AST scan misses because the whole string fails to parse. Both are precise: the `REPLACE()` string function and parenthesized SELECTs pass, and a single trailing `;` is fine; only genuine multi-statement inputs (including `SET` / `DECLARE` prefixes) are rejected. (The broad dangerous-keyword scan stays on the ad-hoc execution path, where input is untrusted free text.)
+  - **`SQLExpressionValidator`**: `FOR` is now allowed in `full_query` context so `FOR JSON` / `FOR XML` queries aren't wrongly rejected (`FOR UPDATE` remains blocked via the independent `UPDATE` keyword).
+
+  No behavior change for already-valid read queries; preprocessing only widens AST coverage, the count fix only affects paged queries that carried an explicit cap, and the guard only rejects writes/stacked statements. All consumers (`queryPagingEngine`, `queryCompositionEngine`, `query-extraction`, `manage-metadata`, `structuralParser`) migrated to the instance API.
+
+- ebb0e3d: Eliminate provider.Refresh() from query save/delete paths, introduce MJQueryEntityExtended with child-relationship getters and business logic, migrate all QueryInfo consumers outside MJCore to use QueryEngine and entity types, remove dead QueryCacheManager, and replace 12 redundant RunView calls with QueryEngine cache reads. Fixes major performance bottleneck on large-entity deployments where every query save reloaded the entire metadata graph.
+- Updated dependencies [6b6c321]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/aiengine@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/sql-dialect@5.38.0
+  - @memberjunction/sql-parser@5.38.0
+  - @memberjunction/query-processor@5.38.0
+  - @memberjunction/queue@5.38.0
+  - @memberjunction/actions-base@5.38.0
+  - @memberjunction/actions@5.38.0
+  - @memberjunction/encryption@5.38.0
+  - @memberjunction/geo-core@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- f5531e0: Refactor the SQL render pipeline's row-cap path to be AST-based. Add `SQLParser.StripComments`, a token-aware comment stripper that preserves string literals and quoted identifiers (including SQL Server brackets) and handles nested block comments. Replace the regex-based `applyMaxRows` in `RenderPipeline` with `QueryPagingEngine.WrapWithMaxRows`, which injects `TOP`/`LIMIT` via the AST and falls back to OFFSET/FETCH for parser-unsupported CTE shapes. Throw on `MaxRows + Paging` conflicts instead of silently overriding. Route `AdhocQueryResolver` through `RenderPipeline.Run` so composition macros, templates, and row capping run consistently with saved queries.
+- Updated dependencies [1af94d0]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/actions@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/sql-parser@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/encryption@5.37.0
+  - @memberjunction/queue@5.37.0
+  - @memberjunction/query-processor@5.37.0
+  - @memberjunction/geo-core@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/sql-dialect@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/aiengine@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/actions@5.36.0
+  - @memberjunction/encryption@5.36.0
+  - @memberjunction/queue@5.36.0
+  - @memberjunction/geo-core@5.36.0
+  - @memberjunction/query-processor@5.36.0
+  - @memberjunction/global@5.36.0
+  - @memberjunction/sql-dialect@5.36.0
+  - @memberjunction/sql-parser@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- 6f083dd: Rewrite `RenderPipeline.applyMaxRows` to inject the row cap (`TOP N` for SQL Server, `LIMIT N` for PostgreSQL) via an AST rewrite instead of a string-anchored regex. CTE queries (`WITH … SELECT …`) and queries whose CTE definitions contain their own `TOP N` now correctly receive the outer cap on the outermost SELECT. Queries that already specify an outermost `TOP` / `LIMIT` are left untouched, and shapes the parser can't represent at the top level (UNION/INTERSECT/EXCEPT, vendor-specific syntax, sqlify round-trip failures) fall back to a `SELECT TOP N * FROM (<original>) AS _capped` wrap.
+- aedd4dc: Bubble save SQL composition up to GenericDatabaseProvider as a single orchestrator; SQL Server and Postgres providers now contribute four dialect hooks instead of duplicating the generator. Fixes a PG UPDATE bug where PK wasn't tail appended
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [32c4a02]
+- Updated dependencies [7332992]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/geo-core@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/aiengine@5.35.0
+  - @memberjunction/actions-base@5.35.0
+  - @memberjunction/actions@5.35.0
+  - @memberjunction/encryption@5.35.0
+  - @memberjunction/queue@5.35.0
+  - @memberjunction/query-processor@5.35.0
+  - @memberjunction/sql-dialect@5.35.0
+  - @memberjunction/sql-parser@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- 3a35358: Surface engine load health in System Diagnostics with per-property success/failure status and error messages, add recovery telemetry to ApplicationManager, cache architecture fixes including schema hash staleness detection, empty result timestamp handling, and timestamp precision tolerance
+- Updated dependencies [3a35358]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/actions@5.34.1
+  - @memberjunction/encryption@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/queue@5.34.1
+  - @memberjunction/query-processor@5.34.1
+  - @memberjunction/geo-core@5.34.1
+  - @memberjunction/global@5.34.1
+  - @memberjunction/sql-dialect@5.34.1
+  - @memberjunction/sql-parser@5.34.1
+
+## 5.34.0
+
+### Minor Changes
+
+- cfffb6d: Add keyset (seek) pagination to `RunView` via the new `RunViewParams.AfterKey: CompositeKey` field. Iterating large entities (background jobs, scheduled actions, bulk processing) now stays O(log N) per page regardless of depth — `StartRow`-based OFFSET pagination is unchanged and remains the right choice for UI grids.
+
+  **Framework changes**
+  - New `RunViewParams.AfterKey: CompositeKey` accepted by all RunView entry points (TS, GraphQL, REST flows that go through RunView).
+  - New exported error class `AfterKeyNotSupportedError` (with `Reason` codes `CompositePK | UnsupportedPKType | IncompatibleOrderBy | StartRowConflict | AfterKeyShape`).
+  - New exported helper `IsKeysetPaginationOrderableType(sqlType)` and constant `KEYSET_PAGINATION_ORDERABLE_PK_TYPES`.
+  - Keyset queries bypass server cache (read + write) automatically — they're inherently single-use so caching is pure overhead.
+  - v1 constraint: single-column PK only. Composite-PK entities throw `AfterKeyNotSupportedError` with `Reason: 'CompositePK'`.
+
+  **Migrated callers (now use keyset by default when entity has a single-column PK)**
+  - `ScheduledGeocodingAction` (`processMissingForEntity`) — falls back to OFFSET on composite-PK entities.
+  - `VectorBase.PageRecordsByEntityID` + `EntityVectorSyncer.startDataPaging` — auto-promotes to keyset when possible. New helper `VectorBase.CanUseKeysetPagination()`. New optional `PageRecordsParams.AfterKey`.
+
+  **Metadata**
+  - `Geocoding Maintenance` scheduled job cron updated to weekly (Saturdays 2 AM UTC); description reworded to not hard-code a cadence. Administrators can adjust the `CronExpression` as needed.
+
+  **Documentation**
+  - New guide: `guides/KEYSET_PAGINATION_GUIDE.md`.
+  - `CLAUDE.md` performance section updated.
+
+  **Out of scope for v1**
+  - `ExternalChangeDetection.ChangeDetector` uses `RunQuery` (saved queries with arbitrary SQL), which the framework can't safely rewrite. Stays on OFFSET; tracked as a follow-up.
+
+  **Backwards compatibility**
+  - Fully additive. Existing callers that don't pass `AfterKey` are unaffected.
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/aiengine@5.34.0
+  - @memberjunction/actions-base@5.34.0
+  - @memberjunction/actions@5.34.0
+  - @memberjunction/encryption@5.34.0
+  - @memberjunction/query-processor@5.34.0
+  - @memberjunction/sql-dialect@5.34.0
+  - @memberjunction/sql-parser@5.34.0
+  - @memberjunction/geo-core@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/global@5.34.0
+  - @memberjunction/queue@5.34.0
+
 ## 5.33.0
 
 ### Minor Changes

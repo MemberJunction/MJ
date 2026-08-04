@@ -157,9 +157,8 @@
 
     <!-- Empty -->
     @if (!IsLoading && !ErrorMessage && Fields.length === 0) {
-      <div class="micro-empty">
-        <p>No field data available.</p>
-      </div>
+      <mj-empty-state class="micro-empty" Size="compact"
+        Icon="" Title="No field data available." />
     }
   </div>
 </ng-template>

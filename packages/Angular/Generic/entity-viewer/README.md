@@ -458,7 +458,7 @@ import {
 | `@memberjunction/ng-filter-builder` | Filter builder component |
 | `@memberjunction/ng-export-service` | Export service and dialog |
 | `@memberjunction/ng-record-changes` | Reusable restore preview panel for the Recycle Bin |
-| `@memberjunction/ng-versions` | Provides `mj-slide-panel` for the Recycle Bin slide-in |
+| `@memberjunction/ng-ui-components` | Provides `mj-slide-panel` for the Recycle Bin slide-in |
 
 ### Peer Dependencies
 

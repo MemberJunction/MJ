@@ -4,12 +4,12 @@
 After run-22 successfully created 28 FKs, the ERD in summary.md showed no relationship links despite FKs being correctly identified. The ERD diagram only displayed tables without connecting lines.
 
 ## Root Cause
-The `processFKInsightsFromLLM` method ([AnalysisEngine.ts:797-927](src/core/AnalysisEngine.ts#L797-L927)) was:
+The `processFKInsightsFromLLM` method ([AnalysisEngine.ts:797-927](../../src/core/AnalysisEngine.ts#L797-L927)) was:
 - ✅ Creating FK candidates in the discovery phase
 - ✅ Updating column-level properties (`column.isForeignKey`, `column.foreignKeyReferences`)
 - ❌ **NOT** updating table-level `dependsOn` and `dependents` arrays
 
-The ERD generator ([MarkdownGenerator.ts:250-285](src/generators/MarkdownGenerator.ts#L250-L285)) relies on these table-level arrays to draw relationship links:
+The ERD generator ([MarkdownGenerator.ts:250-285](../../src/generators/MarkdownGenerator.ts#L250-L285)) relies on these table-level arrays to draw relationship links:
 
 ```typescript
 // Lines 274-282 in MarkdownGenerator.ts
@@ -55,7 +55,7 @@ But columns showed FKs correctly:
 ```
 
 ### 2. Found TableDefinition interface
-[state.ts:72-84](src/types/state.ts#L72-L84) defines:
+[state.ts:72-84](../../src/types/state.ts#L72-L84) defines:
 ```typescript
 export interface TableDefinition {
   name: string;
@@ -71,7 +71,7 @@ FK creation code updated columns but not table-level arrays.
 
 ## Solution
 
-Added `updateTableDependencies` helper method ([AnalysisEngine.ts:947-1007](src/core/AnalysisEngine.ts#L947-L1007)):
+Added `updateTableDependencies` helper method ([AnalysisEngine.ts:947-1007](../../src/core/AnalysisEngine.ts#L947-L1007)):
 
 ```typescript
 private updateTableDependencies(
@@ -135,7 +135,7 @@ private updateTableDependencies(
 
 Called in two places within `processFKInsightsFromLLM`:
 
-### 1. When confirming existing FK candidate ([Line 876](src/core/AnalysisEngine.ts#L876))
+### 1. When confirming existing FK candidate ([Line 876](../../src/core/AnalysisEngine.ts#L876))
 ```typescript
 const column = this.findColumnInState(state, schemaName, tableName, columnName);
 if (column) {
@@ -148,7 +148,7 @@ this.updateTableDependencies(state, schemaName, tableName,
   referencesSchema, referencesTable, columnName, referencesColumn);
 ```
 
-### 2. When creating new FK from LLM ([Line 920](src/core/AnalysisEngine.ts#L920))
+### 2. When creating new FK from LLM ([Line 920](../../src/core/AnalysisEngine.ts#L920))
 ```typescript
 const column = this.findColumnInState(state, schemaName, tableName, columnName);
 if (column) {
@@ -206,7 +206,7 @@ erDiagram
 
 ## Files Modified
 
-1. [src/core/AnalysisEngine.ts](src/core/AnalysisEngine.ts)
+1. [src/core/AnalysisEngine.ts](../../src/core/AnalysisEngine.ts)
    - Lines 876, 920: Added calls to `updateTableDependencies`
    - Lines 947-1007: Added `updateTableDependencies` helper method
 

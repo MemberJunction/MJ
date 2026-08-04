@@ -1,4 +1,4 @@
-import { CompositeKey, LogError, KeyValuePair, IsVerboseLoggingEnabled, PlatformSQL, IsPlatformSQL } from '@memberjunction/core';
+import { CompositeKey, LogError, KeyValuePair, IsVerboseLoggingEnabled, PlatformSQL, IsPlatformSQL, RunQueryEnrichment } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
 import { gql, GraphQLClient } from 'graphql-request'
 import { ActionItemInput, RolesAndUsersInput, SyncDataResult, SyncRolesAndUsersResult } from './rolesAndUsersType';
@@ -498,8 +498,8 @@ export class GraphQLSystemUserClient {
                 throw new Error('Parameters must be a JSON object, not an array. Use {} for empty parameters instead of [].');
             }
 
-            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
+                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
                     QueryID
                     QueryName
                     Success
@@ -518,6 +518,7 @@ export class GraphQLSystemUserClient {
             if (input.Parameters !== undefined) variables.Parameters = input.Parameters;
             if (input.MaxRows !== undefined) variables.MaxRows = input.MaxRows;
             if (input.StartRow !== undefined) variables.StartRow = input.StartRow;
+            if (input.Enrichment !== undefined) variables.Enrichment = input.Enrichment;
 
             const result = await this.Client.request(query, variables) as { GetQueryDataSystemUser: RunQuerySystemUserResult };
             
@@ -567,8 +568,8 @@ export class GraphQLSystemUserClient {
                 throw new Error('Parameters must be a JSON object, not an array. Use {} for empty parameters instead of [].');
             }
 
-            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
+                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
                     QueryID
                     QueryName
                     Success
@@ -587,6 +588,7 @@ export class GraphQLSystemUserClient {
             if (input.Parameters !== undefined) variables.Parameters = input.Parameters;
             if (input.MaxRows !== undefined) variables.MaxRows = input.MaxRows;
             if (input.StartRow !== undefined) variables.StartRow = input.StartRow;
+            if (input.Enrichment !== undefined) variables.Enrichment = input.Enrichment;
 
             const result = await this.Client.request(query, variables) as { GetQueryDataByNameSystemUser: RunQuerySystemUserResult };
             
@@ -625,14 +627,14 @@ export class GraphQLSystemUserClient {
     }
 
     /**
-     * Creates a new query using the CreateQuerySystemUser mutation. This method is restricted to system users only.
+     * Creates a new query using the CreateQueryExtended mutation. This method is restricted to system users only.
      * @param input - CreateQuerySystemUserInput containing all the query attributes including optional CategoryPath
      * @returns Promise containing the result of the query creation
      */
     public async CreateQuery(input: CreateQueryInput): Promise<CreateQueryResult> {
         try {
-            const query = `mutation CreateQuerySystemUser($input: CreateQuerySystemUserInput!) {
-                CreateQuerySystemUser(input: $input) {
+            const query = `mutation CreateQueryExtended($input: CreateQuerySystemUserInput!) {
+                CreateQueryExtended(input: $input) {
                     Success
                     ErrorMessage
                     Query {
@@ -692,9 +694,9 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const result = await this.Client.request(query, { input }) as { CreateQuerySystemUser: CreateQueryResult };
-            if (result && result.CreateQuerySystemUser) {
-                return result.CreateQuerySystemUser;
+            const result = await this.Client.request(query, { input }) as { CreateQueryExtended: CreateQueryResult };
+            if (result && result.CreateQueryExtended) {
+                return result.CreateQueryExtended;
             } else {
                 return {
                     Success: false,
@@ -718,8 +720,8 @@ export class GraphQLSystemUserClient {
      */
     public async UpdateQuery(input: UpdateQueryInput): Promise<UpdateQueryResult> {
         try {
-            const query = `mutation UpdateQuerySystemUser($input: UpdateQuerySystemUserInput!) {
-                UpdateQuerySystemUser(input: $input) {
+            const query = `mutation UpdateQueryExtended($input: UpdateQuerySystemUserInput!) {
+                UpdateQueryExtended(input: $input) {
                     Success
                     ErrorMessage
                     Query {
@@ -779,9 +781,9 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const result = await this.Client.request(query, { input }) as { UpdateQuerySystemUser: UpdateQueryResult };
-            if (result && result.UpdateQuerySystemUser) {
-                return result.UpdateQuerySystemUser;
+            const result = await this.Client.request(query, { input }) as { UpdateQueryExtended: UpdateQueryResult };
+            if (result && result.UpdateQueryExtended) {
+                return result.UpdateQueryExtended;
             } else {
                 return {
                     Success: false,
@@ -799,7 +801,7 @@ export class GraphQLSystemUserClient {
     }
 
     /**
-     * Deletes a query by ID using the DeleteQuerySystemResolver mutation. This method is restricted to system users only.
+     * Deletes a query by ID using the DeleteQueryExtended mutation. This method is restricted to system users only.
      * @param ID - The ID of the query to delete
      * @param options - Optional delete options controlling action execution
      * @returns Promise containing the result of the query deletion
@@ -815,8 +817,8 @@ export class GraphQLSystemUserClient {
                 };
             }
 
-            const query = `mutation DeleteQuerySystemResolver($ID: String!, $options: DeleteOptionsInput) {
-                DeleteQuerySystemResolver(ID: $ID, options: $options) {
+            const query = `mutation DeleteQueryExtended($ID: String!, $options: DeleteOptionsInput) {
+                DeleteQueryExtended(ID: $ID, options: $options) {
                     Success
                     ErrorMessage
                     ID
@@ -836,10 +838,10 @@ export class GraphQLSystemUserClient {
                 };
             }
 
-            const result = await this.Client.request(query, variables) as { DeleteQuerySystemResolver: DeleteQueryResult };
+            const result = await this.Client.request(query, variables) as { DeleteQueryExtended: DeleteQueryResult };
             
-            if (result && result.DeleteQuerySystemResolver) {
-                return result.DeleteQuerySystemResolver;
+            if (result && result.DeleteQueryExtended) {
+                return result.DeleteQueryExtended;
             } else {
                 return {
                     Success: false,
@@ -1653,6 +1655,65 @@ export class GraphQLSystemUserClient {
         };
     }
 
+    /**
+     * Checks whether a given user has read permission on a list of entities.
+     * Used by Skip Brain's permission gate to verify entity-level access before
+     * building components that reference those entities.
+     */
+    public async CheckEntityPermissionsSystemUser(
+        entityNames: string[],
+        userEmail: string
+    ): Promise<CheckEntityPermissionsResult> {
+        try {
+            const query = gql`
+                query CheckEntityPermissionsSystemUser($EntityNames: [String!]!, $UserEmail: String!) {
+                    CheckEntityPermissionsSystemUser(EntityNames: $EntityNames, UserEmail: $UserEmail) {
+                        Success
+                        Results {
+                            EntityName
+                            CanRead
+                        }
+                        ErrorMessage
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = {
+                EntityNames: entityNames,
+                UserEmail: userEmail
+            };
+
+            const result = await this.Client.request(query, variables) as {
+                CheckEntityPermissionsSystemUser: CheckEntityPermissionsGQLResponse;
+            };
+
+            if (result?.CheckEntityPermissionsSystemUser) {
+                const data = result.CheckEntityPermissionsSystemUser;
+                return {
+                    Success: data.Success,
+                    Results: (data.Results || []).map((r): EntityPermissionResultItem => ({
+                        EntityName: r.EntityName,
+                        CanRead: r.CanRead
+                    })),
+                    ErrorMessage: data.ErrorMessage
+                };
+            }
+
+            return {
+                Success: false,
+                Results: [],
+                ErrorMessage: 'Invalid response from server'
+            };
+        } catch (e) {
+            LogError(`GraphQLSystemUserClient::CheckEntityPermissionsSystemUser - Error checking entity permissions - ${e}`);
+            return {
+                Success: false,
+                Results: [],
+                ErrorMessage: e instanceof Error ? e.message : String(e)
+            };
+        }
+    }
+
 }
 
 /**
@@ -2154,6 +2215,10 @@ export interface GetQueryDataSystemUserInput {
      * Optional starting row number for pagination
      */
     StartRow?: number;
+    /**
+     * Optional runtime-only directive to post-process result rows through a registered query result enricher
+     */
+    Enrichment?: RunQueryEnrichment;
 }
 
 /**
@@ -2184,6 +2249,10 @@ export interface GetQueryDataByNameSystemUserInput {
      * Optional starting row number for pagination
      */
     StartRow?: number;
+    /**
+     * Optional runtime-only directive to post-process result rows through a registered query result enricher
+     */
+    Enrichment?: RunQueryEnrichment;
 }
 
 /**
@@ -2256,6 +2325,26 @@ export interface CreateQueryInput {
      * Optional array of permissions to create for the query
      */
     Permissions?: QueryPermissionInput[];
+    /**
+     * Optional caller-provided parameter sample values. When provided, these override
+     * LLM-generated sampleValues during the extraction pipeline. Each entry maps a
+     * parameter name to a tested/validated sample value.
+     */
+    ParameterHints?: QueryParameterHintInput[];
+    /**
+     * When true, the server will automatically resolve name collisions by appending
+     * sequential numeric suffixes (e.g., "Name (1)", "Name (2)") instead of returning an error.
+     * The resolved name is returned in the result's Query.Name field.
+     */
+    AutoResolveCollision?: boolean;
+}
+
+/**
+ * A single parameter hint entry mapping a parameter name to a tested sample value.
+ */
+export interface QueryParameterHintInput {
+    Name: string;
+    Value: string;
 }
 
 /**
@@ -2431,6 +2520,11 @@ export interface UpdateQueryInput {
      * Optional array of permissions to update for the query (replaces existing permissions)
      */
     Permissions?: QueryPermissionInput[];
+    /**
+     * Optional caller-provided parameter sample values. When provided, these override
+     * LLM-generated sampleValues during the extraction pipeline.
+     */
+    ParameterHints?: QueryParameterHintInput[];
 }
 
 /** @deprecated Use QueryMutationResult instead */
@@ -2663,5 +2757,32 @@ interface SearchKnowledgeGQLResponse {
     ElapsedMs: number;
     SourceCounts: SearchSourceCountsGQLResponse;
     Providers: SearchProviderInfoGQLResponse[];
+    ErrorMessage?: string;
+}
+
+/**
+ * A single entity permission check result.
+ */
+export interface EntityPermissionResultItem {
+    EntityName: string;
+    CanRead: boolean;
+}
+
+/**
+ * Result of checking entity permissions for a user.
+ */
+export interface CheckEntityPermissionsResult {
+    Success: boolean;
+    Results: EntityPermissionResultItem[];
+    ErrorMessage?: string;
+}
+
+/**
+ * Internal GraphQL response shape for entity permission results.
+ * @internal
+ */
+interface CheckEntityPermissionsGQLResponse {
+    Success: boolean;
+    Results: { EntityName: string; CanRead: boolean }[];
     ErrorMessage?: string;
 }

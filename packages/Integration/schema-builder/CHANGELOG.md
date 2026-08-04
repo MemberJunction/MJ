@@ -1,5 +1,418 @@
 # @memberjunction/integration-schema-builder
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/integration-engine@6.0.0
+  - @memberjunction/schema-engine@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/integration-engine@5.51.0
+  - @memberjunction/schema-engine@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [623dfc5]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [1e0008f]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core@5.50.0
+  - @memberjunction/integration-engine@5.50.0
+  - @memberjunction/schema-engine@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/sql-dialect@5.50.0
+
+## 5.49.0
+
+### Minor Changes
+
+- 70113b1: Align the integrations framework — resolution overlay, EM/EFM lifecycle, sync locking, watermark backfill, and the U1–U5/U7/U10/U11 upstream defects.
+
+  **Engine (`integration-engine`)**
+  - U1: `IntrospectSchema`/creation-pipeline mappings propagate `undefined` PK/FK flags instead of coercing to `false` — a sample's silence can no longer wipe a declared primary key (`SourceFieldInfo.IsPrimaryKey/IsForeignKey` widened to optional).
+  - Semantic overlay (`decideSemanticOverlay`): Description / DisplayName / IncrementalWatermarkField are external-wins-when-present, curated-fallback-when-silent (per-attribute overlay precedence).
+  - Content-hash basis: the content-hash match/write covers MAPPED fields only — a newly-appearing custom key no longer forces a row rewrite. Custom-key candidates + sizing statistics are aggregated in-memory per sync (`SyncResult.CustomKeyStats`, `foldCustomKeyStats`, `inferColumnTypeFromStats`) and flow to the promotion callback regardless of row skips. **Operational note (one-time):** because the content-hash basis becomes mapped-only, the first sync after this deploys re-hashes and re-writes every overflow-carrying row exactly once — a bounded one-time load spike plus Record-Changes churn — after which stored hashes converge and steady-state (skip-unchanged) writes resume.
+  - Maintenance lock (`AcquireMaintenanceLock`/`ReleaseMaintenanceLock`/`GetMaintenanceLock`): syncs refuse while a metadata refresh / schema evolution / RSU pipeline runs for the connection.
+  - U3: live sync progress is monotonic under concurrency (`RatchetProgressSnapshot`).
+  - U11: `IntrospectSchemaOptions.OnProgress` — determinate discovery progress (scanned/total).
+
+  **Server (`server`)**
+  - `IntegrationSchemaEvolution` is now the full re-resolution refresh: re-resolution → diff → removed objects' entity/field maps disabled (data kept) → changed objects' field maps reconciled + Pull watermarks reset (U10, backfills new columns) → new objects' tables created with entity maps born DISABLED (`autoEnableNewObjects` opts in) → RSU. Extended output: NewObjects/RemovedObjects/ChangedObjects/WatermarksReset.
+  - `IntegrationApplyAll`/`ApplyAllBatch`: `UnselectedAction` ('disable' default) — objects absent from the selection get their entity + field maps disabled; re-selection re-enables both. First-ever apply defaults to a FULL sync.
+  - U7: schedule creation is unique per (connection, job kind) — update-in-place instead of duplicates.
+  - U5: boot-time assert when RSU's additionalSchemaInfo write path diverges from CodeGen's read path.
+  - DAG exposure: `IntegrationListSourceObjects` items carry `DependsOn` parent names.
+  - U11: RSU status/progress expose CurrentStepName/StepIndex/StepTotal; pipeline steps carry StepIndex/StepTotal.
+
+  **SchemaEngine / schema-builder**
+  - additionalSchemaInfo per-table REPLACE semantics for soft FKs (`ClearForeignKeysForTables`) — a refresh's resolution replaces the prior run's FK entries for its tables.
+  - `RSUPendingWork`: `UnselectedAction` + `CreateDisabled` for the post-restart consumer; U11 step-index fields.
+
+  **CodeGenLib / PostgreSQLDataProvider**
+  - U2: `spUpdateExistingEntityFieldsFromSchema` honors `IsSoftPrimaryKey` on BOTH dialects (PG emitter + SQL Server migration) — schema sync no longer wipes resolved soft PKs.
+  - U4: a keyless entity now throws a named "has no primary key" error instead of emitting malformed record-change SQL.
+
+### Patch Changes
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [48fa886]
+- Updated dependencies [314f667]
+- Updated dependencies [70113b1]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [85575cf]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/integration-engine@5.49.0
+  - @memberjunction/schema-engine@5.49.0
+  - @memberjunction/sql-dialect@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/integration-engine@5.48.0
+  - @memberjunction/schema-engine@5.48.0
+  - @memberjunction/global@5.48.0
+  - @memberjunction/sql-dialect@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+  - @memberjunction/integration-engine@5.47.0
+  - @memberjunction/schema-engine@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/integration-engine@5.46.0
+  - @memberjunction/schema-engine@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/schema-engine@5.45.1
+- @memberjunction/integration-engine@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/global@5.45.1
+- @memberjunction/sql-dialect@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [f99cbc1]
+- Updated dependencies [11d5b4e]
+- Updated dependencies [fbee64c]
+- Updated dependencies [81a8aa2]
+- Updated dependencies [82ca89b]
+- Updated dependencies [b2927f1]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/integration-engine@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/schema-engine@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [5396d90]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/integration-engine@5.44.0
+  - @memberjunction/schema-engine@5.44.0
+  - @memberjunction/sql-dialect@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- b98366b: Integration framework hardening for wide-catalog and multi-level connectors (extracted from the 20-connector close-out; no connector-specific code).
+  - **Wide-table safety (dialect-driven in-row size + column-count limits).** The row-size knowledge now lives in the dialect abstraction, not in platform string-branching: `SQLDialect` gains `MaxInRowSizeBytes` (SQL Server `8060`, PostgreSQL `null`), `MaxColumnCount` (SQL Server `1024`, PostgreSQL `1600`), and `EstimateInRowBytes(rawSqlType)` (SQL Server's per-type in-row footprint; base default a conservative off-row pointer). `SchemaBuilder` consumes these via `GetDialect()` — for a dialect with a hard in-row limit it keeps all primary-key columns + a declared-priority core subset within budget, defers the rest (they still sync and land in `__mj_integration_CustomOverflow`), and emits a structured warning instead of shipping a table that fails every `INSERT` with `Cannot create a row of size … greater than 8060`; a dialect with no in-row limit (PostgreSQL/TOAST) only gets a soft advisory near its column-count cap. `IntegrationEngine` adds an env-clamped per-table column ceiling (`MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE`, max 1000 = SQL Server's 1024 minus framework column headroom) so column-count-driven failures degrade to a reversible auto-disable at apply time. Proven on netFORUM (wide objects 8/17 → 15/17, zero 8060 INSERT failures); 17 row-size unit tests.
+  - **Multi-level template-var traversal.** `BaseRESTIntegrationConnector.ResolveParentForVar` adds a per-variable parent map (`Configuration.parentObjectNames` `{ "<var>": "<SiblingObject>" }`, with optional `parentObjectIDFieldNames`), checked before the existing single-valued `parentObjectName`. This lets a path with more than one template variable (e.g. `/events/{eventCode}/sessions/{sessionCode}/…`) resolve each variable to its own parent object instead of collapsing both to one parent and tripping the `PARENT_CYCLE` guard (→ 0 rows). Backward-compatible: connectors that declare no `parentObjectNames` are unaffected.
+  - **Large-catalog ApplyAll performance.** `IntegrationDiscoveryResolver.createEntityAndFieldMaps` reuses the already-in-memory persisted field schema (built in Phase 1) instead of issuing a live per-object `DiscoverFields` describe in a sequential loop, and resolves the target entity via an `O(1)` `schema.table → EntityInfo` map instead of an `O(N²)` scan. This removes the per-object round-trips and ~millions of comparisons that pushed very large catalogs (e.g. Salesforce's ~1,695 objects) past the client timeout with zero maps created.
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/integration-engine@5.43.0
+  - @memberjunction/schema-engine@5.43.0
+
+## 5.42.0
+
+### Minor Changes
+
+- 6ac8ca4: feat(integration): v2 integration framework + unified connector set (GrowthZone, OpenWater, ORCID, PropFuel, Path LMS)
+
+  Consolidated integration-v2 work — framework hardening + five connectors — proven end-to-end via the
+  GraphQL stand-up path (clean DB, CreateConnection → ApplyAll → StartSync) on SQL Server.
+
+  **Integration core (`integration-engine`, `integration-engine-base`, `integration-schema-builder`):**
+  - Deterministic §4 content-hash identity stamp for keyless rows (stable storage key + idempotent re-sync).
+  - Door-before-child dependency ordering derived from soft-FK `parentObjectName`/`ReferencedType` — children
+    land in one pass (no ZERO_PARENTS, no second-sync self-heal).
+  - Adaptive rate-limit hooks (`RateLimitAcquire`/`Report`/`MaxConcurrency`) on `FetchContext`.
+  - Shared `auth-helpers` (`OAuth2TokenManager`); `KeySerialization`/`RecordFlatten` committed (were
+    imported-but-untracked — fresh clones could not build); `IntegrationEngineBase.SeedForTesting` for
+    offline replay harnesses.
+
+  **Schema correctness + sizing (`integration-engine`, `integration-schema-builder`):**
+  - `json`/`text`/`array`/`object` and unsized strings map to `NVARCHAR(MAX)`/unbounded text instead of
+    being collapsed to `nvarchar(255)` — a nested-array JSON or long field routinely exceeds 255 and was
+    dropped at sync time (OpenWater `Program.rounds` went from **0** rows to all of them). Bounded scalar
+    strings keep a small, space-efficient size (255 floor; declared length + headroom when the source
+    reports one; PK strings capped at the dialect index-key limit). Soft-PK columns are emitted nullable.
+  - String-overflow is **skip-and-surface** (`STRING_OVERFLOW_SKIPPED` SyncWarning via the new
+    `StringOverflowError`), not truncate or fail-the-batch.
+  - **Active-only materialization (phantom-skip):** `buildSourceSchemaFromPersistedRows` materializes only
+    `Status='Active'` objects/fields — no empty phantom tables, no wasted per-entity CodeGen/advancedGen cost.
+
+  **StartSync honesty (`server`):**
+  - `IntegrationStartSync` no longer returns optimistic `{Success:true, RunID:null}` for fast/no-op syncs;
+    it resolves the run by recency over a bounded poll (real `RunID`), and returns `Success:false` with a
+    message when no run record appears.
+
+  **Soft-PK config cache (`codegen-lib`):**
+  - `RunInProcess` invalidates `ManageMetadataBase`'s soft-PK/FK config cache per in-process run — the
+    path-keyed cache went stale in the long-lived MJAPI RSU CodeGen path ("No primary key found" → entity
+    never created → 0 rows synced until restart). Deterministic; the CLI `Run()` path is unchanged.
+
+  **Unified connector set (`integration-connectors`):**
+  - **GrowthZone** — OAuth2, 38 objects, idempotency + probe-amended pagination metadata.
+  - **OpenWater** — 25 objects, OpenAPI-complete.
+  - **ORCID** — 12 per-record objects, public-API live-verified.
+  - **PropFuel** — file-feed slice (rich REST API documented out-of-scope).
+  - **Path LMS (Blue Sky eLearn)** — GraphQL Reporting API, pull-only; GraphQL over `/graphql`, two-step
+    app-credential → bearer auth; credential-free discovery from the public SpectaQL schema (84 record
+    types / 1175 fields); per-object `AccessPath` walks the 16 GraphQL query doors to leaf records;
+    content-hash idempotency.
+  - All five validated under the v2 architecture (RealityProbe / completeness-diff / T12 idempotency).
+
+  **Migration + metadata (additive schema → minor):** ships forward migration(s) + integration metadata
+  seeds; additive only — no column drops, narrowing, renames, or new required params — backward-compatible
+  **minor** per the publish-then-no-breaking-changes policy.
+
+### Patch Changes
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [6ac8ca4]
+- Updated dependencies [6520bea]
+- Updated dependencies [5ebf0e9]
+- Updated dependencies [2f225e4]
+- Updated dependencies [0fa3cbc]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/integration-engine@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/schema-engine@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/integration-engine@5.41.0
+  - @memberjunction/schema-engine@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/integration-engine@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/schema-engine@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/integration-engine@5.40.1
+  - @memberjunction/schema-engine@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/integration-engine@5.40.0
+  - @memberjunction/schema-engine@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [a1e2776]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [9bc2916]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/integration-engine@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/schema-engine@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/core@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/integration-engine@5.38.0
+  - @memberjunction/schema-engine@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [4f15f31]
+  - @memberjunction/core@5.37.0
+  - @memberjunction/integration-engine@5.37.0
+  - @memberjunction/schema-engine@5.37.0
+  - @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core@5.36.0
+  - @memberjunction/integration-engine@5.36.0
+  - @memberjunction/schema-engine@5.36.0
+  - @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/integration-engine@5.35.0
+  - @memberjunction/schema-engine@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/integration-engine@5.34.1
+  - @memberjunction/schema-engine@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/integration-engine@5.34.0
+  - @memberjunction/schema-engine@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/global@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

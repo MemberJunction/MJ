@@ -1,5 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [
+    "vitest.shared.ts",
+    "vitest.dom.shared.ts",
+    "vitest.dom.setup.ts"
+  ],
   "tasks": {
     "build": {
       "outputs": ["build/**", "dist/**"],
@@ -23,7 +28,8 @@
         "src/**/*.tsx",
         "src/**/__tests__/**",
         "vitest.config.*",
-        "tsconfig.json"
+        "tsconfig.json",
+        "tsconfig.spec.json"
       ],
       "cache": true
     },

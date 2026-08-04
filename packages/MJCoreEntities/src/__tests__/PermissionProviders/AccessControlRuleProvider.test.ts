@@ -125,7 +125,7 @@ describe('AccessControlRuleProvider', () => {
             expect(runViewCalls[0].ExtraFilter).toContain("GranteeType='User'");
             expect(runViewCalls[0].ExtraFilter).toContain("GranteeID='BBB'");
             expect(runViewCalls[0].ExtraFilter).toContain("GrantedByUserID <> 'BBB'");
-            expect(runViewCalls[0].ExtraFilter).toContain('ExpiresAt IS NULL OR ExpiresAt > GETUTCDATE()');
+            expect(runViewCalls[0].ExtraFilter).toContain('ExpiresAt IS NULL OR ExpiresAt > ');
         });
     });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { NormalizeUUID, UUIDsEqual } from '../util/UUIDUtils';
+import { NormalizeUUID, UUIDsEqual, IsValidUUID } from '../util/UUIDUtils';
 
 describe('NormalizeUUID', () => {
     it('should lowercase an uppercase UUID (SQL Server format)', () => {
@@ -93,5 +93,92 @@ describe('UUIDsEqual', () => {
 
     it('should handle empty strings as equal', () => {
         expect(UUIDsEqual('', '')).toBe(true);
+    });
+
+    // ---- Additional branch coverage (Wave perf fast-path + edge cases) ----
+
+    it('takes the === fast path for the SAME object reference', () => {
+        const ref = upperUUID;
+        // Identical reference — short-circuits before any normalization allocation.
+        expect(UUIDsEqual(ref, ref)).toBe(true);
+    });
+
+    it('takes the === fast path for two strings that are already byte-identical', () => {
+        // Distinct objects, identical content — the === branch still fires before normalization.
+        expect(UUIDsEqual(String(lowerUUID), String(lowerUUID))).toBe(true);
+    });
+
+    it('returns false when the values differ only in length (no accidental prefix match)', () => {
+        expect(UUIDsEqual('abc', 'abcd')).toBe(false);
+        expect(UUIDsEqual('abcd', 'abc')).toBe(false);
+    });
+
+    it('returns false when values differ only by internal whitespace (trim only strips ends)', () => {
+        // NormalizeUUID trims leading/trailing whitespace but does NOT collapse internal spaces.
+        expect(UUIDsEqual('a b', 'ab')).toBe(false);
+    });
+
+    it('treats values differing only by surrounding whitespace AND case as equal', () => {
+        expect(UUIDsEqual('  ' + upperUUID, lowerUUID + '  ')).toBe(true);
+    });
+
+    it('returns false for an empty string vs a non-empty value', () => {
+        expect(UUIDsEqual('', lowerUUID)).toBe(false);
+        expect(UUIDsEqual(lowerUUID, '')).toBe(false);
+    });
+
+    it('treats whitespace-only vs empty string as equal (both normalize to "")', () => {
+        expect(UUIDsEqual('   ', '')).toBe(true);
+    });
+
+    it('treats null vs empty string as NOT equal (null short-circuits before normalization)', () => {
+        // null and '' are different: the null guard returns false before '' could normalize to ''.
+        expect(UUIDsEqual(null, '')).toBe(false);
+        expect(UUIDsEqual('', null)).toBe(false);
+    });
+});
+
+describe('IsValidUUID', () => {
+    const upperUUID = 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890';
+    const lowerUUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+    it('accepts a canonical lowercase UUID (PostgreSQL format)', () => {
+        expect(IsValidUUID(lowerUUID)).toBe(true);
+    });
+
+    it('accepts a canonical uppercase UUID (SQL Server format)', () => {
+        expect(IsValidUUID(upperUUID)).toBe(true);
+    });
+
+    it('accepts a mixed-case UUID', () => {
+        expect(IsValidUUID('A1b2C3d4-E5f6-7890-AbCd-Ef1234567890')).toBe(true);
+    });
+
+    it('tolerates surrounding whitespace', () => {
+        expect(IsValidUUID('  ' + lowerUUID + '  ')).toBe(true);
+    });
+
+    it('rejects null and undefined', () => {
+        expect(IsValidUUID(null)).toBe(false);
+        expect(IsValidUUID(undefined)).toBe(false);
+    });
+
+    it('rejects empty / whitespace-only strings', () => {
+        expect(IsValidUUID('')).toBe(false);
+        expect(IsValidUUID('   ')).toBe(false);
+    });
+
+    it('rejects non-UUID strings (including injection-shaped input)', () => {
+        expect(IsValidUUID('not-a-uuid')).toBe(false);
+        expect(IsValidUUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890'; DROP TABLE")).toBe(false);
+    });
+
+    it('rejects malformed group lengths', () => {
+        expect(IsValidUUID('a1b2c3d4-e5f6-7890-abcd-ef12345678')).toBe(false); // last group too short
+        expect(IsValidUUID('a1b2c3d4e5f67890abcdef1234567890')).toBe(false); // no hyphens
+    });
+
+    it('rejects non-hex characters in an otherwise correct shape', () => {
+        expect(IsValidUUID('g1b2c3d4-e5f6-7890-abcd-ef1234567890')).toBe(false);
     });
 });

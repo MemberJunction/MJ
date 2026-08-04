@@ -381,7 +381,7 @@ const newEntityPermissionDefaultsSchema = z.object({
   AutoAddPermissionsForNewEntities: z.boolean().default(true),
   Permissions: entityPermissionSchema.array().default([
     { RoleName: 'UI', CanRead: true, CanCreate: false, CanUpdate: false, CanDelete: false },
-    { RoleName: 'Developer', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: false },
+    { RoleName: 'Developer', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true },
     { RoleName: 'Integration', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true },
   ]),
 });
@@ -459,6 +459,22 @@ const configInfoSchema = z.object({
     { name: 'auto_index_foreign_keys', value: true },
   ]),
   excludeSchemas: z.string().array().default(['sys', 'staging']),
+  /**
+   * Opt-in POSITIVE scope list. When set (non-empty), CodeGen processes ONLY these schemas — every
+   * other schema present in the DATABASE is treated as excluded, including schemas MJ has never seen
+   * before. It is pure sugar over {@link excludeSchemas}: it is resolved into `excludeSchemas` (see
+   * `applyIncludeSchemaScope`) before metadata management and again before file generation, so
+   * nothing downstream changes. In-scope ⇔ named in `includeSchemas` AND not in `excludeSchemas`
+   * (include shrinks the addressable space; exclude overlays on top). No hidden auto-includes — a
+   * schema, including the MJ core schema, is in scope ONLY if listed explicitly. Leave
+   * undefined/empty for the classic exclude-only behavior (unchanged).
+   *
+   * Primary use: scope an Open App's CodeGen to just its own schema without hand-maintaining an
+   * exclude list naming every other installed app — a list that is O(N²) to maintain and, more
+   * importantly, cannot name schemas the app does not know about (such as a client's own schemas in
+   * a deployed instance).
+   */
+  includeSchemas: z.string().array().optional(),
   excludeTables: tableInfoSchema.array().default([
     { schema: '%', table: 'sys%' },
     { schema: '%', table: 'flyway_schema_history' }
@@ -544,12 +560,85 @@ const configInfoSchema = z.object({
     .default(false)
     .transform((v) => (v ? 'Y' : 'N')),
   /**
-   * Optional SQL Server request timeout in milliseconds applied to the CodeGen
-   * connection pool. Defaults to 120000 (2 minutes). Set in `mj.config.cjs` or
-   * via the `MJ_CODEGEN_REQUEST_TIMEOUT` environment variable when long-running
-   * CodeGen steps (e.g. spUpdateExistingEntityFieldsFromSchema) exceed the default.
+   * **Legacy** — SQL Server request timeout in milliseconds applied to the
+   * CodeGen connection pool. Set in `mj.config.cjs` or via the
+   * `MJ_CODEGEN_REQUEST_TIMEOUT` environment variable when long-running CodeGen
+   * steps (e.g. spUpdateExistingEntityFieldsFromSchema) exceed the default of
+   * 120000 (2 minutes).
+   *
+   * Prefer the cross-platform {@link codegenPool}.statementTimeoutMs for new
+   * configs — it applies to both SQL Server (as `requestTimeout`) and
+   * PostgreSQL (as the per-connection `statement_timeout` GUC). When both are
+   * set on a SQL Server install, `codegenPool.statementTimeoutMs` wins;
+   * `dbRequestTimeout` remains as a backward-compatible fallback so existing
+   * configs keep working unchanged.
    */
   dbRequestTimeout: z.coerce.number().int().positive().optional(),
+  /**
+   * Optional CodeGen-time database connection pool configuration.
+   *
+   * **Per-provider applicability** — not all fields apply to both providers
+   * today:
+   *
+   * | Field | SQL Server | PostgreSQL |
+   * |---|---|---|
+   * | `statementTimeoutMs` | ✅ mssql `requestTimeout` | ✅ libpq `-c statement_timeout` |
+   * | `max` / `min` / `idleTimeoutMillis` / `connectionTimeoutMillis` | ❌ ignored | ✅ `pg.Pool` config |
+   * | `ssl` | ❌ ignored (SQL Server uses `dbTrustServerCertificate` + mssql's own SSL) | ✅ `pg.Pool` ssl |
+   *
+   * The PG-only pool-sizing knobs reflect the asymmetry between mssql and pg.Pool
+   * configurability today; they'll converge in a follow-up. When omitted, each
+   * driver's own defaults apply (mssql: 10 max; `PGConnectionManager`: 20 max, 2 min).
+   *
+   * For runtime (MJAPI) pool settings, see
+   * `@memberjunction/server`'s `databaseSettings.connectionPool` — that is
+   * a separate, long-lived service pool and is independent of CodeGen.
+   */
+  codegenPool: z.object({
+    /** **PostgreSQL only** today. Max pool connections; `pg.Pool` default 20 when unset. */
+    max: z.coerce.number().int().positive().optional(),
+    /** **PostgreSQL only** today. Min idle connections kept open; `pg.Pool` default 2. */
+    min: z.coerce.number().int().nonnegative().optional(),
+    /** **PostgreSQL only** today. Idle timeout in ms before a pooled connection is closed. */
+    idleTimeoutMillis: z.coerce.number().int().positive().optional(),
+    /** **PostgreSQL only** today. New-connection acquisition timeout in ms. */
+    connectionTimeoutMillis: z.coerce.number().int().positive().optional(),
+    /**
+     * Per-statement timeout in milliseconds, applied to **both providers**:
+     *
+     * - **SQL Server**: mapped to mssql's `requestTimeout` on the pool config.
+     *   Takes precedence over the legacy top-level {@link dbRequestTimeout} when both
+     *   are set; falls back to `dbRequestTimeout` (and ultimately mssql's 120000ms
+     *   default) when unset.
+     * - **PostgreSQL**: applied via the libpq startup option `-c statement_timeout=<ms>`
+     *   (carried in pg's connection startup packet), so every backend — including the
+     *   verify-SELECT-1 connection — honors it from the very first query. When unset,
+     *   PostgreSQL applies no statement timeout (its default).
+     */
+    statementTimeoutMs: z.coerce.number().int().positive().optional(),
+    /**
+     * **PostgreSQL only**. SSL configuration for the codegen pool. Defaults to `false`
+     * (matches the pre-multi-provider-refactor inline `pg.Pool` behavior that ran
+     * codegen plaintext locally). Set to `true` for managed PostgreSQL with default
+     * trust (e.g. AWS Aurora `rds.force_ssl=1`); pass an object for full control
+     * (e.g. `{ rejectUnauthorized: true, ca: <CA bundle> }`).
+     *
+     * Note: the runtime MJAPI pool (`databaseSettings.connectionPool`) has its own
+     * SSL handling that defaults ON in `NODE_ENV=production` — this field only
+     * governs the short-lived codegen pool.
+     */
+    ssl: z.union([z.boolean(), z.record(z.string(), z.unknown())]).optional(),
+  }).optional(),
+  /**
+   * Startup mode for engine pre-warm during CodeGen's provider bootstrap: 'full'
+   * pre-warms all @RegisterForStartup engines; 'task' (CodeGen's entry-point default)
+   * skips pre-warm — engines lazy-load on first touch. Because mj.config.cjs is shared
+   * by every process in a repo, the MJ_STARTUP_MODE env var overrides this per
+   * invocation (highest precedence).
+   */
+  startup: z.object({
+    mode: z.enum(['full', 'task']).optional(),
+  }).optional(),
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
   graphqlPort: z.coerce.number().int().positive().default(4000),
@@ -559,6 +648,22 @@ const configInfoSchema = z.object({
   ]).default('mj_generatedentities'),
 
   verboseOutput: z.boolean().optional().default(false),
+
+  /**
+   * Number of metadata `INSERT` statements CodeGen joins into a single batched
+   * round-trip when syncing newly-discovered entity fields into the metadata
+   * tables (`createNewEntityFieldsFromSchema`). Each row's INSERT SQL is
+   * unchanged and conflict-guarded; this knob only controls how many are
+   * terminated, joined, and sent — plus logged to the migration file — per DB
+   * round-trip.
+   *
+   * Larger values mean fewer round-trips but a larger SQL string per batch;
+   * smaller values trade throughput for smaller batches. These are independent
+   * statements (not a multi-row `VALUES`), so no SQL Server row/parameter limit
+   * bounds the value. Defaults to 250, a good balance on large-schema installs
+   * (thousands of tables). Applies to both SQL Server and PostgreSQL.
+   */
+  metadataInsertBatchSize: z.coerce.number().int().positive().default(250),
 });
 
 /**
@@ -567,14 +672,126 @@ const configInfoSchema = z.object({
  *
  * Database connection settings come from environment variables.
  */
+const _DEFAULT_DB_PLATFORM = resolveDbPlatformFromEnv() ?? 'sqlserver';
+const _IS_PG_DEFAULT = _DEFAULT_DB_PLATFORM === 'postgresql';
+
+/**
+ * Tracks which `<pgEnv>:<ssEnv>` precedence pairs have already emitted a
+ * `console.warn`. Both {@link _resolveConnEnv} (runs at module load) and
+ * {@link applyPlatformDependentEnvVars} (runs after the user config merge,
+ * plus again on every `initializeConfig()` call) can detect the same env-var
+ * divergence and would otherwise warn 2–3 times for one config issue. The
+ * set lives at module scope so it survives across both helpers' invocations
+ * within the same process.
+ *
+ * Exported solely so tests can reset the dedup state between cases — production
+ * code never mutates this set directly.
+ */
+export const _warnedEnvPrecedencePairs = new Set<string>();
+/**
+ * Resolve a connection field from PG_*-prefixed env vars when `dbPlatform`
+ * defaults to PostgreSQL, falling back to the SQL-Server-style env var name
+ * and then a baseline default. Keeps env-var precedence inside `configInfo`
+ * (one resolution layer) rather than scattered through provider code.
+ *
+ * When both env vars are set on a PG-default config AND they differ, emits a
+ * one-line `console.warn` recording which one is winning. Continues using the
+ * `PG_*` value (precedence is intentional) — the warning just makes the
+ * override visible. Uses `console.warn` (not `LogWarning`) because this runs
+ * at module-load time, before the logging module is wired.
+ */
+function _resolveConnEnv(pgName: string, ssName: string, fallback: string): string {
+  const pgVal = _IS_PG_DEFAULT ? process.env[pgName] : undefined;
+  const ssVal = process.env[ssName];
+  const pairKey = `${pgName}:${ssName}`;
+  if (
+    _IS_PG_DEFAULT &&
+    pgVal !== undefined &&
+    ssVal !== undefined &&
+    pgVal !== ssVal &&
+    !_warnedEnvPrecedencePairs.has(pairKey)
+  ) {
+    _warnedEnvPrecedencePairs.add(pairKey);
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[codegen-lib] ${pgName}=${pgVal} takes precedence over ${ssName}=${ssVal} on a PostgreSQL-default config. ` +
+        `Set only one to silence this warning, or set them to the same value.`,
+    );
+  }
+  return pgVal ?? ssVal ?? fallback;
+}
+
+/**
+ * Apply PG_*-prefixed env-var precedence *after* the user's `mj.config.cjs` has
+ * been merged into the config. Closes a gap left by {@link _resolveConnEnv}:
+ * that helper is locked to `_IS_PG_DEFAULT` (env-only), so a user who sets
+ * `dbPlatform: 'postgresql'` in `mj.config.cjs` (no `DB_PLATFORM` env var) but
+ * supplies the host via `PG_HOST` would have `PG_HOST` silently ignored and
+ * connect to `localhost`. The pre-refactor code used
+ * `process.env.PG_HOST ?? configInfo.dbHost` unconditionally inside
+ * `setupPostgreSQLDataSource()`, so PG_* always won — this helper restores that
+ * behavior at the config layer.
+ *
+ * Mutates `config` in place. PG_* env vars only override fields the user did NOT
+ * explicitly set in `mj.config.cjs` (passed via `userConfig`); explicit user
+ * values always win. A `console.warn` records the precedence whenever a PG_*
+ * env var and its DB_* counterpart are both set and differ.
+ */
+export function applyPlatformDependentEnvVars(config: ConfigInfo, userConfig: Partial<ConfigInfo>): void {
+  if (config.dbPlatform !== 'postgresql') return;
+
+  const overrides: ReadonlyArray<{
+    readonly pgEnv: string;
+    readonly ssEnv: string;
+    readonly userValue: unknown;
+    readonly apply: (value: string) => void;
+  }> = [
+    { pgEnv: 'PG_HOST',     ssEnv: 'DB_HOST',                userValue: userConfig.dbHost,          apply: (v) => { config.dbHost = v; } },
+    { pgEnv: 'PG_PORT',     ssEnv: 'DB_PORT',                userValue: userConfig.dbPort,          apply: (v) => { const parsed = parseInt(v, 10); if (!isNaN(parsed)) config.dbPort = parsed; } },
+    { pgEnv: 'PG_DATABASE', ssEnv: 'DB_DATABASE',            userValue: userConfig.dbDatabase,      apply: (v) => { config.dbDatabase = v; } },
+    { pgEnv: 'PG_USERNAME', ssEnv: 'CODEGEN_DB_USERNAME',    userValue: userConfig.codeGenLogin,    apply: (v) => { config.codeGenLogin = v; } },
+    { pgEnv: 'PG_PASSWORD', ssEnv: 'CODEGEN_DB_PASSWORD',    userValue: userConfig.codeGenPassword, apply: (v) => { config.codeGenPassword = v; } },
+  ];
+
+  for (const { pgEnv, ssEnv, userValue, apply } of overrides) {
+    const pgVal = process.env[pgEnv];
+    if (pgVal === undefined) continue;
+    if (userValue !== undefined) continue;
+    const ssVal = process.env[ssEnv];
+    const pairKey = `${pgEnv}:${ssEnv}`;
+    if (ssVal !== undefined && ssVal !== pgVal && !_warnedEnvPrecedencePairs.has(pairKey)) {
+      _warnedEnvPrecedencePairs.add(pairKey);
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[codegen-lib] ${pgEnv}=${pgVal} takes precedence over ${ssEnv}=${ssVal} on a PostgreSQL config. ` +
+          `Set only one to silence this warning, or set them to the same value.`,
+      );
+    }
+    apply(pgVal);
+  }
+}
+
 export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
-  // Database connection settings (from environment variables)
-  dbPlatform: resolveDbPlatformFromEnv() ?? 'sqlserver',
-  dbHost: process.env.DB_HOST ?? 'localhost',
-  dbPort: parseInt(process.env.DB_PORT ?? '1433', 10),
-  dbDatabase: process.env.DB_DATABASE ?? '',
-  codeGenLogin: process.env.CODEGEN_DB_USERNAME ?? '',
-  codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
+  // Database connection settings (from environment variables). For PostgreSQL,
+  // the PG_HOST / PG_PORT / PG_DATABASE / PG_USERNAME / PG_PASSWORD env vars
+  // take precedence over their DB_* / CODEGEN_DB_* counterparts so existing
+  // PG-targeted .env files keep working without changes.
+  //
+  // KEEP IN SYNC: the same five PG_*/DB_*/CODEGEN_DB_* pairs are re-applied
+  // post-merge by `applyPlatformDependentEnvVars()` (below). When the user
+  // sets `dbPlatform: 'postgresql'` in `mj.config.cjs` (no env var),
+  // `_IS_PG_DEFAULT` is false here so the PG_* arg of `_resolveConnEnv` is
+  // ignored — `applyPlatformDependentEnvVars` runs after the user config
+  // is merged and re-applies the PG_* precedence. If you add a new
+  // PG_*/DB_* pair, update BOTH the `_resolveConnEnv(...)` call on the
+  // appropriate field below AND the `overrides` table in
+  // `applyPlatformDependentEnvVars`.
+  dbPlatform: _DEFAULT_DB_PLATFORM,
+  dbHost: _resolveConnEnv('PG_HOST', 'DB_HOST', 'localhost'),
+  dbPort: parseInt(_resolveConnEnv('PG_PORT', 'DB_PORT', _IS_PG_DEFAULT ? '5432' : '1433'), 10),
+  dbDatabase: _resolveConnEnv('PG_DATABASE', 'DB_DATABASE', ''),
+  codeGenLogin: _resolveConnEnv('PG_USERNAME', 'CODEGEN_DB_USERNAME', ''),
+  codeGenPassword: _resolveConnEnv('PG_PASSWORD', 'CODEGEN_DB_PASSWORD', ''),
   dbInstanceName: process.env.DB_INSTANCE_NAME,
   dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE) ? 'Y' : 'N',
   dbRequestTimeout: process.env.MJ_CODEGEN_REQUEST_TIMEOUT
@@ -614,7 +831,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
       AutoAddPermissionsForNewEntities: true,
       Permissions: [
         { RoleName: 'UI', CanRead: true, CanCreate: false, CanUpdate: false, CanDelete: false },
-        { RoleName: 'Developer', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: false },
+        { RoleName: 'Developer', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true },
         { RoleName: 'Integration', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true },
       ],
     },
@@ -745,6 +962,14 @@ const configParsing = configInfoSchema.safeParse(mergedConfig);
 //   LogError('Error parsing config file', null, JSON.stringify(configParsing.error.issues, null, 2));
 // }
 
+// Re-apply PG_* env precedence now that the user's `mj.config.cjs` has been
+// merged in — handles the case where `dbPlatform: 'postgresql'` was set in the
+// config file (not via env), which `_resolveConnEnv()` could not have known
+// about at the moment it built DEFAULT_CODEGEN_CONFIG.
+if (configParsing.data) {
+  applyPlatformDependentEnvVars(configParsing.data, configSearchResult?.config ?? {});
+}
+
 /**
  * Parsed configuration object with fallback to empty object if parsing fails
  */
@@ -769,16 +994,26 @@ export function initializeConfig(cwd: string): ConfigInfo {
     : DEFAULT_CODEGEN_CONFIG;
 
   const maybeConfig = configInfoSchema.safeParse(mergedConfig);
-  // Don't log errors - let the calling code handle validation failures
-  // if (!maybeConfig.success) {
-  //   LogError('Error parsing config file', null, JSON.stringify(maybeConfig.error.issues, null, 2));
-  // }
+  if (!maybeConfig.success) {
+    // Surface schema-validation failures so misconfiguration doesn't silently
+    // fall through to an empty configInfo (which then crashes downstream with
+    // confusing errors like "config.server is required" — see Bug #8/#9).
+    LogError(
+      `Error parsing mj.config.cjs - falling back to defaults. Schema issues:\n${JSON.stringify(maybeConfig.error.issues, null, 2)}`
+    );
+  }
 
   const config = maybeConfig.success ? maybeConfig.data : configInfo;
 
   if (config === undefined) {
     throw new Error('No configuration found');
   }
+
+  // Re-apply PG_* env precedence now that the user's `mj.config.cjs` has been
+  // merged in — handles the case where `dbPlatform: 'postgresql'` was set in
+  // the config file (not via env), which `_resolveConnEnv()` could not have
+  // known about at the moment it built DEFAULT_CODEGEN_CONFIG.
+  applyPlatformDependentEnvVars(config, userConfigResult?.config ?? {});
 
   // Update the module-level configInfo so that helpers like
   // resolveEntityPackageName() and getExternalEntitySchemas() see the
@@ -880,14 +1115,26 @@ export function getSettingValue(settingName: string, defaultValue?: any): any {
 }
 
 /**
- * Checks if automatic indexing of foreign keys is enabled
- * @returns True if auto-indexing is enabled, false otherwise
+ * Checks if automatic indexing of foreign keys is enabled.
+ *
+ * **Defaults to `true` when the `auto_index_foreign_keys` setting is absent.**
+ * Config *absence* must be the safe choice here: neither SQL Server nor PostgreSQL
+ * auto-indexes FK columns, yet MJ leans on them heavily — generated base views join
+ * FK relationships, `RunView` filters on them, and CodeGen emits cascade-delete logic
+ * that walks children by FK. A missing FK index therefore degrades silently and is
+ * very hard for a customer to diagnose (it looks like "MJ is slow", not "an index is
+ * missing"), whereas a surplus index is cheap and trivially reversible (`DROP INDEX`).
+ *
+ * This previously defaulted to `false`, which meant any deployment that never set the
+ * setting explicitly — including distribution installs — generated no FK indexes at all.
+ *
+ * @returns True if auto-indexing is enabled (the default), false only if explicitly disabled
  */
 export function autoIndexForeignKeys(): boolean {
   const keyName = 'auto_index_foreign_keys';
   const setting = getSetting(keyName);
   if (setting) return <boolean>setting.value;
-  else return false;
+  else return true;
 }
 
 /**

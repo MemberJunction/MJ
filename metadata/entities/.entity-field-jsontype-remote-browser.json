@@ -1,0 +1,38 @@
+[
+  {
+    "_comments": [
+      "Binds JSONType metadata to AIRemoteBrowserProvider.SupportedFeatures so CodeGen emits a",
+      "typed accessor conforming to IRemoteBrowserProviderFeatures. Apply AFTER the v5.42",
+      "AI_Remote_Browser_Providers migration + CodeGen have created the 'MJ: AI Remote Browser",
+      "Providers' entity and its fields. If CodeGen names the entity differently, update the",
+      "@lookup names below to match."
+    ],
+    "fields": {
+      "Name": "MJ: AI Remote Browser Providers"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IRemoteBrowserProviderFeatures",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IRemoteBrowserProviderFeatures.ts"
+          },
+          "_comments": [
+            "SupportedFeatures field — strongly-typed remote-browser backend capability flags"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Remote Browser Providers&Name=SupportedFeatures"
+          },
+          "sync": {
+            "lastModified": "2026-06-16T01:17:23.068Z",
+            "checksum": "bdb8edb1ccf61e890eb922e40686e5d82828257edbbb948d794bd60830ded546"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Remote Browser Providers"
+    }
+  }
+]

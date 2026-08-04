@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { YourMembershipConnector } from '../YourMembershipConnector.js';
 import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
-import type { FetchContext, RESTResponse } from '@memberjunction/integration-engine';
+import type { FetchContext, RESTResponse, CreateRecordContext } from '@memberjunction/integration-engine';
 
 // ─── Test helpers ────────────────────────────────────────────────
 
@@ -538,6 +538,36 @@ describe('YourMembershipConnector (GetBaseURL)', () => {
         const ci = { Get: () => null } as unknown as MJCompanyIntegrationEntity;
         const auth = { Config: {} };
         expect(() => getBaseURL(ci, auth)).toThrow('Cannot determine YM base URL');
+    });
+});
+
+// ─── CreateRecord no-id guard (BuildCreatedResult / HubSpot-association class of bug) ────────
+
+describe('YourMembershipConnector (CreateRecord no-id guard)', () => {
+    function createCtx(objectName: string, attributes: Record<string, unknown>): CreateRecordContext {
+        return { CompanyIntegration: MOCK_CI, ContextUser: contextUser, ObjectName: objectName, Attributes: attributes };
+    }
+
+    it('returns Success=false when a 2xx create response contains no record id', async () => {
+        // 201 with an empty body — no Id/ID/ProfileID. The connector must NOT report success,
+        // otherwise the record is silently lost and re-created on the next sync.
+        const makeRequest = vi.fn().mockResolvedValue({ Status: 201, Body: {}, Headers: {} } as RESTResponse);
+        const connector = createMockedConnector(makeRequest);
+
+        const result = await connector.CreateRecord(createCtx('Members', { EmailAddr: 'a@b.com' }));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('no record ID');
+    });
+
+    it('returns Success=true with the ExternalID when the 2xx create response carries an id', async () => {
+        const makeRequest = vi.fn().mockResolvedValue({ Status: 201, Body: { Id: '4567' }, Headers: {} } as RESTResponse);
+        const connector = createMockedConnector(makeRequest);
+
+        const result = await connector.CreateRecord(createCtx('Members', { EmailAddr: 'a@b.com' }));
+
+        expect(result.Success).toBe(true);
+        expect(result.ExternalID).toBe('4567');
     });
 });
 

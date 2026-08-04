@@ -22,6 +22,8 @@ export interface CompiledComponent {
   compiledAt: Date;
   /** Any compilation warnings */
   warnings?: string[];
+  /** Babel-generated sourcemap (raw V3 SourceMap object) when sourceMaps is enabled */
+  sourceMap?: any;
 }
 
 /**

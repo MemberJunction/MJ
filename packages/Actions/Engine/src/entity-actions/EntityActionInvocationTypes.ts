@@ -1,6 +1,6 @@
-import { MJGlobal, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { MJGlobal, MJLruCache, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { MJActionParamEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
-import { BaseEntity } from "@memberjunction/core";
+import { BaseEntity, Metadata, RunView } from "@memberjunction/core";
 import { ActionParam, ActionResult, EntityActionInvocationParams, EntityActionResult } from "@memberjunction/actions-base";
 import { ActionEngineServer } from "../generic/ActionEngine";
 
@@ -76,7 +76,8 @@ export abstract class EntityActionInvocationBase {
         return returnValues;
     }
 
-    private _scriptCache: Map<string, Function> = new Map<string, Function>();
+    // Bounded LRU cache prevents unbounded growth from one compiled function per unique EntityActionID.
+    private _scriptCache = new MJLruCache<string, (...args: unknown[]) => Promise<unknown>>({ maxSize: 1000 });
 
     /**
      * Attempt to execute a script and wraps in try/catch to handle any errors so that no exceptions are thrown
@@ -92,19 +93,16 @@ export abstract class EntityActionInvocationBase {
         };
     
         try {
-            let scriptFunction;
-            if (this._scriptCache.has(EntityActionID)) {
-                scriptFunction = this._scriptCache.get(EntityActionID);
-            }
-            else {
+            let scriptFunction = this._scriptCache.Get(EntityActionID);
+            if (!scriptFunction) {
                 scriptFunction = new Function('EntityActionContext', `
                     return (async () => {
                         ${scriptText}
                     })();
-                `);
-                this._scriptCache.set(EntityActionID, scriptFunction);
+                `) as (...args: unknown[]) => Promise<unknown>;
+                this._scriptCache.Set(EntityActionID, scriptFunction);
             }
-    
+
             const ret = await scriptFunction(entityActionContext);
             return ret || entityActionContext.result;
         }
@@ -205,7 +203,7 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
                 throw new Error('Error creating instance of invocation type');
 
             // now, we loop through the list of records and invoke the action for each one
-            const recordList: BaseEntity[] = await this.GetRecordList();
+            const recordList: BaseEntity[] = await this.GetRecordList(params);
             const results: EntityActionResult[] = [];
             for (const record of recordList) {
                 const innerParams = {...params};
@@ -226,8 +224,79 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
             return null;
     }
 
-    protected async GetRecordList(): Promise<BaseEntity[]> {
-        return []
+    /**
+     * Resolves the record set for a View or List invocation into loaded entity objects, which the
+     * per-record loop in {@link InvokeAction} then processes one at a time.
+     */
+    protected async GetRecordList(params: EntityActionInvocationParams): Promise<BaseEntity[]> {
+        const invoType = params.InvocationType.Name.trim().toLowerCase();
+        if (invoType === 'view') {
+            return this.loadRecordsForView(params);
+        }
+        else if (invoType === 'list') {
+            return this.loadRecordsForList(params);
+        }
+        return [];
+    }
+
+    /** Loads all records of a User View as entity objects. */
+    protected async loadRecordsForView(params: EntityActionInvocationParams): Promise<BaseEntity[]> {
+        const rv = new RunView();
+        const result = await rv.RunView<BaseEntity>({
+            ViewID: params.ViewID,
+            ResultType: 'entity_object'
+        }, params.ContextUser);
+        if (!result.Success) {
+            throw new Error(`Failed to load records for view '${params.ViewID}': ${result.ErrorMessage}`);
+        }
+        return result.Results ?? [];
+    }
+
+    /** Loads all members of a List as entity objects (single-primary-key entities). */
+    protected async loadRecordsForList(params: EntityActionInvocationParams): Promise<BaseEntity[]> {
+        const entity = new Metadata().EntityByID(params.EntityAction.EntityID); // global-provider-ok: entity-definition lookup (structural metadata, not per-user/per-provider data); this invocation class isn't provider-threaded yet (multi-provider migration debt), consistent with the new RunView() above
+        if (!entity) {
+            throw new Error(`Entity '${params.EntityAction.EntityID}' for this entity action was not found in metadata`);
+        }
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`List invocation currently supports single-primary-key entities only; '${entity.Name}' has a composite key`);
+        }
+
+        const rv = new RunView();
+        const memberResult = await rv.RunView<{ RecordID: string }>({
+            EntityName: 'MJ: List Details',
+            ExtraFilter: `ListID='${params.ListID}'`,
+            Fields: ['RecordID'],
+            ResultType: 'simple'
+        }, params.ContextUser);
+        if (!memberResult.Success) {
+            throw new Error(`Failed to load members for list '${params.ListID}': ${memberResult.ErrorMessage}`);
+        }
+        const recordIDs = (memberResult.Results ?? []).map(r => String(r.RecordID)).filter(id => id.length > 0);
+        if (recordIDs.length === 0) {
+            return [];
+        }
+
+        const pk = entity.FirstPrimaryKey;
+        const numericKey = this.isNumericFieldType(pk.Type);
+        const inList = recordIDs
+            .map(id => numericKey ? id.replace(/[^0-9.\-]/g, '') : `'${id.replace(/'/g, "''")}'`)
+            .join(',');
+        const result = await rv.RunView<BaseEntity>({
+            EntityName: entity.Name,
+            ExtraFilter: `${pk.Name} IN (${inList})`,
+            ResultType: 'entity_object'
+        }, params.ContextUser);
+        if (!result.Success) {
+            throw new Error(`Failed to load list member records for '${entity.Name}': ${result.ErrorMessage}`);
+        }
+        return result.Results ?? [];
+    }
+
+    /** True when a PK column type is numeric (so its values must not be quoted in a filter). */
+    protected isNumericFieldType(type: string): boolean {
+        const t = (type || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+        return ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'decimal', 'numeric', 'money', 'smallmoney', 'float', 'real', 'double precision', 'serial', 'bigserial'].includes(t);
     }
 }
 

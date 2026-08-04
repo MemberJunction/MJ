@@ -15,7 +15,7 @@ import {
     inject
 } from '@angular/core';
 import { SearchResultItem, SearchResultGroup, SearchResultSelectedEvent } from './search-types';
-import { EscapeHTML } from '@memberjunction/global';
+import { EscapeHTML, HighlightSearchMatches } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 @Component({
@@ -194,14 +194,7 @@ export class SearchResultsComponent extends BaseAngularComponent {
      * The input is regex-escaped so user text is treated as a literal string.
      */
     public HighlightMatch(text: string): string {
-        if (!text) return text;
-        const safeText = EscapeHTML(text);
-        if (!this.HighlightText) return safeText;
-
-        const safeHighlightText = EscapeHTML(this.HighlightText);
-        const escaped = safeHighlightText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`(${escaped})`, 'gi');
-        return safeText.replace(regex, '<mark class="search-highlight">$1</mark>');
+        return HighlightSearchMatches(text, this.HighlightText, 'search-highlight');
     }
 
     /** Format a score as a percentage */

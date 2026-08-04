@@ -15,10 +15,7 @@
 
       <div class="panel-content">
         @if (Errors['general']) {
-          <div class="error-banner">
-            <i class="fa-solid fa-exclamation-circle"></i>
-            {{ Errors['general'] }}
-          </div>
+          <mj-alert Variant="error">{{ Errors['general'] }}</mj-alert>
         }
 
         <!-- Action Type Selection -->
@@ -87,13 +84,12 @@
           }
         </div>
 
-        <div class="info-box">
-          <i class="fa-solid fa-info-circle"></i>
+        <mj-alert Variant="info" class="panel-info-alert">
           <p>
             After creating the action, you'll be taken to the full action editor
             where you can configure parameters, code, and other settings.
           </p>
-        </div>
+        </mj-alert>
       </div>
 
       <div class="panel-footer">

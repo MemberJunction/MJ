@@ -125,7 +125,7 @@ The main class that orchestrates the entire vectorization process. Extends `Vect
 | `VectorizeEntity(params, contextUser)` | Runs the full vectorization pipeline for an entity |
 | `GetEntityDocument(id)` | Retrieves an Entity Document by ID |
 | `GetEntityDocumentByName(name, user)` | Retrieves an Entity Document by name |
-| `GetActiveEntityDocuments(entityNames?)` | Gets all active Entity Documents, optionally filtered |
+| `GetActiveEntityDocuments(entityNames?, entityDocumentType?)` | Gets Active Entity Documents of a given type (default `'Record Duplicate'`; pass `'Search'` for the search-tier pool), optionally filtered by entity name. Returns `[]` (no throw) when nothing matches |
 | `CreateDefaultEntityDocument(entityID, vectorDB, aiModel)` | Creates a default Entity Document when one does not exist |
 
 ### EntityDocumentCache
@@ -210,23 +210,47 @@ await syncer.VectorizeEntity({
 }, contextUser);
 ```
 
+Note: `StartingOffset` forces OFFSET-based pagination for that run (keyset can't skip ahead without knowing the PK at the offset). For runs from the start, the syncer **auto-promotes to keyset (seek) pagination** when the entity has a single-column orderable PK — each page stays O(log N) regardless of how deep into the entity you go, which makes a meaningful difference on multi-million-row entities. Falls back to `PageNumber`-based OFFSET when the entity has a composite PK. See **[KEYSET_PAGINATION_GUIDE.md](../../../../guides/KEYSET_PAGINATION_GUIDE.md)** for details.
+
 ### Manage Entity Documents
 
 ```typescript
 // Look up by name
 const doc = await syncer.GetEntityDocumentByName('Contacts Vectorization', contextUser);
 
-// Get all active documents
+// Get all active 'Record Duplicate' documents (the default type)
 const activeDocs = await syncer.GetActiveEntityDocuments();
 
-// Get active documents for specific entities only
-const filtered = await syncer.GetActiveEntityDocuments(['Contacts', 'Companies']);
+// Get active 'Search'-type documents for specific entities only
+const searchDocs = await syncer.GetActiveEntityDocuments(['Contacts', 'Companies'], 'Search');
 
 // Create a default document when none exists
 const newDoc = await syncer.CreateDefaultEntityDocument(
     entityID, vectorDatabase, aiModel
 );
 ```
+
+> `GetActiveEntityDocuments` returns an **empty array** when no Active documents of the
+> requested type exist — it does not throw. (A misspelled/unknown type name is logged as a
+> warning.) Callers treat the empty case as "nothing to do": e.g. `VectorizeEntityAction`
+> returns `Success: true` / `ResultCode: "NO_DOCUMENTS"` so the unattended daily sync job
+> isn't reported as a failed run on a fresh DB.
+
+### Search Entity Documents and the daily sync job
+
+A `Search`-type Entity Document marks an entity as semantically searchable (it backs
+`Provider.SearchEntity` / the `Search Entity` action — see
+[guides/ENTITY_SEARCH_GUIDE.md](../../../../guides/ENTITY_SEARCH_GUIDE.md)). MemberJunction
+ships a **standard set** as seed metadata in `/metadata/entity-documents/`, all on the
+in-process `Simple Vector Service Provider` + `gte-small (Local)` stack (no API key, no cost):
+`MJ: Entities`, `MJ: AI Agents`, `MJ: Actions`, `MJ: AI Prompts`, and `MJ: AI Models`.
+
+The seeded **`Entity Vector Sync - Daily`** scheduled job (cron `0 0 4 * * *`,
+`RunImmediatelyIfNeverRun: true`) drives the `Vectorize Entity` action with
+`EntityDocumentType="Search"`, vectorizing every Active Search document. Add your own by
+dropping a record into `.entity-documents.json` (+ a `.njk` template) and pushing with
+`mj sync push` — the job picks it up on the next run. With no Active Search documents, the
+job is a clean no-op rather than an error.
 
 ## Configuration Types
 

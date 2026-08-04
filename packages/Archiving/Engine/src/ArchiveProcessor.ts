@@ -155,7 +155,10 @@ export class ArchiveProcessor {
         const filterParts: string[] = [];
 
         if (retentionDays != null && dateField) {
-            filterParts.push(`${dateField} < DATEADD(day, -${retentionDays}, GETUTCDATE())`);
+            // Dialect-neutral retention cutoff: compute in JS and inject an ISO-8601
+            // literal rather than DATEADD/GETUTCDATE, which don't exist on PostgreSQL.
+            const cutoffIso = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+            filterParts.push(`${dateField} < '${cutoffIso}'`);
         }
 
         if (customFilter) {

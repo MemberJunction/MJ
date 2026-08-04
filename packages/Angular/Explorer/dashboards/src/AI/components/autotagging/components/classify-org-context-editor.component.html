@@ -1,0 +1,31 @@
+<mj-accordion-panel Size="sm" [FlushBody]="true" [Expanded]="Expanded" (ExpandedChange)="onExpandedChange($event)">
+    <ng-template mjAccordionTitle>
+        <i class="fa-solid fa-building"></i>
+        <span>Organization domain context</span>
+        @if (HasUnsavedChanges) {
+            <span class="mj-accordion-badge mj-accordion-badge--warning mj-accordion-badge--right">Unsaved</span>
+        }
+    </ng-template>
+    <ng-template mjAccordionBody>
+        <div class="cls-org-ctx-body">
+            @if (IsLoading) {
+                <mj-loading text="Loading org context…" size="small"></mj-loading>
+            } @else {
+                <p class="cls-org-ctx-help">
+                    Applies to every source as the broadest classification-context scope. Source and
+                    content-type guidance combine with this at run time.
+                </p>
+                <textarea class="mj-textarea" rows="5"
+                          [(ngModel)]="ContextText"
+                          placeholder="Org-wide guidance for the classifier — your organization's domain, audience, taxonomy conventions…"></textarea>
+                <div class="cls-org-ctx-actions">
+                    <button mjButton variant="primary" size="sm" (click)="Save()"
+                            [disabled]="IsSaving || !HasUnsavedChanges">
+                        @if (IsSaving) { <i class="fa-solid fa-spinner fa-spin"></i> Saving… }
+                        @else { <i class="fa-solid fa-check"></i> Save }
+                    </button>
+                </div>
+            }
+        </div>
+    </ng-template>
+</mj-accordion-panel>

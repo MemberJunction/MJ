@@ -12,7 +12,7 @@ import { MJProgressBarComponent } from '@memberjunction/ng-ui-components';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
 // MJ
-import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJDropdownComponent, MJWindowComponent, MJWindowTitlebarComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJDropdownComponent, MJWindowComponent, MJWindowTitlebarComponent, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
@@ -24,6 +24,7 @@ import { RecordSelectorModule } from '@memberjunction/ng-record-selector';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { ListDetailGridModule } from '@memberjunction/ng-list-detail-grid';
+import { ListManagementModule } from '@memberjunction/ng-list-management';
 
 // Local Components
 import { ConversationsModule } from '@memberjunction/ng-conversations';
@@ -33,6 +34,7 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ResourceContainerComponent } from './lib/generic/resource-container-component';
 import { DashboardPreferencesDialogComponent } from './lib/dashboard-preferences-dialog/dashboard-preferences-dialog.component';
@@ -62,6 +64,10 @@ import { NotificationsResource } from './lib/resource-wrappers/notifications-res
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { SearchModule } from '@memberjunction/ng-search';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
+import { PaginationComponent } from '@memberjunction/ng-pagination';
+import { ConversationFeedbackResource } from './lib/conversation-feedback';
+import { LiveKitRoomResource } from './lib/resource-wrappers/livekit-room-resource.component';
+import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
 
 @NgModule({
   declarations: [
@@ -89,8 +95,11 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ArtifactResource,
     NotificationsResource,
     DashboardPreferencesDialogComponent,
+    ConversationFeedbackResource,
+    LiveKitRoomResource,
   ],
   imports: [
+    MarkdownModule,
     AppRoutingModule,
     CommonModule,
     FormsModule,
@@ -118,6 +127,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SharedGenericModule,
     EntityViewerModule,
     ListDetailGridModule,
+    ListManagementModule,
     SearchModule,
     MJWordCloudComponent,
     MJButtonDirective,
@@ -126,7 +136,11 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     MJDialogActionsComponent,
     MJDropdownComponent,
     MJWindowComponent,
-    MJWindowTitlebarComponent
+    MJWindowTitlebarComponent,
+    PaginationComponent,
+    MJLiveKitRoomComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent
   ],
   exports: [
     ResourceContainerComponent,
@@ -143,7 +157,8 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     EditDashboardComponent,
     UserNotificationsComponent,
     ListDetailResource,
-    DashboardPreferencesDialogComponent 
+    DashboardPreferencesDialogComponent,
+    ConversationFeedbackResource
   ],
   providers: [
     { provide: RouteReuseStrategy, useClass: CustomReuseStrategy },

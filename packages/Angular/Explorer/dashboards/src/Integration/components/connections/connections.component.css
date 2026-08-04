@@ -10,6 +10,8 @@
   overflow: hidden;
 }
 
+/* Slot passthrough now in <mj-page-header>; stat badges now via <mj-stat-badge>. */
+
 .connections-container {
   padding: 24px;
   max-width: 1400px;
@@ -30,35 +32,6 @@
   overflow: hidden;
 }
 
-.connections-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.header-title {
-  font-size: 24px;
-  font-weight: 700;
-  margin: 0;
-  color: var(--mj-text-primary);
-}
-
-.header-count {
-  font-size: 14px;
-  color: var(--mj-text-disabled);
-}
-
-.add-connection-btn i {
-  margin-right: 6px;
-}
-
 /* ---------------------------------------------------------------------------
    Loading & Empty States
    --------------------------------------------------------------------------- */
@@ -70,32 +43,9 @@
   min-height: 300px;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+/* Give the onboarding placeholder vertical presence so it centers. */
+mj-empty-state {
   min-height: 400px;
-  text-align: center;
-  color: var(--mj-text-muted);
-}
-
-.empty-icon {
-  font-size: 48px;
-  color: var(--mj-text-disabled);
-  margin-bottom: 16px;
-}
-
-.empty-state h3 {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--mj-text-secondary);
-  margin: 0 0 8px;
-}
-
-.empty-state p {
-  font-size: 14px;
-  margin: 0 0 24px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -659,7 +609,7 @@
 .search-input:focus {
   outline: none;
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .search-input::placeholder {
@@ -785,7 +735,7 @@
 .form-input:focus {
   outline: none;
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .form-input::placeholder {
@@ -1819,30 +1769,6 @@
    Sync Result Banner
    --------------------------------------------------------------------------- */
 
-.sync-result-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 12px;
-  animation: fadeIn 200ms ease;
-}
-
-.sync-result-banner.sync-success {
-  background: var(--mj-status-success-bg);
-  border: 1px solid var(--mj-status-success-border);
-  color: var(--mj-status-success-text);
-}
-
-.sync-result-banner.sync-failure {
-  background: var(--mj-status-error-bg);
-  border: 1px solid var(--mj-status-error-border);
-  color: var(--mj-status-error-text);
-}
-
 /* ---------------------------------------------------------------------------
    Auto-Map Schema Panel
    --------------------------------------------------------------------------- */
@@ -2027,7 +1953,7 @@
 .new-entity-dialog-input:focus {
   outline: none;
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .new-entity-dialog-dot {
@@ -2153,24 +2079,6 @@
 }
 
 /* DDL Preview */
-.ddl-warnings {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.ddl-warning {
-  font-size: 12px;
-  color: var(--mj-status-warning);
-  background: var(--mj-status-warning-subtle);
-  padding: 6px 10px;
-  border-radius: var(--mj-radius-sm);
-  border-left: 3px solid var(--mj-status-warning);
-}
-
-.ddl-warning i {
-  margin-right: 4px;
-}
 
 .ddl-preview-block {
   border: 1px solid var(--mj-border-default);
@@ -2221,6 +2129,7 @@
   padding: 64px 24px;
   text-align: center;
   color: var(--mj-text-disabled);
+  width: 100%;
 }
 
 .detail-empty i {

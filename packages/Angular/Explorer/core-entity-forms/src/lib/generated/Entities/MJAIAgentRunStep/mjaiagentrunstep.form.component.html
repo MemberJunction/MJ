@@ -5,6 +5,8 @@
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
 
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
@@ -161,7 +163,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="InputData"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -169,7 +171,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="OutputData"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -177,7 +179,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadAtStart"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -185,7 +187,15 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadAtEnd"
-            Type="code"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Skills"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -235,6 +245,8 @@
         ></mj-form-field>
 
     </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 
     <!-- ========================================
          RELATED ENTITY PANELS
@@ -289,5 +301,7 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

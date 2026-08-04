@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>01 — Form Builder cockpit</title>
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body>
+<div class="mockup-bar">
+    <a href="index.html"><i class="fa-solid fa-arrow-left"></i></a>
+    <span class="title">01 — Form Builder cockpit</span>
+    <span class="spacer"></span>
+    <span class="mj-badge warning"><i class="fa-solid fa-circle-half-stroke"></i> OPTIONS A &amp; B below</span>
+</div>
+<div class="mockup-note">
+    <strong>Decision needed:</strong> Should chat live as an embedded right pane (always visible) or as an overlay only?
+    Option A &amp; Option B are both rendered below at full fidelity — same content, different chrome.
+</div>
+
+<!-- ====================================================================== -->
+<!-- OPTION A: chat embedded as 4th pane                                     -->
+<!-- ====================================================================== -->
+<div class="options-gallery" style="margin-bottom:0; border-bottom: none; border-bottom-left-radius:0; border-bottom-right-radius:0;">
+    <div class="ttl">Option A — Embedded chat (4-pane cockpit)</div>
+    <div class="lead">Chat is always visible at the right. Tighter loop; uses more screen.</div>
+</div>
+<div class="shell" style="min-height: 760px;">
+    <div class="sidebar">
+        <div class="logo"><i class="fa-solid fa-cubes"></i> MemberJunction</div>
+        <div class="nav-section">Studio</div>
+        <div class="nav-item"><i class="fa-solid fa-puzzle-piece"></i> Component Studio</div>
+        <div class="nav-item active"><i class="fa-solid fa-pen-ruler"></i> Form Builder</div>
+        <div class="nav-item"><i class="fa-solid fa-wand-magic-sparkles"></i> Skip</div>
+        <div class="nav-section">Browse</div>
+        <div class="nav-item"><i class="fa-solid fa-database"></i> Entities</div>
+        <div class="nav-item"><i class="fa-solid fa-list"></i> Lists</div>
+        <div class="nav-item"><i class="fa-solid fa-chart-line"></i> Dashboards</div>
+    </div>
+
+    <div class="main">
+        <div class="app-header">
+            <h1><i class="fa-solid fa-pen-ruler"></i> Form Builder <span class="muted" style="font-weight:400; font-size:13px;">— MJ: Applications</span></h1>
+            <span class="meta">Override: <strong>amith — Compact Form</strong> · v1.0.0 Active</span>
+            <span class="spacer"></span>
+            <button class="mj-btn"><i class="fa-solid fa-rotate"></i> Re-scaffold</button>
+            <button class="mj-btn"><i class="fa-solid fa-comments"></i> Refine with AI</button>
+            <button class="mj-btn primary"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+        </div>
+
+        <div class="cockpit-grid with-chat">
+            <!-- Pane 1: Versions -->
+            <div class="cockpit-pane">
+                <div class="pane-head">Versions <span class="spacer"></span><span class="mj-badge brand">2</span></div>
+                <div class="pane-body">
+                    <ul class="version-list">
+                        <li class="version-row active selected">
+                            <div class="v-label">v1.0.0 <span class="mj-badge success">Active</span></div>
+                            <div class="v-meta">Created May 22, 11:14 · by Form Builder</div>
+                        </li>
+                        <li class="version-row pending">
+                            <div class="v-label">v1.1.0 <span class="mj-badge pending">Pending</span></div>
+                            <div class="v-meta">Created May 23, 09:02 · adds payment chart</div>
+                        </li>
+                    </ul>
+                    <hr class="mj-sep" />
+                    <div class="stack-2">
+                        <button class="mj-btn sm"><i class="fa-solid fa-code-compare"></i> Diff vs. Active</button>
+                        <button class="mj-btn sm primary"><i class="fa-solid fa-circle-check"></i> Activate v1.1.0</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pane 2: Code -->
+            <div class="cockpit-pane">
+                <div class="pane-head"><i class="fa-solid fa-code"></i> Code (JSX) <span class="spacer"></span><span class="muted">v1.0.0</span></div>
+                <div class="code-pane"><span class="ln">  1</span><span class="com">// Compact form for MJ: Applications — generated from default scaffold</span>
+<span class="ln">  2</span><span class="kw">function</span> <span class="fn">ApplicationsCompactForm</span>(props) {
+<span class="ln">  3</span>    <span class="kw">const</span> { record, mode, callbacks } = props;
+<span class="ln">  4</span>    <span class="kw">const</span> [draft, setDraft] = <span class="fn">useState</span>(record);
+<span class="ln">  5</span>
+<span class="ln">  6</span>    <span class="fn">useEffect</span>(() => {
+<span class="ln">  7</span>        callbacks.<span class="fn">RegisterMethod</span>(<span class="str">'RequestSave'</span>, () => {
+<span class="ln">  8</span>            callbacks.<span class="fn">NotifyEvent</span>(<span class="str">'BeforeSave'</span>, { dirtyFields });
+<span class="ln">  9</span>        });
+<span class="ln"> 10</span>    }, []);
+<span class="ln"> 11</span>
+<span class="ln"> 12</span>    <span class="kw">return</span> (
+<span class="ln"> 13</span>        &lt;<span class="tag">div</span> <span class="attr">className</span>=<span class="str">"form-card"</span>&gt;
+<span class="ln"> 14</span>            &lt;<span class="tag">Section</span> <span class="attr">title</span>=<span class="str">"Identity"</span> <span class="attr">icon</span>=<span class="str">"fa-fingerprint"</span>&gt;
+<span class="ln"> 15</span>                &lt;<span class="tag">Field</span> <span class="attr">name</span>=<span class="str">"Name"</span> <span class="attr">span</span>={<span class="num">2</span>} /&gt;
+<span class="ln"> 16</span>                &lt;<span class="tag">Field</span> <span class="attr">name</span>=<span class="str">"Description"</span> <span class="attr">span</span>={<span class="num">2</span>} /&gt;
+<span class="ln"> 17</span>            &lt;/<span class="tag">Section</span>&gt;
+<span class="ln"> 18</span>            &lt;<span class="tag">Section</span> <span class="attr">title</span>=<span class="str">"Configuration"</span> <span class="attr">icon</span>=<span class="str">"fa-sliders"</span>&gt;
+<span class="ln"> 19</span>                &lt;<span class="tag">Field</span> <span class="attr">name</span>=<span class="str">"DefaultForNewUser"</span> /&gt;
+<span class="ln"> 20</span>                &lt;<span class="tag">Field</span> <span class="attr">name</span>=<span class="str">"Status"</span> /&gt;
+<span class="ln"> 21</span>            &lt;/<span class="tag">Section</span>&gt;
+<span class="ln"> 22</span>        &lt;/<span class="tag">div</span>&gt;
+<span class="ln"> 23</span>    );
+<span class="ln"> 24</span>}</div>
+            </div>
+
+            <!-- Pane 3: Preview -->
+            <div class="cockpit-pane">
+                <div class="pane-head"><i class="fa-solid fa-eye"></i> Live preview <span class="spacer"></span><span class="muted">bound to real record</span></div>
+                <div class="preview-toolbar">
+                    <div class="picker"><i class="fa-solid fa-magnifying-glass"></i> CoreApp · <strong style="color:var(--mj-text-primary)">amith@bluecypress.io</strong> <i class="fa-solid fa-chevron-down"></i></div>
+                    <span class="spacer"></span>
+                    <span class="mj-badge info"><i class="fa-solid fa-circle-info"></i> Edit mode</span>
+                </div>
+                <div class="preview-frame">
+                    <div class="form-card">
+                        <div class="form-toolbar">
+                            <div class="breadcrumbs">Applications › <strong>CoreApp</strong></div>
+                            <span class="spacer"></span>
+                            <button class="mj-btn xs"><i class="fa-solid fa-clock-rotate-left"></i></button>
+                            <button class="mj-btn xs"><i class="fa-solid fa-tag"></i></button>
+                            <button class="mj-btn xs primary"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+                        </div>
+                        <div class="form-content">
+                            <div class="form-section">
+                                <div class="sect-head"><i class="fa-solid fa-fingerprint"></i> Identity</div>
+                                <div class="form-grid">
+                                    <div class="mj-field full"><label class="mj-label">Name</label><input class="mj-input" value="CoreApp" /></div>
+                                    <div class="mj-field full"><label class="mj-label">Description</label><textarea class="mj-textarea">Default MemberJunction application bundle.</textarea></div>
+                                </div>
+                            </div>
+                            <div class="form-section">
+                                <div class="sect-head"><i class="fa-solid fa-sliders"></i> Configuration</div>
+                                <div class="form-grid">
+                                    <div class="mj-field"><label class="mj-label">Default For New User</label><select class="mj-select"><option>Yes</option><option>No</option></select></div>
+                                    <div class="mj-field"><label class="mj-label">Status</label><select class="mj-select"><option>Active</option><option>Inactive</option></select></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pane 4: Chat (embedded) -->
+            <div class="cockpit-pane">
+                <div class="chat-pane">
+                    <div class="chat-head">
+                        <div class="avatar">FB</div>
+                        <div>
+                            <div class="who">Form Builder</div>
+                            <div class="ctx">Editing: MJ: Applications · amith's Compact</div>
+                        </div>
+                    </div>
+                    <div class="chat-body">
+                        <div class="msg system">Context attached: ActiveForm = MJ: Applications / Compact / v1.0.0</div>
+                        <div class="msg user">Add a small chart of the most-viewed applications below the Description.</div>
+                        <div class="msg agent">Got it. I'll add a <code>&lt;BarChart&gt;</code> reading from <code>MJ: Application Settings</code> grouped by ApplicationID, sorted by view count desc, top 5.<br><br>Producing v1.1.0 as <strong>Pending</strong> — your v1.0.0 stays live until you activate.</div>
+                        <div class="msg system">Created Component v1.1.0 (Status: Pending) · See it in the Versions pane →</div>
+                    </div>
+                    <div class="chat-input">
+                        <textarea placeholder="Ask Form Builder…"></textarea>
+                        <button class="mj-btn primary sm"><i class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====================================================================== -->
+<!-- OPTION B: chat as overlay only (3-pane cockpit, chat overlay floats)    -->
+<!-- ====================================================================== -->
+<div class="options-gallery" style="margin-top: 32px; border-bottom: none; border-bottom-left-radius:0; border-bottom-right-radius:0;">
+    <div class="ttl">Option B — Overlay-only chat (3-pane cockpit)</div>
+    <div class="lead">Chat is launched via "Refine with AI" button → floating overlay. More room for code &amp; preview; chat is intentional, not always-on.</div>
+</div>
+<div class="shell" style="min-height: 760px; position: relative;">
+    <div class="sidebar">
+        <div class="logo"><i class="fa-solid fa-cubes"></i> MemberJunction</div>
+        <div class="nav-section">Studio</div>
+        <div class="nav-item"><i class="fa-solid fa-puzzle-piece"></i> Component Studio</div>
+        <div class="nav-item active"><i class="fa-solid fa-pen-ruler"></i> Form Builder</div>
+        <div class="nav-item"><i class="fa-solid fa-wand-magic-sparkles"></i> Skip</div>
+        <div class="nav-section">Browse</div>
+        <div class="nav-item"><i class="fa-solid fa-database"></i> Entities</div>
+        <div class="nav-item"><i class="fa-solid fa-list"></i> Lists</div>
+        <div class="nav-item"><i class="fa-solid fa-chart-line"></i> Dashboards</div>
+    </div>
+
+    <div class="main">
+        <div class="app-header">
+            <h1><i class="fa-solid fa-pen-ruler"></i> Form Builder <span class="muted" style="font-weight:400; font-size:13px;">— MJ: Applications</span></h1>
+            <span class="meta">Override: <strong>amith — Compact Form</strong> · v1.0.0 Active</span>
+            <span class="spacer"></span>
+            <button class="mj-btn"><i class="fa-solid fa-rotate"></i> Re-scaffold</button>
+            <button class="mj-btn accent"><i class="fa-solid fa-comments"></i> Refine with AI</button>
+            <button class="mj-btn primary"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+        </div>
+
+        <div class="cockpit-grid no-chat">
+            <!-- Pane 1: Versions (same as Option A) -->
+            <div class="cockpit-pane">
+                <div class="pane-head">Versions <span class="spacer"></span><span class="mj-badge brand">2</span></div>
+                <div class="pane-body">
+                    <ul class="version-list">
+                        <li class="version-row active selected">
+                            <div class="v-label">v1.0.0 <span class="mj-badge success">Active</span></div>
+                            <div class="v-meta">Created May 22, 11:14 · by Form Builder</div>
+                        </li>
+                        <li class="version-row pending">
+                            <div class="v-label">v1.1.0 <span class="mj-badge pending">Pending</span></div>
+                            <div class="v-meta">Created May 23, 09:02 · adds payment chart</div>
+                        </li>
+                    </ul>
+                    <hr class="mj-sep" />
+                    <div class="stack-2">
+                        <button class="mj-btn sm"><i class="fa-solid fa-code-compare"></i> Diff vs. Active</button>
+                        <button class="mj-btn sm primary"><i class="fa-solid fa-circle-check"></i> Activate v1.1.0</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pane 2: Code (wider, more lines visible) -->
+            <div class="cockpit-pane">
+                <div class="pane-head"><i class="fa-solid fa-code"></i> Code (JSX) <span class="spacer"></span><span class="muted">v1.0.0 · 24 lines</span></div>
+                <div class="code-pane"><span class="ln">  1</span><span class="com">// Compact form for MJ: Applications — generated from default scaffold</span>
+<span class="ln">  2</span><span class="kw">function</span> <span class="fn">ApplicationsCompactForm</span>(props) {
+<span class="ln">  3</span>    <span class="kw">const</span> { record, entityMetadata, mode, callbacks } = props;
+<span class="ln">  4</span>    <span class="kw">const</span> [draft, setDraft] = <span class="fn">useState</span>(record);
+<span class="ln">  5</span>    <span class="kw">const</span> [dirty, setDirty] = <span class="fn">useState</span>({});
+<span class="ln">  6</span>
+<span class="ln">  7</span>    <span class="fn">useEffect</span>(() => {
+<span class="ln">  8</span>        callbacks.<span class="fn">RegisterMethod</span>(<span class="str">'RequestSave'</span>, () => {
+<span class="ln">  9</span>            callbacks.<span class="fn">NotifyEvent</span>(<span class="str">'BeforeSave'</span>, { dirtyFields: dirty });
+<span class="ln"> 10</span>        });
+<span class="ln"> 11</span>        callbacks.<span class="fn">RegisterMethod</span>(<span class="str">'RequestCancel'</span>, () => {
+<span class="ln"> 12</span>            setDraft(record); setDirty({});
+<span class="ln"> 13</span>        });
+<span class="ln"> 14</span>    }, []);
+<span class="ln"> 15</span>
+<span class="ln"> 16</span>    <span class="kw">const</span> <span class="fn">onField</span> = (name, value) => {
+<span class="ln"> 17</span>        setDraft(d => ({ ...d, [name]: value }));
+<span class="ln"> 18</span>        setDirty(d => ({ ...d, [name]: value }));
+<span class="ln"> 19</span>    };
+<span class="ln"> 20</span>
+<span class="ln"> 21</span>    <span class="kw">return</span> (
+<span class="ln"> 22</span>        &lt;<span class="tag">FormCard</span>&gt;
+<span class="ln"> 23</span>            &lt;<span class="tag">Section</span> <span class="attr">title</span>=<span class="str">"Identity"</span> <span class="attr">icon</span>=<span class="str">"fa-fingerprint"</span>&gt;
+<span class="ln"> 24</span>                &lt;<span class="tag">Field</span> <span class="attr">name</span>=<span class="str">"Name"</span> <span class="attr">value</span>={draft.Name} <span class="attr">onChange</span>={onField} <span class="attr">span</span>={<span class="num">2</span>} /&gt;
+<span class="ln"> 25</span>                &lt;<span class="tag">Field</span> <span class="attr">name</span>=<span class="str">"Description"</span> <span class="attr">value</span>={draft.Description} <span class="attr">onChange</span>={onField} <span class="attr">span</span>={<span class="num">2</span>} /&gt;
+<span class="ln"> 26</span>            &lt;/<span class="tag">Section</span>&gt;
+<span class="ln"> 27</span>            &lt;<span class="tag">Section</span> <span class="attr">title</span>=<span class="str">"Configuration"</span> <span class="attr">icon</span>=<span class="str">"fa-sliders"</span>&gt;
+<span class="ln"> 28</span>                &lt;<span class="tag">Field</span> <span class="attr">name</span>=<span class="str">"DefaultForNewUser"</span> <span class="attr">value</span>={draft.DefaultForNewUser} <span class="attr">onChange</span>={onField} /&gt;
+<span class="ln"> 29</span>                &lt;<span class="tag">Field</span> <span class="attr">name</span>=<span class="str">"Status"</span> <span class="attr">value</span>={draft.Status} <span class="attr">onChange</span>={onField} /&gt;
+<span class="ln"> 30</span>            &lt;/<span class="tag">Section</span>&gt;
+<span class="ln"> 31</span>        &lt;/<span class="tag">FormCard</span>&gt;
+<span class="ln"> 32</span>    );
+<span class="ln"> 33</span>}</div>
+            </div>
+
+            <!-- Pane 3: Preview (same as Option A) -->
+            <div class="cockpit-pane">
+                <div class="pane-head"><i class="fa-solid fa-eye"></i> Live preview <span class="spacer"></span><span class="muted">bound to real record</span></div>
+                <div class="preview-toolbar">
+                    <div class="picker"><i class="fa-solid fa-magnifying-glass"></i> CoreApp · <strong style="color:var(--mj-text-primary)">amith@bluecypress.io</strong> <i class="fa-solid fa-chevron-down"></i></div>
+                    <span class="spacer"></span>
+                    <span class="mj-badge info"><i class="fa-solid fa-circle-info"></i> Edit mode</span>
+                </div>
+                <div class="preview-frame">
+                    <div class="form-card">
+                        <div class="form-toolbar">
+                            <div class="breadcrumbs">Applications › <strong>CoreApp</strong></div>
+                            <span class="spacer"></span>
+                            <button class="mj-btn xs"><i class="fa-solid fa-clock-rotate-left"></i></button>
+                            <button class="mj-btn xs"><i class="fa-solid fa-tag"></i></button>
+                            <button class="mj-btn xs primary"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+                        </div>
+                        <div class="form-content">
+                            <div class="form-section">
+                                <div class="sect-head"><i class="fa-solid fa-fingerprint"></i> Identity</div>
+                                <div class="form-grid">
+                                    <div class="mj-field full"><label class="mj-label">Name</label><input class="mj-input" value="CoreApp" /></div>
+                                    <div class="mj-field full"><label class="mj-label">Description</label><textarea class="mj-textarea">Default MemberJunction application bundle.</textarea></div>
+                                </div>
+                            </div>
+                            <div class="form-section">
+                                <div class="sect-head"><i class="fa-solid fa-sliders"></i> Configuration</div>
+                                <div class="form-grid">
+                                    <div class="mj-field"><label class="mj-label">Default For New User</label><select class="mj-select"><option>Yes</option><option>No</option></select></div>
+                                    <div class="mj-field"><label class="mj-label">Status</label><select class="mj-select"><option>Active</option><option>Inactive</option></select></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating chat overlay (closed indicator at bottom-right) -->
+    <div style="position: absolute; right: 24px; bottom: 24px; background: var(--mj-brand-primary); color: white; border-radius: 999px; padding: 12px 18px; box-shadow: var(--mj-shadow-lg); display:flex; align-items:center; gap:10px; font-weight:600; font-size:13px; cursor:pointer;">
+        <i class="fa-solid fa-comments"></i> Chat with Form Builder
+    </div>
+</div>
+
+<div class="mockup-note" style="margin-top: 24px;">
+    <strong>Recommendation (Claude's take):</strong> Option B — overlay-only — keeps the cockpit focused on code &amp; preview (the things you're literally editing), and the chat is always one click away. Embedded chat looks valuable but eats horizontal room that the code and preview both want. Either works; deciding between them only affects ~150 lines of Angular template.
+</div>
+</body>
+</html>

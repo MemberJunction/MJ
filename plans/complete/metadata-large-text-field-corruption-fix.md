@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-Large text fields (NVARCHAR(MAX), VARCHAR(MAX)) are getting corrupted during the migration process when using `mj sync push`. The **Specification field in the Components Entity** is a known affected field. The corruption appears to be related to the string splitting logic recently added to [SqlLogger.ts](../packages/SQLServerDataProvider/src/SqlLogger.ts) to handle SQL Server's 4000/8000 character literal limits.
+Large text fields (NVARCHAR(MAX), VARCHAR(MAX)) are getting corrupted during the migration process when using `mj sync push`. The **Specification field in the Components Entity** is a known affected field. The corruption appears to be related to the string splitting logic recently added to [SqlLogger.ts](../../packages/GenericDatabaseProvider/src/SqlLogger.ts) to handle SQL Server's 4000/8000 character literal limits.
 
 ## Background
 
@@ -46,15 +46,15 @@ Potentially affected (to be identified):
   - Text with multiple split points required
 
 ### 2. Analyze String Splitting Logic
-Review [`SqlLogger._splitLargeStringsForSqlServer()`](../packages/SQLServerDataProvider/src/SqlLogger.ts#L387-L458):
+Review [`SqlLogger._splitLargeStringsForSqlServer()`](../../packages/GenericDatabaseProvider/src/SqlLogger.ts#L387-L458):
 
 - [ ] **Verify regex pattern correctness**
   - Line 400: `/(N)?'((?:[^']|'')*)'/g` - Does this correctly match all string literals?
   - Does it handle edge cases: empty strings, strings with only escaped quotes, unicode strings?
 
 - [ ] **Analyze chunk splitting logic**
-  - [`_splitStringContent()`](../packages/SQLServerDataProvider/src/SqlLogger.ts#L469-L490) - Correct chunking?
-  - [`_findSafeSplitPoint()`](../packages/SQLServerDataProvider/src/SqlLogger.ts#L502-L535) - Edge cases?
+  - [`_splitStringContent()`](../../packages/GenericDatabaseProvider/src/SqlLogger.ts#L469-L490) - Correct chunking?
+  - [`_findSafeSplitPoint()`](../../packages/GenericDatabaseProvider/src/SqlLogger.ts#L502-L535) - Edge cases?
   - Are there additional patterns that need protection beyond `''` and `$'+'{`?
 
 - [ ] **Check concatenation format**
@@ -220,10 +220,10 @@ Once root cause is identified, implement appropriate fix:
 ## Code Locations
 
 ### Primary Investigation Areas
-1. **String splitting**: [SqlLogger.ts:387-458](../packages/SQLServerDataProvider/src/SqlLogger.ts#L387-L458)
-2. **Safe split detection**: [SqlLogger.ts:502-535](../packages/SQLServerDataProvider/src/SqlLogger.ts#L502-L535)
-3. **Flyway escaping**: [SqlLogger.ts:361-368](../packages/SQLServerDataProvider/src/SqlLogger.ts#L361-L368)
-4. **SQL logging entry point**: [SqlLogger.ts:79](../packages/SQLServerDataProvider/src/SqlLogger.ts#L79)
+1. **String splitting**: [SqlLogger.ts:387-458](../../packages/GenericDatabaseProvider/src/SqlLogger.ts#L387-L458)
+2. **Safe split detection**: [SqlLogger.ts:502-535](../../packages/GenericDatabaseProvider/src/SqlLogger.ts#L502-L535)
+3. **Flyway escaping**: [SqlLogger.ts:361-368](../../packages/GenericDatabaseProvider/src/SqlLogger.ts#L361-L368)
+4. **SQL logging entry point**: [SqlLogger.ts:79](../../packages/GenericDatabaseProvider/src/SqlLogger.ts#L79)
 
 ### Supporting Code
 - Metadata sync validation: `/packages/MetadataSync/src/validation/`

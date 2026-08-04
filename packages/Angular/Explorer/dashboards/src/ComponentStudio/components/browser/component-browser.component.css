@@ -357,34 +357,6 @@
   padding: 40px 20px;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  text-align: center;
-}
-
-.empty-state .empty-icon {
-  font-size: 32px;
-  color: var(--mj-border-default);
-  margin-bottom: 12px;
-}
-
-.empty-state .empty-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--mj-text-secondary);
-  margin: 0 0 4px;
-}
-
-.empty-state .empty-subtitle {
-  font-size: 13px;
-  color: var(--mj-text-secondary);
-  margin: 0;
-}
-
 /* ============================================================ */
 /* Component Card                                                */
 /* ============================================================ */

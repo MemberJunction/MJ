@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T19 - Query Browser Execute Query",
+    "Description": "Navigates to Data Explorer > Queries, selects a query that has no required parameters, runs it, and verifies tabular results display.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer and open the Queries section. Select a runnable query (one without required input parameters), click Run, and verify that results are displayed in a tabular format with data rows.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Query browser is active",
+        "A query was selected and run",
+        "Results are displayed in tabular format with data"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression"
+  },
+  "primaryKey": {
+    "ID": "F89CF3DF-CDC1-4460-9BD1-C98E750C163F"
+  },
+  "sync": {
+    "lastModified": "2026-06-05T02:16:28.099Z",
+    "checksum": "abe58df63e04fb9a26c9d5c9d41b4b72bfa9937b8ebc1855dcd6430582690621"
+  }
+}

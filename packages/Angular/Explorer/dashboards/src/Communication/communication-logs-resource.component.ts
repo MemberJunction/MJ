@@ -3,39 +3,37 @@ import { ResourceData, MJCommunicationLogEntity } from '@memberjunction/core-ent
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 @RegisterClass(BaseResourceComponent, 'CommunicationLogsResource')
 @Component({
   standalone: false,
     selector: 'mj-communication-logs-resource',
     template: `
-    <div class="logs-wrapper">
-      <div class="card">
-        <div class="logs-toolbar">
-          <div class="search-input-wrapper">
-            <i class="fa-solid fa-search"></i>
-            <input type="text" placeholder="Search messages, providers, recipients..." (input)="onSearch($event)">
-          </div>
-          <div class="filter-chip" [class.active]="statusFilter === ''"
-            (click)="onStatusFilter('')">
-            <i class="fa-solid fa-filter"></i> All
-          </div>
-          <div class="filter-chip" [class.active]="statusFilter === 'Complete'"
-            (click)="onStatusFilter('Complete')">
-            <i class="fa-solid fa-check-circle"></i> Sent
-          </div>
-          <div class="filter-chip" [class.active]="statusFilter === 'Failed'"
-            (click)="onStatusFilter('Failed')">
-            <i class="fa-solid fa-times-circle"></i> Failed
-          </div>
-          <div class="filter-chip" [class.active]="statusFilter === 'Pending'"
-            (click)="onStatusFilter('Pending')">
-            <i class="fa-solid fa-clock"></i> Pending
-          </div>
-          <div class="toolbar-spacer"></div>
-          <button class="tb-btn" (click)="loadData()">
-            <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> Refresh
-          </button>
+    <mj-page-layout>
+      <mj-page-header Title="Logs" Icon="fa-solid fa-list-ul">
+        <div actions>
+          <mj-refresh-button [Loading]="isLoading" (Clicked)="loadData()"></mj-refresh-button>
         </div>
+        <div toolbar>
+          <mj-page-search
+            Placeholder="Search messages, providers, recipients..."
+            (ValueChange)="onSearchValue($event)">
+          </mj-page-search>
+          <mj-filter-popover
+            [ActiveCount]="ActiveFilterCount"
+            [ShowClearAll]="ActiveFilterCount > 0"
+            (ClearAllRequested)="resetFilters()">
+            <mj-filter-panel
+              [Fields]="filterFields"
+              [Values]="filterValues"
+              (ValuesChange)="onFilterValuesChange($event)"
+              (Reset)="resetFilters()">
+            </mj-filter-panel>
+          </mj-filter-popover>
+        </div>
+      </mj-page-header>
+      <mj-page-body [Flex]="true">
+        <div class="logs-card">
         <div class="table-wrapper">
           <table class="log-table">
             <thead>
@@ -86,112 +84,30 @@ import { RunView } from '@memberjunction/core';
               @if (filteredLogs.length === 0 && !isLoading) {
                 <tr>
                   <td colspan="6" class="no-data">
-                    <div class="empty-state">
-                      <i class="fa-solid fa-inbox"></i>
-                      <p>No logs found matching your criteria</p>
-                    </div>
+                    <mj-empty-state Variant="no-results" Icon="fa-solid fa-inbox"
+                      Title="No logs found matching your criteria" />
                   </td>
                 </tr>
               }
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
+        </div>
+      </mj-page-body>
+    </mj-page-layout>
     `,
     styles: [`
-    .logs-wrapper {
-        height: 100%;
-        padding: 24px;
-        background: var(--mj-bg-surface);
-    }
-    .card {
+    /* Card wrapper inside <mj-page-body>: the table sits in a tinted card. */
+    .logs-card {
+        flex: 1;
+        min-height: 0;
         background: var(--mj-bg-surface-card);
         border: 1px solid var(--mj-border-default);
         border-radius: 12px;
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        height: 100%;
     }
-
-    /* TOOLBAR */
-    .logs-toolbar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 20px;
-        border-bottom: 1px solid var(--mj-border-default);
-        background: var(--mj-bg-surface-sunken);
-        flex-shrink: 0;
-    }
-    .search-input-wrapper {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex: 1;
-        max-width: 400px;
-        padding: 6px 12px;
-        border: 1px solid var(--mj-border-default);
-        border-radius: 8px;
-        background: var(--mj-bg-surface);
-        transition: border-color 0.15s, box-shadow 0.15s;
-    }
-    .search-input-wrapper:focus-within {
-        border-color: var(--mj-brand-primary);
-        box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-    }
-    .search-input-wrapper i { color: var(--mj-text-muted); font-size: 12px; }
-    .search-input-wrapper input {
-        flex: 1; border: none; outline: none;
-        background: transparent; font-size: 12px;
-        font-family: inherit; color: var(--mj-text-primary);
-    }
-    .search-input-wrapper input::placeholder { color: var(--mj-text-muted); }
-
-    .filter-chip {
-        display: inline-flex; align-items: center;
-        gap: 4px; padding: 4px 10px;
-        border: 1px solid var(--mj-border-default);
-        border-radius: 16px;
-        background: var(--mj-bg-surface-card);
-        font-size: 11px; font-weight: 500;
-        color: var(--mj-text-secondary);
-        cursor: pointer; transition: all 0.15s;
-    }
-    .filter-chip:hover {
-        border-color: var(--mj-border-strong);
-        background: var(--mj-bg-surface-sunken);
-    }
-    .filter-chip.active {
-        border-color: var(--mj-brand-primary);
-        background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-        color: var(--mj-brand-primary);
-    }
-    .filter-chip i { font-size: 10px; }
-
-    .toolbar-spacer { flex: 1; }
-
-    .tb-btn {
-        display: inline-flex; align-items: center;
-        gap: 6px; padding: 6px 12px;
-        border: 1px solid var(--mj-border-default);
-        border-radius: 4px;
-        background: var(--mj-bg-surface-card);
-        color: var(--mj-text-secondary);
-        font-size: 12px; font-weight: 500;
-        cursor: pointer; transition: all 0.15s ease;
-        font-family: inherit;
-    }
-    .tb-btn:hover {
-        background: var(--mj-bg-surface-sunken);
-        border-color: var(--mj-border-strong);
-        color: var(--mj-text-primary);
-    }
-    .tb-btn i { font-size: 12px; }
-
-    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    .spinning { animation: spin 1s linear infinite; }
 
     /* TABLE */
     .table-wrapper { flex: 1; overflow-y: auto; }
@@ -273,13 +189,6 @@ import { RunView } from '@memberjunction/core';
     .no-error { color: var(--mj-text-muted); }
 
     .no-data { padding: 0 !important; }
-    .empty-state {
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        padding: 48px 0; color: var(--mj-text-muted);
-    }
-    .empty-state i { font-size: 2rem; margin-bottom: 12px; opacity: 0.5; }
-    .empty-state p { margin: 0; font-size: 13px; }
   `]
 })
 export class CommunicationLogsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
@@ -288,6 +197,11 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
     public isLoading = false;
     public statusFilter = '';
     private searchTerm = '';
+
+    /** The current free-text search applied to the log list (read-only, for agent context). */
+    public get SearchText(): string {
+        return this.searchTerm;
+    }
 
     constructor(private cdr: ChangeDetectorRef) {
         super();
@@ -328,14 +242,46 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
         }
     }
 
-    public onSearch(event: Event): void {
-        this.searchTerm = (event.target as HTMLInputElement).value.toLowerCase();
+    public onSearchValue(value: string): void {
+        this.searchTerm = (value ?? '').toLowerCase();
         this.applyFilter();
     }
 
     public onStatusFilter(status: string): void {
         this.statusFilter = status;
         this.applyFilter();
+    }
+
+    // -- Concise chrome: Status lives behind the one Filter popover -----------
+
+    public get filterFields(): FilterFieldConfig[] {
+        return [{
+            key: 'status',
+            type: 'chips',
+            label: 'Status',
+            chipOptions: [
+                { text: 'All', value: '' },
+                { text: 'Sent', value: 'Complete', icon: 'fa-solid fa-check-circle' },
+                { text: 'Failed', value: 'Failed', icon: 'fa-solid fa-times-circle' },
+                { text: 'Pending', value: 'Pending', icon: 'fa-solid fa-clock' },
+            ],
+        }];
+    }
+
+    public get filterValues(): Record<string, unknown> {
+        return { status: this.statusFilter };
+    }
+
+    public get ActiveFilterCount(): number {
+        return this.statusFilter ? 1 : 0;
+    }
+
+    public onFilterValuesChange(values: Record<string, unknown>): void {
+        this.onStatusFilter((values['status'] as string) ?? '');
+    }
+
+    public resetFilters(): void {
+        this.onStatusFilter('');
     }
 
     public getStatusClass(status: string): string {

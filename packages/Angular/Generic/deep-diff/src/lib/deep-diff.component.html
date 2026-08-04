@@ -92,15 +92,16 @@
   <!-- Diff Content -->
   <div class="diff-content">
     @if (!diffResult) {
-      <div class="empty-state">
-        <i class="fa-solid fa-code-compare fa-3x"></i>
-        <p>No data to compare</p>
-      </div>
+      <mj-empty-state
+        class="empty-state-fill"
+        Icon="fa-solid fa-code-compare"
+        Title="No data to compare" />
     } @else if (filteredItems.length === 0) {
-      <div class="empty-state">
-        <i class="fa-solid fa-filter fa-3x"></i>
-        <p>No changes match your filter criteria</p>
-      </div>
+      <mj-empty-state
+        class="empty-state-fill"
+        Variant="no-results"
+        Icon="fa-solid fa-filter"
+        Title="No changes match your filter criteria" />
     } @else {
       <div class="diff-tree">
         @for (item of filteredItems; track item.path) {

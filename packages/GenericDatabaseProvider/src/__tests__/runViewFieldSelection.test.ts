@@ -166,6 +166,9 @@ function makeEntity(name: string, fieldNames: string[], pkNames: string[] = ['ID
         Fields: allFields,
         PrimaryKeys: pks,
         FirstPrimaryKey: pks[0],
+        // Mirror the real EntityInfo O(1) field index used by getRunTimeViewFieldArray.
+        FieldByName: (n: string) => allFields.find((f) => f.Name.trim().toLowerCase() === n.trim().toLowerCase()),
+        DatetimeFields: allFields.filter((f) => (f as unknown as { TSType?: unknown }).TSType === 'date'),
     } as unknown as EntityInfo;
 }
 
@@ -386,16 +389,18 @@ describe('GenericDatabaseProvider — getRunTimeViewFieldArray narrow→SELECT p
             // Simulates a renamed field where the entity exposes a different code name
             // than the underlying column. getRunTimeViewFieldString line 1254 generates
             // an AS alias when CodeName !== Name.
+            const aliasedFields = [
+                makeField('ID'),
+                { Name: 'Old Column Name', CodeName: 'NewCodeName' } as unknown as EntityFieldInfo,
+            ];
             const e = {
                 Name: 'AliasedEntity',
                 SchemaName: '__mj',
                 BaseView: 'vwAliased',
-                Fields: [
-                    makeField('ID'),
-                    { Name: 'Old Column Name', CodeName: 'NewCodeName' } as unknown as EntityFieldInfo,
-                ],
+                Fields: aliasedFields,
                 PrimaryKeys: [makeField('ID')],
                 FirstPrimaryKey: makeField('ID'),
+                FieldByName: (n: string) => aliasedFields.find((f) => f.Name.trim().toLowerCase() === n.trim().toLowerCase()),
             } as unknown as EntityInfo;
             provider = new FieldSelectionTestProvider();
             provider.registerEntity(e);

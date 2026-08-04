@@ -7,7 +7,7 @@
 - `BaseDashboard` subclasses get this automatically (base class calls it after `loadData()`)
 - All other `BaseResourceComponent` subclasses must call it explicitly in `ngOnInit()` or `ngAfterViewInit()`
 
-See the root [CLAUDE.md](../../../CLAUDE.md) for the full pattern and examples.
+See [packages/Angular/CLAUDE.md](../CLAUDE.md) for the full pattern and examples.
 
 ## 🚨 CRITICAL: Routing — NavigationService Only 🚨
 
@@ -45,7 +45,7 @@ onEntitySelected(entity: EntityInfo): void {
 
 ## Agent Context & Client Tools
 
-Resource components can report their state to the AI agent and register tools the agent can invoke. See **[packages/AI/Agents/AGENT_CONTEXT_GUIDE.md](/packages/AI/Agents/AGENT_CONTEXT_GUIDE.md)** for the full guide.
+Resource components can report their state to the AI agent and register tools the agent can invoke. See **[packages/AI/Agents/AGENT_CONTEXT_GUIDE.md](../../AI/Agents/AGENT_CONTEXT_GUIDE.md)** for the full guide.
 
 Quick reference:
 ```typescript
@@ -58,9 +58,24 @@ this.navigationService.SetAgentClientTools(this, [
 ]);
 ```
 
+## 🚨 Explorer Surfaces Are Layer 3 — Keep Them Thin 🚨
+
+An Explorer surface resolves its data, hands it to a widget, and translates the widget's
+events into `NavigationService` calls and notifications. It holds **no domain logic and no
+markup a widget should own**. If a form's template is 200 lines of table markup, that markup
+belongs in a `Generic/**` (or app widgets) package; if the class computes totals, that math
+belongs in a pure-TS package.
+
+Packages here declare `{ "mjUILayer": "surface" }` and are checked by `mj standards check`,
+which bans `Router` / `ActivatedRoute` / `NavigationEnd` bindings. (`RouterModule` for
+declarative `routerLink` chrome is fine — what breaks the shell is imperative navigation.)
+
+Read **[/guides/UI_LAYERING_GUIDE.md](../../../guides/UI_LAYERING_GUIDE.md)** for the full
+four-layer model and the `Before*`/`After*` event contract that connects the layers.
+
 ## Navigation & Routing Guide
 
-See **[/guides/NAVIGATION_AND_ROUTING_GUIDE.md](/guides/NAVIGATION_AND_ROUTING_GUIDE.md)** for comprehensive documentation of how navigation, URL sync, and back/forward work in MJ Explorer.
+See **[/guides/NAVIGATION_AND_ROUTING_GUIDE.md](../../../guides/NAVIGATION_AND_ROUTING_GUIDE.md)** for comprehensive documentation of how navigation, URL sync, and back/forward work in MJ Explorer.
 
 ## Package Structure
 

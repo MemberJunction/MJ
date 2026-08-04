@@ -1,0 +1,122 @@
+# PG Split-and-Regenerate — Parallel Pilot Runbook
+
+Run the new **split-and-regenerate** PostgreSQL converter *alongside* the existing
+`/pg-migrate` flow, compare the schemas, and measure the drift — **without touching
+the pg-migrate build**. If the drift is zero (or explainable), that's the signal that
+the AST converter can replace pg-migrate. If it diverges, the diff tells us exactly where.
+
+> TL;DR — build your pg-migrate DB as usual, then:
+> ```bash
+> scripts/pg-parallel-pilot.sh <yourPgMigrateDB>
+> ```
+> Read the DRIFT REPORT it prints.
+
+---
+
+## Why this is safe to run in parallel (no wire crossing)
+
+| Dimension | pg-migrate (existing) | split-and-regenerate (pilot) |
+|---|---|---|
+| **Converter code** | `SQLConverter` rules + `SqlGlotClient` → `python/server.py` → **stock sqlglot** | `extractKeptTSQL` (TS classify) → **`python/mj_postgres.py`** (MJ dialect) |
+| **Database** | builds `<yourPgMigrateDB>` | builds its **own** `pg_pilot_ast` |
+| **Interaction** | — | **read-only** snapshot queries against `<yourPgMigrateDB>`; never writes it |
+
+The two converters share the `@memberjunction/sqlglot-ts` package but use **different
+entry points within it** (`server.py` vs `mj_postgres.py`). This session's changes
+touched **only `mj_postgres.py` + its test** — `SQLConverter`, `server.py`, the
+`/pg-migrate` skill, and the `migrations-pg/` ledger are all unmodified. Verify anytime:
+
+```bash
+git diff <last-known-good-sha>..HEAD --stat          # only SQLGlotTS/.../mj_postgres.py*
+git status --short -- packages/SQLConverter migrations-pg .claude/commands/pg-migrate.md   # clean
+```
+
+---
+
+## What the pilot covers (and what it doesn't — yet)
+
+**In scope — schema parity (the converter's job, and where pg-migrate eats hours):**
+base **tables**, **columns**, **types**, and column **comments** in the `__mj` schema.
+This is fully self-contained: the pilot reads only the source T-SQL migrations and
+builds its own DB. No dependency on any pg-migrate artifact.
+
+**Out of scope for now — codegen objects + runtime:** CodeGen-generated **views/sprocs**
+and **app boot** are *not* part of this drift comparison. Reasons:
+- views/sprocs are produced by `mj codegen`, not the converter — comparing them measures
+  codegen, not the conversion.
+- the from-scratch codegen bootstrap currently still seeds metadata from a pg-migrate-built
+  DB (the "oracle"), which *would* be a wire to pg-migrate's output. Until that's made
+  self-contained (transpile the baseline's metadata seeds + source bootstrap views from the
+  committed `migrations-pg` files), the full-DB comparison is deferred to Phase 2.
+
+So Phase-1 drift = **"does the AST converter produce the same schema as pg-migrate?"**
+That is the question that decides whether pg-migrate can be retired for conversion.
+
+---
+
+## Prerequisites
+
+- The docker workbench PG container `postgres-claude` running (host port `5433`,
+  `mj_admin` / `Claude2Pg99`) — the same container the pg-migrate Docker flow uses.
+- A PG database already built by pg-migrate to compare against (e.g. `MJ_PG_5_40_0`).
+- The Python venv with sqlglot for the dialect (the pilot calls it):
+  ```bash
+  python3 -m venv /tmp/sqlglot-venv && /tmp/sqlglot-venv/bin/pip install "sqlglot~=27.18.0"
+  ```
+- Built workspace (`npm run build` or at least `@memberjunction/sql-converter`).
+
+Override container/creds via env if your setup differs: `PGCONTAINER`, `PGUSER`, `PGPASS`.
+
+---
+
+## Run it
+
+```bash
+# 1. Build the pg-migrate DB exactly as you normally do (the /pg-migrate flow).
+#    Note its database name, e.g. MJ_PG_5_40_0.
+
+# 2. Run the parallel pilot (builds pg_pilot_ast, compares, prints drift):
+scripts/pg-parallel-pilot.sh MJ_PG_5_40_0
+#   args: <pgMigrateDB> [astDB=pg_pilot_ast] [migrationsDir=migrations/v5]
+```
+
+It runs four steps — AST convert → build+apply a fresh `pg_pilot_ast` → snapshot both
+`__mj` schemas → **DRIFT REPORT**. Artifacts land in `/tmp/pg-pilot/`.
+
+---
+
+## Reading the drift report
+
+```
+tables:   AST=NNN   pg-migrate=NNN
+  only in pg-migrate (AST missing): ...     # <- real gap if non-empty (converter dropped a table)
+  only in AST (extra):              ...     # <- usually newer migrations the pg-migrate DB predates
+columns (shared tables): missing in AST=N  extra in AST=N
+  missing columns: ...                      # <- real gap if non-empty
+type mismatches (shared cols): N            # <- converter type-mapping drift
+AST apply errors: N total / M non-benign    # benign = "already exists" (baseline overlap)
+```
+
+**A clean pass looks like:** `0` missing tables, `0` missing columns, `0` type mismatches.
+*Extra* tables/columns on the AST side are expected when the pg-migrate DB was built from
+an older migration cutoff — they're newer entities, not drift. Reconcile by comparing
+against a pg-migrate DB built from the **same** migration set.
+
+**Non-benign apply errors** are mostly procedural/codegen-object content the converter
+intentionally drops (regenerated by codegen) — they don't affect table/column parity, but
+the file is listed in `/tmp/pg-pilot/apply-errors.txt` if you want to inspect.
+
+Last local run vs the (stale) reference DB: **0 missing tables · 0 missing columns ·
+0 type mismatches · 0 differing column defaults** (1650/1650 default expressions match
+value-for-value); the only deltas were newer-migration tables/defaults absent from the
+old reference. Constraints all AST ≥ reference (FK 690≥663, CHECK 371≥369, defaults 1715≥1651).
+
+---
+
+## If something looks wrong
+
+- **A table/column is genuinely missing in AST** → that's a converter gap worth filing; the
+  source migration + the converted `.pg.sql` in `/tmp/pg-pilot/ast-out/` show what happened.
+- **A type mismatch** → an AST type-mapping rule to add in `packages/SQLGlotTS/src/python/mj_postgres.py`.
+- **pg-migrate itself misbehaves** → it cannot be this pilot (separate code path, separate DB,
+  read-only). Re-run the verify commands above to confirm nothing in its tree changed.

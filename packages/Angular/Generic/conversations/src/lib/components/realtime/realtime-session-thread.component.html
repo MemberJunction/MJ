@@ -1,0 +1,61 @@
+<div class="thread">
+  @for (item of State.Items; track TrackItem($index, item)) {
+    @switch (item.Kind) {
+      @case ('caption') {
+        @if (ShowCaptions) {
+          <div class="turn" [class.turn--user]="item.Role === 'User'" [class.turn--agent]="item.Role === 'Assistant'">
+            <div class="turn-avatar">{{ (item.Role === 'User' ? UserName : AgentName).charAt(0).toUpperCase() }}</div>
+            <div class="turn-body">
+              <div class="turn-meta">
+                @if (item.Role === 'User') {
+                  <span class="typed-tag">{{ UserName }}</span>
+                } @else {
+                  {{ AgentName }} <span class="muted">· voice</span>
+                }
+              </div>
+              <div class="bubble">{{ item.Text }}</div>
+            </div>
+          </div>
+        }
+      }
+      @case ('divider') {
+        <!-- Session-leg boundary: subtle rule marking a resume / chained leg -->
+        <div class="thread-divider" role="separator">
+          <span class="thread-divider__line" aria-hidden="true"></span>
+          <span class="thread-divider__label">
+            <i [class]="item.Icon" aria-hidden="true"></i>
+            {{ item.Label }}
+            @if (item.At) {
+              <span class="thread-divider__time">· {{ item.At | date:'MMM d, h:mm a' }}</span>
+            }
+          </span>
+          @if (item.CloseReason) {
+            <span class="thread-divider__chip" title="Why the previous session leg ended">{{ item.CloseReason }}</span>
+          }
+          <span class="thread-divider__line" aria-hidden="true"></span>
+        </div>
+      }
+      @case ('delegation') {
+        <div class="delegation-block">
+          <mj-realtime-delegation-card
+            [Card]="item.Card"
+            [DevMode]="DevMode"
+            (OpenRunRequested)="OpenRunRequested.emit($event)"
+            (OpenArtifactRequested)="OpenArtifactRequested.emit($event)"
+            (CancelRequested)="CancelRequested.emit($event)">
+          </mj-realtime-delegation-card>
+          @if (ShowsLiveNote(item)) {
+            <!-- Ephemeral narration: latest only, never persisted, fades with completion -->
+            <div class="live-note" role="status" aria-live="polite">
+              <i class="fa-solid fa-comment-dots" aria-hidden="true"></i>
+              {{ State.Narration }}
+            </div>
+          }
+        </div>
+      }
+    }
+  } @empty {
+    <div class="thread-empty">The live transcript and any delegated work will appear here.</div>
+  }
+  <div #scrollAnchor></div>
+</div>

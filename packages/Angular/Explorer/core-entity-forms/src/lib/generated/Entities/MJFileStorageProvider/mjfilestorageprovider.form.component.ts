@@ -18,13 +18,14 @@ export class MJFileStorageProviderFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'providerIdentification', sectionName: 'Provider Identification', isExpanded: true },
             { sectionKey: 'driverConfiguration', sectionName: 'Driver Configuration', isExpanded: true },
-            { sectionKey: 'selectionAvailability', sectionName: 'Selection & Availability', isExpanded: false },
-            { sectionKey: 'authenticationAccess', sectionName: 'Authentication & Access', isExpanded: false },
+            { sectionKey: 'selectionAvailability', sectionName: 'Selection & Availability', isExpanded: true },
+            { sectionKey: 'authenticationAccess', sectionName: 'Authentication & Access', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJFiles', sectionName: 'Files', isExpanded: false },
             { sectionKey: 'mJFileStorageAccounts', sectionName: 'File Storage Accounts', isExpanded: false },
+            { sectionKey: 'mJAIAgentsRecordingStorageProviderID', sectionName: 'AI Agents (Recording Storage Provider)', isExpanded: false },
             { sectionKey: 'mJAIConfigurations', sectionName: 'AI Configurations', isExpanded: false },
-            { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }
+            { sectionKey: 'mJAIAgentsAttachmentStorageProviderID', sectionName: 'AI Agents', isExpanded: false }
         ]);
     }
 }

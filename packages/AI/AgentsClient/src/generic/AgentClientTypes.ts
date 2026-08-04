@@ -185,13 +185,38 @@ export type ClientToolDecorator = (
 
 /**
  * Event emitted when a client tool request is received from the server.
- * Raised BEFORE execution — subscribers can observe what tools are being invoked.
+ * Raised BEFORE execution — subscribers can observe what tools are being invoked,
+ * AND veto the dispatch by setting `Cancel = true` (cancel-enforcement).
+ *
+ * **Cancel semantics:** the host's RxJS subscriber runs synchronously inside the
+ * `Subject.next()` call. After the synchronous notify completes,
+ * {@link AgentClientSession.handleToolRequest} reads `event.Cancel`; if `true`,
+ * the tool handler is NOT executed, {@link AgentClientSession.ToolExecuted$} does
+ * NOT fire, and a failure result is sent back to the server with
+ * `Tool dispatch canceled by host[: <CancelReason>]` as the error message.
+ *
+ * **Use cases:** permission/role gates, destructive-action confirmation dialogs,
+ * rate-limit caps, and other host-side policy decisions that must run before a
+ * tool side-effect happens. For pure observation (analytics, logging), leave
+ * `Cancel` at its default `false`.
  */
 export interface ClientToolRequestEvent {
     /** The raw request from the server */
     Request: ClientToolRequest;
     /** The agent run that triggered this request */
     AgentRunID: string;
+    /**
+     * When set to `true` by any synchronous subscriber, the session will short-circuit
+     * dispatch: no tool handler runs, `ToolExecuted$` is NOT emitted, and a failure
+     * response is sent to the server. Defaults to `false` (proceed with dispatch).
+     */
+    Cancel: boolean;
+    /**
+     * Optional human-readable reason set alongside `Cancel = true`. Surfaced in the
+     * server-side error message (`Tool dispatch canceled by host: <reason>`) so the
+     * agent can adapt its next turn.
+     */
+    CancelReason?: string;
 }
 
 /**
@@ -241,6 +266,11 @@ export interface RunAgentParams {
     AutoPopulateLastRunPayload?: boolean;
     /** Configuration ID to use */
     ConfigurationId?: string;
+    /** Whether Plan Mode is requested for this run (requires the agent's SupportsPlanMode capability) */
+    PlanMode?: boolean;
+    /** Skill IDs the user requested via `/skill-name` mentions. Server intersects these with the
+     *  agent's accepted skills AND the user's Run permission before any are activated. */
+    RequestedSkillIDs?: string[];
     /** Optional conversation detail ID (triggers artifact/notification creation) */
     ConversationDetailId?: string;
     /** Whether to create artifacts from the agent's payload */
@@ -276,6 +306,11 @@ export interface RunAgentFromConversationDetailParams {
     AutoPopulateLastRunPayload?: boolean;
     /** Configuration ID to use */
     ConfigurationId?: string;
+    /** Whether Plan Mode is requested for this run (requires the agent's SupportsPlanMode capability) */
+    PlanMode?: boolean;
+    /** Skill IDs the user requested via `/skill-name` mentions. Server intersects these with the
+     *  agent's accepted skills AND the user's Run permission before any are activated. */
+    RequestedSkillIDs?: string[];
     /** Whether to create artifacts from the agent's payload */
     CreateArtifacts?: boolean;
     /** Whether to create a user notification on completion */

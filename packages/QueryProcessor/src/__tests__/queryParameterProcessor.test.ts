@@ -3,7 +3,7 @@ import { QueryParameterProcessor } from '../queryParameterProcessor.js';
 import type { ParameterValidationResult } from '../queryParameterProcessor.js';
 import { RunQuerySQLFilterManager } from '@memberjunction/core';
 
-// Helper to build mock QueryParameterInfo objects
+// Helper to build mock MJQueryParameterEntity objects
 function makeParamDef(overrides: Record<string, unknown> = {}) {
   return {
     QueryID: 'q1',
@@ -16,13 +16,6 @@ function makeParamDef(overrides: Record<string, unknown> = {}) {
     ValidationFilters: null as string | null,
     DetectionMethod: 'Manual' as const,
     AutoDetectConfidenceScore: null,
-    get ParsedFilters(): unknown[] {
-      try {
-        return this.ValidationFilters ? JSON.parse(this.ValidationFilters) : [];
-      } catch {
-        return [];
-      }
-    },
     ...overrides,
   };
 }
@@ -272,6 +265,216 @@ describe('QueryParameterProcessor.validateParameters', () => {
     it('should succeed for empty params and empty defs', () => {
       const result = QueryParameterProcessor.validateParameters(undefined, []);
       expect(result.success).toBe(true);
+    });
+  });
+});
+
+// =====================================================================
+// Tests for ValidationFilters enforcement (the declared @ValidationFilters chain)
+// =====================================================================
+describe('QueryParameterProcessor.validateParameters ValidationFilters enforcement', () => {
+  beforeEach(() => {
+    RunQuerySQLFilterManager.Instance.SetPlatform('sqlserver');
+  });
+
+  // Build a single-parameter definition carrying a declared ValidationFilters chain.
+  function defWithFilters(
+    filters: Array<{ name: string; args?: unknown[] }>,
+    overrides: Record<string, unknown> = {}
+  ) {
+    return [makeParamDef({ Name: 'p', Type: 'string', ValidationFilters: JSON.stringify(filters), ...overrides })];
+  }
+
+  describe('required filter', () => {
+    it('rejects an empty (present) value', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: '' }, defWithFilters([{ name: 'required' }]) as never[]);
+      expect(result.success).toBe(false);
+      expect(result.errors.join(' ')).toContain("'required'");
+    });
+    it('accepts a non-empty value', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'x' }, defWithFilters([{ name: 'required' }]) as never[]);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('email filter', () => {
+    it('rejects a malformed address', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'not-an-email' }, defWithFilters([{ name: 'email' }]) as never[]);
+      expect(result.success).toBe(false);
+      expect(result.errors.join(' ')).toContain("'email'");
+    });
+    it('accepts a well-formed address', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'a@b.co' }, defWithFilters([{ name: 'email' }]) as never[]);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('min filter', () => {
+    it('rejects a string shorter than the bound (length semantics)', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'ab' }, defWithFilters([{ name: 'min', args: [3] }]) as never[]);
+      expect(result.success).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/minimum/i);
+    });
+    it('accepts a string at or above the bound', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'abc' }, defWithFilters([{ name: 'min', args: [3] }]) as never[]);
+      expect(result.success).toBe(true);
+    });
+    it('compares numerically when the value is numeric', () => {
+      const reject = QueryParameterProcessor.validateParameters(
+        { p: 2 },
+        [makeParamDef({ Name: 'p', Type: 'number', ValidationFilters: JSON.stringify([{ name: 'min', args: [5] }]) })] as never[]
+      );
+      expect(reject.success).toBe(false);
+      const accept = QueryParameterProcessor.validateParameters(
+        { p: 9 },
+        [makeParamDef({ Name: 'p', Type: 'number', ValidationFilters: JSON.stringify([{ name: 'min', args: [5] }]) })] as never[]
+      );
+      expect(accept.success).toBe(true);
+    });
+    it('rejects when the filter argument is not numeric', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'abc' }, defWithFilters([{ name: 'min', args: ['x'] }]) as never[]);
+      expect(result.success).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/numeric argument/i);
+    });
+  });
+
+  describe('max filter', () => {
+    it('rejects a string longer than the bound', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'abcdef' }, defWithFilters([{ name: 'max', args: [3] }]) as never[]);
+      expect(result.success).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/maximum/i);
+    });
+    it('accepts a string at or below the bound', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'ab' }, defWithFilters([{ name: 'max', args: [3] }]) as never[]);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('trim / upper / lower transformation filters', () => {
+    it('trim strips surrounding whitespace', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: '  hi  ' }, defWithFilters([{ name: 'trim' }]) as never[]);
+      expect(result.success).toBe(true);
+      expect(result.validatedParameters.p).toBe('hi');
+    });
+    it('upper uppercases', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'hi' }, defWithFilters([{ name: 'upper' }]) as never[]);
+      expect(result.success).toBe(true);
+      expect(result.validatedParameters.p).toBe('HI');
+    });
+    it('lower lowercases', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'HI' }, defWithFilters([{ name: 'lower' }]) as never[]);
+      expect(result.success).toBe(true);
+      expect(result.validatedParameters.p).toBe('hi');
+    });
+  });
+
+  describe('number filter', () => {
+    it('rejects a non-numeric value', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'abc' }, defWithFilters([{ name: 'number' }]) as never[]);
+      expect(result.success).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/not a valid number/i);
+    });
+    it('converts a numeric string to a number', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: '42' }, defWithFilters([{ name: 'number' }]) as never[]);
+      expect(result.success).toBe(true);
+      expect(result.validatedParameters.p).toBe(42);
+    });
+  });
+
+  describe('date filter', () => {
+    it('rejects an invalid date', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'not-a-date' }, defWithFilters([{ name: 'date' }]) as never[]);
+      expect(result.success).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/not a valid date/i);
+    });
+    it('normalizes a valid date to ISO', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: '2024-06-15' }, defWithFilters([{ name: 'date' }]) as never[]);
+      expect(result.success).toBe(true);
+      expect(String(result.validatedParameters.p)).toContain('2024-06-15');
+    });
+  });
+
+  describe('sqlsafe filter', () => {
+    it('rejects a value with SQL metacharacters', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: "O'Brien" }, defWithFilters([{ name: 'sqlsafe' }]) as never[]);
+      expect(result.success).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/metacharacters/i);
+    });
+    it('accepts a clean value', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'Obrien' }, defWithFilters([{ name: 'sqlsafe' }]) as never[]);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('sqljoin filter', () => {
+    it('rejects when an array element carries SQL metacharacters', () => {
+      const result = QueryParameterProcessor.validateParameters(
+        { p: ['ok', "x'; DROP TABLE t--"] },
+        [makeParamDef({ Name: 'p', Type: 'array', ValidationFilters: JSON.stringify([{ name: 'sqljoin' }]) })] as never[]
+      );
+      expect(result.success).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/metacharacters/i);
+    });
+    it('accepts a clean array', () => {
+      const result = QueryParameterProcessor.validateParameters(
+        { p: ['a', 'b', 'c'] },
+        [makeParamDef({ Name: 'p', Type: 'array', ValidationFilters: JSON.stringify([{ name: 'sqljoin' }]) })] as never[]
+      );
+      expect(result.success).toBe(true);
+    });
+    it('rejects a non-array value', () => {
+      const result = QueryParameterProcessor.validateParameters(
+        { p: 'not-an-array' },
+        defWithFilters([{ name: 'sqljoin' }]) as never[]
+      );
+      expect(result.success).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/array value/i);
+    });
+  });
+
+  describe('unknown filter (false-promise guard)', () => {
+    it('rejects a declared filter it cannot honor instead of silently no-op-ing', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'anything' }, defWithFilters([{ name: 'definitely-not-real' }]) as never[]);
+      expect(result.success).toBe(false);
+      expect(result.errors.join(' ')).toContain('unknown validation filter');
+    });
+  });
+
+  describe('chain ordering and short-circuit', () => {
+    it('applies transformation filters BEFORE later validators (ordering)', () => {
+      // '  ab  ' trimmed → 'ab' (length 2), then min:3 fails. If min ran on the UNTRIMMED
+      // value (length 6) it would pass — so a failure proves trim ran first.
+      const result = QueryParameterProcessor.validateParameters({ p: '  ab  ' }, defWithFilters([{ name: 'trim' }, { name: 'min', args: [3] }]) as never[]);
+      expect(result.success).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/minimum/i);
+    });
+    it('passes a valid value through the full ordered chain and keeps the transformed result', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: '  ab  ' }, defWithFilters([{ name: 'trim' }, { name: 'min', args: [2] }]) as never[]);
+      expect(result.success).toBe(true);
+      expect(result.validatedParameters.p).toBe('ab');
+    });
+    it('short-circuits at the FIRST violation (later filters are not evaluated)', () => {
+      // min fails first; email is never reached — so exactly one error, and it is the min error.
+      const result = QueryParameterProcessor.validateParameters({ p: 'ab' }, defWithFilters([{ name: 'min', args: [3] }, { name: 'email' }]) as never[]);
+      expect(result.success).toBe(false);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toMatch(/minimum/i);
+      expect(result.errors.join(' ')).not.toContain("'email'");
+    });
+  });
+
+  describe('malformed ValidationFilters JSON is ignored (no crash)', () => {
+    it('treats non-array / garbage JSON as no filters and does not throw', () => {
+      const result = QueryParameterProcessor.validateParameters({ p: 'x' }, [makeParamDef({ Name: 'p', Type: 'string', ValidationFilters: 'not-json' })] as never[]);
+      expect(result.success).toBe(true);
+    });
+    it('skips malformed chain entries (missing name) but honors valid ones', () => {
+      const result = QueryParameterProcessor.validateParameters(
+        { p: 'ab' },
+        [makeParamDef({ Name: 'p', Type: 'string', ValidationFilters: JSON.stringify([{ nope: true }, { name: 'min', args: [3] }]) })] as never[]
+      );
+      expect(result.success).toBe(false);
+      expect(result.errors.join(' ')).toMatch(/minimum/i);
     });
   });
 });

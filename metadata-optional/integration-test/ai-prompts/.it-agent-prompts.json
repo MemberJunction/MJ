@@ -1,0 +1,1108 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Echo Agent - System Prompt",
+      "Description": "Scripted echo agent prompt: complete immediately on the first turn. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-echo.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "76D0B88B-799B-4915-B4BF-A9FF57A053C1"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.577Z",
+            "checksum": "f3da1e2216a1783527d6d3cc24722bc9ed718f1604a5840daaba53a0835392e4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C8901A9E-B413-4239-BF33-DF368D125FA3"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.587Z",
+            "checksum": "a31cff80e5a646b44f9e4151b04dca09ac3b663b34aabbfd2148a968ed6ede6c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "084FB19A-3943-40EC-9E19-11CA045AC321"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.597Z",
+            "checksum": "2da44158e3b12ca1b4c5b4db9cbadb098c6a0abd86524dd035c5cc93523d4103"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9D8F17C0-04A3-4903-B290-0CA5BFD59E52"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:40.160Z",
+      "checksum": "32e5b21d44d86b4552d9f435f251bc79a599c1eeb6c69ff846fd2ff0050ca376"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Tool Loop Agent - System Prompt",
+      "Description": "Scripted tool loop: exactly one Calculate Expression action, then complete. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-tool-loop.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "543586E2-F1E5-43EF-9974-08AED21C7A0C"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.608Z",
+            "checksum": "f3da1e2216a1783527d6d3cc24722bc9ed718f1604a5840daaba53a0835392e4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3201C751-43E0-4DAE-99A9-519A3FDE36DE"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.619Z",
+            "checksum": "a31cff80e5a646b44f9e4151b04dca09ac3b663b34aabbfd2148a968ed6ede6c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4FC2F413-A1D5-49BB-9891-3786412B6A22"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.632Z",
+            "checksum": "2da44158e3b12ca1b4c5b4db9cbadb098c6a0abd86524dd035c5cc93523d4103"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6F989754-1A8B-4310-8836-D64FC7D3AB9E"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:40.180Z",
+      "checksum": "427e069e2dc4a2da63a0c26b7f88ac39d5d9f42484af94cafe754c1ca70833be"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Failover Agent - System Prompt",
+      "Description": "Echo-shaped prompt whose model bindings are toggled in-fixture to prove the failover ladder. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-failover.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "FE88A490-722C-4BE4-9314-C4D54BECF6B2"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.643Z",
+            "checksum": "f3da1e2216a1783527d6d3cc24722bc9ed718f1604a5840daaba53a0835392e4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "551BAE17-0D04-4DAC-8D8E-86A68C336C1A"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.654Z",
+            "checksum": "a31cff80e5a646b44f9e4151b04dca09ac3b663b34aabbfd2148a968ed6ede6c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8D071888-7D15-4C33-B17A-FD0A6D40D43D"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.666Z",
+            "checksum": "2da44158e3b12ca1b4c5b4db9cbadb098c6a0abd86524dd035c5cc93523d4103"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8C330383-7278-4722-81A9-C5D91DEAE6F9"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:40.196Z",
+      "checksum": "100721f64132bbc620277765337db24613652e89bdd5afccde0cc769610eb595"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Payload Parent - System Prompt",
+      "Description": "Scripted parent: delegate once to the named payload sub-agent, then complete. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-payload-parent.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9D92B71D-968A-4A76-A292-521DF7DC849F"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.678Z",
+            "checksum": "f3da1e2216a1783527d6d3cc24722bc9ed718f1604a5840daaba53a0835392e4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C586F59D-8663-4CEC-94EC-9E9B1572799A"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.707Z",
+            "checksum": "a31cff80e5a646b44f9e4151b04dca09ac3b663b34aabbfd2148a968ed6ede6c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "882FF5A2-490C-4C2E-A71B-DEBDDABA5388"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.718Z",
+            "checksum": "2da44158e3b12ca1b4c5b4db9cbadb098c6a0abd86524dd035c5cc93523d4103"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "12AB3827-68D0-4E7A-A505-A1A6946672B9"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:40.210Z",
+      "checksum": "729dc503ab47f821fc23a48222c7b7d4b8eb81c271effba44ce03c82d3d0b5c2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Payload Child - System Prompt",
+      "Description": "Scripted child: attempt granted and ungranted payload writes in one turn. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-payload-child.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3B3D4531-BF14-4CBB-9409-AA71C6B51570"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.728Z",
+            "checksum": "f3da1e2216a1783527d6d3cc24722bc9ed718f1604a5840daaba53a0835392e4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BD3D97A8-C6EA-4EBF-AD64-FE854AAEB192"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.738Z",
+            "checksum": "a31cff80e5a646b44f9e4151b04dca09ac3b663b34aabbfd2148a968ed6ede6c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "26F3E30B-2909-4534-BC27-831381D369F1"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.748Z",
+            "checksum": "2da44158e3b12ca1b4c5b4db9cbadb098c6a0abd86524dd035c5cc93523d4103"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2F104EA6-3D60-49BE-9378-AC5B99FA305F"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:40.226Z",
+      "checksum": "1e7c7cdb8f2a45970a396b8570c93b2440f5e121e552f79f3dec027976dd98e2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Payload Scoped Child - System Prompt",
+      "Description": "Scripted scoped child: write at its scoped payload root, then complete. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-payload-scoped.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C9E4E9FB-45FB-4BDD-8374-2A742056A3DE"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.759Z",
+            "checksum": "f3da1e2216a1783527d6d3cc24722bc9ed718f1604a5840daaba53a0835392e4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F7731020-A085-481B-9032-DEFE27F8169A"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.770Z",
+            "checksum": "a31cff80e5a646b44f9e4151b04dca09ac3b663b34aabbfd2148a968ed6ede6c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A5D26FE2-1AC5-47A4-B410-27BBF02589FC"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.782Z",
+            "checksum": "2da44158e3b12ca1b4c5b4db9cbadb098c6a0abd86524dd035c5cc93523d4103"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9344C0F8-AE4D-448D-A51D-9B0B619D7665"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:40.240Z",
+      "checksum": "77adaa7131adaa3f6c42c42820eeef41bf31db90f3838fac6efe1c5c2aee92a3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Self-Write Restricted - System Prompt",
+      "Description": "Scripted self-writer: one allowed and one restricted self-write, then complete. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-self-write.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "307053C3-4A52-4B8B-9182-03E85AE3F565"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.794Z",
+            "checksum": "f3da1e2216a1783527d6d3cc24722bc9ed718f1604a5840daaba53a0835392e4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AC8900B4-01C4-4A26-8138-2D872ACBF15E"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.806Z",
+            "checksum": "a31cff80e5a646b44f9e4151b04dca09ac3b663b34aabbfd2148a968ed6ede6c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CFE9218E-980F-44B1-8BBD-BCF09C85182D"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.840Z",
+            "checksum": "2da44158e3b12ca1b4c5b4db9cbadb098c6a0abd86524dd035c5cc93523d4103"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "08F7C91C-1E97-4DCA-88CA-376858E3246D"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:40.256Z",
+      "checksum": "b0f0973425d4cc5937084f812c4a22ccc3e8d3f2ce4ed7018028137eaef6a429"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Plan Agent - System Prompt",
+      "Description": "Scripted plan-capable agent: plan when required, otherwise one action then complete. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-plan.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "23463004-5B18-49BC-BDCA-F1FFF69CB0A3"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.851Z",
+            "checksum": "f3da1e2216a1783527d6d3cc24722bc9ed718f1604a5840daaba53a0835392e4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2190E181-72C5-4F08-8FD8-DB99D5E51E04"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.862Z",
+            "checksum": "a31cff80e5a646b44f9e4151b04dca09ac3b663b34aabbfd2148a968ed6ede6c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DAB37A90-CB70-4349-A000-E683C2435E73"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.872Z",
+            "checksum": "2da44158e3b12ca1b4c5b4db9cbadb098c6a0abd86524dd035c5cc93523d4103"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "713D006E-019A-466E-8D0B-38185A62D08F"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:40.273Z",
+      "checksum": "2c26c0ce382b18c4cf19a53dee27fd50ecdc160a625ab3a03d47270ac03ca8d8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Always-Plan Agent - System Prompt",
+      "Description": "Scripted always-plan agent: identical script under a mandatory plan gate. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-always-plan.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3ED0B692-E356-416B-B5E1-B4C2F1847026"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.882Z",
+            "checksum": "f3da1e2216a1783527d6d3cc24722bc9ed718f1604a5840daaba53a0835392e4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9DCF66C9-4EFA-4494-A9A2-D2137D000CEF"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.891Z",
+            "checksum": "a31cff80e5a646b44f9e4151b04dca09ac3b663b34aabbfd2148a968ed6ede6c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BB127A50-5CBC-4276-8D7F-15D318E88AE6"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.902Z",
+            "checksum": "2da44158e3b12ca1b4c5b4db9cbadb098c6a0abd86524dd035c5cc93523d4103"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "26AA48D0-BAE5-4EFB-AA6F-5A7C8E66AF20"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:40.289Z",
+      "checksum": "78d34719a42724f8af52ff93b5a0f8cffed4b98797045ac205e07008f96fb635"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Skill Probe Agent - System Prompt",
+      "Description": "Scripted skill probe: activate/use skills only exactly as instructed by the user message. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-skill-probe.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "40CD775C-712E-475F-A713-3E0539F77371"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.914Z",
+            "checksum": "f3da1e2216a1783527d6d3cc24722bc9ed718f1604a5840daaba53a0835392e4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "69193488-0CFE-4364-B4DF-E4FFB63C18C7"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.925Z",
+            "checksum": "a31cff80e5a646b44f9e4151b04dca09ac3b663b34aabbfd2148a968ed6ede6c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "479EC98C-8506-4C21-AE0B-13B1AF00DCA8"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.936Z",
+            "checksum": "2da44158e3b12ca1b4c5b4db9cbadb098c6a0abd86524dd035c5cc93523d4103"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F0BC2739-C01F-414D-A6ED-7AA43CA0F229"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:40.306Z",
+      "checksum": "87610d318959191f7f33a18388dbea49d71d22c116aae51ee03cd67abe8d7a6a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Artifact Reader - System Prompt",
+      "Description": "Scripted artifact reader: exactly one instructed artifactToolCalls entry, then complete. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-artifact-reader.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5A0DDF8C-3F9C-4168-8FEC-9E66D1A2DCDC"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:40.988Z",
+            "checksum": "f3da1e2216a1783527d6d3cc24722bc9ed718f1604a5840daaba53a0835392e4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CCBBE028-5322-4182-8B08-6962431848C9"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.003Z",
+            "checksum": "a31cff80e5a646b44f9e4151b04dca09ac3b663b34aabbfd2148a968ed6ede6c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "93A58037-0BC1-4DE1-9955-08C37347BE54"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.016Z",
+            "checksum": "2da44158e3b12ca1b4c5b4db9cbadb098c6a0abd86524dd035c5cc93523d4103"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "038F0AB5-4146-4301-BBC2-ACE179002306"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:40.437Z",
+      "checksum": "9fe6b1d7acbecb450b557b2004590d737855714adbb49f74ba3333d00a890f1e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Compaction Agent - System Prompt",
+      "Description": "Echo-shaped prompt on an agent with tight compaction budget knobs. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-compaction.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "89E2DA77-33F0-4DF4-B86C-CF1FF2F189DE"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.028Z",
+            "checksum": "f3da1e2216a1783527d6d3cc24722bc9ed718f1604a5840daaba53a0835392e4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6B45949F-95B0-4A32-8FE9-9242090EE696"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.041Z",
+            "checksum": "a31cff80e5a646b44f9e4151b04dca09ac3b663b34aabbfd2148a968ed6ede6c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E9F633A2-EEEC-40DD-9294-5182537ECCA3"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.056Z",
+            "checksum": "2da44158e3b12ca1b4c5b4db9cbadb098c6a0abd86524dd035c5cc93523d4103"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AA4BF0B9-4AC9-4FBE-AC63-FB10F14C023B"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:40.451Z",
+      "checksum": "0d8a1660b1f5fc602ee03c1d104e054eb95f186046c44464c36a0ee07b1fbf05"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Memory Writer - System Prompt",
+      "Description": "Scripted memory writer: emit exactly the memoryWrites listed in the user message. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-memory-writer.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A566F799-A8D4-48B4-B194-AFFB1095B1A4"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.068Z",
+            "checksum": "f3da1e2216a1783527d6d3cc24722bc9ed718f1604a5840daaba53a0835392e4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2054F522-CCC0-4931-9B1C-230E1FFE1B00"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.080Z",
+            "checksum": "a31cff80e5a646b44f9e4151b04dca09ac3b663b34aabbfd2148a968ed6ede6c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "85548191-9DF4-4C2A-B6A6-BC40F798F5F0"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.090Z",
+            "checksum": "2da44158e3b12ca1b4c5b4db9cbadb098c6a0abd86524dd035c5cc93523d4103"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6705D887-8DE5-42A0-89CD-9ED13887AAA2"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T17:08:33.104Z",
+      "checksum": "0fd9d5e30c6177467a8cf04fb95a5438512df9c28289213f555372520b9c7691"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Search Agent - System Prompt",
+      "Description": "Scripted searcher: one Scoped Search action with the given query, then complete. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-search.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BA04ABB8-1C17-42E5-AE11-98E52534BBA6"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.104Z",
+            "checksum": "f3da1e2216a1783527d6d3cc24722bc9ed718f1604a5840daaba53a0835392e4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "715511C9-A706-4E4B-9634-BAC2DB91B43A"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.119Z",
+            "checksum": "a31cff80e5a646b44f9e4151b04dca09ac3b663b34aabbfd2148a968ed6ede6c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D1133DEE-8664-409A-8AF1-13DA754AE76A"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.129Z",
+            "checksum": "2da44158e3b12ca1b4c5b4db9cbadb098c6a0abd86524dd035c5cc93523d4103"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "09DCBCF4-8B5F-42E8-8C1B-B3834C8B6724"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:40.465Z",
+      "checksum": "a01605eaa41f15041d6e8be4b891b98b00fc19f12201c2eb67148201cca23900"
+    }
+  }
+]

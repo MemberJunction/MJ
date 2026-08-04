@@ -1,6 +1,19 @@
 import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, BaseEmbeddings, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
+/**
+ * Whether verbose logging is enabled, mirroring the MJ_VERBOSE semantics used by
+ * @memberjunction/core's IsVerboseLoggingEnabled(). Duplicated here as a tiny inline
+ * check so this leaf AI provider doesn't take a dependency on @memberjunction/core
+ * just to gate a couple of routine status messages. Routine load/progress messages
+ * are suppressed by default so they don't garble CodeGen's spinner; errors/warnings
+ * still print unconditionally.
+ */
+function isVerbose(): boolean {
+    const v = process.env.MJ_VERBOSE;
+    return v !== undefined && ['true', '1', 'yes'].includes(v.toLowerCase());
+}
+
 // Dynamic import for ESM-only package
 // TypeScript types for @xenova/transformers (since we can't import them directly)
 interface TransformersEnv {
@@ -149,8 +162,10 @@ export class LocalEmbedding extends BaseEmbeddings {
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             try {
                 if (attempt === 0) {
-                    // First attempt - let user know download may take time
-                    console.log(`Loading embedding model ${modelId} from HuggingFace (first-time download may take a moment)...`);
+                    // First attempt - let user know download may take time (verbose only)
+                    if (isVerbose()) {
+                        console.log(`Loading embedding model ${modelId} from HuggingFace (first-time download may take a moment)...`);
+                    }
                 } else {
                     const backoffDelay = calculateBackoffDelay(attempt - 1, DEFAULT_INITIAL_DELAY_MS, DEFAULT_MAX_DELAY_MS);
                     console.log(`  Retrying download (attempt ${attempt + 1}/${maxRetries})...`);
@@ -163,8 +178,9 @@ export class LocalEmbedding extends BaseEmbeddings {
                 });
 
                 if (attempt > 0) {
+                    // Recovered after a retry — worth surfacing regardless of verbosity
                     console.log(`Successfully loaded model ${modelId} on attempt ${attempt + 1}`);
-                } else {
+                } else if (isVerbose()) {
                     console.log(`Model ${modelId} loaded successfully`);
                 }
 

@@ -1,5 +1,6 @@
 /* Knowledge Configuration - Settings Page with Left Nav */
 
+
 .config-loading {
     display: flex;
     justify-content: center;
@@ -7,85 +8,30 @@
     height: 400px;
 }
 
+/*
+  Layout — <mj-left-nav> rail + <mj-left-nav-content> pane. The shared
+  primitives own the rail width, nav item styling, and content sizing; we just
+  need a flex-row wrapper so they sit side-by-side.
+*/
 .config-layout {
     display: flex;
     height: 100%;
     min-height: 500px;
 }
 
-/* Left Navigation */
-.config-nav {
-    width: 240px;
-    border-right: 1px solid var(--mj-border-default);
-    background: var(--mj-bg-surface-card);
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    padding: 0.5rem 0;
-}
-
-.config-nav-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    font-weight: 600;
-    font-size: 0.9rem;
-    color: var(--mj-text-primary);
-    border-bottom: 1px solid var(--mj-border-subtle);
-    margin-bottom: 0.5rem;
-}
-
-.config-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.55rem 1rem;
-    border: none;
-    background: transparent;
-    color: var(--mj-text-secondary);
-    font-size: 0.85rem;
-    cursor: pointer;
-    text-align: left;
-    transition: all 0.15s ease;
-    width: 100%;
-}
-
-.config-nav-item:hover {
-    color: var(--mj-text-primary);
-    background: var(--mj-bg-surface-hover);
-}
-
-.config-nav-item-active {
-    color: var(--mj-brand-primary);
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    border-left: 3px solid var(--mj-brand-primary);
-}
-
-/* Content Area */
-.config-content {
-    flex: 1;
-    padding: 1.5rem 2rem;
-    overflow-y: auto;
-    position: relative;
-}
-
+/* Section title + description are now rendered by <mj-page-header-interior>
+   (one shared instance bound to currentSection at the top of the content area).
+   The legacy .config-section-title / .config-section-desc rules and the
+   .config-content wrapper were retired with that migration; .config-section
+   remains as a thin readability constraint on the form bodies. */
 .config-section {
     max-width: 700px;
 }
 
-.config-section-title {
-    font-size: 1.3rem;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-    margin: 0 0 0.5rem;
-}
-
-.config-section-desc {
-    color: var(--mj-text-secondary);
-    font-size: 0.9rem;
-    margin-bottom: 1.5rem;
-    line-height: 1.5;
+/* When a section shows only an empty-state placeholder, drop the 700px form
+   cap so the placeholder centers in the full content width. */
+.config-section--centered {
+    max-width: none;
 }
 
 /* Config Groups */
@@ -647,39 +593,6 @@
 
 .create-index-cancel:hover {
     background: var(--mj-bg-surface-hover);
-}
-
-/* Empty State for unconfigured sections */
-.config-empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 3rem 2rem;
-    text-align: center;
-    gap: 0.75rem;
-    border: 2px dashed var(--mj-border-default);
-    border-radius: 12px;
-    background: var(--mj-bg-surface-sunken);
-}
-
-.config-empty-icon {
-    font-size: 2.5rem;
-    color: var(--mj-text-disabled);
-}
-
-.config-empty-title {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--mj-text-secondary);
-}
-
-.config-empty-text {
-    margin: 0;
-    font-size: 0.85rem;
-    color: var(--mj-text-muted);
-    max-width: 480px;
-    line-height: 1.5;
 }
 
 /* Tag list for showing multiple models */

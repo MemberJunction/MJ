@@ -1,3 +1,22 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Integrations"
+    Icon="fa-solid fa-plug"
+    Subtitle="Connected systems and data sources">
+    <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+         "Connections.length integrations" badge mirrored the visible card
+         grid row count. -->
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="LoadData()"></mj-refresh-button>
+      @if (!WizardOpen && !SelectedSummary) {
+        <button mjButton variant="primary" size="sm" (click)="OpenWizard()">
+          <i class="fa-solid fa-plus"></i> <span class="action-btn-label">Add Integration</span>
+        </button>
+      }
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
 <!-- Main container -->
 <div class="connections-container" [class.detail-active]="!!SelectedSummary"
      [class.editor-active]="!!EditorEntityMap">
@@ -6,18 +25,6 @@
        CARD GRID VIEW (shown when no wizard and no detail selected)
        ====================================================================== -->
   @if (!WizardOpen && !SelectedSummary) {
-    <!-- Header -->
-    <div class="connections-header">
-      <div class="header-left">
-        <h2 class="header-title">Integrations</h2>
-        <span class="header-count">{{ Connections.length }} integration{{ Connections.length !== 1 ? 's' : '' }}</span>
-      </div>
-      <button mjButton variant="primary" (click)="OpenWizard()" class="add-connection-btn">
-        <i class="fa-solid fa-plus"></i>
-        Add Integration
-      </button>
-    </div>
-
     <!-- Loading state -->
     @if (IsLoading) {
       <div class="loading-container">
@@ -27,15 +34,12 @@
 
     <!-- Empty state -->
     @if (!IsLoading && Connections.length === 0) {
-      <div class="empty-state">
-        <i class="fa-solid fa-plug empty-icon"></i>
-        <h3>No integrations yet</h3>
-        <p>Connect your first external system to start syncing data.</p>
-        <button mjButton variant="primary" (click)="OpenWizard()">
-          <i class="fa-solid fa-plus"></i>
-          Add Your First Integration
-        </button>
-      </div>
+      <mj-empty-state Icon="fa-solid fa-plug"
+        Title="No integrations yet"
+        Message="Connect your first external system to start syncing data."
+        ActionText="Add Your First Integration"
+        ActionIcon="fa-solid fa-plus"
+        (Action)="OpenWizard()" />
     }
 
     <!-- Card grid -->
@@ -336,6 +340,14 @@
                     title="Select source objects and create entity tables">
               <i class="fa-solid fa-table"></i> Create Tables
             </button>
+            <button class="add-map-btn" (click)="FindAndAddNewTables()" [disabled]="IsCreatingTables"
+                    title="Discover and add every source object that isn't mapped yet, in one step">
+              @if (IsCreatingTables) {
+                <i class="fa-solid fa-spinner fa-spin"></i> Finding…
+              } @else {
+                <i class="fa-solid fa-magnifying-glass-plus"></i> Find New Tables
+              }
+            </button>
             <button class="add-map-btn" (click)="ToggleAutoMapPanel()" [class.active]="ShowAutoMapPanel">
               <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Map Schema
             </button>
@@ -347,14 +359,9 @@
 
         <!-- Sync result banner -->
         @if (SyncResult) {
-          <div class="sync-result-banner" [class.sync-success]="SyncResult.Success" [class.sync-failure]="!SyncResult.Success">
-            @if (SyncResult.Success) {
-              <i class="fa-solid fa-circle-check"></i>
-            } @else {
-              <i class="fa-solid fa-circle-xmark"></i>
-            }
-            <span>{{ SyncResult.Message || (SyncResult.Success ? 'Sync completed successfully' : 'Sync failed') }}</span>
-          </div>
+          <mj-alert Size="sm" [Variant]="SyncResult.Success ? 'success' : 'error'">
+            {{ SyncResult.Message || (SyncResult.Success ? 'Sync completed successfully' : 'Sync failed') }}
+          </mj-alert>
         }
 
         <!-- Auto-Map Schema panel -->
@@ -594,14 +601,11 @@
             <mj-loading text="Loading entity maps..."></mj-loading>
           </div>
         } @else if (DetailEntityMaps.length === 0 && !ShowAddMapPanel) {
-          <div class="detail-empty">
-            <i class="fa-solid fa-cube"></i>
-            <h3>No entity maps configured</h3>
-            <p>Entity maps define how external objects sync to MJ entities.</p>
-            <button class="add-map-btn add-map-btn-lg" (click)="ToggleAddMapPanel()">
-              <i class="fa-solid fa-plus"></i> Add Your First Entity Map
-            </button>
-          </div>
+          <mj-empty-state class="detail-empty" Icon="fa-solid fa-cube"
+            Title="No entity maps configured"
+            Message="Entity maps define how external objects sync to MJ entities."
+            ActionText="Add Your First Entity Map" ActionIcon="fa-solid fa-plus"
+            (Action)="ToggleAddMapPanel()" />
         } @else if (DetailEntityMaps.length > 0) {
           <!-- Table header -->
           <div class="detail-table-head">
@@ -1080,11 +1084,11 @@
       </div>
 
       @if (DDLPreviewWarnings.length > 0) {
-        <div class="ddl-warnings">
+        <mj-alert Variant="warning" Size="sm">
           @for (warn of DDLPreviewWarnings; track warn) {
-            <div class="ddl-warning"><i class="fa-solid fa-triangle-exclamation"></i> {{ warn }}</div>
+            <div>{{ warn }}</div>
           }
-        </div>
+        </mj-alert>
       }
 
       @if (DDLPreview) {
@@ -1131,3 +1135,5 @@
     </div>
   </div>
 }
+  </mj-page-body>
+</mj-page-layout>

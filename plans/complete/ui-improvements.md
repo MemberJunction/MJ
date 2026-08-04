@@ -6,8 +6,8 @@
 **Problem**: Content in Golden Layout tabs doesn't always scroll (primarily affects Chat).
 
 **Key Files**:
-- [tab-container.component.css](packages/Angular/Explorer/explorer-core/src/lib/shell/components/tabs/tab-container.component.css)
-- [conversation-chat-area.component.css](packages/Angular/Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.css)
+- [tab-container.component.css](../../packages/Angular/Explorer/explorer-core/src/lib/shell/components/tabs/tab-container.component.css)
+- [conversation-chat-area.component.css](../../packages/Angular/Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.css)
 
 **Root Cause**: The `.lm_content` class (Golden Layout's content container) only had `background: white` set. It was missing `display: flex`, `flex-direction: column`, and proper height constraints needed for child flex layouts to work.
 
@@ -36,8 +36,8 @@ mj-tab-container .lm_content {
 **Problem**: When resizing the browser, Golden Layout windows don't always adjust to available width.
 
 **Key Files**:
-- [golden-layout-manager.ts](packages/Angular/Explorer/base-application/src/lib/golden-layout-manager.ts)
-- [tab-container.component.css](packages/Angular/Explorer/explorer-core/src/lib/shell/components/tabs/tab-container.component.css)
+- [golden-layout-manager.ts](../../packages/Angular/Explorer/base-application/src/lib/golden-layout-manager.ts)
+- [tab-container.component.css](../../packages/Angular/Explorer/explorer-core/src/lib/shell/components/tabs/tab-container.component.css)
 
 **Current State**: Uses `resizeWithContainerAutomatically = true` which relies on ResizeObserver. There's commented-out delayed resize code that was previously used for timing issues.
 
@@ -74,9 +74,9 @@ mj-tab-container .lm_content {
 **Problem**: Make home dashboard more fleshed out; make nav item chips clickable for direct navigation to tertiary pages.
 
 **Key Files**:
-- [home-dashboard.component.ts](packages/Angular/Explorer/dashboards/src/Home/home-dashboard.component.ts)
-- [home-dashboard.component.html](packages/Angular/Explorer/dashboards/src/Home/home-dashboard.component.html)
-- [home-dashboard.component.css](packages/Angular/Explorer/dashboards/src/Home/home-dashboard.component.css)
+- [home-dashboard.component.ts](../../packages/Angular/Explorer/dashboards/src/Home/home-dashboard.component.ts)
+- [home-dashboard.component.html](../../packages/Angular/Explorer/dashboards/src/Home/home-dashboard.component.html)
+- [home-dashboard.component.css](../../packages/Angular/Explorer/dashboards/src/Home/home-dashboard.component.css)
 
 **Current State**: Cards show first 3 nav items as preview chips with "+X more" indicator. Clicking card navigates to application.
 

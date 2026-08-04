@@ -1,5 +1,820 @@
 # Change Log - @memberjunction/content-autotagging
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/tag-engine@6.0.0
+  - @memberjunction/tag-engine-base@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/ai-segmentation@6.0.0
+  - @memberjunction/ai-vectors@6.0.0
+  - @memberjunction/ai-vectordb@6.0.0
+  - @memberjunction/ai-vector-sync@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/storage@6.0.0
+  - @memberjunction/templates@6.0.0
+  - @memberjunction/ai-provider-bundle@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/tag-engine@5.51.0
+  - @memberjunction/tag-engine-base@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/ai-segmentation@5.51.0
+  - @memberjunction/ai-vectors@5.51.0
+  - @memberjunction/ai-vectordb@5.51.0
+  - @memberjunction/ai-vector-sync@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/storage@5.51.0
+  - @memberjunction/templates@5.51.0
+  - @memberjunction/ai-provider-bundle@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Minor Changes
+
+- 12691e3: Content autotagging: metadata-driven vector config, chunk purge + backfill, and parity with the entity-vectorization pipeline
+
+  Brings the ContentSource / autotag embedding pipeline (`AutotagBaseEngine`) up to parity with the
+  EntityDocument pipeline, and wires up chunk lifecycle operations. All additive and opt-in — existing
+  setups behave identically. No schema/migration changes (config rides the `Configuration` JSONType).
+  - **Metadata-driven vector config** on the `Configuration` JSONType of both `ContentSource` and
+    `ContentType` (ContentSource overrides ContentType, then a hardcoded default):
+    - **`VectorIDStrategy`** (`'hash' | 'recordId'`, default `'recordId'`): `'recordId'` uses each
+      chunk's own id as its vector-DB id (purge-safe); `'hash'` is 5.49 EntityDocument parity and
+      unsafe with re-chunk + purge (documented).
+    - **`ChunkTextStorage`** (`'mixed' | 'alwaysChunk'`, default `'alwaysChunk'`): `'alwaysChunk'`
+      writes a `ContentItemChunk` row for every item and leaves `ContentItem.VectorRecordID` null;
+      `'mixed'` keeps single-chunk items' text/vector on the ContentItem.
+    - **`VectorMetadata`** — full structural parity with the entity pipeline's metadata control:
+      `FieldStrategy: 'all' | 'include' | 'exclude' | 'explicit'` (unset ⇒ the curated content
+      default, preserving historical behavior), per-field `Fields` overrides
+      (`Included`/`TruncationLimit`/`StoreAs`), `DefaultTruncationLimit`,
+      and `IncludeEntityIcon`/`IncludeUpdatedAt`/`IncludeTags`/`IncludeText` toggles. The runner mirrors
+      the entity side's decomposition (system/icon/updatedAt/display-field helpers, StoreAs coercion,
+      UUID normalization, truncation) driven off the ContentItem entity. Content-specific deviations:
+      `Entity` is always kept under `'explicit'` (so results stay labeled; record id recovers from the
+      vector id under the default `recordId` strategy), and `Tags` (not a ContentItem field) is a
+      toggle rather than a discovered field.
+  - **Chunk-Identity Contract** — chunk vectors now carry their own identity: `Entity='MJ: Content
+Item Chunks'`, `RecordID=<ContentItemChunk.ID>`, `ContentItemID`, `Sequence`. The chunk row PK is
+    minted up front and used as its identity (and, under `recordId`, its vector id), so a scoped
+    search hit returns the matched **chunk** id (not just the parent content item id) with no
+    search-side changes. Item-level ('mixed' single-chunk) vectors keep `MJ: Content Items` identity.
+  - **`AutotagBaseEngine.EmbedPendingChunks(user, {maxItems})`** — (re)embeds persisted
+    `ContentItemChunk` rows whose `EmbeddingStatus='Pending'`, for migration backfill and error
+    recovery. Bounded per run + rate-limited; best-effort per chunk.
+  - **Embedding dimensions** — the resolved infrastructure now carries `MJ: Vector Indexes.Dimensions`
+    and threads it into the embedding call (new optional `Dimensions` on `AIModelRunner`'s
+    `EmbeddingRunParams`, forwarded to `EmbedTexts`), so reduced-dimension indexes work in the autotag
+    path and the dedup-check query embeds at the matching size.
+  - **Provider routing** — the resolved infrastructure carries the parsed `VectorIndex.ProviderConfig`;
+    per-record `providerTemporaryDirectives` are built via `VectorDBBase.BuildProviderDirectives`
+    (e.g. Pinecone namespace from a configured source field) and `providerConfig` is passed to
+    `CreateRecords`. Only invoked when the index actually has a ProviderConfig.
+  - **`AutotagBaseEngine.PurgeDeletedChunks`** is now triggerable: the Autotag/Vectorize action gains
+    optional **`Purge`** (Phase 4) and **`EmbedPendingChunks`** (Phase 3) params, both independent of
+    Vectorize, both bounded by `MaxItems`, both best-effort.
+
+  Behavior note: the default `ChunkTextStorage='alwaysChunk'` + `VectorIDStrategy='recordId'` means
+  newly-embedded single-chunk items now get a `ContentItemChunk` row with a unique vector id instead
+  of an item-level hash id. Already-embedded (`EmbeddingStatus='Complete'`) items are not reprocessed,
+  so existing data is untouched until re-embedded; set `ChunkTextStorage='mixed'` per source to retain
+  the item-level single-chunk behavior.
+
+- 1afdc40: Content autotagging: persist vector-database record identifiers, and add the ContentItemChunk entity
+
+  Vectorized Content Items previously had no back-reference to their stored vectors, and chunked items produced multiple vectors with no record of which portion of the item each represented. This adds that provenance.
+  - **`ContentItem.VectorRecordID`** (new `NVARCHAR(100)` column) — the vector-database record id for an item embedded as a single vector, providing traceability from the item to its stored vector.
+  - **New `ContentItemChunk` entity** — `ContentItemID` / `Sequence` / `Text` / `VectorRecordID`. When an item's text is split into multiple embedding chunks, each chunk becomes a row here, linking the stored vector back to the specific portion of the parent item. `(ContentItemID, Sequence)` is intentionally NOT unique — superseded chunks are soft-deleted (kept as tombstones) so a chunk and its replacement can share a Sequence until purged.
+  - **`AutotagBaseEngine.VectorizeContentItems`** — after a successful upsert, persists the record ids: single-chunk items write `ContentItem.VectorRecordID`; multi-chunk items write ordered `ContentItemChunk` rows in a server-side transaction. For multi-chunk items the item-level `VectorRecordID` is left null — the chunk table is the source of truth. Each chunk gets a **unique, persistent per-chunk vector id** (not the old item-hash scheme) so a re-chunk's new rows never reuse a superseded chunk's vector id. Each chunk row is stamped `EmbeddingStatus='Complete'` with `LastEmbeddedAt` on creation.
+  - **Re-chunking is a soft-delete + append** — re-vectorizing an item marks its current live chunks `DeleteStatus='Pending'` (rows kept) and appends the new chunks, all in one SQL transaction (no third-party call inside it). **`AutotagBaseEngine.PurgeDeletedChunks`** then removes the superseded chunks' vectors from the vector database (`vectorDB.DeleteRecords`, bounded sub-batches + rate-limited) and flips them to `DeleteStatus='Deleted'` with `LastDeletedAt` — delete-vector-first so a mid-run failure stays retryable, and out-of-band from vectorization so the remote deletes can be batched to each provider's limits.
+  - **`ContentItem` also gains** a self-referencing `ParentID` (nullable FK, enabling a content-item hierarchy) and a nullable `DisplayLink` (`NVARCHAR(2000)`, a display/clickable URL).
+  - **`ContentItemChunk` also gains** status-lifecycle + tracking fields mirroring the `ContentItem` pattern: `EmbeddingStatus` / `TaggingStatus` (NOT NULL, default `Pending`; value list = ContentItem's plus `Active` and `Processed`), a nullable `DeleteStatus` (`Pending` / `Deleted`), and `LastEmbeddedAt` / `LastTaggedAt` / `LastDeletedAt` timestamps.
+  - **Standalone vectorization** (`@memberjunction/actions-content-autotag`) — the Autotag/Vectorize action now runs vectorization whenever `Vectorize=1`, decoupled from whether autotagging produced new items, so `Autotag=0, Vectorize=1` embeds pending content without re-tagging or `ForceReprocess`. `RunDirectVectorization` selects only items awaiting embedding (`EmbeddingStatus='Pending'`) and honors the `ContentSourceIDs` filter; `ForceReprocess` re-embeds everything.
+  - **Re-embed on change** — when a content item is (re)tagged because its content changed, `AutotagBaseEngine` resets its `EmbeddingStatus` to `Pending` as tagging begins, so the vectorization phase picks it up and re-embeds it.
+
+  Additive only; existing vectorization behavior is unchanged when items fit in a single chunk.
+
+- 8b4c6b2: Route both autotag chunking sites through the pluggable segmentation layer (`@memberjunction/ai-segmentation`).
+
+  `buildEmbeddingChunks` and `chunkExtractedText` previously each called `TextChunker` directly with their own inline parameters. Both now resolve a segmenter via `ResolveSegmenter` and go through a single shared `segmentTextForChunking` seam.
+
+  **Behavior is unchanged.** The strategy defaults to `FixedWindow` with the same token budgets, overlap, and sentence strategy each site used before, and both keep their short-circuit that passes already-fitting text through verbatim. This is a refactor that makes the strategy swappable, not a change to how content is chunked.
+  - New `protected resolveSegmenterKey()` is the extension point — override it (or, once the config field lands, resolve it from the Content Source / Content Type `Configuration`) to opt into `StructuralText`, `SemanticText`, or `Transcript` segmentation.
+  - New `protected segmentTextForChunking()` runs the resolved strategy and returns null on failure so each caller keeps its own fallback rather than silently embedding nothing.
+  - The two sites deliberately keep **separate token budgets** — embedding chunks are sized to the embedding model (7500 tokens) and persisted; tagging chunks are sized to the LLM context window (`InputTokenLimit / 1.5`) and transient. They share a strategy, not a budget.
+
+  `chunkExtractedText` is now `async` (it was synchronous). It is public, so this is a signature change, though the only callers in the repo are its own tests.
+
+### Patch Changes
+
+- 8ce3356: Follow-up polish for #3275 (resolves #3287) — no behavior change:
+  - **Export the vector-config interfaces** from `@memberjunction/content-autotagging` with TSDoc
+    (`ResolvedVectorInfrastructure`, `ResolvedVectorStorageConfig`, `EmbeddingChunk`, `PersistedChunk`,
+    `ChunkPurgeStats`, `ChunkEmbedStats`, and the `VectorIDStrategy` / `ChunkTextStorage` /
+    `VectorMetadataConfig` / `VectorMetadataFieldConfig` aliases) so downstream consumers can reason
+    about resolved vector infrastructure.
+  - **`AutotagBaseEngine` chunk-record shaping is now subclass-overridable**: the per-chunk record
+    construction is extracted into a new `protected buildVectorRecord(...)`, and `buildVectorRecords`
+    plus its collaborators (`resolveChunkVectorId`, `buildVectorMetadata`, `buildProviderDirectives`,
+    `resolveItemVectorStorageConfig`, `isItemLevelVector`) are now `protected` with TSDoc.
+  - **O(1) by-id lookups in `KnowledgeHubMetadataEngine`**: `GetContentSourceByID`,
+    `GetContentTypeByID`, `GetContentSourceTypeByID`, `GetContentFileTypeByID` (plus the existing
+    `GetVectorIndexByID` / `GetEntityDocumentByID`) are now backed by lazily-built id indexes that
+    self-invalidate on the engine's `DataChange$`. `AutotagBaseEngine` now routes its by-id lookups
+    through these helpers instead of repeated `.find()` scans.
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [0686d52]
+- Updated dependencies [9efcfe6]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai-prompts@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/ai-segmentation@5.50.0
+  - @memberjunction/ai-vectors@5.50.0
+  - @memberjunction/storage@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/tag-engine@5.50.0
+  - @memberjunction/tag-engine-base@5.50.0
+  - @memberjunction/ai-vector-sync@5.50.0
+  - @memberjunction/templates@5.50.0
+  - @memberjunction/ai-vectordb@5.50.0
+  - @memberjunction/ai-provider-bundle@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [7db8ef5]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+- Updated dependencies [9d6e3d9]
+- Updated dependencies [78a5e44]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/ai-prompts@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai-vector-sync@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/ai-vectordb@5.49.0
+  - @memberjunction/templates@5.49.0
+  - @memberjunction/aiengine@5.49.0
+  - @memberjunction/tag-engine@5.49.0
+  - @memberjunction/tag-engine-base@5.49.0
+  - @memberjunction/ai-vectors@5.49.0
+  - @memberjunction/storage@5.49.0
+  - @memberjunction/ai-provider-bundle@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/tag-engine@5.48.0
+  - @memberjunction/tag-engine-base@5.48.0
+  - @memberjunction/ai-prompts@5.48.0
+  - @memberjunction/ai-vectors@5.48.0
+  - @memberjunction/ai-vectordb@5.48.0
+  - @memberjunction/ai-vector-sync@5.48.0
+  - @memberjunction/storage@5.48.0
+  - @memberjunction/templates@5.48.0
+  - @memberjunction/ai-provider-bundle@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/tag-engine@5.47.0
+  - @memberjunction/tag-engine-base@5.47.0
+  - @memberjunction/ai-prompts@5.47.0
+  - @memberjunction/ai-vectors@5.47.0
+  - @memberjunction/ai-vectordb@5.47.0
+  - @memberjunction/ai-vector-sync@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/storage@5.47.0
+  - @memberjunction/templates@5.47.0
+  - @memberjunction/ai-provider-bundle@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-prompts@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/tag-engine@5.46.0
+  - @memberjunction/tag-engine-base@5.46.0
+  - @memberjunction/ai-vectors@5.46.0
+  - @memberjunction/ai-vectordb@5.46.0
+  - @memberjunction/ai-vector-sync@5.46.0
+  - @memberjunction/storage@5.46.0
+  - @memberjunction/templates@5.46.0
+  - @memberjunction/ai-provider-bundle@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/aiengine@5.45.1
+  - @memberjunction/tag-engine@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/ai-vectors@5.45.1
+  - @memberjunction/ai-vector-sync@5.45.1
+  - @memberjunction/templates@5.45.1
+  - @memberjunction/ai-provider-bundle@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/tag-engine-base@5.45.1
+  - @memberjunction/ai-vectordb@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/storage@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/tag-engine@5.45.0
+  - @memberjunction/tag-engine-base@5.45.0
+  - @memberjunction/ai-prompts@5.45.0
+  - @memberjunction/ai-vectors@5.45.0
+  - @memberjunction/ai-vectordb@5.45.0
+  - @memberjunction/ai-vector-sync@5.45.0
+  - @memberjunction/storage@5.45.0
+  - @memberjunction/templates@5.45.0
+  - @memberjunction/ai@5.45.0
+  - @memberjunction/ai-provider-bundle@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/aiengine@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/ai-vectordb@5.44.0
+  - @memberjunction/storage@5.44.0
+  - @memberjunction/tag-engine@5.44.0
+  - @memberjunction/ai-prompts@5.44.0
+  - @memberjunction/ai-vectors@5.44.0
+  - @memberjunction/ai-vector-sync@5.44.0
+  - @memberjunction/templates@5.44.0
+  - @memberjunction/tag-engine-base@5.44.0
+  - @memberjunction/ai-provider-bundle@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/ai-prompts@5.43.0
+  - @memberjunction/ai@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/aiengine@5.43.0
+  - @memberjunction/tag-engine@5.43.0
+  - @memberjunction/tag-engine-base@5.43.0
+  - @memberjunction/ai-vectors@5.43.0
+  - @memberjunction/ai-vectordb@5.43.0
+  - @memberjunction/ai-vector-sync@5.43.0
+  - @memberjunction/storage@5.43.0
+  - @memberjunction/templates@5.43.0
+  - @memberjunction/ai-provider-bundle@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [256ab06]
+- Updated dependencies [c871a4d]
+- Updated dependencies [9b9b484]
+- Updated dependencies [d185a5c]
+- Updated dependencies [e7c2437]
+- Updated dependencies [37c73f6]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/ai-prompts@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/templates@5.42.0
+  - @memberjunction/ai-vector-sync@5.42.0
+  - @memberjunction/aiengine@5.42.0
+  - @memberjunction/ai-vectordb@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/tag-engine@5.42.0
+  - @memberjunction/ai-vectors@5.42.0
+  - @memberjunction/tag-engine-base@5.42.0
+  - @memberjunction/storage@5.42.0
+  - @memberjunction/ai@5.42.0
+  - @memberjunction/ai-provider-bundle@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [1e81848]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [1568bae]
+- Updated dependencies [4b3fb9d]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/ai-vectors@5.41.0
+  - @memberjunction/ai-vector-sync@5.41.0
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/aiengine@5.41.0
+  - @memberjunction/ai-core-plus@5.41.0
+  - @memberjunction/ai-provider-bundle@5.41.0
+  - @memberjunction/ai-prompts@5.41.0
+  - @memberjunction/tag-engine@5.41.0
+  - @memberjunction/tag-engine-base@5.41.0
+  - @memberjunction/ai-vectordb@5.41.0
+  - @memberjunction/storage@5.41.0
+  - @memberjunction/templates@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.2
+- @memberjunction/ai-core-plus@5.40.2
+- @memberjunction/aiengine@5.40.2
+- @memberjunction/tag-engine@5.40.2
+- @memberjunction/tag-engine-base@5.40.2
+- @memberjunction/ai-prompts@5.40.2
+- @memberjunction/ai-provider-bundle@5.40.2
+- @memberjunction/ai-vectors@5.40.2
+- @memberjunction/ai-vectordb@5.40.2
+- @memberjunction/ai-vector-sync@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/storage@5.40.2
+- @memberjunction/templates@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/aiengine@5.40.1
+  - @memberjunction/tag-engine@5.40.1
+  - @memberjunction/tag-engine-base@5.40.1
+  - @memberjunction/ai-prompts@5.40.1
+  - @memberjunction/ai-vectors@5.40.1
+  - @memberjunction/ai-vectordb@5.40.1
+  - @memberjunction/ai-vector-sync@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/storage@5.40.1
+  - @memberjunction/templates@5.40.1
+  - @memberjunction/ai-provider-bundle@5.40.1
+  - @memberjunction/ai@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Minor Changes
+
+- 253a188: Knowledge Hub Classify redesign
+  - **Clustering**: new `@memberjunction/clustering-engine` (framework-agnostic fetch → cluster → reduce → LLM-name pipeline), a "Run Cluster Analysis" action, a `RunClusterAnalysis` GraphQL resolver, a `GraphQLClusterClient` transport, and the Angular `ClusteringService` thinned to delegate to the server.
+  - **View-type plug-in architecture (entity viewer)**: `ViewType` registry + `ViewTypeEngine` + `IViewTypeDescriptor`/`IViewRenderer`/`IViewPropSheet` contracts in `ng-entity-viewer`, with Grid/Cards/Timeline/Map descriptors. The host now **dynamic-mounts** any registered plug-in view type (via `ViewContainerRef`) with zero host changes, and the switcher shows the active type's icon + label, collapsing from an icon strip to a dropdown as the list grows. **Cluster view type** added in `@memberjunction/ng-clustering` (descriptor + `IViewRenderer` wrapper over the scatter + `IViewPropSheet` + an Entity-Document availability engine) — available on any entity with vectors, reusing the same `ClusteringService`. The active view type persists to `UserView.ViewTypeID` (new source of truth; backfilled from the legacy `DisplayState.defaultMode`) and per-view-type config to `UserView.DisplayState.viewTypeConfigs` (new typed `IViewTypeConfigEntry`). `ViewType.Icon` is now `ExtendedType='Icon'` for the admin icon picker. See `packages/Angular/Generic/entity-viewer/VIEW_TYPE_PLUGINS.md`.
+  - **Classify UX**: per-tab scroll fix, Refresh buttons, meaningful content-item display names, loading states, `BaseEntityEvent` reactivity, and load-more pagination.
+  - **Audit & analytics**: direct tag→prompt-run lineage (`AIPromptRunID` + `Reasoning` on Content Item Tags), `ClassifyAnalyticsEngine`, reusable item grid + drilldown, and an Overview analytics section.
+  - **Setup & onboarding**: contextual prompt injection (org/content-type/source aggregation), `generateSeedTaxonomy` (clustering-backed) + resolver, source-form domain-context UI, org-context editor, inline Entity Document creation, seed-taxonomy review, and a guided setup wizard.
+  - **Visualize surface**: Knowledge Hub "Clusters" tab generalized to a "Visualize" host with Clusters / Tag Cloud modes, a `TagCloudEngine`, and a shared record drilldown.
+  - **Foundations**: `ApplicationSettingEngine` (global + app-scoped settings), and the `tag-engine` → `tag-engine-base` split so browser code no longer pulls server-only AI dependencies.
+  - **Fix**: stop server-only packages (`templates` → `aiengine`/`ai-provider-bundle`, storage, vector-DB and LLM provider SDKs) from leaking into the browser class-registration manifest, which previously broke the MJExplorer cold build. Added CLAUDE.md guardrails to the Bootstrap and BootstrapLite packages.
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/tag-engine@5.40.0
+  - @memberjunction/tag-engine-base@5.40.0
+  - @memberjunction/ai-core-plus@5.40.0
+  - @memberjunction/aiengine@5.40.0
+  - @memberjunction/ai-prompts@5.40.0
+  - @memberjunction/ai-vectors@5.40.0
+  - @memberjunction/ai-vectordb@5.40.0
+  - @memberjunction/ai-vector-sync@5.40.0
+  - @memberjunction/storage@5.40.0
+  - @memberjunction/templates@5.40.0
+  - @memberjunction/ai-provider-bundle@5.40.0
+  - @memberjunction/ai@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [3c53858]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [db4addf]
+- Updated dependencies [8c39dd9]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-vectordb@5.39.0
+  - @memberjunction/ai-vector-sync@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/ai-prompts@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/aiengine@5.39.0
+  - @memberjunction/tag-engine@5.39.0
+  - @memberjunction/tag-engine-base@5.39.0
+  - @memberjunction/ai-vectors@5.39.0
+  - @memberjunction/storage@5.39.0
+  - @memberjunction/templates@5.39.0
+  - @memberjunction/ai-provider-bundle@5.39.0
+
+## 5.38.0
+
+### Minor Changes
+
+- 30f598d: Two intertwined deliverables in one PR: the autotag-website overhaul, plus a new dynamic forms-extension architecture (`BaseFormPanel` slot system) that lets consumers extend generated entity forms without the heavyweight custom-form override pattern.
+
+  ## Autotag website crawler overhaul
+
+  Fixes the long-standing "only crawls the seed page" symptom and adds first-class run budgets, a streaming pipeline, and per-source UI knobs.
+
+  **Fixes**
+  - `AutotagWebsite` now respects `MaxDepth` out of the box — the recursive crawler was previously gated on a flag that defaulted to falsy, so most sources only ever scraped the start URL. Class-level defaults are now `MaxDepth=2`, `CrawlSitesInLowerLevelDomain=true`, `CrawlOtherSitesInTopLevelDomain=false`.
+  - Change-detection (the "is this page changed?" short-circuit) was rewritten to fetch each URL once instead of two or three times, hash the **extracted body text** (not raw HTML — eliminates spurious "changed" verdicts from CSRF tokens / build hashes / server timestamps), and scope the dedup query to the current `ContentSourceID` (a 404 boilerplate from one site no longer masks real pages on another).
+  - `visitedURLs` state is now reset per content source — was leaking across sources and silently deduping legitimate URLs.
+  - Conservative URL normalization (strip fragment, collapse trailing slash, sort query params; path case preserved per RFC 3986) so common variants dedupe correctly.
+  - Several smaller bugs: `URLPattern` regex now applied in the shallow path too, `Number.isFinite` guard prevents NaN-cascade in the depth check.
+
+  **Features**
+  - **Streaming pipeline.** `ExtractTextAndProcessWithLLM` now accepts `AsyncIterable<MJContentItemEntity>` in addition to arrays. The website crawler streams items into the LLM batcher as they pass change-detection — total wall-clock is `~max(crawl, classify)` instead of `crawl + classify`. Backwards-compatible: existing array callers (AutotagEntity, tests) are unchanged.
+  - **`MaxItemsPerRun` run budget.** Most intuitive "do at most N this run, do the rest next time" cap. Wired into `AutotagWebsite` (which had no budget integration before) and `AutotagEntity` (which already had the other RunBudget knobs). Pause is graceful via the existing CancellationRequested machinery; next run picks up where it left off (change-detection skips already-tagged items).
+  - **Per-source Website crawler UI.** New "Website Crawler Settings" section on the Content Source form (conditional on Website source type) with structured inputs for MaxDepth, RootURL, URLPattern (live regex validation), and toggles for the recursion + sibling-fan-out flags. The Tag Pipeline section gets a promoted "Max items / run" primary row.
+
+  **Storage**
+  - `IContentSourceConfiguration` extended with a typed `MaxItemsPerRun?: number` and `Website?: IContentSourceWebsiteConfiguration` sub-object. The new `MJContentSourceEntity_IContentSourceWebsiteConfiguration` interface is now exported from `@memberjunction/core-entities`.
+  - `AutotagWebsite` reads website knobs from the typed `Configuration.Website` first, then overlays `ContentSourceParam` rows as a sharper-per-instance override (legacy sources configured the old way keep working).
+  - Per-key coercion at the param-overlay boundary fixes a latent bug where DB-stored strings were silently stuffed into number/boolean-typed instance fields.
+
+  **Tests**
+
+  162 tests pass (up from 119). New coverage spans URL normalization, fetch-once / extracted-text hashing, the streaming engine path (AsyncIterable batching, partial-batch flush, resume), `MaxItemsPerRun` budget enforcement, and the `Configuration.Website` overlay.
+
+  **Docs**
+
+  `packages/ContentAutotagging/README.md` documents the new streaming diagram, the Website Crawl Settings table, the Run Budgets table with priority order, and the resume semantics.
+
+  **Known follow-ups** (not in this PR)
+  - True crawl-side resume that persists discovered URLs so re-runs skip the HTTP re-discovery — today's resume is "functional via change-detection dedup."
+  - `ETag` / `If-Modified-Since` conditional GETs on re-crawls (needs new columns on `MJContentItem`).
+
+  ## `BaseFormPanel` slot system (`@memberjunction/ng-base-forms`)
+
+  Generated entity forms can now be extended **without** replacing them via a `*Extended` custom-form override. Author a standalone Angular component extending `BaseFormPanel`, decorate with `@RegisterClassEx(BaseFormPanel, { metadata: { entity, slot, sortKey } })`, declare in any module. `<mj-form-panel-slot>` hosts in the generated form discover matching panels at runtime and dynamically mount them.
+
+  **Slot positions** (top → bottom): `top-area`, `before-fields`, `after-fields`, `after-related`, `after-everything`.
+
+  **Fallback chain** via `FormSlotCoordinator`: if the registered slot is missing because CodeGen hasn't been rerun against the new template emitter, the panel walks forward in the chain until it finds an existing slot. `MjRecordFormContainer` ALWAYS emits `after-everything` in its template, so panels never dead-end — pre-CodeGen-regen forms display every panel (at the bottom); post-regen forms display them in the preferred position.
+
+  New public exports from `@memberjunction/ng-base-forms`:
+  - `BaseFormPanel<TRecord>` abstract directive
+  - `FormPanelSlot` type union
+  - `FormPanelRegistrationMetadata` interface
+  - `<mj-form-panel-slot>` component
+  - `FormSlotCoordinator` service
+  - `FORM_SLOT_CHAIN` constant
+
+  Custom `*Extended` forms (e.g. `AIAgentFormComponentExtended`) remain a first-class pattern for truly bespoke layouts where the generated form is the wrong starting point entirely.
+
+  Full authoring guide in `packages/Angular/Generic/base-forms/PANELS.md`.
+
+  ## `@RegisterClassEx` + ClassFactory metadata (`@memberjunction/global`)
+
+  Existing `@RegisterClass` keeps its exact positional signature (zero breaking changes) but also accepts an optional 6th `metadata` arg for parity. New `@RegisterClassEx(baseClass, options)` is the modern form when you have anything beyond `(baseClass, key, priority)` to specify — options-bag avoids positional-boolean noise and is the right place to attach `metadata`.
+
+  New public exports from `@memberjunction/global`:
+  - `RegisterClassEx` decorator
+  - `RegisterClassOptions` interface
+  - `ClassRegistration.Metadata` field (optional, additive)
+  - `ClassFactory.GetAllRegistrationsByKeyPrefix(base, prefix)` — common structured-key case (case-insensitive, trimmed)
+  - `ClassFactory.GetAllRegistrationsByKeyPattern(base, regex)` — nuanced key matching
+  - `ClassFactory.GetAllRegistrationsByMetadata(base, predicate)` — recommended for structured discriminators
+
+  The `Ex` suffix follows MJ's existing `Foo`/`FooAsync`/`FooEx` convention. Not a true TS overload — JS overloads are hacky compared to true OOP, and sibling decorators give cleaner IntelliSense + a clean deprecation path if we ever consolidate.
+
+  MJGlobal README adds a "Structured registration" section documenting both decorators + all three lookup helpers.
+
+  ## Knowledge Hub dashboard quick-edit (`@memberjunction/ng-dashboards`)
+
+  The AI > Autotagging Pipeline dashboard's "Edit Content Source" slide-in is intentionally a **quick-edit surface**, not a full form. Added the most-useful subset of the new knobs:
+  - `MaxItemsPerRun` (always shown — most-asked-for budget cap)
+  - `MaxDepth` + 2 crawl toggles (Website-source-conditional)
+  - **"Open advanced settings →"** link that calls `NavigationService.OpenEntityRecord('MJ: Content Sources', id)` to land in the full entity form, where every panel is available via the slot system.
+
+  ## Documentation
+  - `packages/Angular/Generic/base-forms/PANELS.md` (NEW) — comprehensive BaseFormPanel authoring guide.
+  - `packages/Angular/CLAUDE.md` — restructured "Extending Entity Forms" section. Both patterns first-class.
+  - `packages/Angular/Explorer/core-entity-forms/README.md` — new "Two Patterns" section above the existing custom-form guide.
+  - `guides/CONTENT_AUTOTAGGING_GUIDE.md` — extended config table (all budget caps + `Website` sub-object) + UI section pointing at PANELS.md.
+  - `packages/MJGlobal/README.md` — new "Structured registration: `@RegisterClassEx` + metadata" section.
+  - Root `CLAUDE.md` — new "Nested CLAUDE.md Index" pointing at every sub-directory CLAUDE.md.
+
+  ## Follow-ups (not in this PR)
+  - Promote source-type-specific form sections to a registered class extension point when the count grows past 2-3 (e.g., RSS, Cloud Storage). Today's `IsWebsiteSourceType` template gate works fine for 1-2 source types.
+
+### Patch Changes
+
+- b2ad244: Declare `domhandler` as a direct dependency. `AutotagWebsite.ts` imports the `AnyNode` type from it; previously it was resolving transitively through `cheerio`, which the workspace dependency-check job flagged as a missing dependency.
+- Updated dependencies [6b6c321]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [8bd97f3]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/aiengine@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/ai-prompts@5.38.0
+  - @memberjunction/ai-vectors@5.38.0
+  - @memberjunction/ai-vector-sync@5.38.0
+  - @memberjunction/templates@5.38.0
+  - @memberjunction/tag-engine@5.38.0
+  - @memberjunction/tag-engine-base@5.38.0
+  - @memberjunction/ai-vectordb@5.38.0
+  - @memberjunction/storage@5.38.0
+  - @memberjunction/ai@5.38.0
+  - @memberjunction/ai-provider-bundle@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [22b775f]
+- Updated dependencies [4f15f31]
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/ai-prompts@5.37.0
+  - @memberjunction/ai-vectors@5.37.0
+  - @memberjunction/ai-vector-sync@5.37.0
+  - @memberjunction/templates@5.37.0
+  - @memberjunction/tag-engine@5.37.0
+  - @memberjunction/tag-engine-base@5.37.0
+  - @memberjunction/ai-vectordb@5.37.0
+  - @memberjunction/storage@5.37.0
+  - @memberjunction/ai-provider-bundle@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/aiengine@5.36.0
+  - @memberjunction/tag-engine@5.36.0
+  - @memberjunction/tag-engine-base@5.36.0
+  - @memberjunction/ai-prompts@5.36.0
+  - @memberjunction/ai-vectors@5.36.0
+  - @memberjunction/ai-vector-sync@5.36.0
+  - @memberjunction/storage@5.36.0
+  - @memberjunction/templates@5.36.0
+  - @memberjunction/ai-vectordb@5.36.0
+  - @memberjunction/ai-provider-bundle@5.36.0
+  - @memberjunction/ai@5.36.0
+  - @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/ai-prompts@5.35.0
+  - @memberjunction/ai-vectors@5.35.0
+  - @memberjunction/ai-vector-sync@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/aiengine@5.35.0
+  - @memberjunction/tag-engine@5.35.0
+  - @memberjunction/tag-engine-base@5.35.0
+  - @memberjunction/ai-vectordb@5.35.0
+  - @memberjunction/storage@5.35.0
+  - @memberjunction/templates@5.35.0
+  - @memberjunction/ai-provider-bundle@5.35.0
+  - @memberjunction/ai@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/tag-engine@5.34.1
+  - @memberjunction/tag-engine-base@5.34.1
+  - @memberjunction/ai-prompts@5.34.1
+  - @memberjunction/ai-vectors@5.34.1
+  - @memberjunction/ai-vectordb@5.34.1
+  - @memberjunction/ai-vector-sync@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/storage@5.34.1
+  - @memberjunction/templates@5.34.1
+  - @memberjunction/ai-provider-bundle@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- 8dad9c5: Fix Content Item EmbeddingStatus never transitioning out of `Pending` during vectorization. `updateEmbeddingStatusBatch` was defined on `AutotagBaseEngine` but never called from anywhere — items would have their vectors successfully embedded and upserted to the vector database, yet `EmbeddingStatus`, `EmbeddingModelID`, and `LastEmbeddedAt` would remain at their initial values forever, leaving dashboards permanently showing items as Pending. `vectorizeGroup` now marks every item in the group as `Processing` before processing begins, transitions each batch to `Complete` (with the resolved embedding model ID and timestamp) on a successful upsert, and to `Failed` when either the embedding API returns the wrong vector count or the vector DB upsert reports failure.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/aiengine@5.34.0
+  - @memberjunction/tag-engine@5.34.0
+  - @memberjunction/tag-engine-base@5.34.0
+  - @memberjunction/ai-prompts@5.34.0
+  - @memberjunction/ai-provider-bundle@5.34.0
+  - @memberjunction/ai-vectors@5.34.0
+  - @memberjunction/ai-vectordb@5.34.0
+  - @memberjunction/ai-vector-sync@5.34.0
+  - @memberjunction/storage@5.34.0
+  - @memberjunction/templates@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/global@5.34.0
+  - @memberjunction/ai@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

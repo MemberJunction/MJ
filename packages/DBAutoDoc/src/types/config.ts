@@ -157,6 +157,88 @@ export interface AnalysisConfig {
   guardrails?: GuardrailsConfig;
   relationshipDiscovery?: RelationshipDiscoveryConfig;
   sampleQueryGeneration?: SampleQueryGenerationConfig;
+  organicKeyDetection?: OrganicKeyDetectionConfig;
+}
+
+/**
+ * Configuration for organic-key cluster detection.
+ *
+ * Organic keys (per MJ PR #2193) are cross-entity navigation rules based on
+ * shared business values rather than declared FKs (e.g. matching contact records
+ * across CRM systems by email). This pass clusters columns whose descriptions +
+ * sample values indicate they share a value space, and emits proposed clusters
+ * for human review.
+ *
+ * Off by default — opt-in via `enabled: true`. Requires an AI provider (the
+ * existing `ai` config) for both embeddings and per-cluster refinement.
+ *
+ * NOTE: This pass deliberately does NOT iterate. Clustering happens once, the
+ * LLM refiner runs once per cluster, and the pass terminates. No convergence
+ * loop, no multi-pass expansion. If a future version reintroduces iteration,
+ * `maxIterations` would join this config section.
+ */
+export interface OrganicKeyDetectionConfig {
+  /** Enable the organic-key detection pass (default: false). */
+  enabled: boolean;
+
+  // ─── Clustering ──────────────────────────────────────────────────────
+  /**
+   * How aggressive should clustering be? The detector auto-calibrates the
+   * merge distance from the actual embedding geometry — this knob just picks
+   * how loose to be when deciding what counts as "close enough" to merge:
+   *
+   *   - 'strict':     few, tight clusters. Only obvious matches. Lower recall, higher precision.
+   *   - 'balanced':   default. Catches most real organic keys without too much noise.
+   *   - 'permissive': more clusters, including borderline cases. Higher recall, more LLM review work.
+   *
+   * Internally maps to a percentile of the pairwise distance distribution
+   * (strict ~ p1, balanced ~ p5, permissive ~ p15).
+   */
+  clusteringSensitivity?: 'strict' | 'balanced' | 'permissive';
+  /**
+   * Advanced / debugging override — explicit cosine-distance threshold. Set ONLY
+   * to bypass auto-calibration (e.g. ablation studies, reproducing a specific run).
+   * Normal users should set `clusteringSensitivity` instead.
+   */
+  mergeThreshold?: number;
+  /** Minimum members for a cluster to be reported. Default: 2. */
+  minClusterSize?: number;
+  /** Minimum distinct tables a cluster must span. Default: 2. */
+  minDistinctTables?: number;
+  /** Number of sample values per column to include in the embedding input and refiner prompt. Default: 5. */
+  sampleValueCount?: number;
+
+  // ─── LLM Refinement ──────────────────────────────────────────────────
+  /** Concurrency for per-cluster LLM refinement calls. Default: 4. */
+  refinementConcurrency?: number;
+  /** Max retries per LLM call on transient failure. Default: 2. */
+  maxRefinementRetries?: number;
+  /** When a single cluster's refinement errors, fail the whole pass or just skip that cluster. Default: 'skip'. */
+  onRefinementError?: 'fail' | 'skip';
+
+  // ─── Budget / Cost ───────────────────────────────────────────────────
+  /** Soft token budget for the entire detection pass (warns when exceeded). Default: 0 = unlimited. */
+  tokenBudget?: number;
+
+  // ─── Embeddings ──────────────────────────────────────────────────────
+  /**
+   * Embedding provider override. Maps to a MemberJunction `BaseEmbeddings` driver
+   * (resolved via the ClassFactory). Defaults to `openai` when absent. The API key
+   * is taken from the top-level `ai` config.
+   */
+  embedding?: {
+    provider?: 'openai' | 'mistral' | 'azure' | 'bedrock' | 'ollama' | 'local';
+    model?: string;
+    dimensions?: number;
+    batchSize?: number;
+    endpoint?: string;
+    /** Disk path for the embedding cache. Default: `<outputDir>/embedding-cache.json`. */
+    cachePath?: string;
+  };
+
+  // ─── Output ──────────────────────────────────────────────────────────
+  /** Path (relative to outputDir) for the detected-organic-keys JSON output. Default: `detected-organic-keys.json`. */
+  outputFile?: string;
 }
 
 export interface SampleQueryGenerationConfig {

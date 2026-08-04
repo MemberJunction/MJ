@@ -26,6 +26,14 @@ export class BedrockLLM extends BaseLLM {
   private _client: BedrockRuntimeClient;
   private _region: string;
 
+  /**
+   * Per-request streaming state. Holds the caller's cancellation token so
+   * finalizeStreamingResponse() can tell a cancelled stream apart from a completed one — the
+   * base-class chunk loop swallows errors thrown while iterating, so without this an abort
+   * mid-stream would be reported as a truncated success.
+   */
+  private _streamingState: { cancellationToken?: AbortSignal } = { cancellationToken: undefined };
+
   constructor(apiKey: string, region: string = 'us-east-1') {
     super(apiKey);
     this._region = region;
@@ -60,11 +68,71 @@ export class BedrockLLM extends BaseLLM {
   }
 
   /**
+   * Reset per-request streaming state. Called by BaseLLM at the start of every streaming request
+   * and again in its `finally` block.
+   */
+  protected override resetStreamingState(): void {
+    this._streamingState = { cancellationToken: undefined };
+  }
+
+  /**
+   * Was this error produced by the caller aborting the request?
+   *
+   * The AWS SDK's HTTP handlers reject with an `Error` whose `name` is `'AbortError'` when the
+   * `abortSignal` we hand `send()` fires — both before the request goes out and mid-flight. That
+   * name is NOT in Smithy's transient-error list, so the retry strategy does not retry it; and even
+   * if it did, the handler short-circuits on an already-aborted signal. A cancelled request stays
+   * cancelled.
+   */
+  private isCancellation(error: unknown, token?: AbortSignal): boolean {
+    if (token?.aborted) {
+      return true;
+    }
+    return error instanceof Error && error.name === 'AbortError';
+  }
+
+  /**
+   * Build the failed ChatResult returned when a request is cancelled (caller abort, or the timeout
+   * composed into `cancellationToken` upstream). Shaped like every other failure this driver
+   * reports, so callers keep using `success === false` + `errorMessage`.
+   */
+  private buildCancelledResult(startTime: Date, endTime: Date): ChatResult {
+    const message = 'Bedrock request was cancelled';
+    return {
+      success: false,
+      statusText: 'cancelled',
+      startTime: startTime,
+      endTime: endTime,
+      timeElapsed: endTime.getTime() - startTime.getTime(),
+      data: {
+        choices: [],
+        usage: new ModelUsage(0, 0)
+      },
+      errorMessage: message,
+      exception: null,
+      errorInfo: ErrorAnalyzer.analyzeError(new Error(message), 'Bedrock')
+    };
+  }
+
+  /**
+   * The request options passed to `BedrockRuntimeClient.send()`. Note the AWS SDK spells this
+   * `abortSignal` (NOT `signal`, which is what the Anthropic/OpenAI SDKs use).
+   */
+  private buildSendOptions(params: ChatParams): { abortSignal?: AbortSignal } {
+    return { abortSignal: params.cancellationToken };
+  }
+
+  /**
    * Implementation of non-streaming chat completion for Amazon Bedrock
    */
   protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
     const startTime = new Date();
-    
+
+    if (params.cancellationToken?.aborted) {
+      // Already cancelled before we opened a socket — don't bother the API.
+      return this.buildCancelledResult(startTime, new Date());
+    }
+
     try {
       // Map provider-agnostic params to Bedrock-specific format
       const bedrockParams = this.mapToBedrockParams(params);
@@ -137,41 +205,56 @@ export class BedrockLLM extends BaseLLM {
         accept: 'application/json'
       });
       
-      const response = await this._client.send(command);
+      // Forward the caller's cancellation token so an abort tears down the HTTP socket.
+      const response = await this._client.send(command, this.buildSendOptions(params));
       const responseBody = JSON.parse(new TextDecoder().decode(response.body));
       
-      // Parse response body based on model provider
+      // Parse response body based on model provider.
+      // cacheReadTokens / cacheWriteTokens default to 0; only Anthropic-on-Bedrock reports caching.
       let content = '';
-      let tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
-      
+      let tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+
       if (modelId.startsWith('anthropic.')) {
         content = responseBody.content?.[0]?.text || '';
+        // Anthropic-style usage: input_tokens EXCLUDES cached tokens, so it is already the net-new
+        // (uncached) prompt count — assign through. Cache reads/writes are reported separately and
+        // are DISJOINT from input_tokens.
         tokenUsage = {
           promptTokens: responseBody.usage?.input_tokens || 0,
           completionTokens: responseBody.usage?.output_tokens || 0,
-          totalTokens: (responseBody.usage?.input_tokens || 0) + (responseBody.usage?.output_tokens || 0)
+          totalTokens: (responseBody.usage?.input_tokens || 0) + (responseBody.usage?.output_tokens || 0),
+          cacheReadTokens: responseBody.usage?.cache_read_input_tokens || 0,
+          cacheWriteTokens: responseBody.usage?.cache_creation_input_tokens || 0
         };
       } else if (modelId.startsWith('ai21.')) {
         content = responseBody.completions?.[0]?.data?.text || '';
+        // AI21 via Bedrock has no prompt-cache reporting — promptTokens is already net-new.
         tokenUsage = {
           promptTokens: responseBody.prompt_tokens || 0,
           completionTokens: responseBody.completion_tokens || 0,
-          totalTokens: (responseBody.prompt_tokens || 0) + (responseBody.completion_tokens || 0)
+          totalTokens: (responseBody.prompt_tokens || 0) + (responseBody.completion_tokens || 0),
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0
         };
       } else if (modelId.startsWith('amazon.titan-')) {
         content = responseBody.results?.[0]?.outputText || '';
+        // Titan via Bedrock has no prompt-cache reporting — promptTokens is already net-new.
         tokenUsage = {
           promptTokens: responseBody.inputTextTokenCount || 0,
           completionTokens: responseBody.outputTextTokenCount || 0,
-          totalTokens: (responseBody.inputTextTokenCount || 0) + (responseBody.outputTextTokenCount || 0)
+          totalTokens: (responseBody.inputTextTokenCount || 0) + (responseBody.outputTextTokenCount || 0),
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0
         };
       } else if (modelId.startsWith('meta.')) {
         content = responseBody.generation || '';
-        // Llama models via Bedrock may not provide token counts
+        // Llama models via Bedrock may not provide token counts, and report no cache info.
         tokenUsage = {
           promptTokens: 0,
           completionTokens: 0,
-          totalTokens: 0
+          totalTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0
         };
       }
       
@@ -187,6 +270,10 @@ export class BedrockLLM extends BaseLLM {
         index: 0
       }];
       
+      const usage = new ModelUsage(tokenUsage.promptTokens, tokenUsage.completionTokens);
+      usage.cacheReadTokens = tokenUsage.cacheReadTokens;
+      usage.cacheWriteTokens = tokenUsage.cacheWriteTokens;
+
       return {
         success: true,
         statusText: "OK",
@@ -195,13 +282,17 @@ export class BedrockLLM extends BaseLLM {
         timeElapsed: endTime.getTime() - startTime.getTime(),
         data: {
           choices: choices,
-          usage: new ModelUsage(tokenUsage.promptTokens, tokenUsage.completionTokens)
+          usage
         },
+        cacheInfo: { cacheHit: tokenUsage.cacheReadTokens > 0, cachedTokenCount: tokenUsage.cacheReadTokens },
         errorMessage: "",
         exception: null,
       };
     } catch (error) {
       const endTime = new Date();
+      if (this.isCancellation(error, params.cancellationToken)) {
+        return this.buildCancelledResult(startTime, endTime);
+      }
       return {
         success: false,
         statusText: "Error",
@@ -223,6 +314,10 @@ export class BedrockLLM extends BaseLLM {
    * Create a streaming request for Bedrock
    */
   protected async createStreamingRequest(params: ChatParams): Promise<any> {
+    // Remember the caller's cancellation token so finalizeStreamingResponse() can distinguish a
+    // cancelled stream from a completed one.
+    this._streamingState.cancellationToken = params.cancellationToken;
+
     // Map provider-agnostic params to Bedrock-specific format
     const bedrockParams = this.mapToBedrockParams(params);
     
@@ -293,8 +388,10 @@ export class BedrockLLM extends BaseLLM {
       contentType: 'application/json',
       accept: 'application/json'
     });
-    
-    return this._client.send(command);
+
+    // Forward the cancellation token so an abort cancels the streaming HTTP request instead of
+    // letting the socket keep delivering events into an abandoned promise.
+    return this._client.send(command, this.buildSendOptions(params));
   }
   
   /**
@@ -330,10 +427,14 @@ export class BedrockLLM extends BaseLLM {
       }
       
       if (chunkData.usage) {
+        // Anthropic-style: input_tokens already EXCLUDES cached tokens (net-new). Cache
+        // reads/writes are reported separately and are DISJOINT from input_tokens.
         usage = new ModelUsage(
           chunkData.usage.input_tokens || 0,
           chunkData.usage.output_tokens || 0
         );
+        usage.cacheReadTokens = chunkData.usage.cache_read_input_tokens || 0;
+        usage.cacheWriteTokens = chunkData.usage.cache_creation_input_tokens || 0;
       }
     }
     
@@ -354,11 +455,19 @@ export class BedrockLLM extends BaseLLM {
   ): ChatResult {
     // Create dates (will be overridden by base class)
     const now = new Date();
-    
+
+    // The base-class chunk loop catches (and only logs) errors thrown while iterating the event
+    // stream, so an abort mid-stream would otherwise land here looking like a normal completion
+    // with truncated content. Report it as the same cancelled failure the non-streaming path returns.
+    if (this._streamingState.cancellationToken?.aborted) {
+      return this.buildCancelledResult(now, now);
+    }
+
     // Create a proper ChatResult instance with constructor params
     const result = new ChatResult(true, now, now);
     
     // Set all properties
+    const finalUsage: ModelUsage = usage || new ModelUsage(0, 0);
     result.data = {
       choices: [{
         message: {
@@ -368,9 +477,12 @@ export class BedrockLLM extends BaseLLM {
         finish_reason: lastChunk?.finishReason || 'stop',
         index: 0
       }],
-      usage: usage || new ModelUsage(0, 0)
+      usage: finalUsage
     };
-    
+
+    const cacheRead = finalUsage.cacheReadTokens ?? 0;
+    result.cacheInfo = { cacheHit: cacheRead > 0, cachedTokenCount: cacheRead };
+
     result.statusText = 'success';
     result.errorMessage = null;
     result.exception = null;

@@ -1,6 +1,6 @@
-import { LogError, LogStatus, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
+import { LogError, LogStatus } from '@memberjunction/core';
+import { UUIDsEqual, RegisterClass } from '@memberjunction/global';
+import { ChatResult, ChatMessageRole, ChatMessage } from '@memberjunction/ai';
 import { MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 import {
   ExecutionTask,
@@ -11,22 +11,12 @@ import {
   ResultSelectionConfig,
   ParallelExecutionProgress,
   TokenUsageUpdate,
+  ProgressCallbacksInterface,
+  IParallelExecutionCoordinator,
 } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
-
-/**
- * Interface for progress callbacks to avoid circular dependency issues
- */
-interface ProgressCallbacksInterface {
-  getStreamingConfig?: () => {
-    enabled?: boolean;
-    callbacks?: {
-      OnTaskComplete?: (taskResult: ExecutionTaskResult, progress: ParallelExecutionProgress) => void;
-      OnParallelProgress?: (progress: ParallelExecutionProgress) => void;
-    };
-  };
-}
+import { AIPromptRunner } from './AIPromptRunner';
 
 /**
  * Helper class for tracking parallel execution progress
@@ -131,28 +121,28 @@ class ParallelProgressTracker {
  * - Performance monitoring and metrics collection
  * - Real-time progress tracking and streaming updates
  */
-export class ParallelExecutionCoordinator {
+/**
+ * Coordinates parallel multi-model prompt execution.
+ *
+ * SUBCLASSES {@link AIPromptRunner} purely to REUSE its execution primitives — most importantly the
+ * `protected executeModel`, which owns credential resolution, driver selection, ChatParams
+ * construction, prefill, media handling, and streaming. Each parallel task delegates to that ONE
+ * method (see {@link executeSingleTask}) instead of re-implementing it, so the parallel and
+ * single-model paths can never drift. The coordinator only adds task fan-out, grouping, timeouts,
+ * result selection, and child-run tracking on top.
+ *
+ * Registered under the base class with a dedicated key so {@link AIPromptRunner.ParallelCoordinator}
+ * can instantiate it via the ClassFactory without a static (circular) import.
+ */
+@RegisterClass(AIPromptRunner, 'ParallelExecutionCoordinator')
+export class ParallelExecutionCoordinator extends AIPromptRunner implements IParallelExecutionCoordinator {
   private readonly _defaultConfig: ParallelExecutionConfig;
-  private _metadata: Metadata;
-  private _provider: IMetadataProvider | null = null;
-
-  /**
-   * Optional metadata provider override. Callers should set
-   * `instance.Provider = providerToUse` before invoking execution methods
-   * in multi-provider contexts. Falls back to the global default provider when unset.
-   */
-  public get Provider(): IMetadataProvider {
-    return this._provider ?? (this._metadata as unknown as IMetadataProvider);
-  }
-  public set Provider(value: IMetadataProvider | null) {
-    this._provider = value;
-  }
 
   /**
    * Creates a new parallel execution coordinator with default configuration.
    */
   constructor() {
-    this._metadata = (this._provider as unknown as Metadata) ?? new Metadata();
+    super();
     this._defaultConfig = {
       maxConcurrentExecutions: 5,
       taskTimeoutMS: 30000, // 30 seconds
@@ -174,7 +164,6 @@ export class ParallelExecutionCoordinator {
    * @param parentPromptRunId - Optional parent prompt run ID for hierarchical logging
    * @param cancellationToken - Optional cancellation token to abort execution
    * @param progressCallbacks - Optional callbacks for progress tracking
-   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ParallelExecutionResult> - Aggregated results from all executions
    */
   public async executeTasksInParallel(
@@ -184,7 +173,6 @@ export class ParallelExecutionCoordinator {
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
     progressCallbacks?: ProgressCallbacksInterface, // Using interface to avoid circular dependency
-    agentRunId?: string,
   ): Promise<ParallelExecutionResult> {
     const startTime = new Date();
     const executionConfig = { ...this._defaultConfig, ...config };
@@ -224,7 +212,7 @@ export class ParallelExecutionCoordinator {
       const progressTracker = new ParallelProgressTracker(tasks.length, executionGroups.length, progressCallbacks);
 
       // Execute groups sequentially, tasks within groups in parallel
-      const allResults = await this.executeGroupsSequentially(params, executionGroups, executionConfig, parentPromptRunId, cancellationToken, progressTracker, agentRunId);
+      const allResults = await this.executeGroupsSequentially(params, executionGroups, executionConfig, parentPromptRunId, cancellationToken, progressTracker);
 
       // Aggregate results and calculate metrics
       const result = this.aggregateResults(allResults, startTime, new Date());
@@ -344,7 +332,6 @@ export class ParallelExecutionCoordinator {
    * @param parentPromptRunId - Optional parent prompt run ID for tracking
    * @param cancellationToken - Optional cancellation token to abort execution
    * @param progressTracker - Progress tracker for monitoring execution
-   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ExecutionTaskResult[]> - All task results from all groups
    */
   private async executeGroupsSequentially(
@@ -354,7 +341,6 @@ export class ParallelExecutionCoordinator {
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
     progressTracker?: ParallelProgressTracker,
-    agentRunId?: string,
   ): Promise<ExecutionTaskResult[]> {
     const allResults: ExecutionTaskResult[] = [];
 
@@ -381,7 +367,7 @@ export class ParallelExecutionCoordinator {
       // Update progress tracker for current group
       progressTracker?.updateProgress(group.groupNumber);
 
-      const groupResults = await this.executeGroupInParallel(params, group, config, parentPromptRunId, cancellationToken, progressTracker, agentRunId);
+      const groupResults = await this.executeGroupInParallel(params, group, config, parentPromptRunId, cancellationToken, progressTracker);
       allResults.push(...groupResults);
 
       // Check if we should fail fast
@@ -403,7 +389,6 @@ export class ParallelExecutionCoordinator {
    * @param parentPromptRunId - Optional parent prompt run ID for tracking
    * @param cancellationToken - Optional cancellation token to abort execution
    * @param progressTracker - Progress tracker for monitoring execution
-   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ExecutionTaskResult[]> - Results from all tasks in the group
    */
   private async executeGroupInParallel(
@@ -413,7 +398,6 @@ export class ParallelExecutionCoordinator {
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
     progressTracker?: ParallelProgressTracker,
-    agentRunId?: string,
   ): Promise<ExecutionTaskResult[]> {
     const maxConcurrent = Math.min(config.maxConcurrentExecutions, group.tasks.length);
     const results: ExecutionTaskResult[] = [];
@@ -447,7 +431,7 @@ export class ParallelExecutionCoordinator {
       while (executing.length < maxConcurrent && taskIndex < group.tasks.length) {
         const task = group.tasks[taskIndex++];
         progressTracker?.addActiveTask(task.taskId);
-        const execution = this.executeTask(params, task, config, parentPromptRunId, executionOrder++, agentRunId);
+        const execution = this.executeTask(params, task, config, parentPromptRunId, executionOrder++);
         executing.push(execution);
       }
 
@@ -480,7 +464,6 @@ export class ParallelExecutionCoordinator {
    * @param config - Execution configuration
    * @param parentPromptRunId - Optional parent prompt run ID for hierarchical logging
    * @param executionOrder - Execution order for this task
-   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ExecutionTaskResult> - Result of the task execution
    */
   private async executeTask(
@@ -489,7 +472,6 @@ export class ParallelExecutionCoordinator {
     config: ParallelExecutionConfig,
     parentPromptRunId?: string,
     executionOrder?: number,
-    agentRunId?: string,
   ): Promise<ExecutionTaskResult> {
     const startTime = new Date();
     let lastError: Error | null = null;
@@ -518,7 +500,7 @@ export class ParallelExecutionCoordinator {
           LogStatus(`Retrying task ${task.taskId}, attempt ${attempt + 1}/${config.maxRetries + 1}`);
         }
 
-        const result = await this.executeSingleTask(params, task, config.taskTimeoutMS, parentPromptRunId, executionOrder, agentRunId);
+        const result = await this.executeSingleTask(params, task, config.taskTimeoutMS, parentPromptRunId, executionOrder);
         result.startTime = startTime;
         result.endTime = new Date();
 
@@ -553,77 +535,60 @@ export class ParallelExecutionCoordinator {
    * @param timeoutMS - Timeout for the execution in milliseconds
    * @param parentPromptRunId - Optional parent prompt run ID for hierarchical logging
    * @param executionOrder - Execution order for this task
-   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ExecutionTaskResult> - Result of the task execution
    */
-  private async executeSingleTask(params: AIPromptParams, task: ExecutionTask, timeoutMS: number, parentPromptRunId?: string, executionOrder?: number, agentRunId?: string): Promise<ExecutionTaskResult> {
-    // TODO: This will need to integrate with AIPromptRunner's execution logic
-    // For now, implementing a simplified version
-
+  private async executeSingleTask(params: AIPromptParams, task: ExecutionTask, timeoutMS: number, parentPromptRunId?: string, executionOrder?: number): Promise<ExecutionTaskResult> {
     const startTime = new Date();
     let childPromptRun: MJAIPromptRunEntityExtended | null = null;
+
+    // Task-level streaming callbacks (LLM lifecycle). OnContent is bridged into executeModel via
+    // params.onStreaming (see buildPerTaskParams); OnComplete/OnError are fired here since the
+    // coordinator owns the task's success/failure transition.
+    const streamCbs = task.streamingConfig?.enabled ? task.streamingConfig.callbacks : undefined;
 
     try {
       // Create child prompt run log if parent ID is provided
       if (parentPromptRunId) {
-        childPromptRun = await this.createChildPromptRun(task, startTime, parentPromptRunId, executionOrder, agentRunId);
-      }
-      // Create LLM instance using vendor-specific driver class if available
-      const driverClass = task.vendorDriverClass || task.model.DriverClass;
-      const apiName = task.vendorApiName || task.model.APIName;
-      
-      if (!driverClass) {
-        throw new Error(`No driver class available for model ${task.model.Name}. Vendor selection may have failed.`);
-      }
-      
-      const apiKey = GetAIAPIKey(driverClass, params.apiKeys, params.verbose);
-      const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
-
-      // Prepare chat parameters
-      const innerParams = new ChatParams();
-      innerParams.model = apiName;
-      innerParams.cancellationToken = task.cancellationToken;
-
-      // Configure streaming if enabled in task
-      if (task.streamingConfig?.enabled && task.streamingConfig.callbacks?.OnContent) {
-        innerParams.streaming = true;
-        innerParams.streamingCallbacks = {
-          OnContent: task.streamingConfig.callbacks.OnContent,
-          OnComplete: task.streamingConfig.callbacks.OnComplete,
-          OnError: task.streamingConfig.callbacks.OnError,
-        };
+        childPromptRun = await this.createChildPromptRun(task, startTime, parentPromptRunId, executionOrder);
       }
 
-      // Build message array with rendered prompt and conversation messages
-      innerParams.messages = this.buildMessageArray(task.renderedPrompt, task.conversationMessages, task.templateMessageRole || 'system');
+      // Delegate the actual model call to the inherited base executeModel — the SINGLE source of truth
+      // for credential resolution (full hierarchical chain, not just legacy env keys), driver/vendor
+      // selection, ChatParams construction (temperature/topP/effort/stop/response-format/prefill),
+      // media handling, and streaming. The coordinator only layers the per-task timeout on top;
+      // cancellation is handled inside executeModel via the task's cancellation token.
+      //
+      // TIMEOUT: a caller-supplied `AIPromptParams.timeoutMS` (or a runner-level
+      // DefaultPromptTimeoutMS) is the authoritative bound for a model call — the inherited
+      // executeModel enforces it on the composed abort signal. The coordinator's `taskTimeoutMS` is
+      // only a DEFAULT backstop for callers that request no timeout, so when a timeout IS requested
+      // we use that value here too. Otherwise a caller asking for 120s would still be truncated at
+      // the coordinator's 30s default — exactly the kind of divergence between the two paths we're
+      // eliminating.
+      const perTaskParams = this.buildPerTaskParams(params, task);
+      const effectiveTimeoutMS = this.getEffectiveTimeoutMS(perTaskParams) ?? timeoutMS;
+      let taskTimer: ReturnType<typeof setTimeout> | undefined;
+      const modelResult = (await Promise.race([
+        this.executeModel(
+          task.model,
+          task.renderedPrompt,
+          task.prompt,
+          perTaskParams,
+          task.vendorId ?? null,
+          task.conversationMessages,
+          task.templateMessageRole || 'system',
+          task.cancellationToken,
+          task.vendorDriverClass,
+          task.vendorApiName,
+        ),
+        new Promise<never>((_, reject) => {
+          taskTimer = setTimeout(() => reject(new Error('Task execution timeout')), effectiveTimeoutMS);
+        }),
+      ]).finally(() => clearTimeout(taskTimer))) as ChatResult;
 
-      // Apply model-specific parameters if available
-      if (task.modelParameters) {
-        Object.assign(params, task.modelParameters);
+      if (streamCbs?.OnComplete) {
+        streamCbs.OnComplete(modelResult);
       }
-
-      // Execute with timeout and cancellation support
-      const racePromises: Promise<ChatResult | never>[] = [llm.ChatCompletion(innerParams)];
-
-      // Add timeout promise
-      racePromises.push(new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Task execution timeout')), timeoutMS)));
-
-      // Add cancellation promise if cancellation token is available
-      if (task.cancellationToken) {
-        racePromises.push(
-          new Promise<never>((_, reject) => {
-            if (task.cancellationToken!.aborted) {
-              reject(new Error('Task execution cancelled'));
-            } else {
-              task.cancellationToken!.addEventListener('abort', () => {
-                reject(new Error('Task execution cancelled'));
-              });
-            }
-          }),
-        );
-      }
-
-      const modelResult = (await Promise.race(racePromises)) as ChatResult;
 
       const endTime = new Date();
       const executionTimeMS = endTime.getTime() - startTime.getTime();
@@ -648,6 +613,10 @@ export class ParallelExecutionCoordinator {
       const endTime = new Date();
       const executionTimeMS = endTime.getTime() - startTime.getTime();
 
+      if (streamCbs?.OnError) {
+        streamCbs.OnError(error);
+      }
+
       // Check if this was a cancellation error
       const isCancelled = error.message.includes('cancelled');
 
@@ -656,6 +625,10 @@ export class ParallelExecutionCoordinator {
         childPromptRun.CompletedAt = endTime;
         childPromptRun.ExecutionTimeMS = executionTimeMS;
         childPromptRun.Success = false;
+        childPromptRun.Status = isCancelled ? 'Cancelled' : 'Failed';
+        if (isCancelled) {
+          childPromptRun.Cancelled = true;
+        }
         childPromptRun.ErrorMessage = error.message;
         childPromptRun.Result = `ERROR: ${error.message}`;
         await childPromptRun.Save();
@@ -766,8 +739,8 @@ export class ParallelExecutionCoordinator {
     _cancellationToken?: AbortSignal,
   ): Promise<ExecutionTaskResult> {
     try {
-      // Import AIPromptRunner here to avoid circular dependency
-      const { AIPromptRunner } = await import('./AIPromptRunner');
+      // AIPromptRunner is statically imported (this class extends it); the prior dynamic import was
+      // only needed before the subclass relationship existed.
 
       // Load the judge prompt from AIEngine
       await AIEngine.Instance.Config(false);
@@ -823,6 +796,7 @@ export class ParallelExecutionCoordinator {
         resultSelectorPromptRun.CompletedAt = new Date(judgeEndTime);
         resultSelectorPromptRun.ExecutionTimeMS = judgeExecutionTimeMS;
         resultSelectorPromptRun.Success = judgeResult.success;
+        resultSelectorPromptRun.Status = judgeResult.success ? 'Completed' : 'Failed';
         resultSelectorPromptRun.Result = judgeResult.rawResult || '';
         if (judgeResult.tokensUsed) {
           resultSelectorPromptRun.TokensUsed = judgeResult.tokensUsed;
@@ -968,47 +942,29 @@ export class ParallelExecutionCoordinator {
   }
 
   /**
-   * Builds the message array combining rendered prompt with conversation messages
+   * Builds a per-task copy of the shared prompt params for delegation to the inherited executeModel.
+   *
+   * - Clones (preserving prototype) so concurrently-running tasks never mutate each other's params —
+   *   fixing the old `Object.assign(params, task.modelParameters)` that mutated the SHARED object.
+   * - Merges the task's per-model parameters into additionalParameters so executeModel's scalar-param
+   *   resolution (temperature/topP/etc.) actually applies them (the old manual ChatParams path
+   *   silently ignored them).
+   * - Bridges the task's incremental streaming callback (OnContent) into params.onStreaming so the
+   *   base's single streaming path drives it. (OnComplete/OnError are fired by executeSingleTask.)
    */
-  private buildMessageArray(
-    renderedPrompt: string,
-    conversationMessages?: ChatMessage[],
-    templateMessageRole: 'system' | 'user' | 'none' = 'system',
-  ): ChatMessage[] {
-    const messages: ChatMessage[] = [];
+  private buildPerTaskParams(params: AIPromptParams, task: ExecutionTask): AIPromptParams {
+    const perTaskParams: AIPromptParams = Object.assign(Object.create(Object.getPrototypeOf(params)), params);
 
-    // Add rendered template as system or user message if not 'none'
-    if (renderedPrompt && templateMessageRole !== 'none') {
-      messages.push({
-        role: templateMessageRole === 'system' ? ChatMessageRole.system : ChatMessageRole.user,
-        content: renderedPrompt,
-      });
+    if (task.modelParameters) {
+      perTaskParams.additionalParameters = { ...(params.additionalParameters ?? {}), ...task.modelParameters };
     }
 
-    // Add conversation messages if provided
-    if (conversationMessages && conversationMessages.length > 0) {
-      messages.push(...conversationMessages);
+    const onContent = task.streamingConfig?.enabled ? task.streamingConfig.callbacks?.OnContent : undefined;
+    if (onContent) {
+      perTaskParams.onStreaming = (chunk) => onContent(chunk.content, chunk.isComplete);
     }
 
-    // If no conversation messages and no rendered prompt as user message,
-    // add a default user message to ensure we have at least one user message
-    if ((!conversationMessages || conversationMessages.length === 0) && templateMessageRole !== 'user' && renderedPrompt) {
-      // If we only have a system message, we need a user message too
-      if (templateMessageRole === 'system') {
-        messages.push({
-          role: ChatMessageRole.user,
-          content: 'Please proceed with the above instructions.',
-        });
-      }
-    } else if ((!conversationMessages || conversationMessages.length === 0) && !renderedPrompt) {
-      // Fallback: if no conversation and no rendered prompt, add a basic user message
-      messages.push({
-        role: ChatMessageRole.user,
-        content: 'Hello',
-      });
-    }
-
-    return messages;
+    return perTaskParams;
   }
 
   /**
@@ -1018,10 +974,9 @@ export class ParallelExecutionCoordinator {
    * @param startTime - When the execution started
    * @param parentPromptRunId - ID of the parent prompt run
    * @param executionOrder - Execution order within the parallel group
-   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<MJAIPromptRunEntityExtended> - The created child prompt run
    */
-  private async createChildPromptRun(task: ExecutionTask, startTime: Date, parentPromptRunId: string, executionOrder?: number, agentRunId?: string): Promise<MJAIPromptRunEntityExtended> {
+  private async createChildPromptRun(task: ExecutionTask, startTime: Date, parentPromptRunId: string, executionOrder?: number): Promise<MJAIPromptRunEntityExtended> {
     try {
       const promptRun = await this.Provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', task.contextUser);
       promptRun.NewRecord();
@@ -1034,11 +989,6 @@ export class ParallelExecutionCoordinator {
 
       if (executionOrder !== undefined) {
         promptRun.ExecutionOrder = executionOrder;
-      }
-
-      // Set AgentRunID if provided for agent-prompt execution tracking
-      if (agentRunId) {
-        promptRun.AgentRunID = agentRunId;
       }
 
       // Set vendor ID from task if available (use task vendor ID which comes from vendor selection)
@@ -1089,6 +1039,7 @@ export class ParallelExecutionCoordinator {
       promptRun.CompletedAt = endTime;
       promptRun.ExecutionTimeMS = executionTimeMS;
       promptRun.Success = modelResult.success;
+      promptRun.Status = modelResult.success ? 'Completed' : 'Failed';
 
       if (modelResult.success) {
         promptRun.Result = modelResult.data?.choices?.[0]?.message?.content || '';

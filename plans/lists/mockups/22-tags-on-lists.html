@@ -1,0 +1,76 @@
+<!doctype html><html><head><meta charset="utf-8"><title>22 — Tags on Lists</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div></aside>
+<main class="main">
+  <div class="app-header"><h1><i class="fa-solid fa-list-check"></i> Lists</h1><div class="spacer"></div><button class="mj-btn mj-btn-primary"><i class="fa-solid fa-plus"></i> New List</button></div>
+  <div class="app-tabs"><div class="tab active"><i class="fa-solid fa-list"></i>Browse <span class="badge">142</span></div><div class="tab"><i class="fa-solid fa-share-nodes"></i>Shared With Me</div><div class="tab"><i class="fa-solid fa-diagram-project"></i>Operations</div><div class="tab"><i class="fa-solid fa-folder-tree"></i>Categories</div></div>
+
+  <div class="toolbar">
+    <div class="mj-search" style="flex: 1; max-width: 320px;"><i class="fa-solid fa-search icon"></i><input class="mj-input" placeholder="Search lists…"></div>
+    <select class="mj-input mj-select" style="width: 160px;"><option>All Owners</option></select>
+    <select class="mj-input mj-select" style="width: 160px;"><option>All Entities</option></select>
+    <div class="spacer"></div>
+    <div class="view-toggle"><button title="Table"><i class="fa-solid fa-table-list"></i></button><button class="active" title="Cards"><i class="fa-solid fa-grip"></i></button><button title="Hierarchy"><i class="fa-solid fa-folder-tree"></i></button></div>
+  </div>
+
+  <div class="row gap-8" style="flex-wrap:wrap; margin-bottom:16px; padding:10px 12px; background:var(--mj-bg-surface-sunken); border-radius:8px; border:1px dashed var(--mj-border-default);">
+    <span class="label" style="margin:0;">Filter by tag:</span>
+    <span class="tag-chip" style="background:color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); color:var(--mj-brand-primary); border-color:var(--mj-brand-primary);"><i class="fa-solid fa-tag"></i> fall-2026 <i class="fa-solid fa-xmark" style="margin-left:4px;"></i></span>
+    <span class="tag-chip"><i class="fa-solid fa-tag"></i> donor</span>
+    <span class="tag-chip"><i class="fa-solid fa-tag"></i> campaign</span>
+    <span class="tag-chip"><i class="fa-solid fa-tag"></i> high-value</span>
+    <span class="tag-chip"><i class="fa-solid fa-tag"></i> compliance</span>
+    <span class="tag-chip"><i class="fa-solid fa-tag"></i> data-quality</span>
+    <span class="tag-chip"><i class="fa-solid fa-tag"></i> event</span>
+    <a href="#" style="font-size:11.5px; margin-left:6px;">More…</a>
+  </div>
+
+  <div class="list-grid">
+    <div class="list-card">
+      <div class="header-row"><div class="entity-icon"><i class="fa-solid fa-list"></i></div><div class="title">VIP Donors Q4 2026</div><i class="fa-solid fa-ellipsis-vertical menu"></i></div>
+      <div class="description">Top-tier donors flagged for fall outreach</div>
+      <div class="meta"><span><i class="fa-solid fa-database"></i>Contacts</span><span><i class="fa-solid fa-hashtag"></i>348</span></div>
+      <div class="tag-chip-row">
+        <span class="tag-chip"><i class="fa-solid fa-tag"></i> fall-2026</span>
+        <span class="tag-chip"><i class="fa-solid fa-tag"></i> donor</span>
+        <span class="tag-chip"><i class="fa-solid fa-tag"></i> high-value</span>
+      </div>
+      <div class="footer"><span class="badge badge-info"><i class="fa-solid fa-users"></i> 4 shared</span><span class="muted" style="margin-left:auto;">2h ago</span></div>
+    </div>
+    <div class="list-card">
+      <div class="header-row"><div class="entity-icon"><i class="fa-solid fa-list"></i></div><div class="title">Conference Attendees 2026</div><i class="fa-solid fa-ellipsis-vertical menu"></i></div>
+      <div class="description">Materialized from registration view</div>
+      <div class="meta"><span><i class="fa-solid fa-database"></i>Contacts</span><span><i class="fa-solid fa-hashtag"></i>2,847</span></div>
+      <div class="tag-chip-row">
+        <span class="tag-chip"><i class="fa-solid fa-tag"></i> fall-2026</span>
+        <span class="tag-chip"><i class="fa-solid fa-tag"></i> event</span>
+        <span class="tag-chip"><i class="fa-solid fa-tag"></i> annual-conference</span>
+      </div>
+      <div class="footer"><span class="badge badge-info"><i class="fa-solid fa-users"></i> 12 shared</span><span class="muted" style="margin-left:auto;">2w ago</span></div>
+    </div>
+    <div class="list-card">
+      <div class="header-row"><div class="entity-icon"><i class="fa-solid fa-list"></i></div><div class="title">Lapsed Members — 90d</div><i class="fa-solid fa-ellipsis-vertical menu"></i></div>
+      <div class="description">Recovery campaign target list</div>
+      <div class="meta"><span><i class="fa-solid fa-database"></i>Members</span><span><i class="fa-solid fa-hashtag"></i>1,204</span></div>
+      <div class="tag-chip-row">
+        <span class="tag-chip"><i class="fa-solid fa-tag"></i> fall-2026</span>
+        <span class="tag-chip"><i class="fa-solid fa-tag"></i> campaign</span>
+        <span class="tag-chip"><i class="fa-solid fa-tag"></i> recovery</span>
+      </div>
+      <div class="footer"><span class="badge badge-info"><i class="fa-solid fa-users"></i> 2 shared</span><span class="muted" style="margin-left:auto;">1w ago</span></div>
+    </div>
+  </div>
+
+  <div style="position:fixed; bottom:24px; right:24px; width:360px; background:var(--mj-bg-surface); border:1px solid var(--mj-border-default); border-radius:var(--mj-radius-xl); padding:16px; box-shadow:var(--mj-shadow-lg);">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><i class="fa-solid fa-tags" style="color:var(--mj-brand-primary)"></i><strong style="font-size:13.5px;">Tags on this list</strong></div>
+    <div class="row gap-6" style="flex-wrap:wrap; margin-bottom:10px;">
+      <span class="tag-chip"><i class="fa-solid fa-tag"></i> fall-2026 <i class="fa-solid fa-xmark muted" style="margin-left:2px; cursor:pointer;"></i></span>
+      <span class="tag-chip"><i class="fa-solid fa-tag"></i> donor <i class="fa-solid fa-xmark muted" style="margin-left:2px; cursor:pointer;"></i></span>
+      <span class="tag-chip"><i class="fa-solid fa-tag"></i> high-value <i class="fa-solid fa-xmark muted" style="margin-left:2px; cursor:pointer;"></i></span>
+    </div>
+    <input class="mj-input mj-btn-sm" placeholder="Add tag… (autocomplete from MJ: Tags)">
+  </div>
+</main>
+</div></body></html>

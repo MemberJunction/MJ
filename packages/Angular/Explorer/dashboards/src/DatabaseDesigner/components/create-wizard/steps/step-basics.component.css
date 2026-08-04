@@ -57,17 +57,6 @@
   color: var(--mj-brand-primary);
 }
 
-.no-schemas-warning {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: var(--mj-status-warning-bg);
-  color: var(--mj-status-warning-text);
-  border: 1px solid var(--mj-status-warning-border);
-  border-radius: 6px;
-  font-size: 0.875rem;
-}
 
 .warning-icon {
   color: var(--mj-status-warning);

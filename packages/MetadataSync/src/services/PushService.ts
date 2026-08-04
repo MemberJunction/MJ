@@ -1,10 +1,12 @@
 import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
-import { BaseEntity, Metadata, UserInfo, EntitySaveOptions } from '@memberjunction/core';
+import chalk from 'chalk';
+import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
+import { SyncMetadataEngine } from '../lib/sync-metadata-engine';
 import { BatchContextIndex, BatchContextStub } from '../lib/batch-context-index';
 import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
@@ -41,13 +43,51 @@ export interface PushOptions {
   incremental?: boolean;  // Skip files whose checksum hasn't changed since last push
 }
 
+/**
+ * A single record-level failure, surfaced exactly ONCE per failed record (unlike
+ * {@link PushCallbacks.onError}, which is multi-line human logging). Lets a
+ * machine-readable consumer collect a structured error list — `mj sync push
+ * --format=json | jq '.errors[]'` — instead of parsing the human log.
+ */
+export interface PushRecordError {
+  entityName: string;
+  /** Source file path of the offending record, when known. */
+  path?: string;
+  /** Display form of the primary key, e.g. "ID=85B8…". */
+  primaryKey?: string;
+  message: string;
+}
+
 export interface PushCallbacks {
   onProgress?: (message: string) => void;
-  onSuccess?: (message: string) => void;
+  /**
+   * Called when a directory finishes. `changed` is true when the directory had any
+   * create/update/delete/error, letting the UI highlight it vs. dim a pure no-op.
+   */
+  onSuccess?: (message: string, changed?: boolean) => void;
   onError?: (message: string) => void;
+  /**
+   * Structured per-record failure, fired once per failed record (in addition to
+   * the human-readable {@link PushCallbacks.onError} lines). Use this to build a
+   * machine-readable error list.
+   */
+  onRecordError?: (detail: PushRecordError) => void;
   onWarn?: (message: string) => void;
   onLog?: (message: string) => void;
   onConfirm?: (message: string) => Promise<boolean>;
+}
+
+/**
+ * A single record-level change captured during a push, replayed in the end-of-run
+ * "Changes" recap so actual mutations stand out from a sea of unchanged records.
+ */
+export interface RecordChangeDetail {
+  entityName: string;
+  /** Display form of the primary key, e.g. "ID: 85B8…14C7". */
+  primaryKey: string;
+  operation: 'created' | 'updated' | 'deleted';
+  /** Field-level diffs (updates only); empty for creates/deletes. */
+  fields: Array<{ field: string; oldValue: string; newValue: string }>;
 }
 
 export interface PushResult {
@@ -60,6 +100,8 @@ export interface PushResult {
   errors: number;
   warnings: string[];
   sqlLogPath?: string;
+  /** Structured per-record changes captured during the push, for the changes recap. */
+  changeLog: RecordChangeDetail[];
 }
 
 export interface EntityPushResult {
@@ -117,15 +159,22 @@ export class PushService {
   private syncEngine: SyncEngine;
   private contextUser: UserInfo;
   private warnings: string[] = [];
+  private changeDetails: RecordChangeDetail[] = [];
   private syncConfig: SyncConfig | null = null;
   private deferredFileWrites: Map<string, DeferredFileWrite> = new Map();
   private deferredRecords: DeferredRecord[] = [];
   private stateManager: SyncStateManager | undefined;
+  private syncMetadataEngine: SyncMetadataEngine;
 
   constructor(syncEngine: SyncEngine, contextUser: UserInfo, stateManager?: SyncStateManager) {
     this.syncEngine = syncEngine;
     this.contextUser = contextUser;
     this.stateManager = stateManager;
+    
+    // Initialize SyncMetadataEngine
+    this.syncMetadataEngine = new SyncMetadataEngine();
+    this.syncMetadataEngine.initializeEngine(this.syncEngine);
+    this.syncEngine.setMetadataEngine(this.syncMetadataEngine);
   }
 
   /** Set or replace the state manager after construction. */
@@ -164,8 +213,55 @@ export class PushService {
     return t === 'string' || IsStringSQLType(t);
   }
 
+  /**
+   * Build the compact, single-line per-directory result shown in normal (non-verbose)
+   * runs — e.g. "ai-models — 722 records, no changes" or
+   * "ai-prompts — 3 created, 1 updated, 8 unchanged". Only non-zero buckets are listed;
+   * a directory with no creates/updates/deletes/errors collapses to "N records, no changes".
+   *
+   * Returns the fully-styled text plus a `changed` flag. No-op directories are dimmed so
+   * the (colored) changed directories pop visually; the `changed` flag lets the caller pick
+   * the success glyph. The "X of N" prefix is dimmed so it reads as secondary.
+   */
+  private formatDirectorySummary(
+    prefix: string,
+    dirName: string,
+    result: { created: number; updated: number; deleted: number; deferred: number; skipped: number; unchanged: number; errors: number },
+    total: number
+  ): { text: string; changed: boolean } {
+    const parts: string[] = [];
+    if (result.created > 0) parts.push(chalk.green(`${result.created} created`));
+    if (result.updated > 0) parts.push(chalk.green(`${result.updated} updated`));
+    if (result.deleted > 0) parts.push(chalk.red(`${result.deleted} deleted`));
+    if (result.deferred > 0) parts.push(chalk.yellow(`${result.deferred} deferred`));
+    if (result.skipped > 0) parts.push(chalk.gray(`${result.skipped} skipped`));
+    if (result.errors > 0) parts.push(chalk.red(`${result.errors} error${result.errors === 1 ? '' : 's'}`));
+
+    const changed = result.created > 0 || result.updated > 0 || result.deleted > 0 || result.deferred > 0 || result.errors > 0;
+
+    if (parts.length === 0) {
+      // Pure no-op — dim the whole line so genuine changes stand out against the stream.
+      return {
+        text: chalk.dim(`${prefix}${dirName} — ${total} record${total === 1 ? '' : 's'}, no changes`),
+        changed: false,
+      };
+    }
+    // When something changed, append unchanged as trailing context so the totals reconcile.
+    if (result.unchanged > 0) parts.push(chalk.gray(`${result.unchanged} unchanged`));
+    return {
+      text: `${chalk.dim(prefix)}${dirName} — ${parts.join(', ')}`,
+      changed,
+    };
+  }
+
   async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
     this.warnings = [];
+    this.changeDetails = [];
+
+    // Respect the global MJ_VERBOSE env/flag in addition to the per-command --verbose
+    // flag, so a single dial (MJ_VERBOSE=1) controls diagnostic verbosity across every
+    // MJ CLI tool (codegen, sync, …) rather than each command inventing its own.
+    options.verbose = options.verbose || IsVerboseLoggingEnabled();
 
     // Validate that include and exclude are not used together
     if (options.include && options.exclude) {
@@ -272,6 +368,33 @@ export class PushService {
       if (entityDirs.length === 0) {
         throw new Error('No entity directories found');
       }
+
+      // Preload entities and cache files.
+      // We pass the SyncEngine's provider explicitly rather than reaching for
+      // Metadata.Provider — `mj sync` is single-process so they resolve to the
+      // same instance today, but routing through SyncEngine keeps the wiring
+      // self-consistent and makes future provider plumbing trivial.
+      // Preload is internal plumbing — emit its progress only in verbose mode so a
+      // normal run jumps straight from validation to per-directory results.
+      if (options.verbose) {
+        callbacks?.onLog?.('⚡ Preloading metadata and caching files...');
+      }
+      this.syncMetadataEngine.setEntityDirs(entityDirs);
+      await this.syncMetadataEngine.Config(true, this.contextUser, this.syncEngine.getProvider());
+      for (const warning of this.syncMetadataEngine.drainWarnings()) {
+        callbacks?.onWarn?.(`   ⚠️  ${warning}`);
+      }
+      if (options.verbose) {
+        const delegations = this.syncMetadataEngine.getDelegationSummary();
+        if (delegations.length > 0) {
+          const donorCount = new Set(delegations.map(d => d.engineClassName)).size;
+          callbacks?.onLog?.(`   ↪ Reused in-memory caches for ${delegations.length} ${delegations.length === 1 ? 'entity' : 'entities'} already loaded by ${donorCount} ${donorCount === 1 ? 'engine' : 'engines'}`);
+          for (const d of delegations.sort((a, b) => a.entityName.localeCompare(b.entityName))) {
+            callbacks?.onLog?.(`      • ${d.entityName} ← ${d.engineClassName}`);
+          }
+        }
+        callbacks?.onLog?.('✓ Preload completed successfully\n');
+      }
       
       if (options.verbose) {
         callbacks?.onLog?.(`Found ${entityDirs.length} entity ${entityDirs.length === 1 ? 'directory' : 'directories'} to process`);
@@ -334,7 +457,8 @@ export class PushService {
             skipped: 0,
             deferred: 0,
             errors: 0,
-            warnings: this.warnings
+            warnings: this.warnings,
+            changeLog: this.changeDetails
           };
         }
       }
@@ -346,9 +470,15 @@ export class PushService {
 
       try {
         // PHASE 1: Process creates/updates for all entities
-        callbacks?.onLog?.('📝 Processing creates and updates...\n');
+        if (options.verbose) {
+          callbacks?.onLog?.('📝 Processing creates and updates...\n');
+        }
 
-        for (const entityDir of entityDirs) {
+        for (const [dirIdx, entityDir] of entityDirs.entries()) {
+          // "X of N" position prefix — only when there's more than one directory, so a
+          // single-directory push stays uncluttered.
+          const progressPrefix = entityDirs.length > 1 ? `[${dirIdx + 1}/${entityDirs.length}] ` : '';
+
           const entityConfig = await loadEntityConfig(entityDir);
           if (!entityConfig) {
             const warning = `Skipping ${entityDir} - no valid entity configuration`;
@@ -358,13 +488,17 @@ export class PushService {
             continue;
           }
 
-          // Show folder with spinner at start
+          // Show folder with spinner at start. The folder header is redundant in a
+          // normal run (the per-directory result line below names the directory), so
+          // it's verbose-only; the live spinner still shows "[X/N] Processing <dir>…".
           const dirName = path.relative(process.cwd(), entityDir) || '.';
-          callbacks?.onLog?.(`\n📁 ${dirName}:`);
+          if (options.verbose) {
+            callbacks?.onLog?.(`\n📁 ${dirName}:`);
+          }
 
           // Use onProgress for animated spinner if available
           if (callbacks?.onProgress) {
-            callbacks.onProgress(`Processing ${dirName}...`);
+            callbacks.onProgress(`${progressPrefix}Processing ${dirName}...`);
           } else {
             callbacks?.onLog?.(`   ⏳ Processing...`);
           }
@@ -382,14 +516,18 @@ export class PushService {
             configDir
           );
           
-          // Stop the spinner if we were using onProgress
-          if (callbacks?.onProgress && callbacks?.onSuccess) {
-            callbacks.onSuccess(`Processed ${dirName}`);
-          }
-          
-          // Show per-directory summary
+          // Per-directory result: one compact line (always), naming the directory and
+          // its changes — or "no changes" for a clean dir. The detailed per-status
+          // breakdown is verbose-only since the final summary box already aggregates it.
           const dirTotal = result.created + result.updated + result.unchanged + result.deleted + result.skipped;
-          if (dirTotal > 0 || result.errors > 0) {
+          const { text: dirSummary, changed: dirChanged } = this.formatDirectorySummary(progressPrefix, dirName, result, dirTotal);
+          if (callbacks?.onProgress && callbacks?.onSuccess) {
+            callbacks.onSuccess(dirSummary, dirChanged);
+          } else {
+            callbacks?.onLog?.(`   ${dirSummary}`);
+          }
+
+          if (options.verbose && (dirTotal > 0 || result.errors > 0)) {
             callbacks?.onLog?.(`   Total processed: ${dirTotal} records`);
             if (result.created > 0) {
               callbacks?.onLog?.(`   ✓ Created: ${result.created}`);
@@ -465,13 +603,20 @@ export class PushService {
         }
       }
       
-      // Close SQL logging session if it was created
+      // Close SQL logging session if it was created. dispose() deletes the file when
+      // it's empty (no statements emitted), so only surface a saved path when the log
+      // actually has content — otherwise the "SQL log saved to…" line would point at a
+      // file dispose() just unlinked.
       let sqlLogPath: string | undefined;
       if (sqlLoggingSession) {
-        sqlLogPath = sqlLoggingSession.filePath;
+        const filePath = sqlLoggingSession.filePath;
+        const hadStatements = sqlLoggingSession.statementCount > 0;
         await sqlLoggingSession.dispose();
-        if (options.verbose) {
-          callbacks?.onLog?.(`📝 SQL log written to: ${sqlLogPath}`);
+        if (hadStatements) {
+          sqlLogPath = filePath;
+          if (options.verbose) {
+            callbacks?.onLog?.(`📝 SQL log written to: ${filePath}`);
+          }
         }
       }
       
@@ -484,7 +629,8 @@ export class PushService {
         deferred: totalDeferred,
         errors: totalErrors,
         warnings: this.warnings,
-        sqlLogPath
+        sqlLogPath,
+        changeLog: this.changeDetails
       };
 
     } catch (error) {
@@ -549,23 +695,31 @@ export class PushService {
           await fileBackupManager.backupFile(filePath);
         }
         
-        // Read the raw file data first
-        const rawFileData = await fs.readJson(filePath);
+        // Check if file is already cached to avoid double I/O
+        let rawFileData: any;
+        let fileData: any;
+        const cachedFile = this.syncMetadataEngine.getCachedFile(filePath);
+        
+        if (cachedFile) {
+          rawFileData = cachedFile.rawData;
+          fileData = cachedFile.fileData;
+        } else {
+          // Fallback (e.g. if not preloaded)
+          rawFileData = await fs.readJson(filePath);
+          fileData = rawFileData;
+          
+          const jsonString = JSON.stringify(rawFileData);
+          const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
+          if (hasIncludes) {
+            const jsonPreprocessor = new JsonPreprocessor();
+            fileData = await jsonPreprocessor.processFile(filePath);
+          }
+          this.syncMetadataEngine.cacheFile(filePath, rawFileData, fileData);
+        }
 
         // Keep unprocessed data to write back (preserves @file: references)
         const unprocessedRecords = Array.isArray(rawFileData) ? rawFileData : [rawFileData];
         const isArray = Array.isArray(rawFileData);
-
-        // Preprocess @include directives before checksumming, so changes to
-        // included files are detected by the incremental skip check.
-        let fileData = rawFileData;
-        const jsonString = JSON.stringify(rawFileData);
-        const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
-
-        if (hasIncludes) {
-          const jsonPreprocessor = new JsonPreprocessor();
-          fileData = await jsonPreprocessor.processFile(filePath);
-        }
 
         // Compute checksum on the RESOLVED content (after @include preprocessing)
         // so that changes to included files are properly detected.
@@ -763,6 +917,9 @@ export class PushService {
             } else {
               await JsonWriteHelper.writeOrderedRecordData(filePath, unprocessedRecords[0]);
             }
+            // Drop the cached snapshot — file on disk no longer matches it,
+            // and any later reader within this push must see fresh contents.
+            this.syncMetadataEngine.invalidateCachedFile(filePath);
           }
         }
 
@@ -929,6 +1086,14 @@ export class PushService {
           const warning = `Record not found: ${entityName} with primaryKey {${pkDisplay}}. To auto-create missing records, set push.autoCreateMissingRecords=true in .mj-sync.json`;
           localWarnings.push(warning);
           callbacks?.onWarn?.(warning);
+          // Counted as an error below — surface it structurally too (this path
+          // returns rather than throws, so it wouldn't otherwise reach onRecordError).
+          callbacks?.onRecordError?.({
+            entityName,
+            path: flattenedRecord.path,
+            primaryKey: pkDisplay,
+            message: `Record not found: ${entityName} {${pkDisplay}} (set push.autoCreateMissingRecords=true to auto-create)`,
+          });
           return { status: 'error', isDuplicate: false, warnings: localWarnings }; // This will be counted as error, not skipped
         } else {
           // Log that we're creating the missing record
@@ -1139,7 +1304,9 @@ export class PushService {
       }
     }
     
-    // If updating an existing record that's dirty, show what changed
+    // If updating an existing record that's dirty, capture what changed for the
+    // end-of-run recap. The inline diff is verbose-only now: the recap is the default
+    // surface, and emitting the diff mid-spinner previously garbled the spinner line.
     if (!isNew && isDirty) {
       const changes = entity.GetChangesSinceLastSave();
       const changeKeys = Object.keys(changes);
@@ -1152,17 +1319,31 @@ export class PushService {
             primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
           }
         }
-        
-        callbacks?.onLog?.(`📝 Updating ${entityName} record:`);
-        if (primaryKeyDisplay.length > 0) {
-          callbacks?.onLog?.(`   Primary Key: ${primaryKeyDisplay.join(', ')}`);
-        }
-        callbacks?.onLog?.(`   Changes:`);
-        for (const fieldName of changeKeys) {
+
+        const fieldDiffs = changeKeys.map((fieldName) => {
           const field = entity.GetFieldByName(fieldName);
-          const oldValue = field ? field.OldValue : undefined;
-          const newValue = (changes as any)[fieldName];
-          callbacks?.onLog?.(`     ${fieldName}: ${this.formatFieldValue(oldValue)} → ${this.formatFieldValue(newValue)}`);
+          return {
+            field: fieldName,
+            oldValue: this.formatFieldValue(field ? field.OldValue : undefined),
+            newValue: this.formatFieldValue((changes as Record<string, unknown>)[fieldName]),
+          };
+        });
+        this.changeDetails.push({
+          entityName,
+          primaryKey: primaryKeyDisplay.join(', '),
+          operation: 'updated',
+          fields: fieldDiffs,
+        });
+
+        if (options.verbose) {
+          callbacks?.onLog?.(`📝 Updating ${entityName} record:`);
+          if (primaryKeyDisplay.length > 0) {
+            callbacks?.onLog?.(`   Primary Key: ${primaryKeyDisplay.join(', ')}`);
+          }
+          callbacks?.onLog?.(`   Changes:`);
+          for (const diff of fieldDiffs) {
+            callbacks?.onLog?.(`     ${diff.field}: ${diff.oldValue} → ${diff.newValue}`);
+          }
         }
       }
     }
@@ -1304,6 +1485,14 @@ export class PushService {
         callbacks?.onError?.(`   ⚠️  Transaction error detected. The database transaction may be corrupted.`);
       }
       
+      // Structured, single-shot error for machine-readable consumers.
+      callbacks?.onRecordError?.({
+        entityName,
+        path: flattenedRecord.path,
+        primaryKey: primaryKeyInfo.length > 0 ? primaryKeyInfo.join(', ') : undefined,
+        message: errorMessage,
+      });
+
       // Throw error to trigger rollback and stop processing
       throw new Error(`Failed to save ${entityName} record at ${flattenedRecord.path}: ${errorMessage}`);
     }
@@ -1338,10 +1527,19 @@ export class PushService {
       const entityInfo = this.syncEngine.getEntityInfo(entityName);
       if (entityInfo) {
         const newPrimaryKey: Record<string, any> = {};
+        const primaryKeyDisplay: string[] = [];
         for (const pk of entityInfo.PrimaryKeys) {
           newPrimaryKey[pk.Name] = entity.Get(pk.Name);
+          primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
         }
         record.primaryKey = newPrimaryKey;
+        // Capture the create for the changes recap (no field diffs — the whole record is new).
+        this.changeDetails.push({
+          entityName,
+          primaryKey: primaryKeyDisplay.join(', '),
+          operation: 'created',
+          fields: [],
+        });
       }
     }
     
@@ -1485,23 +1683,35 @@ export class PushService {
       }
     }
     
-    if (isDbOnly) {
-      callbacks?.onLog?.(`🗑️  Deleting database-only ${entityName} record:`);
-    } else {
-      callbacks?.onLog?.(`🗑️  Deleting ${entityName} record:`);
-    }
-    if (primaryKeyDisplay.length > 0) {
-      callbacks?.onLog?.(`   Primary Key: ${primaryKeyDisplay.join(', ')}`);
+    // Deletion detail streams inline only in verbose mode — the recap is the default
+    // surface (and inline logging mid-spinner garbles the spinner line).
+    if (options.verbose) {
+      if (isDbOnly) {
+        callbacks?.onLog?.(`🗑️  Deleting database-only ${entityName} record:`);
+      } else {
+        callbacks?.onLog?.(`🗑️  Deleting ${entityName} record:`);
+      }
+      if (primaryKeyDisplay.length > 0) {
+        callbacks?.onLog?.(`   Primary Key: ${primaryKeyDisplay.join(', ')}`);
+      }
+      const recordNameVerbose = existingEntity.Get('Name');
+      if (recordNameVerbose) {
+        callbacks?.onLog?.(`   Name: ${recordNameVerbose}`);
+      }
     }
 
-    // Additional info if available
-    const recordName = existingEntity.Get('Name');
-    if (recordName) {
-      callbacks?.onLog?.(`   Name: ${recordName}`);
-    }
-    
+    // Capture the deletion for the changes recap (no field diffs for deletes).
+    this.changeDetails.push({
+      entityName,
+      primaryKey: primaryKeyDisplay.join(', '),
+      operation: 'deleted',
+      fields: [],
+    });
+
     if (options.dryRun) {
-      callbacks?.onLog?.(`[DRY RUN] Would delete ${entityName} record`);
+      if (options.verbose) {
+        callbacks?.onLog?.(`[DRY RUN] Would delete ${entityName} record`);
+      }
       return { status: 'deleted', isDuplicate: false };
     }
     
@@ -1522,9 +1732,19 @@ export class PushService {
         if (errorDetails) {
           callbacks?.onError?.(`   Details: ${errorDetails}`);
         }
-        
+
+        callbacks?.onRecordError?.({
+          entityName,
+          path: flattenedRecord.path,
+          primaryKey: primaryKeyDisplay.length > 0 ? primaryKeyDisplay.join(', ') : undefined,
+          message: errorMessage,
+        });
+
         throw new Error(`Failed to delete ${entityName} record: ${errorMessage}`);
       }
+
+      // Remove from metadata cache
+      this.syncMetadataEngine.removeEntityFromCache(entityName, record.primaryKey);
       
       // Set deletedAt timestamp after successful deletion (only for metadata records)
       if (!isDbOnly) {
@@ -2021,6 +2241,8 @@ export class PushService {
         } else {
           await JsonWriteHelper.writeOrderedRecordData(deferredWrite.filePath, deferredWrite.records[0]);
         }
+        // File contents just changed on disk — drop the stale cache entry.
+        this.syncMetadataEngine.invalidateCachedFile(deferredWrite.filePath);
       } catch (error) {
         callbacks?.onWarn?.(`   ⚠️  Failed to write ${deferredWrite.filePath}: ${error}`);
       }

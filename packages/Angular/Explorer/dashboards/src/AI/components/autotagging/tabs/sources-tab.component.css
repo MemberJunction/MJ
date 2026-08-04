@@ -1,0 +1,42 @@
+/*
+ * Content Sources tab styles.
+ *
+ * The host (AutotaggingPipelineResourceComponent) uses ViewEncapsulation.None,
+ * so its `.at-*` rules are global and already style this tab's markup (cards,
+ * source-detail slide-in, schedule dialog) while it renders inside the host
+ * shell. Tab-specific rules would live here; none are needed during the
+ * host-slim step.
+ */
+
+.at-sources-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    padding: 48px 24px;
+    background: var(--mj-bg-surface-card);
+    border: 1px dashed var(--mj-border-default);
+    border-radius: 12px;
+}
+.at-sources-empty > i {
+    font-size: 2rem;
+    color: var(--mj-brand-primary);
+}
+.at-sources-empty h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--mj-text-primary);
+}
+.at-sources-empty p {
+    margin: 0;
+    max-width: 460px;
+    font-size: 0.85rem;
+    color: var(--mj-text-muted);
+    line-height: 1.5;
+}
+.at-sources-empty-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+}

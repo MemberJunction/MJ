@@ -24,7 +24,8 @@ export type {
     RemoveOptions,
     AppOperationResult,
     InstalledAppInfo,
-    ResolvedDependency
+    ResolvedDependency,
+    PassthroughInstallOptions
 } from './types/open-app-types.js';
 
 // Dependency resolution
@@ -35,9 +36,17 @@ export type {
     DependencyResolutionResult,
     InstalledAppMap
 } from './dependency/dependency-resolver.js';
+export { ResolveDependencyGraph } from './dependency/dependency-graph-builder.js';
+export type {
+    ManifestFetcher,
+    FetchedManifest,
+    RootApp,
+    GraphResolutionResult
+} from './dependency/dependency-graph-builder.js';
 export {
     CheckMJVersionCompatibility,
     CheckDependencyVersionCompatibility,
+    CoerceToBaseVersion,
     IsValidUpgrade
 } from './dependency/version-checker.js';
 export type { VersionCheckResult } from './dependency/version-checker.js';
@@ -50,7 +59,8 @@ export {
     ValidateGitHubTag,
     DownloadMigrations,
     GetLatestVersion,
-    ParseGitHubUrl
+    ParseGitHubUrl,
+    GitHubAccessError
 } from './github/github-client.js';
 export type {
     GitHubClientOptions,
@@ -71,13 +81,14 @@ export type { PackageManagerOptions, PackageOperationResult, PackageManagerType,
 
 export {
     AddServerDynamicPackages,
+    AddClientDynamicPackages,
     RemoveServerDynamicPackages,
     ToggleServerDynamicPackages
 } from './install/config-manager.js';
 export type { DynamicPackageEntry, ConfigOperationResult } from './install/config-manager.js';
 
-export { RegenerateClientBootstrap } from './install/client-bootstrap-gen.js';
-export type { ClientBootstrapEntry } from './install/client-bootstrap-gen.js';
+export { AngularConfigManager, DerivePrebundleExcludePatterns } from './install/angular-config-manager.js';
+export type { AngularConfigResult } from './install/angular-config-manager.js';
 
 export {
     RecordAppInstallation,
@@ -97,6 +108,18 @@ export {
     UpgradeApp,
     RemoveApp,
     DisableApp,
-    EnableApp
+    EnableApp,
+    RemoveAppEntityMetadata
 } from './install/install-orchestrator.js';
 export type { OrchestratorContext } from './install/install-orchestrator.js';
+
+// FK-graph teardown (Solution 1) + migration-declared Application extraction (Solution 2)
+export {
+    buildEntityTeardownPlan,
+    EnumerateMjEntityFkGraph,
+    ReportTeardownPlan,
+    ExecTeardownBatch,
+    RunFkGraphTeardown
+} from './install/entity-teardown.js';
+export type { FkEdge, TeardownPlanItem, TeardownPlan } from './install/entity-teardown.js';
+export { extractApplicationIds } from './install/migration-application-ids.js';

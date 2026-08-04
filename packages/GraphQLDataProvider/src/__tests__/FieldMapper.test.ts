@@ -218,4 +218,21 @@ describe('FieldMapper', () => {
       expect(original.__mj_DeletedAt).toBeNull();
     });
   });
+
+  describe('statelessness (justifies the shared singleton instance)', () => {
+    it('a single instance correctly maps many independent objects in sequence', () => {
+      // The data provider reuses ONE FieldMapper across every row of every RunView. This
+      // verifies the mapper carries no per-call state that could bleed between objects.
+      const shared = new FieldMapper();
+      for (let i = 0; i < 100; i++) {
+        const row: Record<string, unknown> = { ID: String(i), [`__mj_CreatedAt`]: `t${i}` };
+        shared.MapFields(row);
+        expect(row[`_mj__CreatedAt`]).toBe(`t${i}`);
+        expect(row.__mj_CreatedAt).toBeUndefined();
+        shared.ReverseMapFields(row);
+        expect(row.__mj_CreatedAt).toBe(`t${i}`);
+        expect(row._mj__CreatedAt).toBeUndefined();
+      }
+    });
+  });
 });

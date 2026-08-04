@@ -1,5 +1,510 @@
 # Change Log - @memberjunction/actions-content-autotag
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-vector-sync@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/core-actions@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/content-autotagging@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/core-actions@5.51.0
+  - @memberjunction/ai-vector-sync@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/actions@5.51.0
+  - @memberjunction/content-autotagging@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Minor Changes
+
+- 12691e3: Content autotagging: metadata-driven vector config, chunk purge + backfill, and parity with the entity-vectorization pipeline
+
+  Brings the ContentSource / autotag embedding pipeline (`AutotagBaseEngine`) up to parity with the
+  EntityDocument pipeline, and wires up chunk lifecycle operations. All additive and opt-in — existing
+  setups behave identically. No schema/migration changes (config rides the `Configuration` JSONType).
+  - **Metadata-driven vector config** on the `Configuration` JSONType of both `ContentSource` and
+    `ContentType` (ContentSource overrides ContentType, then a hardcoded default):
+    - **`VectorIDStrategy`** (`'hash' | 'recordId'`, default `'recordId'`): `'recordId'` uses each
+      chunk's own id as its vector-DB id (purge-safe); `'hash'` is 5.49 EntityDocument parity and
+      unsafe with re-chunk + purge (documented).
+    - **`ChunkTextStorage`** (`'mixed' | 'alwaysChunk'`, default `'alwaysChunk'`): `'alwaysChunk'`
+      writes a `ContentItemChunk` row for every item and leaves `ContentItem.VectorRecordID` null;
+      `'mixed'` keeps single-chunk items' text/vector on the ContentItem.
+    - **`VectorMetadata`** — full structural parity with the entity pipeline's metadata control:
+      `FieldStrategy: 'all' | 'include' | 'exclude' | 'explicit'` (unset ⇒ the curated content
+      default, preserving historical behavior), per-field `Fields` overrides
+      (`Included`/`TruncationLimit`/`StoreAs`), `DefaultTruncationLimit`,
+      and `IncludeEntityIcon`/`IncludeUpdatedAt`/`IncludeTags`/`IncludeText` toggles. The runner mirrors
+      the entity side's decomposition (system/icon/updatedAt/display-field helpers, StoreAs coercion,
+      UUID normalization, truncation) driven off the ContentItem entity. Content-specific deviations:
+      `Entity` is always kept under `'explicit'` (so results stay labeled; record id recovers from the
+      vector id under the default `recordId` strategy), and `Tags` (not a ContentItem field) is a
+      toggle rather than a discovered field.
+  - **Chunk-Identity Contract** — chunk vectors now carry their own identity: `Entity='MJ: Content
+Item Chunks'`, `RecordID=<ContentItemChunk.ID>`, `ContentItemID`, `Sequence`. The chunk row PK is
+    minted up front and used as its identity (and, under `recordId`, its vector id), so a scoped
+    search hit returns the matched **chunk** id (not just the parent content item id) with no
+    search-side changes. Item-level ('mixed' single-chunk) vectors keep `MJ: Content Items` identity.
+  - **`AutotagBaseEngine.EmbedPendingChunks(user, {maxItems})`** — (re)embeds persisted
+    `ContentItemChunk` rows whose `EmbeddingStatus='Pending'`, for migration backfill and error
+    recovery. Bounded per run + rate-limited; best-effort per chunk.
+  - **Embedding dimensions** — the resolved infrastructure now carries `MJ: Vector Indexes.Dimensions`
+    and threads it into the embedding call (new optional `Dimensions` on `AIModelRunner`'s
+    `EmbeddingRunParams`, forwarded to `EmbedTexts`), so reduced-dimension indexes work in the autotag
+    path and the dedup-check query embeds at the matching size.
+  - **Provider routing** — the resolved infrastructure carries the parsed `VectorIndex.ProviderConfig`;
+    per-record `providerTemporaryDirectives` are built via `VectorDBBase.BuildProviderDirectives`
+    (e.g. Pinecone namespace from a configured source field) and `providerConfig` is passed to
+    `CreateRecords`. Only invoked when the index actually has a ProviderConfig.
+  - **`AutotagBaseEngine.PurgeDeletedChunks`** is now triggerable: the Autotag/Vectorize action gains
+    optional **`Purge`** (Phase 4) and **`EmbedPendingChunks`** (Phase 3) params, both independent of
+    Vectorize, both bounded by `MaxItems`, both best-effort.
+
+  Behavior note: the default `ChunkTextStorage='alwaysChunk'` + `VectorIDStrategy='recordId'` means
+  newly-embedded single-chunk items now get a `ContentItemChunk` row with a unique vector id instead
+  of an item-level hash id. Already-embedded (`EmbeddingStatus='Complete'`) items are not reprocessed,
+  so existing data is untouched until re-embedded; set `ChunkTextStorage='mixed'` per source to retain
+  the item-level single-chunk behavior.
+
+- 1afdc40: Content autotagging: persist vector-database record identifiers, and add the ContentItemChunk entity
+
+  Vectorized Content Items previously had no back-reference to their stored vectors, and chunked items produced multiple vectors with no record of which portion of the item each represented. This adds that provenance.
+  - **`ContentItem.VectorRecordID`** (new `NVARCHAR(100)` column) — the vector-database record id for an item embedded as a single vector, providing traceability from the item to its stored vector.
+  - **New `ContentItemChunk` entity** — `ContentItemID` / `Sequence` / `Text` / `VectorRecordID`. When an item's text is split into multiple embedding chunks, each chunk becomes a row here, linking the stored vector back to the specific portion of the parent item. `(ContentItemID, Sequence)` is intentionally NOT unique — superseded chunks are soft-deleted (kept as tombstones) so a chunk and its replacement can share a Sequence until purged.
+  - **`AutotagBaseEngine.VectorizeContentItems`** — after a successful upsert, persists the record ids: single-chunk items write `ContentItem.VectorRecordID`; multi-chunk items write ordered `ContentItemChunk` rows in a server-side transaction. For multi-chunk items the item-level `VectorRecordID` is left null — the chunk table is the source of truth. Each chunk gets a **unique, persistent per-chunk vector id** (not the old item-hash scheme) so a re-chunk's new rows never reuse a superseded chunk's vector id. Each chunk row is stamped `EmbeddingStatus='Complete'` with `LastEmbeddedAt` on creation.
+  - **Re-chunking is a soft-delete + append** — re-vectorizing an item marks its current live chunks `DeleteStatus='Pending'` (rows kept) and appends the new chunks, all in one SQL transaction (no third-party call inside it). **`AutotagBaseEngine.PurgeDeletedChunks`** then removes the superseded chunks' vectors from the vector database (`vectorDB.DeleteRecords`, bounded sub-batches + rate-limited) and flips them to `DeleteStatus='Deleted'` with `LastDeletedAt` — delete-vector-first so a mid-run failure stays retryable, and out-of-band from vectorization so the remote deletes can be batched to each provider's limits.
+  - **`ContentItem` also gains** a self-referencing `ParentID` (nullable FK, enabling a content-item hierarchy) and a nullable `DisplayLink` (`NVARCHAR(2000)`, a display/clickable URL).
+  - **`ContentItemChunk` also gains** status-lifecycle + tracking fields mirroring the `ContentItem` pattern: `EmbeddingStatus` / `TaggingStatus` (NOT NULL, default `Pending`; value list = ContentItem's plus `Active` and `Processed`), a nullable `DeleteStatus` (`Pending` / `Deleted`), and `LastEmbeddedAt` / `LastTaggedAt` / `LastDeletedAt` timestamps.
+  - **Standalone vectorization** (`@memberjunction/actions-content-autotag`) — the Autotag/Vectorize action now runs vectorization whenever `Vectorize=1`, decoupled from whether autotagging produced new items, so `Autotag=0, Vectorize=1` embeds pending content without re-tagging or `ForceReprocess`. `RunDirectVectorization` selects only items awaiting embedding (`EmbeddingStatus='Pending'`) and honors the `ContentSourceIDs` filter; `ForceReprocess` re-embeds everything.
+  - **Re-embed on change** — when a content item is (re)tagged because its content changed, `AutotagBaseEngine` resets its `EmbeddingStatus` to `Pending` as tagging begins, so the vectorization phase picks it up and re-embeds it.
+
+  Additive only; existing vectorization behavior is unchanged when items fit in a single chunk.
+
+### Patch Changes
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [8b4c6b2]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/content-autotagging@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/core-actions@5.50.0
+  - @memberjunction/ai-vector-sync@5.50.0
+  - @memberjunction/actions@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [7af258e]
+- Updated dependencies [7db8ef5]
+- Updated dependencies [505c8b5]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [85575cf]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+- Updated dependencies [78a5e44]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/core-actions@5.49.0
+  - @memberjunction/actions@5.49.0
+  - @memberjunction/ai-vector-sync@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/content-autotagging@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/core-actions@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ai-vector-sync@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/actions@5.48.0
+  - @memberjunction/content-autotagging@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-vector-sync@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/core-actions@5.47.0
+  - @memberjunction/actions@5.47.0
+  - @memberjunction/content-autotagging@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-vector-sync@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/core-actions@5.46.0
+  - @memberjunction/actions@5.46.0
+  - @memberjunction/content-autotagging@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ai-vector-sync@5.45.1
+- @memberjunction/core-actions@5.45.1
+- @memberjunction/content-autotagging@5.45.1
+- @memberjunction/actions-base@5.45.1
+- @memberjunction/actions@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-vector-sync@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/core-actions@5.45.0
+  - @memberjunction/actions@5.45.0
+  - @memberjunction/content-autotagging@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/core-actions@5.44.0
+  - @memberjunction/ai-vector-sync@5.44.0
+  - @memberjunction/content-autotagging@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/actions@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/actions@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/ai-vector-sync@5.43.0
+  - @memberjunction/actions-base@5.43.0
+  - @memberjunction/core-actions@5.43.0
+  - @memberjunction/content-autotagging@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [37c73f6]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/actions@5.42.0
+  - @memberjunction/core-actions@5.42.0
+  - @memberjunction/ai-vector-sync@5.42.0
+  - @memberjunction/actions-base@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/content-autotagging@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [1e81848]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [4b3fb9d]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/ai-vector-sync@5.41.0
+  - @memberjunction/core-actions@5.41.0
+  - @memberjunction/actions-base@5.41.0
+  - @memberjunction/actions@5.41.0
+  - @memberjunction/content-autotagging@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/core-actions@5.40.2
+- @memberjunction/ai-vector-sync@5.40.2
+- @memberjunction/actions-base@5.40.2
+- @memberjunction/actions@5.40.2
+- @memberjunction/content-autotagging@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-vector-sync@5.40.1
+  - @memberjunction/actions-base@5.40.1
+  - @memberjunction/core-actions@5.40.1
+  - @memberjunction/actions@5.40.1
+  - @memberjunction/content-autotagging@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/content-autotagging@5.40.0
+  - @memberjunction/core-actions@5.40.0
+  - @memberjunction/ai-vector-sync@5.40.0
+  - @memberjunction/actions-base@5.40.0
+  - @memberjunction/actions@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [26761b8]
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [a2aecc7]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/actions@5.39.0
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-vector-sync@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/core-actions@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/actions-base@5.39.0
+  - @memberjunction/content-autotagging@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [b2ad244]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [918d663]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/core@5.38.0
+  - @memberjunction/content-autotagging@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/core-actions@5.38.0
+  - @memberjunction/ai-vector-sync@5.38.0
+  - @memberjunction/actions-base@5.38.0
+  - @memberjunction/actions@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [e32f21f]
+- Updated dependencies [1af94d0]
+- Updated dependencies [4f15f31]
+  - @memberjunction/core-actions@5.37.0
+  - @memberjunction/actions@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ai-vector-sync@5.37.0
+  - @memberjunction/content-autotagging@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core-actions@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-vector-sync@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/actions@5.36.0
+  - @memberjunction/content-autotagging@5.36.0
+  - @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/core-actions@5.35.0
+  - @memberjunction/ai-vector-sync@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/actions-base@5.35.0
+  - @memberjunction/actions@5.35.0
+  - @memberjunction/content-autotagging@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/ai-vector-sync@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/core-actions@5.34.1
+  - @memberjunction/actions@5.34.1
+  - @memberjunction/content-autotagging@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [7ccaf70]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [8dad9c5]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ai-vector-sync@5.34.0
+  - @memberjunction/actions-base@5.34.0
+  - @memberjunction/core-actions@5.34.0
+  - @memberjunction/actions@5.34.0
+  - @memberjunction/content-autotagging@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/global@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

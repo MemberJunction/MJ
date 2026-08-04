@@ -17,8 +17,8 @@ export class MJGeneratedCodeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'codeMetadata', sectionName: 'Code Metadata', isExpanded: false },
             { sectionKey: 'timelineAudit', sectionName: 'Timeline & Audit', isExpanded: true },
-            { sectionKey: 'contentDetails', sectionName: 'Content Details', isExpanded: false },
-            { sectionKey: 'sourceRelationships', sectionName: 'Source & Relationships', isExpanded: false },
+            { sectionKey: 'contentDetails', sectionName: 'Content Details', isExpanded: true },
+            { sectionKey: 'sourceRelationships', sectionName: 'Source & Relationships', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -1,0 +1,47 @@
+[
+  {
+    "fields": {
+      "Name": "Generate Seed Taxonomy",
+      "Description": "Proposes a hierarchical tag taxonomy for a content source by examining a sample of its content items. Used as the fallback path of TagEngine.generateSeedTaxonomy (Knowledge Hub onboarding) when vector embeddings are unavailable.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/knowledge-hub/generate-seed-taxonomy.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "RetryDelayMS": 500,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "9C27AB4A-821E-408F-AF62-A8408799AD2E"
+          },
+          "sync": {
+            "lastModified": "2026-06-09T06:32:33.103Z",
+            "checksum": "71ee991d8e0ab07b2e4ea296274c871739fbb9068ae94df729251a82c42f9641"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9890B578-65C5-468A-8C2C-0BEE839A4E0C"
+    },
+    "sync": {
+      "lastModified": "2026-06-09T06:32:33.063Z",
+      "checksum": "9559344821fb10f79780bd1c39b978ed59150bdaaef3a758162ad02122dba589"
+    }
+  }
+]

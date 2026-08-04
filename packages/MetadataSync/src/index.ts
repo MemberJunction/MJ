@@ -4,6 +4,7 @@ import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
 // Core library exports
 export { FileBackupManager } from './lib/file-backup-manager';
 export { SyncEngine, DeferrableLookupError } from './lib/sync-engine';
+export { SyncMetadataEngine } from './lib/sync-metadata-engine';
 export type { RecordData, BatchContext } from './lib/sync-engine';
 export { BatchContextIndex } from './lib/batch-context-index';
 export type { BatchContextStub } from './lib/batch-context-index';

@@ -62,6 +62,13 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   /** Text color for connection labels */
   @Input() ConnectionLabelTextColor = '#334155';
 
+  /** Title for the canvas empty-state overlay — depends on read-only mode. */
+  public get EmptyStateTitle(): string {
+    return this.ReadOnly
+      ? 'No steps defined for this flow'
+      : 'Drag steps from the palette to start building your flow';
+  }
+
   // ── Outputs ─────────────────────────────────────────────────
   @Output() NodeSelected = new EventEmitter<FlowNode | null>();
   @Output() NodeAdded = new EventEmitter<FlowNodeAddedEvent>();

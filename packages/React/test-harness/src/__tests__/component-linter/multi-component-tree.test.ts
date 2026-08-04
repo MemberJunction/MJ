@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ComponentLinter, LintResult, Violation } from '../../lib/component-linter';
+import { ComponentLinter, LintResult, Violation } from '@memberjunction/react-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 function violationsFor(result: LintResult, ruleName: string): Violation[] {

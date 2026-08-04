@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "XGBoost Hyperparameters",
+  "type": "object",
+  "properties": {
+    "n_estimators": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 5000,
+      "default": 300,
+      "description": "Number of boosting rounds (trees) to build."
+    },
+    "max_depth": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "default": 6,
+      "description": "Maximum depth of each tree; deeper trees capture more interactions but risk overfitting."
+    },
+    "learning_rate": {
+      "type": "number",
+      "minimum": 0.001,
+      "maximum": 1,
+      "default": 0.1,
+      "description": "Step-size shrinkage applied to each tree's contribution."
+    },
+    "subsample": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.8,
+      "description": "Fraction of training rows sampled per boosting round."
+    },
+    "colsample_bytree": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.8,
+      "description": "Fraction of features sampled when constructing each tree."
+    },
+    "min_child_weight": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 1,
+      "description": "Minimum sum of instance weight needed in a child node."
+    }
+  }
+}

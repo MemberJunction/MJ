@@ -1,0 +1,85 @@
+<!doctype html><html><head><meta charset="utf-8"><title>04 — Operations (Current)</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item"><i class="fa-solid fa-house"></i> Home</div><div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div><div class="nav-item"><i class="fa-solid fa-table-list"></i> Data Explorer</div></aside>
+<main class="main">
+  <div class="app-header"><h1><i class="fa-solid fa-list-check"></i> Lists</h1><div class="spacer"></div></div>
+  <div class="app-tabs"><div class="tab"><i class="fa-solid fa-list"></i>Browse</div><div class="tab active"><i class="fa-solid fa-diagram-project"></i>Operations</div><div class="tab"><i class="fa-solid fa-folder-tree"></i>Categories</div></div>
+
+  <div class="ops-grid">
+    <div class="mj-panel">
+      <div class="mj-panel-header"><h3><i class="fa-solid fa-layer-group"></i>Operands</h3></div>
+      <div class="mj-panel-body">
+        <div class="label" style="margin-bottom:6px;">Entity</div>
+        <select class="mj-input mj-select"><option>Contacts</option></select>
+        <div class="divider"></div>
+        <div class="label">Selected Lists</div>
+        <div class="mt-8">
+          <div class="row" style="padding:8px; background:var(--mj-bg-surface-sunken); border-radius:8px; margin-bottom:6px;">
+            <span style="width:10px;height:10px;border-radius:50%;background:#3b82f6;"></span>
+            <span style="flex:1; font-size:13px;">VIP Donors Q4 2026</span>
+            <span class="muted" style="font-size:11px;">348</span>
+            <i class="fa-solid fa-xmark muted"></i>
+          </div>
+          <div class="row" style="padding:8px; background:var(--mj-bg-surface-sunken); border-radius:8px; margin-bottom:6px;">
+            <span style="width:10px;height:10px;border-radius:50%;background:#10b981;"></span>
+            <span style="flex:1; font-size:13px;">Conference Attendees 2026</span>
+            <span class="muted" style="font-size:11px;">2847</span>
+            <i class="fa-solid fa-xmark muted"></i>
+          </div>
+          <div class="row" style="padding:8px; background:var(--mj-bg-surface-sunken); border-radius:8px;">
+            <span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;"></span>
+            <span style="flex:1; font-size:13px;">Lapsed Members — 90d</span>
+            <span class="muted" style="font-size:11px;">1204</span>
+            <i class="fa-solid fa-xmark muted"></i>
+          </div>
+        </div>
+        <div class="mt-12 mj-search"><i class="fa-solid fa-search icon"></i><input class="mj-input" placeholder="Add another list…"></div>
+        <div class="divider"></div>
+        <div class="label">Quick Operations</div>
+        <div class="col mt-8">
+          <button class="mj-btn"><i class="fa-solid fa-layer-group"></i> Union All</button>
+          <button class="mj-btn"><i class="fa-solid fa-circle-notch"></i> Intersection</button>
+          <button class="mj-btn"><i class="fa-solid fa-arrows-split-up-and-left"></i> Unique to Each</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="venn-container">
+      <svg class="venn-svg" viewBox="0 0 420 340">
+        <circle cx="160" cy="150" r="100" fill="#3b82f6" fill-opacity="0.35" stroke="#1d4ed8" stroke-width="1.5"/>
+        <circle cx="260" cy="150" r="100" fill="#10b981" fill-opacity="0.35" stroke="#047857" stroke-width="1.5"/>
+        <circle cx="210" cy="230" r="100" fill="#f59e0b" fill-opacity="0.35" stroke="#b45309" stroke-width="1.5"/>
+        <text x="90" y="80" font-size="12" fill="#1e3a8a" font-weight="600">VIP Donors</text>
+        <text x="280" y="80" font-size="12" fill="#064e3b" font-weight="600">Conference</text>
+        <text x="280" y="310" font-size="12" fill="#78350f" font-weight="600">Lapsed</text>
+        <text x="205" y="195" font-size="14" fill="#0f172a" font-weight="700" text-anchor="middle">87</text>
+      </svg>
+    </div>
+
+    <div class="mj-panel">
+      <div class="mj-panel-header"><h3><i class="fa-solid fa-table-cells-large"></i>Selected Region</h3></div>
+      <div class="mj-panel-body">
+        <div style="background:var(--mj-bg-surface-sunken); border-radius:8px; padding:12px;">
+          <div class="muted" style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Intersection of all three</div>
+          <div style="font-size:28px; font-weight:700; margin-top:4px;">87 records</div>
+        </div>
+        <div class="label mt-16">Preview (first 5)</div>
+        <div class="preview-records">
+          <div class="record"><i class="fa-solid fa-user muted"></i><span>Aaron Holt</span></div>
+          <div class="record"><i class="fa-solid fa-user muted"></i><span>Beth Williams</span></div>
+          <div class="record"><i class="fa-solid fa-user muted"></i><span>Carlos Mendez</span></div>
+          <div class="record"><i class="fa-solid fa-user muted"></i><span>Dianne Park</span></div>
+          <div class="record"><i class="fa-solid fa-user muted"></i><span>Emir Khalil</span></div>
+        </div>
+        <div class="col mt-16">
+          <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-plus"></i> Create New List</button>
+          <button class="mj-btn"><i class="fa-solid fa-list-ul"></i> Add to Existing List</button>
+          <button class="mj-btn"><i class="fa-solid fa-file-excel"></i> Export to Excel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</div></body></html>

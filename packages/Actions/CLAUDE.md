@@ -744,7 +744,7 @@ export class Create_Conversation_Record_Action extends Create_Record_Action { }
    - Generated code saved to database for review
 
    **Key Files:**
-   - [ActionEntity.server.ts:PreparePromptData()](./../../MJCoreEntitiesServer/src/custom/ActionEntity.server.ts#L272-L324) - Prepares data for AI
+   - [MJActionEntityServer.server.ts:PreparePromptData()](./../../packages/MJCoreEntitiesServer/src/custom/MJActionEntityServer.server.ts#L272-L324) - Prepares data for AI
    - [action-generation.template.md](./../../metadata/prompts/templates/system/action-generation.template.md) - AI prompt template
 
 2. **Code Wrapping (Build Time)**: When you run `npm run build`:
@@ -754,7 +754,7 @@ export class Create_Conversation_Record_Action extends Create_Record_Action { }
    - No AI calls during build (fast and deterministic)
 
    **Key Files:**
-   - [action_subclasses_codegen.ts:generateSingleAction()](./../../CodeGenLib/src/Misc/action_subclasses_codegen.ts#L98-L132) - Wraps code in template
+   - [action_subclasses_codegen.ts:generateSingleAction()](../CodeGenLib/src/Misc/action_subclasses_codegen.ts#L98-L132) - Wraps code in template
 
 ### Code Review Workflow
 
@@ -787,5 +787,13 @@ For comprehensive documentation on generated actions, including:
 4. **Type Safety First**: Preserve TypeScript types by using classes and interfaces, not string-based action names
 5. **Thin Wrappers**: Actions should just extract params, delegate to services, and return results
 6. **Generate Simple Actions**: Use Generated Actions for entity-specific CRUD and simple logic
+7. **Metadata for Discovery**: Actions *expose* capabilities — they don't *implement* them. The metadata layer exists so agents, workflow engines, and low-code builders can discover what's available; the implementation lives in the service class behind it.
+
+## Why the separation pays off
+
+Beyond type safety and performance, keeping business logic out of the Action layer buys two things that are easy to overlook:
+
+- **Debugging**: stack traces show the actual execution path. An Action calling an Action by name produces a trace that goes through the metadata lookup and dispatch machinery instead of the code you wrote — the useful frames are gone.
+- **Maintainability**: refactoring tools work correctly with direct imports. Rename a method and every call site updates; rename it behind a string-based action name and nothing does, because the compiler never sees the link. This is the same failure mode as `.Get()`/`.Set()` on entities — string indirection defeats every tool that would otherwise catch the mistake.
 
 Following these principles will result in cleaner, more maintainable, and more performant code.

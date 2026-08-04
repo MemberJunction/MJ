@@ -1,0 +1,58 @@
+@if (IsWebsiteSourceType) {
+<mj-collapsible-panel
+    SectionKey="websiteCrawlerSettings"
+    SectionName="Website Crawler Settings"
+    Icon="fa fa-globe"
+    [Form]="FormComponent"
+    [FormContext]="FormContext">
+
+    <div class="cs-grid">
+        <div class="cs-field">
+            <label>Max depth</label>
+            <input class="cs-input" type="number" min="0" max="10" step="1" [disabled]="!EditMode"
+                   [ngModel]="MaxDepthValue ?? ''"
+                   (ngModelChange)="MaxDepthValue = $event"
+                   placeholder="2 (default)" />
+            <span class="hint">Recursion ceiling for in-domain links. <code>0</code> = just the start URL. <code>2</code> (default) = root + sections + content pages. Higher values multiply with the 1-second per-page delay.</span>
+        </div>
+        <div class="cs-field">
+            <label>Root URL</label>
+            <input class="cs-input" type="text" [disabled]="!EditMode"
+                   [ngModel]="RootURLValue"
+                   (ngModelChange)="RootURLValue = $event"
+                   placeholder="derived from start URL" />
+            <span class="hint">URL prefix used for the in-domain check. Leave blank to derive from the parent directory of the seed URL.</span>
+        </div>
+    </div>
+
+    <div class="cs-field" style="margin-top: 8px;">
+        <label>URL pattern (regex)</label>
+        <input class="cs-input" type="text" [disabled]="!EditMode"
+               [ngModel]="URLPatternValue"
+               (ngModelChange)="URLPatternValue = $event"
+               placeholder="e.g. ^https://example\.com/blog/.*" />
+        @if (URLPatternValidationMessage) {
+            <span class="cs-validation"><i class="fa-solid fa-circle-exclamation"></i> {{ URLPatternValidationMessage }}</span>
+        } @else {
+            <span class="hint">Only URLs matching this regex are added to the visited set. Leave blank to include everything.</span>
+        }
+    </div>
+
+    <div class="cs-toggle-row" style="margin-top: 12px;">
+        <div class="label">
+            <span class="t">Crawl sites in lower-level domain</span>
+            <span class="d">When on (default), the depth-aware recursive crawler runs. Turn off to crawl only the seed page.</span>
+        </div>
+        <div class="cs-switch" [class.on]="CrawlSitesInLowerLevelDomainValue"
+             (click)="EditMode ? (CrawlSitesInLowerLevelDomainValue = !CrawlSitesInLowerLevelDomainValue) : null"></div>
+    </div>
+    <div class="cs-toggle-row">
+        <div class="label">
+            <span class="t">Crawl other sites in top-level domain</span>
+            <span class="d">When on, also adds sibling-path URLs found on the seed page (single-pass, no recursion). Off by default to avoid accidental fan-out.</span>
+        </div>
+        <div class="cs-switch" [class.on]="CrawlOtherSitesInTopLevelDomainValue"
+             (click)="EditMode ? (CrawlOtherSitesInTopLevelDomainValue = !CrawlOtherSitesInTopLevelDomainValue) : null"></div>
+    </div>
+</mj-collapsible-panel>
+}

@@ -1,27 +1,51 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, HostListener, ChangeDetectorRef } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
-import { MJConversationEntity } from '@memberjunction/core-entities';
-import { ConversationEngine } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJProjectEntity, ConversationEngine, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJDialogService } from '@memberjunction/ng-ui-components';
 import { DialogService } from '../../services/dialog.service';
 import { NotificationService } from '../../services/notification.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
+import { ProjectFormModalComponent } from '../project/project-form-modal.component';
+import { ConversationGroupBy } from '../../models/conversation-state.model';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+
+/**
+ * A node in the conversation folder tree. Each node holds its project (folder),
+ * the conversations directly assigned to it, and its nested child folders.
+ */
+interface FolderNode {
+  project: MJProjectEntity;
+  depth: number;
+  /** Conversations directly in this folder (unpinned only — pinned live in the Pinned section). */
+  conversations: MJConversationEntity[];
+  children: FolderNode[];
+  /** Total conversations in this folder and all descendants. */
+  totalCount: number;
+  /** True when this folder or any descendant has at least one (filtered) conversation. */
+  hasContent: boolean;
+}
 
 @Component({
   standalone: false,
   selector: 'mj-conversation-list',
   template: `
     <div class="conversation-list">
+      <!-- Header strip gated as a whole so an empty bordered band never renders:
+           the ⋯ menu also hides during selection mode, so it only counts toward
+           the strip when actually visible. -->
+      @if (showSearch || (showHeaderMenu && !isSelectionMode)) {
       <div class="list-header">
         <div class="header-top">
-          <input
-            type="text"
-            class="search-input"
-            placeholder="Search conversations..."
-            [(ngModel)]="searchQuery">
-          @if (!isSelectionMode) {
+          @if (showSearch) {
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Search conversations..."
+              [(ngModel)]="searchQuery">
+          }
+          @if (showHeaderMenu && !isSelectionMode) {
             <div class="header-menu-container">
               <button class="btn-menu" (click)="toggleHeaderMenu($event)" title="Options">
                 <i class="fas fa-ellipsis-v"></i>
@@ -36,6 +60,10 @@ import { UUIDsEqual } from '@memberjunction/global';
                     <i class="fas fa-check-square"></i>
                     <span>Select Conversations</span>
                   </button>
+                  <button class="dropdown-item" (click)="onToggleGroupByClick($event)">
+                    <i class="fas" [class.fa-folder-tree]="groupBy !== 'project'" [class.fa-list]="groupBy === 'project'"></i>
+                    <span>{{ groupBy === 'project' ? 'Show as flat list' : 'Group by folder' }}</span>
+                  </button>
                   @if (!isMobileView) {
                     <button class="dropdown-item" (click)="onUnpinSidebarClick($event)">
                       <i class="fas fa-table-columns"></i>
@@ -48,153 +76,108 @@ import { UUIDsEqual } from '@memberjunction/global';
           }
         </div>
       </div>
-      <button class="btn-new-conversation" (click)="createNewConversation()" title="New Conversation">
-        <i class="fas fa-plus"></i>
-        <span>New Conversation</span>
-      </button>
+      }
+      @if (showNewConversationButton) {
+        <button class="btn-new-conversation" (click)="createNewConversation()" title="New Conversation">
+          <i class="fas fa-plus"></i>
+          <span>New Conversation</span>
+        </button>
+      }
       <div class="list-content">
         <!-- Pinned Section (only show if there are pinned conversations) -->
         @if (pinnedConversations.length > 0) {
           <div class="sidebar-section pinned-section">
-            <div class="section-header" [class.expanded]="pinnedExpanded" (click)="togglePinned()">
-              <div class="section-title">
-                <i class="fas fa-chevron-right"></i>
-                <i class="fas fa-thumbtack section-icon"></i>
-                <span>Pinned</span>
-              </div>
-            </div>
-            <div class="chat-list" [class.expanded]="pinnedExpanded">
-              @for (conversation of pinnedConversations; track conversation.ID) {
-                <div class="conversation-item"
-                     [class.active]="IsConversationActive(conversation)"
-                     [class.renamed]="IsConversationRenamed(conversation)"
-                     (click)="handleConversationClick(conversation)">
-                  @if (isSelectionMode) {
-                    <div class="conversation-checkbox">
-                      <input type="checkbox"
-                             [checked]="selectedConversationIds.has(conversation.ID)"
-                             (click)="$event.stopPropagation(); toggleConversationSelection(conversation.ID)">
-                    </div>
-                  }
-                  <div class="conversation-icon-wrapper">
-                    @if (hasActiveTasks(conversation.ID)) {
-                      <div class="conversation-icon has-tasks">
-                        <i class="fas fa-spinner fa-pulse"></i>
-                      </div>
-                    }
-                    <div class="badge-overlay">
-                      <mj-notification-badge [conversationId]="conversation.ID"></mj-notification-badge>
-                    </div>
-                  </div>
-                  <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
-                    <div class="conversation-name">
-                      {{ conversation.Name }}
-                      @if (isSharedWithMe(conversation)) {
-                        <i class="fas fa-share-nodes shared-indicator"
-                           [title]="sharedWithMeTooltip(conversation)"></i>
-                      }
-                    </div>
-                    <div class="conversation-preview">{{ conversation.Description }}</div>
-                  </div>
-                  @if (!isSelectionMode) {
-                    <div class="conversation-actions">
-                      <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
-                        <i class="fas fa-ellipsis"></i>
-                      </button>
-                      @if (IsMenuOpen(conversation)) {
-                        <div class="context-menu" (click)="$event.stopPropagation()">
-                          <button class="menu-item" (click)="togglePin(conversation, $event)">
-                            <i class="fas fa-thumbtack"></i>
-                            <span>Unpin</span>
-                          </button>
-                          <button class="menu-item" (click)="renameConversation(conversation); closeMenu()">
-                            <i class="fas fa-edit"></i>
-                            <span>Rename</span>
-                          </button>
-                          <div class="menu-divider"></div>
-                          <button class="menu-item danger" (click)="deleteConversation(conversation); closeMenu()">
-                            <i class="fas fa-trash"></i>
-                            <span>Delete</span>
-                          </button>
-                        </div>
-                      }
-                    </div>
-                  }
+            @if (showSectionHeaders) {
+              <div class="section-header" [class.expanded]="pinnedExpanded" (click)="togglePinned()">
+                <div class="section-title">
+                  <i class="fas fa-chevron-right"></i>
+                  <i class="fas fa-thumbtack section-icon"></i>
+                  <span>Pinned</span>
                 </div>
+              </div>
+            }
+            <div class="chat-list" [class.expanded]="!showSectionHeaders || pinnedExpanded">
+              @for (conversation of pinnedConversations; track conversation.ID) {
+                <ng-container [ngTemplateOutlet]="conversationItem" [ngTemplateOutletContext]="{ $implicit: conversation }"></ng-container>
               }
             </div>
           </div>
         }
 
-        <!-- Messages Section -->
-        <div class="sidebar-section">
-          <div class="section-header" [class.expanded]="directMessagesExpanded" (click)="toggleDirectMessages()">
-            <div class="section-title">
-              <i class="fas fa-chevron-right"></i>
-              <span>Messages</span>
+        <!-- showSectionHeaders=false forces the FLAT branch even in project
+             grouping: the folder tree's root drop-zone and New Folder action
+             live in the section header, so rendering the tree without headers
+             would let a user drag a folder INTO another folder with no way to
+             ever drag it back out (a one-way door). Flat + headerless is the
+             coherent chrome-less rendering. -->
+        @if (showSectionHeaders && groupBy === 'project') {
+          <!-- Folders Section. NOTE: this whole branch is already gated on
+               showSectionHeaders above, so the header + collapse state here are
+               unconditional — a headerless folder tree never renders. -->
+          <div class="sidebar-section folders-section">
+            <div class="section-header" [class.expanded]="foldersExpanded"
+                 [class.drag-over]="dragOverTargetId === 'folders-root'"
+                 (click)="toggleFolders()"
+                 (dragover)="onFoldersRootDragOver($event)"
+                 (dragleave)="onDragLeave('folders-root')"
+                 (drop)="onFoldersRootDrop($event)">
+              <div class="section-title">
+                <i class="fas fa-chevron-right"></i>
+                <span>Folders</span>
+              </div>
+              <button class="section-action-btn" (click)="createFolder(null, $event)" title="New Folder">
+                <i class="fas fa-folder-plus"></i>
+              </button>
+            </div>
+            <div class="chat-list" [class.expanded]="foldersExpanded">
+              @for (node of folderTree; track node.project.ID) {
+                @if (!isSearching || node.hasContent) {
+                  <ng-container [ngTemplateOutlet]="folderNode" [ngTemplateOutletContext]="{ $implicit: node }"></ng-container>
+                }
+              }
+              @if (folderTree.length === 0) {
+                <div class="folder-empty-hint">No folders yet — create one to organize conversations.</div>
+              }
             </div>
           </div>
-          <div class="chat-list" [class.expanded]="directMessagesExpanded">
-            @for (conversation of unpinnedConversations; track conversation.ID) {
-              <div class="conversation-item"
-                   [class.active]="IsConversationActive(conversation)"
-                   [class.renamed]="IsConversationRenamed(conversation)"
-                   (click)="handleConversationClick(conversation)">
-                @if (isSelectionMode) {
-                  <div class="conversation-checkbox">
-                    <input type="checkbox"
-                           [checked]="selectedConversationIds.has(conversation.ID)"
-                           (click)="$event.stopPropagation(); toggleConversationSelection(conversation.ID)">
-                  </div>
-                }
-                <div class="conversation-icon-wrapper">
-                  @if (hasActiveTasks(conversation.ID)) {
-                    <div class="conversation-icon has-tasks">
-                      <i class="fas fa-spinner fa-pulse"></i>
-                    </div>
-                  }
-                  <div class="badge-overlay">
-                    <mj-notification-badge [conversationId]="conversation.ID"></mj-notification-badge>
-                  </div>
+
+          <!-- Ungrouped Section (drop target to remove from folder) -->
+          <div class="sidebar-section ungrouped-section"
+               [class.drag-over]="dragOverTargetId === 'ungrouped'"
+               (dragover)="onUngroupedDragOver($event)"
+               (dragleave)="onDragLeave('ungrouped')"
+               (drop)="onUngroupedDrop($event)">
+            <!-- Same as Folders above: reached only when showSectionHeaders is true. -->
+            <div class="section-header" [class.expanded]="ungroupedExpanded" (click)="toggleUngrouped()">
+              <div class="section-title">
+                <i class="fas fa-chevron-right"></i>
+                <span>{{ folderTree.length > 0 ? 'Ungrouped' : 'Messages' }}</span>
+              </div>
+            </div>
+            <div class="chat-list" [class.expanded]="ungroupedExpanded">
+              @for (conversation of ungroupedConversations; track conversation.ID) {
+                <ng-container [ngTemplateOutlet]="conversationItem" [ngTemplateOutletContext]="{ $implicit: conversation }"></ng-container>
+              }
+            </div>
+          </div>
+        } @else {
+          <!-- Flat Messages Section -->
+          <div class="sidebar-section">
+            @if (showSectionHeaders) {
+              <div class="section-header" [class.expanded]="directMessagesExpanded" (click)="toggleDirectMessages()">
+                <div class="section-title">
+                  <i class="fas fa-chevron-right"></i>
+                  <span>Messages</span>
                 </div>
-                <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
-                  <div class="conversation-name">
-                    {{ conversation.Name }}
-                    @if (isSharedWithMe(conversation)) {
-                      <i class="fas fa-share-nodes shared-indicator"
-                         [title]="sharedWithMeTooltip(conversation)"></i>
-                    }
-                  </div>
-                  <div class="conversation-preview">{{ conversation.Description }}</div>
-                </div>
-                @if (!isSelectionMode) {
-                  <div class="conversation-actions">
-                    <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
-                      <i class="fas fa-ellipsis"></i>
-                    </button>
-                    @if (IsMenuOpen(conversation)) {
-                      <div class="context-menu" (click)="$event.stopPropagation()">
-                        <button class="menu-item" (click)="togglePin(conversation, $event)">
-                          <i class="fas fa-thumbtack"></i>
-                          <span>Pin</span>
-                        </button>
-                        <button class="menu-item" (click)="renameConversation(conversation); closeMenu()">
-                          <i class="fas fa-edit"></i>
-                          <span>Rename</span>
-                        </button>
-                        <div class="menu-divider"></div>
-                        <button class="menu-item danger" (click)="deleteConversation(conversation); closeMenu()">
-                          <i class="fas fa-trash"></i>
-                          <span>Delete</span>
-                        </button>
-                      </div>
-                    }
-                  </div>
-                }
               </div>
             }
+            <div class="chat-list" [class.expanded]="!showSectionHeaders || directMessagesExpanded">
+              @for (conversation of unpinnedConversations; track conversation.ID) {
+                <ng-container [ngTemplateOutlet]="conversationItem" [ngTemplateOutletContext]="{ $implicit: conversation }"></ng-container>
+              }
+            </div>
           </div>
-        </div>
+        }
       </div>
 
       <!-- Selection Action Bar -->
@@ -222,29 +205,202 @@ import { UUIDsEqual } from '@memberjunction/global';
         </div>
       }
     </div>
+
+    <!-- Recursive folder node: header + nested children + direct conversations -->
+    <ng-template #folderNode let-node>
+      <div class="folder-row"
+           [class.drag-over]="dragOverTargetId === node.project.ID"
+           [class.dragging]="draggedFolderId === node.project.ID"
+           [style.paddingLeft.px]="12 + node.depth * 14"
+           [draggable]="true"
+           (dragstart)="onFolderDragStart(node, $event)"
+           (dragend)="onFolderDragEnd()"
+           (click)="toggleFolder(node.project.ID)"
+           (dragover)="onFolderDragOver(node.project.ID, $event)"
+           (dragleave)="onDragLeave(node.project.ID)"
+           (drop)="onFolderDrop(node.project, $event)"
+           [title]="node.project.Name">
+        <i class="fas fa-chevron-right folder-chevron" [class.expanded]="isFolderExpanded(node.project.ID)"></i>
+        <i class="fas {{ node.project.Icon || 'fa-folder' }} folder-icon" [style.color]="node.project.Color || null"></i>
+        <span class="folder-name">{{ node.project.Name }}</span>
+        <span class="folder-count">{{ node.totalCount }}</span>
+        <div class="folder-actions" (click)="$event.stopPropagation()">
+          <button class="folder-action-btn" (click)="createFolder(node.project.ID, $event)" title="New Subfolder">
+            <i class="fas fa-folder-plus"></i>
+          </button>
+          <button class="folder-action-btn" (click)="editFolder(node.project, $event)" title="Edit Folder">
+            <i class="fas fa-pen"></i>
+          </button>
+          <button class="folder-action-btn danger" (click)="deleteFolder(node.project, $event)" title="Delete Folder">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </div>
+      @if (isFolderExpanded(node.project.ID)) {
+        <div class="folder-children">
+          @for (child of node.children; track child.project.ID) {
+            @if (!isSearching || child.hasContent) {
+              <ng-container [ngTemplateOutlet]="folderNode" [ngTemplateOutletContext]="{ $implicit: child }"></ng-container>
+            }
+          }
+          @for (conversation of node.conversations; track conversation.ID) {
+            <ng-container [ngTemplateOutlet]="conversationItem" [ngTemplateOutletContext]="{ $implicit: conversation, depth: node.depth + 1 }"></ng-container>
+          }
+          @if (node.totalCount === 0 && !isSearching) {
+            <div class="folder-empty-hint" [style.paddingLeft.px]="26 + node.depth * 14">Empty — drop a conversation here</div>
+          }
+        </div>
+      }
+    </ng-template>
+
+    <!-- Shared conversation row used by Pinned, folders, and Ungrouped/Messages -->
+    <ng-template #conversationItem let-conversation let-depth="depth">
+      <div class="conversation-item"
+           [class.active]="IsConversationActive(conversation)"
+           [class.renamed]="IsConversationRenamed(conversation)"
+           [class.dragging]="IsConversationDragging(conversation)"
+           [style.paddingLeft.px]="depth ? 16 + depth * 14 : 16"
+           [draggable]="!isSelectionMode"
+           (dragstart)="onConversationDragStart(conversation, $event)"
+           (dragend)="onConversationDragEnd()"
+           (click)="handleConversationClick(conversation)">
+        @if (isSelectionMode) {
+          <div class="conversation-checkbox">
+            <input type="checkbox"
+                   [checked]="selectedConversationIds.has(conversation.ID)"
+                   (click)="$event.stopPropagation(); toggleConversationSelection(conversation.ID)">
+          </div>
+        }
+        <div class="conversation-icon-wrapper">
+          @if (hasActiveTasks(conversation.ID)) {
+            <div class="conversation-icon has-tasks">
+              <i class="fas fa-spinner fa-pulse"></i>
+            </div>
+          }
+          <div class="badge-overlay">
+            <mj-notification-badge [conversationId]="conversation.ID"></mj-notification-badge>
+          </div>
+        </div>
+        <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
+          <div class="conversation-name">
+            {{ conversation.Name }}
+            @if (isSharedWithMe(conversation)) {
+              <i class="fas fa-share-nodes shared-indicator"
+                 [title]="sharedWithMeTooltip(conversation)"></i>
+            }
+          </div>
+          <div class="conversation-preview">{{ conversation.Description }}</div>
+        </div>
+        @if (!isSelectionMode) {
+          <div class="conversation-actions">
+            <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
+              <i class="fas fa-ellipsis"></i>
+            </button>
+            @if (IsMenuOpen(conversation)) {
+              <div class="context-menu" (click)="$event.stopPropagation()">
+                @if (IsMoveSubmenuOpen(conversation)) {
+                  <button class="menu-item back" (click)="closeMoveSubmenu($event)">
+                    <i class="fas fa-chevron-left"></i>
+                    <span>Move to folder</span>
+                  </button>
+                  <div class="menu-divider"></div>
+                  <div class="move-folder-list">
+                    <button class="menu-item" [class.current]="!conversation.ProjectID" (click)="selectMoveTarget(conversation, null)">
+                      <i class="fas fa-inbox"></i>
+                      <span>No folder</span>
+                    </button>
+                    @for (f of flatFolders; track f.project.ID) {
+                      <button class="menu-item" [class.current]="IsInFolder(conversation, f.project.ID)"
+                              [style.paddingLeft.px]="14 + f.depth * 12"
+                              (click)="selectMoveTarget(conversation, f.project.ID)">
+                        <i class="fas {{ f.project.Icon || 'fa-folder' }}" [style.color]="f.project.Color || null"></i>
+                        <span>{{ f.project.Name }}</span>
+                      </button>
+                    }
+                  </div>
+                  <div class="menu-divider"></div>
+                  <button class="menu-item" (click)="createFolderForConversation(conversation, $event)">
+                    <i class="fas fa-folder-plus"></i>
+                    <span>New folder…</span>
+                  </button>
+                } @else {
+                  <button class="menu-item" (click)="togglePin(conversation, $event)">
+                    <i class="fas fa-thumbtack"></i>
+                    <span>{{ conversation.IsPinned ? 'Unpin' : 'Pin' }}</span>
+                  </button>
+                  <button class="menu-item" (click)="openMoveSubmenu(conversation.ID, $event)">
+                    <i class="fas fa-folder-tree"></i>
+                    <span>Move to folder</span>
+                    <i class="fas fa-chevron-right submenu-arrow"></i>
+                  </button>
+                  <button class="menu-item" (click)="renameConversation(conversation); closeMenu()">
+                    <i class="fas fa-edit"></i>
+                    <span>Rename</span>
+                  </button>
+                  <div class="menu-divider"></div>
+                  <button class="menu-item danger" (click)="deleteConversation(conversation); closeMenu()">
+                    <i class="fas fa-trash"></i>
+                    <span>Delete</span>
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </ng-template>
   `,
   styles: [`
-    :host { display: block; height: 100%; }
-    .conversation-list { display: flex; flex-direction: column; height: 100%; background: var(--mj-brand-secondary); }
-    .list-header { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    :host {
+      display: block;
+      height: 100%;
+      /* White-label theming tokens for the list panel. The public
+         --mj-chat-list-* custom properties are host-overridable (set
+         them at :root or on any ancestor); the private --conv-list-* names
+         resolve the fallback ONCE here so the 70+ usages below stay simple.
+         (A self-referential var() fallback would be a custom-property cycle,
+         so the two-name indirection is required, not stylistic.) Defaults
+         preserve the stock look exactly: a brand-secondary panel with
+         on-secondary ink. Hover/border/divider states derive from the ink via
+         color-mix, so they follow automatically when the ink is remapped.
+         The accent trio drives the panel's ACTION surfaces (New Conversation
+         button, search-focus ring, checkbox tick, drag-over highlights) —
+         independent of the active-row pair so a host can tint actions on their
+         own; defaults to the brand-primary action color, unchanged.
+         --conv-list-hover-bg is the row-hover wash: it defaults to the same
+         ink-derived tint as before (so a bg/ink remap still gives a neutral
+         hover), but a host can point it at a brand tint to make hover an accent
+         cue while keeping the panel itself on a neutral surface. */
+      --conv-list-bg: var(--mj-chat-list-bg, var(--mj-brand-secondary));
+      --conv-list-ink: var(--mj-chat-list-ink, var(--mj-brand-on-secondary));
+      --conv-list-active-bg: var(--mj-chat-list-active-bg, var(--mj-brand-primary));
+      --conv-list-active-ink: var(--mj-chat-list-active-ink, var(--mj-brand-on-secondary));
+      --conv-list-active-hover-bg: var(--mj-chat-list-active-hover-bg, var(--mj-brand-primary-hover));
+      --conv-list-accent: var(--mj-chat-list-accent, var(--mj-brand-primary));
+      --conv-list-accent-ink: var(--mj-chat-list-accent-ink, var(--mj-text-inverse));
+      --conv-list-accent-hover: var(--mj-chat-list-accent-hover, var(--mj-brand-primary-hover));
+      --conv-list-hover-bg: var(--mj-chat-list-hover-bg, color-mix(in srgb, var(--conv-list-ink) 8%, transparent));
+    }
+    .conversation-list { display: flex; flex-direction: column; height: 100%; background: var(--conv-list-bg); }
+    .list-header { padding: 8px; border-bottom: 1px solid color-mix(in srgb, var(--conv-list-ink) 10%, transparent); }
     .search-input {
       width: 100%;
       padding: 8px 12px;
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.2);
+      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 20%, transparent);
       border-radius: 6px;
-      color: white;
+      color: var(--conv-list-ink);
       font-size: 13px;
       transition: all 0.2s;
     }
-    .search-input::placeholder { color: rgba(255,255,255,0.5); }
-    .search-input:focus { outline: none; background: rgba(255,255,255,0.15); border-color: var(--mj-brand-primary); }
+    .search-input::placeholder { color: color-mix(in srgb, var(--conv-list-ink) 50%, transparent); }
+    .search-input:focus { outline: none; background: color-mix(in srgb, var(--conv-list-ink) 15%, transparent); border-color: var(--conv-list-accent); }
     .btn-new-conversation {
       width: calc(100% - 16px);
       margin: 8px;
       padding: 10px;
-      background: var(--mj-brand-primary);
-      color: var(--mj-text-inverse);
+      background: var(--conv-list-accent);
+      color: var(--conv-list-accent-ink);
       border: none;
       border-radius: 6px;
       cursor: pointer;
@@ -257,17 +413,12 @@ import { UUIDsEqual } from '@memberjunction/global';
       transition: background 0.2s;
       flex-shrink: 0;
     }
-    .btn-new-conversation:hover { background: var(--mj-brand-primary-hover); }
+    .btn-new-conversation:hover { background: var(--conv-list-accent-hover); }
     .btn-new-conversation i { font-size: 14px; }
     .list-content { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0; }
 
     /* Collapsible Sections */
     .sidebar-section { margin-bottom: 20px; }
-    .pinned-section .section-header {
-      background: rgba(255, 193, 7, 0.08);
-      border-radius: 4px;
-      margin: 0 4px;
-    }
     .pinned-section .section-title .section-icon {
       color: var(--mj-status-warning);
       font-size: 11px;
@@ -279,13 +430,13 @@ import { UUIDsEqual } from '@memberjunction/global';
       align-items: center;
       justify-content: space-between;
       cursor: pointer;
-      color: rgba(255, 255, 255, 0.7);
+      color: var(--conv-list-ink);
       font-size: 13px;
       font-weight: 500;
-      transition: color 0.2s;
+      transition: background 0.2s;
       user-select: none;
     }
-    .section-header:hover { color: white; }
+    .section-header:hover { background: color-mix(in srgb, var(--conv-list-ink) 8%, transparent); }
     .section-title {
       display: flex;
       align-items: center;
@@ -293,9 +444,11 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
     .section-title i {
       font-size: 10px;
+    }
+    .section-title i:not(.section-icon) {
       transition: transform 0.2s;
     }
-    .section-header.expanded .section-title i { transform: rotate(90deg); }
+    .section-header.expanded .section-title i:not(.section-icon) { transform: rotate(90deg); }
     .chat-list {
       padding: 4px 0;
       display: none;
@@ -310,23 +463,23 @@ import { UUIDsEqual } from '@memberjunction/global';
       align-items: center;
       transition: all 0.2s;
       position: relative;
-      color: rgba(255,255,255,0.7);
+      color: color-mix(in srgb, var(--conv-list-ink) 70%, transparent);
       font-size: 14px;
       min-height: 45px;
     }
-    .conversation-item:hover { background: rgba(255,255,255,0.08); color: white; }
+    .conversation-item:hover { background: var(--conv-list-hover-bg); color: var(--conv-list-ink); }
     .conversation-item:hover .conversation-actions { opacity: 1; }
-    .conversation-item.active { background: var(--mj-brand-primary); color: white; }
+    .conversation-item.active { background: var(--conv-list-active-bg); color: var(--conv-list-active-ink); }
     .conversation-icon-wrapper { position: relative; flex-shrink: 0; }
     .conversation-icon { font-size: 12px; width: 16px; text-align: center; }
     .conversation-icon.has-tasks { color: var(--mj-status-warning); }
     .badge-overlay { position: absolute; top: -4px; right: -4px; }
     .conversation-info { flex: 1; min-width: 0; }
     .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
-    .shared-indicator { font-size: 10px; color: rgba(255, 255, 255, 0.55); flex-shrink: 0; }
-    .conversation-item.active .shared-indicator { color: rgba(255, 255, 255, 0.85); }
-    .conversation-preview { font-size: 12px; color: rgba(255,255,255,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .conversation-item.active .conversation-preview { color: rgba(255,255,255,0.8); }
+    .shared-indicator { font-size: 10px; color: color-mix(in srgb, var(--conv-list-ink) 55%, transparent); flex-shrink: 0; }
+    .conversation-item.active .shared-indicator { color: color-mix(in srgb, var(--conv-list-active-ink) 85%, transparent); }
+    .conversation-preview { font-size: 12px; color: color-mix(in srgb, var(--conv-list-ink) 50%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conversation-item.active .conversation-preview { color: color-mix(in srgb, var(--conv-list-active-ink) 80%, transparent); }
     .conversation-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 
     /* Project Badge */
@@ -337,20 +490,20 @@ import { UUIDsEqual } from '@memberjunction/global';
       font-size: 10px;
       font-weight: 600;
       margin-left: auto;
-      background-color: rgba(255, 255, 255, 0.1);
-      color: rgba(255, 255, 255, 0.6);
+      background-color: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 60%, transparent);
       white-space: nowrap;
       max-width: 80px;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .conversation-item:hover .project-badge {
-      background-color: rgba(255, 255, 255, 0.15);
-      color: rgba(255, 255, 255, 0.8);
+      background-color: color-mix(in srgb, var(--conv-list-ink) 15%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 80%, transparent);
     }
     .conversation-item.active .project-badge {
-      background-color: rgba(255, 255, 255, 0.2);
-      color: white;
+      background-color: color-mix(in srgb, var(--conv-list-active-ink) 20%, transparent);
+      color: var(--conv-list-active-ink);
     }
 
     .conversation-actions {
@@ -381,11 +534,11 @@ import { UUIDsEqual } from '@memberjunction/global';
     @keyframes pulse-glow {
       0%, 100% {
         opacity: 1;
-        filter: drop-shadow(0 0 2px #fb923c);
+        filter: drop-shadow(0 0 2px var(--mj-status-warning));
       }
       50% {
         opacity: 0.6;
-        filter: drop-shadow(0 0 4px #fb923c);
+        filter: drop-shadow(0 0 4px var(--mj-status-warning));
       }
     }
     .conversation-item.active .task-indicator {
@@ -399,19 +552,19 @@ import { UUIDsEqual } from '@memberjunction/global';
       align-items: center;
       justify-content: center;
       border-radius: 6px;
-      color: rgba(255,255,255,0.7);
-      background: var(--mj-brand-secondary) !important;
+      color: color-mix(in srgb, var(--conv-list-ink) 70%, transparent);
+      background: var(--conv-list-bg) !important;
       border: none;
       cursor: pointer;
       transition: all 0.2s;
     }
     .menu-btn:hover {
-      background: rgba(255,255,255,0.15) !important;
-      color: white;
+      background: color-mix(in srgb, var(--conv-list-ink) 15%, transparent) !important;
+      color: var(--conv-list-ink);
     }
     .conversation-item.active .menu-btn {
-      background: var(--mj-brand-primary-hover) !important;
-      color: white;
+      background: var(--conv-list-active-hover-bg) !important;
+      color: var(--conv-list-active-ink);
     }
     .menu-btn i { font-size: 14px; }
 
@@ -421,10 +574,10 @@ import { UUIDsEqual } from '@memberjunction/global';
       right: 0;
       margin-top: 4px;
       min-width: 160px;
-      background: var(--mj-brand-secondary);
-      border: 1px solid rgba(255,255,255,0.15);
+      background: var(--conv-list-bg);
+      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 15%, transparent);
       border-radius: 8px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      box-shadow: var(--mj-shadow-lg);
       z-index: 1001;
       overflow: hidden;
       pointer-events: auto;
@@ -438,7 +591,7 @@ import { UUIDsEqual } from '@memberjunction/global';
       padding: 10px 14px;
       background: transparent;
       border: none;
-      color: rgba(255,255,255,0.85);
+      color: color-mix(in srgb, var(--conv-list-ink) 85%, transparent);
       font-size: 14px;
       text-align: left;
       cursor: pointer;
@@ -446,40 +599,40 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .menu-item:hover {
-      background: rgba(255,255,255,0.1);
-      color: white;
+      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      color: var(--conv-list-ink);
     }
 
     .menu-item i {
       width: 16px;
       font-size: 13px;
-      color: rgba(255,255,255,0.6);
+      color: color-mix(in srgb, var(--conv-list-ink) 60%, transparent);
     }
 
     .menu-item:hover i {
-      color: white;
+      color: var(--conv-list-ink);
     }
 
     .menu-item.danger {
-      color: rgba(239, 68, 68, 0.9);
+      color: var(--mj-status-error);
     }
 
     .menu-item.danger:hover {
-      background: rgba(239, 68, 68, 0.15);
-      color: #ff6b6b;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, transparent);
+      color: var(--mj-status-error);
     }
 
     .menu-item.danger i {
-      color: rgba(239, 68, 68, 0.8);
+      color: var(--mj-status-error);
     }
 
     .menu-item.danger:hover i {
-      color: #ff6b6b;
+      color: var(--mj-status-error);
     }
 
     .menu-divider {
       height: 1px;
-      background: rgba(255,255,255,0.1);
+      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
       margin: 4px 0;
     }
 
@@ -488,24 +641,35 @@ import { UUIDsEqual } from '@memberjunction/global';
       animation: renameHighlight 1500ms cubic-bezier(0.4, 0, 0.2, 1);
     }
 
+    /* Brand-token ramp (was hardcoded tailwind blue/purple/emerald rgba values,
+       which ignored theming): primary/accent open the flash, success/primary
+       carry the fade, at the original alpha ramp (40/35/30/20; glows 50-20). */
     @keyframes renameHighlight {
       0% {
-        background: linear-gradient(90deg, rgba(59, 130, 246, 0.4), rgba(147, 51, 234, 0.4));
+        background: linear-gradient(90deg,
+          color-mix(in srgb, var(--mj-brand-primary) 40%, transparent),
+          color-mix(in srgb, var(--mj-brand-accent) 40%, transparent));
         transform: scale(1.03);
-        box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        box-shadow: 0 0 20px color-mix(in srgb, var(--mj-brand-primary) 50%, transparent);
       }
       25% {
-        background: linear-gradient(90deg, rgba(59, 130, 246, 0.35), rgba(147, 51, 234, 0.35));
-        box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+        background: linear-gradient(90deg,
+          color-mix(in srgb, var(--mj-brand-primary) 35%, transparent),
+          color-mix(in srgb, var(--mj-brand-accent) 35%, transparent));
+        box-shadow: 0 0 15px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
       }
       50% {
-        background: linear-gradient(90deg, rgba(16, 185, 129, 0.3), rgba(59, 130, 246, 0.3));
+        background: linear-gradient(90deg,
+          color-mix(in srgb, var(--mj-status-success) 30%, transparent),
+          color-mix(in srgb, var(--mj-brand-primary) 30%, transparent));
         transform: scale(1.02);
-        box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+        box-shadow: 0 0 10px color-mix(in srgb, var(--mj-status-success) 30%, transparent);
       }
       75% {
-        background: linear-gradient(90deg, rgba(16, 185, 129, 0.2), rgba(59, 130, 246, 0.2));
-        box-shadow: 0 0 5px rgba(16, 185, 129, 0.2);
+        background: linear-gradient(90deg,
+          color-mix(in srgb, var(--mj-status-success) 20%, transparent),
+          color-mix(in srgb, var(--mj-brand-primary) 20%, transparent));
+        box-shadow: 0 0 5px color-mix(in srgb, var(--mj-status-success) 20%, transparent);
       }
       100% {
         background: transparent;
@@ -534,17 +698,17 @@ import { UUIDsEqual } from '@memberjunction/global';
       align-items: center;
       justify-content: center;
       background: transparent;
-      border: 1px solid rgba(255,255,255,0.2);
+      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 20%, transparent);
       border-radius: 6px;
-      color: rgba(255,255,255,0.7);
+      color: color-mix(in srgb, var(--conv-list-ink) 70%, transparent);
       cursor: pointer;
       transition: all 0.2s;
     }
 
     .btn-menu:hover {
-      background: rgba(255,255,255,0.1);
-      color: white;
-      border-color: rgba(255,255,255,0.3);
+      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      color: var(--conv-list-ink);
+      border-color: color-mix(in srgb, var(--conv-list-ink) 30%, transparent);
     }
 
     .header-dropdown-menu {
@@ -552,10 +716,10 @@ import { UUIDsEqual } from '@memberjunction/global';
       top: calc(100% + 4px);
       right: 0;
       min-width: 200px;
-      background: var(--mj-brand-secondary);
-      border: 1px solid rgba(255,255,255,0.15);
+      background: var(--conv-list-bg);
+      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 15%, transparent);
       border-radius: 8px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      box-shadow: var(--mj-shadow-lg);
       z-index: 1001;
       overflow: hidden;
       padding: 4px 0;
@@ -569,7 +733,7 @@ import { UUIDsEqual } from '@memberjunction/global';
       padding: 10px 14px;
       background: transparent;
       border: none;
-      color: rgba(255,255,255,0.85);
+      color: color-mix(in srgb, var(--conv-list-ink) 85%, transparent);
       font-size: 13px;
       text-align: left;
       cursor: pointer;
@@ -577,33 +741,33 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .header-dropdown-menu .dropdown-item:hover {
-      background: rgba(255,255,255,0.1);
-      color: white;
+      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      color: var(--conv-list-ink);
     }
 
     .header-dropdown-menu .dropdown-item i {
       width: 16px;
       font-size: 13px;
-      color: rgba(255,255,255,0.6);
+      color: color-mix(in srgb, var(--conv-list-ink) 60%, transparent);
     }
 
     .header-dropdown-menu .dropdown-item:hover i {
-      color: white;
+      color: var(--conv-list-ink);
     }
 
     .header-dropdown-menu .dropdown-item .shortcut {
       margin-left: auto;
       font-size: 11px;
-      color: rgba(255,255,255,0.4);
+      color: color-mix(in srgb, var(--conv-list-ink) 40%, transparent);
       font-family: system-ui, -apple-system, sans-serif;
     }
 
     .btn-select {
       padding: 8px 12px;
       background: transparent;
-      border: 1px solid rgba(255,255,255,0.2);
+      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 20%, transparent);
       border-radius: 6px;
-      color: rgba(255,255,255,0.7);
+      color: color-mix(in srgb, var(--conv-list-ink) 70%, transparent);
       font-size: 13px;
       font-weight: 500;
       display: flex;
@@ -616,9 +780,9 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .btn-select:hover {
-      background: rgba(255,255,255,0.1);
-      color: white;
-      border-color: rgba(255,255,255,0.3);
+      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      color: var(--conv-list-ink);
+      border-color: color-mix(in srgb, var(--conv-list-ink) 30%, transparent);
     }
 
     .conversation-checkbox {
@@ -632,7 +796,7 @@ import { UUIDsEqual } from '@memberjunction/global';
       width: 18px;
       height: 18px;
       cursor: pointer;
-      accent-color: var(--mj-brand-primary);
+      accent-color: var(--conv-list-accent);
     }
 
     .selection-action-bar {
@@ -642,8 +806,8 @@ import { UUIDsEqual } from '@memberjunction/global';
       justify-content: space-between;
       align-items: center;
       padding: 12px 16px;
-      background: var(--mj-brand-secondary);
-      border-top: 1px solid rgba(255,255,255,0.15);
+      background: var(--conv-list-bg);
+      border-top: 1px solid color-mix(in srgb, var(--conv-list-ink) 15%, transparent);
       gap: 12px;
       flex-wrap: wrap;
       flex-shrink: 0;
@@ -653,7 +817,7 @@ import { UUIDsEqual } from '@memberjunction/global';
       display: flex;
       align-items: center;
       gap: 12px;
-      color: rgba(255,255,255,0.9);
+      color: color-mix(in srgb, var(--conv-list-ink) 90%, transparent);
       font-size: 14px;
       font-weight: 500;
       flex: 1 1 auto;
@@ -661,7 +825,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .selection-count {
-      color: white;
+      color: var(--conv-list-ink);
     }
 
     .link-btn {
@@ -676,7 +840,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .link-btn:hover {
-      color: white;
+      color: var(--conv-list-ink);
     }
 
     .selection-actions {
@@ -688,9 +852,9 @@ import { UUIDsEqual } from '@memberjunction/global';
     .btn-cancel {
       padding: 8px 16px;
       background: transparent;
-      border: 1px solid rgba(255,255,255,0.2);
+      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 20%, transparent);
       border-radius: 6px;
-      color: rgba(255,255,255,0.7);
+      color: color-mix(in srgb, var(--conv-list-ink) 70%, transparent);
       cursor: pointer;
       font-size: 13px;
       font-weight: 500;
@@ -698,8 +862,8 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .btn-cancel:hover {
-      background: rgba(255,255,255,0.1);
-      color: white;
+      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      color: var(--conv-list-ink);
     }
 
     .btn-delete-bulk {
@@ -710,7 +874,10 @@ import { UUIDsEqual } from '@memberjunction/global';
       background: var(--mj-status-error);
       border: none;
       border-radius: 6px;
-      color: white;
+      /* Deliberately NOT --conv-list-ink: this ink sits on the error-red button,
+         not the panel, so it must not follow a panel remap. (brand-on-secondary
+         stays light in both modes; text-inverse flips dark in dark mode.) */
+      color: var(--mj-brand-on-secondary);
       cursor: pointer;
       font-size: 13px;
       font-weight: 600;
@@ -729,6 +896,134 @@ import { UUIDsEqual } from '@memberjunction/global';
     .btn-delete-bulk i {
       font-size: 12px;
     }
+
+    /* Folders */
+    .section-action-btn {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: color-mix(in srgb, var(--conv-list-ink) 60%, transparent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .section-action-btn:hover {
+      background: color-mix(in srgb, var(--conv-list-ink) 15%, transparent);
+      color: var(--conv-list-ink);
+    }
+    .section-action-btn i { font-size: 12px; }
+
+    .folder-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px 5px 12px;
+      cursor: pointer;
+      color: color-mix(in srgb, var(--conv-list-ink) 80%, transparent);
+      font-size: 13px;
+      transition: background 0.15s;
+      user-select: none;
+      position: relative;
+    }
+    .folder-row:hover { background: color-mix(in srgb, var(--conv-list-ink) 8%, transparent); }
+    .folder-row.drag-over {
+      background: color-mix(in srgb, var(--conv-list-accent) 25%, transparent);
+      box-shadow: inset 0 0 0 1px var(--conv-list-accent);
+    }
+    .folder-row.dragging { opacity: 0.4; }
+    .section-header.drag-over {
+      background: color-mix(in srgb, var(--conv-list-accent) 18%, transparent);
+      box-shadow: inset 0 0 0 1px var(--conv-list-accent);
+      border-radius: 6px;
+    }
+    .folder-chevron {
+      font-size: 9px;
+      width: 10px;
+      flex-shrink: 0;
+      transition: transform 0.2s;
+      color: color-mix(in srgb, var(--conv-list-ink) 55%, transparent);
+    }
+    .folder-chevron.expanded { transform: rotate(90deg); }
+    .folder-icon { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
+    .folder-name {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 600;
+    }
+    .folder-count {
+      font-size: 11px;
+      font-weight: 600;
+      color: color-mix(in srgb, var(--conv-list-ink) 50%, transparent);
+      flex-shrink: 0;
+      margin-left: auto;
+      padding-left: 6px;
+      text-align: right;
+    }
+    .folder-actions {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      gap: 2px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      z-index: 5;
+    }
+    .folder-row:hover .folder-actions { opacity: 1; pointer-events: auto; }
+    .folder-row:hover .folder-count { opacity: 0; }
+    .folder-action-btn {
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: color-mix(in srgb, var(--conv-list-ink) 60%, transparent);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .folder-action-btn:hover {
+      background: color-mix(in srgb, var(--conv-list-ink) 18%, transparent);
+      color: var(--conv-list-ink);
+    }
+    .folder-action-btn.danger:hover {
+      background: color-mix(in srgb, var(--mj-status-error) 18%, transparent);
+      color: var(--mj-status-error);
+    }
+    .folder-action-btn i { font-size: 11px; }
+    .folder-children { display: block; }
+    .folder-empty-hint {
+      padding: 6px 16px;
+      font-size: 11px;
+      font-style: italic;
+      color: color-mix(in srgb, var(--conv-list-ink) 45%, transparent);
+    }
+    .ungrouped-section.drag-over {
+      background: color-mix(in srgb, var(--conv-list-accent) 12%, transparent);
+      box-shadow: inset 0 0 0 1px var(--conv-list-accent);
+      border-radius: 6px;
+    }
+
+    /* Dragging state */
+    .conversation-item { user-select: none; }
+    .conversation-item.dragging { opacity: 0.4; }
+
+    /* Move-to-folder submenu */
+    .menu-item.back { font-weight: 600; }
+    .menu-item .submenu-arrow { margin-left: auto; font-size: 10px; }
+    .menu-item.current { background: color-mix(in srgb, var(--conv-list-accent) 18%, transparent); }
+    .move-folder-list { max-height: 240px; overflow-y: auto; }
   `]
 })
 export class ConversationListComponent implements OnInit, OnDestroy {
@@ -739,6 +1034,31 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   @Input() isSidebarPinned: boolean = true; // Whether sidebar is pinned (stays open after selection)
   @Input() isMobileView: boolean = false; // Whether we're on mobile (no pin options)
 
+  // ── White-label chrome toggles (all default true = stock rendering) ──
+  /** Show the search box in the list header. Flipping to false clears any active
+   *  search so a hidden filter can't keep silently narrowing the list. */
+  @Input()
+  set showSearch(value: boolean) {
+    if (!value && this._searchQuery) {
+      this.searchQuery = ''; // setter rebuilds the groupings
+    }
+    this._showSearch = value;
+  }
+  get showSearch(): boolean {
+    return this._showSearch;
+  }
+  private _showSearch = true;
+  /** Show the "New Conversation" button. */
+  @Input() showNewConversationButton: boolean = true;
+  /** Show the ⋯ header options menu (refresh / select / group-by / hide sidebar). */
+  @Input() showHeaderMenu: boolean = true;
+  /** Show the collapsible Pinned / Folders / Messages section headers. When false,
+   *  the list renders FLAT and fully expanded: folder grouping is bypassed (the
+   *  folder tree's root drop-zone and New Folder action live in the section
+   *  header, so a headerless tree would allow one-way folder nesting) — the
+   *  chrome-less rendering for embedded hosts. */
+  @Input() showSectionHeaders: boolean = true;
+
   @Output() conversationSelected = new EventEmitter<string>();
   @Output() conversationDeleted = new EventEmitter<string>(); // Emits the deleted conversation ID
   @Output() newConversationRequested = new EventEmitter<void>();
@@ -748,13 +1068,41 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   public directMessagesExpanded: boolean = true;
   public pinnedExpanded: boolean = true;
+  public foldersExpanded: boolean = true;
+  public ungroupedExpanded: boolean = true;
   public openMenuConversationId: string | null = null;
   public conversationIdsWithTasks = new Set<string>();
   public isSelectionMode: boolean = false;
   public selectedConversationIds = new Set<string>();
-  public searchQuery: string = '';
   public isHeaderMenuOpen: boolean = false;
   public isRefreshing: boolean = false;
+
+  /** UserInfoEngine key for persisting folder collapse state + group-by mode. */
+  private static readonly FolderPrefsKey = 'mj.conversations.folderPrefs.v1';
+
+  /** How the conversation list is grouped. 'project' = folders, 'none' = flat list. */
+  public groupBy: ConversationGroupBy = 'project';
+
+  /** Precomputed groupings, rebuilt whenever conversations/projects/search change. */
+  public pinnedConversations: MJConversationEntity[] = [];
+  public unpinnedConversations: MJConversationEntity[] = [];
+  public ungroupedConversations: MJConversationEntity[] = [];
+  public folderTree: FolderNode[] = [];
+  /** Flattened folder list (depth-ordered) for the "Move to folder" menu. */
+  public flatFolders: FolderNode[] = [];
+
+  /** Folder IDs (normalized) whose children are collapsed. Absent = expanded. */
+  private collapsedFolderIds = new Set<string>();
+
+  /** Drag-and-drop state. */
+  public draggedConversationId: string | null = null;
+  public draggedFolderId: string | null = null;
+  public dragOverTargetId: string | null = null;
+
+  /** When set, the open conversation menu is showing its "Move to folder" picker. */
+  public moveSubmenuConversationId: string | null = null;
+
+  private _searchQuery: string = '';
 
   private destroy$ = new Subject<void>();
 
@@ -767,39 +1115,59 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     private dialogService: DialogService,
     private notificationService: NotificationService,
     private activeTasksService: ActiveTasksService,
+    private mjDialogService: MJDialogService,
     private cdr: ChangeDetectorRef
   ) {}
 
+  get searchQuery(): string {
+    return this._searchQuery;
+  }
+  set searchQuery(value: string) {
+    this._searchQuery = value ?? '';
+    this.rebuildGroups();
+  }
+
+  /** True when a search filter is active. */
+  get isSearching(): boolean {
+    return this._searchQuery.trim().length > 0;
+  }
+
+  /** Conversations matching the current search (used by selection-mode helpers). */
   get filteredConversations(): MJConversationEntity[] {
-    if (!this.searchQuery || this.searchQuery.trim() === '') {
-      return this.engine.Conversations;
+    return this.filterConversations(this.engine.Conversations);
+  }
+
+  private filterConversations(conversations: MJConversationEntity[]): MJConversationEntity[] {
+    if (!this.isSearching) {
+      return conversations;
     }
-    const lowerQuery = this.searchQuery.toLowerCase();
-    return this.engine.Conversations.filter(c =>
+    const lowerQuery = this._searchQuery.toLowerCase();
+    return conversations.filter(c =>
       (c.Name?.toLowerCase().includes(lowerQuery)) ||
       (c.Description?.toLowerCase().includes(lowerQuery))
     );
   }
 
-  get pinnedConversations() {
-    return this.filteredConversations.filter(c => c.IsPinned);
-  }
-
-  get unpinnedConversations() {
-    return this.filteredConversations.filter(c => !c.IsPinned);
-  }
-
   ngOnInit() {
-    // Load conversations on init
+    // Restore persisted folder collapse state + group-by preference
+    this.loadFolderPrefs();
+
+    // Load conversations (and folders) on init
     this.engine.LoadConversations(this.environmentId, this.currentUser, false);
 
-    // Re-run change detection whenever the conversations list changes (pin, archive, rename, etc.).
-    // filteredConversations/pinnedConversations/unpinnedConversations are pure getters that read
-    // engine.Conversations directly, so Angular doesn't know to re-evaluate them unless
-    // we explicitly trigger a check here.
+    // Rebuild the precomputed groupings whenever conversations OR projects change
+    // (pin, archive, rename, move-to-folder, folder create/rename/delete, etc.).
     this.engine.Conversations$.pipe(
       takeUntil(this.destroy$)
     ).subscribe(() => {
+      this.rebuildGroups();
+      this.cdr.detectChanges();
+    });
+
+    this.engine.Projects$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.rebuildGroups();
       this.cdr.detectChanges();
     });
 
@@ -843,6 +1211,12 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.closeHeaderMenu();
   }
 
+  public onToggleGroupByClick(event: Event): void {
+    event.stopPropagation();
+    this.toggleGroupBy();
+    this.closeHeaderMenu();
+  }
+
   public async onRefreshConversationsClick(event: Event): Promise<void> {
     event.stopPropagation();
     if (this.isRefreshing) return;
@@ -882,6 +1256,409 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.pinnedExpanded = !this.pinnedExpanded;
   }
 
+  public toggleFolders(): void {
+    this.foldersExpanded = !this.foldersExpanded;
+  }
+
+  public toggleUngrouped(): void {
+    this.ungroupedExpanded = !this.ungroupedExpanded;
+  }
+
+  // ========================================================================
+  // FOLDER GROUPING
+  // ========================================================================
+
+  /**
+   * Recomputes pinned/unpinned/ungrouped lists and the folder tree from the
+   * engine's conversation + project caches and the current search filter.
+   */
+  private rebuildGroups(): void {
+    const matching = this.filterConversations(this.engine.Conversations);
+    this.pinnedConversations = matching.filter(c => c.IsPinned);
+    this.unpinnedConversations = matching.filter(c => !c.IsPinned);
+
+    const projects = this.engine.Projects;
+    const projectIds = new Set(projects.map(p => NormalizeUUID(p.ID)));
+
+    // Bucket unpinned conversations by their folder (pinned ones live in the
+    // Pinned section). Conversations with no/unknown folder are "ungrouped".
+    const conversationsByProject = new Map<string, MJConversationEntity[]>();
+    const ungrouped: MJConversationEntity[] = [];
+    for (const c of this.unpinnedConversations) {
+      const pid = c.ProjectID ? NormalizeUUID(c.ProjectID) : null;
+      if (pid && projectIds.has(pid)) {
+        const arr = conversationsByProject.get(pid) ?? [];
+        arr.push(c);
+        conversationsByProject.set(pid, arr);
+      } else {
+        ungrouped.push(c);
+      }
+    }
+    this.ungroupedConversations = ungrouped;
+
+    // Index projects by parent. A project whose parent isn't loaded is treated
+    // as a root so it never disappears from the tree.
+    const childrenByParent = new Map<string | null, MJProjectEntity[]>();
+    for (const p of projects) {
+      const parentId = p.ParentID ? NormalizeUUID(p.ParentID) : null;
+      const key = parentId && projectIds.has(parentId) ? parentId : null;
+      const arr = childrenByParent.get(key) ?? [];
+      arr.push(p);
+      childrenByParent.set(key, arr);
+    }
+
+    const build = (parentKey: string | null, depth: number): FolderNode[] => {
+      const projectsAtLevel = childrenByParent.get(parentKey) ?? [];
+      return projectsAtLevel.map(p => {
+        const children = build(NormalizeUUID(p.ID), depth + 1);
+        const conversations = conversationsByProject.get(NormalizeUUID(p.ID)) ?? [];
+        const totalCount = conversations.length + children.reduce((sum, ch) => sum + ch.totalCount, 0);
+        const hasContent = conversations.length > 0 || children.some(ch => ch.hasContent);
+        return { project: p, depth, conversations, children, totalCount, hasContent };
+      });
+    };
+    this.folderTree = build(null, 0);
+    this.flatFolders = this.flattenFolders(this.folderTree);
+  }
+
+  private flattenFolders(nodes: FolderNode[]): FolderNode[] {
+    const out: FolderNode[] = [];
+    for (const node of nodes) {
+      out.push(node);
+      out.push(...this.flattenFolders(node.children));
+    }
+    return out;
+  }
+
+  private findFolderNode(nodes: FolderNode[], projectId: string): FolderNode | null {
+    for (const node of nodes) {
+      if (UUIDsEqual(node.project.ID, projectId)) return node;
+      const found = this.findFolderNode(node.children, projectId);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  public isFolderExpanded(projectId: string): boolean {
+    return !this.collapsedFolderIds.has(NormalizeUUID(projectId));
+  }
+
+  public toggleFolder(projectId: string): void {
+    const key = NormalizeUUID(projectId);
+    if (this.collapsedFolderIds.has(key)) {
+      this.collapsedFolderIds.delete(key);
+    } else {
+      this.collapsedFolderIds.add(key);
+    }
+    this.saveFolderPrefs();
+  }
+
+  public toggleGroupBy(): void {
+    this.groupBy = this.groupBy === 'project' ? 'none' : 'project';
+    this.saveFolderPrefs();
+    this.rebuildGroups();
+  }
+
+  private loadFolderPrefs(): void {
+    try {
+      const raw = UserInfoEngine.Instance.GetSetting(ConversationListComponent.FolderPrefsKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { collapsed?: string[]; groupBy?: ConversationGroupBy };
+      this.collapsedFolderIds = new Set((parsed.collapsed ?? []).map(id => NormalizeUUID(id)));
+      if (parsed.groupBy === 'none' || parsed.groupBy === 'project') {
+        this.groupBy = parsed.groupBy;
+      }
+    } catch {
+      // Corrupt/legacy value — ignore and use defaults
+    }
+  }
+
+  private saveFolderPrefs(): void {
+    const payload = JSON.stringify({
+      collapsed: Array.from(this.collapsedFolderIds),
+      groupBy: this.groupBy
+    });
+    UserInfoEngine.Instance.SetSettingDebounced(ConversationListComponent.FolderPrefsKey, payload);
+  }
+
+  // ========================================================================
+  // DRAG & DROP (move conversation into/out of a folder)
+  // ========================================================================
+
+  public onConversationDragStart(conversation: MJConversationEntity, event: DragEvent): void {
+    if (this.isSelectionMode) return;
+    this.draggedFolderId = null;
+    this.draggedConversationId = conversation.ID;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', conversation.ID);
+    }
+  }
+
+  public onConversationDragEnd(): void {
+    this.draggedConversationId = null;
+    this.dragOverTargetId = null;
+  }
+
+  public onFolderDragStart(node: FolderNode, event: DragEvent): void {
+    event.stopPropagation();
+    this.draggedConversationId = null;
+    this.draggedFolderId = node.project.ID;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', node.project.ID);
+    }
+  }
+
+  public onFolderDragEnd(): void {
+    this.draggedFolderId = null;
+    this.dragOverTargetId = null;
+  }
+
+  public onFolderDragOver(projectId: string, event: DragEvent): void {
+    // A conversation can drop onto any folder; a folder can drop onto any folder
+    // that isn't itself or one of its own descendants (which would create a cycle).
+    const accepts = this.draggedConversationId
+      ? true
+      : this.draggedFolderId
+        ? this.isValidFolderDropTarget(projectId)
+        : false;
+    if (!accepts) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    this.dragOverTargetId = projectId;
+  }
+
+  public onUngroupedDragOver(event: DragEvent): void {
+    if (!this.draggedConversationId) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    this.dragOverTargetId = 'ungrouped';
+  }
+
+  /** The Folders section header accepts a dragged folder to move it back to the top level. */
+  public onFoldersRootDragOver(event: DragEvent): void {
+    if (!this.draggedFolderId) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    this.dragOverTargetId = 'folders-root';
+  }
+
+  public onDragLeave(targetId: string): void {
+    if (this.dragOverTargetId === targetId) {
+      this.dragOverTargetId = null;
+    }
+  }
+
+  public onFolderDrop(project: MJProjectEntity, event: DragEvent): void {
+    event.preventDefault();
+    const conversationId = this.draggedConversationId;
+    const folderId = this.draggedFolderId;
+    this.dragOverTargetId = null;
+    this.draggedConversationId = null;
+    this.draggedFolderId = null;
+    if (conversationId) {
+      this.moveConversation(conversationId, project.ID);
+    } else if (folderId && this.isValidFolderDropTarget(project.ID, folderId)) {
+      this.moveFolder(folderId, project.ID);
+    }
+  }
+
+  public onUngroupedDrop(event: DragEvent): void {
+    event.preventDefault();
+    const conversationId = this.draggedConversationId;
+    this.dragOverTargetId = null;
+    this.draggedConversationId = null;
+    if (conversationId) {
+      this.moveConversation(conversationId, null);
+    }
+  }
+
+  public onFoldersRootDrop(event: DragEvent): void {
+    event.preventDefault();
+    const folderId = this.draggedFolderId;
+    this.dragOverTargetId = null;
+    this.draggedFolderId = null;
+    if (folderId) {
+      this.moveFolder(folderId, null);
+    }
+  }
+
+  /**
+   * A folder can be dropped onto a target folder only if the target isn't the dragged
+   * folder itself and isn't one of its descendants (otherwise we'd create a cycle).
+   */
+  private isValidFolderDropTarget(targetId: string, draggedId: string | null = this.draggedFolderId): boolean {
+    if (!draggedId) return false;
+    if (UUIDsEqual(targetId, draggedId)) return false;
+    return !this.isDescendantOf(targetId, draggedId);
+  }
+
+  /** True when `nodeId` is a descendant of `ancestorId` in the folder tree. */
+  private isDescendantOf(nodeId: string, ancestorId: string): boolean {
+    const byId = new Map(this.engine.Projects.map(p => [NormalizeUUID(p.ID), p]));
+    const visited = new Set<string>();
+    let current = byId.get(NormalizeUUID(nodeId));
+    while (current?.ParentID) {
+      const parentKey = NormalizeUUID(current.ParentID);
+      if (visited.has(parentKey)) break; // guard against malformed cycles
+      visited.add(parentKey);
+      if (UUIDsEqual(parentKey, ancestorId)) return true;
+      current = byId.get(parentKey);
+    }
+    return false;
+  }
+
+  /** Assigns a conversation to a folder (or null to ungroup) and refreshes the view. */
+  private async moveConversation(conversationId: string, projectId: string | null): Promise<void> {
+    try {
+      await this.engine.MoveConversationToProject(conversationId, projectId, this.currentUser);
+      // Reveal the destination folder so the user sees where it landed
+      if (projectId) {
+        this.collapsedFolderIds.delete(NormalizeUUID(projectId));
+      }
+      this.rebuildGroups();
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Error moving conversation:', error);
+      await this.dialogService.alert('Error', 'Failed to move conversation. Please try again.');
+    }
+  }
+
+  /** Reparents a folder under another folder (or to the top level when projectId is null). */
+  private async moveFolder(folderId: string, parentId: string | null): Promise<void> {
+    // No-op if it's already under that parent
+    const folder = this.engine.Projects.find(p => UUIDsEqual(p.ID, folderId));
+    const currentParent = folder?.ParentID ?? null;
+    const sameParent = (currentParent === null && parentId === null) ||
+      (!!currentParent && !!parentId && UUIDsEqual(currentParent, parentId));
+    if (sameParent) return;
+
+    try {
+      await this.engine.MoveProjectToParent(folderId, parentId, this.currentUser);
+      // Reveal the new parent so the moved folder is visible
+      if (parentId) {
+        this.collapsedFolderIds.delete(NormalizeUUID(parentId));
+      }
+      this.rebuildGroups();
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Error moving folder:', error);
+      await this.dialogService.alert('Error', 'Failed to move folder. Please try again.');
+    }
+  }
+
+  // ========================================================================
+  // MOVE-TO-FOLDER MENU
+  // ========================================================================
+
+  public openMoveSubmenu(conversationId: string, event: Event): void {
+    event.stopPropagation();
+    this.moveSubmenuConversationId = conversationId;
+  }
+
+  public closeMoveSubmenu(event: Event): void {
+    event.stopPropagation();
+    this.moveSubmenuConversationId = null;
+  }
+
+  public IsInFolder(conversation: MJConversationEntity, projectId: string): boolean {
+    return !!conversation.ProjectID && UUIDsEqual(conversation.ProjectID, projectId);
+  }
+
+  public selectMoveTarget(conversation: MJConversationEntity, projectId: string | null): void {
+    this.moveConversation(conversation.ID, projectId);
+    this.closeMenu();
+  }
+
+  // ========================================================================
+  // FOLDER CRUD (reuses the existing project form modal)
+  // ========================================================================
+
+  public createFolder(parentId: string | null, event?: Event): void {
+    if (event) event.stopPropagation();
+    this.openFolderModal(null, parentId);
+  }
+
+  public editFolder(project: MJProjectEntity, event?: Event): void {
+    if (event) event.stopPropagation();
+    this.openFolderModal(project, null);
+  }
+
+  public createFolderForConversation(conversation: MJConversationEntity, event: Event): void {
+    event.stopPropagation();
+    const conversationId = conversation.ID;
+    this.closeMenu();
+    this.openFolderModal(null, null, (created) => this.moveConversation(conversationId, created.ID));
+  }
+
+  private openFolderModal(
+    project: MJProjectEntity | null,
+    parentId: string | null,
+    onCreated?: (project: MJProjectEntity) => void
+  ): void {
+    const dialogRef = this.mjDialogService.open({
+      content: ProjectFormModalComponent,
+      width: 600,
+      minWidth: 400
+    });
+
+    const instance = dialogRef.Content!.instance as unknown as ProjectFormModalComponent;
+    instance.dialogRef = dialogRef;
+    instance.environmentId = this.environmentId;
+    instance.currentUser = this.currentUser;
+    if (project) instance.project = project;
+    if (parentId) instance.parentId = parentId;
+
+    instance.projectSaved.subscribe((saved: MJProjectEntity) => {
+      // The engine's entity-event handler keeps the projects cache in sync; we
+      // just reveal the parent and refresh, then run any post-create action.
+      if (parentId) {
+        this.collapsedFolderIds.delete(NormalizeUUID(parentId));
+      }
+      this.rebuildGroups();
+      this.cdr.detectChanges();
+      if (onCreated) onCreated(saved);
+    });
+  }
+
+  public async deleteFolder(project: MJProjectEntity, event?: Event): Promise<void> {
+    if (event) event.stopPropagation();
+
+    const node = this.findFolderNode(this.folderTree, project.ID);
+    const total = node?.totalCount ?? 0;
+    const childCount = node?.children.length ?? 0;
+
+    let message = `Are you sure you want to delete the folder "${project.Name}"?`;
+    if (total > 0 || childCount > 0) {
+      message += `\n\nConversations inside will be moved out of the folder`;
+      message += childCount > 0 ? ` and subfolders will move up one level.` : `.`;
+      message += ` Nothing is deleted.`;
+    }
+
+    const confirmed = await this.dialogService.confirm({
+      title: 'Delete Folder',
+      message,
+      okText: 'Delete',
+      cancelText: 'Cancel',
+      dangerous: true
+    });
+    if (!confirmed) return;
+
+    try {
+      await this.engine.DeleteProject(project.ID, this.currentUser);
+      this.collapsedFolderIds.delete(NormalizeUUID(project.ID));
+      this.rebuildGroups();
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Error deleting folder:', error);
+      await this.dialogService.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to delete folder. Please try again.'
+      );
+    }
+  }
+
   IsConversationActive(conversation: MJConversationEntity): boolean {
     return UUIDsEqual(conversation.ID, this.selectedConversationId);
   }
@@ -892,6 +1669,14 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   IsMenuOpen(conversation: MJConversationEntity): boolean {
     return UUIDsEqual(this.openMenuConversationId, conversation.ID);
+  }
+
+  IsConversationDragging(conversation: MJConversationEntity): boolean {
+    return UUIDsEqual(this.draggedConversationId, conversation.ID);
+  }
+
+  IsMoveSubmenuOpen(conversation: MJConversationEntity): boolean {
+    return UUIDsEqual(this.moveSubmenuConversationId, conversation.ID);
   }
 
   selectConversation(conversation: MJConversationEntity): void {
@@ -969,6 +1754,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   closeMenu(): void {
     this.openMenuConversationId = null;
+    this.moveSubmenuConversationId = null;
   }
 
   async togglePin(conversation: MJConversationEntity, event?: Event): Promise<void> {

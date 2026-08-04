@@ -1,0 +1,64 @@
+<div class="shared-with-me">
+  <!-- Toolbar -->
+  <div class="shared-toolbar">
+    <div class="search-box">
+      <i class="fa-solid fa-search"></i>
+      <input
+        class="mj-input"
+        type="text"
+        [(ngModel)]="filterText"
+        (ngModelChange)="OnFilterChange()"
+        placeholder="Filter shared lists…" />
+    </div>
+    <select
+      class="mj-input mj-select permission-filter"
+      [(ngModel)]="filterLevel"
+      (ngModelChange)="OnFilterChange()"
+      title="Filter by permission">
+      <option value="">All Permissions</option>
+      <option value="View">Viewer</option>
+      <option value="Edit">Editor</option>
+      <option value="Owner">Owner</option>
+    </select>
+    <button mjButton variant="outline" (click)="Refresh()" [disabled]="loading">
+      <i class="fa-solid fa-rotate"></i>
+      Refresh
+    </button>
+  </div>
+
+  @if (loading) {
+    <div class="state-block">
+      <mj-loading text="Loading shared lists..." size="medium"></mj-loading>
+    </div>
+  } @else if (errorMessage) {
+    <div class="state-block state-block--error">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <span>{{ errorMessage }}</span>
+    </div>
+  } @else if (visibleShares.length === 0) {
+    <div class="state-block state-block--empty">
+      <i class="fa-solid fa-share-nodes"></i>
+      <h3>No lists shared with you</h3>
+      <p>When someone shares a list with you, it'll appear here.</p>
+    </div>
+  } @else {
+    <div class="list-grid">
+      @for (share of visibleShares; track share.ListID) {
+        <div class="list-card" (click)="OnCardClick(share.ListID)" tabindex="0">
+          <div class="list-card__header">
+            <div class="list-card__icon">
+              <i class="fa-solid fa-list"></i>
+            </div>
+            <div class="list-card__title">{{ share.ListName }}</div>
+          </div>
+          <div class="list-card__footer">
+            <span class="permission-badge" [ngClass]="badgeClass(share.PermissionLevel)">
+              {{ badgeLabel(share.PermissionLevel) }}
+            </span>
+            <span class="list-card__shared-at">{{ formatRelative(share.SharedAt) }}</span>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

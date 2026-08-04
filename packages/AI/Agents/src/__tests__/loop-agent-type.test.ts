@@ -190,6 +190,71 @@ describe('LoopAgentType', () => {
             // Validation catches this before reaching the switch — error comes from isValidLoopResponse
         });
 
+        // ── Parallel Sub-Agent ──────────────────────────────────────────
+
+        it('should return Sub-Agent with subAgents array details when type is "Sub-Agent" with subAgents', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: {
+                        type: 'Sub-Agent',
+                        subAgents: [
+                            { name: 'DbAgent', message: 'Query database', terminateAfter: false },
+                            { name: 'WebAgent', message: 'Search web', terminateAfter: false }
+                        ],
+                    },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Sub-Agent');
+            expect(result.subAgents).toBeDefined();
+            expect(result.subAgents).toHaveLength(2);
+            expect(result.subAgents![0].name).toBe('DbAgent');
+            expect(result.subAgents![0].message).toBe('Query database');
+            expect(result.subAgents![1].name).toBe('WebAgent');
+        });
+
+        it('should infer type "Sub-Agent" when type is missing but subAgents array is present', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: {
+                        subAgents: [
+                            { name: 'HelperAgent1', message: 'Do task 1', terminateAfter: false },
+                            { name: 'HelperAgent2', message: 'Do task 2', terminateAfter: false }
+                        ],
+                    },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Sub-Agent');
+            expect(result.subAgents).toBeDefined();
+            expect(result.subAgents).toHaveLength(2);
+            expect(result.subAgents![0].name).toBe('HelperAgent1');
+        });
+
+        it('should return Retry when type is "Sub-Agent" but both subAgent and subAgents are missing', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: {
+                        type: 'Sub-Agent',
+                    },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+        });
+
         // ── Chat ───────────────────────────────────────────────────────
 
         it('should return Chat with terminate: true when type is "Chat" with message', async () => {
@@ -207,6 +272,119 @@ describe('LoopAgentType', () => {
             expect(result.step).toBe('Chat');
             expect(result.terminate).toBe(true);
             expect(result.message).toBe('Which department should I query?');
+        });
+
+        it('should pre-empt Chat into a productive Retry when conversationToolCalls are present', async () => {
+            const toolCalls = [{ tool: 'getMessageBySequence', input: { sequence: 9 } }];
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    message: 'One moment — retrieving the original message.',
+                    nextStep: { type: 'Chat' },
+                    conversationToolCalls: toolCalls,
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            expect(result.terminate).toBe(false);
+            expect(result.conversationToolCalls).toEqual(toolCalls);
+            // No errorMessage → productive yield/await retry, no "Retrying due to:" message
+            expect(result.errorMessage).toBeUndefined();
+            expect(result.message).toBeUndefined();
+        });
+
+        it('should pre-empt taskComplete into a Retry when artifactToolCalls are present', async () => {
+            const toolCalls = [{ artifactId: 'A', tool: 'get_full', input: {} }];
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: true,
+                    message: 'Done — see the artifact.',
+                    artifactToolCalls: toolCalls,
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            expect(result.terminate).toBe(false);
+            expect(result.artifactToolCalls).toEqual(toolCalls);
+            expect(result.errorMessage).toBeUndefined();
+        });
+
+        it('should defer to the ClientTools path when taskComplete + read tools + clientTools combine', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: true,
+                    conversationToolCalls: [{ tool: 'searchConversation', input: { query: 'x' } }],
+                    nextStep: {
+                        type: 'ClientTools',
+                        clientTools: [{ name: 'NavigateToRecord', params: {} }],
+                    },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            // ClientTools re-enters the loop itself, consuming the injected results —
+            // the read-tool pre-emption must not hijack it.
+            expect(result.step).toBe('ClientTools');
+        });
+
+        it('should NOT pre-empt Chat for memoryWrites alone (writes are fire-and-forget)', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    message: 'Noted — anything else?',
+                    nextStep: { type: 'Chat' },
+                    memoryWrites: [{ note: 'User prefers bar charts.', type: 'Preference' }],
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Chat');
+            expect(result.terminate).toBe(true);
+        });
+
+        it('should still return Success for taskComplete with no inline tool calls', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: true,
+                    message: 'All done.',
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Success');
+            expect(result.terminate).toBe(true);
+        });
+
+        it('should leave the Pipeline pre-emption unchanged (regression)', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    conversationToolCalls: [{ tool: 'getMessageBySequence', input: { sequence: 2 } }],
+                    nextStep: {
+                        type: 'Pipeline',
+                        pipeline: { steps: [{ tool: 'json_path', input: {} }] },
+                    },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            expect(result.pipeline).toBeDefined();
+            expect(result.errorMessage).toBeUndefined();
         });
 
         it('should return Chat even when taskComplete is true (Chat takes priority)', async () => {
@@ -333,6 +511,153 @@ describe('LoopAgentType', () => {
 
             expect(result.step).toBe('Retry');
             expect(result.errorMessage).toContain('While');
+        });
+
+        // ── Pipeline ───────────────────────────────────────────────────
+
+        it('should accept nextStep.type "Pipeline" and return non-terminal Retry carrying the pipeline', async () => {
+            const pipeline = { steps: [{ tool: 'get_rows', with: {} }, { where: "Status == 'Open'" }, { count: true }] };
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { type: 'Pipeline', pipeline },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            // Regression: the response validator must allow 'pipeline' so the pipeline is dispatched
+            // (returned on a non-terminal Retry for base-agent to execute), not bounced as invalid.
+            expect(result.step).toBe('Retry');
+            expect(result.terminate).toBe(false);
+            expect(result.pipeline).toEqual(pipeline);
+        });
+
+        // ── Skill (non-terminal, like ClientTools/Pipeline) ─────────────
+
+        it('should accept nextStep.type "Skill" and map skills[] to skillActivations', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { type: 'Skill', skills: [{ name: 'Report Builder' }, { name: 'Data Validator' }] },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            // 'Skill' is emitted verbatim (the base-agent step-union cast handles it downstream).
+            expect(result.step).toBe('Skill');
+            expect(result.skillActivations).toEqual([{ name: 'Report Builder' }, { name: 'Data Validator' }]);
+        });
+
+        it('should infer type "Skill" when type is missing but nextStep.skills is present', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { skills: [{ name: 'Report Builder' }] },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Skill');
+            expect(result.skillActivations).toEqual([{ name: 'Report Builder' }]);
+        });
+
+        it('should return Retry when type is "Skill" but skills array is empty', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { type: 'Skill', skills: [] },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            expect(result.errorMessage).toBeTruthy();
+        });
+
+        // ── Plan (Plan Mode, non-terminal) ──────────────────────────────
+
+        it('should accept nextStep.type "Plan" and carry the plan text in planDetails', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { type: 'Plan', plan: 'Step 1: look up invoices. Step 2: apply discount.' },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Plan');
+            expect(result.planDetails).toEqual({ plan: 'Step 1: look up invoices. Step 2: apply discount.' });
+        });
+
+        it('should infer type "Plan" when type is missing but nextStep.plan is present', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { plan: 'My proposed approach.' },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Plan');
+            expect(result.planDetails).toEqual({ plan: 'My proposed approach.' });
+        });
+
+        it('should return Retry when type is "Plan" but plan text is blank', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { type: 'Plan', plan: '   ' },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            expect(result.errorMessage).toBeTruthy();
+        });
+
+        it('should infer type "Pipeline" when type is missing but nextStep.pipeline has steps', async () => {
+            const pipeline = { steps: [{ tool: 'get_rows', with: {} }, { first: 5 }] };
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { pipeline },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            expect(result.pipeline).toEqual(pipeline);
+        });
+
+        it('should return Retry when type is "Pipeline" but pipeline.steps is empty', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { type: 'Pipeline', pipeline: { steps: [] } },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            expect(result.errorMessage).toContain('Pipeline');
         });
 
         // ── Invalid / Unknown Type ─────────────────────────────────────
@@ -601,6 +926,28 @@ describe('LoopAgentType', () => {
             );
 
             expect(result.step).toBe('Retry');
+        });
+
+        it('should give a directive corrective message (not a terse one) on unparseable output', async () => {
+            // The retry feedback must explicitly steer the model back to JSON-only output and
+            // away from the prose-narration drift ("I'm executing the X action..."). A vague
+            // "couldn't parse" message gave strong in-context models nothing to correct against.
+            const result = await agent.DetermineNextStep(
+                {
+                    success: true,
+                    result: "I'm executing the Run Ad-hoc Query action with parameters: ...",
+                    chatResult: {} as AIPromptRunResult['chatResult'],
+                },
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            const msg = (result.errorMessage || '').toLowerCase();
+            expect(msg).toContain('json');
+            expect(msg).toContain('narration');
+            expect(msg).toContain('nothing else');
         });
 
         // ── Payload change request passthrough ──────────────────────────

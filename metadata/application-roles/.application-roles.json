@@ -223,5 +223,35 @@
       "lastModified": "2026-04-23T00:51:50.194Z",
       "checksum": "aa821cad060f340abaec89734cffa0b1b2632d633633fbac1557b36e4c401da1"
     }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Agent Feedback",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "B7E91F2C-4A38-4D5E-9C12-345678AABBCC"
+    },
+    "sync": {
+      "lastModified": "2026-05-24T13:07:49.269Z",
+      "checksum": "4870e117fc34ff876858f447298c3bdb8afacbc7c43ea88a03e6924cb8cce0cf"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Agent Feedback",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "C8F02E3D-5B49-4E6F-AD23-456789BBCCDD"
+    },
+    "sync": {
+      "lastModified": "2026-05-24T13:07:49.281Z",
+      "checksum": "5cf4c39b2e888a17f07b52f4c22c2ddbe19cba666b86dc8c7d9cf99acd3f900e"
+    }
   }
 ]

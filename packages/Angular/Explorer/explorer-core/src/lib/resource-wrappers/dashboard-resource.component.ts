@@ -869,9 +869,9 @@ export class DashboardResource extends BaseResourceComponent {
                 this.categories = DashboardEngine.Instance.DashboardCategories;
             }
 
-            // Set the dashboard entity directly on the viewer
-            // We provide our own external toolbar, so disable the viewer's internal toolbar
-            instance.dashboard = dashboard;
+            // Configure the viewer before assigning the dashboard. The dashboard input
+            // starts the layout lifecycle synchronously, so event handlers need to be
+            // wired first.
             instance.showToolbar = false;         // We provide external toolbar
             instance.showBreadcrumb = false;      // Already in its own tab, no breadcrumb needed
             instance.showOpenInTabButton = false; // Already in its own tab
@@ -898,11 +898,12 @@ export class DashboardResource extends BaseResourceComponent {
                 console.error('Dashboard error:', errorEvent.message, errorEvent.error);
             });
 
-            // Notify load complete after a brief delay to let Golden Layout initialize
-            setTimeout(() => {
-                this.NotifyLoadComplete();
-                this.cdr.detectChanges();
-            }, 150);
+            // Set the dashboard entity directly on the viewer and wait for Golden Layout
+            // to initialize against a real container before clearing the resource loader.
+            instance.dashboard = dashboard;
+            await instance.waitForLayoutReady();
+            this.NotifyLoadComplete();
+            this.cdr.detectChanges();
 
         } catch (error) {
             console.error('Error loading config-based dashboard:', error);
@@ -920,7 +921,28 @@ export class DashboardResource extends BaseResourceComponent {
         switch (request.type) {
             case 'OpenEntityRecord': {
                 const entityRequest = request as { type: 'OpenEntityRecord'; entityName: string; recordId: string };
-                const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityRequest.recordId }]);
+                // `recordId` is documented as URL-segment format (see OpenEntityRecordNavRequest in
+                // @memberjunction/ng-dashboard-viewer). E.g. a single-PK record is `"ID|11055"`; a
+                // composite-PK record is `"Field1|Value1||Field2|Value2"`. Senders in
+                // dashboard-viewer (artifact-part, view-part) intentionally call
+                // `compositeKey.ToURLSegment()` to produce this shape.
+                //
+                // Wrapping that string verbatim into `{ FieldName: 'ID', Value: <segment> }` makes
+                // ToURLSegment serialize it a second time as `ID|<segment>` and produces a
+                // malformed `Field|Field|Value` URL the host parser silently mis-reads (manifesting
+                // downstream as `BaseEntity.Load(... Key: ID=ID)` and `Primary Key value is not a
+                // valid number`). Parse the segment with `LoadFromURLSegment` against the entity's
+                // PK metadata instead, so single-PK and composite-PK both round-trip correctly.
+                const md = this.ProviderToUse;
+                const entityInfo = md.EntityByName(entityRequest.entityName);
+                const pkey = new CompositeKey();
+                if (entityInfo) {
+                    pkey.LoadFromURLSegment(entityInfo, entityRequest.recordId);
+                } else {
+                    // Last-resort fallback when entity metadata isn't resolvable — preserves
+                    // pre-fix behavior so we don't NRE on an unknown entity name.
+                    pkey.KeyValuePairs = [{ FieldName: 'ID', Value: entityRequest.recordId }];
+                }
                 this.navigationService.OpenEntityRecord(entityRequest.entityName, pkey);
                 break;
             }

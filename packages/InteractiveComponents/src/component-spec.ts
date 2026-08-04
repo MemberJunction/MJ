@@ -4,6 +4,13 @@ import { ComponentLibraryDependency } from "./library-dependency";
 import { ComponentTypeDefinition } from "./component-constraints";
 
 /**
+ * Contract a component commits to implementing. Hosts use this to decide how
+ * to mount the component and what props/events to wire up. Authoring agents
+ * use it to target a known shape.
+ */
+export type ComponentRole = 'form' | 'dashboard' | 'widget' | 'report' | 'detail-pane';
+
+/**
  * Tracks the current change being applied to this component.
  * Populated by Impact Assessor at the start of a modification flow,
  * updated by each agent as it processes the request.
@@ -148,6 +155,21 @@ export class ComponentSpec {
      * Self-declared type - some common options below, can be any string if the standard ones aren't sufficient
      */
     type: "report" | "dashboard" | "form" | "table" | "chart" | "navigation" | "search" | string;
+
+    /**
+     * Declares the contract this component implements.
+     *
+     * Distinct from `type` (which is descriptive): `componentRole` is a *commitment* that the
+     * component's props, events, and methods conform to a role-specific contract, letting hosts
+     * mount it generically and letting authoring agents target a known shape.
+     *
+     * - `form`: implements `FormHostProps` + standard form events/methods (see `@memberjunction/interactivecomponents/forms`).
+     *   Hosted by `InteractiveFormComponent` against a `BaseEntity` record.
+     * - `dashboard` | `widget` | `report` | `detail-pane`: reserved for future role contracts.
+     *
+     * Unset = a generic component, mounted directly. No behavior change for existing components.
+     */
+    componentRole?: ComponentRole;
 
     /**
      * JavaScript code

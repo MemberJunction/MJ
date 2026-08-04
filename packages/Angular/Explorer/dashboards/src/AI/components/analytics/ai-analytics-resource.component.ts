@@ -10,18 +10,27 @@
  * with debounced writes.
  */
 
-import { Component, ChangeDetectorRef, OnInit, OnDestroy, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
+import { AnalyticsExecutiveSummaryComponent } from './executive-summary/executive-summary.component';
+import { AnalyticsPromptRunsComponent } from './prompt-runs/prompt-run-analysis.component';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { AIAnalyticsPreferences, GlobalFilterState } from '../../interfaces/analytics-preferences.interface';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { FilterFieldConfig, MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 
 interface NavItem {
     Label?: string;
     Icon?: string;
     Key: string;
+    /**
+     * Short prose used as the Subtitle on this section's
+     * <mj-page-header-interior> card. Omitted for the `divider` entry.
+     */
+    Description?: string;
 }
 
 @RegisterClass(BaseResourceComponent, 'AIAnalyticsResource')
@@ -29,64 +38,106 @@ interface NavItem {
     standalone: false,
     selector: 'app-ai-analytics-resource',
     template: `
-        <div class="analytics-shell">
-            <nav class="analytics-nav">
-                <div class="nav-header">
-                    <i class="fa-solid fa-chart-line"></i>
-                    <span>AI Analytics</span>
-                </div>
-                @for (item of NavItems; track item.Key) {
-                    @if (item.Key === 'divider') {
-                        <div class="nav-divider"></div>
-                    } @else {
-                        <button
-                            class="nav-item"
-                            [class.active]="ActiveSection === item.Key"
-                            (click)="OnSectionChange(item.Key)">
-                            <i [class]="item.Icon"></i>
-                            <span>{{ item.Label }}</span>
+      <mj-page-layout>
+        <!-- Outer chrome — pure identity. Every control (filter-popover,
+             TimeRange chips, Compare, Export) lives in the per-section
+             <mj-page-header-interior> card below because each section
+             configures its own filter fields and time-range options. -->
+        <mj-page-header
+            Title="AI Analytics"
+            Icon="fa-solid fa-chart-line"
+            Subtitle="Performance, cost, and usage analytics">
+        </mj-page-header>
+        <mj-page-body [Padding]="false" class="analytics-shell">
+            <mj-left-nav
+                MobileTitle="Analytics"
+                [Sections]="navSections"
+                [ActiveId]="ActiveSection"
+                (ItemClicked)="onNavItemClicked($event)">
+            </mj-left-nav>
+
+            <mj-left-nav-content>
+            <!-- Per-section interior chrome owns the complete control surface
+                 for the active section: identity + actions + the section's
+                 own time-range chip strip. Even TimeRange options vary per
+                 section (Cost & Budget adds MTD / YTD, Model Performance
+                 drops 1h / 6h, etc.) so it belongs here rather than in the
+                 outer chrome. -->
+            <mj-page-header-interior
+                [Title]="currentSection?.Label || ''"
+                [Subtitle]="currentSection?.Description || ''">
+                <div actions>
+                    @if (analyticsFilterFields.length > 0) {
+                        <mj-filter-popover
+                            [ActiveCount]="ActiveFilterCount"
+                            [ShowClearAll]="ActiveFilterCount > 0"
+                            (ClearAllRequested)="resetPopoverFilters()">
+                            <mj-filter-panel
+                                [Fields]="analyticsFilterFields"
+                                [Values]="analyticsFilterValues"
+                                (ValuesChange)="onAnalyticsFilterValuesChange($event)"
+                                (Reset)="resetPopoverFilters()">
+                            </mj-filter-panel>
+                        </mj-filter-popover>
+                    }
+                    @if (FilterBarConfig.ShowCompareToggle) {
+                        <button mjButton variant="secondary" size="sm" [toggleable]="true" [(selected)]="compareActive" (selectedChange)="toggleCompare()">
+                            <i class="fa-solid fa-code-compare"></i> <span class="mj-action-label">Compare</span>
                         </button>
                     }
+                    @if (FilterBarConfig.ShowExportButton) {
+                        <button mjButton variant="secondary" size="sm" (click)="OnExportClicked()">
+                            <i class="fa-solid fa-download"></i> <span class="mj-action-label">Export</span>
+                        </button>
+                    }
+                </div>
+                @if (timeRangeChipOptions.length > 0) {
+                    <div toolbar class="time-range-chips">
+                        @for (chip of timeRangeChipOptions; track chip.value) {
+                            <mj-filter-chip
+                                [Label]="chip.text"
+                                [Active]="CurrentTimeRange === chip.value"
+                                (Clicked)="OnTimeRangeChange(chip.value)">
+                            </mj-filter-chip>
+                        }
+                    </div>
                 }
-            </nav>
-
+            </mj-page-header-interior>
+            <mj-page-body-interior [Padding]="false">
             <div class="analytics-content">
                 @switch (ActiveSection) {
                     @case ('executive-summary') {
                         <app-analytics-executive-summary
+                            #executiveSummary
                             [TimeRange]="CurrentTimeRange"
                             [Filters]="CurrentFilters"
-                            (TimeRangeChange)="OnTimeRangeChange($event)"
-                            (FiltersChange)="OnFiltersChange($event)"
                             (SectionNavigate)="OnSectionChange($event)"
                         ></app-analytics-executive-summary>
                     }
                     @case ('prompt-runs') {
                         <app-analytics-prompt-runs
+                            #promptRuns
                             [TimeRange]="CurrentTimeRange"
                             [Filters]="CurrentFilters"
-                            (TimeRangeChange)="OnTimeRangeChange($event)"
-                            (FiltersChange)="OnFiltersChange($event)"
                         ></app-analytics-prompt-runs>
                     }
                     @case ('agent-runs') {
                         <app-analytics-agent-runs
                             [TimeRange]="CurrentTimeRange"
-                            (TimeRangeChange)="OnTimeRangeChange($event)"
+                            [Filters]="CurrentFilters"
                         ></app-analytics-agent-runs>
                     }
                     @case ('model-performance') {
                         <app-analytics-model-performance
                             [TimeRange]="CurrentTimeRange"
-                            (TimeRangeChange)="OnTimeRangeChange($event)"
+                            [SortBy]="CurrentSortBy"
+                            [SelectedVendor]="CurrentVendor"
                         ></app-analytics-model-performance>
                     }
                     @case ('cost-budget') {
                         <app-analytics-cost-budget
                             [TimeRange]="CurrentTimeRange"
                             [Filters]="CurrentFilters"
-                            (TimeRangeChange)="OnTimeRangeChange($event)"
-                            (FiltersChange)="OnFiltersChange($event)"
                         ></app-analytics-cost-budget>
                     }
                     @case ('error-analysis') {
@@ -98,12 +149,33 @@ interface NavItem {
                     @case ('usage-patterns') {
                         <app-analytics-usage-patterns
                             [TimeRange]="CurrentTimeRange"
-                            (TimeRangeChange)="OnTimeRangeChange($event)"
                         ></app-analytics-usage-patterns>
+                    }
+                    @case ('realtime-overview') {
+                        <app-analytics-realtime-overview
+                            [TimeRange]="CurrentTimeRange"
+                            (SectionNavigate)="OnSectionChange($event)"
+                        ></app-analytics-realtime-overview>
+                    }
+                    @case ('realtime-sessions') {
+                        <app-analytics-realtime-sessions
+                            [TimeRange]="CurrentTimeRange"
+                        ></app-analytics-realtime-sessions>
+                    }
+                    @case ('realtime-management') {
+                        <app-realtime-management
+                            [TimeRange]="CurrentTimeRange"
+                        ></app-realtime-management>
+                    }
+                    @case ('realtime-transcripts') {
+                        <app-analytics-realtime-transcripts></app-analytics-realtime-transcripts>
                     }
                 }
             </div>
-        </div>
+            </mj-page-body-interior>
+            </mj-left-nav-content>
+        </mj-page-body>
+      </mj-page-layout>
     `,
     styles: [`
         :host {
@@ -113,80 +185,16 @@ interface NavItem {
 
         .analytics-shell {
             display: flex;
-            height: 100%;
+            flex: 1;
+            min-height: 0;
             background: var(--mj-bg-page);
         }
 
         /* ── Left Navigation ── */
 
-        .analytics-nav {
-            width: 220px;
-            min-width: 220px;
-            background: var(--mj-bg-surface);
-            border-right: 1px solid var(--mj-border-default);
-            display: flex;
-            flex-direction: column;
-            padding: 12px 0;
-            overflow-y: auto;
-        }
-
-        .nav-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 18px 16px;
-            font-size: 15px;
-            font-weight: 700;
-            color: var(--mj-text-primary);
-            border-bottom: 1px solid var(--mj-border-subtle);
-            margin-bottom: 8px;
-        }
-
-        .nav-header i {
-            color: var(--mj-brand-primary);
-            font-size: 16px;
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 18px;
-            border: none;
-            border-left: 3px solid transparent;
-            background: transparent;
-            color: var(--mj-text-secondary);
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.15s, color 0.15s, border-color 0.15s;
-            text-align: left;
-            width: 100%;
-        }
-
-        .nav-item:hover {
-            background: var(--mj-bg-surface-hover);
-            color: var(--mj-text-primary);
-        }
-
-        .nav-item.active {
-            background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-            color: var(--mj-brand-primary);
-            border-left-color: var(--mj-brand-primary);
-            font-weight: 600;
-        }
-
-        .nav-item i {
-            width: 18px;
-            text-align: center;
-            font-size: 14px;
-        }
-
-        .nav-divider {
-            height: 1px;
-            background: var(--mj-border-subtle);
-            margin: 8px 18px;
-        }
+        /* Rail width + nav-item styling now owned by <mj-left-nav>; the
+           divider is expressed as a new MJLeftNavSection rather than a CSS
+           rule. */
 
         /* ── Content Area ── */
 
@@ -231,47 +239,20 @@ interface NavItem {
 
         /* ── Responsive: collapse nav to horizontal strip ── */
 
+        /* Responsive — <mj-left-nav> handles its own collapse-to-row at
+           narrow viewports. We only need to tune the content padding. */
         @media (max-width: 768px) {
-            .analytics-shell {
-                flex-direction: column;
-            }
-
-            .analytics-nav {
-                width: 100%;
-                min-width: unset;
-                flex-direction: row;
-                overflow-x: auto;
-                overflow-y: hidden;
-                border-right: none;
-                border-bottom: 1px solid var(--mj-border-default);
-                padding: 0 8px;
-                gap: 2px;
-            }
-
-            .nav-header {
-                display: none;
-            }
-
-            .nav-divider {
-                width: 1px;
-                height: 28px;
-                margin: auto 4px;
-            }
-
-            .nav-item {
-                white-space: nowrap;
-                border-left: none;
-                border-bottom: 3px solid transparent;
-                padding: 10px 14px;
-            }
-
-            .nav-item.active {
-                border-left-color: transparent;
-                border-bottom-color: var(--mj-brand-primary);
-            }
-
             .analytics-content {
                 padding: 16px;
+            }
+        }
+
+        /* <mj-left-nav> collapses to a full-width top bar at ≤700px; stack the
+           shell vertically so the content pane sits below it instead of being
+           squeezed to zero width in the flex row. */
+        @media (max-width: 700px) {
+            .analytics-shell {
+                flex-direction: column;
             }
         }
     `]
@@ -283,7 +264,25 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     private settingsLoaded = false;
     private cdr = inject(ChangeDetectorRef);
 
-    public ActiveSection = 'executive-summary';
+    @ViewChild('executiveSummary') private executiveSummary?: AnalyticsExecutiveSummaryComponent;
+    @ViewChild('promptRuns') private promptRuns?: AnalyticsPromptRunsComponent;
+
+    /**
+     * Active analytics section. Implemented as a getter/setter so that changing
+     * it recomputes the (section-dependent) filter-field config exactly once,
+     * rather than rebuilding the whole FilterFieldConfig[] on every
+     * change-detection pass (the field config is template-bound twice).
+     */
+    private _activeSection = 'executive-summary';
+    public get ActiveSection(): string {
+        return this._activeSection;
+    }
+    public set ActiveSection(value: string) {
+        if (value !== this._activeSection) {
+            this._activeSection = value;
+            this.recomputeFilterFields();
+        }
+    }
     public CurrentTimeRange = '24h';
     public CurrentFilters: GlobalFilterState = {
         Models: [],
@@ -291,22 +290,349 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         Prompts: [],
         Statuses: []
     };
+    /** Single-value SortBy used by Model Performance (lives on the shared chrome). */
+    public CurrentSortBy: string = 'cost-efficiency';
+    /** Single-value Vendor filter used by Model Performance (lives on the shared chrome). */
+    public CurrentVendor: string = '';
+
+    /** SortBy options for Model Performance leaderboard. */
+    public readonly sortByOptions = [
+        { text: 'By Performance', value: 'cost-efficiency' },
+        { text: 'By Cost',        value: 'cost' },
+        { text: 'By Speed',       value: 'speed' },
+        { text: 'By Reliability', value: 'reliability' },
+        { text: 'By Usage',       value: 'usage-volume' }
+    ];
+
+    // ── Precomputed option lists ────────────────────────────────────────────
+    // Built ONCE from AIEngineBase's (process-cached, load-once) lists in
+    // ngOnInit — see recomputeOptionLists. Each used to be a getter doing
+    // .map().sort() (and .filter() for agents) over engine-wide lists; because
+    // analyticsFilterFields is template-bound twice they re-ran 2×/CD. The
+    // backing fields are read by both the public getters (kept for any external
+    // callers) and by recomputeFilterFields.
+    private _modelOptions: { text: string; value: string }[] = [];
+    private _agentOptions: { text: string; value: string }[] = [];
+    private _promptOptions: { text: string; value: string }[] = [];
+    private _vendorOptions: { text: string; value: string }[] = [];
+
+    /** Vendor options, built from AIEngineBase for the Model Performance leaderboard. */
+    public get vendorOptions(): { text: string; value: string }[] {
+        return this._vendorOptions;
+    }
+
+    /** Per-section filter-bar config — switched on ActiveSection. */
+    public get FilterBarConfig() {
+        switch (this.ActiveSection) {
+            case 'executive-summary':
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: true,  ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            case 'prompt-runs':
+                return { ShowModelFilter: true,  ShowAgentFilter: true,  ShowPromptFilter: true,  ShowStatusFilter: true,  ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: true,  TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            case 'agent-runs':
+                return { ShowModelFilter: false, ShowAgentFilter: true,  ShowPromptFilter: false, ShowStatusFilter: true,  ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            case 'model-performance':
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: true,  ShowVendor: true,  ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['24h', '7d', '30d'] };
+            case 'cost-budget':
+                return { ShowModelFilter: true,  ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['7d', '30d', '90d', 'MTD', 'YTD'] };
+            case 'error-analysis':
+                return { ShowModelFilter: true,  ShowAgentFilter: false, ShowPromptFilter: true,  ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            case 'usage-patterns':
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            // Realtime Voice sections own their filters internally (search/status/
+            // target/user/host live with the grid); only the time-range chips come
+            // from the shared chrome. Session data is bucketed daily, so the
+            // sub-day ranges are dropped.
+            case 'realtime-overview':
+            case 'realtime-sessions':
+            // Voice Transcripts is a self-contained browser (it loads all rooms; no shared filters apply).
+            case 'realtime-transcripts':
+            // Realtime management owns its sub-tab rail + per-surface filters
+            // internally; only the time-range chips come from the shared chrome
+            // (it windows session history daily, so sub-day ranges are dropped).
+            case 'realtime-management':
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['24h', '7d', '30d'] };
+            default:
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+        }
+    }
+
+    /**
+     * Always true now — every section uses the shared chrome filter bar.
+     * Kept as a getter for future per-section carve-outs.
+     */
+    public get ShowSharedFilterBar(): boolean {
+        return true;
+    }
+
+    /** Status options used by the popover dropdown when the section has ShowStatusFilter. */
+    public readonly statusOptions = [
+        { text: 'Success',  value: 'Success' },
+        { text: 'Error',    value: 'Error' },
+        { text: 'Running',  value: 'Running' },
+        { text: 'Pending',  value: 'Pending' },
+        { text: 'Canceled', value: 'Canceled' },
+    ];
+
+    /** Built from AIEngineBase (see recomputeOptionLists). */
+    public get modelOptions(): { text: string; value: string }[] {
+        return this._modelOptions;
+    }
+
+    public get agentOptions(): { text: string; value: string }[] {
+        return this._agentOptions;
+    }
+
+    public get promptOptions(): { text: string; value: string }[] {
+        return this._promptOptions;
+    }
+
+    /**
+     * Build the four option lists from AIEngineBase's cached metadata. Called once
+     * after the engine is loaded (ngOnInit). Mirrors the exact map/filter/sort the
+     * former getters performed, so the values are identical — just computed once.
+     *
+     * Accepted staleness tradeoff: these lists are built once after engine load and
+     * are NOT reactive — a mid-session AIEngineBase metadata reload (new model/agent/
+     * prompt/vendor) would not refresh them until this component is re-created. That
+     * is acceptable for an analytics surface (its option lists are near-static within
+     * a session); we deliberately do NOT wire observable reactivity here. The former
+     * getters re-read the engine on every CD, which was the perf cost we removed.
+     */
+    private recomputeOptionLists(): void {
+        const engine = AIEngineBase.Instance;
+        this._modelOptions = engine?.Models?.map(m => ({ text: m.Name ?? '', value: m.ID }))
+            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        this._agentOptions = engine?.Agents
+            ?.filter(a => a.Status === 'Active')
+            ?.map(a => ({ text: a.Name ?? '', value: a.ID }))
+            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        this._promptOptions = engine?.Prompts?.map(p => ({ text: p.Name ?? '', value: p.ID }))
+            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+        this._vendorOptions = engine?.Vendors?.map(v => ({ text: v.Name ?? '', value: v.ID ?? '' }))
+            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+    }
+
+    /** Time-range chip options for the toolbar slot. */
+    public get timeRangeChipOptions(): { text: string; value: string }[] {
+        return this.FilterBarConfig.TimeRangeOptions.map(t => ({ text: t, value: t }));
+    }
+
+    /** Compare-mode visual state (kept on the shell now that analytics-filter-bar is gone). */
+    public compareActive = false;
+
+    /**
+     * Precomputed popover field config for the active section. Recomputed only when
+     * ActiveSection changes (via its setter) or after the option lists load — NOT
+     * on every CD pass, even though the template binds this twice (the `@if` guard
+     * and the `[Fields]` input).
+     */
+    private _analyticsFilterFields: FilterFieldConfig[] = [];
+
+    /** Field config for the popover, based on the active section (precomputed). */
+    public get analyticsFilterFields(): FilterFieldConfig[] {
+        return this._analyticsFilterFields;
+    }
+
+    /** Rebuild {@link _analyticsFilterFields} for the current section from the option lists. */
+    private recomputeFilterFields(): void {
+        const cfg = this.FilterBarConfig;
+        const fields: FilterFieldConfig[] = [];
+        if (cfg.ShowModelFilter) {
+            fields.push({
+                key: 'Models',
+                type: 'dropdown',
+                label: 'Model',
+                icon: 'fa-solid fa-microchip',
+                filterable: this.modelOptions.length > 10,
+                options: [{ text: 'All Models', value: '' }, ...this.modelOptions],
+            });
+        }
+        if (cfg.ShowAgentFilter) {
+            fields.push({
+                key: 'Agents',
+                type: 'dropdown',
+                label: 'Agent',
+                icon: 'fa-solid fa-robot',
+                filterable: this.agentOptions.length > 10,
+                options: [{ text: 'All Agents', value: '' }, ...this.agentOptions],
+            });
+        }
+        if (cfg.ShowPromptFilter) {
+            fields.push({
+                key: 'Prompts',
+                type: 'dropdown',
+                label: 'Prompt',
+                icon: 'fa-solid fa-comment-dots',
+                filterable: this.promptOptions.length > 10,
+                options: [{ text: 'All Prompts', value: '' }, ...this.promptOptions],
+            });
+        }
+        if (cfg.ShowStatusFilter) {
+            fields.push({
+                key: 'Statuses',
+                type: 'dropdown',
+                label: 'Status',
+                icon: 'fa-solid fa-toggle-on',
+                options: [{ text: 'All Statuses', value: '' }, ...this.statusOptions],
+            });
+        }
+        if (cfg.ShowSortBy) {
+            fields.push({
+                key: 'SortBy',
+                type: 'dropdown',
+                label: 'Sort By',
+                icon: 'fa-solid fa-arrow-down-wide-short',
+                options: this.sortByOptions,
+            });
+        }
+        if (cfg.ShowVendor) {
+            fields.push({
+                key: 'Vendor',
+                type: 'dropdown',
+                label: 'Vendor',
+                icon: 'fa-solid fa-building',
+                filterable: this.vendorOptions.length > 10,
+                options: [{ text: 'All Vendors', value: '' }, ...this.vendorOptions],
+            });
+        }
+        this._analyticsFilterFields = fields;
+    }
+
+    /** Single-value flattened state for the centralized panel (the panel takes scalar values; we hold arrays in CurrentFilters). */
+    public get analyticsFilterValues(): Record<string, unknown> {
+        return {
+            Models:   this.CurrentFilters.Models?.[0]   ?? '',
+            Agents:   this.CurrentFilters.Agents?.[0]   ?? '',
+            Prompts:  this.CurrentFilters.Prompts?.[0]  ?? '',
+            Statuses: this.CurrentFilters.Statuses?.[0] ?? '',
+            SortBy:   this.CurrentSortBy,
+            Vendor:   this.CurrentVendor,
+        };
+    }
+
+    /** Receive popover updates and translate scalar → array shape used by GlobalFilterState. */
+    public onAnalyticsFilterValuesChange(values: Record<string, unknown>): void {
+        const next: GlobalFilterState = {
+            Models:   values['Models']   ? [values['Models']   as string] : [],
+            Agents:   values['Agents']   ? [values['Agents']   as string] : [],
+            Prompts:  values['Prompts']  ? [values['Prompts']  as string] : [],
+            Statuses: values['Statuses'] ? [values['Statuses'] as string] : [],
+        };
+        this.OnFiltersChange(next);
+        if ('SortBy' in values) {
+            this.CurrentSortBy = (values['SortBy'] as string) || 'cost-efficiency';
+        }
+        if ('Vendor' in values) {
+            this.CurrentVendor = (values['Vendor'] as string) || '';
+        }
+    }
+
+    /** Reset only the popover filters — leaves TimeRange and CompareActive alone. */
+    public resetPopoverFilters(): void {
+        this.OnFiltersChange({ Models: [], Agents: [], Prompts: [], Statuses: [] });
+        // SortBy + Vendor reset only when Model Performance is the active section.
+        if (this.ActiveSection === 'model-performance') {
+            this.CurrentSortBy = 'cost-efficiency';
+            this.CurrentVendor = '';
+        }
+    }
+
+    /** Active filter count for the popover badge. */
+    public get ActiveFilterCount(): number {
+        const f = this.CurrentFilters;
+        let count = (f.Models?.length ?? 0) + (f.Agents?.length ?? 0) + (f.Prompts?.length ?? 0) + (f.Statuses?.length ?? 0);
+        // SortBy counts as "active" when it differs from the default.
+        if (this.FilterBarConfig.ShowSortBy && this.CurrentSortBy && this.CurrentSortBy !== 'cost-efficiency') count++;
+        if (this.FilterBarConfig.ShowVendor && this.CurrentVendor) count++;
+        return count;
+    }
+
+    /** Toggle Compare mode — the mjButton directive owns the [(selected)] flip, so this handler only forwards the new value. */
+    public toggleCompare(): void {
+        this.OnCompareToggled(this.compareActive);
+    }
 
     readonly NavItems: NavItem[] = [
-        { Label: 'Executive Summary', Icon: 'fa-solid fa-gauge-high', Key: 'executive-summary' },
-        { Label: 'Prompt Runs', Icon: 'fa-solid fa-comment-dots', Key: 'prompt-runs' },
-        { Label: 'Agent Runs', Icon: 'fa-solid fa-robot', Key: 'agent-runs' },
-        { Label: 'Model Performance', Icon: 'fa-solid fa-microchip', Key: 'model-performance' },
+        { Label: 'Executive Summary', Icon: 'fa-solid fa-gauge-high', Key: 'executive-summary',
+          Description: 'High-level KPIs and trends across the platform' },
+        { Label: 'Prompt Runs', Icon: 'fa-solid fa-comment-dots', Key: 'prompt-runs',
+          Description: 'Detailed analysis of individual prompt executions' },
+        { Label: 'Agent Runs', Icon: 'fa-solid fa-robot', Key: 'agent-runs',
+          Description: 'Performance breakdown by agent' },
+        { Label: 'Model Performance', Icon: 'fa-solid fa-microchip', Key: 'model-performance',
+          Description: 'Compare models across cost, speed, and quality' },
         { Key: 'divider' },
-        { Label: 'Cost & Budget', Icon: 'fa-solid fa-coins', Key: 'cost-budget' },
-        { Label: 'Error Analysis', Icon: 'fa-solid fa-triangle-exclamation', Key: 'error-analysis' },
-        { Label: 'Usage Patterns', Icon: 'fa-solid fa-clock', Key: 'usage-patterns' },
+        { Label: 'Cost & Budget', Icon: 'fa-solid fa-coins', Key: 'cost-budget',
+          Description: 'Spend trends and budget tracking' },
+        { Label: 'Error Analysis', Icon: 'fa-solid fa-triangle-exclamation', Key: 'error-analysis',
+          Description: 'Failure patterns and root causes' },
+        { Label: 'Usage Patterns', Icon: 'fa-solid fa-clock', Key: 'usage-patterns',
+          Description: 'Volume, frequency, and concurrency over time' },
+        { Key: 'divider2' },
+        { Label: 'Realtime Voice', Icon: 'fa-solid fa-tower-broadcast', Key: 'realtime-overview',
+          Description: 'Operational analytics for voice-agent sessions — sessions, channels, and delegated runs' },
+        { Label: 'Voice Sessions', Icon: 'fa-solid fa-table-list', Key: 'realtime-sessions',
+          Description: 'Every long-lived agent session — live calls, idle holds, and closed history' },
+        { Label: 'Realtime Management', Icon: 'fa-solid fa-satellite-dish', Key: 'realtime-management',
+          Description: 'Manage the realtime + bridge surface — live sessions, bridge providers, agent identities, channels, co-agents, history, and metrics' },
+        { Label: 'Voice Transcripts', Icon: 'fa-solid fa-comments', Key: 'realtime-transcripts',
+          Description: 'Browse recorded meeting-room transcripts — diarized, per-speaker, with each utterance attributed' },
     ];
+
+    /**
+     * Active section metadata — drives <mj-page-header-interior> Title +
+     * Subtitle. Mirrors the pattern in KH Configuration / KH Analytics: one
+     * source of truth (NavItems) used both to build the rail and to render
+     * per-section identity.
+     */
+    get currentSection(): NavItem | undefined {
+        return this.NavItems.find(n => n.Key === this.ActiveSection);
+    }
+
+    /**
+     * Wraps `NavItems` for `<mj-left-nav>`. The `{ Key: 'divider' }` entry
+     * splits the items into two `MJLeftNavSection`s (an unlabeled section per
+     * group) — the rail's natural section break replaces the bespoke
+     * `.nav-divider` line.
+     */
+    get navSections(): MJLeftNavSection[] {
+        const sections: MJLeftNavSection[] = [{ items: [] }];
+        for (const item of this.NavItems) {
+            if (item.Key.startsWith('divider')) {
+                sections.push({ items: [] });
+            } else {
+                sections[sections.length - 1].items.push({
+                    id: item.Key,
+                    label: item.Label ?? '',
+                    icon: item.Icon
+                });
+            }
+        }
+        return sections;
+    }
+
+    /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
+    onNavItemClicked(item: MJLeftNavItem): void {
+        this.OnSectionChange(item.id);
+    }
 
     async ngOnInit(): Promise<void> {
         super.ngOnInit();
         this.setupSettingsDebounce();
+        // AIEngineBase is deferred at startup — ensure it's loaded, then build the
+        // option lists ONCE so the precomputed filter-field config has real data.
+        try {
+            await AIEngineBase.Instance.EnsureLoaded();
+        } catch {
+            // Fall through with whatever (possibly empty) cache exists — the option
+            // lists tolerate an unloaded engine (same as the former lazy getters).
+        }
+        this.recomputeOptionLists();
         await this.loadUserSettings();
+        // Final rebuild: covers both the initial section and any section restored
+        // from user settings, now that the option lists are populated.
+        this.recomputeFilterFields();
+        this.cdr.detectChanges();
         this.NotifyLoadComplete();
     }
 
@@ -326,7 +652,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
 
     /** Navigate to a different analytics section */
     public OnSectionChange(key: string): void {
-        if (key === 'divider' || key === this.ActiveSection) {
+        if (key.startsWith('divider') || key === this.ActiveSection) {
             return;
         }
         this.ActiveSection = key;
@@ -344,6 +670,16 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     public OnFiltersChange(filters: GlobalFilterState): void {
         this.CurrentFilters = filters;
         this.saveUserSettings();
+    }
+
+    /** Compare-toggle button — only visible on Executive Summary; forwards to that section. */
+    public OnCompareToggled(value: boolean): void {
+        this.executiveSummary?.OnCompareToggled?.(value);
+    }
+
+    /** Export button — only visible on Prompt Runs; forwards to that section. */
+    public OnExportClicked(): void {
+        this.promptRuns?.ExportCSV?.();
     }
 
     // ── Private Helpers ──

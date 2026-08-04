@@ -18,7 +18,7 @@ export class MJEnvironmentFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'technicalMetadata', sectionName: 'Technical Metadata', isExpanded: false },
             { sectionKey: 'environmentDefinition', sectionName: 'Environment Definition', isExpanded: true },
-            { sectionKey: 'environmentSettings', sectionName: 'Environment Settings', isExpanded: false },
+            { sectionKey: 'environmentSettings', sectionName: 'Environment Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJArtifacts', sectionName: 'Artifacts', isExpanded: false },
             { sectionKey: 'mJCollections', sectionName: 'Collections', isExpanded: false },
@@ -26,7 +26,8 @@ export class MJEnvironmentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJDashboards', sectionName: 'Dashboards', isExpanded: false },
             { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
             { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false },
-            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false }
+            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
+            { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false }
         ]);
     }
 }

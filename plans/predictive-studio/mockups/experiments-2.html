@@ -1,0 +1,298 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Experiment Board</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .pulse { width:9px; height:9px; border-radius:50%; background:var(--mj-success); box-shadow:0 0 0 0 rgba(31,157,87,.5); animation:pulse 1.6s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(31,157,87,.45);} 70%{box-shadow:0 0 0 7px rgba(31,157,87,0);} 100%{box-shadow:0 0 0 0 rgba(31,157,87,0);} }
+
+  /* leaderboard strip */
+  .lead-strip { display:flex; align-items:stretch; gap:10px; overflow:hidden; }
+  .lead-strip .lead-lbl { display:flex; flex-direction:column; justify-content:center; gap:2px; padding-right:14px; border-right:1px solid var(--mj-border-subtle); white-space:nowrap; }
+  .lead-strip .lead-lbl .t { font-weight:700; font-size:12.5px; display:flex; align-items:center; gap:7px; }
+  .lp { display:flex; align-items:center; gap:9px; padding:8px 12px; background:var(--mj-bg-surface-card); border:1px solid var(--mj-border-subtle); border-radius:9px; flex:0 0 auto; }
+  .lp.best { background:#fdf8ec; border-color:#f0d9a0; }
+  .lp .algo-ic { width:26px; height:26px; border-radius:7px; display:grid; place-items:center; color:#fff; font-size:12px; flex:0 0 auto; }
+  .lp .nm { font-weight:650; font-size:13px; line-height:1.15; }
+  .lp .fs { font-size:11px; color:var(--mj-text-muted); }
+  .lp .auc { font-variant-numeric:tabular-nums; font-weight:740; font-size:15px; margin-left:4px; }
+  .lp.best .auc { color:var(--mj-success-text); }
+  .lp.pruned { opacity:.55; }
+
+  /* budget rail */
+  .budget-rail { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .bud { display:flex; align-items:center; gap:13px; }
+  .bud .gauge.sm { width:64px; height:64px; flex:0 0 auto; }
+  .bud .gauge.sm::after { inset:8px; }
+  .bud .gauge.sm .g-val { font-size:13.5px; }
+  .gauge.cost { background:conic-gradient(var(--mj-warning) calc(var(--p)*1%), var(--mj-bg-surface-sunken) 0); }
+  .gauge.clock { background:conic-gradient(#7b3ff0 calc(var(--p)*1%), var(--mj-bg-surface-sunken) 0); }
+  .bud .b-val { font-weight:720; font-size:16px; letter-spacing:-.01em; }
+
+  /* kanban */
+  .kanban { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:16px; align-items:start; }
+  .kcol { background:var(--mj-bg-surface-card); border:1px solid var(--mj-border-default); border-radius:var(--radius); display:flex; flex-direction:column; min-height:200px; }
+  .kcol-head { display:flex; align-items:center; gap:9px; padding:12px 14px; border-bottom:1px solid var(--mj-border-subtle); position:sticky; top:0; }
+  .kcol-head .ic { width:24px; height:24px; border-radius:7px; display:grid; place-items:center; color:#fff; font-size:11px; }
+  .kcol-head h3 { font-size:13.5px; }
+  .kcol-head .cnt { margin-left:auto; background:var(--mj-bg-surface-sunken); color:var(--mj-text-secondary); font-weight:700; font-size:11.5px; border-radius:999px; padding:1px 9px; }
+  .kcol.run .ic { background:var(--mj-brand-primary); } .kcol.run .kcol-head { box-shadow:inset 0 2px 0 var(--mj-brand-primary); }
+  .kcol.done .ic { background:var(--mj-success); } .kcol.done .kcol-head { box-shadow:inset 0 2px 0 var(--mj-success); }
+  .kcol.prune .ic { background:var(--mj-text-disabled); } .kcol.prune .kcol-head { box-shadow:inset 0 2px 0 var(--mj-text-disabled); }
+  .kbody { padding:12px; display:flex; flex-direction:column; gap:11px; }
+
+  .icard { background:var(--mj-bg-surface); border:1px solid var(--mj-border-default); border-radius:10px; box-shadow:var(--shadow-sm); padding:12px 13px; }
+  .icard.running { border-color:#bcd0fb; box-shadow:0 0 0 1px rgba(32,80,200,.06), var(--shadow-sm); }
+  .icard.best { border-color:#e8c878; box-shadow:inset 3px 0 0 #e0a429, var(--shadow-sm); }
+  .icard.pruned { opacity:.78; }
+  .ic-top { display:flex; align-items:center; gap:9px; }
+  .ic-top .algo-ic { width:30px; height:30px; border-radius:8px; display:grid; place-items:center; color:#fff; font-size:13px; flex:0 0 auto; }
+  .ic-top .nm { font-weight:680; font-size:13.5px; line-height:1.1; }
+  .ic-top .it { font-size:11px; color:var(--mj-text-muted); }
+  .ic-top .spacer { flex:1; }
+  .feat-chips { display:flex; gap:5px; flex-wrap:wrap; margin:9px 0 2px; }
+  .ic-score { display:flex; align-items:baseline; gap:7px; margin-top:9px; }
+  .ic-score .v { font-variant-numeric:tabular-nums; font-weight:740; font-size:21px; letter-spacing:-.02em; }
+  .ic-score .lbl { font-size:11px; color:var(--mj-text-muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .ic-score .v.green { color:var(--mj-success-text); }
+  .ic-prog { margin:10px 0 4px; }
+  .ic-prog .bar { height:7px; }
+  .ic-prog .meta { display:flex; justify-content:space-between; font-size:11px; color:var(--mj-text-muted); margin-top:5px; }
+  .rationale { margin-top:9px; padding-top:9px; border-top:1px solid var(--mj-border-subtle); font-size:12px; color:var(--mj-text-secondary); line-height:1.45; display:flex; gap:7px; }
+  .rationale i { color:var(--mj-brand-primary); margin-top:2px; font-size:11px; }
+  .bar.run > span { background:linear-gradient(90deg,#3a6df0,#6f9bff); animation:shimmer 2.4s ease-in-out infinite; }
+  @keyframes shimmer { 0%,100%{opacity:.85;} 50%{opacity:1;} }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav"><div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a><a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a><a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div>
+  <a class="active"><i class="fa-solid fa-flask"></i> Experiments</a>
+  <a><i class="fa-solid fa-cubes"></i> Model Registry</a><a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div><a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main"><div class="ps-topbar">
+  <div><div class="crumb">Experiments / Member Renewal</div><h1>Renewal AUC Search <span class="badge green" style="vertical-align:middle"><span class="pulse" style="width:7px;height:7px"></span> Running</span></h1></div>
+  <div class="spacer"></div>
+  <span class="muted small"><i class="fa-regular fa-clock"></i> started 38 min ago · driven by <b style="color:var(--mj-text-secondary)">Model Dev Agent</b></span>
+  <button class="btn"><i class="fa-solid fa-pause"></i> Pause</button>
+  <button class="btn danger"><i class="fa-solid fa-stop"></i> Cancel</button>
+</div>
+<div class="ps-content">
+
+  <!-- LEADERBOARD STRIP -->
+  <div class="card"><div class="card-body lead-strip">
+    <div class="lead-lbl">
+      <div class="t"><i class="fa-solid fa-trophy" style="color:#e0a429"></i> Leaderboard</div>
+      <div class="muted small">14 evaluated · holdout AUC</div>
+    </div>
+    <div class="lp best">
+      <span class="rank gold">1</span>
+      <span class="algo-ic" style="background:#d98213"><i class="fa-solid fa-tree"></i></span>
+      <div><div class="nm">XGBoost</div><div class="fs">engagement + recency</div></div>
+      <span class="auc">0.864</span>
+    </div>
+    <div class="lp">
+      <span class="rank">2</span>
+      <span class="algo-ic" style="background:#2050c8"><i class="fa-solid fa-bolt"></i></span>
+      <div><div class="nm">LightGBM</div><div class="fs">full feature set</div></div>
+      <span class="auc">0.859</span>
+    </div>
+    <div class="lp">
+      <span class="rank">3</span>
+      <span class="algo-ic" style="background:#1f9d57"><i class="fa-solid fa-trees"></i></span>
+      <div><div class="nm">Random Forest</div><div class="fs">engagement</div></div>
+      <span class="auc">0.847</span>
+    </div>
+    <div class="lp">
+      <span class="rank">4</span>
+      <span class="algo-ic" style="background:#7b3ff0"><i class="fa-solid fa-wave-square"></i></span>
+      <div><div class="nm">Logistic</div><div class="fs">core</div></div>
+      <span class="auc">0.812</span>
+    </div>
+    <div class="lp pruned">
+      <span class="rank">5</span>
+      <span class="algo-ic" style="background:#98a4b6"><i class="fa-solid fa-tree"></i></span>
+      <div><div class="nm">XGBoost</div><div class="fs">geo-heavy</div></div>
+      <span class="auc">0.790</span>
+    </div>
+  </div></div>
+
+  <!-- BUDGET BARS -->
+  <div class="card" style="margin-top:16px"><div class="card-body budget-rail">
+    <div class="bud">
+      <div class="gauge sm cost" style="--p:62"><div class="g-val">62%</div></div>
+      <div>
+        <div class="section-title" style="margin:0">Compute cost</div>
+        <div class="b-val">$31 <span class="muted" style="font-size:12px;font-weight:600">/ $50 cap</span></div>
+        <div class="bar" style="width:150px;margin-top:6px"><span style="width:62%;background:var(--mj-warning)"></span></div>
+      </div>
+    </div>
+    <div class="bud">
+      <div class="gauge sm" style="--p:56"><div class="g-val">14</div></div>
+      <div>
+        <div class="section-title" style="margin:0">Iterations</div>
+        <div class="b-val">14 <span class="muted" style="font-size:12px;font-weight:600">/ 25 trials</span></div>
+        <div class="bar" style="width:150px;margin-top:6px"><span style="width:56%"></span></div>
+      </div>
+    </div>
+    <div class="bud">
+      <div class="gauge sm clock" style="--p:42"><div class="g-val">38<small style="font-size:9px">m</small></div></div>
+      <div>
+        <div class="section-title" style="margin:0">Wall-clock</div>
+        <div class="b-val">38 <span class="muted" style="font-size:12px;font-weight:600">/ 90 min</span></div>
+        <div class="bar" style="width:150px;margin-top:6px"><span style="width:42%;background:#7b3ff0"></span></div>
+      </div>
+    </div>
+  </div></div>
+
+  <!-- KANBAN -->
+  <div class="kanban">
+
+    <!-- RUNNING -->
+    <div class="kcol run">
+      <div class="kcol-head"><span class="ic"><i class="fa-solid fa-spinner"></i></span><h3>Running</h3><span class="cnt">3</span></div>
+      <div class="kbody">
+
+        <div class="icard running">
+          <div class="ic-top">
+            <span class="algo-ic" style="background:#d98213"><i class="fa-solid fa-tree"></i></span>
+            <div><div class="nm">CatBoost</div><div class="it">iteration 15 · started 4m ago</div></div>
+            <div class="spacer"></div>
+            <span class="badge green"><span class="pulse" style="width:6px;height:6px"></span> Running</span>
+          </div>
+          <div class="feat-chips"><span class="tag">engagement</span><span class="tag">tenure</span><span class="tag">interactions</span></div>
+          <div class="ic-prog">
+            <div class="bar run"><span style="width:72%"></span></div>
+            <div class="meta"><span>fold 4 / 5 · 80 estimators</span><span class="mono">72%</span></div>
+          </div>
+          <div class="rationale"><i class="fa-solid fa-robot"></i><span>Probing tenure×engagement interactions to break the 0.87 ceiling the leader is approaching.</span></div>
+        </div>
+
+        <div class="icard running">
+          <div class="ic-top">
+            <span class="algo-ic" style="background:#2050c8"><i class="fa-solid fa-bolt"></i></span>
+            <div><div class="nm">LightGBM</div><div class="it">iteration 16 · started 2m ago</div></div>
+            <div class="spacer"></div>
+            <span class="badge green"><span class="pulse" style="width:6px;height:6px"></span> Running</span>
+          </div>
+          <div class="feat-chips"><span class="tag">engagement</span><span class="tag">recency</span><span class="tag">+ pairwise</span></div>
+          <div class="ic-prog">
+            <div class="bar run"><span style="width:41%"></span></div>
+            <div class="meta"><span>fold 2 / 5 · early-stop on</span><span class="mono">41%</span></div>
+          </div>
+          <div class="rationale"><i class="fa-solid fa-robot"></i><span>Re-running the #2 architecture with the winning feature subset to confirm the gap is feature-driven.</span></div>
+        </div>
+
+        <div class="icard running">
+          <div class="ic-top">
+            <span class="algo-ic" style="background:#1f9d57"><i class="fa-solid fa-network-wired"></i></span>
+            <div><div class="nm">MLP</div><div class="it">iteration 17 · started 38s ago</div></div>
+            <div class="spacer"></div>
+            <span class="badge green"><span class="pulse" style="width:6px;height:6px"></span> Running</span>
+          </div>
+          <div class="feat-chips"><span class="tag">embeddings</span><span class="tag">core</span></div>
+          <div class="ic-prog">
+            <div class="bar run"><span style="width:18%"></span></div>
+            <div class="meta"><span>epoch 6 / 40 · 2-layer 128d</span><span class="mono">18%</span></div>
+          </div>
+          <div class="rationale"><i class="fa-solid fa-robot"></i><span>Exploratory dense net on learned member embeddings — diversifying the search away from trees.</span></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- COMPLETED -->
+    <div class="kcol done">
+      <div class="kcol-head"><span class="ic"><i class="fa-solid fa-circle-check"></i></span><h3>Completed</h3><span class="cnt">4</span></div>
+      <div class="kbody">
+
+        <div class="icard best">
+          <div class="ic-top">
+            <span class="algo-ic" style="background:#d98213"><i class="fa-solid fa-tree"></i></span>
+            <div><div class="nm">XGBoost</div><div class="it">iteration 14 · 3m 12s</div></div>
+            <div class="spacer"></div>
+            <span class="badge green"><i class="fa-solid fa-trophy"></i> Best</span>
+          </div>
+          <div class="feat-chips"><span class="tag">engagement</span><span class="tag">recency</span></div>
+          <div class="ic-score"><span class="v green">0.864</span><span class="lbl">holdout AUC · Δ best —</span></div>
+          <div class="rationale"><i class="fa-solid fa-robot"></i><span>Added engagement-recency features; dropped low-importance geo signals (importance &lt; 0.01). New leader.</span></div>
+        </div>
+
+        <div class="icard">
+          <div class="ic-top">
+            <span class="algo-ic" style="background:#2050c8"><i class="fa-solid fa-bolt"></i></span>
+            <div><div class="nm">LightGBM</div><div class="it">iteration 11 · 2m 48s</div></div>
+            <div class="spacer"></div>
+            <span class="badge gray">Completed</span>
+          </div>
+          <div class="feat-chips"><span class="tag">full feature set</span></div>
+          <div class="ic-score"><span class="v">0.859</span><span class="lbl">holdout AUC · Δ −0.005</span></div>
+          <div class="rationale"><i class="fa-solid fa-robot"></i><span>Strong baseline on the full set, but carries 64 features — flagged for pruning to cut serving cost.</span></div>
+        </div>
+
+        <div class="icard">
+          <div class="ic-top">
+            <span class="algo-ic" style="background:#1f9d57"><i class="fa-solid fa-trees"></i></span>
+            <div><div class="nm">Random Forest</div><div class="it">iteration 7 · 1m 56s</div></div>
+            <div class="spacer"></div>
+            <span class="badge gray">Completed</span>
+          </div>
+          <div class="feat-chips"><span class="tag">engagement</span></div>
+          <div class="ic-score"><span class="v">0.847</span><span class="lbl">holdout AUC · Δ −0.017</span></div>
+          <div class="rationale"><i class="fa-solid fa-robot"></i><span>Robust and low-variance, but plateaus below the gradient-boosted family on this target.</span></div>
+        </div>
+
+        <div class="icard">
+          <div class="ic-top">
+            <span class="algo-ic" style="background:#7b3ff0"><i class="fa-solid fa-wave-square"></i></span>
+            <div><div class="nm">Logistic Regression</div><div class="it">iteration 3 · 0m 41s</div></div>
+            <div class="spacer"></div>
+            <span class="badge amber"><i class="fa-regular fa-hourglass-half"></i> Awaiting approval</span>
+          </div>
+          <div class="feat-chips"><span class="tag">core</span></div>
+          <div class="ic-score"><span class="v">0.812</span><span class="lbl">holdout AUC · Δ −0.052</span></div>
+          <div class="rationale"><i class="fa-solid fa-robot"></i><span>Interpretable baseline retained as a calibration reference — pending reviewer sign-off.</span></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- PRUNED -->
+    <div class="kcol prune">
+      <div class="kcol-head"><span class="ic"><i class="fa-solid fa-scissors"></i></span><h3>Pruned</h3><span class="cnt">2</span></div>
+      <div class="kbody">
+
+        <div class="icard pruned">
+          <div class="ic-top">
+            <span class="algo-ic" style="background:#98a4b6"><i class="fa-solid fa-tree"></i></span>
+            <div><div class="nm">XGBoost</div><div class="it">iteration 9 · stopped at fold 2</div></div>
+            <div class="spacer"></div>
+            <span class="badge red"><i class="fa-solid fa-scissors"></i> Pruned</span>
+          </div>
+          <div class="feat-chips"><span class="tag">geo-heavy</span></div>
+          <div class="ic-score"><span class="v">0.790</span><span class="lbl">holdout AUC · Δ −0.074</span></div>
+          <div class="rationale"><i class="fa-solid fa-robot"></i><span>Geo features dominated splits but generalized poorly; pruned early once it trailed the median by &gt; 5%.</span></div>
+        </div>
+
+        <div class="icard pruned">
+          <div class="ic-top">
+            <span class="algo-ic" style="background:#98a4b6"><i class="fa-solid fa-network-wired"></i></span>
+            <div><div class="nm">MLP</div><div class="it">iteration 5 · stopped at epoch 8</div></div>
+            <div class="spacer"></div>
+            <span class="badge red"><i class="fa-solid fa-scissors"></i> Pruned</span>
+          </div>
+          <div class="feat-chips"><span class="tag">raw numeric</span></div>
+          <div class="ic-score"><span class="v">0.741</span><span class="lbl">holdout AUC · Δ −0.123</span></div>
+          <div class="rationale"><i class="fa-solid fa-robot"></i><span>Diverged without embeddings — validation loss climbed for 3 straight epochs. Killed to save budget.</span></div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+</main>
+</div></body></html>

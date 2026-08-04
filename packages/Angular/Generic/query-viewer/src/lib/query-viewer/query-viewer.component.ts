@@ -11,9 +11,10 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { RunQuery, RunQueryParams, RunQueryResult, QueryInfo } from '@memberjunction/core';
+import { RunQuery, RunQueryParams, RunQueryResult } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
+import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -58,6 +59,13 @@ import {
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class QueryViewerComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+    /**
+     * Safety cap for the export path — deliberately large (exports should cover the full result set)
+     * but bounded to protect the browser from an unbounded query. Kept in lockstep with the
+     * entity-viewer's EXPORT_MAX_RECORDS so Export behaves the same across Queries and Data Explorer.
+     */
+    private static readonly EXPORT_MAX_RECORDS = 100000;
+
     // ========================================
     // Inputs
     // ========================================
@@ -168,7 +176,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
     // Internal State
     // ========================================
 
-    public QueryInfo: QueryInfo | null = null;
+    public QueryInfo: MJQueryEntityExtended | null = null;
     public QueryData: Record<string, unknown>[] = [];
     public IsLoading: boolean = false;
     public ShowParamsPanel: boolean = false;
@@ -219,7 +227,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
         }
 
         // Load query info from metadata
-        this.QueryInfo = this.ProviderToUse.Queries.find(q => UUIDsEqual(q.ID, this._queryId)) || null;
+        this.QueryInfo = QueryEngine.Instance.Queries.find(q => UUIDsEqual(q.ID, this._queryId)) || null;
 
         if (!this.QueryInfo) {
             this.LastError = `Query with ID ${this._queryId} not found`;
@@ -231,8 +239,8 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
         await this.loadSavedState();
 
         // Determine if we should show params or auto-run
-        const hasParams = this.QueryInfo.Parameters && this.QueryInfo.Parameters.length > 0;
-        const hasRequiredParams = hasParams && this.QueryInfo.Parameters.some(p => p.IsRequired);
+        const hasParams = this.QueryInfo.QueryParameters && this.QueryInfo.QueryParameters.length > 0;
+        const hasRequiredParams = hasParams && this.QueryInfo.QueryParameters.some(p => p.IsRequired);
 
         if (hasParams) {
             // Check if all required params have saved values
@@ -256,7 +264,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
     private canAutoRunWithSavedParams(): boolean {
         if (!this.QueryInfo) return false;
 
-        const requiredParams = this.QueryInfo.Parameters?.filter(p => p.IsRequired) || [];
+        const requiredParams = this.QueryInfo.QueryParameters?.filter(p => p.IsRequired) || [];
 
         for (const param of requiredParams) {
             const savedValue = this.SavedParams[param.Name];
@@ -355,7 +363,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
         const startTime = performance.now();
 
         try {
-            const runQuery = new RunQuery();
+            const runQuery = this.RunQueryToUse;
             const runParams: RunQueryParams = {
                 QueryID: this._queryId,
                 Parameters: normalizedParams as Record<string, unknown>
@@ -406,6 +414,44 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
         }
     }
 
+    /**
+     * Fetches the FULL result set for the current query, used by the grid's export flow so exports
+     * aren't capped at the on-screen page (bug B3). Bound as an arrow property so it can be passed to
+     * the grid's ExportDataProvider input without losing `this`. Loads up to {@link EXPORT_MAX_RECORDS}
+     * (kept in lockstep with the entity-viewer's export cap) and warns — rather than silently
+     * truncating — when the query returns more. Uses the provider-scoped RunQuery so it targets the
+     * correct server in multi-provider setups. Falls back to the currently-loaded page on failure.
+     */
+    public FetchAllRowsForExport = async (): Promise<Record<string, unknown>[]> => {
+        if (!this._queryId) {
+            return this.QueryData;
+        }
+        try {
+            // MaxRows caps the pull to protect the browser from an unbounded query; StartRow 0 = from
+            // the top. This is a much larger window than the on-screen page, so export covers the set.
+            const result = await this.RunQueryToUse.RunQuery({
+                QueryID: this._queryId,
+                Parameters: this.SavedParams as Record<string, unknown>,
+                MaxRows: QueryViewerComponent.EXPORT_MAX_RECORDS,
+                StartRow: 0
+            });
+            if (result.Success) {
+                if (result.TotalRowCount > QueryViewerComponent.EXPORT_MAX_RECORDS) {
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        `This export is limited to the first ${QueryViewerComponent.EXPORT_MAX_RECORDS.toLocaleString()} of ` +
+                        `${result.TotalRowCount.toLocaleString()} rows. Refine the query to include the rest.`,
+                        'warning',
+                        6000
+                    );
+                }
+                return result.Results || [];
+            }
+        } catch {
+            // Fall through to the loaded page.
+        }
+        return this.QueryData;
+    };
+
     // ========================================
     // Event Handlers
     // ========================================
@@ -442,7 +488,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
     public OnRefreshRequest(): void {
         if (this.HasRun) {
             this.RunQuery(this.SavedParams, this.CurrentPageNumber);
-        } else if (this.QueryInfo?.Parameters?.length) {
+        } else if (this.QueryInfo?.QueryParameters?.length) {
             this.ShowParamsPanel = true;
             this.cdr.markForCheck();
         } else {
@@ -482,7 +528,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
     }
 
     public get HasParameters(): boolean {
-        return (this.QueryInfo?.Parameters?.length || 0) > 0;
+        return (this.QueryInfo?.QueryParameters?.length || 0) > 0;
     }
 
     /**
@@ -492,10 +538,10 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
      * array syntax, and parses cleanly.
      */
     private normalizeArrayParams(params: QueryParameterValues): QueryParameterValues {
-        if (!this.QueryInfo?.Parameters?.length) return params;
+        if (!this.QueryInfo?.QueryParameters?.length) return params;
 
         const result = { ...params };
-        for (const paramDef of this.QueryInfo.Parameters) {
+        for (const paramDef of this.QueryInfo.QueryParameters) {
             if (paramDef.Type !== 'array' || !(paramDef.Name in result)) continue;
 
             const value = result[paramDef.Name];

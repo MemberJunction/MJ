@@ -1,5 +1,1660 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/ng-base-application@6.0.0
+  - @memberjunction/ng-link-directives@6.0.0
+  - @memberjunction/ng-shared@6.0.0
+  - @memberjunction/ng-testing@6.0.0
+  - @memberjunction/ng-action-gallery@6.0.0
+  - @memberjunction/ng-actions@6.0.0
+  - @memberjunction/ng-agents@6.0.0
+  - @memberjunction/ng-ai-test-harness@6.0.0
+  - @memberjunction/ng-base-forms@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-code-editor@6.0.0
+  - @memberjunction/ng-deep-diff@6.0.0
+  - @memberjunction/ng-entity-relationship-diagram@6.0.0
+  - @memberjunction/ng-entity-viewer@6.0.0
+  - @memberjunction/ng-flow-editor@6.0.0
+  - @memberjunction/ng-join-grid@6.0.0
+  - @memberjunction/ng-list-management@6.0.0
+  - @memberjunction/ng-notifications@6.0.0
+  - @memberjunction/ng-record-process-studio@6.0.0
+  - @memberjunction/ng-resource-permissions@6.0.0
+  - @memberjunction/ng-search@6.0.0
+  - @memberjunction/ng-shared-generic@6.0.0
+  - @memberjunction/ng-timeline@6.0.0
+  - @memberjunction/ng-trees@6.0.0
+  - @memberjunction/ng-versions@6.0.0
+  - @memberjunction/graphql-dataprovider@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/templates-base-types@6.0.0
+  - @memberjunction/ng-tabstrip@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/ng-markdown@6.0.0
+  - @memberjunction/ng-ui-components@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ng-shared@5.51.0
+  - @memberjunction/ai-engine-base@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/ng-base-application@5.51.0
+  - @memberjunction/ng-link-directives@5.51.0
+  - @memberjunction/ng-testing@5.51.0
+  - @memberjunction/ng-action-gallery@5.51.0
+  - @memberjunction/ng-actions@5.51.0
+  - @memberjunction/ng-agents@5.51.0
+  - @memberjunction/ng-ai-test-harness@5.51.0
+  - @memberjunction/ng-base-forms@5.51.0
+  - @memberjunction/ng-base-types@5.51.0
+  - @memberjunction/ng-code-editor@5.51.0
+  - @memberjunction/ng-deep-diff@5.51.0
+  - @memberjunction/ng-entity-relationship-diagram@5.51.0
+  - @memberjunction/ng-entity-viewer@5.51.0
+  - @memberjunction/ng-flow-editor@5.51.0
+  - @memberjunction/ng-join-grid@5.51.0
+  - @memberjunction/ng-list-management@5.51.0
+  - @memberjunction/ng-notifications@5.51.0
+  - @memberjunction/ng-record-process-studio@5.51.0
+  - @memberjunction/ng-resource-permissions@5.51.0
+  - @memberjunction/ng-search@5.51.0
+  - @memberjunction/ng-shared-generic@5.51.0
+  - @memberjunction/ng-timeline@5.51.0
+  - @memberjunction/ng-trees@5.51.0
+  - @memberjunction/ng-versions@5.51.0
+  - @memberjunction/graphql-dataprovider@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/templates-base-types@5.51.0
+  - @memberjunction/ng-tabstrip@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/ng-markdown@5.51.0
+  - @memberjunction/ng-ui-components@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- 623dfc5: Break CodeGen FK cycle between AIAgentRun, AIPromptRun, and ConversationDetail. Move SummaryPromptRunID from ConversationDetail to a new ConversationCompactionRun audit table. Remove AgentRunID from AIPromptRun (derivable via AIAgentRunStep.TargetLogID). Remove agentRunId from AIPromptParams and all write sites across the prompt/agent stack.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [dd04a24]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ng-action-gallery@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/ng-entity-viewer@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/ai-engine-base@5.50.0
+  - @memberjunction/ng-base-application@5.50.0
+  - @memberjunction/ng-shared@5.50.0
+  - @memberjunction/ng-testing@5.50.0
+  - @memberjunction/ng-actions@5.50.0
+  - @memberjunction/ng-agents@5.50.0
+  - @memberjunction/ng-ai-test-harness@5.50.0
+  - @memberjunction/ng-base-forms@5.50.0
+  - @memberjunction/ng-base-types@5.50.0
+  - @memberjunction/ng-code-editor@5.50.0
+  - @memberjunction/ng-flow-editor@5.50.0
+  - @memberjunction/ng-join-grid@5.50.0
+  - @memberjunction/ng-list-management@5.50.0
+  - @memberjunction/ng-notifications@5.50.0
+  - @memberjunction/ng-record-process-studio@5.50.0
+  - @memberjunction/ng-resource-permissions@5.50.0
+  - @memberjunction/ng-search@5.50.0
+  - @memberjunction/ng-shared-generic@5.50.0
+  - @memberjunction/ng-trees@5.50.0
+  - @memberjunction/ng-versions@5.50.0
+  - @memberjunction/graphql-dataprovider@5.50.0
+  - @memberjunction/templates-base-types@5.50.0
+  - @memberjunction/ng-link-directives@5.50.0
+  - @memberjunction/ng-deep-diff@5.50.0
+  - @memberjunction/ng-entity-relationship-diagram@5.50.0
+  - @memberjunction/ng-timeline@5.50.0
+  - @memberjunction/ng-markdown@5.50.0
+  - @memberjunction/ng-tabstrip@5.50.0
+  - @memberjunction/ng-ui-components@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- d3f9d77: Angular DOM unit-testing — Phase 3 (`Angular/Explorer/**`) complete: 100% in-scope
+  component coverage (129/129 unit-DOM-testable components; deferred buckets catalogued in the
+  Phase-3 deferral register, no silent gaps). Test-only additions — no runtime/API change.
+
+  Build hygiene (the one shipped-artifact change): each DOM-testing Explorer package's build
+  `tsconfig.json` now excludes `*.test.ts` / `*.spec.ts` / `__tests__/**` (previously several
+  compiled specs into `dist`). Specs are type-checked via each package's `tsconfig.spec.json` and
+  run under the vitest DOM preset; they are no longer emitted into the published output.
+
+- c5e4b9e: Agent conversation compaction: durable cross-turn summaries stored on the conversation (Sequence + SummaryPromptRunID, budget knobs on AIAgentType/AIAgent, Compaction run steps), conversation-history retrieval tools (getMessageBySequence, getMessagesByRange, searchConversation, summarizeRange), edit handling with OriginalMessageChanged flagging and a wired chat edit affordance, plus hardening fixes: failed message expansions now surface a reason to the model (breaks an unbounded retry loop), json5 ESM import fix restores the local JSON-repair tier, and SQLConverter no longer truncates PG column comments at escaped apostrophes.
+- 1a15bd2: Add the **"Integration Test" `TestType`** — a headless, metadata-driven integration tier that runs the real MJ provider stack (live SQL Server / GraphQL, real cache managers + engines, real entity saves; no browser, no mocks) inside the Testing Framework, focused first on cache-integrity. The standalone `tsx` cache suites in `packages/MJServer/integration-test-scripts/` are graduated into first-class check bundles on one shared registry, so the same definitions run identically via the `npm run test:integration` aggregator **and** via `mj test` / `TestRun` (the `IntegrationTestDriver`) — a single source of truth.
+
+  **New package `@memberjunction/testing-integration`.** Dedicated-process bootstrap that installs an instrumented `LocalCacheManager` as the first caller (`bootstrapIntegrationServer` / `bootstrapIntegrationClient` / `installInstrumentedCacheFirst`, gated by `MJ_INTEGRATION_TEST=1`); the `IntegrationCheckRegistry` + `NamedCheck` contract; the `InstrumentedLocalStorageProvider` / `UniqueFilter` / `TestRunner` / `ai-verify` proof primitives; and the `IntegrationTestDriver` (`@RegisterClass(BaseTestDriver, 'IntegrationTestDriver')`), which dispatches a Test's configured bundles against one bootstrapped context and maps each check to an `OracleResult`. `@memberjunction/testing-cli`'s run/suite commands install the instrumented cache first under `MJ_INTEGRATION_TEST=1` (byte-for-byte unchanged otherwise); the old `lib/harness.ts` becomes a thin re-export shim. The pre-built `@memberjunction/server-bootstrap` class-registration manifest is regenerated (and the package gains a `@memberjunction/testing-integration` dependency) so `IntegrationTestDriver` is registered in-process and survives tree-shaking.
+
+  **Graduated check bundles (single source of truth).** Every standalone suite is now a thin dispatcher of a registry bundle with a metadata `Test` record (IT01–IT23) joined to an "Integration Tests" suite:
+  - **Deterministic server:** `server-cache` (S1–S31), `runquery-cache`, `dataset-cache`, `aggregates-cache` (AGG1–3), `record-process`, `record-process-facade`, `scheduled-jobs`, `field-rules-bulk-update`, `remote-operations`, `ai-skills`, `api-keys`, `predictive-studio` seams, `rls-isolation` (RLS1–RLS10 — the two overlapping RLS implementations were merged into one canonical bundle), plus the final three graduated in this pass: `lists` (LS1–3, keyset pagination), `open-app-teardown` (OAT1–2, the FK-graph cascade + link-less Application cleanup — adds a `@memberjunction/open-app-engine` dependency), and `user-routines` (UR1–16, the entity servers + dispatcher end-to-end).
+  - **Deterministic client** (needs a live MJAPI; skips cleanly otherwise): `remote-op-wire-progress` (the client bootstrap now derives a `ws(s)://` subscription URL from the HTTP endpoint so the RO-3 progress WebSocket actually connects — it previously passed an empty `wsurl` and threw `Invalid URL` the moment a live MJAPI was reachable, so the check could never pass), and `rls-isolation-client` (RLS7 — the client smart-cache companion to `rls-isolation`, now given its own seeded-Skip IT record instead of being a driver-only orphan).
+  - **Live-model** (`RUN_AGENT_TESTS`): `prompt-runner`, `agent-runner`, `concurrent`, `remote-op-ai-authoring`.
+
+  **tsx↔metadata sibling parity is now enforced.** The check logic lives once in a registry bundle; its two "siblings" are a `tsx` dispatcher script and a metadata `Test` record — both thin pointers. A new `sibling-parity.test.ts` drift-check (unit test) fails the build if any registered bundle is missing a dispatcher or an IT record, or if either points at a non-existent bundle (a small, reasoned `NO_TSX_DISPATCHER` allowlist covers deliberately driver/MJAPI-only bundles like `rls-isolation-client`). Backed by a new `IntegrationCheckRegistry.GetBundleNames()`; the coverage-loss guard was extended to the three new bundles. This closed the last three un-graduated `tsx` suites and the one registry-only bundle so all bundles now have both siblings.
+
+  **Tiering & gating.** A single tier model (`tiers.ts`: `deterministic` | `mutation` | `live-model`, with `IsTierEnabled()` reading `RUN_MUTATION_TESTS` / `RUN_AGENT_TESTS`) is honored identically by the aggregator and the driver, so a flag skip-passes the same way on both paths.
+
+  **Engine-level fixture lifecycle.** A per-bundle `BundleLifecycle` (Setup → run → Teardown in FK-safe order) plus suite-scoped `SuiteFixtureContext` (`@memberjunction/testing-engine-base`) with additive `BaseTestDriver.SetupSuite()` / `TeardownSuite()` hooks; `TestEngine.RunSuite` guarantees teardown + run-status update in a `finally` (pass / fail / thrown `Execute` / timeout), and a thrown `Execute` now resolves to a `Status='Error'` `TestRun` instead of wedging `'Running'`. Mutating suites self-clean identically on both front-ends.
+
+  **RLS / multi-user cache isolation.** New version-controlled seed metadata — a purpose-built **"Integration Test: RLS Scoped Reader"** role (scoped read on `MJ: AI Agent Runs` via `UserID = '{{UserID}}'` and nothing else) plus three inert, login-less test accounts — so the strongest RLS checks (fingerprint divergence / server-superset no-cross-serve / live no-leak) **execute for real** instead of skipping on an admin-only DB. Accounts are `Type='User'`, no auth linkage, clearly named, safe to delete. **The test-only integration records — the IT01–IT23 Tests, the integration suite, AND these RLS principals — live in a dedicated optional sibling root `metadata-optional/integration-test/`, NOT the default-pushed `metadata/` tree**, so none of it (least of all the synthetic `IsActive` accounts) ever reaches a production DB that only syncs `metadata/`. (The inert `Integration Test` TestType definition stays in normal `metadata/test-types/` — it's just a type row, no data or security surface — and the IT records `@lookup` it by name.) Seed the optional records with `mj sync push --dir=metadata-optional/integration-test`; the RLS checks skip-as-pass (with the exact push command logged) when absent.
+
+  **Dashboard legibility.** The custom `MJ: Test Runs` form's `getCheckResults()` now reads `ResultDetails` as the bare `OracleResult[]` the engine actually writes (fixing per-check rendering for all engine runs; mapping extracted into an Angular-free, unit-tested `test-run-checks.ts`), and the runs view binds `<mj-execution-context>` to the run's machine/CI fields. The Test Run dialog's "Execution Failed" banner no longer renders empty — a `failureMessage` getter falls back through top-level `errorMessage` → a synthesized per-test summary → the single test's message → a generic note (applies to every TestType).
+
+  **CI / release gate.** New `run-all.ts` aggregator + root `npm run test:integration` spawn each deterministic server suite in its own process (so each owns `LocalCacheManager.Initialize` as first caller) and collapse the per-suite `0/1/2` exit codes into one. The deterministic SQL Server tier is a blocking PR gate.
+
+  **Cross-platform & cross-server seams.** `DbConfig` gains a `Platform` field (`DB_PLATFORM` ∈ {sqlserver, postgresql}, default sqlserver) and `bootstrapIntegrationServer` dispatches accordingly (the PG path ships behind the tracked PG user-cache prerequisite; no PG CI lane yet). A `RUN_CROSS_SERVER=1` spec proves a `Save()` in one MJAPI invalidates a cached read in a second sharing one DB + Redis.
+
+  **RunView cache-layer fixes (`@memberjunction/core`).** Four real bugs the new suites surfaced, fixed in `localCacheManager.ts` + `providerBase.ts`:
+  - **SECURITY:** the cache-hit path returned _before_ the DB provider's read-permission gate, so a user lacking `CanRead` could be served rows a permitted user had warmed (an observed cross-user data leak). `PreRunView` and the `RunViews` batch now skip the cache when the user lacks read permission on the entity, falling through to the DB path's proper denial (server-cache S31).
+  - **SECURITY:** closed the **ViewID-only** variant of that bypass. The S31 gate keys off the entity resolved from `params.EntityName`; a `ViewID`/`ViewName`-only request (the Explorer-standard saved-view shape) resolved no entity there, so a read-denied user could still hit a slot a permitted user warmed for the same ViewID. `ProviderBase.cacheDeniedForViewOnlyRequest` (both cache paths) now resolves `ViewEntity` synchronously and applies the `CanRead` gate, or **fails closed** for a `ViewID`/`ViewName`-only request whose entity is only known after the async view lookup the cache-hit path skips. This also closes the RLS cross-serve for view-by-ID (two differently-scoped users no longer share a ViewID slot). Pinned by `providerBase.viewOnlyCacheGate.test.ts` + integration check server-cache **S31b** (**operators: prioritize this upgrade — S31 + S31b are both data-leak fixes**).
+  - **SECURITY:** a **stored view's identity** now participates in the RunView cache fingerprint (`vw:` segment). A saved view carries its own server-side `WhereClause` that is not reflected in `params.ExtraFilter`, so a filtered view and a plain unfiltered read of the same entity previously produced identical fingerprints and cross-served — the view was handed the unfiltered slot and returned rows _outside its own WhereClause_. Keyed by ViewID / ViewName / ViewEntity PK, appended only when a view identifier is present → plain entity+filter fingerprints stay byte-identical, no cache invalidation (server-cache S29).
+  - **`IgnoreMaxRows`** now participates in the RunView cache fingerprint, so an `IgnoreMaxRows` request no longer collides with (and is served) the capped slot for the same entity. Appended only when true → existing fingerprints stay byte-identical, no cache invalidation (server-cache S28).
+  - **`AggregateResults`** are remapped to the caller's requested order on a cache hit; the aggregate fingerprint is order-insensitive by design, so a reordered request must not inherit the warming caller's order (aggregates-cache AGG3).
+
+  **Review-response hardening (PR #3020).** Beyond S31b above: a lifecycle bundle's `Setup` and `Teardown` now run inside ONE `try/finally` on both front-ends (driver + tsx dispatchers), and every mutating fixture publishes its handle up-front + populates it as records are created — so a mid-`Setup` crash still tears down whatever was created instead of orphaning it (`runquery-cache` aligned to the shared lifecycle pattern). A single hung check is now bounded by the remaining run budget (a per-check race) instead of running past the driver timeout forever. The integration CI gate's trigger surface was widened (`migrations/**`, the `metadata-optional/**` root, `mj.config.cjs`/`tsconfig*`/`turbo.json`) and given a `push:` backstop mirroring the unit-test gate; the non-`Active` suite-membership exclusion is now surfaced with a concise always-on log; the testing CLI fails fast when it cannot install the instrumented cache first; and the sibling-parity drift-check was extended to cover the `run-all.ts` aggregator wiring and suite-join membership. `mj sync push` now honors `MJ_MIGRATION_REQUEST_TIMEOUT` (MetadataSync's env-driven config defaults, mirroring MJCLI) so the CI metadata push gets the same cold-server request-timeout headroom as `mj migrate` — mssql's 15s default could otherwise abort the push mid-transaction under embedding-on-save + engine-load latency on a cold runner.
+
+  One related cache gap is **deliberately deferred** and documented in-check as a self-healing skip-as-pass: cross-entity **denormalization** invalidation (server-cache S30) — renaming a parent record does not invalidate cached child rows that denormalize its name, because invalidation keys on the changed entity, not on dependent entities. Fixing it requires fanning invalidation out to dependent entities (a broad, higher-risk change), tracked separately; the check re-arms automatically once that lands.
+
+  All changes are additive / back-compat. Verified live against `mj_integrations` via both the `tsx` scripts and the `IntegrationTestDriver` (server-cache 31/31 with `RUN_MUTATION_TESTS`, aggregates-cache 3/3, rls-isolation 9/9; MJCore unit tests 1484/1484, testing-integration 145/145, testing-engine 45/45, testing-cli 23/23); golden-equivalence (`scripts/integration-golden-diff.mjs`) enforces no coverage loss between the two front-ends.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [88d707b]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/graphql-dataprovider@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/ng-testing@5.49.0
+  - @memberjunction/ng-actions@5.49.0
+  - @memberjunction/ng-agents@5.49.0
+  - @memberjunction/ng-ai-test-harness@5.49.0
+  - @memberjunction/ng-base-forms@5.49.0
+  - @memberjunction/ng-deep-diff@5.49.0
+  - @memberjunction/ng-entity-relationship-diagram@5.49.0
+  - @memberjunction/ng-entity-viewer@5.49.0
+  - @memberjunction/ng-flow-editor@5.49.0
+  - @memberjunction/ng-join-grid@5.49.0
+  - @memberjunction/ng-list-management@5.49.0
+  - @memberjunction/ng-markdown@5.49.0
+  - @memberjunction/ng-resource-permissions@5.49.0
+  - @memberjunction/ng-search@5.49.0
+  - @memberjunction/ng-shared-generic@5.49.0
+  - @memberjunction/ng-tabstrip@5.49.0
+  - @memberjunction/ng-timeline@5.49.0
+  - @memberjunction/ng-trees@5.49.0
+  - @memberjunction/ng-ui-components@5.49.0
+  - @memberjunction/ng-versions@5.49.0
+  - @memberjunction/ai-engine-base@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/ng-base-application@5.49.0
+  - @memberjunction/ng-link-directives@5.49.0
+  - @memberjunction/ng-shared@5.49.0
+  - @memberjunction/ng-action-gallery@5.49.0
+  - @memberjunction/ng-base-types@5.49.0
+  - @memberjunction/ng-code-editor@5.49.0
+  - @memberjunction/ng-notifications@5.49.0
+  - @memberjunction/ng-record-process-studio@5.49.0
+  - @memberjunction/templates-base-types@5.49.0
+
+## 5.48.0
+
+### Minor Changes
+
+- bda123a: Lists performance overhaul + bug fixes. Read path: the custom List form paginates its Items section (100/page) and resolves member display names in one batched `IN` query per page instead of one query per item (a 1,000-member list drops from ~1,000 requests to 3); the Lists Browse/My Lists dashboards and the Add-to-List panel compute per-list counts via batched count_only queries instead of downloading every List Detail row; single-list-detail export filters membership server-side via a vwListDetails subquery instead of a client-built giant IN clause. Write path: client-side removals batch through TransactionGroups; server-side ListOperations bulk insert/remove and the "Add Records to List" action run with bounded concurrency (10 in-flight) while preserving per-record error isolation. ListSource switches to keyset (AfterKey) pagination with legacy Offset-cursor resume support. DB migration dedupes ListDetail in-place (keeping the oldest row per pair), adds a UNIQUE composite (ListID, RecordID) index that covers the duplicate-check predicate and closes the concurrent-add race, and drops the redundant single-column ListID index. Bug fixes: Add Records dialog spinner never cleared without a user click (missing change-detection after async loads, fixed in both the List form and single-list-detail); the List form's open-record button did nothing; silently-skipped duplicate adds now surface in a result toast (new optional `summary` on `ListManagementResult`). Also: Browse favorites filter persists as a server-side user preference; entities without a NameField now display and search on a sensible fallback field (`ID — value`, new `GetRecordDisplayField` helper); set-operation membership loads and operand pickers carry defensive MaxRows caps with truncation flagging.
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+- Updated dependencies [d1e1a15]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/ng-base-forms@5.48.0
+  - @memberjunction/ng-list-management@5.48.0
+  - @memberjunction/ng-shared@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ai-engine-base@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/ng-base-application@5.48.0
+  - @memberjunction/ng-link-directives@5.48.0
+  - @memberjunction/ng-testing@5.48.0
+  - @memberjunction/ng-action-gallery@5.48.0
+  - @memberjunction/ng-actions@5.48.0
+  - @memberjunction/ng-agents@5.48.0
+  - @memberjunction/ng-ai-test-harness@5.48.0
+  - @memberjunction/ng-base-types@5.48.0
+  - @memberjunction/ng-code-editor@5.48.0
+  - @memberjunction/ng-deep-diff@5.48.0
+  - @memberjunction/ng-entity-relationship-diagram@5.48.0
+  - @memberjunction/ng-entity-viewer@5.48.0
+  - @memberjunction/ng-flow-editor@5.48.0
+  - @memberjunction/ng-join-grid@5.48.0
+  - @memberjunction/ng-notifications@5.48.0
+  - @memberjunction/ng-record-process-studio@5.48.0
+  - @memberjunction/ng-resource-permissions@5.48.0
+  - @memberjunction/ng-search@5.48.0
+  - @memberjunction/ng-shared-generic@5.48.0
+  - @memberjunction/ng-timeline@5.48.0
+  - @memberjunction/ng-trees@5.48.0
+  - @memberjunction/ng-versions@5.48.0
+  - @memberjunction/graphql-dataprovider@5.48.0
+  - @memberjunction/templates-base-types@5.48.0
+  - @memberjunction/ng-markdown@5.48.0
+  - @memberjunction/ng-tabstrip@5.48.0
+  - @memberjunction/ng-ui-components@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-engine-base@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/ng-base-application@5.47.0
+  - @memberjunction/ng-link-directives@5.47.0
+  - @memberjunction/ng-shared@5.47.0
+  - @memberjunction/ng-testing@5.47.0
+  - @memberjunction/ng-action-gallery@5.47.0
+  - @memberjunction/ng-actions@5.47.0
+  - @memberjunction/ng-agents@5.47.0
+  - @memberjunction/ng-ai-test-harness@5.47.0
+  - @memberjunction/ng-base-forms@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-code-editor@5.47.0
+  - @memberjunction/ng-deep-diff@5.47.0
+  - @memberjunction/ng-entity-relationship-diagram@5.47.0
+  - @memberjunction/ng-entity-viewer@5.47.0
+  - @memberjunction/ng-flow-editor@5.47.0
+  - @memberjunction/ng-join-grid@5.47.0
+  - @memberjunction/ng-list-management@5.47.0
+  - @memberjunction/ng-notifications@5.47.0
+  - @memberjunction/ng-record-process-studio@5.47.0
+  - @memberjunction/ng-resource-permissions@5.47.0
+  - @memberjunction/ng-search@5.47.0
+  - @memberjunction/ng-shared-generic@5.47.0
+  - @memberjunction/ng-timeline@5.47.0
+  - @memberjunction/ng-trees@5.47.0
+  - @memberjunction/ng-versions@5.47.0
+  - @memberjunction/graphql-dataprovider@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/templates-base-types@5.47.0
+  - @memberjunction/ng-tabstrip@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/ng-markdown@5.47.0
+  - @memberjunction/ng-ui-components@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Minor Changes
+
+- ef3e802: feat(prompt-config): scope-aware prompt run-settings override (ScopedPromptConfig + resolver)
+
+  The run-settings sibling of `ScopedPromptPart`. Where `ScopedPromptPart` scope-overrides a
+  prompt's TEXT, `ScopedPromptConfig` scope-overrides a prompt's RUN SETTINGS — model/vendor, AI
+  configuration, sampling knobs (temperature/topP/topK/minP/penalties/seed/stopSequences),
+  response format, and effort level — for an `AIPrompt`, narrowed by the SAME polymorphic scope the
+  agent runtime already carries (`PrimaryScopeEntity`/`PrimaryScopeRecordID` + `SecondaryScopes`).
+  Any MJ app can tune which model a prompt runs on and how it samples, per scope, by editing rows.
+  - **Entity** `__mj.ScopedPromptConfig` — scope columns (mirroring `ScopedPromptPart`) + nullable
+    override columns; `Status`/`Priority`. Whole-row-wins by specificity (SecondaryScopes match >
+    PrimaryScopeRecord > global, tie-broken by `Priority`); each non-null column overrides the
+    prompt default, a NULL column inherits it.
+  - **`ScopedPromptConfigResolver`** (`@memberjunction/ai-agents`) — cached on `AIEngine`
+    (`ScopedPromptConfigs`); pluggable via `@RegisterClass`; resolves the single most-specific
+    in-scope config. `ApplyScopedPromptConfig` overlays it onto the run params
+    (model/vendor → `override`, configuration → `configurationId`, effort → `effortLevel`, sampling
+    knobs → `additionalParameters`).
+  - **`BaseAgent` wiring** — `preparePromptParams` resolves + applies the config using the run's
+    existing scope, right before the params are returned. **Runtime-explicit overrides still win.**
+  - `StopSequences` overlays as a trimmed `string[]` (the comma-delimited column is split before it
+    reaches `additionalParameters`, matching the runner's array contract — not the raw string).
+  - Unit tests for the resolver (cascade / priority / status / null-column inherit / runtime-wins,
+    plus the StopSequences-array and ResponseFormat mappings).
+  - **`@memberjunction/ai-prompts`** — two `AIPromptRunner` fixes:
+    1. **Response format override is honored** — the run now prefers `additionalParameters.responseFormat`
+       (set by `ApplyScopedPromptConfig`) over the prompt's own `ResponseFormat`, keeping `'Any'`-means-
+       silent semantics. Previously a `ScopedPromptConfig.ResponseFormat` was a no-op (the runner only
+       read `prompt.ResponseFormat`).
+    2. **`Messages` logging** — records caller-supplied `conversationMessages` to `AIPromptRun.Messages`
+       even without a template-rendered system prompt (previously dropped for the
+       `templateMessageRole='none'` path, leaving `Messages` null).
+
+### Patch Changes
+
+- 33741fc: Make `mj app` install/upgrade/uninstall resumable and idempotent. The install orchestrator now records its last-completed step (new `OpenApp.LastCompletedStep` and `OpenApp.LastCompletedStepTargetVersion` columns) so a crashed or interrupted run picks up where it left off instead of re-running already-applied steps, and mutex guards prevent concurrent install/upgrade/uninstall operations against the same app from racing each other.
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-engine-base@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/ng-base-application@5.46.0
+  - @memberjunction/ng-link-directives@5.46.0
+  - @memberjunction/ng-shared@5.46.0
+  - @memberjunction/ng-testing@5.46.0
+  - @memberjunction/ng-action-gallery@5.46.0
+  - @memberjunction/ng-actions@5.46.0
+  - @memberjunction/ng-agents@5.46.0
+  - @memberjunction/ng-ai-test-harness@5.46.0
+  - @memberjunction/ng-base-forms@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-code-editor@5.46.0
+  - @memberjunction/ng-deep-diff@5.46.0
+  - @memberjunction/ng-entity-relationship-diagram@5.46.0
+  - @memberjunction/ng-entity-viewer@5.46.0
+  - @memberjunction/ng-flow-editor@5.46.0
+  - @memberjunction/ng-join-grid@5.46.0
+  - @memberjunction/ng-list-management@5.46.0
+  - @memberjunction/ng-notifications@5.46.0
+  - @memberjunction/ng-record-process-studio@5.46.0
+  - @memberjunction/ng-resource-permissions@5.46.0
+  - @memberjunction/ng-search@5.46.0
+  - @memberjunction/ng-shared-generic@5.46.0
+  - @memberjunction/ng-timeline@5.46.0
+  - @memberjunction/ng-trees@5.46.0
+  - @memberjunction/ng-versions@5.46.0
+  - @memberjunction/graphql-dataprovider@5.46.0
+  - @memberjunction/templates-base-types@5.46.0
+  - @memberjunction/ng-tabstrip@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/ng-markdown@5.46.0
+  - @memberjunction/ng-ui-components@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ai-engine-base@5.45.1
+  - @memberjunction/ng-shared@5.45.1
+  - @memberjunction/ng-agents@5.45.1
+  - @memberjunction/ng-ai-test-harness@5.45.1
+  - @memberjunction/graphql-dataprovider@5.45.1
+  - @memberjunction/ng-link-directives@5.45.1
+  - @memberjunction/ng-testing@5.45.1
+  - @memberjunction/ng-join-grid@5.45.1
+  - @memberjunction/ng-list-management@5.45.1
+  - @memberjunction/ng-action-gallery@5.45.1
+  - @memberjunction/ng-actions@5.45.1
+  - @memberjunction/ng-notifications@5.45.1
+  - @memberjunction/ng-record-process-studio@5.45.1
+  - @memberjunction/ng-search@5.45.1
+  - @memberjunction/ng-versions@5.45.1
+  - @memberjunction/ng-base-forms@5.45.1
+  - @memberjunction/ng-entity-viewer@5.45.1
+  - @memberjunction/ng-resource-permissions@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/actions-base@5.45.1
+  - @memberjunction/ng-base-application@5.45.1
+  - @memberjunction/ng-base-types@5.45.1
+  - @memberjunction/ng-code-editor@5.45.1
+  - @memberjunction/ng-deep-diff@5.45.1
+  - @memberjunction/ng-entity-relationship-diagram@5.45.1
+  - @memberjunction/ng-flow-editor@5.45.1
+  - @memberjunction/ng-markdown@5.45.1
+  - @memberjunction/ng-shared-generic@5.45.1
+  - @memberjunction/ng-tabstrip@5.45.1
+  - @memberjunction/ng-timeline@5.45.1
+  - @memberjunction/ng-trees@5.45.1
+  - @memberjunction/ng-ui-components@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/templates-base-types@5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- 6125dcd: Skill activation governance & observability (v5.45): double activation gate (AISkill.ActivationMode × AIAgent.SkillActivationMode, both defaulting to RequestedOnly — self-activation requires Auto×Auto; /skill user requests unaffected) via new GetAutoActivatableSkillsForAgent; AIAgent.RequirePlanMode forces plan mode on every root run; AIAgentRun.PlanMode stamps plan-mode runs; plan-mode runs block skill activations after approval (re-plan required); AIAgentRunStep.Skills JSON records per-step AgentSkillInvocation provenance (activation type, gate values, agent-stated reason) on Skill/Prompt/Actions/Sub-Agent steps with native-grant precedence; agent-run UX gains a Plan Mode header chip, Skill/Plan step icons, per-step skill chips, and a Skills drill-in tab with provenance cards.
+
+### Patch Changes
+
+- 13716e4: Add the canonical confirm-prompt primitives to `@memberjunction/ng-ui-components` and migrate every native `window.confirm()` in MJ Explorer onto them.
+
+  **`@memberjunction/ng-ui-components` (new capability):**
+  - New **`<mj-confirm-dialog>`** — the canonical confirmation dialog (danger/warning/info/default variants, title + message + detail lines, MJ left-confirm button order, `Processing` state, Esc/backdrop dismissal inherited from `mj-dialog`).
+  - New **`MJConfirmService`** — the imperative, Promise-based replacement for `window.confirm()`: `await confirm.Confirm('Discard changes?')` / `ConfirmDelete({ message, detail, confirmText })`. Mounts the dialog on `document.body`, resolves `true`/`false`, tears down on settle.
+  - **Layering fix:** service-spawned dialogs are lifted into their own stacking context (z-index 20000) so a confirm launched over a drawer, slide-panel, or `mj-window` renders above that overlay instead of dimmed and unclickable beneath its backdrop (previously each swallowed click could re-trigger the caller and stack another dialog). Declarative template usage is unchanged.
+
+  **Consumers — 47 native `confirm()` prompts migrated** across 23 files in 6 packages: dashboards (Credentials, MCP, Tags/Autotagging/Prompts, QueryBrowser, FormBuilder, ComponentStudio, DatabaseDesigner), core-entity-forms (Queries, Templates, Tests, Lists, template editor), artifacts (version restore), ai-test-harness (save/clear/delete/import), conversations (collection + artifact share modals, collection tree/view — whose ten native `alert()`s were also replaced with `MJNotificationService` toasts), and credentials (the credential/type/category edit-panel deletes, adding the package's missing `ng-ui-components` dependency). Deletes route through `ConfirmDelete` (red confirm, "Delete"/"Remove" labels); discards and overwrite warnings through `Confirm`. Handlers that gate on the answer were made async only after verifying every caller is fire-and-forget.
+
+  The single intentional exception is DatabaseDesigner's `ModifyPanelCanClose` — a synchronous `[CanClose]` guard that must return a boolean immediately, documented as such in `MJConfirmService`'s docs.
+
+  No public API changes in the consumer packages. Verified with per-package unit test runs (~2,200 tests across touched packages), full-page light+dark state screenshots of 8 distinct surfaces, and live end-to-end executions of the true paths.
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [13716e4]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/graphql-dataprovider@5.45.0
+  - @memberjunction/ng-ui-components@5.45.0
+  - @memberjunction/ng-ai-test-harness@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/ai-engine-base@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ng-trees@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/ng-base-application@5.45.0
+  - @memberjunction/ng-link-directives@5.45.0
+  - @memberjunction/ng-shared@5.45.0
+  - @memberjunction/ng-testing@5.45.0
+  - @memberjunction/ng-action-gallery@5.45.0
+  - @memberjunction/ng-actions@5.45.0
+  - @memberjunction/ng-agents@5.45.0
+  - @memberjunction/ng-base-forms@5.45.0
+  - @memberjunction/ng-base-types@5.45.0
+  - @memberjunction/ng-code-editor@5.45.0
+  - @memberjunction/ng-deep-diff@5.45.0
+  - @memberjunction/ng-entity-relationship-diagram@5.45.0
+  - @memberjunction/ng-entity-viewer@5.45.0
+  - @memberjunction/ng-flow-editor@5.45.0
+  - @memberjunction/ng-join-grid@5.45.0
+  - @memberjunction/ng-list-management@5.45.0
+  - @memberjunction/ng-notifications@5.45.0
+  - @memberjunction/ng-record-process-studio@5.45.0
+  - @memberjunction/ng-resource-permissions@5.45.0
+  - @memberjunction/ng-search@5.45.0
+  - @memberjunction/ng-shared-generic@5.45.0
+  - @memberjunction/ng-timeline@5.45.0
+  - @memberjunction/ng-versions@5.45.0
+  - @memberjunction/templates-base-types@5.45.0
+  - @memberjunction/ai@5.45.0
+  - @memberjunction/ng-tabstrip@5.45.0
+  - @memberjunction/ng-markdown@5.45.0
+
+## 5.44.0
+
+### Minor Changes
+
+- 3633fbb: Agent Skills, Plan Mode, and realtime widget UX.
+
+  **Agent Skills** — portable `SKILL.md` import/export, a first-class Skill step wired into the Loop agent runtime, Skills engine caching + agent-gating resolution, the `AI Skills` resource type with "Can Share Skills" authorization, and the AI Skill sharing panel in the entity forms. Includes the skill-markdown converter/operations and the generated entity + resolver surface for the new Skill entities.
+
+  **Plan Mode** — a human-in-the-loop plan-approval gate for the Loop agent (server + client), threaded through the agent client session/types, the GraphQL AI client, and the conversations composer/message-input UI so a run can pause for plan review before executing.
+
+  **Realtime voice widget UX** — fixes and consolidation in `@memberjunction/ng-conversations`:
+  - Fixed `NG0100 ExpressionChangedAfterItHasBeenCheckedError` when opening the Details panel (defer the `ResizeObserver` seed + callback to a microtask).
+  - The surface/Details panel is now an independent right-hand peek gated on available width (not console chrome / text-reveal), so opening Details keeps the glowing orb and toggling captions off no longer removes the panel; the orb also returns immediately on captions-off.
+  - Type-to-compose: any printable keystroke opens the composer and seeds itself as the first character (removed the dedicated "T" hotkey + hint).
+  - Control consolidation: the banner is now state + window-chrome only (removed duplicate Captions/End controls, folded "pure audio" into the gear's Density = Simple); Captions is promoted to a first-class control in the compact lean dock.
+
+  **Remote Browser** — `RemoteBrowserSnapshot` now honors its documented best-effort contract: it returns an empty snapshot instead of throwing when the underlying browser adapter has been torn down, so the client's periodic live-view poll never surfaces a recurring GraphQL error (with unit coverage).
+
+- 1367fbb: AI Skill permissions (full agent parity) + `/skill` composer invocation. Skills now use the same dedicated-table, **open-by-default** permission model as AI Agents via `MJ: AI Skill Permissions`: a cached runtime helper (`AISkillPermissionHelper`, open-by-default) and a unified-engine provider (`AISkillPermissionProvider`, closed-by-default / Sharing Center), grantee-exclusivity enforced by `MJAISkillPermissionEntityServer`, and a `GetSkillsForAgent(agent, user?)` filter so the model's skill catalog is intersected with the acting user's Run permission. The old `AI Skills` Resource-Type sharing is retired in favor of a skill-scoped permissions grid (`SkillPermissionsPanel`/`Dialog`/`Service`), with the `Can Share Skills` authorization repointed to it. End users invoke a skill for a message by typing `/skill-name` in the conversation composer (mirrors `@agent`/`#entity`; picker filtered by permission, chips use `AISkill.IconClass`/`Color`); selected IDs thread through the client → resolver → runtime chain as `ExecuteAgentParams.requestedSkillIDs` (both the `RunAIAgent` and `RunAIAgentFromConversationDetail` mutations), and `BaseAgent.preActivateRequestedSkills` activates them at run start only if they survive the guard (agent-accepted ∩ user-permitted). Requires the companion Agent Skills migration + CodeGen.
+- 6f74b17: Add an LLM/agentic reasoning pass on top of the embedding/vector duplicate-detection pipeline — "vectors filter, reasoning validates". A small/fast LLM judges high-probability vector candidates (Merge / NotDuplicate / Uncertain) to shrink the human-review set, strengthening or weakening the vector score rather than replacing it. Adds a dual-provider reasoning seam (Prompt/Agent), per-entity gating (EnableLLMReasoning, ReasoningThreshold, AutomationLevel), per-candidate verdict/audit columns, the new @memberjunction/record-comparison engine + resolver/client, and an in-place reasoning UI in the duplicates dashboard. Fully back-compat: EnableLLMReasoning defaults to 0, leaving the vector-only path byte-for-byte unchanged.
+- aa9102d: feat(media+realtime): generic media player, end-to-end media streaming, and the realtime/LiveKit recording stack
+
+  A new media + recording platform spanning the player, storage, server, and the realtime/voice stack.
+
+  **Generic media player (`@memberjunction/ng-media-player`, new package)** — a framework-agnostic
+  `mj-media-player` (transport, click/drag scrubber, playback speed, ±skip, keyboard, fullscreen,
+  multi-track video grid, a real decoded audio waveform that doubles as the scrubber and accepts
+  precomputed `MediaTrack.Peaks`, a time-synced clickable transcript, loading/buffering state with an
+  `aria-live` status, cancelable `Before*` events, and an imperative API) plus an MJStorage-bound
+  `mj-storage-media-player` that resolves a `FileID` to an authenticated, range-streamed source. The
+  artifact audio/video viewers and previews now embed it.
+
+  **MJStorage streaming (`@memberjunction/storage`)** — `FileStorageBase.GetObjectStream` +
+  `SupportsStreaming` + `StreamingNotSupportedError`, implemented for all seven drivers (Box, AWS S3,
+  Azure, GCS, Google Drive, SharePoint, Dropbox).
+
+  **Authenticated media delivery (`@memberjunction/server`)** — a `CreateMediaAccessToken` mutation
+  (short-lived, permission-gated, returns precomputed waveform peaks) and a `GET /media/:fileId?token=`
+  HTTP-Range streaming route — any stored asset is served to the browser by `FileID` with real
+  streaming + permissions, no public links.
+
+  **Realtime co-agent recording (`@memberjunction/ng-conversations`, `@memberjunction/ai-realtime-client`,
+  `@memberjunction/ai-agents`)** — client-direct sessions record a seekable 16-bit WAV with capture-time
+  waveform peaks (a `peaks.json` sidecar); the agent's remote audio is mixed in when its WebRTC track
+  lands (`OnRemoteMediaStream`/`AttachRemoteStream`); transcript cue timing anchors to real audio onset
+  across tool-call gaps; recorded sessions stream back through the player. Plus reactive fixes
+  (`ConversationEngine.EnsureConversationLoaded` in `@memberjunction/core-entities`) so new conversations
+  and recordings appear without a refresh.
+
+  **LiveKit meeting recording (`@memberjunction/livekit-room-server`, `@memberjunction/server`,
+  `@memberjunction/graphql-dataprovider`, `@memberjunction/ng-mj-livekit-room`)** — egress output is
+  registered as an `MJ: Files` row linked to the Meeting-Room `Conversation` (new `RecordingFileID` /
+  `EgressID`), with point-at-sink or copy-to-canonical storage, and played back in the Meet UI.
+
+  **Realtime surface-tab overhaul (`@memberjunction/ng-conversations`)** — channel tabs appear only once
+  used (Whiteboard excepted), each color/icon-coded; the Activity tab is gated, restyled, and
+  right-aligned; agent-run artifacts move out of per-artifact tabs into the Activity tab with a
+  resizable, `UserInfoEngine`-persisted split viewer.
+
+  The Media channel can now show MJStorage files (`fileId`) in addition to URLs. The realtime
+  recordings dashboard (`@memberjunction/ng-dashboards`) and CodeGen-regenerated entity forms
+  (`@memberjunction/ng-core-entity-forms`) reflect the new recording fields.
+
+- 2f926df: feat(prompt-parts): scope-aware, pluggable prompt construction (ScopedPromptPart + PromptComponentResolver)
+
+  Adds a first-class, scope-aware prompt-construction primitive to MJ core. `ScopedPromptPart` is a
+  small, named, role-tagged fragment of prompt text attached to an `AIPrompt` and optionally narrowed
+  by the **same polymorphic scope the agent runtime already carries for memory** (`PrimaryScopeEntity`/
+  `PrimaryScopeRecordID` + `SecondaryScopes`). Any MJ app can control LLM behavior per scope by editing
+  rows, not code.
+  - **Entity + controls:** `__mj.ScopedPromptPart` with `Name`, `Role`, `Sort`, `Text`, `Status`, the
+    polymorphic scope columns, and the resolver controls `MergeBehavior` (`Override` | `Append`) and
+    `Priority`. The inclusion rule is data-driven, not hardcoded.
+  - **Resolution + assembly:** cached on `AIEngine` (`ScopedPromptParts`); resolved by
+    `PromptComponentResolver` — a **template-method** class whose protected hooks (`getCandidates`,
+    `isInScope`, `score`, `selectIncluded`, `order`) are the extension points. Within a part `Name`,
+    the most-specific scope wins (`Override`) or all in-scope parts accumulate (`Append`); distinct
+    names compose additively. Roles are preserved (System/User/Assistant) — assembled messages drive
+    the model directly, not flattened.
+  - **Pluggable:** the agent runtime obtains the resolver via
+    `MJGlobal.ClassFactory.CreateInstance(PromptComponentResolver)`, so a downstream consumer can
+    `@RegisterClass(PromptComponentResolver) class X extends PromptComponentResolver { … }` and override
+    the protected hooks for custom inclusion/scope logic — **no core change required**.
+  - **Agent wiring:** `BaseAgent` resolves + injects scoped parts (role-faithful) alongside memory/RAG,
+    using the run's existing primary/secondary scopes.
+
+  Verified by unit tests (`PromptComponentResolver`) and a full agent run demonstrating the scope cascade.
+
+### Patch Changes
+
+- f8be8a0: Consolidate collapsible/disclosure UI onto the canonical `<mj-accordion-panel>` across MJ Explorer, and level up the accordion component itself.
+
+  **`@memberjunction/ng-ui-components` (the component):**
+  - New **`MJAccordionModule`** — bundles the panel + all three slot directives (`mjAccordionTitle`, `mjAccordionActions`, `mjAccordionBody`) so consumers import one symbol instead of four (works in both NgModule and standalone `imports`). An NgModule is used because AOT can't expand a value-array across a compiled-package boundary (NG1010) and an `as const` tuple is rejected by the `imports` type (TS2322).
+  - New lazy **`[mjAccordionBody]`** slot — heavy bodies (code editors, grids, charts) instantiate on first expand and stay alive for animated re-toggle, so consumers don't have to reason about content weight or hand-write `@if (expanded)`.
+  - Hardening: `--sm`/`--disabled`/`--muted-icon` modifiers scoped to child combinators (no nested-panel style bleed); `hasBeenExpanded` made non-public per naming conventions; added a DOM test proving the module exposes every declarable.
+
+  **~50 disclosure surfaces migrated** from bespoke `<div (click)>`-header + `@if` markup to `<mj-accordion-panel>` across 20 Angular packages — dashboard-viewer config panels, DevTools Class Registry, Version History diff/snapshot groups, the test-run dialog, Explorer section toggles (about-dialog, sql-logging, SystemDiagnostics, App Roles, Home add-pin, Integration activity, Actions/Permissions/Credentials/Testing/ComponentStudio), and Generic components (agents, clustering, conversations, search, entity-viewer, filter-builder, record-tags, resource-permissions, core-entity-forms). Each replaces a non-focusable `<div (click)>` header with a real `<button [attr.aria-expanded]>` — a genuine accessibility improvement, not cosmetic — and deletes the per-consumer collapse chrome CSS. Card-based collapsibles, trees, and fill-panes are intentionally out of scope (they route to their own primitives).
+
+  No public API changes in the consumer packages (internal refactor). Verified: all affected package test suites pass, CI UI gates green (design tokens + button overrides), and a full audit confirmed side-effects preserved with two visual regressions caught and fixed (SystemDiagnostics severity tint restored with semantic tokens; cluster-scatter members list scroll-confined via `[Fill]`).
+  </content>
+
+- 0476455: Migrate inline empty-state placeholders to the canonical `<mj-empty-state>` component across Explorer and Generic Angular packages (UI-consistency objective O4), wiring the component into the packages that needed it (and adding `@memberjunction/ng-ui-components` as a dependency where missing). Also fixes reset-filter CTA correctness in three picker dialogs (sub-agent selector, add-action, action gallery) where the handler cleared only a subset of the active filter dimensions, and refines the UI adoption measurement script with a transparent three-tier empty-state count (raw widened → non-placeholder false-positives → wrappers-around-migrated → genuine).
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [e84c85b]
+- Updated dependencies [f8be8a0]
+- Updated dependencies [783b262]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [1e5e449]
+- Updated dependencies [be5ab50]
+- Updated dependencies [45df197]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [0476455]
+- Updated dependencies [9f96357]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-engine-base@5.44.0
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/graphql-dataprovider@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/ng-agents@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ng-entity-viewer@5.44.0
+  - @memberjunction/ng-ui-components@5.44.0
+  - @memberjunction/ng-actions@5.44.0
+  - @memberjunction/ng-ai-test-harness@5.44.0
+  - @memberjunction/ng-entity-relationship-diagram@5.44.0
+  - @memberjunction/ng-flow-editor@5.44.0
+  - @memberjunction/ng-resource-permissions@5.44.0
+  - @memberjunction/ng-search@5.44.0
+  - @memberjunction/ng-testing@5.44.0
+  - @memberjunction/ng-versions@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/ng-shared@5.44.0
+  - @memberjunction/ng-base-forms@5.44.0
+  - @memberjunction/ng-action-gallery@5.44.0
+  - @memberjunction/ng-deep-diff@5.44.0
+  - @memberjunction/ng-list-management@5.44.0
+  - @memberjunction/ng-record-process-studio@5.44.0
+  - @memberjunction/ng-timeline@5.44.0
+  - @memberjunction/ng-trees@5.44.0
+  - @memberjunction/ng-notifications@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/ng-base-application@5.44.0
+  - @memberjunction/ng-base-types@5.44.0
+  - @memberjunction/ng-code-editor@5.44.0
+  - @memberjunction/ng-join-grid@5.44.0
+  - @memberjunction/ng-shared-generic@5.44.0
+  - @memberjunction/templates-base-types@5.44.0
+  - @memberjunction/ng-markdown@5.44.0
+  - @memberjunction/ng-tabstrip@5.44.0
+  - @memberjunction/ng-link-directives@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [a975e3d]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [54183aa]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/ai@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/ng-base-forms@5.43.0
+  - @memberjunction/ng-ui-components@5.43.0
+  - @memberjunction/ng-tabstrip@5.43.0
+  - @memberjunction/ai-engine-base@5.43.0
+  - @memberjunction/actions-base@5.43.0
+  - @memberjunction/ng-base-application@5.43.0
+  - @memberjunction/ng-link-directives@5.43.0
+  - @memberjunction/ng-shared@5.43.0
+  - @memberjunction/ng-testing@5.43.0
+  - @memberjunction/ng-action-gallery@5.43.0
+  - @memberjunction/ng-actions@5.43.0
+  - @memberjunction/ng-agents@5.43.0
+  - @memberjunction/ng-ai-test-harness@5.43.0
+  - @memberjunction/ng-base-types@5.43.0
+  - @memberjunction/ng-code-editor@5.43.0
+  - @memberjunction/ng-deep-diff@5.43.0
+  - @memberjunction/ng-entity-relationship-diagram@5.43.0
+  - @memberjunction/ng-entity-viewer@5.43.0
+  - @memberjunction/ng-flow-editor@5.43.0
+  - @memberjunction/ng-join-grid@5.43.0
+  - @memberjunction/ng-list-management@5.43.0
+  - @memberjunction/ng-notifications@5.43.0
+  - @memberjunction/ng-record-process-studio@5.43.0
+  - @memberjunction/ng-search@5.43.0
+  - @memberjunction/ng-shared-generic@5.43.0
+  - @memberjunction/ng-timeline@5.43.0
+  - @memberjunction/ng-trees@5.43.0
+  - @memberjunction/ng-versions@5.43.0
+  - @memberjunction/graphql-dataprovider@5.43.0
+  - @memberjunction/templates-base-types@5.43.0
+  - @memberjunction/ng-markdown@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [313c1c5]
+- Updated dependencies [256ab06]
+- Updated dependencies [9b9b484]
+- Updated dependencies [e7c2437]
+- Updated dependencies [5fde509]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [ccaf49b]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/ng-ui-components@5.42.0
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/graphql-dataprovider@5.42.0
+  - @memberjunction/actions-base@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/ng-entity-viewer@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ng-testing@5.42.0
+  - @memberjunction/ng-action-gallery@5.42.0
+  - @memberjunction/ng-ai-test-harness@5.42.0
+  - @memberjunction/ng-base-forms@5.42.0
+  - @memberjunction/ng-entity-relationship-diagram@5.42.0
+  - @memberjunction/ng-join-grid@5.42.0
+  - @memberjunction/ng-list-management@5.42.0
+  - @memberjunction/ai-engine-base@5.42.0
+  - @memberjunction/ng-shared@5.42.0
+  - @memberjunction/ng-agents@5.42.0
+  - @memberjunction/ng-base-application@5.42.0
+  - @memberjunction/ng-link-directives@5.42.0
+  - @memberjunction/ng-actions@5.42.0
+  - @memberjunction/ng-base-types@5.42.0
+  - @memberjunction/ng-code-editor@5.42.0
+  - @memberjunction/ng-deep-diff@5.42.0
+  - @memberjunction/ng-flow-editor@5.42.0
+  - @memberjunction/ng-notifications@5.42.0
+  - @memberjunction/ng-search@5.42.0
+  - @memberjunction/ng-shared-generic@5.42.0
+  - @memberjunction/ng-timeline@5.42.0
+  - @memberjunction/ng-trees@5.42.0
+  - @memberjunction/ng-versions@5.42.0
+  - @memberjunction/templates-base-types@5.42.0
+  - @memberjunction/ai@5.42.0
+  - @memberjunction/ng-tabstrip@5.42.0
+  - @memberjunction/ng-markdown@5.42.0
+
+## 5.41.0
+
+### Minor Changes
+
+- 8fd6f59: Realtime Bridges (Phase 0+1): new media-transport layer that connects the one realtime agent engine to external endpoints — meetings (Zoom/Teams/Slack/Meet/Webex/Discord) and telephony (Twilio/Vonage/RingCentral/VOIP). Adds the v5.42 schema (5 entities: AIBridgeProvider with a strongly-typed SupportedFeatures JSON column, AIBridgeAgentIdentity, AIBridgeProviderChannel, AIAgentSessionBridge, AIAgentSessionBridgeParticipant — the bridge is an attachment to the existing AIAgentSession, not a new session). New packages @memberjunction/ai-bridge-base (BaseRealtimeBridge media driver with capability gating, AIBridgeEngineBase cache, pure passive/active/hybrid TurnTakingPolicy) and @memberjunction/ai-bridge-server (AIBridgeEngine completing the deferred server-bridged transport seam — bridge media ↔ IRealtimeSession.SendInput/OnOutput — plus a LoopbackBridge, host affinity and janitor). Five server-side EntityServer validation invariants. Nothing is audio-specific (typed directional audio/video/screen tracks).
+- cd6c5f0: Realtime AI Agents wave 3: consolidated v5.41 migration (sessions, channels, co-agent schema) with the AIAgentCoAgent affinity registry replacing AIAgentPairedAgent — typed relationship vocabulary (CoAgent implemented; Peer/Delegate/Fallback/Reviewer/Observer reserved), type-level co-agent defaults as junction rows (removing the only FK cycle in core MJ), and the full code sweep (engine cache, resolver resolution chain, server-side invariants, client pairing reads, regenerated manifests). Realtime UX: progressive-disclosure voice console with persisted captions preference, user-owned composer and tabs toggles, audio-reactive visuals; whiteboard pages/multi-select and review-persistence fixes. Gemini Live triggering turns ride realtime text so widget clicks/typed input/narration speak immediately on native-audio models. CodeGen: single-winner IsNameField enforcement with eligibility guardrail fixes, SCC-based cycle diagnostics, and clean-database bootstrap robustness (conditional engine registry datasets).
+- a5f5472: Remote Browser channel + new realtime voice providers + computer-use enrichment.
+  - **Remote Browser channel** (`@memberjunction/remote-browser-*`): an in-house realtime channel where an agent drives a live, CDP-connected browser while it talks (sales demos, support walkthroughs, trainer agents). New `AIRemoteBrowserProvider` registry (migration V202606161000) with JSONType capability gating; a universal `remote-browser-base` (driver family + `RemoteBrowserEngineBase`), a shared `remote-browser-cdp` kit (one lossless action mapper + `CdpRemoteBrowserSession`), a `remote-browser-server` engine + `RemoteBrowserChannel` (control arbiter, control modes AgentOnly/ViewOnly/Collaborative vs strategies ComputerUse/NativeAI), and five thin backends (Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).
+  - **computer-use** enriched additively into a complete browser-I/O + perception engine: CSS-selector-aware actions, CDP screencast, MouseMove, accessibility-snapshot/QueryElement/GetVisibleText/GetTitle/WaitForLoadState — every consumer benefits, existing vision/coordinate path unchanged.
+  - **New realtime model providers**: xAI Grok Voice (`@memberjunction/ai-xai`, OpenAI-Realtime-compatible) and Inworld (`@memberjunction/ai-inworld`), with vendor/model seeds.
+  - **Console logging improvements** across `@memberjunction/ai-core-plus`, `ai-engine-base`, `ai-prompts`, `aiengine`, `cli`, `generic-database-provider`, `metadata-sync`, and the bootstrap/forms packages.
+
+### Patch Changes
+
+- 659ee5b: Realtime co-agent pairing & type configuration. New `MJ: AI Agent Paired Agents` junction (opt-in: a co-agent with zero rows stays universal — today's zero-config default unchanged; rows restrict + prebuild its target list with an IsDefault preselection), `AIAgent.TypeConfiguration` (agent-type-specific JSON: realtime model preference, per-provider voice, tone/speaking style, override policy, narration pacing), and `AIAgentType.ConfigSchema`/`DefaultConfiguration` (the type publishes a JSON Schema + type-level defaults; effective config = type defaults <- agent config <- runtime overrides, deep-merged per key, server-authoritative). Runtime overrides ride a new `configOverridesJson` session-start argument gated by the seeded `Realtime: Advanced Session Controls` authorization (Developer-mapped) — enforced server-side, disclosed client-side (unauthorized users silently get defaults). ValidateAsync server subclasses enforce ConfigSchema conformance, Realtime-type co-agents, and at-most-one-default-per-co-agent. Conversations UX: co-agent picker for everyone with more than one permitted co-agent (persisted via UserInfoEngine), pairing-constrained target selection, authorization-gated model/config override pickers.
+- cc604aa: Agent in-flight memory writes: agents can commit durable cross-run memories mid-run via the memoryWrites loop-response field, gated by AIAgent.AllowMemoryWrite (ON by default — opt out per agent). Writes land as immediately-injectable Provisional agent notes (new Status value, with AuthorType provenance) under framework-enforced guards (descriptive types only, scope clamp, exact-restatement dedupe with same-run supersede, per-run cap, TTL), inject with recency-wins precedence and per-note recorded dates, and are hardened or pruned by a new Memory Manager pass each cycle. Cross-run dedupe requires exact normalized restatement so corrections are never silently absorbed into a stale note; the loop-agent prompt instructs agents not to claim a memory was saved before its result message arrives.
+- 15b743b: Real-Time AI Agents — Sessions, Channels & the Realtime Model (plans/ai-agent-sessions.md). Adds the AIAgentSession/AIAgentChannel/AIAgentSessionChannel schema (+ AgentSessionID on AIAgentRun/ConversationDetail, CloseReason on AIAgentSession); the BaseRealtimeModel server primitive with OpenAIRealtime + GeminiRealtime drivers (server-bridged StartSession and client-direct ephemeral-token CreateClientSession, optional SendContextNote/RequestSpokenUpdate interim updates); the new @memberjunction/ai-realtime-client package with the BaseRealtimeClient browser abstraction + OpenAI/Gemini client drivers resolved via ClassFactory by provider key; the Realtime agent type + Voice Co-Agent with RealtimeSessionRunner/RealtimeToolBroker, AgentMemoryContextBuilder extraction, server session lifecycle (SessionManager, SessionJanitor, start/close/heartbeat + client-direct resolvers with delegated-run progress streaming, AwaitingFeedback resume, co-agent observability runs, user-selectable realtime model); the full-panel realtime voice call UX in ng-conversations (phone trigger + agent/model picker, banner/thread/activity rail, delegation working/result cards with provenance, ephemeral paced first-person progress narration driven by DB prompt templates, in-call text composer); Realtime Voice admin (AI Analytics dashboard sections, session/channel custom forms, agent Runs|Sessions execution history); and Query Builder/Strategist reliability fixes (entity catalog in prompt, Get Entity Details sample caps + semantic fallback, plan formatting). Also: the standalone @memberjunction/ng-whiteboard package (collaborative board with agent tool API, sandboxed interactive widgets + input bridge, markdown panels, exports, cancelable before/after events); ElevenLabs Agents + AssemblyAI Voice Agent realtime provider pairs (4-provider matrix, zero contract changes); session review mode with multi-leg resume carryover (timeline dividers, artifact junction closure, prior-transcript model hydration); delegation cancel channel; usage telemetry relay; Realtime Co-Agent rename with run-step/prompt-run observability.
+- Updated dependencies [8fd6f59]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [34d17e2]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [1568bae]
+- Updated dependencies [4b3fb9d]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/graphql-dataprovider@5.41.0
+  - @memberjunction/ai-engine-base@5.41.0
+  - @memberjunction/ai-core-plus@5.41.0
+  - @memberjunction/ng-notifications@5.41.0
+  - @memberjunction/ng-base-forms@5.41.0
+  - @memberjunction/actions-base@5.41.0
+  - @memberjunction/ng-base-application@5.41.0
+  - @memberjunction/ng-link-directives@5.41.0
+  - @memberjunction/ng-shared@5.41.0
+  - @memberjunction/ng-testing@5.41.0
+  - @memberjunction/ng-action-gallery@5.41.0
+  - @memberjunction/ng-actions@5.41.0
+  - @memberjunction/ng-agents@5.41.0
+  - @memberjunction/ng-ai-test-harness@5.41.0
+  - @memberjunction/ng-base-types@5.41.0
+  - @memberjunction/ng-code-editor@5.41.0
+  - @memberjunction/ng-deep-diff@5.41.0
+  - @memberjunction/ng-entity-relationship-diagram@5.41.0
+  - @memberjunction/ng-entity-viewer@5.41.0
+  - @memberjunction/ng-flow-editor@5.41.0
+  - @memberjunction/ng-join-grid@5.41.0
+  - @memberjunction/ng-list-management@5.41.0
+  - @memberjunction/ng-search@5.41.0
+  - @memberjunction/ng-shared-generic@5.41.0
+  - @memberjunction/ng-timeline@5.41.0
+  - @memberjunction/ng-trees@5.41.0
+  - @memberjunction/ng-versions@5.41.0
+  - @memberjunction/templates-base-types@5.41.0
+  - @memberjunction/ng-tabstrip@5.41.0
+  - @memberjunction/ng-markdown@5.41.0
+  - @memberjunction/ng-ui-components@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.40.2
+- @memberjunction/ai@5.40.2
+- @memberjunction/ai-core-plus@5.40.2
+- @memberjunction/actions-base@5.40.2
+- @memberjunction/ng-base-application@5.40.2
+- @memberjunction/ng-link-directives@5.40.2
+- @memberjunction/ng-shared@5.40.2
+- @memberjunction/ng-testing@5.40.2
+- @memberjunction/ng-action-gallery@5.40.2
+- @memberjunction/ng-actions@5.40.2
+- @memberjunction/ng-agents@5.40.2
+- @memberjunction/ng-ai-test-harness@5.40.2
+- @memberjunction/ng-base-forms@5.40.2
+- @memberjunction/ng-base-types@5.40.2
+- @memberjunction/ng-code-editor@5.40.2
+- @memberjunction/ng-deep-diff@5.40.2
+- @memberjunction/ng-entity-relationship-diagram@5.40.2
+- @memberjunction/ng-entity-viewer@5.40.2
+- @memberjunction/ng-flow-editor@5.40.2
+- @memberjunction/ng-join-grid@5.40.2
+- @memberjunction/ng-list-management@5.40.2
+- @memberjunction/ng-markdown@5.40.2
+- @memberjunction/ng-notifications@5.40.2
+- @memberjunction/ng-search@5.40.2
+- @memberjunction/ng-shared-generic@5.40.2
+- @memberjunction/ng-tabstrip@5.40.2
+- @memberjunction/ng-timeline@5.40.2
+- @memberjunction/ng-trees@5.40.2
+- @memberjunction/ng-ui-components@5.40.2
+- @memberjunction/ng-versions@5.40.2
+- @memberjunction/graphql-dataprovider@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/templates-base-types@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-engine-base@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/actions-base@5.40.1
+  - @memberjunction/ng-base-application@5.40.1
+  - @memberjunction/ng-link-directives@5.40.1
+  - @memberjunction/ng-shared@5.40.1
+  - @memberjunction/ng-testing@5.40.1
+  - @memberjunction/ng-action-gallery@5.40.1
+  - @memberjunction/ng-actions@5.40.1
+  - @memberjunction/ng-agents@5.40.1
+  - @memberjunction/ng-ai-test-harness@5.40.1
+  - @memberjunction/ng-base-forms@5.40.1
+  - @memberjunction/ng-base-types@5.40.1
+  - @memberjunction/ng-code-editor@5.40.1
+  - @memberjunction/ng-deep-diff@5.40.1
+  - @memberjunction/ng-entity-relationship-diagram@5.40.1
+  - @memberjunction/ng-entity-viewer@5.40.1
+  - @memberjunction/ng-flow-editor@5.40.1
+  - @memberjunction/ng-join-grid@5.40.1
+  - @memberjunction/ng-list-management@5.40.1
+  - @memberjunction/ng-notifications@5.40.1
+  - @memberjunction/ng-search@5.40.1
+  - @memberjunction/ng-shared-generic@5.40.1
+  - @memberjunction/ng-timeline@5.40.1
+  - @memberjunction/ng-trees@5.40.1
+  - @memberjunction/ng-versions@5.40.1
+  - @memberjunction/graphql-dataprovider@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/templates-base-types@5.40.1
+  - @memberjunction/ng-tabstrip@5.40.1
+  - @memberjunction/ai@5.40.1
+  - @memberjunction/ng-markdown@5.40.1
+  - @memberjunction/ng-ui-components@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Minor Changes
+
+- 43e6c0f: MJ-issued magic-link sessions for external, app-scoped users: passwordless, single-use (or multi-use) invite links that sign external users into MJExplorer confined to one application and a per-link role. MJ issues and validates its own RS256 session tokens (published via JWKS, accepted by the standard auth-provider path), so there's no external IdP dependency or per-user IdP cost. Invite scope (app, role, expiry, max uses) is configured per link, with support for per-invite app/role, resource-scoped RLS sharing, and anonymous sessions — a shared Anonymous principal whose scope rides per-session JWT claims rather than DB roles, so concurrent anonymous visitors can't accrete privileges.
+
+  Also includes two framework changes made along the way:
+  - **RunView server-cache RLS fix:** the cache fingerprint now incorporates the per-user Row-Level-Security where-clause, so an RLS-scoped read can no longer be served an unscoped cached result. No-op for users without an RLS filter (byte-identical fingerprint), so normal caching is untouched.
+  - **BaseEngine degrades gracefully under restricted roles:** a config load that fails because the current user lacks Read permission is now treated as a permanent condition — the property loads empty and the engine is marked loaded — instead of looping on "not marking as loaded", which previously hung the MJExplorer shell for least-privilege users (e.g. magic-link guests). Only genuinely transient failures (network, server restart) keep retrying.
+
+- 253a188: Knowledge Hub Classify redesign
+  - **Clustering**: new `@memberjunction/clustering-engine` (framework-agnostic fetch → cluster → reduce → LLM-name pipeline), a "Run Cluster Analysis" action, a `RunClusterAnalysis` GraphQL resolver, a `GraphQLClusterClient` transport, and the Angular `ClusteringService` thinned to delegate to the server.
+  - **View-type plug-in architecture (entity viewer)**: `ViewType` registry + `ViewTypeEngine` + `IViewTypeDescriptor`/`IViewRenderer`/`IViewPropSheet` contracts in `ng-entity-viewer`, with Grid/Cards/Timeline/Map descriptors. The host now **dynamic-mounts** any registered plug-in view type (via `ViewContainerRef`) with zero host changes, and the switcher shows the active type's icon + label, collapsing from an icon strip to a dropdown as the list grows. **Cluster view type** added in `@memberjunction/ng-clustering` (descriptor + `IViewRenderer` wrapper over the scatter + `IViewPropSheet` + an Entity-Document availability engine) — available on any entity with vectors, reusing the same `ClusteringService`. The active view type persists to `UserView.ViewTypeID` (new source of truth; backfilled from the legacy `DisplayState.defaultMode`) and per-view-type config to `UserView.DisplayState.viewTypeConfigs` (new typed `IViewTypeConfigEntry`). `ViewType.Icon` is now `ExtendedType='Icon'` for the admin icon picker. See `packages/Angular/Generic/entity-viewer/VIEW_TYPE_PLUGINS.md`.
+  - **Classify UX**: per-tab scroll fix, Refresh buttons, meaningful content-item display names, loading states, `BaseEntityEvent` reactivity, and load-more pagination.
+  - **Audit & analytics**: direct tag→prompt-run lineage (`AIPromptRunID` + `Reasoning` on Content Item Tags), `ClassifyAnalyticsEngine`, reusable item grid + drilldown, and an Overview analytics section.
+  - **Setup & onboarding**: contextual prompt injection (org/content-type/source aggregation), `generateSeedTaxonomy` (clustering-backed) + resolver, source-form domain-context UI, org-context editor, inline Entity Document creation, seed-taxonomy review, and a guided setup wizard.
+  - **Visualize surface**: Knowledge Hub "Clusters" tab generalized to a "Visualize" host with Clusters / Tag Cloud modes, a `TagCloudEngine`, and a shared record drilldown.
+  - **Foundations**: `ApplicationSettingEngine` (global + app-scoped settings), and the `tag-engine` → `tag-engine-base` split so browser code no longer pulls server-only AI dependencies.
+  - **Fix**: stop server-only packages (`templates` → `aiengine`/`ai-provider-bundle`, storage, vector-DB and LLM provider SDKs) from leaking into the browser class-registration manifest, which previously broke the MJExplorer cold build. Added CLAUDE.md guardrails to the Bootstrap and BootstrapLite packages.
+
+### Patch Changes
+
+- 73bb233: Add KeyPrefix column to APIKey table for visual key identification. Stores the configured prefix plus 4 characters of the random body (e.g., "mj_sk_a1b2") at creation time so administrators can differentiate API keys without exposing the full key.
+- f2cca15: Fix research-agent reports being dropped from chat, add pluggable inline artifact previews, and correct Prompt Run token display.
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [7bbfd62]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/ng-entity-viewer@5.40.0
+  - @memberjunction/graphql-dataprovider@5.40.0
+  - @memberjunction/ng-shared@5.40.0
+  - @memberjunction/ai-engine-base@5.40.0
+  - @memberjunction/ai-core-plus@5.40.0
+  - @memberjunction/actions-base@5.40.0
+  - @memberjunction/ng-base-application@5.40.0
+  - @memberjunction/ng-link-directives@5.40.0
+  - @memberjunction/ng-testing@5.40.0
+  - @memberjunction/ng-action-gallery@5.40.0
+  - @memberjunction/ng-actions@5.40.0
+  - @memberjunction/ng-agents@5.40.0
+  - @memberjunction/ng-ai-test-harness@5.40.0
+  - @memberjunction/ng-base-forms@5.40.0
+  - @memberjunction/ng-base-types@5.40.0
+  - @memberjunction/ng-code-editor@5.40.0
+  - @memberjunction/ng-deep-diff@5.40.0
+  - @memberjunction/ng-entity-relationship-diagram@5.40.0
+  - @memberjunction/ng-flow-editor@5.40.0
+  - @memberjunction/ng-join-grid@5.40.0
+  - @memberjunction/ng-list-management@5.40.0
+  - @memberjunction/ng-notifications@5.40.0
+  - @memberjunction/ng-search@5.40.0
+  - @memberjunction/ng-shared-generic@5.40.0
+  - @memberjunction/ng-timeline@5.40.0
+  - @memberjunction/ng-trees@5.40.0
+  - @memberjunction/ng-versions@5.40.0
+  - @memberjunction/templates-base-types@5.40.0
+  - @memberjunction/ng-tabstrip@5.40.0
+  - @memberjunction/ai@5.40.0
+  - @memberjunction/ng-markdown@5.40.0
+  - @memberjunction/ng-ui-components@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Minor Changes
+
+- db4addf: feat(integration): Integration Framework Expansion — schema + metadata-driven CRUD base class, generated layer, cross-dialect hardening, and field-mapping cache
+
+  End-to-end increment expanding the integration framework: new per-operation write metadata on the schema, a generic metadata-driven CRUD base class, the regenerated entity/GraphQL/form layers that expose it, plus the cross-dialect (PostgreSQL + SQL Server) bug fixes and a field-mapping performance cache found while proving it live.
+
+  **Schema (v5.39.x migration)**
+  - `IntegrationObject`: explicit per-operation write columns — `CreateAPIPath`/`Method`/`BodyShape`/`BodyKey`/`IDLocation`, `UpdateAPIPath`/`Method`/`BodyShape`/`BodyKey`/`IDLocation`, `DeleteAPIPath`/`DeleteIDLocation`. The legacy `WriteAPIPath`/`WriteMethod` are kept one release as deprecated aliases.
+  - `IntegrationObject`: `IncrementalWatermarkField` — vendor cursor/timestamp field name driving the incremental sync filter.
+  - `IntegrationObject` + `IntegrationObjectField`: `MetadataSource` enum `{Declared, Discovered, Custom}` — provenance for merge precedence in `IntegrationSchemaSync`.
+
+  All schema changes are additive (new nullable fields + a new enum field) — no existing field is removed, renamed, or narrowed — so the bumps are **minor**.
+
+  **Engine / base class (`@memberjunction/integration-engine`)**
+  - `ExternalFieldSchema`: add `IsPrimaryKey` (distinct from `IsUniqueKey`). Fixes an `IntrospectSchema` bug where `IsPrimaryKey` was incorrectly mapped from `IsUniqueKey` — an object can have multiple unique fields but only one primary key.
+  - `BaseRESTIntegrationConnector`: new `TransformRecord` hook — optional per-record customization seam between `NormalizeResponse` and `ToExternalRecord` (default identity); override for vendor-specific record-level shape changes.
+  - `BaseRESTIntegrationConnector`: generic metadata-driven CRUD — `CreateRecord`/`UpdateRecord`/`DeleteRecord`/`GetRecord` read the per-operation columns and execute generically. Concrete connectors override only when an API is genuinely idiosyncratic. Replaces the hand-rolled write logic previously duplicated across every concrete connector.
+  - `FieldMappingEngine`: cache compiled `custom`-transform expressions instead of recompiling `new Function` once per field per record. A batch of N records sharing an expression compiles it once and executes the cached function N times, dropping per-record cost from `O(compile + execute)` to `O(execute)`. The cache stores a typed `CompiledExpression = (value, fields) => unknown` (no weak typing), caches compile failures too (a malformed expression is compiled once and the resulting `Error` re-thrown from cache per record, leaving `OnError` `Fail`/`Null`/`Skip` semantics unchanged), and is bounded by `MJLruCache` (1000-entry default) since the owning `IntegrationEngine` is a process-lifetime singleton.
+
+  **Generated layer (CodeGen for the v5.39.x migration)**
+  - `@memberjunction/core-entities` — `IntegrationObjectEntity` / `IntegrationObjectFieldEntity` gain strongly-typed accessors for the per-operation write columns, `IncrementalWatermarkField`, and the `MetadataSource` enum (`'Declared' | 'Discovered' | 'Custom'`).
+  - `@memberjunction/server` — regenerated resolvers / GraphQL types expose the new fields.
+  - `@memberjunction/ng-core-entity-forms` — regenerated `MJ: Integration Objects` / `MJ: Integration Object Fields` forms render the new fields.
+
+  **Cross-dialect hardening (PostgreSQL + SQL Server)**
+
+  Bugs found and fixed while proving the framework end-to-end on both dialects with live generated actions:
+  - `@memberjunction/codegen-lib` — PostgreSQL CRUD generation emitted the primary-key column twice for composite-PK entities, so association/junction tables never synced on PG; `PostgreSQLCodeGenProvider` now treats a multi-column PK as strategy-handled. Soft-PK/FK application uses dialect-aware identifier quoting and boolean literals (`this.dialect.QuoteIdentifier` / `BooleanLiteral`) so the pass runs correctly on PostgreSQL.
+  - `@memberjunction/server` — wired the PostgreSQL branch of the in-process CodeGen runner (`RuntimeSchemaManager.SetCodeGenRunner`) that previously existed only for SQL Server, so runtime schema sync no longer falls back to a hang-prone child process on PG. `IntegrationDiscoveryResolver` entity/field-map creation is now create-or-reuse (idempotent on re-apply), and its idempotency + operational list reads use `BypassCache` so create-vs-update decisions read committed state.
+  - `@memberjunction/integration-engine` — `MatchEngine.FindRecordMapEntry` and the bulk record-map load now read committed state (`BypassCache`), fixing duplicate-create after a direct-DB change; watermark save/load is idempotent to avoid a transaction-abort on retry. `LoadRunConfiguration` and every remaining operational decision-read — the upsert-by-identity record-map lookup, field-maps, the full-vs-incremental gate, write-back external-id lookup, orphan-sweep, and orphaned-run resume — now also `BypassCache`. This closes a Postgres-only gap where a freshly-toggled entity-map `Configuration` (e.g. enabling partition/Merkle reconcile) was read stale → the ChangeToken rollup was silently never written on PG, and removes the broader read-stale-then-decide bug class so the read-your-own-writes pipeline always decides from committed state on both dialects.
+  - `@memberjunction/core-actions` — the generated integration-action executor used stale entity names (`'Integrations'`, `'Company Integrations'`); corrected to `'MJ: Integrations'` / `'MJ: Company Integrations'` so `List`/`Get` invoke successfully.
+  - `@memberjunction/core-entities-server` — declares its previously-undeclared `@memberjunction/integration-pk-classifier` dependency (used by the server-side LLM PK-detection callback), fixing the missing-dependency check; covers the integration server-entity behavior (`MJCompanyIntegrationEntityServer`, `IntegrationLLMPKCallback`).
+  - Multi-provider safety — the post-pipeline metadata `Refresh()` calls in `IntegrationDiscoveryResolver` and `MJCompanyIntegrationEntityServer` now refresh the request's own provider (`provider ?? new Metadata()`) instead of the global default, satisfying the `MultiProviderCompliance` gate and refreshing the correct cache under a non-default provider.
+  - Dialect layer (`@memberjunction/sql-dialect`) — statement splitting for runtime schema migrations is now a dialect concern: `SplitStatements` (naive `;`-split on the base, dollar-quote-aware override on PostgreSQL so `DO $$…$$` blocks stay intact) instead of living in the schema-engine runtime.
+
+- 0f9acba: feat(knowledge-hub): Classify sub-app decomposition + new classification features
+
+  Decompose the Classify (content autotagging) dashboard from a single ~5,150-line component into a thin host shell plus 6 self-contained tab sub-page components and 4 dialog components, with a shared pure helper layer. Cacheable metadata reuses the existing `KnowledgeHubMetadataEngine` / `TagEngineBase` / `AIEngineBase`; high-volume rows stay on `RunView`.
+
+  Surfaces backend capabilities that previously had no UI:
+  - **Suggestions Inbox** — human-in-the-loop review queue over `MJ: Tag Suggestions` (approve / merge / reject).
+  - **Tag Health** — real merge-candidate / low-usage / wide-node signals, replacing the prior heuristic.
+  - **Governance / Synonyms / Scope** editors on the Taxonomy tag panel (typed `MJTag` flags, synonym approval workflow, tag scope).
+  - **Config parity** — full `IContentSourceConfiguration` (taxonomy mode, thresholds, tag root, budgets, toggles, effective-values) inline in the source form, which is now sectioned and a resizable, width-remembering slide-in.
+  - **Dry-run preview** — in-memory disposition preview of a source's tags under its current mode + thresholds (no LLM call, nothing persisted).
+
+  Adds `TagSynonym.Status` (`Active`/`Pending`/`Rejected`, default `Active`) for the synonym approval workflow — additive and backward-compatible — with the regenerated entity, server, and form code. `ng-bootstrap`'s class manifest + allow-list pick up `TagEngineBase`.
+
+- 1b0f355: Loop agent prompt improvements for cache optimization. Capture cache-read and cache-write token counts from every LLM provider that reports them (Anthropic, OpenAI, Gemini, Groq, Cerebras, Fireworks, Azure, Bedrock) and surface them on AI Prompt Runs and Agent Runs. Adds `CacheReadTokens`/`CacheWriteTokens` columns to `AIPromptRun` (migration included — run CodeGen after applying), normalizes cache-token accounting in `baseModel` so usage totals are consistent across providers, and enables Gemini implicit/explicit cache reporting. The Prompt Run form and Agent Run analytics now display cache hit/write token breakdown
+- 34fe6d1: Capture and surface AI prompt-cache cost across providers — OpenRouter provider-reported cost passthrough; per-model cache read/write pricing on AI Model Costs with cache-aware cost calculation; cache-token rollups on AI Prompt Runs and Agent Runs; and cache hit-rate + dollar-savings analytics across the AI dashboards (Cost & Budget, Model Performance, Prompt Runs, Usage Patterns, Executive Summary) and the prompt-run / agent-run detail views. Includes a migration adding cache columns — run CodeGen after applying.
+
+### Patch Changes
+
+- 3b29882: feat: render any entity form as a tab, dialog, or slide-in (Generic, no regeneration)
+
+  Adds a presentation-agnostic form stack to `@memberjunction/ng-base-forms`:
+  - **`MjEntityFormHostComponent`** — headless host that resolves the form
+    (generated / custom / interactive override + variants), loads the record,
+    dynamically creates + binds the form, re-emits its events, and tears down.
+    Extracted from Explorer's `SingleRecordComponent`, which is now a thin wrapper.
+  - **`MjFormDialogComponent` / `MjFormSlideInComponent`** + **`MJFormPresenterService`**
+    — declarative and imperative ways to open any entity form as a modal dialog or
+    slide-in panel.
+  - **`EntityFormConfig`** + presets — per-instance control over toolbar visibility,
+    related-entity sections, section collapsibility, width, and in-form navigation.
+    Applied via the form reference so existing generated forms honor it **without
+    regeneration**.
+  - **`FormResolverService`** moved from `ng-explorer-core` into `ng-base-forms`
+    (it had no Explorer/Router coupling), making the interactive-form + variant
+    pathway first-class on every surface.
+  - **`MjSlidePanelComponent`** relocated from `ng-versions` into `ng-ui-components`
+    as a first-class shared primitive; `ng-versions` and the other consumers
+    (record-changes, record-tags, entity-viewer, dashboards, core-entity-forms) now
+    import it from there.
+
+  Phase-1 consumer migrations: the Query Categories create flow now uses
+  `<mj-form-dialog>`, and editing the selected category uses `MJFormPresenterService`
+  slide-in — replacing the bespoke `query-category-dialog`.
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [f60e340]
+- Updated dependencies [bd95e83]
+- Updated dependencies [3c53858]
+- Updated dependencies [4bc6fb4]
+- Updated dependencies [3b29882]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [5b4102c]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/graphql-dataprovider@5.39.0
+  - @memberjunction/ng-ui-components@5.39.0
+  - @memberjunction/ng-base-forms@5.39.0
+  - @memberjunction/ng-shared-generic@5.39.0
+  - @memberjunction/ng-versions@5.39.0
+  - @memberjunction/ng-entity-viewer@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/ng-markdown@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/ai-engine-base@5.39.0
+  - @memberjunction/actions-base@5.39.0
+  - @memberjunction/ng-base-application@5.39.0
+  - @memberjunction/ng-link-directives@5.39.0
+  - @memberjunction/ng-shared@5.39.0
+  - @memberjunction/ng-testing@5.39.0
+  - @memberjunction/ng-action-gallery@5.39.0
+  - @memberjunction/ng-actions@5.39.0
+  - @memberjunction/ng-agents@5.39.0
+  - @memberjunction/ng-ai-test-harness@5.39.0
+  - @memberjunction/ng-base-types@5.39.0
+  - @memberjunction/ng-code-editor@5.39.0
+  - @memberjunction/ng-deep-diff@5.39.0
+  - @memberjunction/ng-entity-relationship-diagram@5.39.0
+  - @memberjunction/ng-flow-editor@5.39.0
+  - @memberjunction/ng-join-grid@5.39.0
+  - @memberjunction/ng-list-management@5.39.0
+  - @memberjunction/ng-notifications@5.39.0
+  - @memberjunction/ng-search@5.39.0
+  - @memberjunction/ng-timeline@5.39.0
+  - @memberjunction/ng-trees@5.39.0
+  - @memberjunction/templates-base-types@5.39.0
+  - @memberjunction/ng-tabstrip@5.39.0
+
+## 5.38.0
+
+### Minor Changes
+
+- 30f598d: Two intertwined deliverables in one PR: the autotag-website overhaul, plus a new dynamic forms-extension architecture (`BaseFormPanel` slot system) that lets consumers extend generated entity forms without the heavyweight custom-form override pattern.
+
+  ## Autotag website crawler overhaul
+
+  Fixes the long-standing "only crawls the seed page" symptom and adds first-class run budgets, a streaming pipeline, and per-source UI knobs.
+
+  **Fixes**
+  - `AutotagWebsite` now respects `MaxDepth` out of the box — the recursive crawler was previously gated on a flag that defaulted to falsy, so most sources only ever scraped the start URL. Class-level defaults are now `MaxDepth=2`, `CrawlSitesInLowerLevelDomain=true`, `CrawlOtherSitesInTopLevelDomain=false`.
+  - Change-detection (the "is this page changed?" short-circuit) was rewritten to fetch each URL once instead of two or three times, hash the **extracted body text** (not raw HTML — eliminates spurious "changed" verdicts from CSRF tokens / build hashes / server timestamps), and scope the dedup query to the current `ContentSourceID` (a 404 boilerplate from one site no longer masks real pages on another).
+  - `visitedURLs` state is now reset per content source — was leaking across sources and silently deduping legitimate URLs.
+  - Conservative URL normalization (strip fragment, collapse trailing slash, sort query params; path case preserved per RFC 3986) so common variants dedupe correctly.
+  - Several smaller bugs: `URLPattern` regex now applied in the shallow path too, `Number.isFinite` guard prevents NaN-cascade in the depth check.
+
+  **Features**
+  - **Streaming pipeline.** `ExtractTextAndProcessWithLLM` now accepts `AsyncIterable<MJContentItemEntity>` in addition to arrays. The website crawler streams items into the LLM batcher as they pass change-detection — total wall-clock is `~max(crawl, classify)` instead of `crawl + classify`. Backwards-compatible: existing array callers (AutotagEntity, tests) are unchanged.
+  - **`MaxItemsPerRun` run budget.** Most intuitive "do at most N this run, do the rest next time" cap. Wired into `AutotagWebsite` (which had no budget integration before) and `AutotagEntity` (which already had the other RunBudget knobs). Pause is graceful via the existing CancellationRequested machinery; next run picks up where it left off (change-detection skips already-tagged items).
+  - **Per-source Website crawler UI.** New "Website Crawler Settings" section on the Content Source form (conditional on Website source type) with structured inputs for MaxDepth, RootURL, URLPattern (live regex validation), and toggles for the recursion + sibling-fan-out flags. The Tag Pipeline section gets a promoted "Max items / run" primary row.
+
+  **Storage**
+  - `IContentSourceConfiguration` extended with a typed `MaxItemsPerRun?: number` and `Website?: IContentSourceWebsiteConfiguration` sub-object. The new `MJContentSourceEntity_IContentSourceWebsiteConfiguration` interface is now exported from `@memberjunction/core-entities`.
+  - `AutotagWebsite` reads website knobs from the typed `Configuration.Website` first, then overlays `ContentSourceParam` rows as a sharper-per-instance override (legacy sources configured the old way keep working).
+  - Per-key coercion at the param-overlay boundary fixes a latent bug where DB-stored strings were silently stuffed into number/boolean-typed instance fields.
+
+  **Tests**
+
+  162 tests pass (up from 119). New coverage spans URL normalization, fetch-once / extracted-text hashing, the streaming engine path (AsyncIterable batching, partial-batch flush, resume), `MaxItemsPerRun` budget enforcement, and the `Configuration.Website` overlay.
+
+  **Docs**
+
+  `packages/ContentAutotagging/README.md` documents the new streaming diagram, the Website Crawl Settings table, the Run Budgets table with priority order, and the resume semantics.
+
+  **Known follow-ups** (not in this PR)
+  - True crawl-side resume that persists discovered URLs so re-runs skip the HTTP re-discovery — today's resume is "functional via change-detection dedup."
+  - `ETag` / `If-Modified-Since` conditional GETs on re-crawls (needs new columns on `MJContentItem`).
+
+  ## `BaseFormPanel` slot system (`@memberjunction/ng-base-forms`)
+
+  Generated entity forms can now be extended **without** replacing them via a `*Extended` custom-form override. Author a standalone Angular component extending `BaseFormPanel`, decorate with `@RegisterClassEx(BaseFormPanel, { metadata: { entity, slot, sortKey } })`, declare in any module. `<mj-form-panel-slot>` hosts in the generated form discover matching panels at runtime and dynamically mount them.
+
+  **Slot positions** (top → bottom): `top-area`, `before-fields`, `after-fields`, `after-related`, `after-everything`.
+
+  **Fallback chain** via `FormSlotCoordinator`: if the registered slot is missing because CodeGen hasn't been rerun against the new template emitter, the panel walks forward in the chain until it finds an existing slot. `MjRecordFormContainer` ALWAYS emits `after-everything` in its template, so panels never dead-end — pre-CodeGen-regen forms display every panel (at the bottom); post-regen forms display them in the preferred position.
+
+  New public exports from `@memberjunction/ng-base-forms`:
+  - `BaseFormPanel<TRecord>` abstract directive
+  - `FormPanelSlot` type union
+  - `FormPanelRegistrationMetadata` interface
+  - `<mj-form-panel-slot>` component
+  - `FormSlotCoordinator` service
+  - `FORM_SLOT_CHAIN` constant
+
+  Custom `*Extended` forms (e.g. `AIAgentFormComponentExtended`) remain a first-class pattern for truly bespoke layouts where the generated form is the wrong starting point entirely.
+
+  Full authoring guide in `packages/Angular/Generic/base-forms/PANELS.md`.
+
+  ## `@RegisterClassEx` + ClassFactory metadata (`@memberjunction/global`)
+
+  Existing `@RegisterClass` keeps its exact positional signature (zero breaking changes) but also accepts an optional 6th `metadata` arg for parity. New `@RegisterClassEx(baseClass, options)` is the modern form when you have anything beyond `(baseClass, key, priority)` to specify — options-bag avoids positional-boolean noise and is the right place to attach `metadata`.
+
+  New public exports from `@memberjunction/global`:
+  - `RegisterClassEx` decorator
+  - `RegisterClassOptions` interface
+  - `ClassRegistration.Metadata` field (optional, additive)
+  - `ClassFactory.GetAllRegistrationsByKeyPrefix(base, prefix)` — common structured-key case (case-insensitive, trimmed)
+  - `ClassFactory.GetAllRegistrationsByKeyPattern(base, regex)` — nuanced key matching
+  - `ClassFactory.GetAllRegistrationsByMetadata(base, predicate)` — recommended for structured discriminators
+
+  The `Ex` suffix follows MJ's existing `Foo`/`FooAsync`/`FooEx` convention. Not a true TS overload — JS overloads are hacky compared to true OOP, and sibling decorators give cleaner IntelliSense + a clean deprecation path if we ever consolidate.
+
+  MJGlobal README adds a "Structured registration" section documenting both decorators + all three lookup helpers.
+
+  ## Knowledge Hub dashboard quick-edit (`@memberjunction/ng-dashboards`)
+
+  The AI > Autotagging Pipeline dashboard's "Edit Content Source" slide-in is intentionally a **quick-edit surface**, not a full form. Added the most-useful subset of the new knobs:
+  - `MaxItemsPerRun` (always shown — most-asked-for budget cap)
+  - `MaxDepth` + 2 crawl toggles (Website-source-conditional)
+  - **"Open advanced settings →"** link that calls `NavigationService.OpenEntityRecord('MJ: Content Sources', id)` to land in the full entity form, where every panel is available via the slot system.
+
+  ## Documentation
+  - `packages/Angular/Generic/base-forms/PANELS.md` (NEW) — comprehensive BaseFormPanel authoring guide.
+  - `packages/Angular/CLAUDE.md` — restructured "Extending Entity Forms" section. Both patterns first-class.
+  - `packages/Angular/Explorer/core-entity-forms/README.md` — new "Two Patterns" section above the existing custom-form guide.
+  - `guides/CONTENT_AUTOTAGGING_GUIDE.md` — extended config table (all budget caps + `Website` sub-object) + UI section pointing at PANELS.md.
+  - `packages/MJGlobal/README.md` — new "Structured registration: `@RegisterClassEx` + metadata" section.
+  - Root `CLAUDE.md` — new "Nested CLAUDE.md Index" pointing at every sub-directory CLAUDE.md.
+
+  ## Follow-ups (not in this PR)
+  - Promote source-type-specific form sections to a registered class extension point when the count grows past 2-3 (e.g., RSS, Cloud Storage). Today's `IsWebsiteSourceType` template gate works fine for 1-2 source types.
+
+### Patch Changes
+
+- ebb0e3d: Eliminate provider.Refresh() from query save/delete paths, introduce MJQueryEntityExtended with child-relationship getters and business logic, migrate all QueryInfo consumers outside MJCore to use QueryEngine and entity types, remove dead QueryCacheManager, and replace 12 redundant RunView calls with QueryEngine cache reads. Fixes major performance bottleneck on large-entity deployments where every query save reloaded the entire metadata graph.
+- Updated dependencies [6b6c321]
+- Updated dependencies [67d6562]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [6a571d3]
+- Updated dependencies [275afda]
+- Updated dependencies [d285996]
+- Updated dependencies [8bd97f3]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [918d663]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [b26d0ee]
+- Updated dependencies [60947be]
+- Updated dependencies [2ee14f1]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/ng-base-application@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/ng-base-forms@5.38.0
+  - @memberjunction/ng-shared@5.38.0
+  - @memberjunction/graphql-dataprovider@5.38.0
+  - @memberjunction/ng-code-editor@5.38.0
+  - @memberjunction/ai-engine-base@5.38.0
+  - @memberjunction/ng-agents@5.38.0
+  - @memberjunction/ng-ai-test-harness@5.38.0
+  - @memberjunction/ng-testing@5.38.0
+  - @memberjunction/actions-base@5.38.0
+  - @memberjunction/ng-link-directives@5.38.0
+  - @memberjunction/ng-action-gallery@5.38.0
+  - @memberjunction/ng-actions@5.38.0
+  - @memberjunction/ng-base-types@5.38.0
+  - @memberjunction/ng-deep-diff@5.38.0
+  - @memberjunction/ng-entity-relationship-diagram@5.38.0
+  - @memberjunction/ng-entity-viewer@5.38.0
+  - @memberjunction/ng-flow-editor@5.38.0
+  - @memberjunction/ng-join-grid@5.38.0
+  - @memberjunction/ng-list-management@5.38.0
+  - @memberjunction/ng-notifications@5.38.0
+  - @memberjunction/ng-search@5.38.0
+  - @memberjunction/ng-shared-generic@5.38.0
+  - @memberjunction/ng-timeline@5.38.0
+  - @memberjunction/ng-trees@5.38.0
+  - @memberjunction/ng-versions@5.38.0
+  - @memberjunction/templates-base-types@5.38.0
+  - @memberjunction/ai@5.38.0
+  - @memberjunction/ng-tabstrip@5.38.0
+  - @memberjunction/ng-markdown@5.38.0
+  - @memberjunction/ng-ui-components@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [dadbde9]
+- Updated dependencies [0102dc6]
+- Updated dependencies [22b775f]
+- Updated dependencies [4f15f31]
+  - @memberjunction/graphql-dataprovider@5.37.0
+  - @memberjunction/ng-base-forms@5.37.0
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ng-shared@5.37.0
+  - @memberjunction/ng-testing@5.37.0
+  - @memberjunction/ng-actions@5.37.0
+  - @memberjunction/ng-ai-test-harness@5.37.0
+  - @memberjunction/ng-list-management@5.37.0
+  - @memberjunction/ng-notifications@5.37.0
+  - @memberjunction/ng-search@5.37.0
+  - @memberjunction/ng-versions@5.37.0
+  - @memberjunction/ai-engine-base@5.37.0
+  - @memberjunction/ng-agents@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/ng-base-application@5.37.0
+  - @memberjunction/ng-link-directives@5.37.0
+  - @memberjunction/ng-action-gallery@5.37.0
+  - @memberjunction/ng-base-types@5.37.0
+  - @memberjunction/ng-code-editor@5.37.0
+  - @memberjunction/ng-deep-diff@5.37.0
+  - @memberjunction/ng-entity-relationship-diagram@5.37.0
+  - @memberjunction/ng-entity-viewer@5.37.0
+  - @memberjunction/ng-flow-editor@5.37.0
+  - @memberjunction/ng-join-grid@5.37.0
+  - @memberjunction/ng-shared-generic@5.37.0
+  - @memberjunction/ng-timeline@5.37.0
+  - @memberjunction/ng-trees@5.37.0
+  - @memberjunction/templates-base-types@5.37.0
+  - @memberjunction/ng-tabstrip@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/ng-markdown@5.37.0
+  - @memberjunction/ng-ui-components@5.37.0
+  - @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- 91036ee: Refreshable, shareable, taggable Lists with an agent-callable Actions surface.
+  - New `@memberjunction/lists` core: ListOperations (delta + drop-guard + materialize/refresh/set-op), ListSharing, AudienceResolver.
+  - `MJ: Lists` lineage fields (SourceViewID, SourceFilterSnapshot, LastRefreshedAt, RefreshMode, UseSnapshot) wired into Refresh-from-source.
+  - GraphQL: ListOperationsResolver + GraphQLListsClient. New `SendToAudience` in communication-engine.
+  - 12 new Actions covering materialize / refresh / share / invite / move / compose / resolve-audience / send-to-audience.
+  - UI: Save-as-List, mixed list+view operands, compose-into-target, Shared With Me tab, invitations + audit-log dialogs, viewer-perspective gating, bulk Move/Copy with delta-confirm, tag chips + filter, list-stats sidebar, audience picker, Communications New Message page, Excel/CSV/JSON column-picker export.
+
+- Updated dependencies [f29b7c0]
+- Updated dependencies [1c0fce9]
+- Updated dependencies [e215af2]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/graphql-dataprovider@5.36.0
+  - @memberjunction/ng-ui-components@5.36.0
+  - @memberjunction/ng-base-forms@5.36.0
+  - @memberjunction/ng-entity-viewer@5.36.0
+  - @memberjunction/ng-list-management@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ng-shared@5.36.0
+  - @memberjunction/ng-testing@5.36.0
+  - @memberjunction/ng-actions@5.36.0
+  - @memberjunction/ng-ai-test-harness@5.36.0
+  - @memberjunction/ng-notifications@5.36.0
+  - @memberjunction/ng-search@5.36.0
+  - @memberjunction/ng-versions@5.36.0
+  - @memberjunction/ng-action-gallery@5.36.0
+  - @memberjunction/ng-entity-relationship-diagram@5.36.0
+  - @memberjunction/ng-join-grid@5.36.0
+  - @memberjunction/ai-engine-base@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/ng-base-application@5.36.0
+  - @memberjunction/ng-agents@5.36.0
+  - @memberjunction/ng-base-types@5.36.0
+  - @memberjunction/ng-code-editor@5.36.0
+  - @memberjunction/ng-flow-editor@5.36.0
+  - @memberjunction/ng-shared-generic@5.36.0
+  - @memberjunction/ng-trees@5.36.0
+  - @memberjunction/templates-base-types@5.36.0
+  - @memberjunction/ng-link-directives@5.36.0
+  - @memberjunction/ng-deep-diff@5.36.0
+  - @memberjunction/ng-timeline@5.36.0
+  - @memberjunction/ng-tabstrip@5.36.0
+  - @memberjunction/ai@5.36.0
+  - @memberjunction/ng-markdown@5.36.0
+  - @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- eb54def: Add an inline save/edit experience to the custom Test and Test Suite forms: editable Name, Description, Status, Parent Suite / Test Type, and tag-chip editor, plus a sticky save bar that slides up from the bottom whenever the record is dirty (Save/Discard, ⌘S shortcut, beforeunload guard, success/error toasts). Test Suite forms also gain in-place membership management — a searchable picker dialog for bulk-adding tests, hover-revealed remove with inline confirm, and drag-to-reorder via CDK with sequence persistence.
+- Updated dependencies [6fa8e13]
+- Updated dependencies [ee380f7]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [77e4782]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [383784c]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/ng-ui-components@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/graphql-dataprovider@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/ng-shared@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/ai-engine-base@5.35.0
+  - @memberjunction/actions-base@5.35.0
+  - @memberjunction/ng-base-application@5.35.0
+  - @memberjunction/ng-link-directives@5.35.0
+  - @memberjunction/ng-testing@5.35.0
+  - @memberjunction/ng-action-gallery@5.35.0
+  - @memberjunction/ng-actions@5.35.0
+  - @memberjunction/ng-agents@5.35.0
+  - @memberjunction/ng-ai-test-harness@5.35.0
+  - @memberjunction/ng-base-forms@5.35.0
+  - @memberjunction/ng-base-types@5.35.0
+  - @memberjunction/ng-code-editor@5.35.0
+  - @memberjunction/ng-deep-diff@5.35.0
+  - @memberjunction/ng-entity-relationship-diagram@5.35.0
+  - @memberjunction/ng-entity-viewer@5.35.0
+  - @memberjunction/ng-flow-editor@5.35.0
+  - @memberjunction/ng-join-grid@5.35.0
+  - @memberjunction/ng-list-management@5.35.0
+  - @memberjunction/ng-notifications@5.35.0
+  - @memberjunction/ng-search@5.35.0
+  - @memberjunction/ng-shared-generic@5.35.0
+  - @memberjunction/ng-timeline@5.35.0
+  - @memberjunction/ng-trees@5.35.0
+  - @memberjunction/ng-versions@5.35.0
+  - @memberjunction/templates-base-types@5.35.0
+  - @memberjunction/ai@5.35.0
+  - @memberjunction/ng-tabstrip@5.35.0
+  - @memberjunction/ng-markdown@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/ng-base-application@5.34.1
+  - @memberjunction/graphql-dataprovider@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/ai-engine-base@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/ng-link-directives@5.34.1
+  - @memberjunction/ng-shared@5.34.1
+  - @memberjunction/ng-testing@5.34.1
+  - @memberjunction/ng-action-gallery@5.34.1
+  - @memberjunction/ng-actions@5.34.1
+  - @memberjunction/ng-agents@5.34.1
+  - @memberjunction/ng-ai-test-harness@5.34.1
+  - @memberjunction/ng-base-forms@5.34.1
+  - @memberjunction/ng-base-types@5.34.1
+  - @memberjunction/ng-code-editor@5.34.1
+  - @memberjunction/ng-deep-diff@5.34.1
+  - @memberjunction/ng-entity-relationship-diagram@5.34.1
+  - @memberjunction/ng-entity-viewer@5.34.1
+  - @memberjunction/ng-flow-editor@5.34.1
+  - @memberjunction/ng-join-grid@5.34.1
+  - @memberjunction/ng-list-management@5.34.1
+  - @memberjunction/ng-notifications@5.34.1
+  - @memberjunction/ng-search@5.34.1
+  - @memberjunction/ng-shared-generic@5.34.1
+  - @memberjunction/ng-timeline@5.34.1
+  - @memberjunction/ng-trees@5.34.1
+  - @memberjunction/ng-versions@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/templates-base-types@5.34.1
+  - @memberjunction/ng-tabstrip@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/ng-markdown@5.34.1
+  - @memberjunction/ng-ui-components@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Minor Changes
+
+- ae5cfbd: Search Scopes & RAG+ — multi-phase ship
+
+  A bundled feature release across the search pipeline (Phases 2A–6 of
+  the Search Scopes & RAG+ initiative). Highlights:
+
+  **SearchEngine pipeline**
+  - New `SimpleVectorDatabase` in-process driver — points
+    `VectorDBBase` at any entity column with an `EmbeddingVector`
+    field. Suitable for dev / agent-memory / small-medium corpora.
+    Constructor accepts an empty/missing API key (in-process driver
+    has no remote auth target).
+  - `VectorDBBase.QueryIndex(params, contextUser?)` — `contextUser`
+    is now a proper second parameter instead of being smuggled
+    through `filter.__contextUser`. Pinecone/Qdrant/pgvector ignore
+    it (they auth via API key); in-process drivers use it for
+    RunView's server-side RLS guard. Method-level pattern matches
+    MJ's `RunView(params, contextUser)` and `GetEntityObject(name,
+contextUser)` conventions.
+  - `SearchFusion` — multi-provider score evidence is now preserved
+    through RRF. Previously the second provider's `ScoreBreakdown`
+    contribution was silently dropped when the same RecordID
+    appeared in two provider lists, causing the merged item to
+    rank below single-provider hits. Records that match in
+    Vector + Entity now carry both contributions and rank
+    correctly.
+  - Defensive sanitation in `Fuse()` — items with non-finite Score
+    (NaN, Infinity), empty/non-string RecordID, or null payloads are
+    filtered before fusion. Closes a class of failure modes from
+    misbehaving 3rd-party providers.
+  - Tier-1 input edge cases hardened — null/undefined/non-string
+    Query no longer TypeErrors, surfaces a clean Failure result.
+    `EntitySearchProvider` now strips SQL LIKE wildcards (`%`, `_`,
+    `[`, `]`) from user input — `Query="%"` no longer matches every
+    row through the LIKE-injection vector.
+  - Streaming search — `SearchEngine.streamSearch()` v2 emits
+    provider events as soon as each provider promise settles
+    (concurrent emission), not in registration order.
+
+  **Permission gate (Phase 2A)**
+  - `SearchScopePermissionResolver` enforces a 6-step decision tree:
+    AgentNone → AgentAssignedNotListed → DirectGrant → RoleGrant →
+    AgentUnscopedAll → NoGrant.
+  - `AIAgent.SearchScopeAccess` enum (`'None' | 'All' | 'Assigned'`)
+    controls agent-side fallback when no per-user/per-role grant
+    applies. `BypassCache` propagates through the dedup-linger cache
+    so freshly-revoked grants take effect immediately.
+  - New tests + agent scenarios cover all 13 permission-matrix cells
+    (PM-01..PM-13).
+
+  **Reranker catalog (Phase 2D)**
+  - 4 reranker drivers — Cohere, Voyage, OpenAI judge, BGE local —
+    all with `@RegisterClass(BaseReRanker, ...)`. Per-search
+    `RerankerBudgetGuard` caps API spend; `EstimateCostCents` and
+    `CostReporter` per driver. Graceful degradation when the
+    upstream SDK rejects/times out/returns malformed responses.
+
+  **Observability (Phase 3)**
+  - `MJSearchExecutionLog` — every `Search()` invocation writes one
+    row with Status / ResultCount / TotalDurationMs / RerankerCostCents
+    / ProvidersJSON (per-source hit counts) / AIAgentID attribution.
+    Forbidden gate decisions log `Status='Forbidden'` rows.
+  - Knowledge Hub Config dashboard subtab visualizes the log:
+    hit-rate, p50/p95 latency, top failure reasons, top users, total
+    reranker cost.
+
+  **External providers (Phase 5)**
+  - 4 search providers — Elasticsearch, Typesense, Azure AI Search,
+    OpenSearch — all with `@RegisterClass(BaseSearchProvider, ...)`.
+  - New `AvailableSearchProviders` GraphQL query exposes the
+    `BaseSearchProvider.GetAvailableProviders()` runtime catalog to
+    the SearchScope form's provider dropdown (P5.5).
+
+  **Angular / UI**
+  - Custom `MJSearchScopeFormComponentExtended` (P2D.7 / P4) — fusion
+    weights sliders, reranker dropdown, live-preview panel, A/B
+    Kendall-tau similarity, CSV export of last 500 invocations.
+  - Custom `MJSearchScopeProviderFormComponentExtended` (P5.5) —
+    provider dropdown sourced from `MJ: Search Providers` rows,
+    annotated with whether each provider's DriverClass is currently
+    registered with the server's ClassFactory.
+  - Streaming search consumer in `SearchService.StreamSearch()` —
+    Angular Observable surface for the `StreamScopedSearch`
+    mutation + `SearchStreamEvents` subscription.
+
+  **Migration**
+  - `V202605081416__v5.34.x__Search_Scopes_And_RAG_Plus.sql` —
+    consolidated. Contains six DDL sections (Phase 1 baseline,
+    `SearchScopePermission`, `SearchScope.RerankerBudgetCents`,
+    `SearchExecutionLog`, `SearchScopeTestQuery`, unique-constraint
+    fix) followed by five CodeGen runs that regenerate the entity
+    metadata, sprocs, views, and permission grants for all of the
+    above.
+
+  **Test suite**
+  - 17 end-to-end agent scenarios (s01–s17) under `agent-scenarios/`,
+    driving real LLM tool-calls (Sage agent) against the SearchEngine
+    - multi-provider RRF + reranker pipeline. 95 assertions; all PASS.
+  - `@memberjunction/search-engine` vitest: 237 unit tests across 21
+    files, all PASS. Covers fusion, providers (real + external),
+    rerankers, scope template renderer, parent-ID metadata,
+    streaming, permission resolver, edge cases, mid-flight failures.
+
+  **Documentation**
+  - `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` — comprehensive guide
+    covering scope creation, agent integration, permission resolution,
+    multi-scope fusion, reranker catalog, observability, external
+    providers, how-to templates for adding a new provider /
+    reranker / artifact tool library / vector index over an
+    embedded entity column. Documents the embedding-regeneration
+    contract for ops.
+
+  See `RAG_plan.md` for the full multi-phase plan and `plans/
+search-scopes-rag-plus/what-we-built.md` for the customer-facing
+  summary.
+
+### Patch Changes
+
+- b03bfb4: Replace hardcoded colors with semantic design tokens across Angular components and shared styles, restoring correct dark-mode behavior and enabling white-labeling. Also maps the System Diagnostics PerfMon chrome (background, borders, text, controls) to MJ semantic tokens so the panel adapts to the active theme; series colors stay categorical.
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [b03bfb4]
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ng-flow-editor@5.34.0
+  - @memberjunction/ng-markdown@5.34.0
+  - @memberjunction/ai-engine-base@5.34.0
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/actions-base@5.34.0
+  - @memberjunction/ng-base-application@5.34.0
+  - @memberjunction/ng-link-directives@5.34.0
+  - @memberjunction/ng-shared@5.34.0
+  - @memberjunction/ng-testing@5.34.0
+  - @memberjunction/ng-action-gallery@5.34.0
+  - @memberjunction/ng-actions@5.34.0
+  - @memberjunction/ng-agents@5.34.0
+  - @memberjunction/ng-ai-test-harness@5.34.0
+  - @memberjunction/ng-base-forms@5.34.0
+  - @memberjunction/ng-base-types@5.34.0
+  - @memberjunction/ng-code-editor@5.34.0
+  - @memberjunction/ng-deep-diff@5.34.0
+  - @memberjunction/ng-entity-relationship-diagram@5.34.0
+  - @memberjunction/ng-entity-viewer@5.34.0
+  - @memberjunction/ng-join-grid@5.34.0
+  - @memberjunction/ng-list-management@5.34.0
+  - @memberjunction/ng-notifications@5.34.0
+  - @memberjunction/ng-search@5.34.0
+  - @memberjunction/ng-shared-generic@5.34.0
+  - @memberjunction/ng-tabstrip@5.34.0
+  - @memberjunction/ng-timeline@5.34.0
+  - @memberjunction/ng-trees@5.34.0
+  - @memberjunction/ng-ui-components@5.34.0
+  - @memberjunction/ng-versions@5.34.0
+  - @memberjunction/templates-base-types@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/graphql-dataprovider@5.34.0
+  - @memberjunction/global@5.34.0
+  - @memberjunction/ai@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

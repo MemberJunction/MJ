@@ -19,14 +19,80 @@
     justify-content: center;
     cursor: pointer;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-    z-index: 999;
+    z-index: 2147483647;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     animation: overlayBubbleIn 0.3s ease;
+    /* Required for touch drag: blocks browser pan/zoom so pointermove fires
+       continuously instead of being swallowed by scroll-handling. */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Subtle up/down chevrons just outside the bubble, hinting that it can be
+   dragged vertically. On hover-capable devices (mouse/pen) they stay hidden
+   in the resting state and reveal on hover/press/drag — keeps the corner
+   visually clean. On touch-only devices (no hover) they're always visible at
+   low opacity so the affordance is discoverable without needing a hover. */
+.chat-overlay-bubble-arrow {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--mj-text-muted);
+    font-size: 0.65rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+}
+
+.chat-overlay-bubble-arrow-up {
+    top: -0.85rem;
+}
+
+.chat-overlay-bubble-arrow-down {
+    bottom: -0.85rem;
+}
+
+/* Hover-capable devices: reveal on hover, press, or active drag. */
+.chat-overlay-bubble:hover .chat-overlay-bubble-arrow,
+.chat-overlay-bubble.is-pressed .chat-overlay-bubble-arrow,
+.chat-overlay-bubble.is-dragging .chat-overlay-bubble-arrow {
+    opacity: 0.85;
+}
+
+/* Touch-only devices (no hover): always show at subtle opacity. The
+   :hover/.is-pressed/.is-dragging rules above still apply via higher
+   specificity, so touching the bubble briefly bumps them to 0.85. */
+@media (hover: none) {
+    .chat-overlay-bubble-arrow {
+        opacity: 0.5;
+    }
 }
 
 .chat-overlay-bubble:hover {
     transform: scale(1.08);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* Immediate press feedback — fires on mousedown before the drag threshold is crossed,
+   so the user sees "I'm being held" right away and learns the bubble is draggable. */
+.chat-overlay-bubble.is-pressed {
+    cursor: grabbing;
+    transform: scale(0.94);
+    transition: transform 0.08s ease;
+    box-shadow:
+        0 2px 6px rgba(0, 0, 0, 0.25),
+        0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+}
+
+/* Active drag — overrides the press state once movement passes the threshold. */
+.chat-overlay-bubble.is-dragging {
+    cursor: grabbing;
+    transform: scale(1.04);
+    transition: none;
+    box-shadow:
+        0 8px 28px rgba(0, 0, 0, 0.35),
+        0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
 }
 
 @keyframes overlayBubbleIn {
@@ -62,6 +128,103 @@
     border: 2px solid var(--mj-bg-page);
 }
 
+/* --- Hide-bubble affordance ("×" pill on the outer-left edge of the bubble) ---
+   Revealed on hover. Touch-only devices (no hover) get a permanent low-opacity
+   render so the affordance is reachable without a hover gesture. */
+.chat-overlay-bubble-close {
+    position: absolute;
+    top: 50%;
+    /* Sits flush with the bubble's left bounding-box edge — no dead-zone gap that
+       would drop the :hover state mid-reach. The bubble's circular shape means the
+       visible space between the circle and the pill still reads as a gap. */
+    right: 100%;
+    transform: translateY(-50%);
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0;
+    border-radius: 9999px;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-strong);
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.chat-overlay-bubble:hover .chat-overlay-bubble-close {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.chat-overlay-bubble-close:hover {
+    color: var(--mj-text-primary);
+    border-color: var(--mj-brand-primary);
+    transform: translateY(-50%) scale(1.08);
+}
+
+/* Touch devices: keep the pill reachable without a hover gesture. */
+@media (hover: none) {
+    .chat-overlay-bubble-close {
+        opacity: 0.7;
+        pointer-events: auto;
+    }
+}
+
+/* While actively dragging, suppress the close pill — it shouldn't compete with the drag affordance. */
+.chat-overlay-bubble.is-dragging .chat-overlay-bubble-close,
+.chat-overlay-bubble.is-pressed .chat-overlay-bubble-close {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* --- Collapsed sliver (right edge, replaces bubble when hidden) --- */
+
+.chat-overlay-sliver {
+    position: fixed;
+    right: 0;
+    width: 0.875rem;        /* 14px sliver */
+    height: 5rem;           /* 80px tall */
+    padding: 0;
+    background: var(--mj-brand-primary);
+    border: none;
+    border-radius: 8px 0 0 8px;
+    color: var(--mj-text-inverse);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 2147483647;
+    transition: width 0.18s ease, background 0.15s ease;
+    animation: overlayBubbleIn 0.25s ease;
+}
+
+.chat-overlay-sliver:hover {
+    width: 1.5rem;          /* widens slightly to invite the click */
+    background: color-mix(in srgb, var(--mj-brand-primary) 85%, white);
+}
+
+.chat-overlay-sliver-icon {
+    font-size: 0.55rem;
+    opacity: 0.95;
+}
+
+.chat-overlay-sliver:hover .chat-overlay-sliver-icon {
+    font-size: 0.7rem;
+}
+
+.chat-overlay-sliver-badge {
+    /* Pull the badge a hair outside the sliver so it isn't clipped by the narrow width. */
+    top: -6px;
+    right: -6px;
+}
+
 /* --- Expanded Panel --- */
 
 .chat-overlay-panel {
@@ -74,7 +237,7 @@
     box-shadow:
         0 8px 32px rgba(0, 0, 0, 0.3),
         0 2px 8px rgba(0, 0, 0, 0.15);
-    z-index: 999;
+    z-index: 2147483647;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -207,11 +370,14 @@
     height: 100%;
 }
 
-/* --- Mobile Responsive --- */
+/* --- Mobile / Small-Screen Responsive ---
+   640px = small-screen cutoff (covers all phones in both orientations). Tablets
+   in portrait (≥768px) keep the floating-panel treatment because they have the
+   real estate for it. */
 
-@media (max-width: 480px) {
+@media (max-width: 640px) {
     .chat-overlay-panel {
-        bottom: 0;
+        bottom: 0 !important;
         right: 0;
         width: 100% !important;
         height: 100vh !important;
@@ -220,11 +386,34 @@
     }
 
     .chat-overlay-bubble {
-        bottom: 1rem;
+        /* No !important on `bottom` — the inline [style.bottom.px] binding owns it
+           so users can drag the bubble out of the way of underlying app buttons.
+           Smaller diameter on small screens: 2.75rem (44px) hits the WCAG minimum
+           touch target while ~38% less occluding than the desktop 3.5rem. */
+        width: 2.75rem;
+        height: 2.75rem;
         right: 1rem;
+    }
+
+    .chat-overlay-bubble-icon {
+        font-size: 1.1rem;
+    }
+
+    .chat-overlay-badge {
+        min-width: 1rem;
+        height: 1rem;
+        font-size: 0.6rem;
+        top: -3px;
+        right: -3px;
     }
 
     .resize-handle {
         display: none;
+    }
+
+    /* Slightly wider sliver on touch so it meets the WCAG minimum touch target. */
+    .chat-overlay-sliver {
+        width: 1.25rem;
+        height: 4.5rem;
     }
 }

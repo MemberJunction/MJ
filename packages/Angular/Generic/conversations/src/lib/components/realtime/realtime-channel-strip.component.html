@@ -1,0 +1,17 @@
+<div class="channel-strip">
+  <span class="channel-strip__label">Channels</span>
+  @for (channel of Channels; track TrackChannel($index, channel)) {
+    <span class="chan-chip"
+          [class.chan-chip--live]="channel.Status === 'live'"
+          [class.chan-chip--opening]="channel.Status === 'opening'"
+          [class.chan-chip--off]="channel.Status === 'off'">
+      <i class="fa-solid" [ngClass]="channel.Icon" aria-hidden="true"></i>
+      {{ channel.Label }}
+      @if (channel.Status === 'live') {
+        <span class="live-dot" aria-hidden="true"></span>
+      } @else if (channel.Status === 'opening') {
+        <span class="muted">opening…</span>
+      }
+    </span>
+  }
+</div>

@@ -3,6 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ArchiveManagerModule } from '@memberjunction/ng-archive-manager';
+import {
+    MJPageLayoutComponent,
+    MJPageHeaderComponent,
+    MJPageBodyComponent
+} from '@memberjunction/ng-ui-components';
 
 import {
     ArchiveConfigResourceComponent,
@@ -28,6 +33,9 @@ import {
         FormsModule,
         SharedGenericModule,
         ArchiveManagerModule,
+        MJPageLayoutComponent,
+        MJPageHeaderComponent,
+        MJPageBodyComponent,
     ],
     exports: [
         ArchiveConfigResourceComponent,

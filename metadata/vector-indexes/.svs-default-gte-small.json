@@ -1,0 +1,17 @@
+[
+  {
+    "fields": {
+      "Name": "Default - SVS + gte-small (Local)",
+      "Description": "Default in-process Vector Index for Entity Documents that want hybrid search via Provider.SearchEntity without standing up an external vector store. The 'index' is a logical pairing — vectors live in MJ: Entity Record Documents.VectorJSON and SimpleVectorServiceProvider rehydrates them on demand, keyed by EntityDocumentID. Use this VectorIndex when seeding a Search-type EntityDocument backed by the gte-small (Local) embedding model. Configure a separate Vector Index per (VectorDatabase, EmbeddingModel) pair you want to use; the EntityDocument's AIModelID and the index's EmbeddingModelID must match.",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+      "EmbeddingModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)"
+    },
+    "primaryKey": {
+      "ID": "C4B90E4C-F338-4620-B1B0-6301BC40EF2E"
+    },
+    "sync": {
+      "lastModified": "2026-06-05T02:25:20.322Z",
+      "checksum": "5663ee9bfa4bc3fd15b95f42074ec8b833c97c79a425698a1f681d5c82c44ff0"
+    }
+  }
+]

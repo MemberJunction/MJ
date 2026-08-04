@@ -48,39 +48,6 @@
   font-size: 12px;
 }
 
-/* ─── State (denied / error / empty) ─── */
-
-.rb-state {
-  text-align: center;
-  padding: 50px 20px;
-  color: var(--mj-text-muted);
-}
-
-.rb-state i {
-  font-size: 36px;
-  margin-bottom: 12px;
-  display: block;
-}
-
-.rb-state h3 {
-  margin: 0 0 6px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--mj-text-primary);
-}
-
-.rb-state p {
-  margin: 0;
-  font-size: 13px;
-  max-width: 320px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.rb-state-denied i { color: var(--mj-text-disabled); }
-.rb-state-error i  { color: var(--mj-status-error); }
-.rb-state-empty i  { color: var(--mj-text-disabled); }
-
 /* ─── List ─── */
 
 .rb-list {

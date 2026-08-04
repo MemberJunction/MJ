@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "apiKey": {
+      "type": "string",
+      "title": "API Key",
+      "description": "PandaDoc API key from Settings > API & Integrations. Sent as 'Authorization: API-Key <key>'.",
+      "isSecret": true,
+      "order": 0
+    },
+    "restBase": {
+      "type": "string",
+      "title": "REST Base URI",
+      "description": "PandaDoc public REST base. Defaults to https://api.pandadoc.com/public/v1.",
+      "isSecret": false,
+      "order": 1,
+      "default": "https://api.pandadoc.com/public/v1"
+    },
+    "connectHmacKey": {
+      "type": "string",
+      "title": "Webhook Shared Key",
+      "description": "Optional shared key for verifying inbound webhook HMAC (configured per PandaDoc webhook subscription). Required only if you enable inbound status webhooks; inbound webhooks are rejected unless their signature verifies against this key.",
+      "isSecret": true,
+      "order": 2
+    }
+  },
+  "required": ["apiKey"]
+}

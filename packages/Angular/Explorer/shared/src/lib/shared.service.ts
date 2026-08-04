@@ -8,6 +8,8 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
 import { first, tap } from 'rxjs/operators';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { IsDescendantElement } from '@memberjunction/ng-shared-generic';
+import { RecordNavigationAdapter } from '@memberjunction/ng-base-types';
 import { NavigationService } from './navigation.service';
 
 @Injectable({
@@ -31,6 +33,15 @@ export class SharedService {
       return g[SharedService._globalStoreKey] as SharedService;
     }
     g[SharedService._globalStoreKey] = this;
+
+    // Supply record navigation to Generic widgets that need it but must not import Explorer.
+    // The widget calls RecordNavigationAdapter.OpenEntityRecord(...); this is what makes that
+    // resolve to an Explorer tab. Registered here because SharedService is constructed once per
+    // app and is already the Explorer-side owner of OpenEntityRecord.
+    // See guides/UI_LAYERING_GUIDE.md §3 and the adapter's own docs.
+    RecordNavigationAdapter.Register({
+      OpenEntityRecord: (entityName, recordKey) => this.OpenEntityRecord(entityName, recordKey),
+    });
 
     MJGlobal.Instance.GetEventListener(true).subscribe(async (event) => {
       switch (event.event) {
@@ -86,8 +97,10 @@ export class SharedService {
       LogError(`Failed to pre-warm AIEngineBase: ${err}`)
     );
 
-    // ArtifactMetadataEngine is lightweight (just artifact types)
-    // Used by Conversations and Artifact viewer
+    // ArtifactMetadataEngine.Config() loads only the artifact-type registry —
+    // a small, fixed set. Artifacts and versions (whose Content can be huge) are
+    // fetched on demand per-artifact, so this pre-warm stays cheap and bounded.
+    // Used by Conversations and the Artifact viewer.
     ArtifactMetadataEngine.Instance.Config(false).catch(err =>
       LogError(`Failed to pre-warm ArtifactMetadataEngine: ${err}`)
     );
@@ -260,17 +273,13 @@ export class SharedService {
   /**
    * Utility method that returns true if child is a descendant of parent, false otherwise. 
    */
+  /**
+   * @deprecated Use `IsDescendantElement` from `@memberjunction/ng-shared-generic`. This is a pure
+   * DOM predicate with no Explorer coupling; keeping it here forced widgets that wanted it to
+   * depend on Explorer. Delegates so existing callers are unaffected.
+   */
   public static IsDescendant(parent: ElementRef, child: ElementRef) {
-    if (parent && child && parent.nativeElement && child.nativeElement) {
-      let node = child.nativeElement.parentNode;
-      while (node != null) {
-        if (node == parent.nativeElement) {
-          return true;
-        }
-        node = node.parentNode;
-      }
-    }
-    return false;
+    return IsDescendantElement(parent, child);
   }
 
 

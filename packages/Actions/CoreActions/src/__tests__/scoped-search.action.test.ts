@@ -57,7 +57,8 @@ const loadedAgentStub: { ID: string; Name: string; SearchScopeAccess: string; Lo
 
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
-    LogStatus: vi.fn(),
+    LogStatusEx: vi.fn(),
+    IsVerboseLoggingEnabled: () => false,
     Metadata: class {
         GetEntityObject = async () => loadedAgentStub;
     },
@@ -286,6 +287,109 @@ describe('ScopedSearchAction', () => {
                 User: expect.objectContaining({ ID: 'u1' }),
                 Agent: expect.objectContaining({ ID: 'agent-1' }),
             }));
+        });
+    });
+
+    describe('SearchContext threading (per-call multi-tenant inputs)', () => {
+        it('omits SearchContext entirely when neither input is provided', async () => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' }
+            ]));
+            expect(result.Success).toBe(true);
+            const callArgs = searchSpy.mock.calls[0][0];
+            expect(callArgs.SearchContext).toBeUndefined();
+        });
+
+        it('threads PrimaryScopeRecordID through to SearchParams.SearchContext', async () => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'PrimaryScopeRecordID', Value: 'ORG-O1' }
+            ]));
+            expect(result.Success).toBe(true);
+            const callArgs = searchSpy.mock.calls[0][0];
+            expect(callArgs.SearchContext).toEqual({
+                PrimaryScopeRecordID: 'ORG-O1',
+                SecondaryScopes: undefined,
+            });
+        });
+
+        it('parses SecondaryScopes JSON and supports string/number/boolean/string[] values', async () => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            const action = new ScopedSearchAction();
+            const payload = JSON.stringify({
+                Department: 'Finance',
+                HeadcountFloor: 50,
+                IsActive: true,
+                Tags: ['audit', 'q4-priorities']
+            });
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'PrimaryScopeRecordID', Value: 'ORG-O1' },
+                { Name: 'SecondaryScopes', Value: payload }
+            ]));
+            expect(result.Success).toBe(true);
+            const callArgs = searchSpy.mock.calls[0][0];
+            expect(callArgs.SearchContext).toEqual({
+                PrimaryScopeRecordID: 'ORG-O1',
+                SecondaryScopes: {
+                    Department: 'Finance',
+                    HeadcountFloor: 50,
+                    IsActive: true,
+                    Tags: ['audit', 'q4-priorities']
+                }
+            });
+        });
+
+        it('drops SecondaryScopes entries with unsupported value types but keeps valid ones', async () => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            const action = new ScopedSearchAction();
+            // Object-valued, null, and mixed-array entries are unsupported and should be dropped.
+            const payload = JSON.stringify({
+                Region: 'US',                             // string — kept
+                NestedJunk: { foo: 'bar' },                // object — dropped
+                NullValue: null,                            // null   — dropped
+                MixedArray: ['ok', 42, true],               // mixed  — dropped
+                Tags: ['policy', 'audit']                  // string[] — kept
+            });
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'SecondaryScopes', Value: payload }
+            ]));
+            expect(result.Success).toBe(true);
+            const callArgs = searchSpy.mock.calls[0][0];
+            expect(callArgs.SearchContext).toEqual({
+                PrimaryScopeRecordID: undefined,
+                SecondaryScopes: {
+                    Region: 'US',
+                    Tags: ['policy', 'audit']
+                }
+            });
+        });
+
+        it('treats malformed SecondaryScopes JSON as absent and still runs the search', async () => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams([
+                { Name: 'Query', Value: 'q' },
+                { Name: 'AgentID', Value: 'agent-1' },
+                { Name: 'PrimaryScopeRecordID', Value: 'ORG-O1' },
+                { Name: 'SecondaryScopes', Value: '{not valid json' }
+            ]));
+            expect(result.Success).toBe(true);
+            const callArgs = searchSpy.mock.calls[0][0];
+            // Primary is still set; SecondaryScopes is dropped due to parse failure.
+            expect(callArgs.SearchContext).toEqual({
+                PrimaryScopeRecordID: 'ORG-O1',
+                SecondaryScopes: undefined,
+            });
         });
     });
 });

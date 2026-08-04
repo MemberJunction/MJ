@@ -28,12 +28,19 @@ import {
   reactRootManager,
   ResolvedComponents,
   SetupStyles,
-  ComponentRegistryService
+  BuildStylesFromTheme,
+  wrapWithLibraryThemeProviders,
+  ComponentRegistryService,
+  resolveUserStateScope,
+  userStateStorageKey,
+  parseStoredUserSettings,
+  mergeUserSettings,
+  applyUserSettingsUpdate
 } from '@memberjunction/react-runtime';
 import { createRuntimeUtilities } from '../utilities/runtime-utilities';
 import { LogError, CompositeKey, KeyValuePair, Metadata, RunView, RunViewParams, RunViewResult, RunQueryParams, RunQueryResult, DataSnapshot, DataTable, MJColumnDescriptor } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { ComponentMetadataEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { ComponentUtilities, SimpleRunView, SimpleRunQuery } from '@memberjunction/interactive-component-types';
 
 /**
@@ -196,7 +203,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     // Lazy initialization - only create default utilities when needed
     if (!this._utilities) {
       const runtimeUtils = createRuntimeUtilities();
-      this._utilities = runtimeUtils.buildUtilities(this.enableLogging);
+      this._utilities = runtimeUtils.buildUtilities(this.enableLogging, this.ProviderToUse);
       if (this.enableLogging) {
         console.log('MJReactComponent: Auto-initialized utilities using createRuntimeUtilities()');
       }
@@ -206,19 +213,72 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   
   // Auto-initialize styles if not provided
   private _styles?: Partial<ComponentStyles>;
+  // Theme-bridge cache: the ComponentStyles derived from the live `--mj-*` theme,
+  // memoized per theme key so we don't re-read getComputedStyle on every access.
+  private _themeStyles?: ComponentStyles;
+  private _themeStylesKey?: string;
+  private themeObserver?: MutationObserver;
   @Input()
   set styles(value: Partial<ComponentStyles> | undefined) {
     this._styles = value;
   }
   get styles(): Partial<ComponentStyles> {
-    // Lazy initialization - only create default styles when needed
-    if (!this._styles) {
-      this._styles = SetupStyles();
+    // An explicitly-provided styles input always wins.
+    if (this._styles) {
+      return this._styles;
+    }
+    // Otherwise bridge the host's live MJ theme (--mj-* tokens) into ComponentStyles
+    // so generated components inherit the active theme — including dark mode and
+    // hover/active/focus state families — instead of the frozen defaults. Memoized
+    // per theme key; invalidated by the MutationObserver on data-theme changes.
+    const key = this.computeThemeKey();
+    if (!this._themeStyles || this._themeStylesKey !== key) {
+      this._themeStyles = BuildStylesFromTheme();
+      this._themeStylesKey = key;
       if (this.enableLogging) {
-        console.log('MJReactComponent: Auto-initialized styles using SetupStyles()');
+        console.log(`MJReactComponent: Bridged styles from live theme (key="${key}")`);
       }
     }
-    return this._styles;
+    return this._themeStyles;
+  }
+
+  /**
+   * Identifies the current theme so bridged styles can be memoized and refreshed
+   * when the user's mode (`data-theme`) or the org overlay (`data-theme-overlay`)
+   * changes. Non-DOM environments return a constant key.
+   */
+  private computeThemeKey(): string {
+    if (typeof document === 'undefined') {
+      return 'no-dom';
+    }
+    const root = document.documentElement;
+    return `${root.getAttribute('data-theme') || 'light'}|${root.getAttribute('data-theme-overlay') || ''}`;
+  }
+
+  /**
+   * Watches the document root for theme changes (`data-theme` / `data-theme-overlay`)
+   * and, when the theme flips, invalidates the bridged-styles cache and re-renders so
+   * the live React component picks up the new theme. No-op when styles are supplied
+   * explicitly or when there is no DOM.
+   */
+  private setupThemeObserver(): void {
+    if (this._styles || typeof MutationObserver === 'undefined' || typeof document === 'undefined') {
+      return;
+    }
+    this.themeObserver = new MutationObserver(() => {
+      const key = this.computeThemeKey();
+      if (key !== this._themeStylesKey) {
+        this._themeStyles = undefined;
+        this._themeStylesKey = undefined;
+        if (this.isInitialized) {
+          this.renderComponent();
+        }
+      }
+    });
+    this.themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'data-theme-overlay'],
+    });
   }
   
   private _savedUserSettings: any = {};
@@ -233,7 +293,49 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   get savedUserSettings(): any {
     return this._savedUserSettings;
   }
-  
+
+  /**
+   * Optional explicit scope for per-user settings persistence. When omitted, the
+   * scope defaults to `<namespace>/<name>` of the component spec. Settings are
+   * stored per-user via `UserInfoEngine` under the key
+   * `InteractiveComponents_UserState_Root/<scope>`. Provide an
+   * explicit scope when a single component spec is rendered in multiple distinct
+   * contexts that should NOT share preferences (e.g. the same form spec used for
+   * different entities) — set it to something stable and unique per context.
+   */
+  @Input() UserStateScope?: string;
+
+  /**
+   * When `true` (default), the host transparently persists `savedUserSettings`
+   * per-user, cross-device via `UserInfoEngine` — seeding the component from
+   * storage on load and saving (debounced) on every `onSaveUserSettings` call,
+   * auto-scoped per component. Set to `false` to opt out and own persistence
+   * yourself by handling the `userSettingsChanged` output instead.
+   */
+  @Input() PersistUserSettings: boolean = true;
+
+  /**
+   * Host-supplied props spread into the React component's props alongside the
+   * standard `utilities`, `callbacks`, `components`, `styles`, `libraries`, and
+   * `savedUserSettings`. Used by hosts that need to push data context the React
+   * component can't fetch itself — e.g. `InteractiveFormComponent` passing
+   * `FormHostProps` (the current record snapshot, mode, permissions).
+   *
+   * Standard keys take precedence over caller-supplied keys to keep the
+   * platform contract stable.
+   */
+  private _componentProps: object = {};
+  @Input()
+  set componentProps(value: object | undefined) {
+    this._componentProps = value ?? {};
+    if (this.isInitialized) {
+      this.renderComponent();
+    }
+  }
+  get componentProps(): object {
+    return this._componentProps;
+  }
+
   @Output() stateChange = new EventEmitter<StateChangeEvent>();
   @Output() componentEvent = new EventEmitter<ReactComponentEvent>();
   @Output() refreshData = new EventEmitter<void>();
@@ -303,6 +405,8 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     
     // Trigger change detection to show loading state
     this.cdr.detectChanges();
+    // Refresh bridged theme styles when the user's mode / org overlay changes.
+    this.setupThemeObserver();
     await this.initializeComponent();
   }
 
@@ -312,6 +416,9 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
 
     // Cancel any pending renders
     this.pendingRender = false;
+
+    this.themeObserver?.disconnect();
+    this.themeObserver = undefined;
 
     this.destroyed$.next();
     this.destroyed$.complete();
@@ -442,7 +549,11 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
         (container: HTMLElement) => reactContext.ReactDOM.createRoot(container),
         this.componentId
       );
-      
+
+      // Seed savedUserSettings from durable per-user storage before the first
+      // render so the component mounts with the user's persisted preferences.
+      await this.seedUserSettingsFromStore();
+
       // Initial render
       this.renderComponent();
       this.isInitialized = true;
@@ -826,9 +937,14 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     const runtimeContext = this.adapter.getRuntimeContext();
     const libraries = runtimeContext.libraries || {};
     
-    // Build props — wrap utilities with data capture for fallback snapshot support
+    // Build props — wrap utilities with data capture for fallback snapshot support.
+    // Host-supplied componentProps spread first so platform-provided keys
+    // (utilities, callbacks, components, styles, libraries, savedUserSettings,
+    // onSaveUserSettings) always win — the contract stays stable regardless of
+    // what a host passes in.
     const wrappedUtilities = this.wrapUtilitiesWithCapture(this.utilities);
     const props = {
+      ...this._componentProps,
       utilities: wrappedUtilities,
       callbacks: this.currentCallbacks,
       components,
@@ -857,11 +973,21 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       recovery: 'retry'
     });
 
-    // Create element with error boundary
+    // Create element with error boundary. Auto-theme component libraries (antd) from
+    // the live MJ theme by wrapping the mounted tree in their theme provider — antd
+    // components don't read styles.* on their own and would otherwise render in their
+    // built-in light theme even in dark mode. One wrap themes every antd component in
+    // the subtree; no-op when antd isn't loaded.
+    const themedComponent = wrapWithLibraryThemeProviders(
+      React,
+      React.createElement(this.compiledComponent.component, props),
+      libraries,
+      this.styles as ComponentStyles
+    );
     const element = React.createElement(
       ErrorBoundary,
       null,
-      React.createElement(this.compiledComponent.component, props)
+      themedComponent
     );
 
     // Render with timeout protection using resource manager
@@ -1019,21 +1145,108 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   }
 
   /**
-   * Handle onSaveUserSettings from components
-   * This implements the SavedUserSettings pattern
+   * Handle onSaveUserSettings from components.
+   *
+   * This implements the SavedUserSettings pattern: the component owns its single
+   * settings object and hands us the full latest copy whenever it changes. We
+   * (1) **merge** the payload over our in-memory snapshot so any future re-render
+   * passes the latest values, (2) persist the merged snapshot per-user via
+   * UserInfoEngine (debounced, auto-scoped) unless the host opted out, and
+   * (3) still bubble the event up for any parent container that wants to observe
+   * changes — carrying the merged snapshot, so observers and storage agree.
+   *
+   * Merge (not replace) makes the host resilient to a component passing only the
+   * changed keys, and to the stale-prop case: we deliberately never re-render on
+   * save, so the `savedUserSettings` prop a component spreads is frozen at mount
+   * and would otherwise lose earlier same-session changes. Removing a key
+   * requires explicit intent — set it to `null` (see applyUserSettingsUpdate).
    */
   private handleSaveUserSettings(newSettings: Record<string, any>) {
-    // Just bubble the event up to parent containers for persistence
-    // We don't need to store anything here
+    // Keep our snapshot current WITHOUT going through the setter (which would
+    // re-render). The component already holds the correct state — it's the one
+    // that told us about the change — so re-rendering would only cause flicker.
+    this._savedUserSettings = applyUserSettingsUpdate(this._savedUserSettings, newSettings);
+
+    // Durably persist the latest settings for this user, scoped to this component.
+    this.persistUserSettings(this._savedUserSettings);
+
+    // Bubble the event up to parent containers (back-compat; no consumer required).
     this.userSettingsChanged.emit({
-      settings: newSettings,
+      settings: this._savedUserSettings,
       componentName: this.component?.name,
       timestamp: new Date()
     });
-    
-    // DO NOT re-render the component!
-    // The component already has the correct state - it's the one that told us about the change.
-    // Re-rendering would cause unnecessary DOM updates and visual flashing.
+  }
+
+  /**
+   * Resolve the durable storage key for this component's per-user settings, or
+   * null when persistence is disabled or no stable scope can be derived.
+   */
+  private getUserStateStorageKey(): string | null {
+    if (!this.PersistUserSettings) {
+      return null;
+    }
+    const scope = resolveUserStateScope(
+      this.UserStateScope,
+      this._component?.namespace,
+      this._component?.name
+    );
+    return userStateStorageKey(scope);
+  }
+
+  /**
+   * Seed `savedUserSettings` from durable per-user storage (UserInfoEngine),
+   * merging stored values over any host-provided defaults (stored wins). Best
+   * effort — any failure leaves the host-provided / empty settings in place.
+   */
+  private async seedUserSettingsFromStore(): Promise<void> {
+    const key = this.getUserStateStorageKey();
+    if (!key) {
+      return;
+    }
+    try {
+      const provider = this.ProviderToUse;
+      const user = provider?.CurrentUser;
+      if (!user) {
+        return; // No user context — cannot scope settings to a user.
+      }
+      // Idempotent: a no-op when the engine is already loaded for this user.
+      await UserInfoEngine.Instance.Config(false, user, provider);
+      const stored = parseStoredUserSettings(UserInfoEngine.Instance.GetSetting(key));
+      this._savedUserSettings = mergeUserSettings(this._savedUserSettings, stored);
+    } catch (error) {
+      if (this.enableLogging) {
+        console.warn('MJReactComponent: failed to seed user settings from store', error);
+      }
+    }
+  }
+
+  /**
+   * Persist the component's settings object for the current user (debounced,
+   * cross-device). Best effort — failures are logged when logging is enabled and
+   * never surfaced to the component.
+   */
+  private persistUserSettings(settings: Record<string, any> | string): void {
+    const key = this.getUserStateStorageKey();
+    if (!key) {
+      return;
+    }
+    try {
+      const provider = this.ProviderToUse;
+      const user = provider?.CurrentUser;
+      if (!user) {
+        return;
+      }
+      // The component normally hands us an object, but guard against a caller
+      // that already serialized it — double-stringifying would store a quoted
+      // JSON string the seed path could not parse back into settings.
+      const serialized = typeof settings === 'string' ? settings : JSON.stringify(settings);
+      UserInfoEngine.Instance.SetSettingDebounced(key, serialized, user);
+    } catch (error) {
+      if (this.enableLogging) {
+        console.warn('MJReactComponent: failed to persist user settings', error);
+      }
+    }
   }
 
   // =================================================================
@@ -1170,8 +1383,11 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     this.isInitialized = false;
     this.capturedData = [];
 
-    // Trigger registry cleanup
-    this.adapter.getRegistry().cleanup();
+    // Trigger registry cleanup (guard: adapter may not be initialized if
+    // React bootstrap failed or was destroyed during retry)
+    if (this.adapter.isInitialized()) {
+      this.adapter.getRegistry().cleanup();
+    }
   }
 
   /**

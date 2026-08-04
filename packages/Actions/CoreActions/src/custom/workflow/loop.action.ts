@@ -286,7 +286,7 @@ export class LoopAction extends BaseAction {
         const preparedConfig = this.prepareActionConfig(actionConfig, iterationContext);
 
         // Execute the action
-        const engine = new ActionEngineServer();
+        const engine = ActionEngineServer.Instance;
         const result = await engine.RunAction(preparedConfig);
 
         // Convert ActionResult to ActionResultSimple

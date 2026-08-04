@@ -2,44 +2,287 @@
  * MJ Accordion Panel Styles
  */
 
+/* The host is a custom element (defaults to display:inline); make it block so
+   consumers don't each have to set display/width on the panel. */
+.mj-accordion-panel-host {
+  display: block;
+}
+
 .mj-accordion-panel {
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-sm);
-  margin-bottom: 4px;
+  margin-bottom: 8px;
   overflow: hidden;
 }
 
+/* The header ROW owns the background/separator so the toggle button and the
+   optional actions cluster sit on one continuous surface. Hover lives HERE (not on
+   the individual title/chevron buttons) so hovering ANY part of the header — title,
+   actions, or chevron — lights up the whole bar as one unit. */
+.mj-accordion-header-row {
+  display: flex; align-items: stretch;
+  background: var(--mj-bg-surface-sunken);
+  transition: background var(--mj-transition-fast);
+}
+.mj-accordion-panel:not(.mj-accordion-panel--disabled) > .mj-accordion-header-row:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+/* The toggle button is the disclosure control (title + chevron). Transparent over
+   the row so the row-level hover shows through; the button itself paints nothing on
+   hover (the whole bar reacts together). */
 .mj-accordion-header {
-  display: flex; align-items: center; justify-content: space-between;
-  width: 100%; padding: 12px 16px;
-  background: var(--mj-bg-surface-sunken); border: none; cursor: pointer;
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 16px;
+  background: transparent; border: none; cursor: pointer;
   font-family: var(--mj-font-family); font-size: var(--mj-text-sm);
   font-weight: var(--mj-font-semibold); color: var(--mj-text-primary);
-  text-align: left; transition: background var(--mj-transition-fast);
-  &:hover { background: var(--mj-bg-surface-hover); }
+  text-align: left;
   &:focus-visible { outline: none; box-shadow: var(--mj-focus-ring); }
+}
+
+/* Header actions — interactive controls (edit/copy/run/checkbox) that live in
+   the header but are NOT the toggle. Sibling of the button (no button-in-button).
+   Sits BEFORE the chevron so the chevron stays the rightmost element. */
+.mj-accordion-actions {
+  display: flex; align-items: center; gap: 4px;
+  flex-shrink: 0; padding: 0 4px;
+}
+
+/* Chevron toggle — ALWAYS the rightmost element of the header row (after any
+   actions). Secondary, a11y-hidden affordance; the title button is the announced
+   disclosure control. Stretches the full header height so the whole right edge
+   toggles on click. */
+.mj-accordion-chevron {
+  flex-shrink: 0;
+  align-self: stretch;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 16px;
+  background: transparent; border: none; cursor: pointer;
+}
+
+/* In dark mode the "sunken" header (near-black) sits much darker than the body
+   and reads as overly bold. Use the elevated surface instead — one step lighter
+   than the body for a subtle raised header. Light mode keeps the sunken look.
+   (Emphasis variants are more specific, so they keep their brand backgrounds.) */
+[data-theme="dark"] .mj-accordion-header-row {
+  background: var(--mj-bg-surface-elevated);
 }
 
 .mj-accordion-icon {
   font-size: 0.75rem; color: var(--mj-text-muted);
   transition: transform var(--mj-transition-base);
-  .mj-accordion-panel--expanded & { transform: rotate(180deg); }
+  /* Scope to THIS panel's own header row (direct child) so a nested accordion's
+     chevron doesn't rotate just because an outer panel is expanded. */
+  .mj-accordion-panel--expanded > .mj-accordion-header-row & { transform: rotate(180deg); }
 }
 
+/* Body animates open/close via grid-template-rows 0fr -> 1fr (smooth auto-height,
+   no JS measuring). The body stays in the DOM when collapsed (inert) so the
+   transition has something to animate. */
+.mj-accordion-body-outer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--mj-transition-base);
+}
+/* Child combinator (>) is critical: a descendant selector would also match a
+   NESTED accordion's body-outer whenever an OUTER panel is expanded, forcing the
+   nested panel open and breaking its collapse. Scope to this panel's own body. */
+.mj-accordion-panel--expanded > .mj-accordion-body-outer {
+  grid-template-rows: 1fr;
+}
+/* The clip element is what the grid collapses — it must carry NO padding, or a
+   padding-height sliver survives the 0fr collapse. overflow:hidden + min-height:0
+   let it shrink to a true 0. */
+.mj-accordion-body-clip {
+  overflow: hidden;
+  min-height: 0;
+}
+/* Padding lives on the inner element (fully clipped at 0fr). Keeps the
+   .mj-accordion-body name so existing ::ng-deep consumer overrides still apply. */
 .mj-accordion-body {
   padding: 16px;
-  border-top: 1px solid var(--mj-border-default);
   background: var(--mj-bg-surface);
 }
+/* Header/body separator lives on the header row so it only shows while open
+   (a border on the collapsing body would leave a stray line at 0fr). */
+.mj-accordion-panel--expanded > .mj-accordion-header-row {
+  border-bottom: 1px solid var(--mj-border-default);
+}
 
-.mj-accordion-title { flex: 1; }
+/* Lay the title slot out as a row so projected content (icon + label + badge/
+   count) spaces consistently without each consumer reinventing it. min-width:0
+   lets long titles truncate instead of shoving the chevron off the edge. */
+.mj-accordion-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
-.mj-accordion-panel--disabled .mj-accordion-header {
-  opacity: 0.5;
-  cursor: not-allowed;
-  &:hover { background: var(--mj-bg-surface-sunken); }
+/* The accordion owns the size of icons projected into the title — consumers
+   should NOT set font-size on title icons (inline or otherwise). 1em tracks the
+   header's own font-size, so icons scale with the title text (and with any
+   future Size variant) instead of each form hand-tuning pixels. */
+.mj-accordion-title i {
+  font-size: 1em;
+}
+
+/* Muted title icons — opt in via [TitleIconMuted]="true" instead of per-consumer
+   CSS. (Status/brand-colored icons are still set per-instance inline.) */
+.mj-accordion-panel--muted-icon > .mj-accordion-header-row > .mj-accordion-header .mj-accordion-title i {
+  color: var(--mj-text-muted);
+}
+
+/* ── Title badge ────────────────────────────────────────────────────────────
+   Standard count/badge for the title slot. Use instead of per-consumer count
+   styling:  <span class="mj-accordion-badge">3</span>
+   Modifiers: --right (push to the far right, before the chevron),
+              --muted (plain muted text, no pill),
+              --success / --error / --warning / --info (status pills).
+   All token-driven, so dark-mode-safe. */
+.mj-accordion-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-medium);
+  line-height: 1.4;
+}
+.mj-accordion-badge--right { margin-left: auto; }
+.mj-accordion-badge--muted {
+  padding: 0;
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-weight: var(--mj-font-normal);
+}
+.mj-accordion-badge--success { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+.mj-accordion-badge--error   { background: var(--mj-status-error-bg);   color: var(--mj-status-error-text); }
+.mj-accordion-badge--warning { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); }
+.mj-accordion-badge--info    { background: var(--mj-status-info-bg);    color: var(--mj-status-info-text); }
+
+.mj-accordion-panel--disabled > .mj-accordion-header-row { opacity: 0.5; }
+.mj-accordion-panel--disabled > .mj-accordion-header-row > .mj-accordion-header,
+.mj-accordion-panel--disabled > .mj-accordion-header-row > .mj-accordion-chevron { cursor: not-allowed; }
+
+/* ── Density (Size="sm") — tighter padding + smaller text for dense contexts.
+   Child-combinator-scoped so a default panel nested inside a Size="sm" panel
+   doesn't inherit the dense styling. ── */
+.mj-accordion-panel--sm {
+  > .mj-accordion-header-row > .mj-accordion-header { padding: 8px 12px; font-size: var(--mj-text-xs); }
+  > .mj-accordion-header-row > .mj-accordion-actions { padding-right: 4px; }
+  > .mj-accordion-header-row > .mj-accordion-chevron { padding: 0 12px; }
+  > .mj-accordion-body-outer > .mj-accordion-body-clip > .mj-accordion-body { padding: 10px 12px; }
+}
+
+/* ── Bare — drop the box (border + header background) so the panel sits cleanly
+   inside a host that already provides chrome (e.g. an expandable card). ── */
+.mj-accordion-panel--bare {
+  border: none;
+  border-radius: 0;
+  > .mj-accordion-header-row { background: transparent; }
+  &.mj-accordion-panel--expanded > .mj-accordion-header-row { border-bottom-color: var(--mj-border-subtle); }
+}
+
+/* ── Flush body — body manages its own padding (code editors, full-bleed grids) ── */
+.mj-accordion-panel--flush-body .mj-accordion-body { padding: 0; }
+
+/* ── Fill — "rail section that owns the leftover height" (entity tree/grid that
+   fills remaining vertical space and scrolls internally), rather than the default
+   content-height disclosure. Requires the panel's parent to be a flex column with
+   min-height:0. The grid-fr open animation is replaced by flex sizing while
+   expanded; a collapsed fill panel falls back to the normal grid-0fr collapse,
+   so it still sits at natural header height and yields the space to its siblings.
+
+   The host only claims flex space when expanded (.mj-accordion-fill-active), so a
+   collapsed fill panel doesn't hog the rail. ── */
+.mj-accordion-panel-host.mj-accordion-fill-active {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* Direct-child (>) chains throughout so a nested accordion inside a fill panel's
+   body is never affected by this panel's fill/expanded state. */
+.mj-accordion-panel--fill.mj-accordion-panel--expanded {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+
+  > .mj-accordion-header-row { flex: 0 0 auto; }
+
+  /* Override the grid-fr animation: the body region now fills the column. */
+  > .mj-accordion-body-outer {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+
+    > .mj-accordion-body-clip {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 0;
+      min-height: 0;
+
+      /* The body is a fill region; projected content supplies its own scroll child. */
+      > .mj-accordion-body {
+        flex: 1 1 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        /* Fill mode can't tween the height (it fills the leftover pane, not content
+           height), so it gets a reveal instead: a quick fade + slide-in re-triggered
+           each time the --expanded class is applied. The chevron still rotates. */
+        animation: mj-accordion-fill-reveal var(--mj-transition-base) ease;
+      }
+    }
+  }
+}
+
+@keyframes mj-accordion-fill-reveal {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Emphasis variants (visual hierarchy, brand-colored — not status) ───────
+   Make a panel read bolder/quieter. All driven by brand tokens, so they
+   adapt to dark mode + white-labeling. Set via [Variant] on the panel.
+   The header owns its text colour; custom title slots should inherit it
+   (e.g. `color: inherit`) so the bold `primary` reads correctly. */
+
+/* secondary — subtle brand tint */
+.mj-accordion-panel[data-variant='secondary'] {
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-border-default));
+  > .mj-accordion-header-row { background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); }
+  &:not(.mj-accordion-panel--disabled) > .mj-accordion-header-row:hover { background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface)); }
+  > .mj-accordion-header-row .mj-accordion-header { color: var(--mj-brand-primary); }
+  > .mj-accordion-header-row .mj-accordion-icon { color: var(--mj-brand-primary); }
+  &.mj-accordion-panel--expanded > .mj-accordion-header-row {
+    border-bottom-color: color-mix(in srgb, var(--mj-brand-primary) 22%, var(--mj-border-default));
+  }
+}
+
+/* primary — bold, solid brand header (its own colour separates it; no extra line) */
+.mj-accordion-panel[data-variant='primary'] {
+  border-color: var(--mj-brand-primary);
+  > .mj-accordion-header-row { background: var(--mj-brand-primary); }
+  &:not(.mj-accordion-panel--disabled) > .mj-accordion-header-row:hover { background: var(--mj-brand-primary-hover); }
+  > .mj-accordion-header-row .mj-accordion-header { color: var(--mj-text-inverse); }
+  > .mj-accordion-header-row .mj-accordion-icon { color: var(--mj-text-inverse); }
+  &.mj-accordion-panel--expanded > .mj-accordion-header-row { border-bottom-color: transparent; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .mj-accordion-icon { transition: none; }
+  .mj-accordion-body-outer { transition: none; }
+  .mj-accordion-panel--fill.mj-accordion-panel--expanded > .mj-accordion-body-outer > .mj-accordion-body-clip > .mj-accordion-body { animation: none; }
 }

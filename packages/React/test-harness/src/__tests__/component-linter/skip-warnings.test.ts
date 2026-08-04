@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ComponentLinter, LintResult } from '../../lib/component-linter';
+import { ComponentLinter, LintResult } from '@memberjunction/react-linter';
 import { loadFixture } from './fixture-loader';
 
 describe('Skip-with-warning behavior', () => {

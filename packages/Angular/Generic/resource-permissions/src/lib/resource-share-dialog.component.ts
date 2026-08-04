@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RunView } from '@memberjunction/core';
 import { MJUserEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -30,7 +31,7 @@ export interface ResourceShareDialogResult {
     styleUrls: ['./resource-share-dialog.component.css'],
     encapsulation: ViewEncapsulation.None
 })
-export class GenericShareDialogComponent implements OnChanges {
+export class GenericShareDialogComponent extends BaseAngularComponent implements OnChanges {
     @Input() Visible = false;
     @Input() Context: ResourceShareContext | null = null;
     @Input() Adapter: ResourceShareAdapter | null = null;
@@ -46,7 +47,13 @@ export class GenericShareDialogComponent implements OnChanges {
     public Error: string | null = null;
     public UserSearchFilter = '';
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    /** Message for the no-results empty-state, echoing the current search term. */
+    public get NoUsersFoundMessage(): string {
+        return `No users found matching "${this.UserSearchFilter}"`;
+    }
+
+    constructor(private cdr: ChangeDetectorRef) {
+        super();}
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['Visible'] && this.Visible && this.Context && this.Adapter) {
@@ -70,7 +77,7 @@ export class GenericShareDialogComponent implements OnChanges {
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const usersResult = await rv.RunView<MJUserEntity>({
                 EntityName: 'MJ: Users',
                 ExtraFilter: 'IsActive = 1',

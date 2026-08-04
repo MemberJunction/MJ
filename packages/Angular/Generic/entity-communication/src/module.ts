@@ -5,7 +5,7 @@ import { CommonModule } from '@angular/common';
 import { MJButtonDirective, MJWindowComponent } from '@memberjunction/ng-ui-components';
 
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
-import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { SharedGenericModule, MJSafeRichHtmlPipe } from '@memberjunction/ng-shared-generic';
 import { EntityCommunicationsPreviewWindowComponent } from './lib/window.component';
 import { EntityCommunicationsPreviewComponent } from './lib/preview.component';
 
@@ -19,7 +19,8 @@ import { EntityCommunicationsPreviewComponent } from './lib/preview.component';
     ContainerDirectivesModule,
     MJButtonDirective,
     MJWindowComponent,
-    SharedGenericModule
+    SharedGenericModule,
+    MJSafeRichHtmlPipe
   ],
   exports: [
     EntityCommunicationsPreviewComponent,

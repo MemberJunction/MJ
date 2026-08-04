@@ -22,14 +22,22 @@ set -euo pipefail
 # ── Argument Parsing ──────────────────────────────────────────
 
 if [ $# -lt 1 ]; then
-    echo "Usage: $0 <github-repo-url>"
+    echo "Usage: $0 <github-repo-url> [app-name] [schema-name]"
     echo ""
-    echo "Example: $0 https://github.com/MemberJunction/mj-sample-open-app"
+    echo "  app-name     manifest app name to assert against (default: mj-sample-app)"
+    echo "  schema-name  app schema name to assert against  (default: sample_app)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 https://github.com/MemberJunction/mj-sample-open-app"
+    echo "  $0 https://github.com/BlueCypress/Skip-Client-Open-App skip-client skip_client"
     exit 1
 fi
 
 REPO_URL="$1"
-APP_NAME="mj-sample-app"
+# App + schema names are parametrized so the harness can drive any Open App, not just the
+# sample. Override via positional args or the APP_NAME / SCHEMA_NAME env vars.
+APP_NAME="${2:-${APP_NAME:-mj-sample-app}}"
+SCHEMA_NAME="${3:-${SCHEMA_NAME:-sample_app}}"
 
 # ── Colors ────────────────────────────────────────────────────
 
@@ -60,16 +68,17 @@ step() {
 
 # ── CLI Detection ─────────────────────────────────────────────
 
-MJ_CLI="mj"
-if ! command -v mj &> /dev/null; then
-    LOCAL_CLI="$(dirname "$0")/../../packages/MJOpenApp/CLI/dist/index.js"
-    if [ -f "$LOCAL_CLI" ]; then
-        MJ_CLI="node $LOCAL_CLI"
-        echo -e "${YELLOW}Using local CLI: $LOCAL_CLI${NC}"
-    else
-        echo -e "${RED}ERROR: 'mj' CLI not found. Build it first or add to PATH.${NC}"
-        exit 1
-    fi
+# Prefer the LOCAL repo CLI so we exercise THIS checkout's build (a globally-installed
+# @memberjunction/cli may bundle a different open-app-engine). Fall back to `mj` on PATH.
+LOCAL_CLI="$(dirname "$0")/../../packages/MJCLI/bin/run.js"
+if [ -f "$LOCAL_CLI" ]; then
+    MJ_CLI="node $LOCAL_CLI"
+    echo -e "${YELLOW}Using local CLI: $LOCAL_CLI${NC}"
+elif command -v mj &> /dev/null; then
+    MJ_CLI="mj"
+else
+    echo -e "${RED}ERROR: 'mj' CLI not found. Build packages/MJCLI (npm run build) or add 'mj' to PATH.${NC}"
+    exit 1
 fi
 
 echo ""
@@ -136,10 +145,10 @@ if OUTPUT=$($MJ_CLI app info "$APP_NAME" 2>&1); then
         echo -e "    ${YELLOW}(Could not verify version in output)${NC}"
     fi
 
-    if echo "$OUTPUT" | grep -qi "sample_app\|sample-app"; then
-        pass "Schema name shown in info"
+    if echo "$OUTPUT" | grep -qi "$SCHEMA_NAME"; then
+        pass "Schema name '$SCHEMA_NAME' shown in info"
     else
-        echo -e "    ${YELLOW}(Could not verify schema name in output)${NC}"
+        echo -e "    ${YELLOW}(Could not verify schema name '$SCHEMA_NAME' in output)${NC}"
     fi
 else
     fail "mj app info failed"
@@ -232,7 +241,7 @@ step "Verify database schema was dropped"
 echo -e "    ${YELLOW}NOTE: Schema verification requires direct DB access.${NC}"
 echo -e "    ${YELLOW}Run the following SQL to verify:${NC}"
 echo ""
-echo "    SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'sample_app';"
+echo "    SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '$SCHEMA_NAME';"
 echo ""
 echo "    (Should return 0 rows if schema was dropped)"
 pass "Schema drop verification instructions provided"

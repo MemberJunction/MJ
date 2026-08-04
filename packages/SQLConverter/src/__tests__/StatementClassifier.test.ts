@@ -114,6 +114,29 @@ SELECT @role_exists = 1 FROM sys.database_principals WHERE name = 'cdp_Developer
   });
 
   // ============================================================
+  // Database principal blocks (baseline header idioms)
+  // ============================================================
+  describe('database principal blocks', () => {
+    it('should classify IF DATABASE_PRINCIPAL_ID ... CREATE ROLE as CONDITIONAL_DDL', () => {
+      const sql = `IF DATABASE_PRINCIPAL_ID(N'cdp_BI') IS NULL
+    EXEC('CREATE ROLE [cdp_BI] AUTHORIZATION [db_securityadmin]');`;
+      expect(classifyBatch(sql)).toBe('CONDITIONAL_DDL');
+    });
+
+    it('should classify IF DATABASE_PRINCIPAL_ID ... CREATE USER as SKIP_SQLSERVER', () => {
+      const sql = `IF DATABASE_PRINCIPAL_ID(N'MJ_CodeGen') IS NULL
+    EXEC('CREATE USER [MJ_CodeGen] FOR LOGIN [MJ_CodeGen]');`;
+      expect(classifyBatch(sql)).toBe('SKIP_SQLSERVER');
+    });
+
+    it('should classify IF IS_ROLEMEMBER ... ALTER ROLE ADD MEMBER as SKIP_SQLSERVER', () => {
+      const sql = `IF IS_ROLEMEMBER(N'cdp_Developer', N'MJ_Connect') = 0
+    ALTER ROLE [cdp_Developer] ADD MEMBER [MJ_Connect];`;
+      expect(classifyBatch(sql)).toBe('SKIP_SQLSERVER');
+    });
+  });
+
+  // ============================================================
   // CREATE_TABLE
   // ============================================================
   describe('CREATE_TABLE', () => {
@@ -696,6 +719,49 @@ AS
 BEGIN
   SELECT name FROM SYS.VIEWS WHERE schema_id = SCHEMA_ID('__mj')
 END`;
+      expect(classifyBatch(sql)).toBe('SKIP_SQLSERVER');
+    });
+  });
+
+  describe('DECLARE-block routing (the neighbours of the mj-sync carve-out)', () => {
+    // These paths predate issue #3253, but they are decided by the same ordered cascade
+    // the bare-EXEC carve-out was inserted into, and the cascade is order-sensitive: the
+    // DECLARE branch tests for EXEC first, then DML, then falls through to a skip. Pinning
+    // them means a future reordering shows up as a failing test rather than as statements
+    // quietly taking the wrong route — which is exactly how the deletes were lost.
+    it('should classify a DECLARE block driving an UPDATE as DECLARE_DML_BLOCK', () => {
+      const sql = [
+        'DECLARE @x INT',
+        'SELECT @x = 1',
+        "UPDATE __mj.Thing SET C = @x WHERE ID = '1';",
+      ].join('\n');
+      expect(classifyBatch(sql)).toBe('DECLARE_DML_BLOCK');
+    });
+
+    it('should classify a DECLARE block driving an INSERT as DECLARE_DML_BLOCK', () => {
+      const sql = ['DECLARE @x INT', 'SELECT @x = 1', 'INSERT INTO __mj.Thing (ID) VALUES (@x);'].join('\n');
+      expect(classifyBatch(sql)).toBe('DECLARE_DML_BLOCK');
+    });
+
+    it('should skip a DECLARE block that drives neither an EXEC nor DML', () => {
+      // Bare T-SQL variable scratch work with no effect to translate.
+      expect(classifyBatch('DECLARE @x INT\nSELECT @x = 1')).toBe('SKIP_SQLSERVER');
+    });
+  });
+
+  describe('bare EXEC CRUD sp calls (mj-sync deletes — issue #3253)', () => {
+    it('should classify a bare schema-qualified EXEC spDelete as EXEC_BLOCK, not platform noise', () => {
+      // mj-sync emits record deletions as a bare EXEC with inline params — no DECLARE
+      // block. The v5.45 metadata sync's spDeleteComponentRegistry was silently
+      // dropped because this shape fell through to the bare-EXEC SKIP_SQLSERVER rule.
+      const sql = `EXEC [__mj].[spDeleteComponentRegistry] @ID = 'B2F8C247-D22E-4991-9A69-0F73954A68D6';`;
+      expect(classifyBatch(sql)).toBe('EXEC_BLOCK');
+    });
+
+    it('should keep skipping maintenance procs whose names start with spDelete but lack the @ID-uuid signature', () => {
+      // spDeleteUnneededEntityFields is a CodeGen maintenance proc, not an entity
+      // CRUD sp — the near-miss the signature requirement exists for.
+      const sql = `EXEC [__mj].spDeleteUnneededEntityFields @ExcludedSchemaNames = 'sys,staging';`;
       expect(classifyBatch(sql)).toBe('SKIP_SQLSERVER');
     });
   });

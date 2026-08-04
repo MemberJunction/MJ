@@ -5,6 +5,8 @@
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
 
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
@@ -113,6 +115,8 @@
 
     </mj-collapsible-panel>
 
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
     <!-- ========================================
          RELATED ENTITY PANELS
          ======================================== -->
@@ -166,5 +170,32 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <!-- Signature Request Documents Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSignatureRequestDocuments"
+        SectionName="Signature Request Documents"
+        Icon="fa fa-file-signature"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSignatureRequestDocuments')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Signature Request Documents','ArtifactID')"
+                [NewRecordValues]="NewRecordValues('MJ: Signature Request Documents')"
+                [AllowLoad]="IsSectionExpanded('mJSignatureRequestDocuments')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSignatureRequestDocuments', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

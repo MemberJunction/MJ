@@ -25,6 +25,30 @@ import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import path from 'node:path';
 
 /**
+ * Convert an install tag into a valid npm version spec.
+ *
+ * Handles:
+ *   - `v5.38.0` / `5.38.0` → `5.38.0`
+ *   - `v5.38.0-beta.1` → `5.38.0-beta.1`
+ *   - `v5.38.0+meta` → `5.38.0+meta`
+ *   - Anything else (branch ref, commit SHA, the literal string `latest`, etc.) → `latest`
+ *
+ * Without this guard, a branch ref like `feature/some-branch` lands in
+ * package.json as `"@memberjunction/cli": "feature/some-branch"`, which npm
+ * interprets as a GitHub shorthand and tries to ssh-clone
+ * `github.com/feature/some-branch.git`. That hard-fails the install for
+ * anyone running `mj install --tag <branch>` (testing/dev scenarios, or
+ * users picking a branch ref via the version picker post-fallback).
+ *
+ * Exported for unit testing; consumed by `DependencyPhase.ensureCliDependency`
+ * and `DependencyPhase.ensureHoistedDependencies`.
+ */
+export function tagToNpmVersion(tag: string): string {
+  const stripped = tag.startsWith('v') ? tag.slice(1) : tag;
+  return /^\d+\.\d+\.\d+(-[\w.-]+)?(\+[\w.-]+)?$/.test(stripped) ? stripped : 'latest';
+}
+
+/**
  * Packages that contain generated code managed by CodeGen.
  *
  * Build failures in **only** these packages are treated as partial success.
@@ -391,7 +415,7 @@ export class DependencyPhase {
       return;
     }
 
-    const npmVersion = tag.startsWith('v') ? tag.slice(1) : tag;
+    const npmVersion = tagToNpmVersion(tag);
 
     if (!pkg['devDependencies']) {
       pkg['devDependencies'] = {};
@@ -444,7 +468,7 @@ export class DependencyPhase {
 
     const pkgPath = path.join(dir, 'package.json');
     const pkg = await this.fileSystem.ReadJSON<Record<string, Record<string, string>>>(pkgPath);
-    const npmVersion = tag.startsWith('v') ? tag.slice(1) : tag;
+    const npmVersion = tagToNpmVersion(tag);
 
     let modified = false;
 

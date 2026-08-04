@@ -79,21 +79,6 @@
     justify-content: center;
     flex-wrap: wrap;
   }
-
-  .mj-btn-icon-mobile .btn-text {
-    display: none;
-  }
-
-  .mj-btn-icon-mobile {
-    padding: 0.5rem 0.75rem;
-    min-height: 40px;
-    gap: 0;
-    border-radius: var(--mj-radius-full);
-  }
-
-  .mj-btn-icon-mobile i {
-    font-size: 1.125rem;
-  }
 }
 
 /* -----------------------------------------------------------------------------
@@ -262,16 +247,6 @@
   border-radius: var(--mj-radius-full);
   padding: 4px;
   gap: 2px;
-}
-
-.mj-filter-buttons .mj-btn {
-  border-radius: var(--mj-radius-full);
-}
-
-.mj-filter-buttons .mj-btn-primary {
-  background-color: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-  box-shadow: var(--mj-shadow-sm);
 }
 
 /* -----------------------------------------------------------------------------
@@ -636,137 +611,18 @@
     flex-direction: column;
   }
 
-  .modal-footer .mj-btn {
-    width: 100%;
-    justify-content: center;
-  }
 }
 
-/* -----------------------------------------------------------------------------
-   MJ Button System
-   ----------------------------------------------------------------------------- */
-.mj-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  border: none;
-  border-radius: var(--mj-radius-full);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  white-space: nowrap;
-  min-height: 44px;
-}
-
-.mj-btn:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
-}
-
-/* Primary Button */
-.mj-btn-primary {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-  box-shadow: var(--mj-shadow-sm);
-}
-
-.mj-btn-primary:hover:not(:disabled) {
-  background: var(--mj-brand-primary-light);
-  box-shadow: var(--mj-shadow-md);
-}
-
-.mj-btn-primary:active:not(:disabled) {
-  background: var(--mj-color-brand-400);
-  transform: scale(0.98);
-}
-
-/* Secondary Button */
-.mj-btn-secondary {
-  background: var(--mj-bg-page);
-  color: var(--mj-brand-primary);
-  border: 1px solid var(--mj-color-neutral-400);
-}
-
-.mj-btn-secondary:hover:not(:disabled) {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-  border-color: var(--mj-brand-primary);
-}
-
-.mj-btn-secondary:active:not(:disabled) {
-  background: var(--mj-color-brand-700);
-  border-color: var(--mj-color-brand-700);
-}
-
-/* Ghost Button */
-.mj-btn-ghost {
-  background: transparent;
-  color: var(--mj-text-secondary);
-}
-
-.mj-btn-ghost:hover:not(:disabled) {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-}
-
-.mj-btn-ghost:active:not(:disabled) {
-  background: var(--mj-color-brand-700);
-}
-
-/* Danger Button */
-.mj-btn-danger {
-  background: var(--mj-status-error);
-  color: var(--mj-text-inverse);
-  box-shadow: var(--mj-shadow-sm);
-}
-
-.mj-btn-danger:hover:not(:disabled) {
-  background: var(--mj-color-error-300);
-  box-shadow: var(--mj-shadow-md);
-}
-
-.mj-btn-danger:active:not(:disabled) {
-  background: var(--mj-color-error-200);
-  transform: scale(0.98);
-}
-
-/* Small Button */
-.mj-btn-sm {
-  padding: 0.5rem 0.875rem;
-  font-size: 0.8125rem;
-  min-height: 36px;
-}
-
-/* Icon-only Button */
-.mj-btn-icon-only {
-  padding: 0.625rem;
-  min-width: 44px;
-  min-height: 44px;
-}
-
-/* Icon-mobile Button (text hidden on small screens) */
-.mj-btn-icon-mobile {
-  gap: 0.5rem;
-}
-
-.mj-btn-icon-mobile .btn-text {
-  display: inline;
-}
-
-/* Ghost Danger Button */
-.mj-btn-ghost.mj-btn-danger {
-  background: transparent;
-  color: var(--mj-status-error);
-  box-shadow: none;
-}
-
-.mj-btn-ghost.mj-btn-danger:hover:not(:disabled) {
-  background: var(--mj-color-error-100);
-  color: var(--mj-status-error);
-}
+/* The legacy "MJ Button System" rule block (.mj-btn / .mj-btn-primary /
+   .mj-btn-secondary / .mj-btn-ghost / .mj-btn-danger / .mj-btn-sm /
+   .mj-btn-icon-only / .mj-btn-icon-mobile) was removed 2026-05-19. These
+   rules pre-dated the mjButton directive standardization (the directive
+   uses BEM modifiers like .mj-btn--primary, single-dash names like
+   .mj-btn-primary don't match it anyway). The base .mj-btn rule WAS active
+   though — its component-scoped specificity outranked button.scss's global
+   directive styles, so admin sub-page buttons rendered pill-shaped + 44px
+   regardless of the variant/size requested via mjButton inputs. Removing the
+   rule lets every sub-page fall back to the directive's intended look. */
 
 /* -----------------------------------------------------------------------------
    Filter Button (Mobile Only)
@@ -1038,8 +894,7 @@
    Accessibility: Focus Indicators
    ----------------------------------------------------------------------------- */
 .mj-search-input:focus-visible,
-button:focus-visible,
-.mj-btn:focus-visible {
+button:focus-visible {
   outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }

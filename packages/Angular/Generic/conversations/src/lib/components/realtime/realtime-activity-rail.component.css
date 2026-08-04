@@ -1,0 +1,384 @@
+:host {
+  display: block;
+  height: 100%;
+  --sage: var(--mj-color-violet-400, #a78bfa);
+  --sage-bg: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 10%, transparent);
+  --sage-border: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 38%, transparent);
+}
+
+.rail {
+  width: 308px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  transition: width 180ms ease;
+}
+.rail--collapsed {
+  width: 40px;
+}
+
+/* EMBEDDED in the surface panel's Activity tab: the panel owns chrome + collapse,
+   so the rail stretches to the pane and drops its own border. */
+.rail--embedded {
+  width: 100%;
+  border-left: 0;
+}
+
+.rail__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+}
+.rail--collapsed .rail__head {
+  justify-content: center;
+  padding: 10px 6px;
+  border-bottom-color: transparent;
+}
+.rail__toggle {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 10px;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+.rail__toggle:hover {
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-strong);
+}
+.rail__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mj-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.rail__title i {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+
+/* ---------- split: activity list (left) | artifact viewer (right) ---------- */
+.rail__split {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.rail__list {
+  height: 100%;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mj-border-strong) transparent;
+}
+.rail__list::-webkit-scrollbar {
+  width: 6px;
+}
+.rail__list::-webkit-scrollbar-thumb {
+  background: var(--mj-border-strong);
+  border-radius: 3px;
+}
+
+.rail__empty {
+  font-size: 11.5px;
+  color: var(--mj-text-disabled);
+  text-align: center;
+  padding: 18px 8px;
+}
+
+/* Session-review carryover artifacts group (above the activity cards). */
+.rail__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px dashed var(--mj-border-default);
+}
+.rail__group-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mj-text-muted);
+}
+.rail__group-title i {
+  font-size: 10px;
+  color: var(--sage);
+}
+
+/* ---------- artifact viewer (right split pane) ---------- */
+.rail__viewer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--mj-bg-surface);
+  border-left: 1px solid var(--mj-border-default);
+}
+.rail__viewer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+}
+.rail__viewer-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rail__viewer-title i {
+  font-size: 11px;
+  color: var(--sage);
+  flex-shrink: 0;
+}
+.rail__viewer-close {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 11px;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+.rail__viewer-close:hover {
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-strong);
+}
+.rail__viewer-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.rail__viewer-body > * {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---------- Activity cards ---------- */
+.act-card {
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg, 10px);
+  padding: 8px 10px;
+  background: var(--mj-bg-surface);
+}
+.act-card--running {
+  border-color: var(--sage-border);
+  background: var(--sage-bg);
+  box-shadow: 0 0 0 1px var(--sage-border);
+}
+.act-card--done,
+.act-card--failed {
+  opacity: 0.72;
+}
+.act-card--done:hover,
+.act-card--failed:hover {
+  opacity: 1;
+}
+
+.act-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.act-card__name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mj-text-primary);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.act-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: var(--mj-radius-full, 9999px);
+  flex-shrink: 0;
+  line-height: 1.6;
+}
+.act-status i { font-size: 8.5px; }
+.act-status--running {
+  background: color-mix(in srgb, var(--sage) 18%, transparent);
+  color: var(--mj-color-violet-300, var(--mj-text-secondary));
+  border: 1px solid var(--sage-border);
+}
+.act-status--done {
+  background: var(--mj-status-success-bg, transparent);
+  color: var(--mj-status-success);
+  border: 1px solid color-mix(in srgb, var(--mj-status-success) 35%, transparent);
+}
+.act-status--failed {
+  background: var(--mj-status-error-bg, transparent);
+  color: var(--mj-status-error);
+  border: 1px solid color-mix(in srgb, var(--mj-status-error) 35%, transparent);
+}
+.spin {
+  animation: rail-spin 1.1s linear infinite;
+}
+
+.act-card__step {
+  font-size: 11.5px;
+  color: var(--mj-text-secondary);
+  margin-top: 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.act-card--running .act-card__step {
+  color: var(--mj-text-primary);
+  font-weight: 600;
+}
+.act-card__meta {
+  font-size: 10px;
+  color: var(--mj-text-muted);
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.act-card__preview {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  margin-top: 3px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---------- inline artifact preview (opens the split viewer on click) ---------- */
+.act-card__artifact {
+  margin-top: 6px;
+  border-radius: var(--mj-radius-lg, 10px);
+  transition: box-shadow 140ms ease;
+}
+/* The inline preview card carries its own margins; collapse them inside the slot. */
+.act-card__artifact ::ng-deep .artifact-message-card {
+  margin: 0;
+}
+/* Highlight the artifact whose viewer is currently open in the split pane. */
+.act-card__artifact--open {
+  box-shadow: 0 0 0 2px var(--sage);
+  border-radius: calc(var(--mj-radius-lg, 10px) + 2px);
+}
+
+/* Fallback "View →" chip (used only when no CurrentUser to render the rich preview) */
+.act-card__artifact-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid var(--sage-border);
+  background: var(--sage-bg);
+  color: var(--mj-color-violet-300, var(--mj-text-secondary));
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  max-width: 100%;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.act-card__artifact-link:hover {
+  color: var(--mj-text-primary);
+  border-color: var(--sage);
+  background: color-mix(in srgb, var(--sage) 18%, transparent);
+}
+.act-card__artifact-link span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.act-card__artifact-link i {
+  font-size: 9px;
+  flex-shrink: 0;
+}
+
+/* Gear-gated developer link to the delegated run record */
+.act-card__dev-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px dashed var(--mj-border-strong);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.act-card__dev-link:hover {
+  color: var(--mj-text-link, var(--mj-brand-primary));
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+.act-card__dev-link i {
+  font-size: 8px;
+}
+
+@keyframes rail-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail { transition: none; }
+  .spin { animation: none; }
+}
+
+/* On narrow widths the STANDALONE rail stacks out of the way (overlay falls back to a
+   single column). The embedded rail is governed by the surface panel's own breakpoint. */
+@media (max-width: 860px) {
+  .rail:not(.rail--embedded) {
+    display: none;
+  }
+}

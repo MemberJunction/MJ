@@ -3,7 +3,21 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJPageHeaderInteriorComponent,
+  MJPageBodyInteriorComponent,
+  MJPageSearchComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJFilterChipComponent,
+  MJRefreshButtonComponent,
+  MJStatBadgeComponent,
+  MJViewToggleComponent,
+  MJEmptyStateComponent,
+  MJAlertComponent,
+  MJAccordionModule
+} from '@memberjunction/ng-ui-components';
 
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
@@ -21,6 +35,7 @@ import { SettingsComponent } from './settings/settings.component';
 // User-facing components
 import { UserProfileSettingsComponent } from './user-profile-settings/user-profile-settings.component';
 import { UserAppConfigComponent } from './user-app-config/user-app-config.component';
+import { UserAppConfigContentComponent } from './user-app-config/user-app-config-content.component';
 import { NotificationPreferencesComponent } from './notification-preferences/notification-preferences.component';
 
 // New user settings components
@@ -49,6 +64,7 @@ import { ApplicationDialogComponent } from './application-management/application
     // User-facing components
     UserProfileSettingsComponent,
     UserAppConfigComponent,
+    UserAppConfigContentComponent,
     NotificationPreferencesComponent,
     // New user settings components
     GeneralSettingsComponent,
@@ -79,7 +95,19 @@ import { ApplicationDialogComponent } from './application-management/application
     CodeEditorModule,
     SharedSettingsModule,
     SharedGenericModule,
-    MJButtonDirective
+    MJButtonDirective,
+    MJPageHeaderInteriorComponent,
+    MJPageBodyInteriorComponent,
+    MJPageSearchComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJFilterChipComponent,
+    MJRefreshButtonComponent,
+    MJStatBadgeComponent,
+    MJViewToggleComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent,
+    MJAccordionModule
   ],
   exports: [
     // Main settings container
@@ -87,6 +115,7 @@ import { ApplicationDialogComponent } from './application-management/application
     // User-facing components
     UserProfileSettingsComponent,
     UserAppConfigComponent,
+    UserAppConfigContentComponent,
     NotificationPreferencesComponent,
     // New user settings components
     GeneralSettingsComponent,

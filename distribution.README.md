@@ -27,12 +27,25 @@ This monorepo distribution includes:
 
 ## Quick Start
 
-### 1. Extract the Distribution
+### 1. Get the Distribution
 
-Extract the zip file to your desired location:
+There are two ways to obtain this distribution:
+
+**Online (recommended)** — the MemberJunction CLI fetches and assembles the project for you, directly into a new directory:
 
 ```bash
-unzip MemberJunction_Code_Bootstrap_*.zip -d /path/to/your/project
+npx @memberjunction/cli install
+cd /path/to/your/project
+```
+
+**Offline / air-gapped** — on a machine with network access, build a self-contained bundle zip, copy it across, then extract it:
+
+```bash
+# On a connected machine:
+npx @memberjunction/cli bundle --out mj-distribution.zip --with-migrations
+
+# On the target machine:
+unzip mj-distribution.zip -d /path/to/your/project
 cd /path/to/your/project
 ```
 

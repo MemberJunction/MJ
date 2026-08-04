@@ -73,14 +73,25 @@ vi.mock('@memberjunction/global', () => ({
         },
     },
     RegisterClass: () => (target: Function) => target,
+    UUIDsEqual: (a: string, b: string) => a?.toLowerCase() === b?.toLowerCase(),
+    // TemplateEngineServer now composes the base via BaseSingleton instead of extending it.
+    BaseSingleton: class BaseSingletonMock<T> {
+        protected constructor() {}
+        protected static getInstance<U>(this: new () => U): U {
+            return new this();
+        }
+    },
 }));
 
 vi.mock('@memberjunction/templates-base-types', () => ({
     TemplateRenderResult: class { Success = false; Output: string | null = null; Message?: string = undefined; },
     TemplateEngineBase: class {
-        static getInstance<T>(): T { return new (this as never)() as T; }
-        protected ContextUser = { ID: 'test-user', Name: 'Test' };
-        protected Loaded = true;
+        // TemplateEngineServer now composes this via `TemplateEngineBase.Instance` (cached singleton).
+        private static _inst: unknown;
+        static get Instance() { return (this._inst ??= new (this as never)()); }
+        static getInstance<T>(): T { return (this as unknown as { Instance: T }).Instance; }
+        public ContextUser = { ID: 'test-user', Name: 'Test' };
+        public Loaded = true;
         async Config() {}
         async Load() {}
         protected async AdditionalLoading() {}
@@ -294,6 +305,75 @@ describe('TemplateEngineServer', () => {
 
             expect(result.Success).toBe(true);
             expect(result.Output).toBe('HELLO');
+        });
+    });
+
+    describe('RenderTemplateSimple autoescape control', () => {
+        it('should NOT HTML-escape when autoescape is false (email subject-line case)', async () => {
+            const result = await engine.RenderTemplateSimple(
+                '{{ company }}',
+                { company: 'Acme & Co' },
+                { autoescape: false }
+            );
+
+            expect(result.Success).toBe(true);
+            expect(result.Output).toBe('Acme & Co');
+        });
+
+        it('should still HTML-escape when autoescape is explicitly true', async () => {
+            const result = await engine.RenderTemplateSimple(
+                '{{ company }}',
+                { company: 'Acme & Co' },
+                { autoescape: true }
+            );
+
+            expect(result.Success).toBe(true);
+            expect(result.Output).toBe('Acme &amp; Co');
+        });
+
+        it('should HTML-escape by default when no options are passed (unchanged behavior)', async () => {
+            const result = await engine.RenderTemplateSimple(
+                '{{ company }}',
+                { company: 'Acme & Co' }
+            );
+
+            expect(result.Success).toBe(true);
+            expect(result.Output).toBe('Acme &amp; Co');
+        });
+
+        it('should support custom filters (json/jsoninline/jsonparse) in no-autoescape mode', async () => {
+            const jsonInline = await engine.RenderTemplateSimple(
+                '{{ data | jsoninline }}',
+                { data: { a: 1, b: 2 } },
+                { autoescape: false }
+            );
+            expect(jsonInline.Success).toBe(true);
+            expect(jsonInline.Output).toBe('{"a":1,"b":2}');
+
+            const json = await engine.RenderTemplateSimple(
+                '{{ data | json }}',
+                { data: { key: 'value' } },
+                { autoescape: false }
+            );
+            expect(json.Success).toBe(true);
+            expect(json.Output).toContain('"key"');
+            expect(json.Output).toContain('"value"');
+
+            const parsed = await engine.RenderTemplateSimple(
+                '{% set obj = jsonStr | jsonparse %}{{ obj.name }}',
+                { jsonStr: '{"name":"Alice"}' },
+                { autoescape: false }
+            );
+            expect(parsed.Success).toBe(true);
+            expect(parsed.Output).toBe('Alice');
+        });
+
+        it('should reuse the lazily-created no-autoescape environment across calls', async () => {
+            const first = await engine.RenderTemplateSimple('{{ v }}', { v: 'A & B' }, { autoescape: false });
+            const second = await engine.RenderTemplateSimple('{{ v }}', { v: 'C & D' }, { autoescape: false });
+
+            expect(first.Output).toBe('A & B');
+            expect(second.Output).toBe('C & D');
         });
     });
 

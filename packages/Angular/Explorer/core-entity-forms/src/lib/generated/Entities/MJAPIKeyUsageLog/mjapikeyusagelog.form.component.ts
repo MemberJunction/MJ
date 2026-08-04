@@ -17,7 +17,7 @@ export class MJAPIKeyUsageLogFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'requestInformation', sectionName: 'Request Information', isExpanded: true },
             { sectionKey: 'responseClientInfo', sectionName: 'Response & Client Info', isExpanded: true },
-            { sectionKey: 'authorizationDetails', sectionName: 'Authorization Details', isExpanded: false },
+            { sectionKey: 'authorizationDetails', sectionName: 'Authorization Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

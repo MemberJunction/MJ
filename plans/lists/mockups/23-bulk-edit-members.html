@@ -1,0 +1,55 @@
+<!doctype html><html><head><meta charset="utf-8"><title>23 — Bulk Edit Members</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div></aside>
+<main class="main">
+  <div class="app-header">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <button class="mj-btn mj-btn-ghost"><i class="fa-solid fa-arrow-left"></i></button>
+      <div class="entity-icon" style="width:44px; height:44px;"><i class="fa-solid fa-list"></i></div>
+      <div><h1 style="font-size:20px; margin:0;">VIP Donors Q4 2026</h1><div class="muted" style="font-size:12.5px;">Contacts · 348 items</div></div>
+    </div>
+    <div class="spacer"></div>
+    <button class="mj-btn"><i class="fa-solid fa-share-nodes"></i> Share</button>
+  </div>
+
+  <div style="background:color-mix(in srgb, var(--mj-brand-primary) 8%, transparent); border:1px solid var(--mj-brand-primary); border-radius:10px; padding:10px 14px; margin-bottom:16px; display:flex; align-items:center; gap:12px;">
+    <span class="badge badge-brand" style="font-size:12px;">12 members selected</span>
+    <div style="height:18px; width:1px; background:var(--mj-border-strong);"></div>
+    <button class="mj-btn mj-btn-sm"><i class="fa-solid fa-arrow-right-arrow-left"></i> Move to List…</button>
+    <button class="mj-btn mj-btn-sm"><i class="fa-solid fa-copy"></i> Copy to List…</button>
+    <button class="mj-btn mj-btn-sm"><i class="fa-solid fa-flag"></i> Set Status… <i class="fa-solid fa-chevron-down" style="font-size:9px;"></i></button>
+    <button class="mj-btn mj-btn-sm mj-btn-danger"><i class="fa-solid fa-trash"></i> Remove from List</button>
+    <div class="spacer"></div>
+    <a href="#" style="font-size:12px;">Clear selection</a>
+  </div>
+
+  <div class="mj-panel">
+    <div class="mj-panel-header"><h3><i class="fa-solid fa-users"></i>Members</h3></div>
+    <div class="mj-panel-body" style="padding:0;">
+      <table class="mj-table" style="border:none; border-radius:0;">
+        <thead><tr><th style="width:36px;"><input type="checkbox" checked></th><th>Name</th><th>Email</th><th>Status</th><th>Added</th></tr></thead>
+        <tbody>
+          <tr style="background:color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);"><td><input type="checkbox" checked></td><td>Aaron Holt</td><td>aaron.holt@example.org</td><td><span class="badge badge-success">Active</span></td><td>2026-04-30</td></tr>
+          <tr style="background:color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);"><td><input type="checkbox" checked></td><td>Beth Williams</td><td>beth.w@example.org</td><td><span class="badge badge-success">Active</span></td><td>2026-04-30</td></tr>
+          <tr style="background:color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);"><td><input type="checkbox" checked></td><td>Carlos Mendez</td><td>cmendez@example.org</td><td><span class="badge badge-warning">Pending</span></td><td>2026-04-30</td></tr>
+          <tr><td><input type="checkbox"></td><td>Dianne Park</td><td>dianne@example.org</td><td><span class="badge badge-success">Active</span></td><td>2026-04-30</td></tr>
+          <tr><td><input type="checkbox"></td><td>Emir Khalil</td><td>emir.k@example.org</td><td><span class="badge badge-error">Error</span></td><td>2026-04-30</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="position:fixed; bottom:24px; right:24px; width:240px; background:var(--mj-bg-surface); border:1px solid var(--mj-border-default); border-radius:var(--mj-radius-lg); padding:14px; box-shadow:var(--mj-shadow-md);">
+    <div style="font-weight:600; font-size:13px; margin-bottom:8px;">Set Status</div>
+    <div class="col gap-8">
+      <button class="mj-btn mj-btn-sm" style="justify-content:flex-start;"><span class="badge badge-success">Active</span></button>
+      <button class="mj-btn mj-btn-sm" style="justify-content:flex-start;"><span class="badge badge-warning">Pending</span></button>
+      <button class="mj-btn mj-btn-sm" style="justify-content:flex-start;"><span class="badge badge-info">Complete</span></button>
+      <button class="mj-btn mj-btn-sm" style="justify-content:flex-start;"><span class="badge badge-error">Rejected</span></button>
+      <button class="mj-btn mj-btn-sm" style="justify-content:flex-start;"><span class="badge badge-muted">Disabled</span></button>
+    </div>
+  </div>
+</main>
+</div></body></html>

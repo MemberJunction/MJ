@@ -1,5 +1,5 @@
 import { ComponentRef, ApplicationRef } from '@angular/core';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 
 /**
@@ -16,6 +16,12 @@ export interface CachedComponentInfo {
   resourceType: string;
   resourceRecordId: string;
   applicationId: string;
+
+  // Optional tiebreaker used when recordId is empty (e.g., "new record" tabs for
+  // different entities all have recordId='' but must NOT share a cache entry).
+  // For entity-record resources this is the entity name; null/undefined for
+  // resource types that don't need disambiguation.
+  keyDiscriminator?: string;
 
   // Usage tracking
   isAttached: boolean;        // Currently attached to a tab/container?
@@ -69,22 +75,36 @@ export class ComponentCacheManager {
    */
   public static MaxDetachedComponents: number = 20;
 
-  constructor(private appRef: ApplicationRef) {}
+  /**
+   * @param navigationService Optional — when provided, the cache manager keeps the AI agent's live
+   *   client-tool set in sync with the attached surface: it replays a reattached component's tools
+   *   ({@link NavigationService.NotifyResourceReattached}) and clears them on detach
+   *   ({@link NavigationService.NotifyResourceDetached}), since cached components don't re-run
+   *   `ngAfterViewInit`. Centralizing it here covers BOTH single-resource and Golden Layout paths.
+   */
+  constructor(private appRef: ApplicationRef, private navigationService?: NavigationService) {}
 
   /**
    * Generate a unique cache key from resource identity.
    * This is the ONE canonical key format used by ALL cache operations.
+   *
+   * `discriminator` is appended into the recordId slot only when recordId is empty.
+   * It exists to prevent collisions between distinct "new record" tabs that share
+   * an empty recordId — e.g., a new MJ:Companies form and a new MJ:Employees form
+   * would otherwise both cache at `appId::RecordResource::__no_record__` and clobber
+   * each other. Passing the entity name as discriminator keeps them separate.
    */
-  private getCacheKey(resourceType: string, recordId: string, appId: string): string {
-    const normalizedRecordId = recordId || '__no_record__';
+  private getCacheKey(resourceType: string, recordId: string, appId: string, discriminator?: string): string {
+    const normalizedRecordId = recordId
+      || (discriminator ? `__new__::${discriminator}` : '__no_record__');
     return `${appId}::${resourceType}::${normalizedRecordId}`;
   }
 
   /**
    * Check if a component exists in cache and is available for reuse.
    */
-  hasAvailableComponent(resourceType: string, recordId: string, appId: string): boolean {
-    const key = this.getCacheKey(resourceType, recordId, appId);
+  hasAvailableComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): boolean {
+    const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
     return info !== undefined && !info.isAttached;
   }
@@ -93,8 +113,8 @@ export class ComponentCacheManager {
    * Get a cached component if available (not currently attached).
    * Lookup is by resource identity, not tab ID.
    */
-  getCachedComponent(resourceType: string, recordId: string, appId: string): CachedComponentInfo | null {
-    const key = this.getCacheKey(resourceType, recordId, appId);
+  getCachedComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): CachedComponentInfo | null {
+    const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
 
     if (!info) {
@@ -124,10 +144,14 @@ export class ComponentCacheManager {
     const resolvedResourceType = resourceData.Configuration?.resourceTypeDriverClass
       || resourceData.Configuration?.driverClass
       || resourceData.ResourceType;
+    // Entity name discriminates between distinct "new record" tabs (empty recordId).
+    // For non-Records resource types this is undefined, leaving the key unchanged.
+    const discriminator = resourceData.Configuration?.Entity as string | undefined;
     const key = this.getCacheKey(
       resolvedResourceType,
       resourceData.ResourceRecordID || '',
-      resourceData.Configuration?.applicationId || ''
+      resourceData.Configuration?.applicationId || '',
+      discriminator
     );
 
     const info: CachedComponentInfo = {
@@ -136,6 +160,7 @@ export class ComponentCacheManager {
       resourceType: resolvedResourceType,
       resourceRecordId: resourceData.ResourceRecordID || '',
       applicationId: resourceData.Configuration?.applicationId || '',
+      keyDiscriminator: discriminator,
       isAttached: true,
       attachedToTabId: tabId,
       lastUsed: new Date(),
@@ -149,14 +174,17 @@ export class ComponentCacheManager {
   /**
    * Mark a component as attached. Lookup by resource identity.
    */
-  markAsAttached(resourceType: string, recordId: string, appId: string, tabId: string): void {
-    const key = this.getCacheKey(resourceType, recordId, appId);
+  markAsAttached(resourceType: string, recordId: string, appId: string, tabId: string, discriminator?: string): void {
+    const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
 
     if (info) {
       info.isAttached = true;
       info.attachedToTabId = tabId;
       info.lastUsed = new Date();
+      // Replay this surface's agent client tools to the AI agent on reattach (cached components keep
+      // their instance but never re-run ngAfterViewInit, so they don't re-register on their own).
+      this.navigationService?.NotifyResourceReattached(info.componentRef.instance);
     }
   }
 
@@ -166,16 +194,63 @@ export class ComponentCacheManager {
    * This is the ONLY way to detach a component. Both single-resource mode and
    * Golden Layout mode use this same method to ensure consistent cache behavior.
    */
-  markAsDetached(resourceType: string, recordId: string, appId: string): CachedComponentInfo | null {
-    const key = this.getCacheKey(resourceType, recordId, appId);
+  markAsDetached(resourceType: string, recordId: string, appId: string, discriminator?: string): CachedComponentInfo | null {
+    const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
     if (!info) return null;
 
     info.isAttached = false;
     info.attachedToTabId = null;
     info.lastUsed = new Date();
+    // Clear this surface's agent client tools on detach so the previous app's tools aren't offered to
+    // the AI agent on the next surface. NotifyResourceReattached replays them if the user returns.
+    this.navigationService?.NotifyResourceDetached(info.componentRef.instance);
     this.EvictIfNeeded();
     return info;
+  }
+
+  /**
+   * Re-key a cached component when its underlying record identity changes.
+   *
+   * Used when a "new record" component (cached at `recordId = ''`) becomes a saved record
+   * (now identified by its new PK). Without re-keying, the next "new record" request would
+   * still resolve to this same cache entry, surfacing the previously-saved record on a form
+   * the user expects to be blank.
+   *
+   * Preserves the live component instance — only the cache key + stored identity change.
+   * Returns true if a matching entry was found and re-keyed, false otherwise.
+   */
+  rekeyComponent(
+    resourceType: string,
+    oldRecordId: string,
+    newRecordId: string,
+    appId: string,
+    oldDiscriminator?: string,
+    newDiscriminator?: string
+  ): boolean {
+    const oldKey = this.getCacheKey(resourceType, oldRecordId, appId, oldDiscriminator);
+    const info = this.cache.get(oldKey);
+    if (!info) {
+      return false;
+    }
+
+    // Once a record has a real id, the discriminator no longer matters (the id is unique).
+    // Default the new discriminator to undefined unless explicitly provided.
+    const newKey = this.getCacheKey(resourceType, newRecordId, appId, newDiscriminator);
+    if (oldKey === newKey) {
+      return false;
+    }
+
+    info.resourceRecordId = newRecordId;
+    info.keyDiscriminator = newDiscriminator;
+    info.lastUsed = new Date();
+    if (info.resourceData) {
+      info.resourceData.ResourceRecordID = newRecordId;
+    }
+
+    this.cache.delete(oldKey);
+    this.cache.set(newKey, info);
+    return true;
   }
 
   /**
@@ -191,7 +266,7 @@ export class ComponentCacheManager {
     if (!entry) return null;
 
     const [_, info] = entry;
-    return this.markAsDetached(info.resourceType, info.resourceRecordId, info.applicationId);
+    return this.markAsDetached(info.resourceType, info.resourceRecordId, info.applicationId, info.keyDiscriminator);
   }
 
   /**
@@ -207,6 +282,8 @@ export class ComponentCacheManager {
 
     while (detached.length > ComponentCacheManager.MaxDetachedComponents) {
       const [key, info] = detached.shift()!;
+      // Drop the destroyed component's cached agent tools so the registry doesn't retain a dead ref.
+      this.navigationService?.ForgetResource(info.componentRef.instance);
       this.appRef.detachView(info.componentRef.hostView);
       info.componentRef.destroy();
       this.cache.delete(key);
@@ -227,12 +304,13 @@ export class ComponentCacheManager {
   /**
    * Remove and destroy a specific component from cache by resource identity.
    */
-  destroyComponent(resourceType: string, recordId: string, appId: string): void {
-    const key = this.getCacheKey(resourceType, recordId, appId);
+  destroyComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): void {
+    const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
 
     if (!info) return;
 
+    this.navigationService?.ForgetResource(info.componentRef.instance);
     this.appRef.detachView(info.componentRef.hostView);
     info.componentRef.destroy();
     this.cache.delete(key);
@@ -263,6 +341,36 @@ export class ComponentCacheManager {
       info.componentRef.destroy();
     });
     this.cache.clear();
+  }
+
+  /**
+   * Selectively clear cached components matching a predicate.
+   * Components that match are destroyed; those that don't are kept.
+   *
+   * Use this for tenant switching: clear org-scoped components while
+   * keeping system/global components alive.
+   *
+   * @param predicate Return true for components that should be destroyed.
+   * @returns Number of components destroyed.
+   */
+  ClearCacheByPredicate(predicate: (info: CachedComponentInfo) => boolean): number {
+    let destroyed = 0;
+    const toRemove: string[] = [];
+
+    this.cache.forEach((info, key) => {
+      if (predicate(info)) {
+        this.appRef.detachView(info.componentRef.hostView);
+        info.componentRef.destroy();
+        toRemove.push(key);
+        destroyed++;
+      }
+    });
+
+    for (const key of toRemove) {
+      this.cache.delete(key);
+    }
+
+    return destroyed;
   }
 
   /**

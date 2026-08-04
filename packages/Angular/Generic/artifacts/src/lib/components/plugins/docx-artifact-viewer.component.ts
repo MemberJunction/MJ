@@ -20,7 +20,7 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
   template: `
     <div class="docx-viewer">
       <mj-file-artifact-toolbar
-        [fileName]="artifactVersion?.FileName || 'document.docx'"
+        [fileName]="artifactVersion.FileName || 'document.docx'"
         [isDownloading]="isDownloading"
         [showPrint]="true"
         (download)="onDownload()"

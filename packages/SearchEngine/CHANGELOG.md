@@ -1,5 +1,604 @@
 # @memberjunction/search-engine
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/ai-vectordb@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/storage@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/ai-vectordb@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/storage@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Minor Changes
+
+- 0686d52: Add content cleaning, adaptive-boundary and paged segmentation, and chunk-aware external search mapping — all from PR review feedback.
+
+  **Cleaning is now its own plug-in stage** (`@memberjunction/ai-segmentation`). Segmenting dirty content produces well-bounded garbage: navigation, sidebars, cookie banners, and advertising usually outweigh the article, and because that chrome repeats across every page of a site it yields many near-identical chunks that crowd out real answers.
+  - `BaseContentCleaner` — resolved through the class factory like segmenters, via `ResolveContentCleaner` / `SuggestCleanerKey`.
+  - `HtmlContentCleaner` (`Html`) — CSS-selector-driven extraction. `IncludeSelectors` is the high-leverage knob: naming the element that holds the content discards everything else without enumerating what to drop. `ExcludeSelectors` handles what survives inside it. An invalid selector is skipped rather than failing the clean, and if cleaning would remove everything the original is returned with a warning.
+  - `PlainTextContentCleaner` (`PlainText`) — whitespace normalization and truncation, preserving the paragraph breaks segmenters use as boundaries.
+
+  **`AdaptiveBoundarySegmenter` (`AdaptiveBoundary`)** targets a size and closes on the nearest natural break, escalating through boundary quality: paragraph → sentence → word → hard ceiling. Segment sizes vary on purpose — a slightly short segment ending at a paragraph beats an exactly-sized one ending mid-clause. It also declines to split when the whole text is only modestly over target, avoiding one full chunk plus a context-free runt. `TargetTokens` should be sized to your **queries**, not to the embedding model's context window, which is an upper bound rather than a goal.
+
+  **`PagedContentSegmenter` (`PagedContent`)** emits one segment per page of a paginated source via the new `SegmentationParams.Pages`, preserving `PageNumber` for citation-grade provenance. A page may carry text, a rendered-page media reference, or both — the both case is what allows embedding a PDF page _as an image_ (preserving tables and charts that text extraction flattens) while its text rides along for lexical search. Pages carrying media are never merged, so their provenance stays true.
+
+  **`@memberjunction/search-engine`** gains `ExternalHitMapper`, a shared field mapping now used by all four external providers (Azure AI Search, Elasticsearch, OpenSearch, Typesense) instead of four inline copies. It resolves snippets from `description` and `transcript` in addition to the conventional `content`/`body`/`text`, so a media chunk returns readable text rather than an empty snippet, and recovers chunk provenance (`chunkId`, `modality`, `startMs`/`endMs`, `pageNumber`) into the result's `RawMetadata` — which is what lets a hit deep-link to a moment in a recording or a page in a PDF. Field names are matched across camelCase, PascalCase, and snake_case, and numeric strings are coerced, since external indexes are populated outside MJ.
+
+  Also fixes `BaseSegmenter` rejecting a params object that carried only `Pages`.
+
+- c7b6710: Make Scoped Search dimensions enforceable so a dimension can carry an access decision rather than being a narrowing convenience any caller — including an LLM writing a tool call — could author. `SearchScope.SearchContextConfig` documented `dimensions[]`, `inheritanceMode` and `strictValidation` but no runtime code read any of it.
+
+  A `restricts: true` dimension is now server-derived: a caller-supplied value is discarded, not merged, and the attempt is recorded in provenance. Values are grammar-checked, `freetext` is prohibited in filter positions, and every interpolated value is escaped automatically for its lane's dialect (SQL / OData / JSON / Typesense / path), keyed off the existing `IndexType`. `narrowingOf` is a lattice meet, so a caller may narrow a server bound but never widen it.
+
+  A Skill becomes a search principal alongside an Agent, and scope grants gain a time window plus a tenant key. `RequiredMetadataKeys` catches a filter that rendered _partially_ — the case no other guard can see, where an optional clause vanishes because its dimension was absent or discarded and the lane silently searches wider than intended. Supersession (`advisory` + ordered rules) composes by subtraction and fails soft, deliberately outside the boundary. `ExplainScope()` reports what a search would be able to reach without running one, and the same structure is written to `SearchExecutionLog.ScopeDecisionJSON`.
+
+  Fixes four security bugs, two live on `next`: the result-cache key omitted `ScopeIDs` and `SearchContext` (cross-tenant result leak within the 30s TTL); six provider call sites silently dropped a filter whose rendered value had the wrong shape and then queried unfiltered; a restricting template that rendered to nothing was indistinguishable from one never authored; and `inheritanceMode` was itself declared-and-unread.
+
+  Additive throughout — a scope with no declaration behaves exactly as before, and no existing filter template needs an edit.
+
+### Patch Changes
+
+- 764d6f6: Fix three client-reported issues (search coverage, Configure App dialog, default-app provisioning):
+  - **C3 — Search coverage:** decouple the per-entity fetch depth from the global `topK` budget in both `EntitySearchProvider` and `FullTextSearchProvider` (new tunable `PerEntityFetchDepth`, default 15), so multi-entity searches no longer starve individual entities of results. Also lower `MIN_TERM_LENGTH` from 3 to 2 across the engine and both providers so short queries (e.g. "US", "AI") are searchable.
+  - **F1 — Configure App dialog glitch:** the `[(ShowDialog)]` setter now emits `ShowDialogChange`, so the app-switcher's flag round-trips correctly; the dialog resets its app lists on open/close and reloads the user's applications on a deferred microtask (avoids `ExpressionChangedAfterItHasBeenCheckedError`). Removed the redundant double-drive in the app switcher.
+  - **F2 — Default-app provisioning (`Status = 'Active'` filter):** the JWT new-user provisioning path selected default applications with `DefaultForNewUser` but **without** the `Status = 'Active'` check that the client self-heal path already applied, so an inactive app flagged `DefaultForNewUser` could be provisioned onto new users there. Both paths now use a single shared selector, `UserInfoEngine.GetDefaultApplicationsForNewUser`, which filters to Active + `DefaultForNewUser` in `DefaultSequence` order — eliminating the drift.
+
+- 408e4bf: Use `UUIDsEqual` instead of `===` when matching rendered constraints to their scope rows in `SearchEngine.buildLaneExplanations` (external-index, entity and storage-account lanes).
+
+  PostgreSQL returns UUIDs lowercased where SQL Server returns them uppercased, so on a case mismatch the `find` returned `undefined` and the lane reported `RenderedFilter: null` — `ExplainScope` telling an admin a lane carries no filter when it does. Silent, and a wrong answer from the one feature whose purpose is answering that question. Also unbreaks the `Unit Tests` job on `next`, where the repo's `UUIDCompliance` gate flagged the three comparisons.
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/storage@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/ai-vectordb@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- 15e3017: Add optional embedding dimensions, per-record Pinecone namespace routing, and scope-level provider config support.
+
+  **`@memberjunction/ai`** — Add optional `dimensions` field to `EmbedTextParams`, `EmbedTextsParams`, and `EmbedContentParams`. When provided, overrides the model's native output dimension (only effective on models that support it, e.g. OpenAI `text-embedding-3-*`).
+
+  **`@memberjunction/ai-openai`** — `OpenAIEmbedding.EmbedText` and `embedBatch` now forward `params.dimensions` to the OpenAI embeddings API when set.
+
+  **`@memberjunction/ai-vectordb`** — Three additive changes to the vector DB abstraction layer:
+  - `VectorRecord` gains an optional `providerTemporaryDirectives` field — an MJ-internal routing map set by ingestion and stripped before any external upsert.
+  - `QueryParamsBase` gains an optional `providerConfig` field — an opaque blob sourced from the scope's rendered `ExternalIndexConfig`, threaded through to the driver at query time.
+  - `VectorDBBase` gains a `BuildProviderDirectives(sourceRecord, providerConfig)` hook (default: returns `{}`) that drivers override to extract per-record routing values (e.g. namespace) from the raw source row.
+  - `CreateRecord` and `CreateRecords` signatures gain an optional `providerConfig` parameter.
+
+  **`@memberjunction/ai-vectors-pinecone`** — Full namespace routing support:
+  - `BuildProviderDirectives` reads `providerConfig.namespaceField`, looks up that field on each source record, and returns `{ namespace: '<value>' }` so records are routed to the correct Pinecone namespace during ingestion.
+  - `CreateRecords` groups a mixed batch by namespace and issues one `upsert` per distinct namespace; falls back to a single-namespace path when no per-record directives are present.
+  - `QueryIndex` extracts `providerConfig.namespace`, calls `index.namespace(ns)` when present, and strips the field before passing params to the Pinecone SDK.
+  - `providerTemporaryDirectives` is stripped from each `VectorRecord` before any upsert call.
+
+  **`@memberjunction/ai-vector-sync`** — Sync pipeline now reads `VectorIndex.Dimensions` and `VectorIndex.ProviderConfig` and threads them through:
+  - `Dimensions` is forwarded to `EmbedTexts` so the embedding model produces vectors at the configured size.
+  - `ProviderConfig` (parsed from JSON) is forwarded to `upsertBatchToVectorDB`, which passes it to `BuildProviderDirectives` per record and to `CreateRecords`.
+  - Metadata value storage is now type-aware: SQL numeric types (`int`, `float`, `decimal`, etc.) are stored as JS numbers; a new `storeAs` field config supports `'epochSeconds'` and `'epochMilliseconds'` for datetime columns, `'number'`, and `'boolean'`.
+
+  **`@memberjunction/search-engine`** — `ExternalIndexConfig` on scope external-index rows is now treated as a Nunjucks template: it is rendered against the caller's `SearchContext` before being JSON-parsed. The rendered object (e.g. `{ namespace: '<orgId>' }`) is forwarded as `providerConfig` through `VectorSearchProvider.queryOneIndex` to the vector DB driver. `VectorIndex.Dimensions` is also forwarded to the query-time embedding call.
+
+- 78a5e44: Vector sync: portable record IDs, minimal-metadata mode, and explicit-inclusion field fixes
+  - **New `vectorIdStrategy` on `EntityDocumentConfiguration`** — `'hash'` (default, unchanged SHA-1 behavior) or `'recordId'`, which uses the source record's primary key value directly as the vector database ID. UUIDs are normalized to lowercase for SQL Server / PostgreSQL portability; composite PK values are joined with `||`; empty keys and IDs over the 512-byte provider limit fail loudly.
+  - **New `fieldStrategy: 'explicit'`** — vector metadata contains EXACTLY the configured fields: the system-injected keys (`RecordID`, `Entity`, `TemplateID`) are omitted and `includeEntityIcon` / `includeUpdatedAt` flip to opt-in. Existing `'all'` / `'include'` / `'exclude'` strategies are byte-for-byte unchanged.
+  - **Explicit inclusion now wins over type heuristics** — under `'include'` / `'explicit'`, fields listed with `included: true` are honored even when the implicit-eligibility filter would skip them (uniqueidentifiers, PKs, `__mj_*` fields). Only genuinely unstorable binary column types are refused, with a logged warning instead of a silent drop. Uniqueidentifier metadata values are normalized to lowercase so metadata filters behave identically across database platforms.
+  - **SearchEngine `VectorSearchProvider`** — when a match's metadata omits the `Entity` key (e.g. indexes populated with `fieldStrategy: 'explicit'`), the provider now resolves a fallback entity name from the index's entity documents (cached per index, only when unambiguous) instead of labeling results `Unknown`. Record identity already falls back to the vector ID when `RecordID` metadata is absent.
+
+  Note: switching an already-populated index to `vectorIdStrategy: 'recordId'` orphans vectors written under the old hashed IDs — purge or re-create the index (or use a fresh namespace) when changing strategy.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/ai-vectordb@5.49.0
+  - @memberjunction/aiengine@5.49.0
+  - @memberjunction/storage@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/ai-vectordb@5.48.0
+  - @memberjunction/storage@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/ai-vectordb@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/storage@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-vectordb@5.46.0
+  - @memberjunction/storage@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/aiengine@5.45.1
+- @memberjunction/ai@5.45.1
+- @memberjunction/ai-vectordb@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+- @memberjunction/storage@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-vectordb@5.45.0
+  - @memberjunction/storage@5.45.0
+  - @memberjunction/ai@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/aiengine@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/ai-vectordb@5.44.0
+  - @memberjunction/storage@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/aiengine@5.43.0
+  - @memberjunction/ai-vectordb@5.43.0
+  - @memberjunction/storage@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/aiengine@5.42.0
+  - @memberjunction/ai-vectordb@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/storage@5.42.0
+  - @memberjunction/ai@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [1568bae]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/aiengine@5.41.0
+  - @memberjunction/ai-vectordb@5.41.0
+  - @memberjunction/storage@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.2
+- @memberjunction/aiengine@5.40.2
+- @memberjunction/ai-vectordb@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/storage@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/aiengine@5.40.1
+  - @memberjunction/ai-vectordb@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/storage@5.40.1
+  - @memberjunction/ai@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/aiengine@5.40.0
+  - @memberjunction/ai-vectordb@5.40.0
+  - @memberjunction/storage@5.40.0
+  - @memberjunction/ai@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- 7dfacc7: Add support for storing and querying embeddings inside the application's own database instead of a separate vector service. `VectorDBBase` gains an `IColocatedVectorHost` adapter (implemented by the PostgreSQL and SQL Server data providers) and a `ColocatedQuery` API; the new `PgVectorColocated` provider does vector + keyword (RRF) search in one statement, and the new `@memberjunction/ai-vectors-sqlserver` package adds a SQL Server 2025 native `VECTOR` provider with sibling-table and entity-column storage modes. `VectorSearchProvider` and `EntityVectorSyncer` route these indexes through the borrowed connection.
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-vectordb@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/aiengine@5.39.0
+  - @memberjunction/storage@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- 6a3ac36: Fix AllowUpdateAPI clearing when EntityField transitions to virtual, use subqueries for organic key INSERTs for portable SQL, prevent permanent engine failure when MJAPI is temporarily unavailable, and centralize RLS exemption check in GetUserRowLevelSecurityWhereClause
+- Updated dependencies [6b6c321]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/aiengine@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/ai-vectordb@5.38.0
+  - @memberjunction/storage@5.38.0
+  - @memberjunction/ai@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [4f15f31]
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/ai-vectordb@5.37.0
+  - @memberjunction/storage@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/aiengine@5.36.0
+  - @memberjunction/storage@5.36.0
+  - @memberjunction/ai-vectordb@5.36.0
+  - @memberjunction/ai@5.36.0
+  - @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/aiengine@5.35.0
+  - @memberjunction/ai-vectordb@5.35.0
+  - @memberjunction/storage@5.35.0
+  - @memberjunction/ai@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/ai-vectordb@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/storage@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Minor Changes
+
+- ae5cfbd: Search Scopes & RAG+ — multi-phase ship
+
+  A bundled feature release across the search pipeline (Phases 2A–6 of
+  the Search Scopes & RAG+ initiative). Highlights:
+
+  **SearchEngine pipeline**
+  - New `SimpleVectorDatabase` in-process driver — points
+    `VectorDBBase` at any entity column with an `EmbeddingVector`
+    field. Suitable for dev / agent-memory / small-medium corpora.
+    Constructor accepts an empty/missing API key (in-process driver
+    has no remote auth target).
+  - `VectorDBBase.QueryIndex(params, contextUser?)` — `contextUser`
+    is now a proper second parameter instead of being smuggled
+    through `filter.__contextUser`. Pinecone/Qdrant/pgvector ignore
+    it (they auth via API key); in-process drivers use it for
+    RunView's server-side RLS guard. Method-level pattern matches
+    MJ's `RunView(params, contextUser)` and `GetEntityObject(name,
+contextUser)` conventions.
+  - `SearchFusion` — multi-provider score evidence is now preserved
+    through RRF. Previously the second provider's `ScoreBreakdown`
+    contribution was silently dropped when the same RecordID
+    appeared in two provider lists, causing the merged item to
+    rank below single-provider hits. Records that match in
+    Vector + Entity now carry both contributions and rank
+    correctly.
+  - Defensive sanitation in `Fuse()` — items with non-finite Score
+    (NaN, Infinity), empty/non-string RecordID, or null payloads are
+    filtered before fusion. Closes a class of failure modes from
+    misbehaving 3rd-party providers.
+  - Tier-1 input edge cases hardened — null/undefined/non-string
+    Query no longer TypeErrors, surfaces a clean Failure result.
+    `EntitySearchProvider` now strips SQL LIKE wildcards (`%`, `_`,
+    `[`, `]`) from user input — `Query="%"` no longer matches every
+    row through the LIKE-injection vector.
+  - Streaming search — `SearchEngine.streamSearch()` v2 emits
+    provider events as soon as each provider promise settles
+    (concurrent emission), not in registration order.
+
+  **Permission gate (Phase 2A)**
+  - `SearchScopePermissionResolver` enforces a 6-step decision tree:
+    AgentNone → AgentAssignedNotListed → DirectGrant → RoleGrant →
+    AgentUnscopedAll → NoGrant.
+  - `AIAgent.SearchScopeAccess` enum (`'None' | 'All' | 'Assigned'`)
+    controls agent-side fallback when no per-user/per-role grant
+    applies. `BypassCache` propagates through the dedup-linger cache
+    so freshly-revoked grants take effect immediately.
+  - New tests + agent scenarios cover all 13 permission-matrix cells
+    (PM-01..PM-13).
+
+  **Reranker catalog (Phase 2D)**
+  - 4 reranker drivers — Cohere, Voyage, OpenAI judge, BGE local —
+    all with `@RegisterClass(BaseReRanker, ...)`. Per-search
+    `RerankerBudgetGuard` caps API spend; `EstimateCostCents` and
+    `CostReporter` per driver. Graceful degradation when the
+    upstream SDK rejects/times out/returns malformed responses.
+
+  **Observability (Phase 3)**
+  - `MJSearchExecutionLog` — every `Search()` invocation writes one
+    row with Status / ResultCount / TotalDurationMs / RerankerCostCents
+    / ProvidersJSON (per-source hit counts) / AIAgentID attribution.
+    Forbidden gate decisions log `Status='Forbidden'` rows.
+  - Knowledge Hub Config dashboard subtab visualizes the log:
+    hit-rate, p50/p95 latency, top failure reasons, top users, total
+    reranker cost.
+
+  **External providers (Phase 5)**
+  - 4 search providers — Elasticsearch, Typesense, Azure AI Search,
+    OpenSearch — all with `@RegisterClass(BaseSearchProvider, ...)`.
+  - New `AvailableSearchProviders` GraphQL query exposes the
+    `BaseSearchProvider.GetAvailableProviders()` runtime catalog to
+    the SearchScope form's provider dropdown (P5.5).
+
+  **Angular / UI**
+  - Custom `MJSearchScopeFormComponentExtended` (P2D.7 / P4) — fusion
+    weights sliders, reranker dropdown, live-preview panel, A/B
+    Kendall-tau similarity, CSV export of last 500 invocations.
+  - Custom `MJSearchScopeProviderFormComponentExtended` (P5.5) —
+    provider dropdown sourced from `MJ: Search Providers` rows,
+    annotated with whether each provider's DriverClass is currently
+    registered with the server's ClassFactory.
+  - Streaming search consumer in `SearchService.StreamSearch()` —
+    Angular Observable surface for the `StreamScopedSearch`
+    mutation + `SearchStreamEvents` subscription.
+
+  **Migration**
+  - `V202605081416__v5.34.x__Search_Scopes_And_RAG_Plus.sql` —
+    consolidated. Contains six DDL sections (Phase 1 baseline,
+    `SearchScopePermission`, `SearchScope.RerankerBudgetCents`,
+    `SearchExecutionLog`, `SearchScopeTestQuery`, unique-constraint
+    fix) followed by five CodeGen runs that regenerate the entity
+    metadata, sprocs, views, and permission grants for all of the
+    above.
+
+  **Test suite**
+  - 17 end-to-end agent scenarios (s01–s17) under `agent-scenarios/`,
+    driving real LLM tool-calls (Sage agent) against the SearchEngine
+    - multi-provider RRF + reranker pipeline. 95 assertions; all PASS.
+  - `@memberjunction/search-engine` vitest: 237 unit tests across 21
+    files, all PASS. Covers fusion, providers (real + external),
+    rerankers, scope template renderer, parent-ID metadata,
+    streaming, permission resolver, edge cases, mid-flight failures.
+
+  **Documentation**
+  - `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` — comprehensive guide
+    covering scope creation, agent integration, permission resolution,
+    multi-scope fusion, reranker catalog, observability, external
+    providers, how-to templates for adding a new provider /
+    reranker / artifact tool library / vector index over an
+    embedded entity column. Documents the embedding-regeneration
+    contract for ops.
+
+  See `RAG_plan.md` for the full multi-phase plan and `plans/
+search-scopes-rag-plus/what-we-built.md` for the customer-facing
+  summary.
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/aiengine@5.34.0
+  - @memberjunction/ai-vectordb@5.34.0
+  - @memberjunction/storage@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/global@5.34.0
+  - @memberjunction/ai@5.34.0
+
 ## 5.33.0
 
 ### Minor Changes

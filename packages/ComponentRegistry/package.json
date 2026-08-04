@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/component-registry-server",
-  "version": "5.33.0",
+  "version": "6.0.0",
   "description": "MemberJunction: Component Registry Server API Implementation",
   "type": "module",
   "main": "./dist/index.js",
@@ -23,18 +23,18 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.33.0",
-    "@memberjunction/global": "5.33.0",
-    "@memberjunction/core-entities": "5.33.0",
-    "@memberjunction/interactive-component-types": "5.33.0",
-    "@memberjunction/sqlserver-dataprovider": "5.33.0",
+    "@memberjunction/core": "6.0.0",
+    "@memberjunction/global": "6.0.0",
+    "@memberjunction/core-entities": "6.0.0",
+    "@memberjunction/interactive-component-types": "6.0.0",
+    "@memberjunction/sqlserver-dataprovider": "6.0.0",
     "@types/express": "^5.0.6",
     "express": "^5.2.1",
     "cors": "^2.8.6",
     "mssql": "^12.2.0",
     "cosmiconfig": "9.0.0",
     "dotenv": "^17.2.4",
-    "zod": "~3.24.4"
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

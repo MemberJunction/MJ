@@ -17,8 +17,8 @@ export class MJAIAgentDataSourceFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'agentAssociation', sectionName: 'Agent Association', isExpanded: true },
             { sectionKey: 'sourceSpecification', sectionName: 'Source Specification', isExpanded: true },
-            { sectionKey: 'retrievalMapping', sectionName: 'Retrieval & Mapping', isExpanded: false },
-            { sectionKey: 'cachingStatus', sectionName: 'Caching & Status', isExpanded: false },
+            { sectionKey: 'retrievalMapping', sectionName: 'Retrieval & Mapping', isExpanded: true },
+            { sectionKey: 'cachingStatus', sectionName: 'Caching & Status', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

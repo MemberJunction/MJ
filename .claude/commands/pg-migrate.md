@@ -143,20 +143,30 @@ Verify the build succeeded before continuing.
 
 ## Phase 1: Discover Missing Migrations
 
-Run this locally (on the host) since it's just file comparison:
+Run this locally (on the host) since it's just file comparison. A T-SQL source
+file is "covered" when a `.pg.sql` **OR** a hand-authored `.pg-only.sql` of the
+same basename exists — you must subtract BOTH, or you will falsely flag V-files
+that ship only as a `.pg-only.sql` override. Baselines (`B*`) and versioned
+migrations (`V*`) are discovered separately because they are converted by
+different phases.
 
 ```bash
-# Find SQL Server migrations with no PG equivalent
-comm -23 \
-  <(ls migrations/v5/*.sql | xargs -I{} basename {} .sql | sort) \
-  <(ls migrations-pg/v5/*.pg.sql | xargs -I{} basename {} .pg.sql | sort)
+# Basenames already covered on the PG side (.pg.sql OR .pg-only.sql)
+PG_COVERED=$( { ls migrations-pg/v5/*.pg.sql      2>/dev/null | xargs -n1 basename | sed 's/\.pg\.sql$//';
+                ls migrations-pg/v5/*.pg-only.sql 2>/dev/null | xargs -n1 basename | sed 's/\.pg-only\.sql$//'; } | sort -u )
+
+# Versioned migrations (V*) needing PG conversion → handled by Phase 2
+comm -23 <(ls migrations/v5/V*.sql | xargs -n1 basename | sed 's/\.sql$//' | sort) <(echo "$PG_COVERED")
+
+# Baselines (B*) needing PG conversion → handled by Phase 2.5 (NOT Phase 2)
+comm -23 <(ls migrations/v5/B*.sql | xargs -n1 basename | sed 's/\.sql$//' | sort) <(echo "$PG_COVERED")
 ```
 
 Also note PG-only files (in `migrations-pg/v5/` with no SQL Server source) — these are intentional PG-specific patches; preserve them.
 
-Report: "Found N migrations needing PG conversion" with the full list.
+Report: "Found N versioned migrations and M baselines needing PG conversion" with the full lists.
 
-If zero missing, skip to Phase 3. **Phase 3, Phase 4, and Phase 4b ALWAYS run** — even when all conversions succeed perfectly, these phases provide essential confidence that the full migration stack works end-to-end.
+**Phase 2.5, Phase 3, Phase 4, and Phase 4b ALWAYS run** — even when zero files are missing, Phase 2.5 still validates the active baseline and the later phases confirm the full migration stack works end-to-end.
 
 ---
 
@@ -173,7 +183,7 @@ Your job: Convert SQL Server migrations to PostgreSQL and validate them. Work th
 
 CRITICAL: ONLY convert the files listed below. Do NOT re-convert any existing .pg.sql files that are already present in migrations-pg/v5/. Even if the toolchain has improved, re-converting old migrations is a breaking change. Only new/missing migrations should be converted.
 
-CRITICAL: Your converted output MUST NOT contain any "-- TODO:" comments. If the sql-convert tool produces TODO comments, that means the toolchain has a bug. You must fix the relevant rule in packages/SQLConverter/src/rules/, rebuild, and re-convert. Never accept TODO comments in output — they represent unconverted SQL that will be silently skipped.
+CRITICAL: Your converted output MUST NOT contain any "-- TODO:" comments, nor any "-- SKIPPED" comment that is NOT tagged "(INTENTIONAL)". Both represent unconverted SQL that will be silently dropped. A bare "-- SKIPPED: ..." means a rule gave up on a pattern — that is a toolchain bug: fix the relevant rule in packages/SQLConverter/src/rules/, rebuild, and re-convert. The ONLY acceptable skips are tagged "-- SKIPPED (INTENTIONAL): <reason>" (e.g. GRANT CONNECT with no PG equivalent, or a CRUD sproc for a deprecated entity whose return view no longer exists) — these are reviewed, justified, and emitted deliberately by the rules. Never hand-edit a skip tag; if a bare SKIPPED is actually justified, encode that in the rule so it emits the (INTENTIONAL) tag.
 
 ## Database Connections
 - PostgreSQL: host=postgres-claude, port=5432, user=mj_admin, password=Claude2Pg99 (use PGPASSWORD env var)
@@ -252,11 +262,15 @@ For each file, record: filename, status (PASS/FAIL), error details if any, toolc
 
 ## After All Files
 
-Verify zero TODO comments:
+Verify zero TODO comments and zero non-intentional SKIPPED comments. The gate
+allows only skips tagged `(INTENTIONAL)`:
 ```bash
-grep -c "TODO:" /workspace/MJ/migrations-pg/v5/*.pg.sql | grep -v ':0$'
+# Prints offending lines. Empty output = gate passes.
+grep -nE -- '-- (TODO:|SKIPPED)' /workspace/MJ/migrations-pg/v5/*.pg.sql | grep -v 'INTENTIONAL'
 ```
-If any remain, fix the toolchain and re-convert the affected files.
+If any lines print, fix the toolchain rule (so it either converts the pattern or
+emits a justified `-- SKIPPED (INTENTIONAL): <reason>`) and re-convert the
+affected files.
 
 Write a JSON summary to /tmp/phase2-result.json:
 {
@@ -281,7 +295,111 @@ IMPORTANT: When you are completely finished, write the word PIPELINE_DONE as the
 
 After sending this task, poll for completion. When done, read `/tmp/phase2-result.json` and `/tmp/phase2-summary.txt` from the container. Report progress to the user.
 
-**Orchestrator validation after Phase 2**: Before proceeding, the orchestrator MUST verify zero TODOs by running `grep -r "TODO:" migrations-pg/v5/*.pg.sql` on the Docker container. If any remain, send a follow-up fix task to CC in Docker.
+**Orchestrator validation after Phase 2**: Before proceeding, the orchestrator MUST verify the gate is clean by running `docker exec claude-dev bash -c "grep -nE -- '-- (TODO:|SKIPPED)' /workspace/MJ/migrations-pg/v5/*.pg.sql | grep -v 'INTENTIONAL'"`. Any output means an unconverted TODO or a non-intentional SKIPPED remains — send a follow-up fix task to CC in Docker.
+
+---
+
+## Phase 2.5: Baseline Conversion & Validation (Delegated to CC in Docker)
+
+**ALWAYS run this phase.** Baselines (`B*__Baseline.sql`) are huge consolidated schema dumps that Skyway applies first on a fresh DB. This phase (a) converts any T-SQL baseline that has no PG counterpart (Phase 1's baseline list) through the SAME rule pipeline as every other migration, and (b) PROVES the active PG baseline reproduces the T-SQL baseline's schema. This is the step that answers "did the rules actually work on the baseline?" — the generic Phase 3 compare can't, because it builds each side from its own baseline, so a shared gap looks like a match.
+
+Build the task prompt below, substituting `{{MISSING_BASELINES}}` with the baseline list from Phase 1 (may be empty) and `{{LATEST_TSQL_BASELINE}}` / `{{LATEST_PG_BASELINE}}` with the highest-versioned `B*` filenames. Send to CC in Docker using the delegation pattern.
+
+### Phase 2.5 Task Prompt
+
+```
+You are running inside the claude-dev Docker container with the MJ repo at /workspace/MJ.
+
+Your job: Convert any missing T-SQL baseline to PostgreSQL using the SAME rule
+pipeline as other migrations, then PROVE the active PG baseline reproduces the
+T-SQL baseline's schema. Never hand-edit converted SQL — fix the rule and re-convert.
+
+## Database Connections
+- PostgreSQL: host=postgres-claude, port=5432, user=mj_admin, password=Claude2Pg99 (use PGPASSWORD)
+- SQL Server: host=sql-claude, port=1433, user=sa, password=Claude2Sql99
+  - sqlcmd: /opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C
+
+## Missing baselines to convert (may be empty)
+{{MISSING_BASELINES}}
+
+## Step 1: Convert each missing baseline (same command as V-files)
+For each missing baseline FILENAME:
+```bash
+npx mj sql-convert migrations/v5/FILENAME.sql --from tsql --to postgres \
+  --output migrations-pg/v5/FILENAME.pg.sql --schema __mj --verbose
+```
+Do NOT re-convert a baseline that already has a .pg.sql — those are immutable
+(only validated in Step 3).
+
+## Step 2: Quality gate (zero TODO, zero non-intentional SKIPPED)
+```bash
+grep -nE -- '-- (TODO:|SKIPPED)' migrations-pg/v5/B*.pg.sql | grep -v 'INTENTIONAL'
+```
+Empty output = pass. Any line = fix the rule in packages/SQLConverter/src/rules/
+(convert the pattern, or emit a justified `-- SKIPPED (INTENTIONAL): <reason>`),
+rebuild (cd packages/SQLConverter && npm run build), run tests (npm run test),
+then re-convert. Never edit the .pg.sql by hand.
+
+## Step 3: Validate the active baseline (convert -> apply -> compare)
+Latest T-SQL baseline: {{LATEST_TSQL_BASELINE}}
+Latest PG baseline:    {{LATEST_PG_BASELINE}}
+
+### 3a. Apply the PG baseline ALONE to a fresh PG DB (fail loudly on first error)
+```bash
+export PGPASSWORD=Claude2Pg99
+psql -h postgres-claude -U mj_admin -d postgres -c "DROP DATABASE IF EXISTS \"MJ_PG_Baseline_Test\";"
+psql -h postgres-claude -U mj_admin -d postgres -c "CREATE DATABASE \"MJ_PG_Baseline_Test\";"
+psql -h postgres-claude -U mj_admin -d MJ_PG_Baseline_Test <<BOOT
+DO \$b\$ BEGIN CREATE ROLE "cdp_UI" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$b\$;
+DO \$b\$ BEGIN CREATE ROLE "cdp_Developer" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$b\$;
+DO \$b\$ BEGIN CREATE ROLE "cdp_Integration" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$b\$;
+GRANT USAGE ON SCHEMA public TO "cdp_UI", "cdp_Developer", "cdp_Integration";
+BOOT
+psql -h postgres-claude -U mj_admin -d MJ_PG_Baseline_Test -v ON_ERROR_STOP=1 \
+  -f migrations-pg/v5/{{LATEST_PG_BASELINE}} 2>&1 | tee /tmp/pg-baseline-apply.log
+```
+A non-zero exit = the converted baseline has a real apply error (e.g. a sproc
+returning a missing view, or an invalid GRANT). Treat it like a failed gate:
+fix the rule, re-convert, re-apply.
+
+### 3b. Apply the T-SQL baseline ALONE to a fresh SS DB
+```bash
+/opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -Q "IF DB_ID('MJ_SS_Baseline_Test') IS NOT NULL BEGIN ALTER DATABASE MJ_SS_Baseline_Test SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE MJ_SS_Baseline_Test; END; CREATE DATABASE MJ_SS_Baseline_Test;"
+/opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -d MJ_SS_Baseline_Test -I -i migrations/v5/{{LATEST_TSQL_BASELINE}} -b 2>&1 | tee /tmp/ss-baseline-apply.log
+```
+
+### 3c. Compare schemas (counts + object lists)
+Run the same comparison queries as Phase 3 Step 3 (tables, views, routines,
+foreign keys, column-count-per-table, objects-in-one-not-the-other) against
+MJ_SS_Baseline_Test vs MJ_PG_Baseline_Test. EVERY difference must be explained by
+a documented `-- SKIPPED (INTENTIONAL)` (e.g. the EntityBehavior sprocs / GRANT
+CONNECT). Any UNEXPLAINED difference is a converter bug — fix the rule and redo.
+
+### 3d. Completeness + diff scripts
+```bash
+PGHOST=postgres-claude PGPORT=5432 PGUSER=mj_admin PGPASSWORD=Claude2Pg99 \
+  PGDATABASE=MJ_PG_Baseline_Test node scripts/audit-baseline-completeness.mjs
+node scripts/pg-diff-regenerated.mjs   # only if applicable to the active baseline
+```
+
+## Step 4: Write results
+Write /tmp/phase2_5-result.json:
+{
+  "baselinesConverted": ["B....pg.sql"],
+  "gateClean": true,
+  "pgBaselineApplied": true,
+  "ssBaselineApplied": true,
+  "schemaParity": {"tables": [N,N], "views": [N,N], "routines": [N,N], "foreignKeys": [N,N]},
+  "intentionalSkips": ["spCreateEntityBehavior -> vwEntityBehaviors", "GRANT CONNECT MJ_CodeGen ..."],
+  "unexplainedDifferences": [],
+  "toolchainFixes": []
+}
+Also write /tmp/phase2_5-summary.txt.
+
+IMPORTANT: When completely finished, write PIPELINE_DONE as the very last line.
+```
+
+After sending, poll for completion. The orchestrator MUST verify `gateClean === true`, `pgBaselineApplied === true`, and `unexplainedDifferences` is empty before proceeding to Phase 3. If not, re-send with fixes.
 
 ---
 
@@ -964,6 +1082,7 @@ Print a concise summary in chat with:
 4. **All heavy work happens inside Docker** — never run migrations, SQL, or conversion on the host
 5. **Preserve existing PG-only migrations** — files in `migrations-pg/v5/` with no SQL Server source are intentional
 6. **NEVER re-convert existing migrations without explicit user approval** — Only convert NEW migrations (those discovered in Phase 1 as missing PG equivalents). Existing `.pg.sql` files that already work MUST NOT be re-run through the toolchain, even if the toolchain has improved. Re-converting old migrations is a breaking change once they've been deployed to any environment. If toolchain improvements would benefit old files, flag this to the user and let them decide.
+   - **Baseline carve-out (convert-if-missing, never silently overwrite):** A T-SQL baseline (`B*__Baseline.sql`) with NO `.pg.sql` counterpart is a *missing* migration — Phase 2.5 converts it through the same rule pipeline as any other file (a baseline is a regenerable consolidation artifact, so producing a missing one is expected). But an **existing** committed baseline `.pg.sql` is still immutable under this rule: Phase 2.5 only *validates* it (convert→apply→compare), never overwrites it. If validation shows a committed baseline diverges from what the current rules now produce, flag it to the user rather than re-converting.
 7. **Copy results back to host** — Docker uses a named volume, so `docker cp` is needed to get files onto the host filesystem
 8. **Discover CLI syntax dynamically** — if `mj sql-convert` or `mj migrate` flags differ from examples, use `--help` first
 9. **Run SQLConverter unit tests** after any toolchain fix to prevent regressions
@@ -975,22 +1094,22 @@ Print a concise summary in chat with:
 
 ## Quality Gates (CRITICAL)
 
-### Zero TODO Comments Allowed
-**Converted `.pg.sql` files MUST NOT contain any `-- TODO:` comments.** TODO comments indicate the SQLConverter failed to convert a SQL pattern and commented it out instead. This is unacceptable — every T-SQL statement must be properly converted to working PostgreSQL.
+### Zero TODO and Zero Non-Intentional SKIPPED Comments Allowed
+**Converted `.pg.sql` files MUST NOT contain any `-- TODO:` comments, nor any `-- SKIPPED` comment lacking the `(INTENTIONAL)` tag.** Both indicate the SQLConverter failed to convert a SQL pattern and commented it out — silently dropping SQL. The ONLY permitted skips are reviewed, rule-emitted `-- SKIPPED (INTENTIONAL): <reason>` lines (e.g. `GRANT CONNECT` with no PG equivalent, or a CRUD sproc for a deprecated entity whose return view no longer exists — see `GrantRule` and `ProcedureToFunctionRule`'s `ORPHANED_RETURN_VIEWS`).
 
-**After Phase 2 conversion, the orchestrator (you) MUST run this validation:**
+**After Phase 2 conversion, the orchestrator (you) MUST run this validation (empty output = pass):**
 ```bash
-docker exec claude-dev bash -c 'grep -c "TODO:" /workspace/MJ/migrations-pg/v5/*.pg.sql | grep -v ":0$"'
+docker exec claude-dev bash -c "grep -nE -- '-- (TODO:|SKIPPED)' /workspace/MJ/migrations-pg/v5/*.pg.sql | grep -v 'INTENTIONAL'"
 ```
 
-If ANY TODO comments are found:
+If ANY lines print:
 1. **Do NOT proceed to Phase 3** — the conversions are incomplete
-2. Identify the SQLConverter rule producing the TODO (search `packages/SQLConverter/src/rules/` for the TODO text)
-3. Send a follow-up fix task to CC in Docker with the specific TODO patterns to eliminate
+2. Identify the SQLConverter rule producing the TODO/SKIPPED (search `packages/SQLConverter/src/rules/` for the text)
+3. Fix the rule so it either converts the pattern OR emits a justified `-- SKIPPED (INTENTIONAL): <reason>`. Never hand-edit the tag into a converted file.
 4. Re-convert ALL affected files
 5. Re-run the full migration set on a fresh PG database
-6. Re-check for TODO comments
-7. Only proceed when zero TODOs remain
+6. Re-run the gate
+7. Only proceed when the gate is clean
 
 ### Full Migration Stack Validation
 After all conversions pass the TODO check, the full PG migration set (baseline + all migrations) must run on a fresh database as part of Phase 3. Phase 3 ALWAYS runs, even when Phase 2 has zero new files.

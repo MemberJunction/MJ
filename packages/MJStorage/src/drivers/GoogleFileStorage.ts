@@ -9,6 +9,8 @@ import {
   FileSearchResultSet,
   GetObjectParams,
   GetObjectMetadataParams,
+  GetObjectStreamParams,
+  ObjectStreamResult,
   StorageListResult,
   StorageObjectMetadata,
   StorageProviderConfig,
@@ -630,6 +632,70 @@ export class GoogleFileStorage extends FileStorageBase {
       console.error('Error getting object from Google storage', { objectName, bucket: this._bucket });
       console.error(e);
       throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
+    }
+  }
+
+  /**
+   * Google Cloud Storage supports ranged streaming via `File.createReadStream({ start, end })`.
+   */
+  public override get SupportsStreaming(): boolean {
+    return true;
+  }
+
+  /**
+   * Streams an object's content from Google Cloud Storage, optionally honoring a byte range.
+   *
+   * Uses `File.createReadStream({ start, end })`, which returns a Node.js readable stream backed
+   * by GCS's native HTTP Range support — the object is never buffered fully in memory. The
+   * inclusive `Range.Start`/`Range.End` map directly to GCS's inclusive `start`/`end` options.
+   * `createReadStream` doesn't surface the total object size or content type, so this method
+   * resolves them via {@link GetObjectMetadata} (mirroring the Box driver) to populate
+   * {@link ObjectStreamResult.ContentLength} / `ContentType` / `ContentRange`. The supplied range
+   * is clamped to the object size so `ContentRange.End` is always valid.
+   *
+   * @param params - Object identifier (objectId and fullPath are equivalent for GCS) plus optional Range.
+   * @returns A Promise resolving to an {@link ObjectStreamResult}.
+   * @throws Error if the object doesn't exist or cannot be streamed.
+   */
+  public override async GetObjectStream(params: GetObjectStreamParams): Promise<ObjectStreamResult> {
+    // Validate params
+    if (!params.objectId && !params.fullPath) {
+      throw new Error('Either objectId or fullPath must be provided');
+    }
+
+    // For GCS, objectId and fullPath are the same (both are the object name/path)
+    const objectName = params.objectId || params.fullPath!;
+
+    try {
+      // GCS's createReadStream doesn't surface size/content-type, so fetch metadata to
+      // populate ContentLength / ContentType / ContentRange.
+      const metadata = await this.GetObjectMetadata({ fullPath: objectName });
+      const total = metadata.size;
+
+      const file = this._client.bucket(this._bucket).file(objectName);
+      const streamOptions = params.Range ? { start: params.Range.Start, end: params.Range.End } : undefined;
+      const stream = file.createReadStream(streamOptions);
+
+      const result: ObjectStreamResult = {
+        Stream: stream,
+        ContentType: metadata.contentType,
+      };
+
+      if (params.Range) {
+        // Clamp the inclusive range to the object size.
+        const start = Math.min(params.Range.Start, Math.max(total - 1, 0));
+        const end = params.Range.End != null ? Math.min(params.Range.End, total - 1) : total - 1;
+        result.ContentRange = { Start: start, End: end, Total: total };
+        result.ContentLength = end - start + 1;
+      } else {
+        result.ContentLength = total;
+      }
+
+      return result;
+    } catch (e) {
+      console.error('Error streaming object from Google storage', { objectName, bucket: this._bucket });
+      console.error(e);
+      throw new Error(`Failed to stream object: ${params.objectId || params.fullPath}`);
     }
   }
 

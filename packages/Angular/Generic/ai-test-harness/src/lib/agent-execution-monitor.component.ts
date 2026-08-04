@@ -93,10 +93,10 @@ export interface ExecutionStats {
                 <div #executionNodesContainer class="nodes-container">
                 </div>
                 @if (!agentRun && liveSteps.length === 0) {
-                    <div class="empty-state">
-                        <i class="fa-solid fa-hourglass-start"></i>
-                        <p>Waiting for execution to begin...</p>
-                    </div>
+                    <mj-empty-state
+                        Icon="fa-solid fa-hourglass-start"
+                        Title="Waiting for execution to begin..."
+                        Size="compact" />
                 }
             </div>
 
@@ -244,25 +244,8 @@ export interface ExecutionStats {
             /* No extra padding needed, indentation handled by node margins */
         }
 
-        .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+        .execution-tree mj-empty-state {
             height: 100%;
-            color: var(--mj-text-muted);
-            text-align: center;
-        }
-
-        .empty-state i {
-            font-size: 48px;
-            margin-bottom: 16px;
-            opacity: 0.5;
-        }
-
-        .empty-state p {
-            margin: 0;
-            font-size: 14px;
         }
 
         /* Tree Nodes - These styles are for reference only, actual rendering is done by ExecutionNodeComponent */

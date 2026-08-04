@@ -237,29 +237,6 @@
 .actions-list-view .actions-list .action-card:hover .action-actions button {
   opacity: 1;
 }
-.actions-list-view .actions-list .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem 2rem;
-  text-align: center;
-  color: var(--mj-text-muted);
-}
-.actions-list-view .actions-list .empty-state i {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
-}
-.actions-list-view .actions-list .empty-state h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-}
-.actions-list-view .actions-list .empty-state p {
-  margin: 0;
-  font-size: 0.875rem;
-}
 .actions-list-view .loading-overlay {
   position: absolute;
   top: 0;

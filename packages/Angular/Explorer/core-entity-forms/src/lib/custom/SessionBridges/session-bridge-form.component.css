@@ -1,0 +1,93 @@
+/* AI Agent Session Bridge — lifecycle timeline. All colors via design tokens. */
+
+.sb-status-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+    margin-bottom: 16px;
+}
+.sb-status-line i { color: var(--mj-brand-primary); }
+.sb-status-line.failed,
+.sb-status-line.failed i { color: var(--mj-status-error); }
+.sb-status-line .sb-close-reason {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mj-text-muted);
+    margin-left: 4px;
+}
+
+.sb-timeline {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+}
+.sb-step {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex: 1 1 0;
+    min-width: 130px;
+    padding: 0 8px 0 0;
+}
+/* Connector line between steps */
+.sb-step::after {
+    content: "";
+    position: absolute;
+    top: 13px;
+    left: 26px;
+    right: -2px;
+    height: 2px;
+    background: var(--mj-border-default);
+}
+.sb-step:last-child::after { display: none; }
+.sb-step.done::after { background: var(--mj-brand-primary); }
+
+.sb-step-dot {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    border: 2px solid var(--mj-border-default);
+    z-index: 1;
+}
+.sb-step.done .sb-step-dot {
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    border-color: var(--mj-brand-primary);
+}
+.sb-step.current .sb-step-dot {
+    background: var(--mj-bg-surface);
+    color: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+}
+
+.sb-step-body { display: flex; flex-direction: column; gap: 2px; padding-top: 2px; min-width: 0; }
+.sb-step-label { font-size: 12px; font-weight: 600; color: var(--mj-text-secondary); }
+.sb-step.current .sb-step-label,
+.sb-step.done .sb-step-label { color: var(--mj-text-primary); }
+.sb-step-time { font-size: 11px; color: var(--mj-text-muted); }
+
+.sb-failed-note {
+    margin-top: 14px;
+    font-size: 12px;
+    line-height: 1.45;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--mj-status-error) 10%, transparent);
+    color: var(--mj-status-error-text, var(--mj-status-error));
+}
+.sb-failed-note i { margin-right: 6px; }

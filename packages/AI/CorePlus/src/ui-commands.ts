@@ -36,7 +36,8 @@
  */
 export type ActionableCommand =
     | OpenResourceCommand
-    | OpenURLCommand;
+    | OpenURLCommand
+    | CaptureDataSnapshotCommand;
 
 /**
  * Command to open a resource in the MemberJunction UI.
@@ -173,6 +174,65 @@ export interface OpenURLCommand {
      * Default: true
      */
     newTab?: boolean;
+}
+
+/**
+ * Command requesting the host UI capture a Data Snapshot of the user's current
+ * view of an artifact, submit it as a `Data Snapshot` input artifact on the
+ * conversation, and resume the conversation so the agent can analyze it.
+ *
+ * Use this when an analysis-class agent needs the user's on-screen state
+ * (filters, drill, sort, selection, scroll position, etc.) to answer accurately
+ * but no `Data Snapshot` artifact is attached to the request. The agent emits
+ * this command alongside `nextStep: 'Chat'` and a brief `message` explaining
+ * why; the chat UI renders a button; on click the host captures the snapshot
+ * from the currently-viewed artifact, persists it as a Data Snapshot artifact,
+ * attaches it as an `Input` to the next conversation turn, and resumes.
+ *
+ * Any artifact type that supports snapshotting can be captured this way — the
+ * artifact viewer plugin produces the snapshot via its standard contract.
+ *
+ * @example
+ * ```json
+ * {
+ *   "type": "client:capture-data-snapshot",
+ *   "label": "Capture & Submit Data Snapshot",
+ *   "icon": "fa-camera",
+ *   "artifactId": "abc-123",
+ *   "followupMessage": "Now answer the original question with the snapshot data."
+ * }
+ * ```
+ */
+export interface CaptureDataSnapshotCommand {
+    /** Command type identifier */
+    type: 'client:capture-data-snapshot';
+
+    /**
+     * Button label shown to the user.
+     * Should be clear about the action (e.g., "Capture & Submit Data Snapshot",
+     * "Share my current view").
+     */
+    label: string;
+
+    /**
+     * Optional Font Awesome icon class to display on the button.
+     * Commonly: "fa-camera" or "fa-image".
+     */
+    icon?: string;
+
+    /**
+     * Optional ID of the artifact to snapshot. When omitted, the host defaults
+     * to the most recently attached output artifact on the conversation
+     * (typical for single-artifact conversations).
+     */
+    artifactId?: string;
+
+    /**
+     * Optional follow-up text the host should pass back to the agent after
+     * the snapshot is attached, so the agent knows what question to answer.
+     * If omitted, the host may resume with the most recent user message.
+     */
+    followupMessage?: string;
 }
 
 /**

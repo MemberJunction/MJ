@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Realtime Co-Agent TypeConfiguration",
+  "description": "Configuration payload for agents of the Realtime type — the agent's realtime profile. Effective config = AIAgentType.DefaultConfiguration <- AIAgent.TypeConfiguration <- runtime overrides (later layers win per key, deep-merged).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "realtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modelPreference": {
+          "type": "string",
+          "description": "Preferred realtime AI model (name or ID). Used unless an authorized runtime override supplies a different model."
+        },
+        "voice": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "default": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tone": { "type": "string", "description": "Spoken tone folded into the session system prompt (e.g. 'warm, unhurried')." },
+                "speakingStyle": { "type": "string", "description": "Speaking style folded into the session system prompt (e.g. 'concise, plain language')." }
+              }
+            },
+            "providers": {
+              "type": "object",
+              "description": "Per-provider voice settings, keyed by provider key (openai, gemini, elevenlabs, assemblyai).",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "voice": { "type": "string", "description": "Provider voice name/preset (e.g. 'alloy')." },
+                  "voiceId": { "type": "string", "description": "Provider voice identifier where voices are ID-addressed (e.g. ElevenLabs)." }
+                }
+              }
+            }
+          }
+        },
+        "allowUserModelOverride": {
+          "type": "boolean",
+          "description": "When false, even authorized users cannot override the model at runtime for sessions fronted by this agent."
+        },
+        "narration": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "paceMs": { "type": "number", "description": "Minimum milliseconds between spoken progress narrations while delegated work runs." }
+          }
+        },
+        "disclosure": {
+          "type": "string",
+          "enum": ["silent", "mention", "hand-voice"],
+          "description": "Default delegation disclosure — how the co-agent narrates handing a request to a colleague: 'mention' (name the handoff aloud), 'silent' (absorb and speak the result as its own), 'hand-voice' (reserved). Absent => 'mention'. Overridable by app AgentSettings and per-target."
+        },
+        "allowedAgents": {
+          "type": "array",
+          "description": "Delegation targets the lead co-agent may invoke via invoke-target-agent. UNION-accumulated across cascade layers (type/co-agent/target/app) + dynamic registrations; never array-replaced.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "agentId": { "type": "string", "description": "The target agent's MJ: AI Agents ID (loop or flow)." },
+              "label": { "type": "string", "description": "Friendly name for the capability manifest / disclosure narration." },
+              "disclosure": { "type": "string", "enum": ["silent", "mention", "hand-voice"], "description": "Per-target disclosure override; falls back to the effective default." }
+            },
+            "required": ["agentId"]
+          }
+        }
+      }
+    }
+  }
+}

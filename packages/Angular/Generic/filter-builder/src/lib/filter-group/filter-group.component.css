@@ -203,18 +203,6 @@ mj-filter-group .connector-label {
   letter-spacing: 0.5px;
 }
 
-/* Empty State */
-mj-filter-group .empty-state {
-  text-align: center;
-  padding: 24px;
-  color: var(--mj-text-disabled);
-}
-
-mj-filter-group .empty-state p {
-  margin: 0 0 12px 0;
-  font-size: 14px;
-}
-
 /* Responsive */
 @media (max-width: 768px) {
   mj-filter-group .group-header {

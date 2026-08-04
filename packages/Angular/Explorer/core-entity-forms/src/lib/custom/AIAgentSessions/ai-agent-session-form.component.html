@@ -1,0 +1,428 @@
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="ToolbarConfig"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+  <div class="record-form ai-agent-session-form">
+    <!-- Header (mirrors the AI Agent Run form header) -->
+    <div class="header">
+      <div class="header-content">
+        <div class="header-left">
+          <div class="icon-wrapper">
+            <i class="fas fa-tower-broadcast"></i>
+          </div>
+          <div class="header-info">
+            <h2>AI Agent Session</h2>
+            <div class="meta-info">
+              @if (record.AgentID) {
+                <span class="agent-name">
+                  <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('AI Agents', record.AgentID)">
+                    {{ record.Agent || 'Agent' }}
+                  </a>
+                </span>
+              }
+              @if (TargetAgentID) {
+                <i class="fas fa-arrow-right-long target-arrow"></i>
+                <span class="agent-name">
+                  <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('AI Agents', TargetAgentID)">
+                    {{ TargetAgentName || 'Target agent' }}
+                  </a>
+                </span>
+              }
+              <span class="run-id">{{ ShortSessionId }}</span>
+              @if (record.ConversationID) {
+                <span class="conversation-pill" (click)="NavigateToConversation()" title="Open conversation in Chat app">
+                  <i class="fas fa-comments"></i>
+                  <span>{{ record.Conversation || 'Conversation' }}</span>
+                  <i class="fas fa-external-link-alt pill-action"></i>
+                </span>
+              }
+            </div>
+          </div>
+        </div>
+        <div class="header-right">
+          <div class="status-badge" [attr.data-status]="record.Status">
+            <i class="fas" [ngClass]="GetStatusIcon(record.Status)"></i>
+            {{ record.Status }}
+          </div>
+          <div class="header-actions">
+            <button class="btn-icon" (click)="RefreshData()" title="Refresh">
+              <i class="fas fa-sync-alt"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-stats">
+        <div class="stat">
+          <span class="label">User</span>
+          <span class="value">
+            <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('Users', record.UserID)">{{ record.User }}</a>
+          </span>
+        </div>
+        <div class="stat">
+          <span class="label">Started</span>
+          <span class="value">{{ record.__mj_CreatedAt | date:'medium' }}</span>
+        </div>
+        @if (record.ClosedAt) {
+          <div class="stat">
+            <span class="label">Closed</span>
+            <span class="value">{{ record.ClosedAt | date:'medium' }}</span>
+          </div>
+        } @else {
+          <div class="stat">
+            <span class="label">Last Active</span>
+            <span class="value">{{ record.LastActiveAt | date:'medium' }}</span>
+          </div>
+        }
+        <div class="stat">
+          <span class="label">Duration</span>
+          <span class="value">{{ SessionDuration }}</span>
+        </div>
+        <div class="stat">
+          <span class="label">Channels</span>
+          <span class="value">{{ Channels.length }}</span>
+        </div>
+        <div class="stat">
+          <span class="label">Delegated Runs</span>
+          <span class="value">{{ DelegatedRunCount }}</span>
+        </div>
+        @if (SessionTokens != null && SessionTokens > 0) {
+          <div class="stat">
+            <span class="label">Tokens</span>
+            <span class="value">{{ SessionTokens | number:'1.0-0' }}</span>
+          </div>
+        }
+        @if (SessionCost != null && SessionCost > 0) {
+          <div class="stat">
+            <span class="label">Cost</span>
+            <span class="value success">${{ SessionCost | number:'1.2-4' }}</span>
+          </div>
+        }
+      </div>
+
+      <!-- Config bar: target agent / host instance / continuation -->
+      <div class="configuration-bar">
+        <div class="config-item">
+          <i class="fas fa-bullseye"></i>
+          <div class="config-content">
+            <div class="config-label">Target Agent</div>
+            <div class="config-value">
+              @if (TargetAgentID) {
+                <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('AI Agents', TargetAgentID)">
+                  {{ TargetAgentName || 'Unknown' }}
+                </a>
+              } @else {
+                <span class="muted">None</span>
+              }
+            </div>
+          </div>
+        </div>
+        <div class="config-item">
+          <i class="fas fa-server"></i>
+          <div class="config-content">
+            <div class="config-label">Host Instance</div>
+            <div class="config-value mono">{{ record.HostInstanceID || '—' }}</div>
+          </div>
+        </div>
+        <div class="config-item">
+          <i class="fas fa-link"></i>
+          <div class="config-content">
+            <div class="config-label">Continuation</div>
+            <div class="config-value">
+              @if (record.LastSessionID) {
+                <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('MJ: AI Agent Sessions', record.LastSessionID)">
+                  Resumed from prior session
+                </a>
+              } @else {
+                <span class="muted">None (new session)</span>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab" [class.active]="ActiveTab === 'runs'" (click)="ChangeTab('runs')">
+        <i class="fas fa-diagram-project"></i> Runs
+        @if (RunTree.length > 0) { <span class="tab-count">{{ RunTree.length }}</span> }
+      </button>
+      <button class="tab" [class.active]="ActiveTab === 'channels'" (click)="ChangeTab('channels')">
+        <i class="fas fa-plug"></i> Channels
+        @if (Channels.length > 0) { <span class="tab-count">{{ Channels.length }}</span> }
+      </button>
+      <button class="tab" [class.active]="ActiveTab === 'transcript'" (click)="ChangeTab('transcript')">
+        <i class="fas fa-comments"></i> Transcript
+        @if (Transcript.length > 0) { <span class="tab-count">{{ Transcript.length }}</span> }
+      </button>
+      <button class="tab" [class.active]="ActiveTab === 'details'" (click)="ChangeTab('details')">
+        <i class="fas fa-info-circle"></i> Details
+      </button>
+    </div>
+
+    <!-- Content -->
+    <div class="content-area">
+      @if (Loading) {
+        <mj-loading text="Loading session data..." size="medium"></mj-loading>
+      } @else if (LoadError) {
+        <mj-empty-state
+          Variant="error"
+          [Message]="LoadError" />
+      } @else {
+
+        <!-- Runs tab: the session's delegated run tree -->
+        @if (ActiveTab === 'runs') {
+          <div class="tab-content">
+            @if (RunTree.length === 0) {
+              <mj-empty-state
+                Icon="fa-solid fa-diagram-project"
+                Title="No Runs"
+                Message="No agent runs have been recorded for this session yet." />
+            } @else {
+              <div class="run-tree">
+                @for (node of RunTree; track node.id) {
+                  <div class="run-node"
+                       [class.run-node--child]="node.depth > 0"
+                       [style.margin-left.px]="node.depth * 36"
+                       (click)="OpenEntityRecord(node.entityName, node.id)"
+                       title="Open record">
+                    <div class="run-marker"
+                         [class.run-marker--coagent]="node.isCoAgentRun"
+                         [class.run-marker--prompt]="node.kind === 'promptRun'">
+                      @if (node.kind === 'promptRun') {
+                        <i class="fas fa-microchip"></i>
+                      } @else if (node.isCoAgentRun) {
+                        <i class="fas fa-tower-broadcast"></i>
+                      } @else {
+                        <i class="fas fa-robot"></i>
+                      }
+                    </div>
+                    <div class="run-body">
+                      <div class="run-headrow">
+                        <h4 class="run-title">{{ node.title }}</h4>
+                        <span class="run-time">{{ node.startedAt | date:'h:mm:ss a' }}</span>
+                      </div>
+                      <div class="run-sub">{{ node.subtitle }}</div>
+                      <div class="run-foot">
+                        <span class="run-status" [attr.data-status]="node.status">
+                          <i class="fas" [ngClass]="GetRunStatusIcon(node.status)"></i> {{ node.status }}
+                        </span>
+                        <span class="run-chip">
+                          <i class="fas fa-clock"></i> {{ FormatDuration(node.startedAt, node.completedAt) }}
+                        </span>
+                        @if (node.tokens != null && node.tokens > 0) {
+                          <span class="run-chip"><i class="fas fa-coins"></i> {{ node.tokens | number:'1.0-0' }} tok</span>
+                        }
+                        @if (node.cost != null && node.cost > 0) {
+                          <span class="run-chip"><i class="fas fa-dollar-sign"></i> {{ node.cost | number:'1.2-4' }}</span>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Channels tab -->
+        @if (ActiveTab === 'channels') {
+          <div class="tab-content">
+            @if (Channels.length === 0) {
+              <mj-empty-state
+                Icon="fa-solid fa-plug"
+                Title="No Channels"
+                Message="No channel instances were attached to this session." />
+            } @else {
+              <div class="channels-grid-wrap">
+                <table class="channels-grid">
+                  <thead>
+                    <tr>
+                      <th>Channel</th>
+                      <th>Transport</th>
+                      <th>Status</th>
+                      <th>Connected</th>
+                      <th>Last Active</th>
+                      <th>Disconnected</th>
+                      <th>Socket</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (channel of Channels; track channel.row.ID) {
+                      <tr (click)="OpenEntityRecord('MJ: AI Agent Session Channels', channel.row.ID)" title="Open record">
+                        <td>
+                          <span class="cell-strong">
+                            <i class="fas" [ngClass]="GetChannelIcon(channel.row.Channel)"></i>
+                            {{ channel.row.Channel }}
+                          </span>
+                        </td>
+                        <td>
+                          @if (channel.transportType) {
+                            <span class="transport-pill" [attr.data-transport]="channel.transportType">{{ channel.transportType }}</span>
+                          } @else {
+                            <span class="muted">—</span>
+                          }
+                        </td>
+                        <td>
+                          <span class="channel-status-pill" [attr.data-status]="channel.row.Status">{{ channel.row.Status }}</span>
+                        </td>
+                        <td class="mono">{{ channel.row.__mj_CreatedAt | date:'h:mm:ss a' }}</td>
+                        <td class="mono">{{ channel.row.LastActiveAt | date:'h:mm:ss a' }}</td>
+                        <td class="mono">
+                          @if (channel.row.DisconnectedAt) {
+                            {{ channel.row.DisconnectedAt | date:'h:mm:ss a' }}
+                          } @else {
+                            <span class="muted">—</span>
+                          }
+                        </td>
+                        <td class="mono socket-cell" [title]="channel.row.SocketUrl || ''">
+                          {{ channel.row.SocketUrl || '—' }}
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Transcript tab -->
+        @if (ActiveTab === 'transcript') {
+          <div class="tab-content">
+            @if (Transcript.length === 0) {
+              <mj-empty-state
+                Icon="fa-solid fa-comments"
+                Title="No Transcript"
+                Message="No conversation messages were stamped with this session." />
+            } @else {
+              <div class="transcript-thread">
+                @for (turn of Transcript; track turn.ID) {
+                  <div class="turn" [class.turn--user]="turn.Role === 'User'" [class.turn--error]="turn.Role === 'Error'">
+                    <div class="turn-avatar">
+                      @if (turn.Role === 'User') {
+                        <i class="fas fa-user"></i>
+                      } @else if (turn.Role === 'Error') {
+                        <i class="fas fa-triangle-exclamation"></i>
+                      } @else {
+                        <i class="fas fa-robot"></i>
+                      }
+                    </div>
+                    <div class="turn-main">
+                      <div class="turn-meta">
+                        @if (turn.Role === 'User') {
+                          {{ turn.User || 'User' }}
+                        } @else {
+                          {{ turn.Agent || 'Agent' }}
+                        }
+                        <span class="turn-time">{{ turn.__mj_CreatedAt | date:'h:mm:ss a' }}</span>
+                      </div>
+                      <div class="turn-bubble">{{ turn.Message }}</div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Details tab -->
+        @if (ActiveTab === 'details') {
+          <div class="tab-content">
+            <mj-accordion-panel [Expanded]="true">
+              <ng-template mjAccordionTitle>
+                <i class="fas fa-info-circle"></i> Session Record
+              </ng-template>
+              <div class="details-grid">
+                <div class="detail-item">
+                  <label>ID</label>
+                  <span class="mono">{{ record.ID }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Agent (Co-Agent)</label>
+                  <span>
+                    <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('AI Agents', record.AgentID)">
+                      {{ record.Agent || 'N/A' }}
+                    </a>
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>User</label>
+                  <span>
+                    <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('Users', record.UserID)">
+                      {{ record.User }}
+                    </a>
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>Conversation</label>
+                  <span>
+                    @if (record.ConversationID) {
+                      <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('MJ: Conversations', record.ConversationID)">
+                        {{ record.Conversation || record.ConversationID }}
+                      </a>
+                    } @else {
+                      <span>N/A</span>
+                    }
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>Status</label>
+                  <span class="status-badge small" [attr.data-status]="record.Status">{{ record.Status }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Prior Session</label>
+                  <span>
+                    @if (record.LastSessionID) {
+                      <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('MJ: AI Agent Sessions', record.LastSessionID)">
+                        {{ record.LastSessionID }}
+                      </a>
+                    } @else {
+                      <span>None (root)</span>
+                    }
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <label>Host Instance</label>
+                  <span class="mono">{{ record.HostInstanceID || 'N/A' }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Last Active At</label>
+                  <span>{{ record.LastActiveAt | date:'medium' }}</span>
+                </div>
+                <div class="detail-item">
+                  <label>Closed At</label>
+                  <span>{{ record.ClosedAt ? (record.ClosedAt | date:'medium') : 'Still open' }}</span>
+                </div>
+              </div>
+            </mj-accordion-panel>
+
+            @if (record.Config_) {
+              <mj-accordion-panel [Expanded]="false">
+                <ng-template mjAccordionTitle>
+                  <i class="fas fa-code"></i> Config (Session State JSON)
+                </ng-template>
+                <div class="config-viewer">
+                  <mj-code-editor
+                    [ngModel]="PrettyConfig"
+                    [language]="'json'"
+                    [readonly]="true"
+                    style="height: 300px; width: 100%;">
+                  </mj-code-editor>
+                </div>
+              </mj-accordion-panel>
+            }
+          </div>
+        }
+      }
+    </div>
+  </div>
+</mj-record-form-container>
+}

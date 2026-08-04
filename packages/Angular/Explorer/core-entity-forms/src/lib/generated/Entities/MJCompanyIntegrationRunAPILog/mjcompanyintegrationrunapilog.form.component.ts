@@ -17,7 +17,7 @@ export class MJCompanyIntegrationRunAPILogFormComponent extends BaseFormComponen
         this.initSections([
             { sectionKey: 'executionTimingStatus', sectionName: 'Execution Timing & Status', isExpanded: true },
             { sectionKey: 'aPICallDetails', sectionName: 'API Call Details', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

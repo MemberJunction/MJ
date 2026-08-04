@@ -1,0 +1,69 @@
+.ps-experiments { display: flex; flex-direction: column; gap: 16px; }
+
+.ps-experiments .sess-head { display: flex; align-items: center; gap: 12px; }
+.ps-experiments .sess-head h2 { font-size: 18px; color: var(--mj-text-primary); display: flex; align-items: center; gap: 10px; }
+
+/* leaderboard strip */
+.ps-experiments .lead-strip { display: flex; gap: 10px; align-items: center; overflow-x: auto; }
+.ps-experiments .lead-lbl { padding-right: 14px; border-right: 1px solid var(--mj-border-default); flex: 0 0 auto; }
+.ps-experiments .lead-lbl .t { display: flex; align-items: center; gap: 7px; font-weight: 650; color: var(--mj-text-primary); }
+.ps-experiments .lp {
+  display: flex; align-items: center; gap: 9px; flex: 0 0 auto; padding: 8px 12px;
+  border: 1px solid var(--mj-border-default); border-radius: 9px; background: var(--mj-bg-surface);
+}
+.ps-experiments .lp.best { background: var(--mj-status-warning-bg); border-color: var(--mj-status-warning-border); }
+.ps-experiments .lp.pruned { opacity: .55; }
+.ps-experiments .algo-ic {
+  width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center;
+  color: var(--mj-text-inverse); font-size: 12px; flex: 0 0 auto;
+}
+.ps-experiments .lp .nm { font-size: 12.5px; font-weight: 600; color: var(--mj-text-primary); }
+.ps-experiments .lp .auc { font-weight: 740; font-variant-numeric: tabular-nums; color: var(--mj-text-primary); }
+.ps-experiments .lp .auc.win { color: var(--mj-status-success-text); }
+
+/* budget rail */
+.ps-experiments .budget-rail { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 880px) { .ps-experiments .budget-rail { grid-template-columns: 1fr; } }
+.ps-experiments .bud { display: flex; align-items: center; gap: 13px; }
+.ps-experiments .b-val { font-size: 15px; color: var(--mj-text-primary); margin-top: 2px; }
+
+/* kanban */
+.ps-experiments .kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 980px) { .ps-experiments .kanban { grid-template-columns: 1fr; } }
+.ps-experiments .kcol { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; }
+.ps-experiments .kcol-head {
+  display: flex; align-items: center; gap: 9px; padding: 12px 14px; border-bottom: 1px solid var(--mj-border-subtle);
+  font-weight: 650; color: var(--mj-text-primary);
+}
+.ps-experiments .kcol-head h3 { font-size: 13.5px; margin: 0; flex: 1; }
+.ps-experiments .kcol.run .kcol-head { border-top: 3px solid var(--mj-brand-primary); }
+.ps-experiments .kcol.done .kcol-head { border-top: 3px solid var(--mj-status-success); }
+.ps-experiments .kcol.prune .kcol-head { border-top: 3px solid var(--mj-text-disabled); }
+.ps-experiments .kcol.run .kcol-head i { color: var(--mj-brand-primary); }
+.ps-experiments .kcol.done .kcol-head i { color: var(--mj-status-success); }
+.ps-experiments .kcol.prune .kcol-head i { color: var(--mj-text-muted); }
+.ps-experiments .cnt {
+  background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary);
+  border-radius: 999px; padding: 1px 9px; font-size: 12px; font-weight: 700;
+}
+.ps-experiments .kbody { padding: 11px; display: flex; flex-direction: column; gap: 11px; }
+
+.ps-experiments .icard {
+  border: 1px solid var(--mj-border-default); border-radius: 9px; padding: 11px;
+  background: var(--mj-bg-surface-card); display: flex; flex-direction: column; gap: 9px;
+}
+.ps-experiments .icard.running { border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, var(--mj-border-default)); }
+.ps-experiments .icard.best { border-left: 3px solid var(--mj-status-warning); }
+.ps-experiments .icard.pruned { opacity: .78; }
+.ps-experiments .ic-top { display: flex; align-items: center; gap: 9px; }
+.ps-experiments .ic-top .algo-ic { width: 30px; height: 30px; }
+.ps-experiments .ic-top .nm { font-weight: 600; color: var(--mj-text-primary); font-size: 13px; }
+.ps-experiments .feat-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.ps-experiments .ic-prog .meta { display: flex; justify-content: space-between; margin-top: 5px; }
+.ps-experiments .ic-score { display: flex; align-items: baseline; gap: 8px; }
+.ps-experiments .ic-score .v { font-size: 21px; font-weight: 720; color: var(--mj-text-primary); font-variant-numeric: tabular-nums; }
+.ps-experiments .ic-score .v.green { color: var(--mj-status-success-text); }
+.ps-experiments .rationale {
+  display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid var(--mj-border-subtle); color: var(--mj-text-secondary);
+}
+.ps-experiments .rationale i { color: var(--mj-brand-primary); margin-top: 2px; }

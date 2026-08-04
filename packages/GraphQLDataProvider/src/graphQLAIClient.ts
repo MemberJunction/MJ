@@ -1,9 +1,12 @@
 import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
-import { ExecuteAgentParams, ExecuteAgentResult } from "@memberjunction/ai-core-plus";
+import { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { SafeJSONParse, CleanAndParseJSON } from "@memberjunction/global";
-import { FireAndForgetHelper } from "./fireAndForgetHelper";
+import { FireAndForgetHelper, StallDecision } from "./fireAndForgetHelper";
+
+/** Mutable holder for the most recent run id observed on the PubSub stream. */
+interface RunIdRef { id?: string; }
 
 /**
  * Client for executing AI operations through GraphQL.
@@ -311,6 +314,7 @@ export class GraphQLAIClient {
             // Enable fire-and-forget to avoid Azure proxy timeouts
             variables.fireAndForget = true;
 
+            const runIdRef: RunIdRef = {};
             return await FireAndForgetHelper.Execute<ExecuteAgentResult>({
                 dataProvider: this._dataProvider,
                 mutation,
@@ -320,9 +324,14 @@ export class GraphQLAIClient {
                 validateAck: (ack) => ack?.success === true,
                 isCompletionEvent: (parsed) => this.isAgentCompletionEvent(parsed),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
-                onMessage: params.onProgress
-                    ? (parsed) => this.forwardAgentProgress(parsed, params.onProgress!)
-                    : undefined,
+                // Headless clients (no PushStatusUpdates channel) run synchronously; the resolver
+                // returns the full result inline in the mutation ack rather than over PubSub.
+                extractSyncResult: (ack) => this.extractAgentResultFromAck(ack),
+                onMessage: (parsed) => {
+                    this.captureAgentRunId(parsed, runIdRef);
+                    if (params.onProgress) this.forwardAgentProgress(parsed, params.onProgress);
+                },
+                onStall: () => this.reconcileAgentRun(runIdRef.id ? `ID='${runIdRef.id}'` : undefined),
                 createErrorResult: (msg) => this.createAgentErrorResult(msg),
             });
         } catch (e) {
@@ -350,7 +359,9 @@ export class GraphQLAIClient {
                 $createNotification: Boolean,
                 $sourceArtifactId: String,
                 $sourceArtifactVersionId: String,
-                $fireAndForget: Boolean
+                $fireAndForget: Boolean,
+                $planMode: Boolean,
+                $requestedSkillIDs: [String!]
             ) {
                 RunAIAgent(
                     agentId: $agentId,
@@ -367,7 +378,9 @@ export class GraphQLAIClient {
                     createNotification: $createNotification,
                     sourceArtifactId: $sourceArtifactId,
                     sourceArtifactVersionId: $sourceArtifactVersionId,
-                    fireAndForget: $fireAndForget
+                    fireAndForget: $fireAndForget,
+                    planMode: $planMode,
+                    requestedSkillIDs: $requestedSkillIDs
                 ) {
                     success
                     errorMessage
@@ -419,6 +432,9 @@ export class GraphQLAIClient {
         // Add source artifact tracking for versioning (GraphQL resolver-level concern)
         if (sourceArtifactId !== undefined) variables.sourceArtifactId = sourceArtifactId;
         if (sourceArtifactVersionId !== undefined) variables.sourceArtifactVersionId = sourceArtifactVersionId;
+        // Per-request Plan Mode + user-requested skills (symmetric with the conversation-detail path).
+        if (params.planMode !== undefined) variables.planMode = params.planMode;
+        if (params.requestedSkillIDs !== undefined) variables.requestedSkillIDs = params.requestedSkillIDs;
 
         return variables;
     }
@@ -508,9 +524,16 @@ export class GraphQLAIClient {
                 isCompletionEvent: (parsed) =>
                     this.isConversationDetailCompletionEvent(parsed, params.conversationDetailId),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
+                // Headless clients (no PushStatusUpdates channel) run synchronously; the resolver
+                // returns the full result inline in the mutation ack rather than over PubSub.
+                extractSyncResult: (ack) => this.extractAgentResultFromAck(ack),
                 onMessage: params.onProgress
                     ? (parsed) => this.forwardConversationDetailProgress(parsed, params.onProgress!)
                     : undefined,
+                // Reconcile by the caller-known ConversationDetailID rather than a run id scraped off
+                // the shared session stream: that key is operation-specific, so concurrent
+                // conversation-detail runs on one session can never cross-resolve to each other.
+                onStall: () => this.reconcileAgentRun(`ConversationDetailID='${params.conversationDetailId}'`),
                 createErrorResult: (msg) => this.createAgentErrorResult(msg),
             });
         } catch (e) {
@@ -533,6 +556,8 @@ export class GraphQLAIClient {
                 $lastRunId: String,
                 $autoPopulateLastRunPayload: Boolean,
                 $configurationId: String,
+                $planMode: Boolean,
+                $requestedSkillIDs: [String!],
                 $createArtifacts: Boolean,
                 $createNotification: Boolean,
                 $sourceArtifactId: String,
@@ -549,6 +574,8 @@ export class GraphQLAIClient {
                     lastRunId: $lastRunId,
                     autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
                     configurationId: $configurationId,
+                    planMode: $planMode,
+                    requestedSkillIDs: $requestedSkillIDs,
                     createArtifacts: $createArtifacts,
                     createNotification: $createNotification,
                     sourceArtifactId: $sourceArtifactId,
@@ -587,6 +614,8 @@ export class GraphQLAIClient {
         if (params.lastRunId !== undefined) variables.lastRunId = params.lastRunId;
         if (params.autoPopulateLastRunPayload !== undefined) variables.autoPopulateLastRunPayload = params.autoPopulateLastRunPayload;
         if (params.configurationId !== undefined) variables.configurationId = params.configurationId;
+        if (params.planMode !== undefined) variables.planMode = params.planMode;
+        if (params.requestedSkillIDs !== undefined) variables.requestedSkillIDs = params.requestedSkillIDs;
         if (params.createArtifacts !== undefined) variables.createArtifacts = params.createArtifacts;
         if (params.createNotification !== undefined) variables.createNotification = params.createNotification;
         if (params.sourceArtifactId !== undefined) variables.sourceArtifactId = params.sourceArtifactId;
@@ -623,6 +652,71 @@ export class GraphQLAIClient {
             data?.conversationDetailId === conversationDetailId;
     }
 
+    // ===== Agent Run Reconciliation (idle-stall recovery) =====
+
+    /**
+     * Capture the agent run id from any PubSub message so the reconciliation hook has a
+     * handle even before progress flows. Used only by the plain RunAIAgent path, which
+     * has no conversationDetailId to reconcile on (the conversation-detail path reconciles
+     * by ConversationDetailID instead). Heartbeats carry `data.runId`;
+     * progress/streaming/completion carry `data.agentRunId`. Ignores the 'unknown'
+     * placeholder used by background error events.
+     */
+    private captureAgentRunId(parsed: Record<string, unknown>, ref: RunIdRef): void {
+        const data = parsed.data as Record<string, unknown> | undefined;
+        const id = (data?.agentRunId ?? data?.runId) as string | undefined;
+        if (id && id !== 'unknown') {
+            ref.id = id;
+        }
+    }
+
+    /**
+     * Reconcile against the persisted AI Agent Run when the client idle timer expires.
+     * `filter` selects the run: the plain path passes `ID='<captured run id>'`; the
+     * conversation-detail path passes `ConversationDetailID='<id>'` (a stable,
+     * operation-specific key). 'Running' means execution is genuinely in progress (keep
+     * waiting); any other status means executeAIAgent already returned, so we resolve
+     * from the record — recovering a completion event lost to a socket blip.
+     *
+     * The recovered result rehydrates `payload` from the run's persisted Result so a
+     * programmatic caller still receives the agent's output. The interactive
+     * `responseForm` / actionable + automatic commands are intentionally NOT
+     * reconstructed here: they live on the response ConversationDetail and the
+     * conversation UI renders them from that record, independent of this return value.
+     */
+    private async reconcileAgentRun(filter: string | undefined): Promise<StallDecision<ExecuteAgentResult>> {
+        if (!filter) {
+            return 'continue'; // no handle yet — bounded by maxStallReconciles
+        }
+
+        const view = await this._dataProvider.RunView<MJAIAgentRunEntityExtended>({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: filter,
+            OrderBy: '__mj_CreatedAt DESC', // newest run wins if a conversation detail was retried
+            ResultType: 'entity_object',
+            BypassCache: true, // true DB state — server wrote this via a different provider
+        });
+
+        const run = view.Success ? view.Results?.[0] : undefined;
+        if (!run) {
+            return 'continue'; // run not created yet / transient read miss — bounded by maxStallReconciles
+        }
+
+        if (run.Status === 'Running') {
+            return 'continue';
+        }
+
+        const success = run.Status === 'Completed' || run.Status === 'Paused' || run.Status === 'AwaitingFeedback';
+        return {
+            resolve: {
+                success,
+                agentRun: run,
+                payload: run.Result ? SafeJSONParse(run.Result) ?? undefined : undefined,
+                errorMessage: run.ErrorMessage ?? undefined,
+            } as ExecuteAgentResult,
+        };
+    }
+
     // ===== Agent Result Extraction =====
 
     /**
@@ -639,6 +733,32 @@ export class GraphQLAIClient {
         return {
             success: data.success as boolean,
             agentRun: undefined,
+        } as ExecuteAgentResult;
+    }
+
+    /**
+     * Extract an ExecuteAgentResult from a SYNCHRONOUS mutation ack.
+     *
+     * Used on the headless-client path: when the data provider has no PushStatusUpdates
+     * channel, FireAndForgetHelper runs the mutation with `fireAndForget: false`, so the
+     * resolver awaits the run and returns the full sanitized result inline in the mutation's
+     * own return payload (`{ success, errorMessage, executionTimeMs, result }`). The `result`
+     * field is the same JSON the completion event carries, so the parsed shape — including
+     * `agentRun` (with its ID and settled Status) — matches the PubSub-completion path.
+     */
+    private extractAgentResultFromAck(ack: Record<string, unknown>): ExecuteAgentResult {
+        const resultJson = ack.result as string | undefined;
+        if (resultJson) {
+            const parsed = SafeJSONParse(resultJson) as ExecuteAgentResult | null;
+            if (parsed) {
+                return parsed;
+            }
+        }
+        // Fallback: the ack carried no parseable result payload — surface success + any error message.
+        return {
+            success: ack.success as boolean,
+            agentRun: undefined,
+            errorMessage: ack.errorMessage as string | undefined,
         } as ExecuteAgentResult;
     }
 
@@ -1673,6 +1793,17 @@ export interface RunAIAgentFromConversationDetailParams {
      * Configuration ID to use
      */
     configurationId?: string;
+
+    /**
+     * Whether Plan Mode is requested for this run (requires the agent's SupportsPlanMode capability)
+     */
+    planMode?: boolean;
+
+    /**
+     * Skill IDs the user requested via `/skill-name` mentions. The server intersects these with the
+     * agent's accepted skills AND the user's Run permission before any are activated.
+     */
+    requestedSkillIDs?: string[];
 
     /**
      * Whether to create artifacts from the agent's payload

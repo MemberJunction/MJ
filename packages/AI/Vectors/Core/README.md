@@ -20,7 +20,7 @@ npm install @memberjunction/ai-vectors
 | `IVectorIndex` | Interface | Contract for CRUD operations on vector records within an index |
 | `ChunkTextParams` | Type | Configuration for `TextChunker.ChunkText()` |
 | `TextChunk` | Type | Output chunk with text, offsets, token count, and index |
-| `PageRecordsParams` | Type | Paginated entity record retrieval configuration |
+| `PageRecordsParams` | Type | Paginated entity record retrieval configuration. Supports both OFFSET-based pagination (`PageNumber`) and keyset/seek pagination (`AfterKey`) — see [KEYSET_PAGINATION_GUIDE.md](../../../../guides/KEYSET_PAGINATION_GUIDE.md). |
 
 ## Architecture
 
@@ -72,6 +72,18 @@ graph TD
 ## TextChunker
 
 Token-aware text splitting that respects natural language boundaries. All methods are static.
+
+> **Looking for chunking *strategy*?** `TextChunker` is the low-level primitive — given a string and a
+> budget, split it. It has no notion of documents, media, or meaning. Choosing *where* content should
+> be cut (headings, topic shifts, audio chapters) belongs to `BaseSegmenter` in
+> [`@memberjunction/ai-segmentation`](../../Segmentation/README.md), which sits one layer up and uses
+> `TextChunker` to enforce the budget within a unit it identified. Ingestion pipelines should call a
+> segmenter, not this class directly. See the
+> [Content Segmentation Guide](../../../../guides/CONTENT_SEGMENTATION_GUIDE.md).
+>
+> **Offsets are provenance.** `StartOffset`/`EndOffset` are persisted as chunk provenance and used to
+> resolve a search hit back to its source passage — always verify that
+> `text.slice(StartOffset, EndOffset)` contains the chunk when changing this class.
 
 ### Strategies
 
@@ -320,8 +332,46 @@ export class MyVectorProcessor extends VectorBase {
             page++;
         }
     }
+
+    // Preferred for deep iteration: keyset (seek) pagination via AfterKey.
+    // O(log N) per page regardless of depth — `PageNumber`-based OFFSET pagination
+    // gets progressively slower as pages climb into the thousands.
+    async ProcessInKeysetPages(entityId: string): Promise<void> {
+        // Check upfront — falls back to PageNumber path if the entity has a composite PK.
+        if (!this.CanUseKeysetPagination(entityId)) {
+            // ... use the PageNumber loop above
+            return;
+        }
+        const entity = this.Metadata.Entities.find(e => e.ID === entityId)!;
+        const pkField = entity.FirstPrimaryKey!;
+
+        let lastSeenKey: CompositeKey | undefined; // undefined => first page
+        while (true) {
+            const records = await this.PageRecordsByEntityID<Record<string, unknown>>({
+                EntityID: entityId,
+                PageNumber: 0, // ignored when AfterKey is set
+                PageSize: 500,
+                ResultType: 'simple',
+                Filter: "Status = 'Active'",
+                AfterKey: lastSeenKey,
+            });
+            if (records.length === 0) break;
+            for (const r of records) { /* process */ }
+            if (records.length < 500) break;
+            lastSeenKey = CompositeKey.FromKeyValuePair(pkField.Name, records[records.length - 1][pkField.Name]);
+        }
+    }
 }
 ```
+
+### Keyset Pagination Helpers
+
+`VectorBase` exposes two helpers for keyset (seek) pagination:
+
+- **`PageRecordsParams.AfterKey?: CompositeKey`** — optional cursor that switches `PageRecordsByEntityID` from OFFSET (`PageNumber`) mode to keyset mode. When set, the query uses `WHERE pk > @lastSeen ORDER BY pk LIMIT N` and stays O(log N) per page.
+- **`CanUseKeysetPagination(entityID)`** — returns true if the entity has a single-column PK on an orderable type (i.e. it's safe to pass `AfterKey`). Use it to choose between the keyset and OFFSET paths.
+
+See **[KEYSET_PAGINATION_GUIDE.md](../../../../guides/KEYSET_PAGINATION_GUIDE.md)** for the full pattern, constraints (composite-PK entities throw `AfterKeyNotSupportedError`), and reference implementations across the framework.
 
 ### Filtering with Composite Keys
 

@@ -14,10 +14,9 @@ type RunStatusColorType = 'amber' | 'green' | 'red';
         <mj-loading text="Loading run history..." size="small"></mj-loading>
       </div>
     } @else if (Runs.length === 0) {
-      <div class="history-empty">
-        <i class="fa-solid fa-clock-rotate-left"></i>
-        <p>No runs recorded yet</p>
-      </div>
+      <mj-empty-state class="history-empty" Size="compact"
+        Icon="fa-solid fa-clock-rotate-left"
+        Title="No runs recorded yet" />
     } @else {
       <div class="history-panel">
         <table class="history-table">

@@ -85,6 +85,18 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
   @Input() artifactVersion!: MJArtifactVersionEntity;
 
   /**
+   * Inline-PREVIEW resolution does NOT live here.
+   *
+   * Plugins that want to drive an inline preview inside conversation message cards declare the
+   * preview contract as STATIC members on their class — `static readonly PreviewComponentType` and
+   * `static CanHandlePreview(...)` — described by {@link IArtifactViewerPluginPreviewStatics}. The
+   * resolver reads those statics off the registered constructor WITHOUT instantiating the plugin
+   * (these are Angular components with DI constructors; a bare `new` outside an injection context
+   * throws). There is intentionally NO instance-level preview member on this base class — static is
+   * the single source of truth.
+   */
+
+  /**
    * Optional: Custom height for the viewer (defaults to auto)
    */
   @Input() height?: string;

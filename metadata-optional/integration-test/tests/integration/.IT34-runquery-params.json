@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT34 - RunQuery Parameter Permutation",
+    "Description": "RunQuery parameter permutation: all-optional defaults, per-param and combo filters, number/date/array coercion + clean rejections, 0-truthiness pin, unknown-param both legs, injection probe through filter-piped params, ValidationFilters enforcement guard. 10 checks (QP1-QP10), read-only, client transport.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "RunQuery parameter permutation: all-optional defaults, per-param and combo filters, number/date/array coercion + clean rejections, 0-truthiness pin, unknown-param both legs, injection probe through filter-piped params, ValidationFilters enforcement guard. 10 checks (QP1-QP10), read-only, client transport."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "runquery-params"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "E0C1DF37-AB0C-46CA-B049-A696EE63D715"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T12:28:04.749Z",
+    "checksum": "8b836ccc1bb2d78f152a6b170a51e56d26f615efd73c86a4c5eae70a8c396a9d"
+  }
+}

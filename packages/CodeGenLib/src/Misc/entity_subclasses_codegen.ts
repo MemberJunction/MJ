@@ -10,6 +10,15 @@ import { SQLLogging } from './sql_logging';
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 
 /**
+ * Narrow typed view over a parsed `ts.SourceFile` exposing the internal-but-stable
+ * `parseDiagnostics` property the parser populates during `ts.createSourceFile`.
+ * Lets us read syntax diagnostics without constructing a full `ts.Program`.
+ */
+interface ParsedSourceFile extends ts.SourceFile {
+    parseDiagnostics?: ts.Diagnostic[];
+}
+
+/**
  * Dynamically collects all own property names from BaseEntity's prototype chain
  * (excluding Object.prototype). Any entity field whose CodeName matches one of
  * these is suffixed with `_` to avoid shadowing base-class members at the
@@ -87,21 +96,10 @@ export class EntitySubClassGeneratorBase {
           ts.ScriptKind.TS
       );
 
-      // Check for syntax errors using a minimal compiler program
-      const compilerHost = ts.createCompilerHost({});
-      const originalGetSourceFile = compilerHost.getSourceFile;
-      compilerHost.getSourceFile = (fileName: string, languageVersion: ts.ScriptTarget) => {
-          if (fileName === 'jsontype-validation.ts') return sourceFile;
-          return originalGetSourceFile.call(compilerHost, fileName, languageVersion);
-      };
-
-      const program = ts.createProgram(
-          ['jsontype-validation.ts'],
-          { noEmit: true, strict: false, skipLibCheck: true },
-          compilerHost
-      );
-
-      const syntacticDiagnostics = program.getSyntacticDiagnostics(sourceFile);
+      // Read syntax errors directly from the parser-populated diagnostics on the
+      // source file — avoids constructing a full ts.Program (which loads the TS
+      // default-lib .d.ts files on every call).
+      const syntacticDiagnostics = (sourceFile as ParsedSourceFile).parseDiagnostics ?? [];
       for (const diag of syntacticDiagnostics) {
           const message = ts.flattenDiagnosticMessageText(diag.messageText, '\n');
           errors.push(`${prefix}: Syntax error — ${message}`);
@@ -149,7 +147,19 @@ export class EntitySubClassGeneratorBase {
       for (const e of entities) {
         sContent += await this.generateEntitySubClass(pool, e, false, skipDBUpdate);
       }
-      const allContent = `${this.generateEntitySubClassFileHeader()} \n ${zodContent} \n ${sContent}`;
+      // Hoist the base-class imports (e.g. ReadOnlyExternalBaseEntity for external entities, or custom
+      // subclass imports) into the file header, de-duplicated. Emitting each once — instead of once per
+      // entity — prevents a TS2300 duplicate-identifier error in files with 2+ external entities.
+      // Only consider entities that actually emit a class: generateEntitySubClass skips PK-less entities
+      // (returns ''), so hoisting their import would leave a dangling/unused import (a build error under
+      // a downstream consumer's noUnusedLocals). Match that skip condition here.
+      const subclassImports: string = [...new Set(
+        entities
+          .filter((e) => e.PrimaryKeys.length > 0)
+          .map((e) => this.resolveEntityBaseClass(e).importStatement)
+          .filter((s) => s.length > 0)
+      )].join('');
+      const allContent = `${this.generateEntitySubClassFileHeader()} \n ${subclassImports}${zodContent} \n ${sContent}`;
 
       makeDir(directory);
       fs.writeFileSync(path.join(directory, 'entity_subclasses.ts'), allContent);
@@ -174,10 +184,24 @@ export const loadModule = () => {
   }
 
   /**
-   *
-   * @param entity
-   * @param includeFileHeader
+   * Resolves an entity's generated base class and the import statement that class requires.
+   * Pure (no side effects) so BOTH {@link generateEntitySubClass} and the file assembler can call it —
+   * the assembler uses it to hoist and DE-DUPLICATE these imports into the file header. Emitting the
+   * import once per file instead of once per entity avoids a TS2300 duplicate-identifier error when a
+   * file contains 2+ external entities (each previously emitted `import { ReadOnlyExternalBaseEntity }`).
+   * Precedence: explicit custom subclass → ReadOnlyExternalBaseEntity (external entities) → BaseEntity.
    */
+  protected resolveEntityBaseClass(entity: EntityInfo): { baseClass: string; importStatement: string } {
+    const explicitSubClass: string = entity.EntityObjectSubclassName ? entity.EntityObjectSubclassName : '';
+    const explicitSubClassImport: string = entity.EntityObjectSubclassImport ? entity.EntityObjectSubclassImport : '';
+    if (explicitSubClass.length > 0 && explicitSubClassImport.length > 0) {
+      return { baseClass: explicitSubClass, importStatement: `import { ${explicitSubClass} } from '${explicitSubClassImport}';\n` };
+    } else if (entity.ExternalDataSourceID) {
+      return { baseClass: 'ReadOnlyExternalBaseEntity', importStatement: `import { ReadOnlyExternalBaseEntity } from '@memberjunction/core-entities';\n` };
+    }
+    return { baseClass: 'BaseEntity', importStatement: '' };
+  }
+
   public async generateEntitySubClass(pool: CodeGenConnection, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
     if (entity.PrimaryKeys.length === 0) {
       console.warn(`SKIPPING TYPESCRIPT GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
@@ -300,11 +324,24 @@ export const loadModule = () => {
         return sRet;
       }).join('\n\n');
 
-      const subClass: string = entity.EntityObjectSubclassName ? entity.EntityObjectSubclassName : '';
-      const subClassImport: string = entity.EntityObjectSubclassImport ? entity.EntityObjectSubclassImport : '';
-      const sBaseClass: string = subClass.length > 0 && subClassImport.length > 0 ? `${subClass}` : 'BaseEntity';
-      const subClassImportStatement: string =
-        subClass.length > 0 && subClassImport.length > 0 ? `import { ${subClass} } from '${subClassImport}';\n` : '';
+      // Base-class resolution, in precedence order:
+      //   1. An explicit custom subclass configured on the entity (EntityObjectSubclassName/Import).
+      //   2. ReadOnlyExternalBaseEntity for entities backed by an external data source — they
+      //      proxy a remote system live and must reject Save/Delete. (External entities only ever
+      //      appear in downstream generated packages, so the @memberjunction/core-entities import
+      //      is always a clean cross-package import, never a self-import.)
+      //   3. BaseEntity for everything else.
+      // Base class + its import come from resolveEntityBaseClass (pure) so the file assembler can hoist
+      // and de-duplicate the imports into the header. The per-entity inline import (below) is emitted
+      // ONLY in the standalone includeFileHeader path (single entity → no duplication); in the
+      // multi-entity file path the assembler owns the (deduped) imports.
+      const { baseClass: sBaseClass, importStatement: subClassImportStatement } = this.resolveEntityBaseClass(entity);
+      if (entity.ExternalDataSourceID && entity.EntityObjectSubclassName && entity.EntityObjectSubclassImport) {
+        // Custom subclass takes precedence over ReadOnlyExternalBaseEntity, so this external entity's
+        // read-only guarantee holds ONLY if that subclass itself extends ReadOnlyExternalBaseEntity.
+        // Warn so the author doesn't silently lose Save/Delete rejection.
+        logStatus(`   ⚠️  External entity '${entity.Name}' has a custom subclass ('${entity.EntityObjectSubclassName}') that overrides ReadOnlyExternalBaseEntity — Save/Delete will be rejected only if '${entity.EntityObjectSubclassName}' extends ReadOnlyExternalBaseEntity.`);
+      }
       const loadFieldString: string = entity.PrimaryKeys.map((f) => `${f.CodeName}: ${f.TSType}`).join(', ');
       const loadFunction: string = `    /**
     * Loads the ${entity.Name} record from the database
@@ -333,7 +370,7 @@ export const loadModule = () => {
     * @memberof ${sClassName}
     * @throws {Error} - Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.
     */
-    public async Delete(): Promise<boolean> {
+    public override async Delete(): Promise<boolean> {
         throw new Error('Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.');
     }`;
       } else if (entity.CascadeDeletes) {
@@ -347,7 +384,7 @@ export const loadModule = () => {
     * @memberof ${sClassName}
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -385,7 +422,7 @@ export const loadModule = () => {
     * @memberof ${sClassName}
     * @throws {Error} - Save is not allowed for ${entity.Name}, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
     */
-    public async Save(options?: EntitySaveOptions) : Promise<boolean> {
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
         throw new Error('Save is not allowed for ${entity.Name}, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
     }`;
 
@@ -449,7 +486,7 @@ ${jsonTypeBlock}
  * @class${disabledFlag}
  * @public${deprecatedFlag}
  */
-${subClassImportStatement}@RegisterClass(BaseEntity, '${entity.Name}')
+${includeFileHeader ? subClassImportStatement : ''}@RegisterClass(BaseEntity, '${entity.Name}')
 export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}
 
 ${fields}
@@ -492,41 +529,48 @@ ${fields}
       if (!skipDBUpdate) {
         // only do the database update stuff if we are not skipping the DB update, of course the .justGenerated flag SHOULD be false in all of the records
         // we have in the ret.validators array but this is an explicit flag to ensure we don't even bother checking
+        // Build SQL through the dialect rather than hardcoding T-SQL syntax — `[brackets]` and
+        // `GETUTCDATE()` are SS-only and PG's strict parser rejects both.
+        const dialect = pool.Dialect;
+        const qi = (n: string) => dialect.QuoteIdentifier(n);
+        const lit = (v: string) => dialect.QuoteStringLiteral(v);
+        const utcNow = dialect.CurrentTimestampUTC();
+        const generatedCodeTbl = dialect.QuoteSchema(mj_core_schema(), 'GeneratedCode');
+        const generatedCodeCatsView = dialect.QuoteSchema(mj_core_schema(), 'vwGeneratedCodeCategories');
+        const validatorCodeCategoryID = `(SELECT ${qi('ID')} FROM ${generatedCodeCatsView} WHERE ${qi('Name')}=${lit('CodeGen: Validators')})`;
+
         let sSQL: string  = '';
         const justGenerated = ret.validators.filter((f) => f.wasGenerated);
         for (const v of justGenerated) {
           // only update the DB for the fields that were actually generated/regenerated, otherwise not needed
-          const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());   
+          const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());
           sSQL += `-- CHECK constraint for ${entity.Name}${f ? ': Field: ' + f.Name : ' @ Table Level'} was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function\n`
-          const code = v.functionText.replace(/'/g, "''");
-          const source = v.sourceCheckConstraint.replace(/'/g, "''");
-          const description = v.functionDescription.replace(/'/g, "''");
-          const name = v.functionName.replace(/'/g, "''");
-          const validatorCodeCategoryID = `(SELECT ID FROM ${mj_core_schema()}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators')`;
           if (v.generatedCodeId) {
             // need to update the existing record in the __mj.GeneratedCode table
-            sSQL += `UPDATE [${mj_core_schema()}].[GeneratedCode] SET
-                        Source='${source}',
-                        Code='${code}',
-                        Description='${description}',
-                        Name='${name}',
-                        GeneratedAt=GETUTCDATE(),
-                        GeneratedByModelID='${v.aiModelID}'
+            sSQL += `UPDATE ${generatedCodeTbl} SET
+                        ${qi('Source')}=${lit(v.sourceCheckConstraint)},
+                        ${qi('Code')}=${lit(v.functionText)},
+                        ${qi('Description')}=${lit(v.functionDescription)},
+                        ${qi('Name')}=${lit(v.functionName)},
+                        ${qi('GeneratedAt')}=${utcNow},
+                        ${qi('GeneratedByModelID')}=${lit(v.aiModelID)}
                      WHERE
-                        ID='${v.generatedCodeId}';`
+                        ${qi('ID')}=${lit(v.generatedCodeId)};`
           }
           else {
             // need to create a row inside the __mj.GeneratedCode table
-            sSQL += `INSERT INTO [${mj_core_schema()}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
-                      VALUES (${validatorCodeCategoryID}, '${v.aiModelID}', GETUTCDATE(), 'TypeScript','Approved', '${source}', '${code}', '${description}', '${name}', '${f ? entityFieldsEntityID : entitiesEntityID}', '${f ? f.ID : entity.ID}');
+            const linkedEntityID = f ? entityFieldsEntityID : entitiesEntityID;
+            const linkedRecordPK = f ? f.ID : entity.ID;
+            sSQL += `INSERT INTO ${generatedCodeTbl} (${qi('CategoryID')}, ${qi('GeneratedByModelID')}, ${qi('GeneratedAt')}, ${qi('Language')}, ${qi('Status')}, ${qi('Source')}, ${qi('Code')}, ${qi('Description')}, ${qi('Name')}, ${qi('LinkedEntityID')}, ${qi('LinkedRecordPrimaryKey')})
+                      VALUES (${validatorCodeCategoryID}, ${lit(v.aiModelID)}, ${utcNow}, ${lit('TypeScript')}, ${lit('Approved')}, ${lit(v.sourceCheckConstraint)}, ${lit(v.functionText)}, ${lit(v.functionDescription)}, ${lit(v.functionName)}, ${lit(linkedEntityID ?? '')}, ${lit(linkedRecordPK)});
 
             `
           }
         }
-  
+
         // now Log and Execute the SQL
         try {
-          await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);  
+          await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);
         }
         catch (e) {
           logError(`Error logging and executing SQL for ${entity.Name}: ${e}`);
@@ -642,7 +686,12 @@ ${validationFunctions}`
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
           const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
-          typeString = `union([${sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`).join(', ')}])`;
+          // z.union() requires at least 2 members. When there's only one allowed
+          // value (single-value CHECK constraint), emit z.literal() directly.
+          const literals = sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`);
+          typeString = literals.length === 1
+            ? literals[0].substring(2) // strip leading 'z.' since caller prepends it
+            : `union([${literals.join(', ')}])`;
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
             // special case becuase a user can enter whatever they want
             typeString += `.or(z.${TypeScriptTypeFromSQLType(e.Type)}()) `;

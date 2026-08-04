@@ -430,9 +430,7 @@
    Loading / Error / Empty States
    =========================== */
 
-.loading-state,
-.error-state,
-.empty-state {
+.loading-state {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -441,38 +439,9 @@
   padding: 40px 20px;
 }
 
-.error-icon,
-.empty-icon {
-  font-size: 48px;
-  color: var(--mj-text-disabled);
-  margin-bottom: 16px;
-}
-
-.error-message,
-.empty-message {
-  font-size: 14px;
-  color: var(--mj-text-secondary);
-  margin-bottom: 16px;
-}
-
-.retry-btn,
-.upload-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--mj-bg-surface);
-  border: 1px solid var(--mj-border-strong);
-  padding: 8px 16px;
-  cursor: pointer;
-  border-radius: 3px;
-  font-size: 13px;
-  color: var(--mj-text-primary);
-  transition: background-color 0.15s;
-}
-
-.retry-btn:hover,
-.upload-btn:hover {
-  background-color: var(--mj-bg-surface-sunken);
+/* Empty/error states fill the file pane vertically (flex-parent gotcha) */
+.file-grid-empty-fill {
+  flex: 1;
 }
 
 /* ===========================

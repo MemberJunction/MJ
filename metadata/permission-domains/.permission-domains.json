@@ -155,6 +155,28 @@
   },
   {
     "fields": {
+      "Name": "AI Skill Permissions",
+      "Description": "User- or role-level permissions on AI skills. Actions: View (Read), Run (Execute — request/activate at agent runtime), Edit (Update), Delete. Open-by-default at runtime (no rows → View+Run for everyone) via AISkillPermissionHelper; this provider reports explicit grants for the Sharing Center.",
+      "ProviderClassName": "MJAISkillPermissionProvider",
+      "SupportedGranteeTypes": "User,Role",
+      "SupportedActions": "Read,Execute,Update,Delete",
+      "SupportsDeny": false,
+      "SupportsExpiration": false,
+      "SupportsHierarchyInheritance": false,
+      "IsActive": true,
+      "DisplayOrder": 75,
+      "Icon": "fa-solid fa-wand-magic-sparkles"
+    },
+    "primaryKey": {
+      "ID": "A426FB70-1254-4620-AAB1-130B10170EB4"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T20:17:00.370Z",
+      "checksum": "cb32f84c6429b57fc6333bc70a76092156121fc822f7ab50bd6b6f6a7dffa984"
+    }
+  },
+  {
+    "fields": {
       "Name": "Query Permissions",
       "Description": "Role-based Execute permission on MJ queries. Existence of a QueryPermission row for a role that the user holds grants Execute.",
       "ProviderClassName": "MJQueryPermissionProvider",

@@ -12,10 +12,12 @@ import {
 } from '@angular/core';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { buildPkString, computeFieldsList } from '../utils/record.util';
 import {
@@ -286,6 +288,21 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    * TotalRowCount from server responses. The pager auto-hides when there's only one page.
    */
   @Input() ShowPager: boolean = false;
+
+  /**
+   * Optional provider that returns the FULL result set for export. Because the grid is server-side
+   * paged, `Data`/`rowData` only hold the current page (default 100 rows), so exporting them would
+   * silently cap the export at the page size (bug C1). The host (entity-viewer) supplies this callback
+   * to fetch every matching row (honoring the active filter/sort) on demand; the grid awaits it when
+   * the user opens the export dialog. When not provided, export falls back to the loaded page.
+   */
+  @Input() ExportDataProvider: (() => Promise<Record<string, unknown>[]>) | null = null;
+
+  /** True while an export is fetching the full result set via ExportDataProvider. */
+  public IsPreparingExport: boolean = false;
+
+  /** True while "Add to List" (with no explicit selection) is fetching the full result set. */
+  public IsPreparingAddToList: boolean = false;
 
   /**
    * Whether to render the Recycle Bin chip in the toolbar. The chip
@@ -797,7 +814,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
   private _showExportButton: boolean = true;
   /**
-   * Show the "Export to Excel" button in toolbar
+   * Show the "Export" button in toolbar (opens the export dialog — Excel/CSV/JSON)
    */
   @Input()
   set ShowExportButton(value: boolean) {
@@ -969,6 +986,63 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
   get EntityActions(): EntityActionConfig[] {
     return this._entityActions;
+  }
+
+  private _autoLoadEntityActions = false;
+  private _entityActionsAutoLoaded = false;
+  /**
+   * When true, the grid resolves the current entity's active EntityActions itself (via the metadata-only
+   * `EntityActionEngineBase`) and shows them — no parent wiring or `LoadEntityActionsRequested` handler
+   * needed. Buttons appear only when the entity actually has active actions (data-driven). Actions whose
+   * invocation names a `RuntimeUXDriverClass` mount that interactive driver in-place when clicked.
+   */
+  @Input()
+  set AutoLoadEntityActions(value: boolean) {
+    this._autoLoadEntityActions = value;
+    void this.maybeAutoLoadEntityActions();
+  }
+  get AutoLoadEntityActions(): boolean {
+    return this._autoLoadEntityActions;
+  }
+
+  /** Loads + maps the entity's active actions once, when auto-load is on and the entity is known. */
+  private async maybeAutoLoadEntityActions(): Promise<void> {
+    if (!this._autoLoadEntityActions || !this._entityInfo || this._entityActionsAutoLoaded) {
+      return;
+    }
+    this._entityActionsAutoLoaded = true;
+    try {
+      const provider = this.ProviderToUse;
+      await EntityActionEngineBase.Instance.Config(false, provider?.CurrentUser, provider);
+      const configs = this.mapEntityActionsToConfigs(this._entityInfo.Name);
+      if (configs.length > 0) {
+        this._entityActions = configs;
+        this._showEntityActionButtons = true;
+        this.cdr.detectChanges();
+      }
+    } catch {
+      // Non-fatal: leave the action bar empty if the engine can't load.
+      this._entityActionsAutoLoaded = false;
+    }
+  }
+
+  /** Maps the entity's active EntityActions to grid configs, carrying the driver key + RecordProcessID. */
+  private mapEntityActionsToConfigs(entityName: string): EntityActionConfig[] {
+    const engine = EntityActionEngineBase.Instance;
+    return engine.GetActionsByEntityName(entityName, 'Active').map((ea): EntityActionConfig => {
+      const driverInvocation = engine.Invocations.find(i => UUIDsEqual(i.EntityActionID, ea.ID) && !!i.RuntimeUXDriverClass);
+      const recordProcessParam = engine.Params.find(p => UUIDsEqual(p.EntityActionID, ea.ID) && p.ActionParam?.trim().toLowerCase() === 'recordprocessid');
+      const config: EntityActionConfig = {
+        id: ea.ID,
+        name: ea.Action ?? 'Action',
+        icon: 'fa-solid fa-bolt',
+        runtimeUXDriverClass: driverInvocation?.RuntimeUXDriverClass ?? undefined,
+      };
+      if (recordProcessParam?.Value) {
+        config.metadata = { RecordProcessID: recordProcessParam.Value };
+      }
+      return config;
+    });
   }
 
   // ========================================
@@ -1157,6 +1231,8 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   @Output() AddToListButtonClick = new EventEmitter<Record<string, unknown>[]>();
   @Output() DuplicateSearchButtonClick = new EventEmitter<Record<string, unknown>[]>();
   @Output() CommunicationButtonClick = new EventEmitter<Record<string, unknown>[]>();
+  /** Raised when the user clicks the column-chooser / "Manage Columns" toolbar affordance. The host opens its column-management UI (see {@link onColumnChooserClick}). */
+  @Output() ManageColumnsRequested = new EventEmitter<void>();
 
   // Navigation Events
   /**
@@ -1622,9 +1698,27 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       // Rebuild AG Grid column definitions to reflect the new view's settings
       this.buildAgColumnDefs();
 
-      // Load data if auto-refresh is enabled and parent hasn't disabled loading
-      if (this._autoRefreshOnParamsChange && this._allowLoad) {
-        await this.loadData(false);
+      // If the parent already supplied external [Data] BEFORE [Params] resolved the entity,
+      // the earlier processData() ran with a null _entityInfo and produced rows with no field
+      // values (empty cells). This happens when the grid is dynamic-mounted by the view-type
+      // plug-in host, where Angular applies the batched inputs in template order ([Data] before
+      // [Params]). Now that _entityInfo + columns exist, re-map the rows so values render.
+      if (this._useExternalData && this._entityInfo) {
+        this.processData();
+      }
+
+      // Load data if auto-refresh is enabled and parent hasn't disabled loading.
+      // Defer the AllowLoad check to a microtask: Angular applies @Input setters synchronously
+      // in template order, and [Params] is commonly bound before [AllowLoad] (see the wrapper in
+      // explorer-entity-data-grid). Reading _allowLoad synchronously here would see its default
+      // (true) before a later [AllowLoad]="false" binding lands, causing collapsed/deferred panels
+      // to fire a RunView anyway. Yielding lets all sibling input setters apply first so the check
+      // reflects the final AllowLoad value.
+      if (this._autoRefreshOnParamsChange) {
+        await Promise.resolve();
+        if (this._allowLoad) {
+          await this.loadData(false);
+        }
       }
     } catch (error) {
       this.errorMessage = error instanceof Error ? error.message : 'Failed to load view';
@@ -1632,6 +1726,8 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     } finally {
       // Re-enable persistence now that the new view is fully loaded
       this._suppressPersist = false;
+      // Entity is resolved by now — self-load its actions if auto-load is enabled.
+      void this.maybeAutoLoadEntityActions();
     }
   }
 
@@ -2219,8 +2315,6 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     const cols: ColDef[] = [];
 
     for (const colConfig of sortedColumns) {
-      if (colConfig.hidden) continue;
-
       const field = this._entityInfo.Fields.find(f =>
         f.Name.toLowerCase() === colConfig.Name.toLowerCase()
       );
@@ -2233,7 +2327,14 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         headerName: colConfig.userDisplayName || colConfig.DisplayName || field.DisplayNameOrName,
         width: colConfig.width || this.estimateColumnWidth(field),
         sortable: this._allowSorting,
-        resizable: this._allowColumnResize
+        resizable: this._allowColumnResize,
+        // Hidden columns are still added as col defs with hide:true rather than omitted
+        // entirely (bug C2). A column omitted from the col defs is invisible to AG Grid's
+        // quick filter, so search couldn't match values in columns the user had hidden.
+        // Adding it with hide:true keeps it out of the visible layout and CSV export while
+        // making its values quick-filterable. (Server-side filtered grids additionally need
+        // the field flagged IncludeInUserSearchAPI for the server to return matching rows.)
+        hide: colConfig.hidden === true
       };
 
       // Add type-specific formatters with optional custom format
@@ -2562,7 +2663,15 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         // Regular number formatting
         else if (fieldType === 'number') {
           const num = Number(params.value);
-          displayValue = isNaN(num) ? String(params.value) : num.toLocaleString();
+          if (isNaN(num)) {
+            displayValue = String(params.value);
+          } else if (field.IsPrimaryKey) {
+            // Primary-key integers are identifiers, not quantities — never group them with
+            // thousands separators (an ID of 12345 must render as "12345", not "12,345").
+            displayValue = String(params.value);
+          } else {
+            displayValue = num.toLocaleString();
+          }
         }
         // Email formatting
         else if (isEmail && vc.clickableEmails) {
@@ -3276,6 +3385,11 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
   onGridReady(event: GridReadyEvent): void {
     this.gridApi = event.api;
+    // Let the quick filter (search box) match values in HIDDEN columns too (bug C2). AG Grid
+    // defaults `includeHiddenColumnsInQuickFilter` to false, so without this a search term that
+    // only exists in a column the user has hidden would match nothing — even though we now add
+    // hidden columns to the col defs with hide:true precisely so they remain searchable.
+    this.gridApi.setGridOption('includeHiddenColumnsInQuickFilter', true);
     this.updateSelection();
 
     if (this._sortState.length > 0) {
@@ -4031,14 +4145,22 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     this.ExportRequested.emit();
     this.ExportButtonClick.emit();
     // Show the export dialog
-    this.showExportDialogForCurrentData();
+    void this.showExportDialogForCurrentData();
   }
 
   /**
-   * Shows the export dialog for the current grid data
+   * Shows the export dialog for the full result set (falling back to the loaded page when no
+   * ExportDataProvider is supplied).
    */
-  private showExportDialogForCurrentData(): void {
-    const data = this.getExportData();
+  private async showExportDialogForCurrentData(): Promise<void> {
+    this.IsPreparingExport = true;
+    this.cdr.detectChanges();
+    let data: ExportData;
+    try {
+      data = await this.resolveExportData();
+    } finally {
+      this.IsPreparingExport = false;
+    }
     const columns = this.getExportColumns();
     const fileName = this.getDefaultExportFileName();
 
@@ -4073,7 +4195,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    * @returns Export result with data buffer and metadata
    */
   async Export(options?: Partial<ExportOptions>, download: boolean = true): Promise<ExportResult> {
-    const data = this.getExportData();
+    const data = await this.resolveExportData();
     const columns = this.getExportColumns();
     const fileName = options?.fileName || this.getDefaultExportFileName();
 
@@ -4119,9 +4241,27 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   /**
-   * Get the current grid data formatted for export
+   * Resolves the rows to export. An explicit row selection always wins — export exactly the rows the
+   * user picked (matches the Query viewer's behavior). With NO selection, the FULL result set is
+   * fetched via the host's ExportDataProvider so export isn't silently capped at the current page
+   * (bug C1). So: "export these" = select rows first; "export everything" = export with nothing
+   * selected. If no provider is supplied or the fetch yields nothing, falls back to the loaded page.
    */
-  private getExportData(): ExportData {
+  private async resolveExportData(): Promise<ExportData> {
+    const selected = this.GetSelectedRows();
+    if (selected.length > 0) {
+      return selected.map(row => row as Record<string, unknown>);
+    }
+    if (this.ExportDataProvider) {
+      try {
+        const allRows = await this.ExportDataProvider();
+        if (allRows && allRows.length > 0) {
+          return allRows.map(row => row as Record<string, unknown>);
+        }
+      } catch {
+        // Fall through to the loaded page on any fetch failure.
+      }
+    }
     // rowData is already plain Record<string, unknown>[] objects - return directly
     return this.rowData.map(row => row as Record<string, unknown>);
   }
@@ -4222,20 +4362,38 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
   }
 
-  onAddToListClick(): void {
-    const selectedRows = this.GetSelectedRows();
-    if (selectedRows.length > 0) {
+  async onAddToListClick(): Promise<void> {
+    let rows = this.GetSelectedRows();
+
+    // No explicit selection → add EVERY matching record, not just the loaded page. Without this,
+    // building a list from a sizeable view meant selecting-all page by page (bug E3). We fetch the
+    // full result set via the host-supplied provider; the downstream list dialog still requires the
+    // user to pick a target list and confirm, so nothing is committed implicitly.
+    if (rows.length === 0 && this.ExportDataProvider) {
+      this.IsPreparingAddToList = true;
+      this.cdr.detectChanges();
+      try {
+        rows = await this.ExportDataProvider();
+      } catch {
+        rows = [];
+      } finally {
+        this.IsPreparingAddToList = false;
+        this.cdr.detectChanges();
+      }
+    }
+
+    if (rows.length > 0) {
       // Emit legacy event for backward compatibility
-      this.AddToListButtonClick.emit(selectedRows);
+      this.AddToListButtonClick.emit(rows);
 
       // Emit new structured event with record IDs for list management
       if (this._entityInfo) {
-        const recordIds = selectedRows.map(r => {
+        const recordIds = rows.map(r => {
           return buildPkString(r, this._entityInfo!);
         });
         this.AddToListRequested.emit({
           entityInfo: this._entityInfo,
-          records: selectedRows,
+          records: rows,
           recordIds
         });
       }
@@ -4275,21 +4433,75 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
   }
 
+  /**
+   * "Manage Columns" / column-chooser toolbar affordance. The grid is generic and doesn't own a
+   * column-management UI, so it raises {@link ManageColumnsRequested} for its host to handle —
+   * in the entity-viewer/workspace this opens the view's config panel (Columns tab), the canonical
+   * column editor backed by `UserView.GridState`. Hosts that embed the grid standalone can handle
+   * this to surface their own column UI.
+   */
   onColumnChooserClick(): void {
-    // TODO: Implement column chooser dialog
+    this.ManageColumnsRequested.emit();
   }
 
   /**
-   * Handles entity action click from the overflow menu
+   * The runtime-UX driver currently mounted over the grid (e.g. the Record Process bulk-update runner),
+   * or null when none. Set when an action whose invocation names a `RuntimeUXDriverClass` is clicked.
+   */
+  public ActiveRuntimeDriver: { DriverClass: string; Context: EntityActionUXContext } | null = null;
+
+  /**
+   * Handles entity action click from the overflow menu. When the action names a runtime-UX driver, the
+   * grid mounts that interactive driver in-place (no parent wiring required); otherwise it emits
+   * `EntityActionRequested` for the host to invoke the action the classic way.
    */
   onEntityActionClick(action: EntityActionConfig): void {
     if (!this._entityInfo) return;
+
+    if (action.runtimeUXDriverClass) {
+      this.mountRuntimeDriver(action);
+      return;
+    }
 
     this.EntityActionRequested.emit({
       entityInfo: this._entityInfo,
       action,
       selectedRecords: this.GetSelectedRows()
     });
+  }
+
+  /** Builds the driver context from the current entity + selection and mounts the named driver. */
+  private mountRuntimeDriver(action: EntityActionConfig): void {
+    const entity = this._entityInfo!;
+    const pkName = entity.FirstPrimaryKey?.Name;
+    const selectedRecordIDs = pkName
+      ? this.GetSelectedRows().map(r => String(r[pkName])).filter(id => id.length > 0)
+      : [];
+    this.ActiveRuntimeDriver = {
+      DriverClass: action.runtimeUXDriverClass!,
+      Context: {
+        EntityInfo: entity,
+        ScopeKind: 'records',
+        SelectedRecordIDs: selectedRecordIDs,
+        Config: action.metadata ?? {},
+        Provider: this.ProviderToUse,
+        ContextUser: this.ProviderToUse?.CurrentUser,
+        ActionLabel: action.name
+      }
+    };
+  }
+
+  /** The mounted driver finished — refresh the grid when it changed data, then unmount. */
+  async OnRuntimeDriverCompleted(result: EntityActionUXResult): Promise<void> {
+    this.ActiveRuntimeDriver = null;
+    if (result?.RefreshData) {
+      await this.Refresh();
+    }
+  }
+
+  /** The user dismissed the mounted driver without applying — just unmount. */
+  OnRuntimeDriverCancelled(): void {
+    this.ActiveRuntimeDriver = null;
   }
 
   /**

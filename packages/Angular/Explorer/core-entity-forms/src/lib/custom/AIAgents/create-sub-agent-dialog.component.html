@@ -186,10 +186,10 @@
             }
           </div>
         } @else {
-          <div class="empty-state">
-            <i class="fa-solid fa-comments"></i>
-            <p>No prompts added yet. Click the buttons above to add prompts.</p>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-comments"
+            Title="No prompts added yet. Click the buttons above to add prompts."
+            Size="compact" />
         }
       </div>
 
@@ -225,10 +225,10 @@
             }
           </div>
         } @else {
-          <div class="empty-state">
-            <i class="fa-solid fa-bolt"></i>
-            <p>No actions added yet. Click the button above to add actions.</p>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-bolt"
+            Title="No actions added yet. Click the button above to add actions."
+            Size="compact" />
         }
       </div>
     </form>

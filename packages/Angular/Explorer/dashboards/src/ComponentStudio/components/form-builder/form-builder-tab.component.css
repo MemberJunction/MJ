@@ -1,0 +1,265 @@
+:host {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.form-builder-tab {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    background: var(--mj-bg-page);
+}
+
+/* ============================================================
+   TOOLBAR
+   ============================================================ */
+.fbt-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--mj-bg-surface);
+    border-bottom: 1px solid var(--mj-border-default);
+    flex-shrink: 0;
+}
+
+.fbt-toolbar-left,
+.fbt-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fbt-toolbar-spacer {
+    flex: 1;
+}
+
+/* ============================================================
+   ENTITY PICKER
+   ============================================================ */
+.fbt-entity-picker {
+    position: relative;
+}
+
+.fbt-entity-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    color: var(--mj-text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s ease;
+}
+
+.fbt-entity-btn:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.fbt-entity-btn em {
+    color: var(--mj-text-muted);
+    font-style: italic;
+}
+
+.fbt-entity-btn .chev {
+    font-size: 10px;
+    color: var(--mj-text-muted);
+}
+
+.fbt-entity-popover {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    width: 320px;
+    max-height: 360px;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.fbt-entity-search {
+    padding: 8px 10px;
+    border: none;
+    border-bottom: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+}
+
+.fbt-entity-search:focus {
+    background: var(--mj-bg-surface-hover);
+}
+
+.fbt-entity-list {
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.fbt-entity-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.fbt-entity-item:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.fbt-entity-display {
+    font-size: 13px;
+    color: var(--mj-text-primary);
+    font-weight: 500;
+}
+
+.fbt-entity-name {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+}
+
+/* ============================================================
+   MODE PILLS
+   ============================================================ */
+.fbt-mode-pills {
+    display: inline-flex;
+    background: var(--mj-bg-surface-sunken);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.fbt-mode-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    background: transparent;
+    border: none;
+    color: var(--mj-text-secondary);
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border-right: 1px solid var(--mj-border-default);
+}
+
+.fbt-mode-pill:last-child {
+    border-right: none;
+}
+
+.fbt-mode-pill:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
+.fbt-mode-pill.active {
+    background: var(--mj-bg-surface);
+    color: var(--mj-brand-primary);
+    font-weight: 600;
+}
+
+/* ============================================================
+   RIGHT-SIDE TOOLBAR BUTTONS
+   ============================================================ */
+.fbt-tool-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    color: var(--mj-text-primary);
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.fbt-tool-btn:hover:not(:disabled) {
+    background: var(--mj-bg-surface-hover);
+}
+
+.fbt-tool-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ============================================================
+   CANVAS HOST + EMPTY STATE
+   ============================================================ */
+.fbt-canvas-host {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.fbt-canvas-host > mj-form-builder-canvas {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.fbt-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    text-align: center;
+    color: var(--mj-text-muted);
+    padding: 48px;
+}
+
+.fbt-empty i {
+    font-size: 36px;
+    color: var(--mj-text-disabled);
+}
+
+.fbt-empty h3 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--mj-text-primary);
+}
+
+.fbt-empty p {
+    margin: 0;
+    max-width: 380px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.fbt-lossy-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--mj-status-warning-bg);
+    color: var(--mj-status-warning-text);
+    border: 1px solid var(--mj-status-warning-border);
+    border-radius: 6px;
+    font-size: 12px;
+}

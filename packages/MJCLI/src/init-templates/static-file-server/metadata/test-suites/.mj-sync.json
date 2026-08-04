@@ -1,0 +1,12 @@
+{
+  "entity": "MJ: Test Suites",
+  "filePattern": "**/.*.json",
+  "pull": {
+    "relatedEntities": {
+      "MJ: Test Suite Tests": {
+        "entity": "MJ: Test Suite Tests",
+        "foreignKey": "TestSuiteID"
+      }
+    }
+  }
+}

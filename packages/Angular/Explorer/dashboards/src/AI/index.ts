@@ -44,5 +44,18 @@ export * from './components/analytics/cost-budget/cost-budget.component';
 export * from './components/analytics/error-analysis/error-analysis.component';
 export * from './components/analytics/usage-patterns/usage-patterns.component';
 
+// Realtime Voice (agent sessions)
+export * from './components/analytics/realtime/realtime-session-data';
+export * from './components/analytics/realtime/realtime-overview.component';
+export * from './components/analytics/realtime/realtime-sessions.component';
+
+// Realtime management (bridges, providers, identities, channels, co-agents)
+export * from './components/analytics/realtime/realtime-management-data';
+export * from './components/analytics/realtime/realtime-management.component';
+
+// Realtime voice transcripts (diarized per-room meeting transcript browser)
+export * from './components/analytics/realtime/realtime-transcripts-data';
+export * from './components/analytics/realtime/realtime-transcripts.component';
+
 // Overview Hub
 export * from './components/overview/ai-overview-hub.component';

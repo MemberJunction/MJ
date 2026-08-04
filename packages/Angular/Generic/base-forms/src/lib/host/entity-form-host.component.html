@@ -1,0 +1,22 @@
+<!-- Loading state -->
+@if (loading) {
+  <div class="mj-form-host-loading">
+    <mj-loading text="Loading record..."></mj-loading>
+  </div>
+}
+
+<!-- Error state -->
+@if (!loading && errorTitle) {
+  <div class="mj-form-host-error" role="alert">
+    <i class="fa-solid fa-triangle-exclamation mj-form-host-error-icon"></i>
+    <h3 class="mj-form-host-error-title">{{ errorTitle }}</h3>
+    <p class="mj-form-host-error-detail">{{ errorDetail }}</p>
+  </div>
+}
+
+<!--
+  Anchor for the dynamically-created form component. Always present (static)
+  so the ViewContainerRef resolves at AfterViewInit. The form's own template
+  carries the <mj-record-form-container>, so nothing wraps it here.
+-->
+<ng-template #anchor></ng-template>

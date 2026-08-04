@@ -2422,7 +2422,7 @@ sqlcmd -S sqlserver.local,1433 -d mj_test_2 -U MJ_CodeGen -P '...' \
 **Key Lesson**: **Always verify actual column names** in the base view before using in EntityDataGrid. Line items tables typically don't have denormalized date columns - they only have foreign keys to parent tables.
 
 **Files Modified**:
-- [product-category-analysis.js](metadata/components/code/query-examples/product-category-analysis.js)
+- [product-category-analysis.js](code/query-examples/product-category-analysis.js)
 
 **Testing**: ✅ Component now loads line item drill-down without errors
 
@@ -2676,7 +2676,7 @@ sqlcmd -S sqlserver.local,1433 -d mj_test_2 -U MJ_CodeGen -P '...' \
 
 **Files Modified**:
 - [deal-stage-trends.sql](SQL Scripts/demo/metadata/queries/SQL/deal-stage-trends.sql) - Query refactored
-- [deal-pipeline-visualization.js](metadata/components/code/query-examples/deal-pipeline-visualization.js) - Added conditional rendering
+- [deal-pipeline-visualization.js](code/query-examples/deal-pipeline-visualization.js) - Added conditional rendering
 
 #### Issue 2: Deal Velocity Analysis Showing Negative Values
 **Problem**: AvgDaysInPipeline showed negative values for some stages.
@@ -2730,7 +2730,7 @@ EXEC sp_addextendedproperty
 **Files Modified**:
 - [CRM Schema 2 - Products - Deals - Invoices.sql](SQL Scripts/demo/CRM Schema 2 - Products - Deals - Invoices.sql) - Schema enhanced
 - All 3 Deal Pipeline query SQL files
-- [deal-pipeline-visualization.js](metadata/components/code/query-examples/deal-pipeline-visualization.js) - Updated filters
+- [deal-pipeline-visualization.js](code/query-examples/deal-pipeline-visualization.js) - Updated filters
 
 ### Architectural Decisions
 
@@ -2973,7 +2973,7 @@ sqlcmd -S localhost -d MJ -Q "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
 ```
 
 **Files Modified**:
-- [invoice-aging-analysis.js](metadata/components/code/query-examples/invoice-aging-analysis.js)
+- [invoice-aging-analysis.js](code/query-examples/invoice-aging-analysis.js)
 
 #### Issue 3: Invalid Column Name 'DaysOverdue' in EntityDataGrid Filter
 **Problem**: EntityDataGrid drill-down failed with SQL error: "Invalid column name 'DaysOverdue'"
@@ -3015,7 +3015,7 @@ const buildInvoiceFilter = () => {
 ```
 
 **Files Modified**:
-- [invoice-aging-analysis.js](metadata/components/code/query-examples/invoice-aging-analysis.js)
+- [invoice-aging-analysis.js](code/query-examples/invoice-aging-analysis.js)
 
 #### Issue 4: Payment History Filter Using Non-Existent 'AccountName' Field
 **Problem**: Payment history drill-down failed when clicking an account.
@@ -3041,7 +3041,7 @@ const buildInvoiceFilter = () => {
 5. Cleaned up all references
 
 **Files Modified**:
-- [invoice-aging-analysis.js](metadata/components/code/query-examples/invoice-aging-analysis.js) - Removed ~50 lines
+- [invoice-aging-analysis.js](code/query-examples/invoice-aging-analysis.js) - Removed ~50 lines
 
 #### Issue 6: Payment Trends Chart Showing Zero for All Months
 **Problem**: Monthly payment trends chart displayed 0 for all months despite query returning data.
@@ -3107,7 +3107,7 @@ const fillMissingMonths = (data, monthsBack) => {
 **Additional Enhancement**: Added year to month labels (e.g., "Jan 2024" instead of just "Jan") for clarity in longer date ranges.
 
 **Files Modified**:
-- [invoice-aging-analysis.js](metadata/components/code/query-examples/invoice-aging-analysis.js)
+- [invoice-aging-analysis.js](code/query-examples/invoice-aging-analysis.js)
 
 #### Issue 7: Component Stuck on Loading After State Cleanup
 **Problem**: After removing payment history section, component showed loading indicator indefinitely.
@@ -3123,7 +3123,7 @@ grep -n "setSelectedAccount" invoice-aging-analysis.js
 ```
 
 **Files Modified**:
-- [invoice-aging-analysis.js](metadata/components/code/query-examples/invoice-aging-analysis.js)
+- [invoice-aging-analysis.js](code/query-examples/invoice-aging-analysis.js)
 
 ### Schema Validation Process
 
@@ -3220,8 +3220,8 @@ cat "SQL Scripts/demo/CRM Schema 2 - Products - Deals - Invoices.sql" | grep -A 
 - [.queries.json](SQL Scripts/demo/metadata/queries/.queries.json) - Updated metadata for renamed query
 
 **Component Files**:
-- [invoice-aging-analysis.js](metadata/components/code/query-examples/invoice-aging-analysis.js) - Added client-side aggregation, fixed multiple bugs
-- [invoice-aging-analysis.json](metadata/components/.components.json) - Updated spec to reflect dataRequirements change (uses both queries and views)
+- [invoice-aging-analysis.js](code/query-examples/invoice-aging-analysis.js) - Added client-side aggregation, fixed multiple bugs
+- [invoice-aging-analysis.json](.components.json) - Updated spec to reflect dataRequirements change (uses both queries and views)
 
 **Schema Files**:
 - None (validated existing schema, no changes needed)

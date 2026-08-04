@@ -28,6 +28,7 @@ export const MJEventType = {
     LogoutFailed: 'LogoutFailed',
     ManualResizeRequest: 'ManualResizeRequest',
     DisplaySimpleNotificationRequest: 'DisplaySimpleNotificationRequest',
+    TenantChanged: 'TenantChanged',
 } as const;
 
 export type MJEventType = typeof MJEventType[keyof typeof MJEventType];

@@ -134,8 +134,8 @@ export class YourModule {}
 
 ## Dependencies
 
-- [@memberjunction/core](../../MJCore/README.md) -- Metadata, entity framework
-- [@memberjunction/core-entities](../../MJCoreEntities/README.md) -- ResourcePermissionEntity, ResourcePermissionEngine
+- [@memberjunction/core](../../../MJCore/readme.md) -- Metadata, entity framework
+- [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- ResourcePermissionEntity, ResourcePermissionEngine
 - [@memberjunction/ng-notifications](../notifications/README.md) -- Notification service
 - [@memberjunction/ng-generic-dialog](../generic-dialog/README.md) -- Dialog component
 - `@progress/kendo-angular-grid` -- Grid rendering

@@ -52,18 +52,17 @@
     font-size: 1.1em;
 }
 
-.loading-state,
-.no-template-state,
-.invalid-template-state {
+.loading-state {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
 }
 
-.no-template-state i,
-.invalid-template-state i {
-    opacity: 0.6;
+/* Template-editor placeholders fill the editor pane */
+mj-empty-state.no-template-state,
+mj-empty-state.invalid-template-state {
+    flex: 1;
 }
 
 .template-editor-container {

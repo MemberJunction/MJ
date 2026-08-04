@@ -1,5 +1,291 @@
 # @memberjunction/communication-gmail
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/communication-types@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/communication-types@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- 03fc891: Capture inbound To/CC recipients on normalized messages across email providers
+- Updated dependencies [623dfc5]
+- Updated dependencies [ce6374c]
+- Updated dependencies [86832fa]
+- Updated dependencies [deb02b4]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [03fc891]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core@5.50.0
+  - @memberjunction/communication-types@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- 88d707b: Communication **DryRun** send mode + a real HTML-body fallback fix.
+  - **DryRun seam (new capability)** — `Message.DryRun` and `MessageResult.DryRun` on the base contract (`communication-types`), threaded through the engine and honored by all five shipping providers (SendGrid, Gmail, Twilio, MS Graph, Expo Push). When `DryRun` is true a provider runs its **full** preflight + payload construction and reports success **without** contacting its external service, stamping `MessageResult.DryRun = true`. Lets scheduled jobs and tests exercise the entire send pipeline with zero real messages sent. `scheduling-engine` passes the flag through on scheduled communication sends.
+  - **B64 fix (`communication-engine`)** — `ProcessedMessageServer.Process` derives the HTML body from the BodyTemplate (its HTML content render, or the documented rendered-text fallback), then the trailing `else` branch unconditionally overwrote it with `HTMLBody || ''` — so any message without an explicit HTMLBody/HTMLBodyTemplate shipped an **empty** HTML body, making the fallback dead code. The derived value is now preserved (`HTMLBody || ProcessedHTMLBody || ''`).
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [88d707b]
+- Updated dependencies [505c8b5]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [85575cf]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/communication-types@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/communication-types@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/communication-types@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/communication-types@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/communication-types@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/communication-types@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [5396d90]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/communication-types@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/communication-types@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- 598d2d6: Recursively extract Gmail message bodies from nested MIME parts.
+- Updated dependencies [9b9b484]
+- Updated dependencies [37c73f6]
+- Updated dependencies [2f225e4]
+- Updated dependencies [0fa3cbc]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/communication-types@5.42.0
+  - @memberjunction/global@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/communication-types@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/communication-types@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/communication-types@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/communication-types@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [9bc2916]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/communication-types@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/core@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/communication-types@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [4f15f31]
+  - @memberjunction/core@5.37.0
+  - @memberjunction/communication-types@5.37.0
+  - @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core@5.36.0
+  - @memberjunction/communication-types@5.36.0
+  - @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/communication-types@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/communication-types@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/communication-types@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/global@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

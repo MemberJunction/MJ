@@ -89,8 +89,8 @@ UserInfoEngine.SetSetting() → Saved to MJ: User Settings
 
 | File | Changes |
 |------|---------|
-| [UserInfoEngine.ts](../packages/MJCoreEntities/src/engines/UserInfoEngine.ts) | Added `GetSetting`, `GetSettingEntity`, `SetSetting`, `DeleteSetting` methods |
-| [entity-data-grid.component.ts](../packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts) | Added `loadUserDefaultGridState`, `persistUserDefaultGridState`, debounce setup |
+| [UserInfoEngine.ts](../../packages/MJCoreEntities/src/engines/UserInfoEngine.ts) | Added `GetSetting`, `GetSettingEntity`, `SetSetting`, `DeleteSetting` methods |
+| [entity-data-grid.component.ts](../../packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts) | Added `loadUserDefaultGridState`, `persistUserDefaultGridState`, debounce setup |
 
 ## Future Enhancements
 

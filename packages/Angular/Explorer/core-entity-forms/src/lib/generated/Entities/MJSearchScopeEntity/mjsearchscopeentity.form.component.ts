@@ -15,8 +15,10 @@ export class MJSearchScopeEntityFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'searchConfiguration', sectionName: 'Search Configuration', isExpanded: true },
-            { sectionKey: 'queryOverrides', sectionName: 'Query Overrides', isExpanded: true },
+            { sectionKey: 'scopeConfiguration', sectionName: 'Scope Configuration', isExpanded: true },
+            { sectionKey: 'entityConfiguration', sectionName: 'Entity Configuration', isExpanded: true },
+            { sectionKey: 'searchLogic', sectionName: 'Search Logic', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -1,0 +1,82 @@
+{
+  "name": "MJFormField",
+  "title": "Form Field",
+  "description": "Metadata-driven, entity-aware edit/view field input. Renders the correct control for a field by reading EntityFieldInfo: foreign keys become searchable related-entity dropdowns, value-list fields become selects, booleans become checkboxes, dates/numbers/long-text get the appropriate input, and read mode renders Email/URL/Tel/Record links. Mirrors the enhanced fields used by MemberJunction's generated (CodeGen) entity forms.",
+  "type": "form",
+  "location": "embedded",
+  "functionalRequirements": "Render a single entity field as a view or edit control, driven entirely by the field's metadata (no per-field hand coding by the consumer).\n\n- View mode: plain value, with clickable Email / URL / Tel links and clickable foreign-key / record links (via callbacks.OpenEntityRecord). Booleans show Yes/No; dates are localized.\n- Edit mode: foreign-key fields render a searchable autocomplete that queries the related entity by its name field; value-list fields render a select of allowed values; booleans render a checkbox; dates render a date input; numbers a number input; long text a textarea; otherwise a text/email/url input.\n- Read-only fields (primary keys, non-updatable, computed/virtual) always render as read display, even in edit mode.\n- Required (non-null) fields show a marker and a required-empty validation message.",
+  "technicalDesign": "Resolves field metadata from utilities.md.Entities (find by entityName, then field by fieldName). Foreign-key search and current-value name resolution use utilities.rv.RunView against the related entity (MaxRows-limited, debounced). The component is controlled: it reads `value` (falling back to record[fieldName]) and emits changes via the `onChange` callback prop, so the parent form owns draft state. It never mutates the record and never writes via BaseEntity/Metadata. No top-level imports; React is the injected global.",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives the record + field name through props; resolves field metadata via utilities.md and foreign-key lookups via utilities.rv.RunView."
+  },
+  "properties": [
+    {
+      "name": "entityName",
+      "type": "string",
+      "description": "Name of the entity the field belongs to (for metadata lookup).",
+      "required": true
+    },
+    {
+      "name": "fieldName",
+      "type": "string",
+      "description": "Name of the field to render.",
+      "required": true
+    },
+    {
+      "name": "record",
+      "type": "Record<string, any>",
+      "description": "The bound record; used as the value fallback and for joined FK display names.",
+      "required": true
+    },
+    {
+      "name": "value",
+      "type": "any",
+      "description": "Controlled value. When provided, overrides record[fieldName] (use the form's draft value).",
+      "required": false
+    },
+    {
+      "name": "mode",
+      "type": "'view' | 'edit' | 'create'",
+      "description": "Render mode. 'edit'/'create' show inputs; 'view' shows read display.",
+      "required": false,
+      "defaultValue": "view",
+      "possibleValues": ["view", "edit", "create"]
+    },
+    {
+      "name": "editMode",
+      "type": "boolean",
+      "description": "Alternative to `mode`; true renders edit controls.",
+      "required": false
+    },
+    {
+      "name": "showLabel",
+      "type": "boolean",
+      "description": "Whether to render the field label.",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "label",
+      "type": "string",
+      "description": "Override the field's display name.",
+      "required": false
+    }
+  ],
+  "events": [
+    {
+      "name": "change",
+      "description": "Fired when the user edits the field. The parameter is the new value; wire it to the form's draft state.",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "any",
+          "description": "The new field value (FK id, selected value, boolean, date string, number, or text)."
+        }
+      ]
+    }
+  ],
+  "dependencies": [],
+  "code": "@file:../../code/generic/mj-form-field.js",
+  "exampleUsage": "<MJFormField\n  entityName={entityName}\n  fieldName={f.name}\n  record={record}\n  value={f.name in draft ? draft[f.name] : record?.[f.name]}\n  mode={mode}\n  onChange={(v) => setField(f.name, v)}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>"
+}

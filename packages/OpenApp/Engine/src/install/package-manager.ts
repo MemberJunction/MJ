@@ -9,9 +9,10 @@
  * Version-agnostic: supports semver ranges, pnpm catalog:, and workspace:*.
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import type { ManifestPackageEntry } from '../manifest/manifest-schema.js';
+import { ResolveServerPackagePath, ResolveClientPackagePath } from './workspace-paths.js';
 
 /** Supported package managers. */
 export type PackageManagerType = 'npm' | 'pnpm' | 'yarn';
@@ -26,8 +27,7 @@ export type PackageManagerType = 'npm' | 'pnpm' | 'yarn';
  */
 export type VersionStrategy = 'semver' | 'exact' | 'catalog' | 'workspace' | 'auto';
 
-const DEFAULT_SERVER_PATH = 'packages/MJAPI';
-const DEFAULT_CLIENT_PATH = 'packages/MJExplorer';
+/* Workspace-layout detection is shared with config-manager — see workspace-paths.ts (#3270). */
 
 /**
  * A single workspace target for package operations.
@@ -56,9 +56,9 @@ export interface PackageManagerOptions {
   Version: string;
   /** Enable verbose output */
   Verbose?: boolean;
-  /** Path to server workspace relative to RepoRoot (default: 'packages/MJAPI') */
+  /** Path to server workspace relative to RepoRoot (default: detected — 'packages/MJAPI' or 'apps/MJAPI') */
   ServerPackagePath?: string;
-  /** Path to client workspace relative to RepoRoot (default: 'packages/MJExplorer') */
+  /** Path to client workspace relative to RepoRoot (default: detected — 'packages/MJExplorer' or 'apps/MJExplorer') */
   ClientPackagePath?: string;
   /** Package manager to use (default: auto-detected from lockfile) */
   PackageManager?: PackageManagerType;
@@ -73,6 +73,13 @@ export interface PackageManagerOptions {
    * Each target specifies a path and role. Packages are distributed by role.
    */
   AdditionalTargets?: WorkspaceTarget[];
+  /**
+   * Package names that must SURVIVE a removal because another installed app still declares
+   * them (shared npm deps). Only honored by {@link RemoveAppPackages}: any package whose
+   * name is in this list is skipped, so removing one app cannot strip a dependency a
+   * surviving app needs to boot.
+   */
+  RetainPackages?: string[];
 }
 
 /**
@@ -136,8 +143,10 @@ export function RemoveAppPackages(options: PackageManagerOptions): PackageOperat
 
   try {
     const targets = buildTargetList(options);
-    const serverPkgs = [...options.ServerPackages, ...options.SharedPackages];
-    const clientPkgs = [...options.ClientPackages, ...options.SharedPackages];
+    // Never remove a package another installed app still declares — see RetainPackages.
+    const retained = new Set(options.RetainPackages ?? []);
+    const serverPkgs = [...options.ServerPackages, ...options.SharedPackages].filter((p) => !retained.has(p.name));
+    const clientPkgs = [...options.ClientPackages, ...options.SharedPackages].filter((p) => !retained.has(p.name));
 
     for (const target of targets) {
       const pkgs = target.Role === 'server' ? serverPkgs : clientPkgs;
@@ -180,6 +189,30 @@ export function hasPnpmCatalog(repoRoot: string): boolean {
 }
 
 /**
+ * Validates a custom npm registry URL before it is passed to the package manager (B40).
+ * Must be a well-formed http(s) URL and free of shell metacharacters / whitespace. The install
+ * itself now runs via `execFileSync` with an argv array (no shell), so this is defense-in-depth
+ * — it still rejects a malformed URL / wrong protocol before it reaches the package manager.
+ */
+function ValidateRegistryUrl(url: string): { Valid: boolean; Reason?: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return { Valid: false, Reason: `'${url}' is not a valid URL` };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { Valid: false, Reason: `registry URL must use http(s), got '${parsed.protocol}'` };
+  }
+  // URL parsing tolerates some shell-significant characters in the path/query; reject them
+  // explicitly since the value is interpolated into a command string.
+  if (/[;&|`$(){}<>\s'"\\]/.test(url)) {
+    return { Valid: false, Reason: 'registry URL contains illegal characters' };
+  }
+  return { Valid: true };
+}
+
+/**
  * Runs package install from the monorepo root using the appropriate package manager.
  *
  * Registry configuration is resolved in this order:
@@ -200,31 +233,41 @@ export function RunPackageInstall(repoRoot: string, verbose?: boolean, registryU
   // overrides scoped registry + auth token settings in .npmrc, breaking private packages.
   const isCustomRegistry = registryUrl && !registryUrl.includes('registry.npmjs.org');
 
+  // Defense-in-depth: validate the registry URL is a clean http(s) URL before using it. It is
+  // now passed as a literal argv element (no shell), but a malformed URL / wrong protocol is
+  // still worth rejecting up front (B40).
+  if (isCustomRegistry) {
+    const validation = ValidateRegistryUrl(registryUrl!);
+    if (!validation.Valid) {
+      return { Success: false, Added: [], Removed: [], ErrorMessage: `Invalid custom registry URL: ${validation.Reason}` };
+    }
+  }
+
   try {
-    let cmd: string;
+    // Build the argv as an ARRAY and run via execFileSync (no shell). The registry URL — and
+    // every other argument — is passed as a single literal argv element, so a hostile value can
+    // never be interpreted by a shell. This removes shell interpolation as a class of risk on
+    // top of ValidateRegistryUrl (B40). On Windows the package-manager binaries are `.cmd`
+    // shims, which execFileSync only resolves when the name carries the extension.
+    const argv: string[] = ['install'];
     switch (pm) {
-      case 'pnpm': {
-        cmd = 'pnpm install';
-        if (isCustomRegistry) cmd += ` --registry=${registryUrl}`;
-        break;
-      }
+      case 'pnpm':
       case 'yarn': {
-        cmd = 'yarn install';
-        if (isCustomRegistry) cmd += ` --registry=${registryUrl}`;
+        if (isCustomRegistry) argv.push(`--registry=${registryUrl}`);
         break;
       }
       default: {
-        let flags = verbose ? '' : '--loglevel=warn';
-        if (isCustomRegistry) flags += ` --registry=${registryUrl}`;
-        cmd = `npm install ${flags}`;
+        if (!verbose) argv.push('--loglevel=warn');
+        if (isCustomRegistry) argv.push(`--registry=${registryUrl}`);
         break;
       }
     }
+    const bin = process.platform === 'win32' ? `${pm}.cmd` : pm;
 
     // All package managers natively read .npmrc / .pnpmrc / .yarnrc.yml for
     // scoped registries, auth tokens, and other settings. We don't need to
     // parse these files — just ensure `cwd` is set correctly so they're found.
-    execSync(cmd, {
+    execFileSync(bin, argv, {
       cwd: repoRoot,
       encoding: 'utf-8',
       timeout: 300000,
@@ -254,8 +297,8 @@ export function RunNpmInstall(repoRoot: string, verbose?: boolean, registryUrl?:
  */
 function buildTargetList(options: PackageManagerOptions): WorkspaceTarget[] {
   const targets: WorkspaceTarget[] = [
-    { Path: options.ServerPackagePath ?? DEFAULT_SERVER_PATH, Role: 'server' },
-    { Path: options.ClientPackagePath ?? DEFAULT_CLIENT_PATH, Role: 'client' },
+    { Path: ResolveServerPackagePath(options.RepoRoot, options.ServerPackagePath), Role: 'server' },
+    { Path: ResolveClientPackagePath(options.RepoRoot, options.ClientPackagePath), Role: 'client' },
   ];
 
   if (options.AdditionalTargets) {
@@ -292,11 +335,31 @@ function resolveVersionString(options: PackageManagerOptions): string {
 }
 
 /**
+ * Reads and parses a package.json, turning an opaque ENOENT / SyntaxError into a clear,
+ * path-qualified error (B39). The raw `JSON.parse(readFileSync(...))` calls this replaced
+ * surfaced "Unexpected token in JSON" with no indication of which file was malformed.
+ */
+function ParsePackageJson<T>(pkgJsonPath: string): T {
+  let content: string;
+  try {
+    content = readFileSync(pkgJsonPath, 'utf-8');
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not read package.json at ${pkgJsonPath}: ${message}`);
+  }
+  try {
+    return JSON.parse(content) as T;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid JSON in ${pkgJsonPath}: ${message}`);
+  }
+}
+
+/**
  * Adds dependencies to a specific package.json file.
  */
 function AddDependenciesToPackageJson(pkgJsonPath: string, packages: ManifestPackageEntry[], versionStr: string): void {
-  const content = readFileSync(pkgJsonPath, 'utf-8');
-  const pkgJson: { dependencies?: Record<string, string> } = JSON.parse(content);
+  const pkgJson = ParsePackageJson<{ dependencies?: Record<string, string> }>(pkgJsonPath);
 
   if (!pkgJson.dependencies) {
     pkgJson.dependencies = {};
@@ -313,8 +376,7 @@ function AddDependenciesToPackageJson(pkgJsonPath: string, packages: ManifestPac
  * Removes dependencies from a specific package.json file.
  */
 function RemoveDependenciesFromPackageJson(pkgJsonPath: string, packages: ManifestPackageEntry[]): void {
-  const content = readFileSync(pkgJsonPath, 'utf-8');
-  const pkgJson: { dependencies?: Record<string, string> } = JSON.parse(content);
+  const pkgJson = ParsePackageJson<{ dependencies?: Record<string, string> }>(pkgJsonPath);
 
   if (!pkgJson.dependencies) {
     return;
@@ -345,11 +407,10 @@ export function BumpPrefixedDependencies(repoRoot: string, prefix: string, bareV
   let updatedCount = 0;
 
   for (const pkgJsonPath of packageJsonFiles) {
-    const content = readFileSync(pkgJsonPath, 'utf-8');
-    const pkgJson: {
+    const pkgJson = ParsePackageJson<{
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
-    } = JSON.parse(content);
+    }>(pkgJsonPath);
 
     let fileChanged = false;
 

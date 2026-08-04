@@ -1,5 +1,349 @@
 # @memberjunction/schema-engine
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/queue@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/queue@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- 1e0008f: fix(integration): apply-phase correctness — identity, completeness, and record-map durability
+
+  Defects in the sync apply phase, all of which corrupt data rather than fail loudly.
+  - **Content-unchanged records skipped their tombstone repair.** A record marked deleted in MJ but alive again externally hashes identical on every subsequent sync, so it never reached the sync-state repair and stayed tombstoned permanently. The early return now runs the repair before returning.
+  - **Record-map loads stopped at the entity row cap.** `RunView` without `MaxRows` is not unbounded — it falls back to `UserViewMaxRows` (1000 by default). The orphan sweep silently stopped cleaning past row 1000, and worse, the full-push path read a missing mapping as "never pushed" and re-created records that already existed in the external system. `LoadAllRecordMaps` now walks the map with `AfterKey` keyset paging ordered by `ID` with `IgnoreMaxRows`, bounded by a `MAX_PAGES` backstop, and reports a `Complete` flag; callers that did not get the whole map refuse to act on it rather than acting on a partial one. Keyset rather than `StartRow` because OFFSET paging skips rows on PostgreSQL, where `gen_random_uuid()` primary keys are random rather than monotonic and concurrent inserts can land before the cursor.
+  - **Identity was decided by two competing rules.** The entity primary key (soft PKs included) is now the single definition of record identity for both matching and saving. `IsKeyField` remains a fallback lookup for records whose mapped data does not carry the PK, and is no longer AND-ed on as an additional constraint when a complete PK is present.
+  - **Record-map writes were three round trips per record on the hot path** — a lookup, a load, and a save, paid for every record the sync touched including the ones it decided not to change. The new `RecordMapBatch` resolves a whole chunk against the database in one `RunView` and then writes only the rows that are actually new or actually point somewhere different, so an incremental sync where mappings are stable costs one read and zero writes per chunk. Writes go through the provider's entity layer (`GetEntityObject` + `Save()`), not hand-written SQL, so they are dialect-agnostic by construction and still get field validation, timestamps, Record Changes and — the one that bites silently — the save event that invalidates `LocalCacheManager`. Per-row error attribution is structural rather than reconstructed: each mapping is its own `Save()` returning its own boolean, so a bad row names itself and its chunk-mates are unaffected. `Queue()` deliberately does not auto-flush on a full chunk — it is called from inside the apply pass's batch transaction, where a flush would write map rows that `Discard()` could no longer take back on rollback. The apply loop flushes once per batch, after commit.
+  - **Identity lookups were one query per record.** They are now prefetched per field-set group, issued as one `RunViews`. The batched path indexes external IDs both exactly and collation-folded (lowercased, trailing blanks stripped), because the single-query path let SQL Server compare — case-insensitive and trailing-blank-insensitive under a default collation — while pairing rows in JavaScript with `===` would read `AB-100 ` against a stored `ab-100` as unmapped and create a duplicate record. **The fold is applied only on SQL Server**: PostgreSQL's `=` on text is case-sensitive and pads nothing, so folding there would hand back a mapping the database itself did not return and turn a CREATE into an UPDATE of a different row. A folded key that more than one distinct mapping collapses onto is marked ambiguous and deferred to the per-record query rather than guessed at, as is an ID that was never in the batch's `IN (…)` list. Absence is only ever concluded from a read that can prove it.
+  - **A non-ASCII external ID was invisible to every record-map lookup on SQL Server.** The lookups embed the external ID as a SQL literal, and a bare `'…'` on SQL Server is a _varchar_ literal: any character outside the database's collation codepage is replaced with `?` before the comparison runs. Under the default `SQL_Latin1_General_CP1_CI_AS`, `ünïcödé-Ω-日本語` reads as `ünïcödé-O-???` and matches the stored (nvarchar) row zero times — so the record looked unmapped and was created a second time in the customer's external system on every sync. The literals are now `N`-prefixed on SQL Server (no prefix on PostgreSQL, whose literals are already Unicode), which also removes the implicit conversion that would otherwise sit on the column. Applied at all three lookup sites — the batched read, the batched read's per-record fallback, and `MatchEngine`'s per-record query — so they cannot disagree about a value.
+  - **Batch sizes are configurable and clamped.** `MJ_INTEGRATION_RECORD_MAP_CHUNK_SIZE` (default 500, ceiling 5,000 — a chunk becomes one `IN (…)` list, so the filter text grows linearly with it) and `MJ_INTEGRATION_RECORD_MAP_PAGE_SIZE` (default 10,000, ceiling 50,000). Out-of-range values are clamped with a logged warning rather than accepted.
+
+  Also: a schema pipeline whose migration already committed is never retried, so a retry cannot re-run a committed install step.
+
+- Updated dependencies [623dfc5]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core@5.50.0
+  - @memberjunction/queue@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/sql-dialect@5.50.0
+
+## 5.49.0
+
+### Minor Changes
+
+- 70113b1: Align the integrations framework — resolution overlay, EM/EFM lifecycle, sync locking, watermark backfill, and the U1–U5/U7/U10/U11 upstream defects.
+
+  **Engine (`integration-engine`)**
+  - U1: `IntrospectSchema`/creation-pipeline mappings propagate `undefined` PK/FK flags instead of coercing to `false` — a sample's silence can no longer wipe a declared primary key (`SourceFieldInfo.IsPrimaryKey/IsForeignKey` widened to optional).
+  - Semantic overlay (`decideSemanticOverlay`): Description / DisplayName / IncrementalWatermarkField are external-wins-when-present, curated-fallback-when-silent (per-attribute overlay precedence).
+  - Content-hash basis: the content-hash match/write covers MAPPED fields only — a newly-appearing custom key no longer forces a row rewrite. Custom-key candidates + sizing statistics are aggregated in-memory per sync (`SyncResult.CustomKeyStats`, `foldCustomKeyStats`, `inferColumnTypeFromStats`) and flow to the promotion callback regardless of row skips. **Operational note (one-time):** because the content-hash basis becomes mapped-only, the first sync after this deploys re-hashes and re-writes every overflow-carrying row exactly once — a bounded one-time load spike plus Record-Changes churn — after which stored hashes converge and steady-state (skip-unchanged) writes resume.
+  - Maintenance lock (`AcquireMaintenanceLock`/`ReleaseMaintenanceLock`/`GetMaintenanceLock`): syncs refuse while a metadata refresh / schema evolution / RSU pipeline runs for the connection.
+  - U3: live sync progress is monotonic under concurrency (`RatchetProgressSnapshot`).
+  - U11: `IntrospectSchemaOptions.OnProgress` — determinate discovery progress (scanned/total).
+
+  **Server (`server`)**
+  - `IntegrationSchemaEvolution` is now the full re-resolution refresh: re-resolution → diff → removed objects' entity/field maps disabled (data kept) → changed objects' field maps reconciled + Pull watermarks reset (U10, backfills new columns) → new objects' tables created with entity maps born DISABLED (`autoEnableNewObjects` opts in) → RSU. Extended output: NewObjects/RemovedObjects/ChangedObjects/WatermarksReset.
+  - `IntegrationApplyAll`/`ApplyAllBatch`: `UnselectedAction` ('disable' default) — objects absent from the selection get their entity + field maps disabled; re-selection re-enables both. First-ever apply defaults to a FULL sync.
+  - U7: schedule creation is unique per (connection, job kind) — update-in-place instead of duplicates.
+  - U5: boot-time assert when RSU's additionalSchemaInfo write path diverges from CodeGen's read path.
+  - DAG exposure: `IntegrationListSourceObjects` items carry `DependsOn` parent names.
+  - U11: RSU status/progress expose CurrentStepName/StepIndex/StepTotal; pipeline steps carry StepIndex/StepTotal.
+
+  **SchemaEngine / schema-builder**
+  - additionalSchemaInfo per-table REPLACE semantics for soft FKs (`ClearForeignKeysForTables`) — a refresh's resolution replaces the prior run's FK entries for its tables.
+  - `RSUPendingWork`: `UnselectedAction` + `CreateDisabled` for the post-restart consumer; U11 step-index fields.
+
+  **CodeGenLib / PostgreSQLDataProvider**
+  - U2: `spUpdateExistingEntityFieldsFromSchema` honors `IsSoftPrimaryKey` on BOTH dialects (PG emitter + SQL Server migration) — schema sync no longer wipes resolved soft PKs.
+  - U4: a keyless entity now throws a named "has no primary key" error instead of emitting malformed record-change SQL.
+
+### Patch Changes
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [85575cf]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/queue@5.49.0
+  - @memberjunction/sql-dialect@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/queue@5.48.0
+  - @memberjunction/global@5.48.0
+  - @memberjunction/sql-dialect@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+  - @memberjunction/queue@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/queue@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/queue@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/global@5.45.1
+- @memberjunction/sql-dialect@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/queue@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [5396d90]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/queue@5.44.0
+  - @memberjunction/sql-dialect@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/queue@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [2f225e4]
+- Updated dependencies [0fa3cbc]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/queue@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/queue@5.41.0
+  - @memberjunction/global@5.41.0
+  - @memberjunction/sql-dialect@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/core@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/queue@5.40.2
+- @memberjunction/sql-dialect@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/queue@5.40.1
+  - @memberjunction/global@5.40.1
+  - @memberjunction/sql-dialect@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/queue@5.40.0
+  - @memberjunction/global@5.40.0
+  - @memberjunction/sql-dialect@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [9bc2916]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/queue@5.39.0
+  - @memberjunction/sql-dialect@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/core@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/sql-dialect@5.38.0
+  - @memberjunction/queue@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [4f15f31]
+  - @memberjunction/core@5.37.0
+  - @memberjunction/queue@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/sql-dialect@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core@5.36.0
+  - @memberjunction/queue@5.36.0
+  - @memberjunction/global@5.36.0
+  - @memberjunction/sql-dialect@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/queue@5.35.0
+  - @memberjunction/sql-dialect@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/queue@5.34.1
+  - @memberjunction/global@5.34.1
+  - @memberjunction/sql-dialect@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/sql-dialect@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/global@5.34.0
+  - @memberjunction/queue@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

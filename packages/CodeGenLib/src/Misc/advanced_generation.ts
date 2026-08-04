@@ -1,5 +1,6 @@
 import { AdvancedGenerationFeature, configInfo } from "../Config/config";
 import { FieldCategoryInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { SafeJSONParse } from "@memberjunction/global";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus";
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
@@ -13,10 +14,16 @@ export type CheckConstraintParserResult = { Description: string, Code: string, M
 
 export type SmartFieldIdentificationResult = {
     /**
-     * One or more fields that together form the human-readable record name.
-     * For person entities: ["FirstName", "LastName"]
-     * For simple entities: ["Name"]
-     * Displayed concatenated with spaces in card titles, tooltips, etc.
+     * RANKED candidate list for the entity's human-readable record name, best first.
+     * For person entities: ["FirstName", "LastName"]; for simple entities: ["Name"].
+     *
+     * IMPORTANT: although the LLM may propose several fields, MemberJunction's metadata
+     * supports exactly ONE `IsNameField` per entity — `EntityInfo.NameField`, the
+     * base-view FK-name virtual columns, and `RelatedEntityNameFieldMap` resolution all
+     * assume a single winner. `applyNameFieldUpdates` therefore flags only the FIRST
+     * eligible candidate (and clears any other auto-updatable `IsNameField` flags).
+     * Composite display names are NOT implemented downstream; treat extra entries as
+     * fallback candidates, not as a concatenation recipe.
      */
     nameFields: string[];
     nameFieldsReason: string;
@@ -111,6 +118,13 @@ export class AdvancedGeneration {
     private _metadata: Metadata;
     private _promptRunner: AIPromptRunner;
 
+    /** Consecutive AI credential/authentication failures this run; trips the circuit breaker. */
+    private _consecutiveAuthFailures = 0;
+    /** Once tripped, remaining advanced-generation LLM calls are skipped for the rest of this run. */
+    private _aiCircuitOpen = false;
+    /** Open the circuit after this many consecutive credential/authentication failures. */
+    private static readonly AUTH_FAILURE_CIRCUIT_THRESHOLD = 3;
+
     constructor() {
         this._metadata = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
         this._promptRunner = new AIPromptRunner();
@@ -118,6 +132,62 @@ export class AdvancedGeneration {
 
     public get enabled(): boolean {
         return configInfo.advancedGeneration?.enableAdvancedGeneration ?? false;
+    }
+
+    /**
+     * True once repeated AI credential/authentication failures have tripped the circuit breaker for
+     * this run. Callers should stop issuing advanced-generation calls when this is set, so a keyless
+     * or mis-credentialed environment fails fast — logging one clear message and skipping the rest —
+     * instead of attempting (and swallowing) a doomed LLM call for every entity. State is per-run: a
+     * fresh AdvancedGeneration instance is created each codegen run.
+     */
+    public get AICircuitOpen(): boolean {
+        return this._aiCircuitOpen;
+    }
+
+    /** Classify a failure as an AI credential / authentication problem (vs a content or transient error). */
+    private isCredentialError(err: unknown): boolean {
+        const msg = (err instanceof Error ? err.message : String(err ?? '')).toLowerCase();
+        return (
+            msg.includes('credential') ||
+            msg.includes('unauthorized') ||
+            msg.includes('authentication') ||
+            msg.includes('permission denied') ||
+            msg.includes('access denied') ||
+            msg.includes('invalid api key') ||
+            msg.includes('api key not') ||
+            msg.includes('invalid_grant') ||
+            msg.includes('401') ||
+            msg.includes('403')
+        );
+    }
+
+    /**
+     * True when a RETURNED result (not a throw) represents a credential/auth failure. `AIPromptRunner`
+     * does NOT throw for these — provider drivers catch internally and return `{ success:false }` with
+     * `chatResult.errorInfo.errorType = 'Authentication' | 'NoCredentials'` (and STOP failover) — so the
+     * circuit breaker must inspect the RESULT, not only the `catch` block.
+     */
+    private isCredentialFailureResult(result: AIPromptRunResult<unknown>): boolean {
+        if (result.success) {
+            return false;
+        }
+        const errorType = result.chatResult?.errorInfo?.errorType;
+        if (errorType === 'Authentication' || errorType === 'NoCredentials') {
+            return true;
+        }
+        // Fallback for providers that don't populate errorInfo but carry a message
+        // (e.g. "Invalid Vertex AI credentials").
+        return this.isCredentialError(result.errorMessage);
+    }
+
+    /** Increment the consecutive-failure counter and open the AI circuit once the threshold is reached. */
+    private recordAuthFailure(detail: unknown): void {
+        this._consecutiveAuthFailures++;
+        if (this._consecutiveAuthFailures >= AdvancedGeneration.AUTH_FAILURE_CIRCUIT_THRESHOLD && !this._aiCircuitOpen) {
+            this._aiCircuitOpen = true;
+            LogError(`AdvancedGeneration: opening AI circuit after ${this._consecutiveAuthFailures} consecutive credential/authentication failures (${detail}) — remaining entities will skip AI enrichment this run. Check the AI provider credentials (e.g. Vertex AI) or set advancedGeneration.enableAdvancedGeneration=false.`);
+        }
     }
 
     public features(): AdvancedGenerationFeature[] | undefined {
@@ -153,10 +223,36 @@ export class AdvancedGeneration {
     private async executePrompt<T>(
         params: AIPromptParams
     ): Promise<AIPromptRunResult<T>> {
+        // Defense-in-depth: once the credential circuit is open, skip the round-trip entirely.
+        // Callers should also gate on AICircuitOpen so an open circuit produces no call and no log.
+        if (this._aiCircuitOpen) {
+            throw new Error('AdvancedGeneration: AI credential circuit is open — skipping this LLM call after repeated authentication failures this run.');
+        }
         const startMs = Date.now();
         const promptName = params.prompt?.Name ?? 'unknown';
         try {
             const result = await this._promptRunner.ExecutePrompt<T>(params);
+            // Credential/auth failures come back as a RETURNED result (success:false), NOT a throw —
+            // provider drivers catch internally and stop failover for NoCredentials/Authentication. Detect
+            // them on the result and trip the breaker; only a genuinely successful call clears the counter.
+            if (result.success) {
+                this._consecutiveAuthFailures = 0;
+            } else if (this.isCredentialFailureResult(result)) {
+                this.recordAuthFailure(result.errorMessage ?? result.chatResult?.errorInfo?.errorType ?? 'credential failure');
+            }
+            // Resilience: some models return the JSON payload as a raw string rather
+            // than a parsed object (and Warn-mode validation lets it through with
+            // success=true). If we got a string, try to recover a structured object
+            // before any feature consumes it. SafeJSONParse returns null on genuine
+            // non-JSON (e.g. a "Here is the JSON requested:" preamble with no body),
+            // in which case we leave result.result as-is and the per-feature
+            // typeof-object guards degrade gracefully (skip the entity, no crash).
+            if (typeof result.result === 'string') {
+                const parsed = SafeJSONParse<T>(result.result);
+                if (parsed && typeof parsed === 'object') {
+                    result.result = parsed;
+                }
+            }
             // Record telemetry for this LLM call. Entity attribution falls back to the
             // entityPhase in processEntityAdvancedGeneration via CodeGenReporter's
             // _currentEntity. No-op if no run is active.
@@ -172,6 +268,11 @@ export class AdvancedGeneration {
             });
             return result;
         } catch (error) {
+            // A THROWN (rather than returned) credential/auth failure — trip the breaker here too,
+            // as a safety net for providers/paths that do throw.
+            if (this.isCredentialError(error)) {
+                this.recordAuthFailure(error);
+            }
             LogError(`AdvancedGeneration:Prompt execution failed: ${error}`);
             throw error;
         }
@@ -221,17 +322,29 @@ export class AdvancedGeneration {
 
             const result = await this.executePrompt<SmartFieldIdentificationResult>(params);
 
-            if (result.success && result.result) {
-                // Defensive shape cleanup. The LLM occasionally returns
-                // contradictory states (allowUserSearch=false with
-                // searchableFields populated, duplicates in the field list,
-                // etc.). The full code-level guardrail pipeline runs in
-                // ManageMetadataBase.normalizeSearchFlagsInPlace; this is just
-                // the first-pass cleanup so any caller of identifyFields()
-                // gets a coherent result.
-                return normalizeSmartFieldResultShape(result.result);
+            // Guard against a non-object result. With Warn-mode validation, a model
+            // that returns a non-JSON preamble (e.g. "Here is the JSON requested:")
+            // comes back as a raw string with success=true — we must not treat that
+            // as a usable result (and must not try to set properties on a primitive).
+            if (result.success && result.result && typeof result.result === 'object') {
+                // Normalize: LLMs frequently omit array keys when they would be
+                // empty. Default every collection so downstream apply* consumers
+                // can iterate without undefined-guard crashes.
+                const r = result.result;
+                r.nameFields ??= [];
+                r.defaultInView ??= [];
+                r.searchableFields ??= [];
+                r.searchPredicates ??= [];
+                r.fullTextSearchFields ??= [];
+                // Defensive shape cleanup for the search flags: dedupe searchableFields
+                // and reconcile contradictory states the LLM occasionally returns
+                // (allowUserSearch=false with searchableFields populated, empty fields
+                // with allowUserSearch=true). The full code-level guardrail pipeline runs
+                // in ManageMetadataBase.normalizeSearchFlagsInPlace; this is just the
+                // first-pass cleanup so any caller of identifyFields() gets a coherent result.
+                return normalizeSmartFieldResultShape(r);
             } else {
-                LogError(`AdvancedGeneration:Smart field identification failed: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:Smart field identification failed or returned a non-object result: ${result.errorMessage ?? `got ${typeof result.result}`}`);
                 return null;
             }
         } catch (error) {
@@ -437,7 +550,12 @@ export class AdvancedGeneration {
 
             const result = await this.executePrompt<FormLayoutResult>(params);
 
-            if (result.success && result.result) {
+            if (result.success && result.result && typeof result.result === 'object') {
+                // Normalize: a model that returns no/invalid JSON can leave this
+                // undefined; downstream applyFieldCategories iterates it, so default
+                // it to an empty array to avoid a "not iterable" crash.
+                result.result.fieldCategories ??= [];
+
                 // Merge category info - preserve ALL existing categories, only add new ones
                 if (existingInfo.categoryInfo) {
                     const newFieldCategoryInfo = result.result.categoryInfo || {};

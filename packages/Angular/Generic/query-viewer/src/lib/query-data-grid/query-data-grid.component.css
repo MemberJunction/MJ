@@ -165,31 +165,12 @@
    Empty state
    ======================================== */
 
+/* Absolute-center the empty state over the grid; mj-empty-state owns its content. */
 .empty-state {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    text-align: center;
-    padding: 40px;
-}
-
-.empty-icon {
-    font-size: 48px;
-    color: var(--mj-border-strong);
-    margin-bottom: 16px;
-}
-
-.empty-message {
-    font-size: 18px;
-    color: var(--mj-text-secondary);
-    margin: 0 0 8px 0;
-}
-
-.empty-hint {
-    font-size: 14px;
-    color: var(--mj-text-muted);
-    margin: 0;
 }
 
 /* ========================================

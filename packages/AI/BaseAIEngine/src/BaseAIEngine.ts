@@ -1,6 +1,6 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
-import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
+import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
          MJArtifactTypeEntity, MJEntityAIActionEntity, MJVectorDatabaseEntity,
@@ -28,8 +28,16 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAIClientToolDefinitionEntity,
          MJAIAgentClientToolEntity,
          MJAIAgentCategoryEntity,
+         MJAIAgentCoAgentEntity,
+         MJAIAgentChannelEntity,
+         MJAISkillEntity,
+         MJAISkillActionEntity,
+         MJAISkillSubAgentEntity,
+         MJAIAgentSkillEntity,
+         MJAISkillPermissionEntity,
          ArtifactMetadataEngine} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
+import { AISkillPermissionHelper, EffectiveSkillPermissions } from "./AISkillPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 import { MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended, MJAIModelEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { IStartupSink, RegisterForStartup } from "@memberjunction/core";
@@ -87,6 +95,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentPrompts: MJAIAgentPromptEntity[] = [];
     private _agentNoteTypes: MJAIAgentNoteTypeEntity[] = [];
     private _agentNotes: MJAIAgentNoteEntity[] = [];
+    private _scopedPromptParts: MJScopedPromptPartEntity[] = [];
+    private _scopedPromptConfigs: MJScopedPromptConfigEntity[] = [];
     private _agentExamples: MJAIAgentExampleEntity[] = [];
     private _agentDataSources: MJAIAgentDataSourceEntity[] = [];
     private _agents: MJAIAgentEntityExtended[] = [];
@@ -111,12 +121,42 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _clientToolDefinitions: MJAIClientToolDefinitionEntity[] = [];
     private _agentClientTools: MJAIAgentClientToolEntity[] = [];
     private _agentCategories: MJAIAgentCategoryEntity[] = [];
+    private _agentCoAgents: MJAIAgentCoAgentEntity[] = [];
+    private _agentChannels: MJAIAgentChannelEntity[] = [];
+    private _skills: MJAISkillEntity[] = [];
+    private _skillActions: MJAISkillActionEntity[] = [];
+    private _skillSubAgents: MJAISkillSubAgentEntity[] = [];
+    private _agentSkills: MJAIAgentSkillEntity[] = [];
+    private _skillPermissions: MJAISkillPermissionEntity[] = [];
 
     /**
      * Cache for configuration inheritance chains.
      * Key: configurationId, Value: array of MJAIConfigurationEntity from child to root
      */
     private _configurationChainCache: Map<string, MJAIConfigurationEntity[]> = new Map();
+
+    /**
+     * Memoized ID of the "Inference Provider" vendor-type definition. `undefined` means
+     * "not yet computed"; `null` means "computed and not found". Reset on every (re)load
+     * via {@link AdditionalLoading}. Vendor-type definitions are static seed data, so this
+     * is safe to cache for the lifetime of a loaded engine.
+     */
+    private _inferenceProviderTypeID: string | null | undefined = undefined;
+    /** Memoized ID of the "Model Developer" vendor-type definition (fallback path). */
+    private _modelDeveloperTypeID: string | null | undefined = undefined;
+
+    /**
+     * Lazily-built O(1) lookup indexes over the cached metadata arrays. These replace the
+     * repeated linear `.find()` / `.filter()` scans that previously ran on every prompt
+     * execution. All are reset in {@link AdditionalLoading} so they rebuild against fresh
+     * data after a reload. `null` = not yet built.
+     */
+    private _modelsByID: Map<string, MJAIModelEntityExtended> | null = null;
+    private _vendorsByID: Map<string, MJAIVendorEntity> | null = null;
+    private _modelTypesByID: Map<string, MJAIModelTypeEntity> | null = null;
+    private _configurationsByID: Map<string, MJAIConfigurationEntity> | null = null;
+    private _modelVendorsByModelID: Map<string, MJAIModelVendorEntity[]> | null = null;
+    private _promptModelsByPromptID: Map<string, MJAIPromptModelEntity[]> | null = null;
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params: Array<Partial<BaseEnginePropertyConfig>> = [
@@ -169,6 +209,16 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentNotes',
                 EntityName: 'MJ: AI Agent Notes',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_scopedPromptParts',
+                EntityName: 'MJ: Scoped Prompt Parts',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_scopedPromptConfigs',
+                EntityName: 'MJ: Scoped Prompt Configs',
                 CacheLocal: true
             },
             {
@@ -295,21 +345,103 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 PropertyName: '_agentCategories',
                 EntityName: 'MJ: AI Agent Categories',
                 CacheLocal: true
-            }
+            },
+            {
+                PropertyName: '_skills',
+                EntityName: 'MJ: AI Skills',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_skillActions',
+                EntityName: 'MJ: AI Skill Actions',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_skillSubAgents',
+                EntityName: 'MJ: AI Skill Sub Agents',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentSkills',
+                EntityName: 'MJ: AI Agent Skills',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_skillPermissions',
+                EntityName: 'MJ: AI Skill Permissions',
+                CacheLocal: true
+            },
+            // NOTE: the realtime registry datasets below are CONDITIONAL — appended by
+            // appendRealtimeRegistryConfigs() only when their entities exist in metadata.
+            // They are NEW in the v5.41 schema, and CodeGen itself boots this engine for
+            // advanced generation BEFORE it has generated the new entities on a clean
+            // database — a hard reference here would deadlock the bootstrap (BaseEngine
+            // rightly throws on unknown entity names). Skipped datasets leave their
+            // getters returning [] — for pairings that means every co-agent resolves as
+            // UNIVERSAL, and for channels that no channel surfaces attach — both safe
+            // degraded defaults until the next engine refresh after CodeGen completes.
         ];
+        this.appendRealtimeRegistryConfigs(params, provider);
 
         // make sure engines we depend on downstream are loaded up before we load
         await Promise.all([
-            TemplateEngineBase.Instance.Config(false, contextUser), 
+            TemplateEngineBase.Instance.Config(false, contextUser),
             ArtifactMetadataEngine.Instance.Config(false, contextUser)
         ]);
-        
+
         return await this.Load(params, provider, forceRefresh, contextUser);
+    }
+
+    /**
+     * Appends the realtime registry datasets (interactive channels; co-agent pairings once
+     * the renamed `MJ: AI Agent Co Agents` entity ships) to the Config() dataset list — but
+     * ONLY when the entity actually exists in the provider's metadata. See the note at the
+     * call site: these entities are created by CodeGen, and CodeGen boots this engine, so a
+     * hard reference would deadlock a clean-database bootstrap.
+     */
+    private appendRealtimeRegistryConfigs(
+        params: Array<Partial<BaseEnginePropertyConfig>>,
+        provider?: IMetadataProvider
+    ): void {
+        const md = provider ?? Metadata.Provider;
+        const conditional: Array<Partial<BaseEnginePropertyConfig>> = [
+            {
+                PropertyName: '_agentChannels',
+                EntityName: 'MJ: AI Agent Channels',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentCoAgents',
+                EntityName: 'MJ: AI Agent Co Agents',
+                CacheLocal: true
+            }
+        ];
+        for (const config of conditional) {
+            if (md?.EntityByName?.(config.EntityName!)) {
+                params.push(config);
+            } else {
+                LogStatus(
+                    `AIEngineBase: entity '${config.EntityName}' not found in metadata — dataset skipped ` +
+                    `(expected only during a clean-install CodeGen bootstrap; the registry loads on the next engine refresh).`
+                );
+            }
+        }
     }
 
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // Clear the configuration chain cache when data is reloaded
         this._configurationChainCache.clear();
+
+        // Invalidate memoized vendor-type IDs and lazily-built lookup indexes so they
+        // rebuild against the freshly-loaded arrays. (See field declarations above.)
+        this._inferenceProviderTypeID = undefined;
+        this._modelDeveloperTypeID = undefined;
+        this._modelsByID = null;
+        this._vendorsByID = null;
+        this._modelTypesByID = null;
+        this._configurationsByID = null;
+        this._modelVendorsByModelID = null;
+        this._promptModelsByPromptID = null;
 
         // handle associating prompts with prompt categories
         //here we're using the underlying data (i.e _promptCategories and _prompts)
@@ -363,7 +495,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param contextUser required on the server side
      * @returns 
      */
-    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
+    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended | undefined> {
         try {
             await AIEngineBase.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
             const models = AIEngineBase.Instance.Models.filter(m => {
@@ -376,6 +508,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 return mModelType === targetType &&
                        (targetVendor === '' || mVendor === targetVendor);
             });
+            if (models.length === 0) return undefined;
             // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
             models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
             return models[0];
@@ -392,7 +525,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param contextUser 
      * @returns 
      */
-    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
+    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended | undefined> {
         return await this.GetHighestPowerModel(vendorName, 'LLM', contextUser);
     }
 
@@ -428,11 +561,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
  
 
     public get Agents(): MJAIAgentEntityExtended[] {
-        return this._agents;
+        return this.GetConfigData<MJAIAgentEntityExtended>('_agents');
     }
 
     public get AgentRelationships(): MJAIAgentRelationshipEntity[] {
-        return this._agentRelationships;
+        return this.GetConfigData<MJAIAgentRelationshipEntity>('_agentRelationships');
     }
 
     /**
@@ -483,13 +616,13 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentTypes(): MJAIAgentTypeEntity[] {
-        return this._agentTypes;
+        return this.GetConfigData<MJAIAgentTypeEntity>('_agentTypes');
     }
 
     /** All agent categories, cached during Config(). Used for hierarchical resolution of
      *  assignment strategies and default storage accounts (category → parent → root). */
     public get AgentCategories(): MJAIAgentCategoryEntity[] {
-        return this._agentCategories;
+        return this.GetConfigData<MJAIAgentCategoryEntity>('_agentCategories');
     }
 
     public GetAgentByName(agentName: string): MJAIAgentEntityExtended {
@@ -501,11 +634,144 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentActions(): MJAIAgentActionEntity[] {
-        return this._agentActions;
+        return this.GetConfigData<MJAIAgentActionEntity>('_agentActions');
+    }
+
+    /** All AI Skills (capability bundles), cached during Config(). Filter by Status yourself
+     *  or use {@link GetSkillsForAgent} for the full agent-gating resolution. */
+    public get Skills(): MJAISkillEntity[] {
+        return this._skills;
+    }
+
+    /** Skill → Action bundling rows ("MJ: AI Skill Actions"), cached during Config(). */
+    public get SkillActions(): MJAISkillActionEntity[] {
+        return this._skillActions;
+    }
+
+    /** Skill → sub-agent bundling rows ("MJ: AI Skill Sub Agents"), cached during Config(). */
+    public get SkillSubAgents(): MJAISkillSubAgentEntity[] {
+        return this._skillSubAgents;
+    }
+
+    /** Agent ↔ Skill grant rows ("MJ: AI Agent Skills"), used when an agent's AcceptsSkills is 'Limited'. */
+    public get AgentSkills(): MJAIAgentSkillEntity[] {
+        return this._agentSkills;
+    }
+
+    /** Per-user / per-role skill permission grants ("MJ: AI Skill Permissions"), cached during Config().
+     *  Consumed by {@link AISkillPermissionHelper} (open-by-default runtime gate). */
+    public get SkillPermissions(): MJAISkillPermissionEntity[] {
+        return this._skillPermissions;
+    }
+
+    /**
+     * Resolves the set of skills a given agent may activate, honoring the three-layer
+     * gate: {@link MJAIAgentEntityExtended.AcceptsSkills} on the agent, {@link MJAISkillEntity.Status}
+     * on the catalog entry, and (when AcceptsSkills is 'Limited') {@link MJAIAgentSkillEntity.Status}
+     * on the grant.
+     *
+     * - `AcceptsSkills = 'None'` (default) → no skills, regardless of catalog or grants.
+     * - `AcceptsSkills = 'All'` → every `Active` skill in the catalog.
+     * - `AcceptsSkills = 'Limited'` → only `Active` skills with an `Active` `MJ: AI Agent Skills` grant for this agent.
+     *
+     * When `user` is supplied, the agent-allowed set is additionally **intersected with the user's
+     * run-permission** (open-by-default via {@link AISkillPermissionHelper}) — i.e. only skills the
+     * user is permitted to request survive. This is the single call the `/skill` picker and the
+     * server-side RequestedSkills intersection guard use. Omit `user` for pure agent-gating (e.g.
+     * resolving the full activatable catalog independent of who is asking).
+     *
+     * @param agent - The agent to resolve available skills for.
+     * @param user - Optional user; when present, filters to skills the user can Run.
+     * @returns MJAISkillEntity[] - Active skills the agent may activate (empty if AcceptsSkills is 'None').
+     */
+    public GetSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] {
+        if (!agent || agent.AcceptsSkills === 'None') {
+            return [];
+        }
+
+        const activeSkills = this._skills.filter(s => s.Status === 'Active');
+
+        let agentSkills: MJAISkillEntity[];
+        if (agent.AcceptsSkills === 'All') {
+            agentSkills = activeSkills;
+        } else {
+            // 'Limited' — only skills with an Active grant for this agent
+            const grantedSkillIDs = new Set(
+                this._agentSkills
+                    .filter(gs => UUIDsEqual(gs.AgentID, agent.ID) && gs.Status === 'Active')
+                    .map(gs => NormalizeUUID(gs.SkillID))
+            );
+            agentSkills = activeSkills.filter(s => grantedSkillIDs.has(NormalizeUUID(s.ID)));
+        }
+
+        if (!user) {
+            return agentSkills;
+        }
+
+        // Intersect with the user's run-permission (synchronous — cache already loaded).
+        return agentSkills.filter(s =>
+            AISkillPermissionHelper.ComputeEffectivePermissions(s, this._skillPermissions, user).canRun
+        );
+    }
+
+    /**
+     * Resolves the subset of {@link GetSkillsForAgent} that the agent may **self-activate** —
+     * i.e. the skills eligible to appear in the agent's prompt catalog and to be activated by an
+     * agent-initiated `Skill` step, without an explicit user request.
+     *
+     * Self-activation is governed by the **double activation gate** (added in v5.45), on top of
+     * all availability gates enforced by {@link GetSkillsForAgent}:
+     *
+     * - **`agent.SkillActivationMode === 'Auto'`** — the agent side of the gate. The default is
+     *   `'RequestedOnly'`, meaning the agent's prompt catalog is empty and skills only enter its
+     *   runs via explicit user requests (`/skill` mentions → `ExecuteAgentParams.requestedSkillIDs`).
+     * - **`skill.ActivationMode === 'Auto'`** — the skill side. The default is `'RequestedOnly'`,
+     *   meaning the skill never appears in ANY agent's catalog regardless of agent posture.
+     *
+     * Auto × Auto is the deliberately-configured "super agent" posture — an agent that may expand
+     * its own tool surface at runtime. Because both defaults are `'RequestedOnly'`, that posture
+     * always requires two explicit opt-ins and can never arise accidentally ("skill leakage").
+     *
+     * The **requested path is NOT gated by ActivationMode** — a user's explicit `/skill` request
+     * for a `RequestedOnly` skill is honored (subject to the availability gates); use
+     * {@link GetSkillsForAgent} for that path.
+     *
+     * @param agent - The agent to resolve the self-activatable catalog for.
+     * @param user - Optional user; when present, additionally filters to skills the user can Run
+     *               (same semantics as {@link GetSkillsForAgent}).
+     * @returns Active skills the agent may self-activate (empty when either side of the double
+     *          gate is 'RequestedOnly', or when no availability gate passes).
+     */
+    public GetAutoActivatableSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] {
+        if (!agent || agent.SkillActivationMode !== 'Auto') {
+            return [];
+        }
+        return this.GetSkillsForAgent(agent, user).filter(s => s.ActivationMode === 'Auto');
+    }
+
+    /**
+     * Returns the ActionIDs bundled into a skill (via "MJ: AI Skill Actions"). Callers resolve
+     * the full `MJActionEntity` objects from their own Action cache (e.g. `ActionEngineServer`)
+     * to avoid a cross-package dependency here.
+     */
+    public GetSkillActionIDs(skillID: string): string[] {
+        return this._skillActions
+            .filter(sa => UUIDsEqual(sa.SkillID, skillID))
+            .map(sa => sa.ActionID);
+    }
+
+    /**
+     * Returns the sub-agent IDs bundled into a skill (via "MJ: AI Skill Sub Agents"). Callers
+     * resolve the full `MJAIAgentEntityExtended` objects via `this.Agents` / `GetAgentByID`.
+     */
+    public GetSkillSubAgentIDs(skillID: string): string[] {
+        return this._skillSubAgents
+            .filter(sa => UUIDsEqual(sa.SkillID, skillID))
+            .map(sa => sa.SubAgentID);
     }
 
     public get AgentPrompts(): MJAIAgentPromptEntity[] {
-        return this._agentPrompts;
+        return this.GetConfigData<MJAIAgentPromptEntity>('_agentPrompts');
     }
 
     /**
@@ -513,7 +779,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * These define semantic presets for agents (e.g., "Fast", "High Quality").
      */
     public get AgentConfigurations(): MJAIAgentConfigurationEntity[] {
-        return this._agentConfigurations;
+        return this.GetConfigData<MJAIAgentConfigurationEntity>('_agentConfigurations');
     }
 
     /**
@@ -557,11 +823,39 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentNoteTypes(): MJAIAgentNoteTypeEntity[] {
-        return this._agentNoteTypes;
+        return this.GetConfigData<MJAIAgentNoteTypeEntity>('_agentNoteTypes');
+    }
+
+    /**
+     * All `MJ: AI Agent Co Agents` affinity rows, cached during Config(). Each row relates an
+     * owning agent (`CoAgentID` — for Type='CoAgent', a Realtime-type co-agent) to EITHER a
+     * specific paired agent (`TargetAgentID`) or a whole agent type (`TargetAgentTypeID`),
+     * with `Type` naming the relationship nature (only 'CoAgent' is implemented today; the
+     * other values are reserved). Ordered for pickers via `Sequence`; `IsDefault` marks the
+     * co-agent's default target (agent rows) or the type's default co-agent (type rows);
+     * `Status='Disabled'` rows are kept for audit but must be ignored by resolution. A
+     * co-agent with ZERO Active 'CoAgent' rows is universal (it can front any target).
+     * Small metadata table — filter client-side (e.g. `UUIDsEqual(row.CoAgentID, ...)`)
+     * rather than issuing RunViews. NOTE: the dataset is registered conditionally (see
+     * Config()); on a clean-install CodeGen bootstrap this is [] until the entity exists.
+     */
+    public get AgentCoAgents(): MJAIAgentCoAgentEntity[] {
+        return this.GetConfigData<MJAIAgentCoAgentEntity>('_agentCoAgents');
+    }
+
+    /**
+     * All `MJ: AI Agent Channels` interactive-channel registry rows, cached during Config().
+     * Each row declares a realtime channel surface (e.g. Whiteboard) with its server/client
+     * plugin class keys and transport type; only rows with `IsActive` may be attached to a
+     * session. Small metadata table — filter client-side (e.g. `c => c.IsActive`) rather than
+     * issuing RunViews.
+     */
+    public get AgentChannels(): MJAIAgentChannelEntity[] {
+        return this.GetConfigData<MJAIAgentChannelEntity>('_agentChannels');
     }
 
     public get AgentPermissions(): MJAIAgentPermissionEntity[] {
-        return this._agentPermissions;
+        return this.GetConfigData<MJAIAgentPermissionEntity>('_agentPermissions');
     }
 
     public AgenteNoteTypeIDByName(agentNoteTypeName: string): string {
@@ -569,27 +863,168 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentNotes(): MJAIAgentNoteEntity[] {
-        return this._agentNotes;
+        return this.GetConfigData<MJAIAgentNoteEntity>('_agentNotes');
+    }
+
+    /**
+     * All scoped prompt parts (MJ: Scoped Prompt Parts). Cached like AgentNotes;
+     * resolved by scope + assembled into role-faithful messages by the
+     * ScopedPromptPartInjector. See plans/scoped-prompt-components.
+     */
+    public get ScopedPromptParts(): MJScopedPromptPartEntity[] {
+        return this._scopedPromptParts;
+    }
+
+    /**
+     * All scoped prompt configs (MJ: Scoped Prompt Configs). Cached like ScopedPromptParts;
+     * the run-settings sibling of parts — resolved by scope + overlaid onto AIPromptParams by
+     * the ScopedPromptConfigResolver. See plans/scoped-prompt-components.
+     */
+    public get ScopedPromptConfigs(): MJScopedPromptConfigEntity[] {
+        return this._scopedPromptConfigs;
     }
 
     public get AgentExamples(): MJAIAgentExampleEntity[] {
-        return this._agentExamples;
+        return this.GetConfigData<MJAIAgentExampleEntity>('_agentExamples');
     }
 
     public get VendorTypeDefinitions(): MJAIVendorTypeDefinitionEntity[] {
-        return this._vendorTypeDefinitions;
+        return this.GetConfigData<MJAIVendorTypeDefinitionEntity>('_vendorTypeDefinitions');
+    }
+
+    /**
+     * The ID of the "Inference Provider" vendor-type definition, or `undefined` if no such
+     * definition is loaded. Memoized — the underlying lookup is a linear scan of
+     * {@link VendorTypeDefinitions}, but this getter caches the result for the lifetime of a
+     * loaded engine (reset on reload). Prefer {@link IsInferenceProvider} for the common
+     * "is this model-vendor an inference provider?" check.
+     */
+    public get InferenceProviderTypeID(): string | undefined {
+        if (this._inferenceProviderTypeID === undefined) {
+            this._inferenceProviderTypeID =
+                this._vendorTypeDefinitions.find(vt => vt.Name === 'Inference Provider')?.ID ?? null;
+        }
+        return this._inferenceProviderTypeID ?? undefined;
+    }
+
+    /** Memoized ID of the "Model Developer" vendor-type definition (used only as a fallback). */
+    private get modelDeveloperTypeID(): string | undefined {
+        if (this._modelDeveloperTypeID === undefined) {
+            this._modelDeveloperTypeID =
+                this._vendorTypeDefinitions.find(vt => vt.Name === 'Model Developer')?.ID ?? null;
+        }
+        return this._modelDeveloperTypeID ?? undefined;
+    }
+
+    /**
+     * Returns true when the given model-vendor record represents an *inference provider*
+     * (a service that runs the model) rather than a *model developer* (the company that
+     * trained it). This is the canonical check — use it instead of re-scanning
+     * {@link VendorTypeDefinitions} at each call site.
+     *
+     * Resolution: compares `modelVendor.TypeID` against the memoized "Inference Provider"
+     * type ID. If that type isn't loaded (should be rare), falls back to "anything that is
+     * not explicitly a Model Developer is treated as an inference provider".
+     */
+    public IsInferenceProvider(modelVendor: MJAIModelVendorEntity): boolean {
+        const inferenceTypeID = this.InferenceProviderTypeID;
+        if (!inferenceTypeID) {
+            // Fallback: no Inference Provider type loaded — treat non-developers as inference providers.
+            return !UUIDsEqual(modelVendor.TypeID, this.modelDeveloperTypeID);
+        }
+        return UUIDsEqual(modelVendor.TypeID, inferenceTypeID);
+    }
+
+    /**
+     * O(1) lookup of a model by ID. Lazily built from {@link Models}; reset on reload.
+     * Use instead of `Models.find(m => UUIDsEqual(m.ID, id))` in hot paths.
+     */
+    public get ModelsByID(): Map<string, MJAIModelEntityExtended> {
+        if (!this._modelsByID) {
+            this._modelsByID = new Map(this._models.map(m => [NormalizeUUID(m.ID), m]));
+        }
+        return this._modelsByID;
+    }
+
+    /** O(1) lookup of a vendor by ID. Lazily built from {@link Vendors}; reset on reload. */
+    public get VendorsByID(): Map<string, MJAIVendorEntity> {
+        if (!this._vendorsByID) {
+            this._vendorsByID = new Map(this._vendors.map(v => [NormalizeUUID(v.ID), v]));
+        }
+        return this._vendorsByID;
+    }
+
+    /** O(1) lookup of a model type by ID. Lazily built from {@link ModelTypes}; reset on reload. */
+    public get ModelTypesByID(): Map<string, MJAIModelTypeEntity> {
+        if (!this._modelTypesByID) {
+            this._modelTypesByID = new Map(this._modelTypes.map(mt => [NormalizeUUID(mt.ID), mt]));
+        }
+        return this._modelTypesByID;
+    }
+
+    /** O(1) lookup of a configuration by ID. Lazily built from {@link Configurations}; reset on reload. */
+    public get ConfigurationsByID(): Map<string, MJAIConfigurationEntity> {
+        if (!this._configurationsByID) {
+            this._configurationsByID = new Map(this._configurations.map(c => [NormalizeUUID(c.ID), c]));
+        }
+        return this._configurationsByID;
+    }
+
+    /**
+     * Model-vendor records grouped by ModelID. Lazily built from {@link ModelVendors}; reset on reload.
+     * Use instead of `ModelVendors.filter(mv => UUIDsEqual(mv.ModelID, id))` in hot paths.
+     * NOTE: the per-model `MJAIModelEntityExtended.ModelVendors` property is the preferred
+     * accessor when you already hold the model entity; this index serves callers that only
+     * have a ModelID.
+     */
+    public get ModelVendorsByModelID(): Map<string, MJAIModelVendorEntity[]> {
+        if (!this._modelVendorsByModelID) {
+            const map = new Map<string, MJAIModelVendorEntity[]>();
+            for (const mv of this._modelVendors) {
+                const key = NormalizeUUID(mv.ModelID);
+                const list = map.get(key);
+                if (list) {
+                    list.push(mv);
+                } else {
+                    map.set(key, [mv]);
+                }
+            }
+            this._modelVendorsByModelID = map;
+        }
+        return this._modelVendorsByModelID;
+    }
+
+    /**
+     * Prompt-model associations grouped by PromptID. Lazily built from {@link PromptModels}; reset on reload.
+     * Use instead of `PromptModels.filter(pm => UUIDsEqual(pm.PromptID, id))` in hot paths.
+     */
+    public get PromptModelsByPromptID(): Map<string, MJAIPromptModelEntity[]> {
+        if (!this._promptModelsByPromptID) {
+            const map = new Map<string, MJAIPromptModelEntity[]>();
+            for (const pm of this._promptModels) {
+                const key = NormalizeUUID(pm.PromptID);
+                const list = map.get(key);
+                if (list) {
+                    list.push(pm);
+                } else {
+                    map.set(key, [pm]);
+                }
+            }
+            this._promptModelsByPromptID = map;
+        }
+        return this._promptModelsByPromptID;
     }
 
     public get Vendors(): MJAIVendorEntity[] {
-        return this._vendors;
+        return this.GetConfigData<MJAIVendorEntity>('_vendors');
     }
 
     public get ModelVendors(): MJAIModelVendorEntity[] {
-        return this._modelVendors;
+        return this.GetConfigData<MJAIModelVendorEntity>('_modelVendors');
     }
 
     public get CredentialBindings(): MJAICredentialBindingEntity[] {
-        return this._credentialBindings;
+        return this.GetConfigData<MJAICredentialBindingEntity>('_credentialBindings');
     }
 
     /**
@@ -636,27 +1071,27 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get ModelTypes(): MJAIModelTypeEntity[] {
-        return this._modelTypes;
+        return this.GetConfigData<MJAIModelTypeEntity>('_modelTypes');
     }
 
     public get Prompts(): MJAIPromptEntityExtended[] {
-        return this._prompts;
+        return this.GetConfigData<MJAIPromptEntityExtended>('_prompts');
     }
 
     public get PromptModels(): MJAIPromptModelEntity[] {
-        return this._promptModels;
+        return this.GetConfigData<MJAIPromptModelEntity>('_promptModels');
     }
 
     public get PromptTypes(): MJAIPromptTypeEntity[] {
-        return this._promptTypes;
+        return this.GetConfigData<MJAIPromptTypeEntity>('_promptTypes');
     }
 
     public get PromptCategories(): MJAIPromptCategoryEntityExtended[] {
-        return this._promptCategories;
+        return this.GetConfigData<MJAIPromptCategoryEntityExtended>('_promptCategories');
     }
 
     public get Models(): MJAIModelEntityExtended[] {
-        return this._models;
+        return this.GetConfigData<MJAIModelEntityExtended>('_models');
     }
 
     public get ArtifactTypes(): MJArtifactTypeEntity[] {
@@ -671,27 +1106,27 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get VectorDatabases(): MJVectorDatabaseEntity[] {
-        return this._vectorDatabases;
+        return this.GetConfigData<MJVectorDatabaseEntity>('_vectorDatabases');
     }
 
     public get ModelCosts(): MJAIModelCostEntity[] {
-        return this._modelCosts;
+        return this.GetConfigData<MJAIModelCostEntity>('_modelCosts');
     }
 
     public get ModelPriceTypes(): MJAIModelPriceTypeEntity[] {
-        return this._modelPriceTypes;
+        return this.GetConfigData<MJAIModelPriceTypeEntity>('_modelPriceTypes');
     }
 
     public get ModelPriceUnitTypes(): MJAIModelPriceUnitTypeEntity[] {
-        return this._modelPriceUnitTypes;
+        return this.GetConfigData<MJAIModelPriceUnitTypeEntity>('_modelPriceUnitTypes');
     }
 
     public get Configurations(): MJAIConfigurationEntity[] {
-        return this._configurations;
+        return this.GetConfigData<MJAIConfigurationEntity>('_configurations');
     }
 
     public get ConfigurationParams(): MJAIConfigurationParamEntity[] {
-        return this._configurationParams;
+        return this.GetConfigData<MJAIConfigurationParamEntity>('_configurationParams');
     }
 
     /**
@@ -827,15 +1262,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentDataSources(): MJAIAgentDataSourceEntity[] {
-        return this._agentDataSources;
+        return this.GetConfigData<MJAIAgentDataSourceEntity>('_agentDataSources');
     }
 
     public get AgentSteps(): MJAIAgentStepEntity[] {
-        return this._agentSteps;
+        return this.GetConfigData<MJAIAgentStepEntity>('_agentSteps');
     }
 
     public get AgentStepPaths(): MJAIAgentStepPathEntity[] {
-        return this._agentStepPaths;
+        return this.GetConfigData<MJAIAgentStepPathEntity>('_agentStepPaths');
     }
 
     // ==========================================
@@ -846,35 +1281,35 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Gets all AI modalities (Text, Image, Audio, Video, File, Embedding, etc.)
      */
     public get Modalities(): MJAIModalityEntity[] {
-        return this._modalities;
+        return this.GetConfigData<MJAIModalityEntity>('_modalities');
     }
 
     /**
      * Gets all agent-modality mappings
      */
     public get AgentModalities(): MJAIAgentModalityEntity[] {
-        return this._agentModalities;
+        return this.GetConfigData<MJAIAgentModalityEntity>('_agentModalities');
     }
 
     /**
      * Gets all model-modality mappings
      */
     public get ModelModalities(): MJAIModelModalityEntity[] {
-        return this._modelModalities;
+        return this.GetConfigData<MJAIModelModalityEntity>('_modelModalities');
     }
 
     /**
      * Gets all client tool definitions (the catalog of reusable tools).
      */
     public get ClientToolDefinitions(): MJAIClientToolDefinitionEntity[] {
-        return this._clientToolDefinitions;
+        return this.GetConfigData<MJAIClientToolDefinitionEntity>('_clientToolDefinitions');
     }
 
     /**
      * Gets all agent-to-client-tool junction records.
      */
     public get AgentClientTools(): MJAIAgentClientToolEntity[] {
-        return this._agentClientTools;
+        return this.GetConfigData<MJAIAgentClientToolEntity>('_agentClientTools');
     }
 
     /**
@@ -1380,5 +1815,44 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      */
     public async RefreshAgentPermissionsCache(agentId: string, user: UserInfo): Promise<void> {
         await AIAgentPermissionHelper.RefreshCache(user);
+    }
+
+    // ==========================================
+    // AI Skill Permission Helper Methods
+    // ==========================================
+
+    /** Checks if a user can view a skill (open-by-default). */
+    public async CanUserViewSkill(skillId: string, user: UserInfo): Promise<boolean> {
+        return await AISkillPermissionHelper.HasPermission(skillId, user, 'view');
+    }
+
+    /** Checks if a user can run (request/activate) a skill (open-by-default). */
+    public async CanUserRunSkill(skillId: string, user: UserInfo): Promise<boolean> {
+        return await AISkillPermissionHelper.HasPermission(skillId, user, 'run');
+    }
+
+    /** Checks if a user can edit a skill (owner or explicit grant). */
+    public async CanUserEditSkill(skillId: string, user: UserInfo): Promise<boolean> {
+        return await AISkillPermissionHelper.HasPermission(skillId, user, 'edit');
+    }
+
+    /** Checks if a user can delete a skill (owner or explicit grant). */
+    public async CanUserDeleteSkill(skillId: string, user: UserInfo): Promise<boolean> {
+        return await AISkillPermissionHelper.HasPermission(skillId, user, 'delete');
+    }
+
+    /** Gets all effective permissions a user has for a specific skill. */
+    public async GetUserSkillPermissions(skillId: string, user: UserInfo): Promise<EffectiveSkillPermissions> {
+        return await AISkillPermissionHelper.GetEffectivePermissions(skillId, user);
+    }
+
+    /** Gets all skills a user can access with a specific permission level. */
+    public async GetAccessibleSkills(user: UserInfo, permission: 'view' | 'run' | 'edit' | 'delete'): Promise<MJAISkillEntity[]> {
+        return await AISkillPermissionHelper.GetAccessibleSkills(user, permission);
+    }
+
+    /** Refreshes the skill permissions cache. Call after modifying permissions. */
+    public async RefreshSkillPermissionsCache(user: UserInfo): Promise<void> {
+        await AISkillPermissionHelper.RefreshCache(user);
     }
 }

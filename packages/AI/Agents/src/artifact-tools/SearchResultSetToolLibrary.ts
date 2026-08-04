@@ -179,7 +179,7 @@ export class SearchResultSetToolLibrary extends BaseArtifactToolLibrary {
      * Tools provided in addition to whatever the parent chain (DataSnapshot
      * → Data → ...) supplies. Naming and shape mirror the spec's mockup #5.
      */
-    GetToolList(): ArtifactToolDefinition[] {
+    protected getSubclassToolList(): ArtifactToolDefinition[] {
         return [
             {
                 name: 'filterByScore',
@@ -237,7 +237,7 @@ export class SearchResultSetToolLibrary extends BaseArtifactToolLibrary {
         ];
     }
 
-    async InvokeTool(
+    protected async invokeSubclassTool(
         toolName: string,
         input: Record<string, unknown>,
         artifactContent: string | Buffer,

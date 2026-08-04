@@ -1,0 +1,64 @@
+:host {
+  display: block;
+}
+
+.channel-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 22px;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+}
+
+.channel-strip__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mj-text-muted);
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.chan-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  transition: all 150ms ease;
+}
+.chan-chip i {
+  font-size: 12px;
+}
+.chan-chip--live {
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-accent, var(--mj-brand-primary));
+}
+.chan-chip--opening {
+  border-style: dashed;
+  color: var(--mj-text-muted);
+  animation: chip-pulse 1.4s ease-in-out infinite;
+}
+.chan-chip--off {
+  opacity: 0.55;
+}
+.chan-chip .live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mj-status-success);
+}
+.chan-chip .muted {
+  color: var(--mj-text-muted);
+  font-weight: 400;
+}
+
+@keyframes chip-pulse { 0%, 100% { opacity: .55 } 50% { opacity: 1 } }

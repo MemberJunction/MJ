@@ -43,6 +43,17 @@ export class ListShareDialogComponent extends BaseAngularComponent implements On
   @Input() config!: ListShareDialogConfig;
 
   /**
+   * Supporting message for the empty-state shown when a list has no shares.
+   * Appends a usage hint when the current user can manage shares.
+   */
+  public get EmptyShareMessage(): string {
+    const base = "This list hasn't been shared with anyone yet.";
+    return this.canModifyShares
+      ? `${base} Use the search above to find users or roles to share with.`
+      : base;
+  }
+
+  /**
    * Controls dialog visibility
    */
   @Input()
@@ -66,6 +77,26 @@ export class ListShareDialogComponent extends BaseAngularComponent implements On
    * Emitted when dialog is cancelled
    */
   @Output() cancel = new EventEmitter<void>();
+
+  /**
+   * Emitted when the user clicks "Manage Invitations" in the footer.
+   * Phase 2: opens the invitations management UI for this list.
+   */
+  @Output() manageInvitations = new EventEmitter<void>();
+
+  /**
+   * Emitted when the user clicks "View audit log" in the footer.
+   * Phase 2: opens the per-list audit log view.
+   */
+  @Output() viewAuditLog = new EventEmitter<void>();
+
+  /**
+   * When true (the default), newly-added shares fan out as notifications
+   * to the recipient (email + in-app, depending on user preferences).
+   * The state is captured on the dialog so consumers can read it back
+   * via `ListShareDialogResult.notifyByEmail`.
+   */
+  public notifyByEmail = true;
 
   // State
   loading = false;
@@ -392,7 +423,8 @@ export class ListShareDialogComponent extends BaseAngularComponent implements On
       action: 'apply',
       sharesAdded: this.sharesAdded,
       sharesUpdated: this.sharesUpdated,
-      sharesRemoved: this.sharesRemoved
+      sharesRemoved: this.sharesRemoved,
+      notifyByEmail: this.notifyByEmail
     };
 
     this._visible = false;

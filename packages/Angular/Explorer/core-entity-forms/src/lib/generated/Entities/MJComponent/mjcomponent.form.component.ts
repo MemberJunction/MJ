@@ -18,12 +18,13 @@ export class MJComponentFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'identificationVersioning', sectionName: 'Identification & Versioning', isExpanded: true },
             { sectionKey: 'specificationDesign', sectionName: 'Specification & Design', isExpanded: true },
-            { sectionKey: 'developerOwnership', sectionName: 'Developer & Ownership', isExpanded: false },
-            { sectionKey: 'registrySynchronization', sectionName: 'Registry & Synchronization', isExpanded: false },
+            { sectionKey: 'developerOwnership', sectionName: 'Developer & Ownership', isExpanded: true },
+            { sectionKey: 'registrySynchronization', sectionName: 'Registry & Synchronization', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJComponentDependenciesComponentID', sectionName: 'Component Dependencies (Component ID)', isExpanded: false },
             { sectionKey: 'mJComponentLibraryLinks', sectionName: 'Component Library Links', isExpanded: false },
-            { sectionKey: 'mJComponentDependenciesDependencyComponentID', sectionName: 'Component Dependencies (Dependency Component ID)', isExpanded: false }
+            { sectionKey: 'mJComponentDependenciesDependencyComponentID', sectionName: 'Component Dependencies (Dependency Component ID)', isExpanded: false },
+            { sectionKey: 'mJEntityFormOverrides', sectionName: 'Entity Form Overrides', isExpanded: false }
         ]);
     }
 }

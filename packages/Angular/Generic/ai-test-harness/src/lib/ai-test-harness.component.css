@@ -288,31 +288,8 @@
     scroll-behavior: smooth;
 }
 
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+.messages-container mj-empty-state {
     height: 100%;
-    text-align: center;
-    color: var(--mj-text-muted);
-}
-
-.empty-state i {
-    font-size: 48px;
-    margin-bottom: 16px;
-    opacity: 0.5;
-}
-
-.empty-state h4 {
-    margin: 0 0 8px 0;
-    font-size: 18px;
-    font-weight: 500;
-}
-
-.empty-state p {
-    margin: 0;
-    font-size: 14px;
 }
 
 /* Message Styles */
@@ -1052,29 +1029,11 @@
     width: 100%;
 }
 
-.empty-variables {
-    text-align: center;
-    padding: 40px 20px;
-    color: var(--mj-text-muted);
-}
-
 /* Saved Conversations */
 .saved-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
-}
-
-.empty-saved {
-    text-align: center;
-    padding: 40px 20px;
-    color: var(--mj-text-muted);
-}
-
-.empty-saved i {
-    font-size: 36px;
-    margin-bottom: 12px;
-    opacity: 0.5;
 }
 
 .saved-item {

@@ -18,8 +18,9 @@ export class MJScheduledJobRunFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'jobDetails', sectionName: 'Job Details', isExpanded: true },
             { sectionKey: 'timingQueue', sectionName: 'Timing & Queue', isExpanded: true },
-            { sectionKey: 'outcomeStatus', sectionName: 'Outcome & Status', isExpanded: false },
+            { sectionKey: 'outcomeStatus', sectionName: 'Outcome & Status', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrationRuns', sectionName: 'Company Integration Runs', isExpanded: false }
         ]);

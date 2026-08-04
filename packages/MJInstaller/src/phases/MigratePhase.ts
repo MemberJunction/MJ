@@ -57,6 +57,27 @@ export interface MigrateResult {
 }
 
 /**
+ * Default migration timeout in minutes. First-install on a slow Docker SQL
+ * Server can take 20+ minutes due to the size of the metadata-sync migrations
+ * (~30 MB SQL files inserting tens of thousands of rows). Override via the
+ * `MJ_INSTALL_MIGRATE_TIMEOUT_MIN` environment variable when shipping in even
+ * slower CI / VM environments.
+ */
+const DEFAULT_MIGRATE_TIMEOUT_MIN = 30;
+
+/** Resolve the configured migrate timeout in milliseconds. */
+function resolveMigrateTimeoutMs(): number {
+  const raw = process.env.MJ_INSTALL_MIGRATE_TIMEOUT_MIN;
+  if (raw) {
+    const parsed = parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed * 60_000;
+    }
+  }
+  return DEFAULT_MIGRATE_TIMEOUT_MIN * 60_000;
+}
+
+/**
  * Phase D — Runs database migrations via the MemberJunction CLI.
  *
  * @example
@@ -78,25 +99,34 @@ export class MigratePhase {
   /**
    * Execute database migrations.
    *
+   * The timeout defaults to {@link DEFAULT_MIGRATE_TIMEOUT_MIN} minutes and
+   * can be raised via the `MJ_INSTALL_MIGRATE_TIMEOUT_MIN` environment
+   * variable for slower environments (e.g., Docker SQL Server on Windows).
+   *
    * @param context - Migrate input with directory, config, and emitter.
    * @returns Migration result with success status and raw output.
-   * @throws {InstallerError} With code `MIGRATE_TIMEOUT` if migrations exceed 10 minutes.
-   * @throws {InstallerError} With code `MIGRATE_FAILED` if the migration command exits non-zero.
+   * @throws {InstallerError} With code `MIGRATE_TIMEOUT` if migrations exceed
+   *   the configured timeout (default: 30 minutes).
+   * @throws {InstallerError} With code `MIGRATE_FAILED` if the migration
+   *   command exits non-zero.
    */
   async Run(context: MigrateContext): Promise<MigrateResult> {
     const { Emitter: emitter } = context;
 
+    const timeoutMs = resolveMigrateTimeoutMs();
+    const timeoutMin = Math.round(timeoutMs / 60_000);
+
     emitter.Emit('step:progress', {
       Type: 'step:progress',
       Phase: 'migrate',
-      Message: 'Running database migrations...',
+      Message: `Running database migrations (timeout: ${timeoutMin} min)...`,
     });
 
     const { cmd, args } = await this.resolveCli(context.Dir, context.VersionTag, ['migrate', '--verbose']);
 
     const result = await this.processRunner.Run(cmd, args, {
       Cwd: context.Dir,
-      TimeoutMs: 600_000, // 10 minutes
+      TimeoutMs: timeoutMs,
       OnStdout: (line: string) => {
         emitter.Emit('step:progress', {
           Type: 'step:progress',
@@ -117,8 +147,8 @@ export class MigratePhase {
       throw new InstallerError(
         'migrate',
         'MIGRATE_TIMEOUT',
-        'Database migration timed out after 5 minutes.',
-        'Run "mj migrate" manually to see detailed output. Check database connectivity.'
+        `Database migration timed out after ${timeoutMin} minutes.`,
+        `Raise the timeout with MJ_INSTALL_MIGRATE_TIMEOUT_MIN=<minutes> for slow environments, or run "mj migrate" manually to see detailed output. Also check database connectivity.`
       );
     }
 

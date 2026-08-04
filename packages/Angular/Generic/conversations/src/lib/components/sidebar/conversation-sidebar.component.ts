@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { UserInfo } from '@memberjunction/core';
+import { CompositeKey, UserInfo } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { NavigationTab } from '../../models/conversation-state.model';
 
 @Component({
@@ -16,8 +17,14 @@ import { NavigationTab } from '../../models/conversation-state.model';
             [renamedConversationId]="renamedConversationId"
             [isSidebarPinned]="isSidebarPinned"
             [isMobileView]="isMobileView"
+            [showSearch]="showSearch"
+            [showNewConversationButton]="showNewConversationButton"
+            [showHeaderMenu]="showHeaderMenu"
+            [showSectionHeaders]="showSectionHeaders"
             (conversationSelected)="conversationSelected.emit($event)"
+            (conversationDeleted)="conversationDeleted.emit($event)"
             (newConversationRequested)="newConversationRequested.emit()"
+            (refreshRequested)="refreshRequested.emit()"
             (pinSidebarRequested)="onPinSidebarRequested()"
             (unpinSidebarRequested)="onUnpinSidebarRequested()">
           </mj-conversation-list>
@@ -31,6 +38,16 @@ import { NavigationTab } from '../../models/conversation-state.model';
           </mj-collection-tree>
         </div>
       }
+
+      <!-- Routines — pinned at the very bottom of the sidebar. Gated by the
+           ShowRoutines opt-out AND the user's Read permission on
+           'MJ: User Routines' (checked inside the section component). -->
+      <mj-conversation-routines-section
+        [Provider]="Provider"
+        [ShowRoutines]="ShowRoutines"
+        (openEntityRecord)="openEntityRecord.emit($event)"
+        (openConversation)="conversationSelected.emit($event)">
+      </mj-conversation-routines-section>
     </div>
     `,
   styles: [`
@@ -59,7 +76,7 @@ import { NavigationTab } from '../../models/conversation-state.model';
     }
   `]
 })
-export class ConversationSidebarComponent {
+export class ConversationSidebarComponent extends BaseAngularComponent {
   @Input() activeTab: NavigationTab = 'conversations';
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
@@ -67,11 +84,31 @@ export class ConversationSidebarComponent {
   @Input() renamedConversationId: string | null = null;
   @Input() isSidebarPinned: boolean = true;
   @Input() isMobileView: boolean = false;
+  /** Show the Routines section at the bottom of the sidebar (bubbled from the workspace; default true). */
+  @Input() ShowRoutines: boolean = true;
+
+  // ── White-label chrome toggles, passed through to the conversation list
+  //    (all default true = stock rendering; see ConversationListComponent). ──
+  /** Show the list's search box. */
+  @Input() showSearch: boolean = true;
+  /** Show the list's "New Conversation" button. */
+  @Input() showNewConversationButton: boolean = true;
+  /** Show the list's ⋯ header options menu. */
+  @Input() showHeaderMenu: boolean = true;
+  /** Show the list's collapsible section headers. */
+  @Input() showSectionHeaders: boolean = true;
 
   @Output() conversationSelected = new EventEmitter<string>();
+  /** Forwarded from the routines section — a run's linked execution record was clicked. */
+  @Output() openEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
   @Output() newConversationRequested = new EventEmitter<void>();
   @Output() pinSidebarRequested = new EventEmitter<void>();
   @Output() unpinSidebarRequested = new EventEmitter<void>();
+  /** Re-emitted from the conversation list — a conversation was deleted (payload = its ID).
+   *  Hosts use this to recover when the ACTIVE conversation is deleted. */
+  @Output() conversationDeleted = new EventEmitter<string>();
+  /** Re-emitted from the conversation list — the user refreshed the list. */
+  @Output() refreshRequested = new EventEmitter<void>();
 
   onPinSidebarRequested(): void {
     this.pinSidebarRequested.emit();

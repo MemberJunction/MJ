@@ -93,51 +93,39 @@
     <span class="form-hint">Leave empty to use artifact name as title</span>
   </div>
 
-  <!-- Display Options (Collapsible) -->
-  <div class="collapsible-section">
-    <button
-      type="button"
-      class="collapsible-header"
-      (click)="toggleOptions()"
-      [attr.aria-expanded]="showOptions">
-      <span class="collapsible-title">
-        <i class="fa-solid fa-sliders"></i>
-        Display Options
-      </span>
-      <i class="collapsible-chevron fa-solid"
-        [class.fa-chevron-down]="!showOptions"
-      [class.fa-chevron-up]="showOptions"></i>
-    </button>
-
-    @if (showOptions) {
-      <div class="collapsible-content">
-        <div class="checkbox-group checkbox-group--compact">
-          <label class="checkbox-option checkbox-option--compact">
-            <input
-              type="checkbox"
-              [(ngModel)]="showHeader"
-              (change)="onOptionChange()">
-            <span class="checkbox-mark"></span>
-            <span class="checkbox-label">Show Header</span>
-          </label>
-          <label class="checkbox-option checkbox-option--compact">
-            <input
-              type="checkbox"
-              [(ngModel)]="showTabs"
-              (change)="onOptionChange()">
-            <span class="checkbox-mark"></span>
-            <span class="checkbox-label">Show Tabs</span>
-          </label>
-          <label class="checkbox-option checkbox-option--compact">
-            <input
-              type="checkbox"
-              [(ngModel)]="showMetadata"
-              (change)="onOptionChange()">
-            <span class="checkbox-mark"></span>
-            <span class="checkbox-label">Show Metadata</span>
-          </label>
-        </div>
+  <!-- Display Options -->
+  <mj-accordion-panel [(Expanded)]="showOptions" Size="sm">
+    <ng-template mjAccordionTitle>
+      <i class="fa-solid fa-sliders"></i>
+      Display Options
+    </ng-template>
+    <div class="config-section-body">
+      <div class="checkbox-group checkbox-group--compact">
+        <label class="checkbox-option checkbox-option--compact">
+          <input
+            type="checkbox"
+            [(ngModel)]="showHeader"
+            (change)="onOptionChange()">
+          <span class="checkbox-mark"></span>
+          <span class="checkbox-label">Show Header</span>
+        </label>
+        <label class="checkbox-option checkbox-option--compact">
+          <input
+            type="checkbox"
+            [(ngModel)]="showTabs"
+            (change)="onOptionChange()">
+          <span class="checkbox-mark"></span>
+          <span class="checkbox-label">Show Tabs</span>
+        </label>
+        <label class="checkbox-option checkbox-option--compact">
+          <input
+            type="checkbox"
+            [(ngModel)]="showMetadata"
+            (change)="onOptionChange()">
+          <span class="checkbox-mark"></span>
+          <span class="checkbox-label">Show Metadata</span>
+        </label>
       </div>
-    }
-  </div>
+    </div>
+  </mj-accordion-panel>
 </div>

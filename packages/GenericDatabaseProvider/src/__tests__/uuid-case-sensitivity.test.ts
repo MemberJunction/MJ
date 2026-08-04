@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
 
 // Mock sql-formatter (used by SqlLoggingSessionImpl)
@@ -7,17 +7,12 @@ vi.mock('sql-formatter', () => ({
 }));
 
 import {
-    DatabaseProviderBase,
     SaveSQLResult,
     DeleteSQLResult,
     EntityInfo,
-    EntityFieldInfo,
     UserInfo,
-    BaseEntity,
-    CompositeKey,
-    QueryInfo,
-    QueryCategoryInfo,
 } from '@memberjunction/core';
+import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 
 /**
  * Tests that UUID comparisons throughout GenericDatabaseProvider are case-insensitive.
@@ -60,23 +55,9 @@ class TestGenericProvider extends GenericDatabaseProvider {
     async CommitTransaction(): Promise<void> {}
     async RollbackTransaction(): Promise<void> {}
 
-    // Expose protected resolveQueryInfo for testing
-    public testResolveQueryInfo(params: { QueryID?: string; QueryName?: string; CategoryID?: string; CategoryPath?: string }): QueryInfo | undefined {
-        return this.resolveQueryInfo(params as Parameters<typeof this.resolveQueryInfo>[0]);
-    }
-
-    // Expose protected refreshQueryInfoFromEntity for testing
-    public testRefreshQueryInfoFromEntity(entity: { GetAll: () => Record<string, unknown> }): QueryInfo {
-        return this.refreshQueryInfoFromEntity(entity as Parameters<typeof this.refreshQueryInfoFromEntity>[0]);
-    }
-
-    // Allow direct setting of Queries array for testing
-    public setTestQueries(queries: QueryInfo[]): void {
-        // ProviderBase stores Queries on Metadata.Provider, so we override via Object.defineProperty
-        Object.defineProperty(this, 'Queries', {
-            get: () => queries,
-            configurable: true,
-        });
+    // Expose protected resolveQuery for testing
+    public testResolveQuery(params: { QueryID?: string; QueryName?: string; CategoryID?: string; CategoryPath?: string }): MJQueryEntityExtended | undefined {
+        return this.resolveQuery(params as Parameters<typeof this.resolveQuery>[0]);
     }
 
     // Allow direct setting of Entities array for testing
@@ -112,6 +93,15 @@ const mockUser: UserInfo = {
     Email: 'test@test.com',
 } as UserInfo;
 
+/**
+ * Helper to mock QueryEngine.Instance.Queries with the given array.
+ */
+function mockQueryEngineQueries(queries: MJQueryEntityExtended[]): void {
+    vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({
+        Queries: queries,
+    } as unknown as QueryEngine);
+}
+
 describe('GenericDatabaseProvider UUID case-insensitivity', () => {
     let provider: TestGenericProvider;
 
@@ -119,14 +109,18 @@ describe('GenericDatabaseProvider UUID case-insensitivity', () => {
         provider = new TestGenericProvider();
     });
 
-    describe('resolveQueryInfo - UUID-based query lookup', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    describe('resolveQuery - UUID-based query lookup', () => {
         it('should find a query by uppercase ID when stored with lowercase ID', () => {
             const queries = [
-                { ID: LOWER_UUID, Name: 'TestQuery', CategoryID: null, CategoryPath: '' } as unknown as QueryInfo,
+                { ID: LOWER_UUID, Name: 'TestQuery', CategoryID: null, CategoryPath: '' } as unknown as MJQueryEntityExtended,
             ];
-            provider.setTestQueries(queries);
+            mockQueryEngineQueries(queries);
 
-            const result = provider.testResolveQueryInfo({ QueryID: UPPER_UUID });
+            const result = provider.testResolveQuery({ QueryID: UPPER_UUID });
 
             expect(result).toBeDefined();
             expect(result!.Name).toBe('TestQuery');
@@ -134,11 +128,11 @@ describe('GenericDatabaseProvider UUID case-insensitivity', () => {
 
         it('should find a query by lowercase ID when stored with uppercase ID', () => {
             const queries = [
-                { ID: UPPER_UUID, Name: 'TestQuery', CategoryID: null, CategoryPath: '' } as unknown as QueryInfo,
+                { ID: UPPER_UUID, Name: 'TestQuery', CategoryID: null, CategoryPath: '' } as unknown as MJQueryEntityExtended,
             ];
-            provider.setTestQueries(queries);
+            mockQueryEngineQueries(queries);
 
-            const result = provider.testResolveQueryInfo({ QueryID: LOWER_UUID });
+            const result = provider.testResolveQuery({ QueryID: LOWER_UUID });
 
             expect(result).toBeDefined();
             expect(result!.Name).toBe('TestQuery');
@@ -146,11 +140,11 @@ describe('GenericDatabaseProvider UUID case-insensitivity', () => {
 
         it('should find a query by mixed-case ID', () => {
             const queries = [
-                { ID: UPPER_UUID, Name: 'TestQuery', CategoryID: null, CategoryPath: '' } as unknown as QueryInfo,
+                { ID: UPPER_UUID, Name: 'TestQuery', CategoryID: null, CategoryPath: '' } as unknown as MJQueryEntityExtended,
             ];
-            provider.setTestQueries(queries);
+            mockQueryEngineQueries(queries);
 
-            const result = provider.testResolveQueryInfo({ QueryID: MIXED_UUID });
+            const result = provider.testResolveQuery({ QueryID: MIXED_UUID });
 
             expect(result).toBeDefined();
             expect(result!.Name).toBe('TestQuery');
@@ -158,11 +152,11 @@ describe('GenericDatabaseProvider UUID case-insensitivity', () => {
 
         it('should return undefined when no query matches the UUID', () => {
             const queries = [
-                { ID: UPPER_UUID, Name: 'TestQuery', CategoryID: null, CategoryPath: '' } as unknown as QueryInfo,
+                { ID: UPPER_UUID, Name: 'TestQuery', CategoryID: null, CategoryPath: '' } as unknown as MJQueryEntityExtended,
             ];
-            provider.setTestQueries(queries);
+            mockQueryEngineQueries(queries);
 
-            const result = provider.testResolveQueryInfo({ QueryID: OTHER_UUID });
+            const result = provider.testResolveQuery({ QueryID: OTHER_UUID });
 
             expect(result).toBeUndefined();
         });
@@ -203,62 +197,18 @@ describe('GenericDatabaseProvider UUID case-insensitivity', () => {
         });
     });
 
-    describe('refreshQueryInfoFromEntity - UUID matching for cache update', () => {
-        it('should replace existing query when IDs match across case', () => {
-            const existingQueries: QueryInfo[] = [
-                { ID: UPPER_UUID, Name: 'OldQuery' } as unknown as QueryInfo,
-            ];
-            provider.setTestQueries(existingQueries);
-
-            // Create a mock entity with GetAll that returns lowercase ID
-            const mockEntity = {
-                GetAll: () => ({ ID: LOWER_UUID, Name: 'UpdatedQuery' }),
-            };
-
-            const result = provider.testRefreshQueryInfoFromEntity(mockEntity);
-
-            expect(result).toBeDefined();
-            // The refreshed query should have the new data
-            expect(result.Name).toBe('UpdatedQuery');
-
-            // The existing queries array should have been updated (not grown)
-            const queries = (provider as { Queries: QueryInfo[] }).Queries;
-            expect(queries.length).toBe(1);
-        });
-
-        it('should add new query when no existing query matches', () => {
-            const existingQueries: QueryInfo[] = [
-                { ID: OTHER_UUID, Name: 'ExistingQuery' } as unknown as QueryInfo,
-            ];
-            provider.setTestQueries(existingQueries);
-
-            const mockEntity = {
-                GetAll: () => ({ ID: UPPER_UUID, Name: 'NewQuery' }),
-            };
-
-            const result = provider.testRefreshQueryInfoFromEntity(mockEntity);
-
-            expect(result).toBeDefined();
-            expect(result.Name).toBe('NewQuery');
-
-            // Should have added the query to the array
-            const queries = (provider as { Queries: QueryInfo[] }).Queries;
-            expect(queries.length).toBe(2);
-        });
-    });
-
     describe('Cross-platform UUID scenario', () => {
         it('SQL Server uppercase UUIDs should match PostgreSQL lowercase UUIDs in query resolution', () => {
             // Simulate: queries loaded from SQL Server (uppercase IDs)
             const queries = [
-                { ID: 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE', Name: 'Query1', CategoryID: null, CategoryPath: '' } as unknown as QueryInfo,
-                { ID: 'FFFFFFFF-1111-2222-3333-444444444444', Name: 'Query2', CategoryID: null, CategoryPath: '' } as unknown as QueryInfo,
+                { ID: 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE', Name: 'Query1', CategoryID: null, CategoryPath: '' } as unknown as MJQueryEntityExtended,
+                { ID: 'FFFFFFFF-1111-2222-3333-444444444444', Name: 'Query2', CategoryID: null, CategoryPath: '' } as unknown as MJQueryEntityExtended,
             ];
-            provider.setTestQueries(queries);
+            mockQueryEngineQueries(queries);
 
             // Look up with PostgreSQL lowercase IDs
-            const result1 = provider.testResolveQueryInfo({ QueryID: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' });
-            const result2 = provider.testResolveQueryInfo({ QueryID: 'ffffffff-1111-2222-3333-444444444444' });
+            const result1 = provider.testResolveQuery({ QueryID: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' });
+            const result2 = provider.testResolveQuery({ QueryID: 'ffffffff-1111-2222-3333-444444444444' });
 
             expect(result1).toBeDefined();
             expect(result1!.Name).toBe('Query1');

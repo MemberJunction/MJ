@@ -8,23 +8,35 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@memberjunction/communication-types', () => ({
-  BaseCommunicationProvider: class {
-    getSupportedOperations() { return []; }
-  },
-  resolveCredentialValue: (requestVal: string | undefined, envVal: string | undefined, disableFallback: boolean) => {
-    if (requestVal) return requestVal;
-    if (!disableFallback && envVal) return envVal;
-    return undefined;
-  },
-  validateRequiredCredentials: (creds: Record<string, unknown>, required: string[], provider: string) => {
-    for (const key of required) {
-      if (!creds[key]) {
-        throw new Error(`${provider}: Missing required credential: ${key}`);
+vi.mock('@memberjunction/communication-types', async () => {
+  // Pull the REAL address-list parser (a pure, dependency-free module) directly from the
+  // base-types source so the recipient-extraction tests exercise genuine parsing; importing
+  // the whole actual package would drag in @memberjunction/core-entities, which this test
+  // environment deliberately does not mock.
+  // Typed structurally (not via `typeof import(path)`) so the cross-package source file
+  // stays out of this package's TS program — a type-level path import violates rootDir.
+  const addressUtils = await vi.importActual<{
+    ParseEmailAddressList: (headerValue: string | null | undefined) => string[];
+  }>('../../../../base-types/src/AddressUtils');
+  return {
+    ...addressUtils,
+    BaseCommunicationProvider: class {
+      getSupportedOperations() { return []; }
+    },
+    resolveCredentialValue: (requestVal: string | undefined, envVal: string | undefined, disableFallback: boolean) => {
+      if (requestVal) return requestVal;
+      if (!disableFallback && envVal) return envVal;
+      return undefined;
+    },
+    validateRequiredCredentials: (creds: Record<string, unknown>, required: string[], provider: string) => {
+      for (const key of required) {
+        if (!creds[key]) {
+          throw new Error(`${provider}: Missing required credential: ${key}`);
+        }
       }
-    }
-  },
-}));
+    },
+  };
+});
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -217,6 +229,186 @@ describe('GmailProvider', () => {
       });
       expect(result.Success).toBe(false);
       expect(result.Error).toContain('Missing required credential');
+    });
+  });
+
+  describe('GetMessages body extraction', () => {
+    // Gmail returns part data as base64url; encode helper mirrors that.
+    const b64url = (s: string) => Buffer.from(s, 'utf-8').toString('base64url');
+
+    /**
+     * Drives a single message payload through the public GetMessages() path
+     * and returns the extracted Body. The Gmail API flow is list() -> get().
+     */
+    const getBodyFor = async (payload: Record<string, unknown>): Promise<string> => {
+      mockMessagesList.mockResolvedValue({ data: { messages: [{ id: 'msg-1' }] } });
+      mockMessagesGet.mockResolvedValue({
+        data: { id: 'msg-1', threadId: 'thread-1', payload },
+      });
+
+      const result = await provider.GetMessages({ NumMessages: 1 } as never);
+      expect(result.Success).toBe(true);
+      expect(result.Messages).toHaveLength(1);
+      return result.Messages![0].Body;
+    };
+
+    it('extracts a single-part text/plain body (payload.body.data)', async () => {
+      const body = await getBodyFor({
+        mimeType: 'text/plain',
+        headers: [{ name: 'From', value: 'a@example.com' }],
+        body: { data: b64url('Hello plain world') },
+      });
+      expect(body).toBe('Hello plain world');
+    });
+
+    it('extracts body from multipart/alternative (prefers text/html)', async () => {
+      const body = await getBodyFor({
+        mimeType: 'multipart/alternative',
+        headers: [],
+        parts: [
+          { mimeType: 'text/plain', body: { data: b64url('plain version') } },
+          { mimeType: 'text/html', body: { data: b64url('<p>html version</p>') } },
+        ],
+      });
+      expect(body).toBe('<p>html version</p>');
+    });
+
+    it('extracts the nested body from multipart/related with an inline image (the failing case)', async () => {
+      const body = await getBodyFor({
+        mimeType: 'multipart/related',
+        headers: [],
+        parts: [
+          {
+            mimeType: 'multipart/alternative',
+            parts: [
+              { mimeType: 'text/plain', body: { data: b64url('plain body') } },
+              { mimeType: 'text/html', body: { data: b64url('<p>body with <img src="cid:logo"></p>') } },
+            ],
+          },
+          {
+            mimeType: 'image/png',
+            filename: 'logo.png',
+            body: { attachmentId: 'att-1', size: 1234 },
+          },
+        ],
+      });
+      expect(body).toBe('<p>body with <img src="cid:logo"></p>');
+    });
+
+    it('extracts body from multipart/mixed and ignores the attachment part', async () => {
+      const body = await getBodyFor({
+        mimeType: 'multipart/mixed',
+        headers: [],
+        parts: [
+          {
+            mimeType: 'multipart/alternative',
+            parts: [
+              { mimeType: 'text/plain', body: { data: b64url('plain body') } },
+              { mimeType: 'text/html', body: { data: b64url('<p>real body</p>') } },
+            ],
+          },
+          {
+            mimeType: 'application/pdf',
+            filename: 'doc.pdf',
+            body: { attachmentId: 'att-2', size: 4096 },
+          },
+        ],
+      });
+      expect(body).toBe('<p>real body</p>');
+    });
+
+    it('extracts body from an HTML-only message (no text/plain part)', async () => {
+      const body = await getBodyFor({
+        mimeType: 'multipart/alternative',
+        headers: [],
+        parts: [
+          { mimeType: 'text/html', body: { data: b64url('<h1>html only</h1>') } },
+        ],
+      });
+      expect(body).toBe('<h1>html only</h1>');
+    });
+
+    it('decodes base64url payloads containing - and _ characters cleanly', async () => {
+      // A string whose base64url encoding contains both '-' and '_'.
+      const original = 'subjects??>>';
+      const encoded = Buffer.from(original, 'utf-8').toString('base64url');
+      expect(encoded).toMatch(/[-_]/); // guard: fixture actually exercises base64url alphabet
+      const body = await getBodyFor({
+        mimeType: 'text/plain',
+        headers: [],
+        body: { data: encoded },
+      });
+      expect(body).toBe(original);
+    });
+
+    it('returns empty string when no text part exists anywhere', async () => {
+      const body = await getBodyFor({
+        mimeType: 'multipart/mixed',
+        headers: [],
+        parts: [
+          { mimeType: 'image/png', filename: 'a.png', body: { attachmentId: 'att-3', size: 10 } },
+        ],
+      });
+      expect(body).toBe('');
+    });
+  });
+
+  describe('GetMessages recipient extraction', () => {
+    const b64url = (s: string) => Buffer.from(s, 'utf-8').toString('base64url');
+
+    /**
+     * Drives a single message with the given headers through the public GetMessages()
+     * path and returns the normalized message. Flow mirrors the body-extraction harness.
+     */
+    const getMessageFor = async (headers: Array<{ name: string; value: string }>) => {
+      mockMessagesList.mockResolvedValue({ data: { messages: [{ id: 'msg-1' }] } });
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: 'msg-1',
+          threadId: 'thread-1',
+          payload: { mimeType: 'text/plain', headers, body: { data: b64url('hello') } },
+        },
+      });
+
+      const result = await provider.GetMessages({ NumMessages: 1 } as never);
+      expect(result.Success).toBe(true);
+      expect(result.Messages).toHaveLength(1);
+      return result.Messages![0];
+    };
+
+    it('populates ToRecipients and CCRecipients as bare addresses', async () => {
+      const message = await getMessageFor([
+        { name: 'From', value: 'assistant@example.com' },
+        { name: 'To', value: 'us@example.org, other@example.com' },
+        { name: 'Cc', value: 'leader@example.com, staff@example.org' },
+      ]);
+      expect(message.ToRecipients).toEqual(['us@example.org', 'other@example.com']);
+      expect(message.CCRecipients).toEqual(['leader@example.com', 'staff@example.org']);
+    });
+
+    it('normalizes display-name forms, including quoted names with commas', async () => {
+      const message = await getMessageFor([
+        { name: 'From', value: 'assistant@example.com' },
+        { name: 'To', value: '"Doe, Jane" <jane@example.com>, Bob Smith <bob@example.com>' },
+        { name: 'Cc', value: 'Leader <leader@example.com>' },
+      ]);
+      expect(message.ToRecipients).toEqual(['jane@example.com', 'bob@example.com']);
+      expect(message.CCRecipients).toEqual(['leader@example.com']);
+    });
+
+    it('returns empty arrays when To/Cc headers are absent', async () => {
+      const message = await getMessageFor([{ name: 'From', value: 'assistant@example.com' }]);
+      expect(message.ToRecipients).toEqual([]);
+      expect(message.CCRecipients).toEqual([]);
+    });
+
+    it('leaves the legacy To field as the raw header value', async () => {
+      const rawTo = '"Doe, Jane" <jane@example.com>, bob@example.com';
+      const message = await getMessageFor([
+        { name: 'From', value: 'assistant@example.com' },
+        { name: 'To', value: rawTo },
+      ]);
+      expect(message.To).toBe(rawTo);
     });
   });
 

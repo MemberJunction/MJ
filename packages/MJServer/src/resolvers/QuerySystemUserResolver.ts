@@ -1,8 +1,7 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType, Resolver, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, RunView, UserInfo, CompositeKey, DatabaseProviderBase, LogStatus, QueryFieldInfo, QueryParameterInfo, QueryEntityInfo, QueryPermissionInfo } from '@memberjunction/core';
-import { RequireSystemUser } from '../directives/RequireSystemUser.js';
-import { MJQueryCategoryEntity, MJQueryPermissionEntity } from '@memberjunction/core-entities';
+import { LogError, UserInfo, CompositeKey, DatabaseProviderBase, LogStatus } from '@memberjunction/core';
+import { MJQueryCategoryEntity, MJQueryPermissionEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryEntityEntity, QueryEngine } from '@memberjunction/core-entities';
 import { MJQueryResolver, MJQuery_, MJQueryField_, MJQueryParameter_, MJQueryEntity_, MJQueryPermission_ } from '../generated/generated.js';
 import { GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
@@ -41,6 +40,15 @@ registerEnumType(QueryStatus, {
 export class QueryPermissionInputType {
     @Field(() => String)
     RoleID!: string;
+}
+
+@InputType()
+export class QueryParameterHintInput {
+    @Field(() => String)
+    Name!: string;
+
+    @Field(() => String)
+    Value!: string;
 }
 
 @InputType()
@@ -98,6 +106,12 @@ export class CreateQuerySystemUserInput {
 
     @Field(() => [QueryPermissionInputType], { nullable: true })
     Permissions?: QueryPermissionInputType[];
+
+    @Field(() => [QueryParameterHintInput], { nullable: true })
+    ParameterHints?: QueryParameterHintInput[];
+
+    @Field(() => Boolean, { nullable: true, defaultValue: false })
+    AutoResolveCollision?: boolean;
 }
 
 @InputType()
@@ -158,6 +172,9 @@ export class UpdateQuerySystemUserInput {
 
     @Field(() => [QueryPermissionInputType], { nullable: true })
     Permissions?: QueryPermissionInputType[];
+
+    @Field(() => [QueryParameterHintInput], { nullable: true })
+    ParameterHints?: QueryParameterHintInput[];
 }
 
 /**
@@ -211,19 +228,21 @@ export class DeleteQueryResultType {
 @Resolver()
 export class MJQueryResolverExtended extends MJQueryResolver {
     /**
-     * Creates a new query with the provided attributes. This mutation is restricted to system users only.
+     * Creates a new query with the provided attributes. Requires `query:create` scope for API key users;
+     * entity-level create permission on MJ: Queries for all users.
      * @param input - CreateQuerySystemUserInput containing all the query attributes
      * @param context - Application context containing user information
      * @returns CreateQueryResultType with success status and query data
      */
-    @RequireSystemUser()
     @Mutation(() => QueryMutationResultType)
-    async CreateQuerySystemUser(
+    async CreateQueryExtended(
         @Arg('input', () => CreateQuerySystemUserInput) input: CreateQuerySystemUserInput,
         @Ctx() context: AppContext,
         @PubSub() pubSub: PubSubEngine
     ): Promise<QueryMutationResultType> {
         try {
+            await this.CheckAPIKeyScopeAuthorization('query:create', '*', context.userPayload);
+
             // Handle CategoryPath if provided
             let finalCategoryID = input.CategoryID;
             const provider = GetReadWriteProvider(context.providers);
@@ -235,18 +254,24 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             const existingQuery = await this.findExistingQuery(provider, input.Name, finalCategoryID, context.userPayload.userRecord);
 
             if (existingQuery) {
-                const categoryInfo = input.CategoryPath ? `category path '${input.CategoryPath}'` : `category ID '${finalCategoryID}'`;
-                return {
-                    Success: false,
-                    ErrorMessage: `Query with name '${input.Name}' already exists in ${categoryInfo}`
-                };
+                if (input.AutoResolveCollision) {
+                    // Server-side collision resolution: find a unique name using sequential numeric suffixes
+                    input.Name = await this.findUniqueName(provider, input.Name, finalCategoryID, context.userPayload.userRecord);
+                    LogStatus(`[CreateQuery] Auto-resolved name collision: "${existingQuery.Name}" -> "${input.Name}"`);
+                } else {
+                    const categoryInfo = input.CategoryPath ? `category path '${input.CategoryPath}'` : `category ID '${finalCategoryID}'`;
+                    return {
+                        Success: false,
+                        ErrorMessage: `Query with name '${input.Name}' already exists in ${categoryInfo}`
+                    };
+                }
             }
 
             // Use MJQueryEntityServer which handles AI processing
             const record = await provider.GetEntityObject<MJQueryEntityServer>("MJ: Queries", context.userPayload.userRecord);
             
             // Destructure out non-database fields, keep only fields to persist
-            const { Permissions: _permissions, CategoryPath: _categoryPath, ...fieldsToSet } = {
+            const { Permissions: _permissions, CategoryPath: _categoryPath, ParameterHints: _parameterHints, AutoResolveCollision: _autoResolve, ...fieldsToSet } = {
                 ...input,
                 CategoryID: finalCategoryID || input.CategoryID,
                 Status: input.Status || 'Approved',
@@ -259,6 +284,12 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             };
 
             record.SetMany(fieldsToSet, true);
+
+            // Pass caller-provided parameter sample values to override LLM guesses
+            if (input.ParameterHints && input.ParameterHints.length > 0) {
+                record.ParameterHints = new Map(input.ParameterHints.map(h => [h.Name, h.Value]));
+            }
+
             this.ListenForEntityMessages(record, pubSub, context.userPayload.userRecord);
 
             // Attempt to save the query
@@ -271,12 +302,9 @@ export class MJQueryResolverExtended extends MJQueryResolver {
 
                 if (input.Permissions && input.Permissions.length > 0) {
                     await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
-                    await record.RefreshRelatedMetadata(true); // force DB update since we just created new permissions
+
                 }
 
-                // Refresh metadata cache to include the newly created query
-                // This ensures subsequent operations can find the query without additional DB calls
-                await provider.Refresh();
 
                 return this.buildSuccessResult(record);
             }
@@ -335,7 +363,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         };
     }
 
-    private mapFields(fields: QueryFieldInfo[]): MJQueryField_[] {
+    private mapFields(fields: MJQueryFieldEntity[]): MJQueryField_[] {
         return fields.map(f => ({
             ID: f.ID,
             QueryID: f.QueryID,
@@ -359,7 +387,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         }) as MJQueryField_);
     }
 
-    private mapParameters(params: QueryParameterInfo[]): MJQueryParameter_[] {
+    private mapParameters(params: MJQueryParameterEntity[]): MJQueryParameter_[] {
         return params.map(p => ({
             ID: p.ID,
             QueryID: p.QueryID,
@@ -378,7 +406,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         }) as MJQueryParameter_);
     }
 
-    private mapEntities(entities: QueryEntityInfo[]): MJQueryEntity_[] {
+    private mapEntities(entities: MJQueryEntityEntity[]): MJQueryEntity_[] {
         return entities.map(e => ({
             ID: e.ID,
             QueryID: e.QueryID,
@@ -392,7 +420,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         }) as MJQueryEntity_);
     }
 
-    private mapPermissions(permissions: QueryPermissionInfo[]): MJQueryPermission_[] {
+    private mapPermissions(permissions: MJQueryPermissionEntity[]): MJQueryPermission_[] {
         return permissions.map(p => ({
             ID: p.ID,
             QueryID: p.QueryID,
@@ -416,19 +444,21 @@ export class MJQueryResolverExtended extends MJQueryResolver {
     }
 
     /**
-     * Updates an existing query with the provided attributes. This mutation is restricted to system users only.
+     * Updates an existing query with the provided attributes. Requires `query:update` scope for API key users;
+     * entity-level update permission on MJ: Queries for all users.
      * @param input - UpdateQuerySystemUserInput containing the query ID and fields to update
      * @param context - Application context containing user information
      * @returns UpdateQueryResultType with success status and updated query data including related entities
      */
-    @RequireSystemUser()
     @Mutation(() => QueryMutationResultType)
-    async UpdateQuerySystemUser(
+    async UpdateQueryExtended(
         @Arg('input', () => UpdateQuerySystemUserInput) input: UpdateQuerySystemUserInput,
         @Ctx() context: AppContext,
         @PubSub() pubSub: PubSubEngine
     ): Promise<QueryMutationResultType> {
         try {
+            await this.CheckAPIKeyScopeAuthorization('query:update', input.ID, context.userPayload);
+
             // Load the existing query using MJQueryEntityServer
             const provider = GetReadWriteProvider(context.providers);
             const queryEntity = await provider.GetEntityObject<MJQueryEntityServer>('MJ: Queries', context.userPayload.userRecord);
@@ -480,6 +510,11 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             // Use SetMany to update all fields at once
             queryEntity.SetMany(updateFields);
 
+            // Pass caller-provided parameter sample values to override LLM guesses
+            if (input.ParameterHints && input.ParameterHints.length > 0) {
+                queryEntity.ParameterHints = new Map(input.ParameterHints.map(h => [h.Name, h.Value]));
+            }
+
             // Save the updated query
             const saveResult = await queryEntity.Save();
             if (!saveResult) {
@@ -493,25 +528,14 @@ export class MJQueryResolverExtended extends MJQueryResolver {
 
             // Handle permissions update if provided
             if (input.Permissions !== undefined) {
-                // Delete existing permissions
-                const rv = new RunView();
-                const existingPermissions = await rv.RunView<MJQueryPermissionEntity>({
-                    EntityName: 'MJ: Query Permissions',
-                    ExtraFilter: `QueryID='${queryID}'`,
-                    ResultType: 'entity_object'
-                }, context.userPayload.userRecord);
-
-                if (existingPermissions.Success && existingPermissions.Results) {
-                    for (const perm of existingPermissions.Results) {
-                        await perm.Delete();
-                    }
+                // Delete existing permissions (read from QueryEngine cache)
+                const existingPermissions = QueryEngine.Instance.GetQueryPermissions(queryID);
+                for (const perm of existingPermissions) {
+                    await perm.Delete();
                 }
 
                 // Create new permissions
                 await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
-                
-                // Refresh the metadata to get updated permissions
-                await queryEntity.RefreshRelatedMetadata(true);
             }
 
             return this.buildSuccessResult(queryEntity);
@@ -526,21 +550,22 @@ export class MJQueryResolverExtended extends MJQueryResolver {
     }
 
     /**
-     * Deletes a query by ID. This mutation is restricted to system users only.
+     * Deletes a query by ID. Requires `query:delete` scope for API key users;
+     * entity-level delete permission on MJ: Queries is enforced by the entity framework.
      * @param ID - The ID of the query to delete
      * @param options - Delete options controlling action execution
      * @param context - Application context containing user information
      * @returns DeleteQueryResultType with success status and deleted query data
      */
-    @RequireSystemUser()
     @Mutation(() => DeleteQueryResultType)
-    async DeleteQuerySystemResolver(
+    async DeleteQueryExtended(
         @Arg('ID', () => String) ID: string,
         @Arg('options', () => DeleteOptionsInput, { nullable: true }) options: DeleteOptionsInput | null,
         @Ctx() context: AppContext,
         @PubSub() pubSub: PubSubEngine
     ): Promise<DeleteQueryResultType> {
         try {
+            await this.CheckAPIKeyScopeAuthorization('query:delete', ID, context.userPayload);
             // Validate ID is not null/undefined/empty
             if (!ID || ID.trim() === '') {
                 return {
@@ -706,6 +731,33 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             // If query fails, return null (query doesn't exist)
             return null;
         }
+    }
+
+    /**
+     * Finds a unique query name by appending sequential numeric suffixes.
+     * Format: "Name (1)", "Name (2)", etc.
+     * Uses direct DB queries (not cache) for authoritative uniqueness checks.
+     * @param provider - Database provider for direct DB queries
+     * @param baseName - The original desired name that is already taken
+     * @param categoryID - Category ID to check uniqueness within
+     * @param contextUser - User context for database operations
+     * @returns A unique name in the format "baseName (N)"
+     */
+    private async findUniqueName(
+        provider: DatabaseProviderBase,
+        baseName: string,
+        categoryID: string | null,
+        contextUser: UserInfo
+    ): Promise<string> {
+        const MAX_ATTEMPTS = 50;
+        for (let i = 1; i <= MAX_ATTEMPTS; i++) {
+            const candidateName = `${baseName} (${i})`;
+            const existing = await this.findExistingQuery(provider, candidateName, categoryID, contextUser);
+            if (!existing) {
+                return candidateName;
+            }
+        }
+        throw new Error(`Unable to find unique name for "${baseName}" after ${MAX_ATTEMPTS} attempts`);
     }
 
     /**

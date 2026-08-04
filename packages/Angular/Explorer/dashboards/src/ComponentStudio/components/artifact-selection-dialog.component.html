@@ -83,10 +83,8 @@
                     </div>
                 } 
                 @else if (artifacts.length === 0) {
-                    <div class="empty-state">
-                        <i class="fa-solid fa-inbox"></i>
-                        <p>No artifacts found</p>
-                    </div>
+                    <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
+                        Title="No artifacts found" />
                 } 
                 @else {
                     @for (artifact of artifacts; track artifact.ID) {

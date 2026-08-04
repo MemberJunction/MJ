@@ -1,51 +1,181 @@
 <div class="app-switcher-container" [class.loading]="isLoading">
   <div class="app-switcher-button"
-    (click)="toggleDropdown()">
+    #trigger
+    [mjClickable]="TriggerAriaLabel"
+    testId="app-switcher-trigger"
+    [attr.aria-haspopup]="'dialog'"
+    [attr.aria-expanded]="showDropdown"
+    (click)="ToggleLauncher()">
     <!-- Show spinner when loading, otherwise show app icon -->
     @if (isLoading) {
-      <i class="app-icon loading-spinner fa-solid fa-spinner fa-spin"></i>
+      <i class="app-icon loading-spinner fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
     }
     @if (!isLoading) {
       <i class="app-icon" [class]="activeApp?.Icon || 'fa-solid fa-cube'"
-        [style.color]="activeApp?.GetColor()"
-      [style.--active-color]="activeApp?.GetColor()"></i>
+        [style.color]="activeApp?.GetColor()" aria-hidden="true"></i>
     }
-    <i class="dropdown-arrow fa-solid fa-chevron-down"></i>
+    <!-- Current app name; hidden at the mobile breakpoint (icon-only trigger) -->
+    <span class="app-label">{{ TriggerLabel }}</span>
+    <i class="dropdown-arrow fa-solid fa-chevron-down" aria-hidden="true"></i>
   </div>
 
   @if (showDropdown) {
-    <div class="app-switcher-dropdown">
-      <div class="app-switcher-list">
-        @for (app of apps; track app) {
-          <div
-            class="app-switcher-item"
-            [class.active]="IsActiveApp(app)"
-            [class.loading]="IsLoadingApp(app)"
-            [style.--item-color]="app.GetColor()"
-            (click)="selectApp(app)">
-            @if (IsLoadingApp(app)) {
-              <i class="fa-solid fa-spinner fa-spin"></i>
-            }
-            @if (!IsLoadingApp(app)) {
-              <i [class]="app.Icon || 'fa-solid fa-cube'"></i>
-            }
-            <span>{{ app.Name }}</span>
+    <!-- Native <dialog> + showModal(): lives in the browser TOP LAYER (above
+         every app stacking context — chat FAB, toasts), background is inert
+         (real focus trap), and focus restores to the trigger on close. The
+         backdrop is ::backdrop; clicks on it arrive as clicks on the dialog
+         element itself (OnDialogClick). -->
+    <dialog class="launcher-panel"
+      #panel
+      role="dialog"
+      aria-modal="true"
+      [class.launcher-panel--compact]="CompactMode && !ConfigMode"
+      [style.--anchor-left]="AnchorLeft + 'px'"
+      [style.--anchor-top]="AnchorTop + 'px'"
+      [attr.aria-label]="ConfigMode ? null : 'Application launcher'"
+      [attr.aria-labelledby]="ConfigMode ? 'mj-launcher-config-title' : null"
+      (click)="OnDialogClick($event)"
+      (cancel)="OnDialogCancel($event)"
+      (keydown)="OnPanelKeydown($event)">
+
+      @if (ConfigMode) {
+        <!-- Configuration view: same panel, body swapped -->
+        <div class="launcher-head launcher-head--config">
+          <button class="launcher-back" type="button" aria-label="Back to apps" (click)="RequestExitConfigMode()">
+            <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+          </button>
+          <h2 class="launcher-title" id="mj-launcher-config-title">Configure apps</h2>
+          <button class="launcher-close" type="button" aria-label="Close application launcher" (click)="CloseLauncher()">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </div>
+        @if (PendingDiscard) {
+          <div class="launcher-discard-bar" role="alert">
+            <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+            <span class="discard-msg">You have unsaved changes.</span>
+            <button mjButton variant="danger" size="sm" (click)="ConfirmDiscard()">Discard</button>
+            <button mjButton size="sm" (click)="CancelDiscard()">Keep editing</button>
           </div>
         }
+        <mj-user-app-config-content
+          class="launcher-config-body"
+          [Provider]="Provider"
+          (Saved)="ExitConfigMode()"
+          (Cancelled)="RequestExitConfigMode()">
+        </mj-user-app-config-content>
+      } @else {
+      @if (ShowFilter) {
+      <div class="launcher-head">
+        <div class="launcher-filter">
+          <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+          <input
+            #filterInput
+            type="text"
+            placeholder="Find an app…"
+            aria-label="Find an app"
+            [value]="FilterText"
+            (input)="OnFilterInput($event)"
+            (keydown)="OnFilterKeydown($event)"
+            autocomplete="off"
+            spellcheck="false" />
+        </div>
+        <button class="launcher-close" type="button" aria-label="Close application launcher" (click)="CloseLauncher()">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
       </div>
-      <!-- Divider + Configure pinned at bottom -->
-      <div class="app-switcher-divider"></div>
-      <div class="app-switcher-item configure-item" (click)="openConfigDialog()">
-        <i class="fa-solid fa-gear"></i>
-        <span>Configure...</span>
+      }
+
+      <div class="launcher-scroll">
+        @if (IsFiltering) {
+          <div class="launcher-grid">
+            @for (app of VisibleApps; track app.ID; let i = $index) {
+              <ng-container *ngTemplateOutlet="appCard; context: { $implicit: app, idx: i }"></ng-container>
+            }
+          </div>
+          @if (VisibleApps.length === 0) {
+            <div class="launcher-empty">No apps match "{{ FilterText }}"</div>
+          }
+        } @else {
+          @if (RecentApps.length > 0) {
+            <div class="launcher-sect">Recent</div>
+            <div class="launcher-grid" role="group" aria-label="Recent applications">
+              @for (app of RecentApps; track app.ID; let i = $index) {
+                <ng-container *ngTemplateOutlet="appCard; context: { $implicit: app, idx: i }"></ng-container>
+              }
+            </div>
+          }
+          <div class="launcher-sect launcher-sect--row">
+            <span>All apps</span>
+            <button class="launcher-sort-toggle" type="button"
+              [attr.aria-pressed]="SortMode === 'alpha'"
+              [attr.aria-label]="SortMode === 'alpha' ? 'Sorted alphabetically — switch to your custom order' : 'Sorted by your custom order — switch to alphabetical'"
+              [title]="SortMode === 'alpha' ? 'Sorted A–Z — click for your custom order' : 'Custom order — click for A–Z'"
+              (click)="ToggleSortMode()">
+              <i [class]="SortMode === 'alpha' ? 'fa-solid fa-arrow-down-a-z' : 'fa-solid fa-bars-staggered'" aria-hidden="true"></i>
+            </button>
+          </div>
+          <div class="launcher-grid" role="group" aria-label="All applications">
+            @for (app of OtherApps; track app.ID; let i = $index) {
+              <ng-container *ngTemplateOutlet="appCard; context: { $implicit: app, idx: i + RecentApps.length }"></ng-container>
+            }
+          </div>
+          @if (VisibleApps.length === 0) {
+            <div class="launcher-empty">
+              No applications are enabled for you yet — use Configure… below to add some.
+            </div>
+          }
+        }
       </div>
-    </div>
+
+      <div class="launcher-foot">
+        <span class="launcher-kbd-hints" aria-hidden="true">
+          <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+          <span><kbd>↵</kbd> open</span>
+          <span><kbd>esc</kbd> close</span>
+        </span>
+        <button class="launcher-configure" type="button" testId="app-switcher-configure" (click)="EnterConfigMode()">
+          <i class="fa-solid fa-gear" aria-hidden="true"></i>
+          <span>Configure…</span>
+        </button>
+      </div>
+
+      <span class="sr-only" role="status">{{ AnnouncedAppCount }} applications available</span>
+      }
+    </dialog>
   }
 </div>
 
-<!-- App Configuration Dialog -->
-<mj-user-app-config
-  #appConfigDialog
-  [(ShowDialog)]="showConfigDialog"
-  (ConfigSaved)="onConfigSaved()">
-</mj-user-app-config>
+<!-- Shared app-card template: each card is a real focusable control (mjClickable
+     adds role, tabindex 0, aria-label, and Enter/Space activation), so Tab walks
+     the cards and arrow keys are the fast path. -->
+<ng-template #appCard let-app let-idx="idx">
+  <div class="app-card"
+    [id]="OptionId(idx)"
+    [mjClickable]="app.Name"
+    role="link"
+    [testId]="'app-switcher-item-' + app.Name"
+    [attr.aria-current]="IsActiveApp(app) ? 'true' : null"
+    [attr.aria-describedby]="app.Description ? OptionId(idx) + '-desc' : null"
+    [class.active]="IsActiveApp(app)"
+    [class.loading]="IsLoadingApp(app)"
+    [style.--app-color]="app.GetColor()"
+    (click)="selectApp(app)"
+    (keydown)="OnCardKeydown(idx, $event)">
+    <div class="app-card-glyph">
+      @if (IsLoadingApp(app)) {
+        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+      } @else {
+        <i [class]="app.Icon || 'fa-solid fa-cube'" aria-hidden="true"></i>
+      }
+    </div>
+    <div class="app-card-text">
+      <div class="app-card-name">
+        <span class="app-card-name-label">{{ app.Name }}</span>
+      </div>
+      @if (app.Description) {
+        <div class="app-card-desc" [id]="OptionId(idx) + '-desc'">{{ app.Description }}</div>
+      }
+    </div>
+  </div>
+</ng-template>
+

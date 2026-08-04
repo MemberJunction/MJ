@@ -152,7 +152,7 @@ export class ParallelExecuteAction extends BaseAction {
         contextUser: any,
         params: RunActionParams
     ): Promise<ActionResultSimple> {
-        const engine = new ActionEngineServer();
+        const engine = ActionEngineServer.Instance;
         const results: any[] = [];
         const startTime = Date.now();
         let successCount = 0;
@@ -280,7 +280,7 @@ export class ParallelExecuteAction extends BaseAction {
         contextUser: any,
         params: RunActionParams
     ): Promise<ActionResultSimple> {
-        const engine = new ActionEngineServer();
+        const engine = ActionEngineServer.Instance;
         const startTime = Date.now();
 
         return new Promise<ActionResultSimple>((resolve) => {

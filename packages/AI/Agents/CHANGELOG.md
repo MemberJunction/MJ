@@ -1,5 +1,1098 @@
 # @memberjunction/ai-agents
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/ai-reranker@6.0.0
+  - @memberjunction/ai-vector-dupe@6.0.0
+  - @memberjunction/ai-vector-sync@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/storage@6.0.0
+  - @memberjunction/search-engine@6.0.0
+  - @memberjunction/templates@6.0.0
+  - @memberjunction/context-crush@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- c382605: Fix realtime relayed-tool dispatch for scoped anonymous magic-link sessions (#3371): delegated agent runs, co-agent observability writes (creation, transcript/tool-turn appends, usage accumulation, finalize), and recording uploads now execute under the system user once session ownership is proven — gated on MagicLinkScope, excluding public web-widget guests, and failing closed to the caller when no system user is available. The session's `allowedAgents` colleague union is now CanRun-gated against the original caller before dispatch, so elevation cannot widen agent authority, and delegated runs carry the visitor's id as `userId` so run attribution and context-memory scope stay the person's. Adds the IT68 scoped-anon-elevation deterministic integration bundle proving the permission contract on a live database.
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-engine-base@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/ai-reranker@5.51.0
+  - @memberjunction/ai-vector-dupe@5.51.0
+  - @memberjunction/ai-vector-sync@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/actions@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/storage@5.51.0
+  - @memberjunction/search-engine@5.51.0
+  - @memberjunction/templates@5.51.0
+  - @memberjunction/context-crush@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- 623dfc5: Break CodeGen FK cycle between AIAgentRun, AIPromptRun, and ConversationDetail. Move SummaryPromptRunID from ConversationDetail to a new ConversationCompactionRun audit table. Remove AgentRunID from AIPromptRun (derivable via AIAgentRunStep.TargetLogID). Remove agentRunId from AIPromptParams and all write sites across the prompt/agent stack.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [0686d52]
+- Updated dependencies [c7b6710]
+- Updated dependencies [764d6f6]
+- Updated dependencies [408e4bf]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai-prompts@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/search-engine@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/storage@5.50.0
+  - @memberjunction/ai-engine-base@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/ai-reranker@5.50.0
+  - @memberjunction/ai-vector-dupe@5.50.0
+  - @memberjunction/ai-vector-sync@5.50.0
+  - @memberjunction/actions@5.50.0
+  - @memberjunction/templates@5.50.0
+  - @memberjunction/context-crush@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Minor Changes
+
+- bc388e3: Realtime QA hardening — every finding from the adversarial audit of the driver-family consolidation (PR #3177) plus the broader co-agent architecture, fixed with regression tests (plan: `plans/complete/realtime-qa-hardening.md`).
+
+  **Regression fixes (A-items)** — bodyless provider `error` frames are recoverable again on raw-WS providers (adapter synthesizes the payload; transport failures stay fatal); `Capabilities.CanReconfigureTurnMode` is profile-gated (`supportsLiveReconfigure` — HuggingFace now truthfully reports false and `Reconfigure` no-ops); protected wire fields (`type`/`instructions`/`tools`) can no longer be overridden through the open Config bag (closing a strict-endpoint session.update kill vector) while the documented `audio` override remains; the client-direct minted `SessionConfig` now applies the residual bag with the same construction order as server-bridged (the two topologies are actually identical); deferred-config listener cleanup on early teardown; family-wide empty-transcript suppression; settle-handle + adapter buffer hygiene.
+
+  **Robustness (B-items)** — connect/readiness deadlines everywhere (client WS `connectTimeoutMs` covering open + `session.created`, with socket-death/`Disconnect` releasing the awaited `Connect`; server `configReadinessTimeoutMs` rejecting `WaitForConfigApplied` on silent endpoints without cancelling the deferred apply); stale-`response.done` protection (a cancelled turn's trailing done can't release the busy lock under a locally-initiated replacement); TRUE-barge-in drops queued tool-result auto-triggers (the model never speaks over a user who took the floor; delivery via the user's next turn); WebRTC remote-stream handlers cleared on Disconnect; WS sends gated on socket-open.
+
+  **Architecture (C-items)** — `realtime.session` tuning config (`effortLevel`/`parallelToolCalls`/`mcpTools`/`inputTranscriptionModel`) now flows config→bag→driver on BOTH topologies (`GetSessionTuningSettings`; the PR #3177 driver features are live end-to-end); per-modality usage detail (`RealtimeUsage.Input/OutputTokenDetails`) captured by the OpenAI driver, accumulated by the runner, and persisted on the realtime `AIPromptRun` for multi-channel cost attribution; HF proxy hardening (optional `MJ_REALTIME_PROXY_ALLOWED_ORIGINS` allowlist, upstream-open deadline, bounded pre-open buffer); the session runner observes the chained cancellation signal and performs bounded transport reconnects (default 1, `MaxTransportReconnects`); MCP approval requests are auto-DENIED so the turn continues instead of dead-air blocking; Gemini scrubs+warns on foreign OpenAI-protocol/transport keys (`REALTIME_SHARED_CONFIG_KEYS` exported from Core); `RealtimeTranscript.ReplacesPrevious` added for streamed-final providers.
+
+  Suite totals after the wave: ai-openai 147, ai-realtime-client 391, ai-agents 1653, ai-gemini 87, ai-xai 50, ai-huggingface 34, MJServer proxy 8 — all passing.
+
+  **Second-pass re-audit fixes**: a follow-up adversarial audit of the hardening itself found the C1 fix was inert (the new realtime.session field was never propagated through the effective-config resolver — now fixed with normalizeSession), plus untested edges introduced by the B2 counter (permanent wedge on a rejected response.create — now self-heals on the error frame), the C7 reconnect (abort/Stop race leaking a live session; stale call_id relayed to the fresh session; no re-entrancy/identity guard — all fixed), the client connect deadline (timer leak on synchronous socket-construction throw), reused-instance socket handling (old socket late close corrupting the new session), the C4 abort window (abort during StartSession lost), model not being a protected wire field, and ReplacesPrevious being ignored at the transcript-persist site. All fixed with regression + interaction-seam tests.
+
+  **Fifth-pass re-audit fixes**: a five-reviewer verification pass found one reachable correctness bug and closed two latent transcript fragilities. (1) The pass-4 client `onErrorFrame` fix cleared the pending narration kind only when no confirmed response was active, so a narration create rejected while a cancelled response drained mistagged the next delegated-answer turn as ephemeral (dropping its transcript) — the kind is now cleared unconditionally on the rejecting error. (2) The transcript in-flight-row bookkeeping moved to an `{id, open}` model so a turn that emits both an interim delta and repeated streamed completeds still collapses to one row, and a short assistant final no longer suppresses the next turn's interim streaming row. Coverage added for the `confirmedResponseActive` busy-lock guard and the per-turn `ReplacesPrevious` reset (xAI + HuggingFace).
+
+  **Fourth-pass re-audit fixes**: a four-reviewer pass found one regression from the third-pass work and several reachable pre-existing defects, all fixed with regression tests. (1) The third-pass usage un-gate let a trailing usage frame accumulate after `Stop()` and arm a post-finalize checkpoint timer — now gated on the runner lifecycle (`!stopped`) instead. (2) `RealtimeTranscript.ReplacesPrevious` is now wired END-TO-END: the shared server session flags the 2nd+ streamed user transcription completed (Grok streams repeated growing finals) and `persistRealtimeTranscript` uses status-disambiguated reuse, so server-bridged Grok/ElevenLabs no longer mint a duplicate `ConversationDetail` per caption (previously the flag was only ever set client-side). (3) The client `onErrorFrame` self-heal now clears the eager `responseActive`/narration phantom left by a rejected local `response.create` (a `confirmedResponseActive` flag distinguishes it from a live VAD turn) so `IsBusy` no longer wedges on compat endpoints. (4) The tool broker aborts EVERY concurrent delegation on barge-in (was: only the newest, orphaning the rest). (5) The HuggingFace server session declares its native 16 kHz sample rate (was: bridge fell back to 24 kHz into a 16 kHz pipeline). (6) A stuck delegate can no longer leak stale narration-burst timing across a reconnect (burst state reset decoupled from the delegation counter).
+
+  **Third-pass re-audit fixes**: a third adversarial pass against the latest `next` found three residual seams: (1) the C8 transcript-persist fix only bound the in-flight key on the INTERIM branch, so a FINALS-ONLY streamed provider (e.g. Grok user captions, ElevenLabs corrections) that never emits an interim delta still minted a duplicate `ConversationDetail` row per correction — the create+finalize branch now binds the key too; (2) the C7 reconnect blanket-zeroed the runner's shared `activeDelegations` counter, which — combined with each aborted delegation's self-decrementing `finally` — could double-decrement and steal a CONCURRENT post-reconnect delegation's narration burst; the reset is gone (frames self-unwind); (3) `OnUsage` was identity-gated like every other handler, so a trailing usage frame flushed on the just-dropped socket was silently discarded — usage is runner-GLOBAL (cumulative) and is now un-gated. Plus a bounded-worst-case characterization test for the S1 self-heal. All fixed with regression + interaction-seam tests.
+
+### Patch Changes
+
+- c5e4b9e: Agent conversation compaction: durable cross-turn summaries stored on the conversation (Sequence + SummaryPromptRunID, budget knobs on AIAgentType/AIAgent, Compaction run steps), conversation-history retrieval tools (getMessageBySequence, getMessagesByRange, searchConversation, summarizeRange), edit handling with OriginalMessageChanged flagging and a wired chat edit affordance, plus hardening fixes: failed message expansions now surface a reason to the model (breaks an unbounded retry loop), json5 ESM import fix restores the local JSON-repair tier, and SQLConverter no longer truncates PG column comments at escaped apostrophes.
+- 5473e9a: Filter the `since` parameter through `sqlDate` in the PostgreSQL dialect of the `GetConversationsForMemoryManager` query, which Memory Manager runs via `RunQuery` (`memory-manager-agent.ts:704`).
+
+  The PG template interpolated the parameter straight into the SQL string (`>= '{{ since }}'`). The SQL Server sibling was fixed in `7cd4953574` (2026-07-18); that commit touched only `get-conversations-for-memory-manager.sql`, so the `.pg.sql` file kept the raw interpolation it has carried since it was added on 2026-04-28, and the two dialects drifted apart.
+
+  `sqlDate` parses the value as a `Date`, throws on unparseable input, and returns `'${date.toISOString()}'` — it emits its own quotes, so the manual quotes in the old line were wrong twice over: the value was unfiltered, and a filtered value would have been double-quoted. The filter is dialect-agnostic (unlike `sqlBoolean` and `sqlIdentifier`, it has no platform-aware override in `RunQuerySQLFilterManager`), so the same filter is correct for both engines. The file already used `{{ agentIds | sqlIn }}`, so the filter mechanism was live here and `since` was simply the one that was missed.
+
+  Metadata-only change — it reaches the database through the release's consolidated `mj sync push`, not through a migration.
+
+- 373c5f6: Fix a concurrency race that could persist a realtime transcript turn twice.
+
+  The session runner dispatches provider transcript frames fire-and-forget (`void this.handleTranscript(t)`), so frames for the same role are processed concurrently. `persistRealtimeTranscript` did a check-then-act on the in-flight turn map that spanned `await`s (GetEntityObject / Load / Save), so two captions arriving a few milliseconds apart could both observe "no tracked row yet", both take the create branch, and write the turn twice.
+
+  Observed live against a streamed Grok session: one user utterance produced two byte-identical `ConversationDetail` rows, the duplicate created 17ms _before_ the first row's final update. Streamed-caption providers (Grok) are the most exposed since they emit many finals per turn, but the interim-racing-its-own-final variant applies to any provider.
+
+  Transcript persistence is now serialized per role through a promise chain, making the read-modify-write atomic with respect to other frames of the same role. Roles remain independent and are not serialized against each other. A frame that fails no longer strands the rest of its role's queue.
+
+  Adds regression coverage for concurrent (non-awaited) frames — overlapping streamed captions, an interim racing its final, cross-role independence, and failure isolation. This class of bug was invisible to the existing suite, which drove every persist call sequentially.
+
+  Also bounds session teardown against a stuck write: `Stop()` now drains queued transcript writes after the provider session closes (so no new frames can arrive) and before the result is built — so tail writes land and the turn count doesn't undercount — under a hard timeout (`TranscriptFlushTimeoutMs`, default 5s). A hung or rejected drain is logged and teardown finalizes anyway; losing a tail write is strictly better than wedging the session.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [7db8ef5]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+- Updated dependencies [9d6e3d9]
+- Updated dependencies [78a5e44]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/ai-prompts@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/actions@5.49.0
+  - @memberjunction/ai-vector-sync@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/search-engine@5.49.0
+  - @memberjunction/templates@5.49.0
+  - @memberjunction/ai-engine-base@5.49.0
+  - @memberjunction/aiengine@5.49.0
+  - @memberjunction/ai-reranker@5.49.0
+  - @memberjunction/ai-vector-dupe@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/storage@5.49.0
+  - @memberjunction/context-crush@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- 2143b98: Fix realtime agent media library failing with "Entity AI Agents not found in metadata" — the agent lookup in `resolveAgentMediaCollectionID` used the pre-v5 unprefixed entity name `'AI Agents'` instead of the canonical `'MJ: AI Agents'`, so an agent's media kit (`DefaultMediaCollectionID` collection) silently never loaded at realtime session start. Adds a regression test pinning the canonical entity name.
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ai-engine-base@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/ai-prompts@5.48.0
+  - @memberjunction/ai-reranker@5.48.0
+  - @memberjunction/ai-vector-dupe@5.48.0
+  - @memberjunction/ai-vector-sync@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/actions@5.48.0
+  - @memberjunction/storage@5.48.0
+  - @memberjunction/search-engine@5.48.0
+  - @memberjunction/templates@5.48.0
+  - @memberjunction/context-crush@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-engine-base@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/ai-prompts@5.47.0
+  - @memberjunction/ai-reranker@5.47.0
+  - @memberjunction/ai-vector-dupe@5.47.0
+  - @memberjunction/ai-vector-sync@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/actions@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/storage@5.47.0
+  - @memberjunction/search-engine@5.47.0
+  - @memberjunction/templates@5.47.0
+  - @memberjunction/context-crush@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Minor Changes
+
+- ef3e802: feat(prompt-config): scope-aware prompt run-settings override (ScopedPromptConfig + resolver)
+
+  The run-settings sibling of `ScopedPromptPart`. Where `ScopedPromptPart` scope-overrides a
+  prompt's TEXT, `ScopedPromptConfig` scope-overrides a prompt's RUN SETTINGS — model/vendor, AI
+  configuration, sampling knobs (temperature/topP/topK/minP/penalties/seed/stopSequences),
+  response format, and effort level — for an `AIPrompt`, narrowed by the SAME polymorphic scope the
+  agent runtime already carries (`PrimaryScopeEntity`/`PrimaryScopeRecordID` + `SecondaryScopes`).
+  Any MJ app can tune which model a prompt runs on and how it samples, per scope, by editing rows.
+  - **Entity** `__mj.ScopedPromptConfig` — scope columns (mirroring `ScopedPromptPart`) + nullable
+    override columns; `Status`/`Priority`. Whole-row-wins by specificity (SecondaryScopes match >
+    PrimaryScopeRecord > global, tie-broken by `Priority`); each non-null column overrides the
+    prompt default, a NULL column inherits it.
+  - **`ScopedPromptConfigResolver`** (`@memberjunction/ai-agents`) — cached on `AIEngine`
+    (`ScopedPromptConfigs`); pluggable via `@RegisterClass`; resolves the single most-specific
+    in-scope config. `ApplyScopedPromptConfig` overlays it onto the run params
+    (model/vendor → `override`, configuration → `configurationId`, effort → `effortLevel`, sampling
+    knobs → `additionalParameters`).
+  - **`BaseAgent` wiring** — `preparePromptParams` resolves + applies the config using the run's
+    existing scope, right before the params are returned. **Runtime-explicit overrides still win.**
+  - `StopSequences` overlays as a trimmed `string[]` (the comma-delimited column is split before it
+    reaches `additionalParameters`, matching the runner's array contract — not the raw string).
+  - Unit tests for the resolver (cascade / priority / status / null-column inherit / runtime-wins,
+    plus the StopSequences-array and ResponseFormat mappings).
+  - **`@memberjunction/ai-prompts`** — two `AIPromptRunner` fixes:
+    1. **Response format override is honored** — the run now prefers `additionalParameters.responseFormat`
+       (set by `ApplyScopedPromptConfig`) over the prompt's own `ResponseFormat`, keeping `'Any'`-means-
+       silent semantics. Previously a `ScopedPromptConfig.ResponseFormat` was a no-op (the runner only
+       read `prompt.ResponseFormat`).
+    2. **`Messages` logging** — records caller-supplied `conversationMessages` to `AIPromptRun.Messages`
+       even without a template-rendered system prompt (previously dropped for the
+       `templateMessageRole='none'` path, leaving `Messages` null).
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-engine-base@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-prompts@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/ai-reranker@5.46.0
+  - @memberjunction/ai-vector-dupe@5.46.0
+  - @memberjunction/ai-vector-sync@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/actions@5.46.0
+  - @memberjunction/storage@5.46.0
+  - @memberjunction/search-engine@5.46.0
+  - @memberjunction/templates@5.46.0
+  - @memberjunction/context-crush@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ai-engine-base@5.45.1
+  - @memberjunction/aiengine@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/ai-reranker@5.45.1
+  - @memberjunction/ai-vector-dupe@5.45.1
+  - @memberjunction/ai-vector-sync@5.45.1
+  - @memberjunction/templates@5.45.1
+  - @memberjunction/search-engine@5.45.1
+  - @memberjunction/context-crush@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/actions-base@5.45.1
+  - @memberjunction/actions@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/storage@5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- 19ec4b0: Phase 2 of the core AI Skill library: seven new skills (Document Builder, Communications, Data Import & Transform, File Management, Scheduling & Automation, Lists & Audiences, Code & Computation) with externalized instruction templates and bundled actions/sub-agents; the SkillSmith meta-agent (interviews, discovers bundle members, drafts guardrailed instructions, persists skills as Pending for review); and MJAISkillEntityServer, which defaults AISkill.CreatedByUserID to the context user so programmatic creation paths (Create Record action, scripts) work without knowing the acting user's ID.
+- b2927f1: Omnibus fixes: (1) skill-granted sub-agent execution — resolveSubAgentByName now resolves from the same runtime-effective set the prompt offers and validation approves (skill activations / subAgentChanges), the resolved entity threads into child dispatch, and execution-time not-found retries are bounded by the shared validation-retry cap with a self-correcting available-sub-agents message (fixes an infinite delegation loop observed live on Research Agent → Infographic Agent); (2) RunView dedup/linger cache write-invalidation on entity events (@memberjunction/core); (3) regenerated class-registration manifests.
+- 6125dcd: Skill activation governance & observability (v5.45): double activation gate (AISkill.ActivationMode × AIAgent.SkillActivationMode, both defaulting to RequestedOnly — self-activation requires Auto×Auto; /skill user requests unaffected) via new GetAutoActivatableSkillsForAgent; AIAgent.RequirePlanMode forces plan mode on every root run; AIAgentRun.PlanMode stamps plan-mode runs; plan-mode runs block skill activations after approval (re-plan required); AIAgentRunStep.Skills JSON records per-step AgentSkillInvocation provenance (activation type, gate values, agent-stated reason) on Skill/Prompt/Actions/Sub-Agent steps with native-grant precedence; agent-run UX gains a Plan Mode header chip, Skill/Plan step icons, per-step skill chips, and a Skills drill-in tab with provenance cards.
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/ai-engine-base@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-prompts@5.45.0
+  - @memberjunction/ai-reranker@5.45.0
+  - @memberjunction/ai-vector-dupe@5.45.0
+  - @memberjunction/ai-vector-sync@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/actions@5.45.0
+  - @memberjunction/storage@5.45.0
+  - @memberjunction/search-engine@5.45.0
+  - @memberjunction/templates@5.45.0
+  - @memberjunction/ai@5.45.0
+  - @memberjunction/context-crush@5.45.0
+
+## 5.44.0
+
+### Minor Changes
+
+- eb38a42: Agent media library: a realtime agent can now draw on a curated, governed **media kit** during a conversation — a `MJ: Collections` of `MJ: Artifacts` bound to the agent via the new `AIAgent.DefaultMediaCollectionID`, with per-membership `ContextDescription` ("when to show it") and `Preload` on `MJ: Collection Artifacts`. The `MediaChannelServer` resolves the kit at session start and feeds the model a manifest so it can surface items via the existing `Media_ShowMedia` tool. Additive only; reuses Files/streaming/viewers/versioning/permissions (no new top-level entity). Requires the companion migration + CodeGen.
+- 3633fbb: Agent Skills, Plan Mode, and realtime widget UX.
+
+  **Agent Skills** — portable `SKILL.md` import/export, a first-class Skill step wired into the Loop agent runtime, Skills engine caching + agent-gating resolution, the `AI Skills` resource type with "Can Share Skills" authorization, and the AI Skill sharing panel in the entity forms. Includes the skill-markdown converter/operations and the generated entity + resolver surface for the new Skill entities.
+
+  **Plan Mode** — a human-in-the-loop plan-approval gate for the Loop agent (server + client), threaded through the agent client session/types, the GraphQL AI client, and the conversations composer/message-input UI so a run can pause for plan review before executing.
+
+  **Realtime voice widget UX** — fixes and consolidation in `@memberjunction/ng-conversations`:
+  - Fixed `NG0100 ExpressionChangedAfterItHasBeenCheckedError` when opening the Details panel (defer the `ResizeObserver` seed + callback to a microtask).
+  - The surface/Details panel is now an independent right-hand peek gated on available width (not console chrome / text-reveal), so opening Details keeps the glowing orb and toggling captions off no longer removes the panel; the orb also returns immediately on captions-off.
+  - Type-to-compose: any printable keystroke opens the composer and seeds itself as the first character (removed the dedicated "T" hotkey + hint).
+  - Control consolidation: the banner is now state + window-chrome only (removed duplicate Captions/End controls, folded "pure audio" into the gear's Density = Simple); Captions is promoted to a first-class control in the compact lean dock.
+
+  **Remote Browser** — `RemoteBrowserSnapshot` now honors its documented best-effort contract: it returns an empty snapshot instead of throwing when the underlying browser adapter has been torn down, so the client's periodic live-view poll never surfaces a recurring GraphQL error (with unit coverage).
+
+- d88568e: Add agent token-optimization primitives and framework wiring (Headroom-inspired).
+
+  New package `@memberjunction/context-crush` — dependency-light, framework-agnostic token-optimization primitives:
+  - `CrushJSON` / `DescribeCrush` — deterministic, byte-stable structural JSON compression (array-of-objects → columns/rows, null elision, string interning, budget guard) with a reversible legend.
+  - `PartitionStablePrefix` — splits a conversation into a cache-stable prefix and a volatile tail.
+  - `CrushCode` (subpath `@memberjunction/context-crush/code`) — AST-aware SQL/TypeScript reduction that preserves signatures and collapses non-focal bodies.
+
+  `@memberjunction/ai-agents` wiring:
+  - Action-result summaries structurally compress large inline JSON values — whether an output param is a raw object/array **or a JSON string** (many actions `JSON.stringify` their payload, e.g. `run-adhoc-query`'s `Results`); default on, opt out per agent via `crushActionResults: false`.
+  - `pruneAndCompactExpiredMessages` now confines pruning/compaction to the volatile tail, preserving the provider KV-cache prefix; overflow recovery still reaches the prefix when required.
+  - Opt-in AST reduction of large _code-string_ action results, enabled per agent type via the `crushCodeLang` prompt param (`'sql'` | `'typescript'`); not wired to any agent by default.
+  - `MemoryManagerAgent` now mines failed runs for corrective `Issue`/`Context` notes (never `Constraint`), tagged `Ephemeral` so they decay unless reinforced, with full run-step observability. The selector keys on the run's own failure signals — `Status IN ('Failed','Cancelled')` **or** `Success = 0` (subsuming the safety-net and context-recovery failures the engine records as `Status='Failed'`).
+
+  Credits the Headroom project (Apache-2.0) as the conceptual source; all primitives are independent TypeScript re-implementations.
+
+- 1367fbb: AI Skill permissions (full agent parity) + `/skill` composer invocation. Skills now use the same dedicated-table, **open-by-default** permission model as AI Agents via `MJ: AI Skill Permissions`: a cached runtime helper (`AISkillPermissionHelper`, open-by-default) and a unified-engine provider (`AISkillPermissionProvider`, closed-by-default / Sharing Center), grantee-exclusivity enforced by `MJAISkillPermissionEntityServer`, and a `GetSkillsForAgent(agent, user?)` filter so the model's skill catalog is intersected with the acting user's Run permission. The old `AI Skills` Resource-Type sharing is retired in favor of a skill-scoped permissions grid (`SkillPermissionsPanel`/`Dialog`/`Service`), with the `Can Share Skills` authorization repointed to it. End users invoke a skill for a message by typing `/skill-name` in the conversation composer (mirrors `@agent`/`#entity`; picker filtered by permission, chips use `AISkill.IconClass`/`Color`); selected IDs thread through the client → resolver → runtime chain as `ExecuteAgentParams.requestedSkillIDs` (both the `RunAIAgent` and `RunAIAgentFromConversationDetail` mutations), and `BaseAgent.preActivateRequestedSkills` activates them at run start only if they survive the guard (agent-accepted ∩ user-permitted). Requires the companion Agent Skills migration + CodeGen.
+- 91842c3: Seed the core AI Skill library: first 3 shipped skills (Web Research, Data Analysis & Queries, Data Visualization) with externalized instruction templates, bundled actions, and bundled sub-agents (Query Strategist, Infographic Agent). Wires the ai-skills metadata directory into the sync directoryOrder and adds junction/lookup pull config.
+- 6f74b17: Add an LLM/agentic reasoning pass on top of the embedding/vector duplicate-detection pipeline — "vectors filter, reasoning validates". A small/fast LLM judges high-probability vector candidates (Merge / NotDuplicate / Uncertain) to shrink the human-review set, strengthening or weakening the vector score rather than replacing it. Adds a dual-provider reasoning seam (Prompt/Agent), per-entity gating (EnableLLMReasoning, ReasoningThreshold, AutomationLevel), per-candidate verdict/audit columns, the new @memberjunction/record-comparison engine + resolver/client, and an in-place reasoning UI in the duplicates dashboard. Fully back-compat: EnableLLMReasoning defaults to 0, leaving the vector-only path byte-for-byte unchanged.
+- aa9102d: feat(media+realtime): generic media player, end-to-end media streaming, and the realtime/LiveKit recording stack
+
+  A new media + recording platform spanning the player, storage, server, and the realtime/voice stack.
+
+  **Generic media player (`@memberjunction/ng-media-player`, new package)** — a framework-agnostic
+  `mj-media-player` (transport, click/drag scrubber, playback speed, ±skip, keyboard, fullscreen,
+  multi-track video grid, a real decoded audio waveform that doubles as the scrubber and accepts
+  precomputed `MediaTrack.Peaks`, a time-synced clickable transcript, loading/buffering state with an
+  `aria-live` status, cancelable `Before*` events, and an imperative API) plus an MJStorage-bound
+  `mj-storage-media-player` that resolves a `FileID` to an authenticated, range-streamed source. The
+  artifact audio/video viewers and previews now embed it.
+
+  **MJStorage streaming (`@memberjunction/storage`)** — `FileStorageBase.GetObjectStream` +
+  `SupportsStreaming` + `StreamingNotSupportedError`, implemented for all seven drivers (Box, AWS S3,
+  Azure, GCS, Google Drive, SharePoint, Dropbox).
+
+  **Authenticated media delivery (`@memberjunction/server`)** — a `CreateMediaAccessToken` mutation
+  (short-lived, permission-gated, returns precomputed waveform peaks) and a `GET /media/:fileId?token=`
+  HTTP-Range streaming route — any stored asset is served to the browser by `FileID` with real
+  streaming + permissions, no public links.
+
+  **Realtime co-agent recording (`@memberjunction/ng-conversations`, `@memberjunction/ai-realtime-client`,
+  `@memberjunction/ai-agents`)** — client-direct sessions record a seekable 16-bit WAV with capture-time
+  waveform peaks (a `peaks.json` sidecar); the agent's remote audio is mixed in when its WebRTC track
+  lands (`OnRemoteMediaStream`/`AttachRemoteStream`); transcript cue timing anchors to real audio onset
+  across tool-call gaps; recorded sessions stream back through the player. Plus reactive fixes
+  (`ConversationEngine.EnsureConversationLoaded` in `@memberjunction/core-entities`) so new conversations
+  and recordings appear without a refresh.
+
+  **LiveKit meeting recording (`@memberjunction/livekit-room-server`, `@memberjunction/server`,
+  `@memberjunction/graphql-dataprovider`, `@memberjunction/ng-mj-livekit-room`)** — egress output is
+  registered as an `MJ: Files` row linked to the Meeting-Room `Conversation` (new `RecordingFileID` /
+  `EgressID`), with point-at-sink or copy-to-canonical storage, and played back in the Meet UI.
+
+  **Realtime surface-tab overhaul (`@memberjunction/ng-conversations`)** — channel tabs appear only once
+  used (Whiteboard excepted), each color/icon-coded; the Activity tab is gated, restyled, and
+  right-aligned; agent-run artifacts move out of per-artifact tabs into the Activity tab with a
+  resizable, `UserInfoEngine`-persisted split viewer.
+
+  The Media channel can now show MJStorage files (`fileId`) in addition to URLs. The realtime
+  recordings dashboard (`@memberjunction/ng-dashboards`) and CodeGen-regenerated entity forms
+  (`@memberjunction/ng-core-entity-forms`) reflect the new recording fields.
+
+- 2f926df: feat(prompt-parts): scope-aware, pluggable prompt construction (ScopedPromptPart + PromptComponentResolver)
+
+  Adds a first-class, scope-aware prompt-construction primitive to MJ core. `ScopedPromptPart` is a
+  small, named, role-tagged fragment of prompt text attached to an `AIPrompt` and optionally narrowed
+  by the **same polymorphic scope the agent runtime already carries for memory** (`PrimaryScopeEntity`/
+  `PrimaryScopeRecordID` + `SecondaryScopes`). Any MJ app can control LLM behavior per scope by editing
+  rows, not code.
+  - **Entity + controls:** `__mj.ScopedPromptPart` with `Name`, `Role`, `Sort`, `Text`, `Status`, the
+    polymorphic scope columns, and the resolver controls `MergeBehavior` (`Override` | `Append`) and
+    `Priority`. The inclusion rule is data-driven, not hardcoded.
+  - **Resolution + assembly:** cached on `AIEngine` (`ScopedPromptParts`); resolved by
+    `PromptComponentResolver` — a **template-method** class whose protected hooks (`getCandidates`,
+    `isInScope`, `score`, `selectIncluded`, `order`) are the extension points. Within a part `Name`,
+    the most-specific scope wins (`Override`) or all in-scope parts accumulate (`Append`); distinct
+    names compose additively. Roles are preserved (System/User/Assistant) — assembled messages drive
+    the model directly, not flattened.
+  - **Pluggable:** the agent runtime obtains the resolver via
+    `MJGlobal.ClassFactory.CreateInstance(PromptComponentResolver)`, so a downstream consumer can
+    `@RegisterClass(PromptComponentResolver) class X extends PromptComponentResolver { … }` and override
+    the protected hooks for custom inclusion/scope logic — **no core change required**.
+  - **Agent wiring:** `BaseAgent` resolves + injects scoped parts (role-faithful) alongside memory/RAG,
+    using the run's existing primary/secondary scopes.
+
+  Verified by unit tests (`PromptComponentResolver`) and a full agent run demonstrating the scope cascade.
+
+### Patch Changes
+
+- 5396d90: Add permission-constrained engine loading to BaseEngine — pre-checks entity read permissions during Config() and skips all entity configs (all-or-nothing) when the user lacks access, preventing endless retry loops and console error flooding for org-scoped SaaS users. Engine getters now use GetConfigData() which throws a typed PermissionConstrainedError instead of silently returning empty arrays. Also fixes unsafe GetHighestPowerModel/GetHighestPowerLLM return types and resolves FK_AIAgentRunStep_ParentID race in fire-and-forget step saves.
+- Updated dependencies [3633fbb]
+- Updated dependencies [d88568e]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-engine-base@5.44.0
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/aiengine@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/context-crush@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/ai-vector-dupe@5.44.0
+  - @memberjunction/storage@5.44.0
+  - @memberjunction/ai-prompts@5.44.0
+  - @memberjunction/ai-reranker@5.44.0
+  - @memberjunction/ai-vector-sync@5.44.0
+  - @memberjunction/templates@5.44.0
+  - @memberjunction/search-engine@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/actions@5.44.0
+
+## 5.43.0
+
+### Minor Changes
+
+- aa21fef: Flow agent loop fixes: correct loop-body action resolution + static collections
+  - **Fix**: ForEach/While loop-body **Action** steps now resolve against the standard Action registry (`ActionEngineServer.Instance.Actions`) instead of the legacy AI Actions collection (`AIEngine.Instance.Actions`). Previously any flow loop over a normal Action (e.g. Google Custom Search) failed with "Action not found for loop body" even though the action existed and ran fine as a non-loop step.
+  - **Feature**: ForEach `collectionPath` now supports a `static:[...]` literal collection (e.g. `static:[1,2,3,4,5]`), letting a flow iterate a fixed list/range without a prior step to build the array in the payload.
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/actions@5.43.0
+  - @memberjunction/ai-prompts@5.43.0
+  - @memberjunction/ai@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/ai-engine-base@5.43.0
+  - @memberjunction/aiengine@5.43.0
+  - @memberjunction/ai-reranker@5.43.0
+  - @memberjunction/ai-vector-dupe@5.43.0
+  - @memberjunction/ai-vector-sync@5.43.0
+  - @memberjunction/actions-base@5.43.0
+  - @memberjunction/storage@5.43.0
+  - @memberjunction/search-engine@5.43.0
+  - @memberjunction/templates@5.43.0
+
+## 5.42.0
+
+### Minor Changes
+
+- 9b9b484: Field active-status enforcement relocation, plus the "Meet" app rename, quieter operational logging, and a telemetry suppression refinement.
+
+  **Field active-status enforcement (`@memberjunction/core`, `@memberjunction/generic-database-provider`)**
+  - Deprecated-field warnings and disabled-field exceptions are now enforced at the field-access boundary genuine code flows through — `BaseEntity.Get()`, `Set()`, and `SetMany()` (what the generated strongly-typed accessors call) — instead of on the low-level `EntityField.Value` accessor. This flips a leaky blocklist (assert on every `.Value` touch, then suppress at each internal call site) into a precise allowlist, and fixes false deprecation warnings emitted on every load/save of a record that merely _contains_ a deprecated column (e.g. `"MJ: AI Agent Runs".AgentState`) even when no code uses it.
+  - New memoized `EntityInfo.HasInactiveFields` fast-path gate: entities whose fields are all `Active` (the vast majority) pay only a single cached boolean check in the hot read/write paths.
+  - `EntityField.ActiveStatusAssertions` is retained as a `@deprecated` no-op for backward compatibility; the six now-redundant internal suppression toggles were removed. Warning caller strings are now accurate (`BaseEntity.Get`/`Set`) instead of the misleading `"EntityField.Value setter"`.
+
+  **Telemetry (`@memberjunction/core`)**
+  - Suppress "load this into a dedicated engine cache" telemetry suggestions for entities that have explicitly opted out of caching (`EntityInfo.AllowCaching = false`), reusing the existing flag as the single source of truth.
+
+  **Quieter operational logging (`@memberjunction/scheduling-engine`, `@memberjunction/ai-agents`, `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`)**
+  - Scheduled-job no-op runs (e.g. the Agent Memory Manager finding no new activity) now collapse to the engine's `Starting`/`Completed` heartbeat; the per-agent and memory-manager internal traces are verbose-only.
+  - Cleaner server startup logging: transient boot spinner, true total timing, less redundant output, and the `CustomColumnPromoter` registration log demoted to verbose-only.
+
+  **"Meet" app + local LiveKit dev (`@memberjunction/ng-explorer-core`, `@memberjunction/livekit-room-server`, `@memberjunction/auth-providers`, `@memberjunction/server`)**
+  - Renamed the Realtime app to "Meet", with the Live Room now defaulting to the Realtime co-agent instead of starting with no agent, plus a local LiveKit dev server and supporting docs.
+
+- 4ec1732: Make the Meet app's LiveKit Live Room work end-to-end (default agent resolution, realtime model fallback, real backing session row, bridge-driver registration, connect timeout, and active device selection), then build it into a multi-party experience: a pre-join agent picker, threading a target agent so the co-agent actually responds, in-room add/remove of agents, and shareable human invite links. Also improves Entity Vector Sync with a concise per-document summary, verbose-gated pipeline logging, and a batched Entity Record Document existence read that replaces an N+1 query storm.
+
+### Patch Changes
+
+- 256ab06: Fix agent-run steps (and prompt runs) occasionally stuck at `Status='Running'` / `CompletedAt=NULL`.
+
+  When a step finished fast enough that its fire-and-forget INSERT was still in flight, the in-memory
+  finalize mutation (`Completed`) was reverted by the INSERT's post-save reload
+  (`BaseEntity.finalizeSave` → `init()` + `SetMany(insertedRow)`), and the chained force-persisted UPDATE
+  then wrote the stale `Running` row. Predominantly hit fast Actions, but any fast step (e.g. a
+  quick/cached prompt) could be affected.
+
+  The fire-and-forget save queue now applies finalize/`TargetLogID` mutations INSIDE the post-INSERT
+  continuation (after the reload), so they survive: `AgentRunStepSaveQueue.QueueUpdate` gains an optional
+  `applyMutation` callback, `finalizeAgentRunStep` gains a `completedAt` option for deterministic re-apply,
+  and `BaseAgent.finalizeStepEntity` + the three `TargetLogID` callback sites re-assert their values
+  post-INSERT. `AIPromptRunner.updatePromptRun` now awaits the initial INSERT before mutating the final
+  state. This mirrors the already-correct `ActionEngine.finalizeActionLog` pattern (which has zero stuck
+  rows). Adds regression tests covering the race and the legacy clobber.
+
+  Also removes a per-chunk `console.log` in `RunAIAgentResolver`'s streaming callback (debug noise that
+  became hot once single-model prompt streaming was enabled).
+
+- e7c2437: Goal-driven browser control — blend computer-use with the remote browser so a realtime agent (or human) sets a high-level goal ("log into this site and open the latest invoice") and computer-use plans + executes it, instead of issuing granular actions.
+  - **`@memberjunction/remote-browser-base`**: `IRemoteBrowserSession.RunComputerUseGoal(goal, options)` + `RemoteBrowserGoalResult` / `RunComputerUseGoalOptions` (with `OnProgress`, `Signal`, `ContextUser`, and `AgentRunID`/`AgentRunStepID` for narration, barge-in, per-user execution, and run-step observability). The `ComputerUse` vs `NativeAI` strategy is resolved by the existing `resolveControlStrategy`.
+  - **`@memberjunction/remote-browser-cdp`**: `CdpRemoteBrowserSession.RunComputerUseGoal` drives MJ computer-use against the session's **own** already-attached `PlaywrightBrowserAdapter` (the same instance/CDP connection the human watches — no second browser), behind an injectable `ComputerUseGoalRun` seam (`SetGoalEngineFactory`). **Model-blind credential injection**: a `Context` object's `{{label}}` tokens are substituted with real values in a _cloned_ action at the CDP boundary, so neither the realtime model nor the computer-use controller ever sees the value (the recorded/logged action stays templated).
+  - **`@memberjunction/remote-browser-server`**: `RemoteBrowserEngine.AchieveGoal(agentSessionID, goal, opts)` + the pure, testable `dispatchRemoteBrowserGoal()` strategy switch. **Collaborative pause-on-takeover**: a granted human takeover (or session end) aborts the in-flight goal so the computer-use loop pauses cooperatively rather than racing the human on the shared browser.
+  - **`@memberjunction/computer-use-engine`**: controller auto-selection now prefers the highest-power LLM that advertises **Image input** modality (vision-capable), falling back to the plain highest-power LLM so selection never hard-fails (`pickHighestPowerVisionLLM`). New `AgentRunStepTracker` nests a child `Prompt` step per controller/judge prompt under the goal's parent step (linking each prompt run via `TargetLogID`), with the per-prompt step writes **fire-and-forget** (queued, flushed once at goal end) so an N-iteration goal pays no synchronous DB round-trips on its hot loop.
+  - **`@memberjunction/ai-core-plus`**: new shared, single-source-of-truth step machinery — `initAgentRunStep` / `finalizeAgentRunStep` (field-level create/finalize semantics) AND `AgentRunStepSaveQueue` (the fire-and-forget INSERT/chained-UPDATE/`IgnoreDirtyState`/flush orchestration), reused by both `BaseAgent` and the Computer Use tracker (no copy-paste).
+  - **`@memberjunction/ai-agents`**: `BaseAgent` refactored to delegate step field population to the shared helpers AND its save orchestration to the shared `AgentRunStepSaveQueue` (behavior-preserving; full 1348-test suite green).
+  - **`@memberjunction/server`**: `ExecuteRemoteBrowserGoal` GraphQL mutation **+ production binding** — `MJProgressComputerUseEngine` (MJ prompt-runner routing, vision-model auto-selection, media persistence, progress narration) is bound to the CDP goal-engine seam at startup via `BindRemoteBrowserGoalEngine`. **Run-step observability**: the resolver creates one parent "Browser goal" `Tool` step on the realtime co-agent run (`beginBrowserGoalStep`) and threads it down so the goal's prompt runs nest under it.
+  - **`@memberjunction/ng-conversations`**: `browser_AchieveGoal` realtime tool + channel route to the goal mutation.
+
+  77 new unit tests (cdp 22, remote-browser-server 7, computer-use-engine 15, ai-core-plus 16 step helpers + save-queue, @memberjunction/server 15 goal-engine glue, ai-agents 2 createStepEntity nesting/target/InputData paths) plus the full 1350-test ai-agents suite green after the behavior-preserving refactor. Credentials use MJ's model-blind context-variable injection. No migrations. Live browser + LLM validation is the only step deferred — see `plans/realtime/computer-use-remote-browser-blend.md`.
+
+- 0c6bf61: Entity Vector Sync: ship standard Search Entity Documents, no-op cleanly when none are configured, and remove a duplicate metadata load at startup.
+
+  **`@memberjunction/ai-vector-sync` (minor — ships new seed metadata; downstream installs must run `mj sync push` / a metadata migration to pick up the standard Search Entity Documents):**
+  - Adds a standard set of Active `Search`-type Entity Documents — `MJ: Entities`, `MJ: AI Agents`, `MJ: Actions`, `MJ: AI Prompts`, `MJ: AI Models` — under `/metadata/entity-documents/` (+ Nunjucks templates and a folder README), all on the in-process `Simple Vector Service Provider` + `gte-small (Local)` stack (no API key, no per-token cost). Semantic / hybrid `Provider.SearchEntity` now works out of the box for these core catalogs.
+  - `EntityVectorSyncer.GetActiveEntityDocuments` returns `[]` (logging a warning for an unknown/misspelled type name) instead of throwing when no Active documents of the requested type exist, so unattended callers don't hard-fail on an empty/fresh DB.
+
+  **`@memberjunction/core-actions` (patch):** `VectorizeEntityAction` returns `Success`/`ResultCode: "NO_DOCUMENTS"` (a benign no-op) when there are no Active Entity Documents of the requested type — so the daily `Entity Vector Sync` scheduled job no longer reports a _failed_ run on a fresh DB — and captures `Config()`/lookup errors as a legible `FAILED` result instead of an uncaught throw. Also fixes a latent `error as any`.
+
+  **`@memberjunction/aiengine` + `@memberjunction/ai-agents` (patch — startup perf / telemetry):** `AIEngine.RefreshActions` now reuses already-cached `MJ: Actions` metadata via `BaseEngineRegistry.TryGetCachedRecords` instead of loading a second copy into `ActionEngineBase` (a separate singleton from the server-side `ActionEngineServer`); `BaseAgent.initializeEngines` loads `ActionEngineServer` before `AIEngine` so the registry hit lands. Together these eliminate the duplicate 6-entity `RunViews` batch (and its "Duplicate RunView Detected" telemetry warning) at agent/scheduled-job startup.
+
+  **Keyless local vector providers (`@memberjunction/ai-vectordb`, `@memberjunction/ai-vectors-memory`, `@memberjunction/ai-vector-dupe` — patch):** `VectorDBBase` gains a `RequiresAPIKey` capability (default `true`); `SimpleVectorServiceProvider` overrides it to `false` since it's in-process (reads vectors from `MJ: Entity Record Documents.VectorJSON`, no external service). Both the Entity Vector Sync pipeline and the duplicate-record detector now consult `RequiresAPIKey` (in addition to the existing colocated-query exemption) before rejecting a provider for a missing key — fixing a spurious `No API Key found for Vector Database SimpleVectorServiceProvider` that blocked the standard Search docs above from vectorizing. The dupe detector also no longer pre-throws on a missing embedding key, so local embedding models (e.g. `gte-small (Local)`) work there too, matching the sync pipeline.
+
+  Adds 14 unit tests (9 covering the VectorizeEntityAction no-op / failure-aggregation / error-capture / param-shaping paths; 3 covering `RefreshActions` registry-reuse vs. base-engine fallback; 2 covering the `RequiresAPIKey` default + `SimpleVectorServiceProvider` override). No code migrations; the only downstream action is the metadata sync noted above. Docs updated: `ENTITY_SEARCH_GUIDE.md`, `@memberjunction/ai-vector-sync` README, `metadata/entity-documents/README.md`, `CACHING_AND_PUBSUB_GUIDE.md`, and JSDoc.
+
+- 78f834d: Wire the realtime-session factory so a LiveKit-bridged agent actually talks. Adds `BaseAgent.StartBridgeRealtimeSession()` — opens a raw `IRealtimeSession` for the agent (reusing the same model resolution + system-prompt/memory assembly as the client-direct realtime path, minus the RealtimeSessionRunner since the bridge engine owns turn-taking) — and `CreateBridgeRealtimeSession`, the provider-agnostic factory that resolves the agent + instantiates its `BaseAgent` and calls it. `RealtimeBridgeResolver` binds the factory onto `LiveKitAgentRoomCoordinator` at module load. The coordinator now threads `NativeModuleSpecifier` (default `@memberjunction/ai-bridge-livekit-native`, overridable via `LIVEKIT_NATIVE_MODULE` env / `SetNativeModuleSpecifier`) into the bridge session Configuration so the native room client loads. Completes the agent-talking path for the LiveKit bridge.
+- 008f449: Serve Memory Manager maintenance reads from the AIEngine cache instead of per-cycle `RunView`/`RunViews` calls. The scheduled Memory Manager job (every ~15 min) was re-querying `MJ: AI Agent Notes` and `MJ: AI Agent Examples` — entities `AIEngineBase` already holds fully in memory and keeps current via `BaseEntity` events — tripping the "Entity Already in Engine" redundancy telemetry on every run. The consolidation event-trigger count, the orphan-prune, TTL-expiry, and decay-candidate scans, and the **hardening pass** (the provisional-note load, `Status='Provisional' AND AuthorType='Agent'`) now filter/sort/cap the cached arrays in-memory. The scan-only paths project to plain rows (mutation re-`Load()`s fresh owned entities, so cached instances are never aliased); the hardening pass operates on the cached note entities directly and saves them — consistent with the existing dedupe-save path, which already saves cached note instances returned by `FindSimilarAgentNotes`. The cache-miss note-resolver fallback and transactional `MJ: AI Agent Runs` reads intentionally remain DB queries.
+- Updated dependencies [256ab06]
+- Updated dependencies [c871a4d]
+- Updated dependencies [9b9b484]
+- Updated dependencies [d185a5c]
+- Updated dependencies [e7c2437]
+- Updated dependencies [37c73f6]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/ai-prompts@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/actions@5.42.0
+  - @memberjunction/templates@5.42.0
+  - @memberjunction/ai-vector-sync@5.42.0
+  - @memberjunction/aiengine@5.42.0
+  - @memberjunction/ai-vector-dupe@5.42.0
+  - @memberjunction/actions-base@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ai-engine-base@5.42.0
+  - @memberjunction/ai-reranker@5.42.0
+  - @memberjunction/storage@5.42.0
+  - @memberjunction/search-engine@5.42.0
+  - @memberjunction/ai@5.42.0
+
+## 5.41.0
+
+### Minor Changes
+
+- 6f227ab: Realtime voice co-agent: direct channel control, full observability, Grok client-direct, and channel onboarding.
+  - **Direct channel control** — the voice co-agent now drives interactive channels (the `browser_` and `Whiteboard_` tools) DIRECTLY instead of delegating every request to the target agent. The framing was fixed in both the client-direct path (`realtime-client-session-service.ts`, the path actually used) and the server-bridged path (`base-agent.ts`). A one-line mint log now surfaces the exact tools + framing reaching the model.
+  - **Auto/Default model resolution** — now walks candidate Realtime models by power and returns the first that fully resolves to a usable client-direct driver, instead of dead-ending on a keyless or non-client-direct top pick (e.g. a newly-seeded Grok/Inworld model outranking GPT Realtime).
+  - **Co-agent observability** — the co-agent's long-lived `AIPromptRun` now captures the full conversation: transcript turns AND channel tool calls (recorded run-only as `🔧 <tool> … → <result>`), closing the gap where the run held only token totals. Observability parity with every other MJ agent run.
+  - **Grok Voice client-direct** — implemented xAI's OpenAI-Realtime-compatible client-direct topology: server ephemeral-token mint (`CreateClientSession` + `SupportsClientDirect`) plus a new browser-side WebSocket-audio client driver in `@memberjunction/ai-realtime-client` (registered under `Provider: 'xai'`). Grok is now selectable for voice sessions.
+  - **Channel onboarding** — a first-run intro/details panel generalized to any interactive channel (Whiteboard, Remote Browser, future ones) via an optional `GetOnboardingDetails()` on `BaseRealtimeChannelClient`; excluded for the base Voice channel and persisted per-user via `UserInfoEngine`.
+  - **Fix** — NG0100 `ExpressionChangedAfterItHasBeenCheckedError` on channel reveal (agent-activity tab mutations now deferred to a microtask).
+
+- cd6c5f0: Realtime AI Agents wave 3: consolidated v5.41 migration (sessions, channels, co-agent schema) with the AIAgentCoAgent affinity registry replacing AIAgentPairedAgent — typed relationship vocabulary (CoAgent implemented; Peer/Delegate/Fallback/Reviewer/Observer reserved), type-level co-agent defaults as junction rows (removing the only FK cycle in core MJ), and the full code sweep (engine cache, resolver resolution chain, server-side invariants, client pairing reads, regenerated manifests). Realtime UX: progressive-disclosure voice console with persisted captions preference, user-owned composer and tabs toggles, audio-reactive visuals; whiteboard pages/multi-select and review-persistence fixes. Gemini Live triggering turns ride realtime text so widget clicks/typed input/narration speak immediately on native-audio models. CodeGen: single-winner IsNameField enforcement with eligibility guardrail fixes, SCC-based cycle diagnostics, and clean-database bootstrap robustness (conditional engine registry datasets).
+
+### Patch Changes
+
+- 659ee5b: Realtime co-agent pairing & type configuration. New `MJ: AI Agent Paired Agents` junction (opt-in: a co-agent with zero rows stays universal — today's zero-config default unchanged; rows restrict + prebuild its target list with an IsDefault preselection), `AIAgent.TypeConfiguration` (agent-type-specific JSON: realtime model preference, per-provider voice, tone/speaking style, override policy, narration pacing), and `AIAgentType.ConfigSchema`/`DefaultConfiguration` (the type publishes a JSON Schema + type-level defaults; effective config = type defaults <- agent config <- runtime overrides, deep-merged per key, server-authoritative). Runtime overrides ride a new `configOverridesJson` session-start argument gated by the seeded `Realtime: Advanced Session Controls` authorization (Developer-mapped) — enforced server-side, disclosed client-side (unauthorized users silently get defaults). ValidateAsync server subclasses enforce ConfigSchema conformance, Realtime-type co-agents, and at-most-one-default-per-co-agent. Conversations UX: co-agent picker for everyone with more than one permitted co-agent (persisted via UserInfoEngine), pairing-constrained target selection, authorization-gated model/config override pickers.
+- cc604aa: Agent in-flight memory writes: agents can commit durable cross-run memories mid-run via the memoryWrites loop-response field, gated by AIAgent.AllowMemoryWrite (ON by default — opt out per agent). Writes land as immediately-injectable Provisional agent notes (new Status value, with AuthorType provenance) under framework-enforced guards (descriptive types only, scope clamp, exact-restatement dedupe with same-run supersede, per-run cap, TTL), inject with recency-wins precedence and per-note recorded dates, and are hardened or pruned by a new Memory Manager pass each cycle. Cross-run dedupe requires exact normalized restatement so corrections are never silently absorbed into a stale note; the loop-agent prompt instructs agents not to claim a memory was saved before its result message arrives.
+- 15b743b: Real-Time AI Agents — Sessions, Channels & the Realtime Model (plans/ai-agent-sessions.md). Adds the AIAgentSession/AIAgentChannel/AIAgentSessionChannel schema (+ AgentSessionID on AIAgentRun/ConversationDetail, CloseReason on AIAgentSession); the BaseRealtimeModel server primitive with OpenAIRealtime + GeminiRealtime drivers (server-bridged StartSession and client-direct ephemeral-token CreateClientSession, optional SendContextNote/RequestSpokenUpdate interim updates); the new @memberjunction/ai-realtime-client package with the BaseRealtimeClient browser abstraction + OpenAI/Gemini client drivers resolved via ClassFactory by provider key; the Realtime agent type + Voice Co-Agent with RealtimeSessionRunner/RealtimeToolBroker, AgentMemoryContextBuilder extraction, server session lifecycle (SessionManager, SessionJanitor, start/close/heartbeat + client-direct resolvers with delegated-run progress streaming, AwaitingFeedback resume, co-agent observability runs, user-selectable realtime model); the full-panel realtime voice call UX in ng-conversations (phone trigger + agent/model picker, banner/thread/activity rail, delegation working/result cards with provenance, ephemeral paced first-person progress narration driven by DB prompt templates, in-call text composer); Realtime Voice admin (AI Analytics dashboard sections, session/channel custom forms, agent Runs|Sessions execution history); and Query Builder/Strategist reliability fixes (entity catalog in prompt, Get Entity Details sample caps + semantic fallback, plan formatting). Also: the standalone @memberjunction/ng-whiteboard package (collaborative board with agent tool API, sandboxed interactive widgets + input bridge, markdown panels, exports, cancelable before/after events); ElevenLabs Agents + AssemblyAI Voice Agent realtime provider pairs (4-provider matrix, zero contract changes); session review mode with multi-leg resume carryover (timeline dividers, artifact junction closure, prior-transcript model hydration); delegation cancel channel; usage telemetry relay; Realtime Co-Agent rename with run-step/prompt-run observability.
+- 1568bae: Realtime ledger completion + two field bugs. SERVER CHANNEL PLUGIN HALF: `ServerPluginClass` is now consumed — `BaseRealtimeChannelServer` lifecycle contract in @memberjunction/ai, `RealtimeChannelServerHost` (ClassFactory resolution mirroring the client half, per-session instances, failure-isolated hooks, post-close dispose linger) in ai-agents with a `WhiteboardChannelServer` reference impl that validates/canonicalizes landed board saves, wired through SessionManager create/close and the channel-state save path. TRANSCRIPT CORRECTIONS END-TO-END: `RealtimeClientTranscript.ReplacesPrevious` (stamped by the ElevenLabs driver on `agent_response_correction`) replaces the caption in place and `RelayRealtimeTranscript(replacesPrevious)` updates the persisted turn instead of appending. ASSEMBLYAI RESUME WINDOW: one-shot `session.resume` reattach on unexpected socket drop (mic/playout survive; failed/second drop falls through to the old fatal path). WHITEBOARD: widget srcdoc rebuilt per mount via a view-scoped pure pipe — SVG charts survive page switches/lazy remounts, and mounted widgets no longer reload on unrelated journal ops (the old journal-invalidated identity cache was both stale on remount and over-eager on 'replace'). CONVERSATIONS: surface-panel (re)creation lands on the marquee channel tab (the whiteboard) instead of the Activity rail, the agent's first stroke reveals synchronously, and session review now merges channel states across ALL chain legs (newest leg with a saved board wins) so resumed sessions never hide an earlier leg's drawing. Plus Per-Minute/Per-Hour AI model price unit types seeded via metadata.
+- Updated dependencies [8fd6f59]
+- Updated dependencies [d38ecbb]
+- Updated dependencies [1e81848]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [1568bae]
+- Updated dependencies [4b3fb9d]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/ai-vector-dupe@5.41.0
+  - @memberjunction/ai-vector-sync@5.41.0
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/aiengine@5.41.0
+  - @memberjunction/ai-engine-base@5.41.0
+  - @memberjunction/ai-core-plus@5.41.0
+  - @memberjunction/ai-prompts@5.41.0
+  - @memberjunction/ai-reranker@5.41.0
+  - @memberjunction/actions-base@5.41.0
+  - @memberjunction/actions@5.41.0
+  - @memberjunction/storage@5.41.0
+  - @memberjunction/search-engine@5.41.0
+  - @memberjunction/templates@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- Updated dependencies [da2ee38]
+  - @memberjunction/ai-vector-dupe@5.40.2
+  - @memberjunction/ai-engine-base@5.40.2
+  - @memberjunction/ai@5.40.2
+  - @memberjunction/ai-core-plus@5.40.2
+  - @memberjunction/aiengine@5.40.2
+  - @memberjunction/ai-prompts@5.40.2
+  - @memberjunction/ai-reranker@5.40.2
+  - @memberjunction/ai-vector-sync@5.40.2
+  - @memberjunction/actions-base@5.40.2
+  - @memberjunction/actions@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/global@5.40.2
+  - @memberjunction/storage@5.40.2
+  - @memberjunction/search-engine@5.40.2
+  - @memberjunction/templates@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-engine-base@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/aiengine@5.40.1
+  - @memberjunction/ai-prompts@5.40.1
+  - @memberjunction/ai-reranker@5.40.1
+  - @memberjunction/ai-vector-dupe@5.40.1
+  - @memberjunction/ai-vector-sync@5.40.1
+  - @memberjunction/actions-base@5.40.1
+  - @memberjunction/actions@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/storage@5.40.1
+  - @memberjunction/search-engine@5.40.1
+  - @memberjunction/templates@5.40.1
+  - @memberjunction/ai@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Minor Changes
+
+- 6ea4de7: Stop loop-agent JSON format drift and add infinite-loop guardrails. Framework action and sub-agent delegation records are now written to the conversation as user-role environment annotations instead of assistant-role prose, so models no longer imitate the framework's narration and drift out of the required JSON envelope. The unparseable-output retry feedback is now a directive demanding JSON-only output, and a consecutive-unproductive-retries guardrail (cap 10) prevents parse-failure retry loops. Also sets MaxIterationsPerRun=50 on the Query Strategist agent metadata.
+
+### Patch Changes
+
+- f2cca15: Fix research-agent reports being dropped from chat, add pluggable inline artifact previews, and correct Prompt Run token display.
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/ai-engine-base@5.40.0
+  - @memberjunction/ai-core-plus@5.40.0
+  - @memberjunction/aiengine@5.40.0
+  - @memberjunction/ai-prompts@5.40.0
+  - @memberjunction/ai-reranker@5.40.0
+  - @memberjunction/ai-vector-dupe@5.40.0
+  - @memberjunction/ai-vector-sync@5.40.0
+  - @memberjunction/actions-base@5.40.0
+  - @memberjunction/actions@5.40.0
+  - @memberjunction/storage@5.40.0
+  - @memberjunction/search-engine@5.40.0
+  - @memberjunction/templates@5.40.0
+  - @memberjunction/ai@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Minor Changes
+
+- 3d4510c: Add an agent-run watchdog that prevents `AIAgentRun` records from being left in `Status='Running'` after a process restart, crash/OOM, or a failed terminal-state write. While a run is in flight the owning process stamps a new `LastHeartbeatAt` column; a staleness-based sweep (once on boot and on a timer) force-fails any `Running` run whose heartbeat has gone stale, and a graceful-shutdown handler cancels the in-flight runs the process owns. All timing is anchored to the database clock and the sweep only ever touches `Status='Running'` rows, so it is safe across multiple MJAPI instances behind a load balancer. Also adds an optional, opt-in `Agent Run Sweep` scheduled-job type (`AgentRunSweepScheduledJobDriver`) that runs the same idempotent sweep through MJ's scheduler for audit/observability.
+- d1cc0ad: agents can run a multi-step, server-side dataflow over their Actions and artifact tools in a single turn, with only the final result entering the context window. Stages pass structured JSON (PowerShell-style) and bind to fields via a safe, eval-free path grammar; operators include where/select/sort/groupBy/distinct/first/last/count/jsonpath/lines/grep/head/tail, plus map and let. Requested via nextStep.type: 'Pipeline'.
+- 34fe6d1: Capture and surface AI prompt-cache cost across providers — OpenRouter provider-reported cost passthrough; per-model cache read/write pricing on AI Model Costs with cache-aware cost calculation; cache-token rollups on AI Prompt Runs and Agent Runs; and cache hit-rate + dollar-savings analytics across the AI dashboards (Cost & Budget, Model Performance, Prompt Runs, Usage Patterns, Executive Summary) and the prompt-run / agent-run detail views. Includes a migration adding cache columns — run CodeGen after applying.
+
+### Patch Changes
+
+- Updated dependencies [26761b8]
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [3c53858]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [db4addf]
+- Updated dependencies [8c39dd9]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [a2aecc7]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/actions@5.39.0
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-vector-sync@5.39.0
+  - @memberjunction/search-engine@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/ai-prompts@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/ai-engine-base@5.39.0
+  - @memberjunction/aiengine@5.39.0
+  - @memberjunction/ai-reranker@5.39.0
+  - @memberjunction/ai-vector-dupe@5.39.0
+  - @memberjunction/actions-base@5.39.0
+  - @memberjunction/storage@5.39.0
+  - @memberjunction/templates@5.39.0
+
+## 5.38.0
+
+### Minor Changes
+
+- 8bd97f3: fix: image display + artifact/attachment unification cleanup
+  - Add ImageArtifactViewerPlugin for raster image artifacts
+  - Remove persist gate so agent-generated media always persists as artifacts
+  - AgentRunner writes media artifacts directly (bypass deprecated ConversationDetailAttachment)
+  - Remove deprecated SuggestedResponses feature (superseded by ResponseForm)
+  - Backfill migration for legacy ConversationDetailAttachment rows
+  - Remove all back-compat reads from deprecated ConversationDetailAttachment
+
+### Patch Changes
+
+- 6b6c321: Agent latency optimizations and parallel sub-agent execution:
+  - **Embedding cache** (`AIEngine.EmbedText`): Replaced unbounded `Map` + FIFO eviction with `MJLruCache` (5000-entry LRU). Cache key now `${modelId}|sha256(text)` so a large text doesn't pin its full string. Cache stores in-flight `Promise<EmbedTextResult>` so concurrent callers share one ONNX inference instead of racing. Failed/empty-vector results evict on settle. Empty/whitespace text short-circuits to `null` without invoking the provider. Options `{ bypassCache: true }` / `{ noCache: true }` and `ClearEmbeddingCache()` exposed.
+  - **AgentDataPreloader**: Data-source preload now runs with a bounded concurrency cap (default 10) via a new `resolveDataSources` helper so a long source list can't saturate the DB pool.
+  - **Non-blocking step saves**: New `queueStepSave` chains saves on the same step ID (UPDATE can't race INSERT) while letting saves on different steps run concurrently. Failures are logged via `LogError` with `LatestResult.CompleteMessage`. `finalizeAgentRun` drains pending saves via `Promise.allSettled` (not `Promise.all`, which swallowed failures after the first rejection), folds failure counts into `agentRun.ErrorMessage`, and clears both `_pendingSaves` and `_stepSavePromises` so reused instances don't leak settled promises.
+  - **Parallel sub-agent execution**: Loop agents can now return a `subAgents` array on `nextStep` to fan out to multiple sub-agents at once. Bounded fan-out concurrency (default 5). Each sub-agent receives a deep-cloned input payload (structuredClone with JSON fallback) so siblings can't see each other's in-flight mutations. Delegation messages + progress events are pushed synchronously in source order before any await, so transcript order is deterministic regardless of completion order. Per-sub-agent step `PayloadAtEnd` records that sub-agent's own contribution (not the cumulative merged state) for audit visibility. Termination semantics: parent terminates only when a _successful_ sub-agent requested `terminateAfter: true`; failing sub-agents fall through to `Retry` so the parent can react. Aggregated `user` summary message appended to the parent conversation.
+  - **Driver sub-class surface**: Promoted to `protected` for driver sub-classes (e.g. Skip) — the step lifecycle triad (`createStepEntity` / `finalizeStepEntity` / `queueStepSave`), hierarchy display helpers (`formatHierarchicalMessage`, `buildHierarchicalStep`), dispatch utilities (`mapWithConcurrency`, `resolveSubAgentByName`, `cloneSubAgentPayload`, `incrementExecutionCount`, `getExecutionCount`), and read-only state getters (`Depth`, `AgentHierarchy`, `ParentStepCounts`, `FileOutputs`).
+  - **Loop agent prompt template** updated to advertise the new `subAgents` array variant alongside `subAgent`, with the parallel-fan-out and success-only-terminate semantics documented so LLMs emit the new shape correctly.
+
+  Tests: `@memberjunction/ai-agents` 806 pass (was 799 — added 7), `@memberjunction/aiengine` 74 pass (was 70 — added 4).
+
+- b2e6782: Propagate `inputArtifacts` from a parent agent to its sub-agents so delegates inherit the artifact manifest and tools (e.g. a Codesmith delegate can read a Data Snapshot the parent references). Add `group_aggregate`, `compute` (safe arithmetic expression parser), `filter`, and `percentile` tools to the DataSnapshot artifact tool library. Improve client-side snapshot capture to wait for actual rows (not just registered tables) and bump the capture timeout to 15s so query-backed / server-paged components have time to load.
+- Updated dependencies [6b6c321]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [8bd97f3]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/aiengine@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/search-engine@5.38.0
+  - @memberjunction/ai-engine-base@5.38.0
+  - @memberjunction/ai-prompts@5.38.0
+  - @memberjunction/ai-reranker@5.38.0
+  - @memberjunction/ai-vector-sync@5.38.0
+  - @memberjunction/templates@5.38.0
+  - @memberjunction/ai-vector-dupe@5.38.0
+  - @memberjunction/actions-base@5.38.0
+  - @memberjunction/actions@5.38.0
+  - @memberjunction/storage@5.38.0
+  - @memberjunction/ai@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [22b775f]
+- Updated dependencies [1af94d0]
+- Updated dependencies [4f15f31]
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/actions@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ai-engine-base@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/ai-prompts@5.37.0
+  - @memberjunction/ai-reranker@5.37.0
+  - @memberjunction/ai-vector-sync@5.37.0
+  - @memberjunction/templates@5.37.0
+  - @memberjunction/ai-vector-dupe@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/storage@5.37.0
+  - @memberjunction/search-engine@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-engine-base@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/aiengine@5.36.0
+  - @memberjunction/ai-prompts@5.36.0
+  - @memberjunction/ai-reranker@5.36.0
+  - @memberjunction/ai-vector-dupe@5.36.0
+  - @memberjunction/ai-vector-sync@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/actions@5.36.0
+  - @memberjunction/storage@5.36.0
+  - @memberjunction/search-engine@5.36.0
+  - @memberjunction/templates@5.36.0
+  - @memberjunction/ai@5.36.0
+  - @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Minor Changes
+
+- e9d4b1c: Add missing `Memory Manager - Detect Contradictions` prompt metadata record so the agent's contradiction-detection phase actually runs instead of silently no-opping. Existing installs must run `mj sync push --dir=metadata --include="prompts"` (or the migration on next release) to seed the new prompt + prompt-model bindings; without it the phase remains disabled.
+
+### Patch Changes
+
+- 32c4a02: Unify artifact and attachment delivery paths for AI agents. Seperate artifact storage from rendering. Every attachement now creates paired Artifact + ArtifactVersion and routing functions exist to replace hardcoded MIME allowlist. Unregistered file types are rejected at upload time unless the agent opts into AcceptUnregisteredFiles. Adds wildecard MIME resolver. `mj artifacts reclassify` for legacy rows
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/ai-prompts@5.35.0
+  - @memberjunction/ai-vector-sync@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/ai-engine-base@5.35.0
+  - @memberjunction/aiengine@5.35.0
+  - @memberjunction/ai-reranker@5.35.0
+  - @memberjunction/ai-vector-dupe@5.35.0
+  - @memberjunction/actions-base@5.35.0
+  - @memberjunction/actions@5.35.0
+  - @memberjunction/storage@5.35.0
+  - @memberjunction/search-engine@5.35.0
+  - @memberjunction/templates@5.35.0
+  - @memberjunction/ai@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- 5abf790: fix(ai-agents): preserve context class identity through action and data preload pipelines
+
+  `ExecuteSingleAction` was spreading `params.context` into a plain object to stamp `AgentID`, which destroyed class instances (getters, methods, prototype chain). This broke downstream consumers like Skip's `SkipAgentContext` whose `skipAPIRequest` getter became `undefined` after spreading. Similarly, `preloadAgentData` was spreading `params.context` when merging preloaded data.
+
+  Fixed by mutating properties directly onto the original context object instead of spreading. Also changed `InjectContextMemory` to use `agent.RerankerConfiguration` property instead of `agent.Get('RerankerConfiguration')`. Added JSDoc to `ExecuteAgentParams.context` documenting that `TContext` may be a class instance and must never be spread. Added 20 unit tests covering context identity preservation.
+
+- Updated dependencies [3a35358]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/ai-engine-base@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/ai-prompts@5.34.1
+  - @memberjunction/ai-reranker@5.34.1
+  - @memberjunction/ai-vector-dupe@5.34.1
+  - @memberjunction/ai-vector-sync@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/actions@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/storage@5.34.1
+  - @memberjunction/search-engine@5.34.1
+  - @memberjunction/templates@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Minor Changes
+
+- ae5cfbd: Search Scopes & RAG+ — multi-phase ship
+
+  A bundled feature release across the search pipeline (Phases 2A–6 of
+  the Search Scopes & RAG+ initiative). Highlights:
+
+  **SearchEngine pipeline**
+  - New `SimpleVectorDatabase` in-process driver — points
+    `VectorDBBase` at any entity column with an `EmbeddingVector`
+    field. Suitable for dev / agent-memory / small-medium corpora.
+    Constructor accepts an empty/missing API key (in-process driver
+    has no remote auth target).
+  - `VectorDBBase.QueryIndex(params, contextUser?)` — `contextUser`
+    is now a proper second parameter instead of being smuggled
+    through `filter.__contextUser`. Pinecone/Qdrant/pgvector ignore
+    it (they auth via API key); in-process drivers use it for
+    RunView's server-side RLS guard. Method-level pattern matches
+    MJ's `RunView(params, contextUser)` and `GetEntityObject(name,
+contextUser)` conventions.
+  - `SearchFusion` — multi-provider score evidence is now preserved
+    through RRF. Previously the second provider's `ScoreBreakdown`
+    contribution was silently dropped when the same RecordID
+    appeared in two provider lists, causing the merged item to
+    rank below single-provider hits. Records that match in
+    Vector + Entity now carry both contributions and rank
+    correctly.
+  - Defensive sanitation in `Fuse()` — items with non-finite Score
+    (NaN, Infinity), empty/non-string RecordID, or null payloads are
+    filtered before fusion. Closes a class of failure modes from
+    misbehaving 3rd-party providers.
+  - Tier-1 input edge cases hardened — null/undefined/non-string
+    Query no longer TypeErrors, surfaces a clean Failure result.
+    `EntitySearchProvider` now strips SQL LIKE wildcards (`%`, `_`,
+    `[`, `]`) from user input — `Query="%"` no longer matches every
+    row through the LIKE-injection vector.
+  - Streaming search — `SearchEngine.streamSearch()` v2 emits
+    provider events as soon as each provider promise settles
+    (concurrent emission), not in registration order.
+
+  **Permission gate (Phase 2A)**
+  - `SearchScopePermissionResolver` enforces a 6-step decision tree:
+    AgentNone → AgentAssignedNotListed → DirectGrant → RoleGrant →
+    AgentUnscopedAll → NoGrant.
+  - `AIAgent.SearchScopeAccess` enum (`'None' | 'All' | 'Assigned'`)
+    controls agent-side fallback when no per-user/per-role grant
+    applies. `BypassCache` propagates through the dedup-linger cache
+    so freshly-revoked grants take effect immediately.
+  - New tests + agent scenarios cover all 13 permission-matrix cells
+    (PM-01..PM-13).
+
+  **Reranker catalog (Phase 2D)**
+  - 4 reranker drivers — Cohere, Voyage, OpenAI judge, BGE local —
+    all with `@RegisterClass(BaseReRanker, ...)`. Per-search
+    `RerankerBudgetGuard` caps API spend; `EstimateCostCents` and
+    `CostReporter` per driver. Graceful degradation when the
+    upstream SDK rejects/times out/returns malformed responses.
+
+  **Observability (Phase 3)**
+  - `MJSearchExecutionLog` — every `Search()` invocation writes one
+    row with Status / ResultCount / TotalDurationMs / RerankerCostCents
+    / ProvidersJSON (per-source hit counts) / AIAgentID attribution.
+    Forbidden gate decisions log `Status='Forbidden'` rows.
+  - Knowledge Hub Config dashboard subtab visualizes the log:
+    hit-rate, p50/p95 latency, top failure reasons, top users, total
+    reranker cost.
+
+  **External providers (Phase 5)**
+  - 4 search providers — Elasticsearch, Typesense, Azure AI Search,
+    OpenSearch — all with `@RegisterClass(BaseSearchProvider, ...)`.
+  - New `AvailableSearchProviders` GraphQL query exposes the
+    `BaseSearchProvider.GetAvailableProviders()` runtime catalog to
+    the SearchScope form's provider dropdown (P5.5).
+
+  **Angular / UI**
+  - Custom `MJSearchScopeFormComponentExtended` (P2D.7 / P4) — fusion
+    weights sliders, reranker dropdown, live-preview panel, A/B
+    Kendall-tau similarity, CSV export of last 500 invocations.
+  - Custom `MJSearchScopeProviderFormComponentExtended` (P5.5) —
+    provider dropdown sourced from `MJ: Search Providers` rows,
+    annotated with whether each provider's DriverClass is currently
+    registered with the server's ClassFactory.
+  - Streaming search consumer in `SearchService.StreamSearch()` —
+    Angular Observable surface for the `StreamScopedSearch`
+    mutation + `SearchStreamEvents` subscription.
+
+  **Migration**
+  - `V202605081416__v5.34.x__Search_Scopes_And_RAG_Plus.sql` —
+    consolidated. Contains six DDL sections (Phase 1 baseline,
+    `SearchScopePermission`, `SearchScope.RerankerBudgetCents`,
+    `SearchExecutionLog`, `SearchScopeTestQuery`, unique-constraint
+    fix) followed by five CodeGen runs that regenerate the entity
+    metadata, sprocs, views, and permission grants for all of the
+    above.
+
+  **Test suite**
+  - 17 end-to-end agent scenarios (s01–s17) under `agent-scenarios/`,
+    driving real LLM tool-calls (Sage agent) against the SearchEngine
+    - multi-provider RRF + reranker pipeline. 95 assertions; all PASS.
+  - `@memberjunction/search-engine` vitest: 237 unit tests across 21
+    files, all PASS. Covers fusion, providers (real + external),
+    rerankers, scope template renderer, parent-ID metadata,
+    streaming, permission resolver, edge cases, mid-flight failures.
+
+  **Documentation**
+  - `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` — comprehensive guide
+    covering scope creation, agent integration, permission resolution,
+    multi-scope fusion, reranker catalog, observability, external
+    providers, how-to templates for adding a new provider /
+    reranker / artifact tool library / vector index over an
+    embedded entity column. Documents the embedding-regeneration
+    contract for ops.
+
+  See `RAG_plan.md` for the full multi-phase plan and `plans/
+search-scopes-rag-plus/what-we-built.md` for the customer-facing
+  summary.
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ai-engine-base@5.34.0
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/aiengine@5.34.0
+  - @memberjunction/ai-prompts@5.34.0
+  - @memberjunction/ai-reranker@5.34.0
+  - @memberjunction/ai-vector-dupe@5.34.0
+  - @memberjunction/ai-vector-sync@5.34.0
+  - @memberjunction/actions-base@5.34.0
+  - @memberjunction/actions@5.34.0
+  - @memberjunction/storage@5.34.0
+  - @memberjunction/search-engine@5.34.0
+  - @memberjunction/templates@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/global@5.34.0
+  - @memberjunction/ai@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

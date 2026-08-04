@@ -23,6 +23,13 @@ export interface MJConfig {
 
     // Testing CLI specific settings
     testing?: {
+        /**
+         * Module specifiers side-effect-imported before `mj test` resolves any integration
+         * bundle — each import registers its check bundles on the IntegrationCheckRegistry.
+         * In this repo: ['@memberjunction/integration-test-suite'] (the private content
+         * package the published CLI must not depend on). See utils/check-module-loader.ts.
+         */
+        checkModules?: string[];
         defaultEnvironment?: string;
         defaultFormat?: 'console' | 'json' | 'markdown';
         failFast?: boolean;
@@ -54,10 +61,12 @@ export async function loadMJConfig(): Promise<MJConfig> {
         return cachedConfig;
     }
 
-    // Clear any existing require cache for mj.config.cjs to ensure env vars are re-evaluated
-    // This is necessary because mj.config.cjs uses process.env.DB_DATABASE directly
+    // Clear any existing require cache for mj.config.cjs to ensure env vars are re-evaluated.
+    // require.cache is only available in CommonJS; in ESM, cosmiconfig's cache:false handles this.
     const configPath = path.resolve(process.cwd(), 'mj.config.cjs');
-    delete require.cache[configPath];
+    if (typeof require !== 'undefined') {
+        delete require.cache[configPath];
+    }
 
     // Create a new explorer instance to ensure fresh config load with current env vars
     const explorer = cosmiconfig('mj', {

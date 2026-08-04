@@ -279,6 +279,12 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
     this.cdr.detectChanges();
   }
 
+  /** Bridge for <mj-page-search> which emits a plain string. */
+  OnGlobalSearchValue(value: string): void {
+    this.GlobalSearch = value;
+    this.cdr.detectChanges();
+  }
+
   get FilteredCards(): PipelineCard[] {
     if (!this.GlobalSearch.trim()) return this.PipelineCards;
     const term = this.GlobalSearch.toLowerCase();

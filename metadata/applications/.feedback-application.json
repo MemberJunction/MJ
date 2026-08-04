@@ -1,0 +1,28 @@
+[
+  {
+    "fields": {
+      "Name": "Agent Feedback",
+      "Description": "User ratings and comments left on AI messages in the local MJ database",
+      "Icon": "fa-solid fa-comment-dots",
+      "Color": "#634e79",
+      "DefaultForNewUser": false,
+      "Status": "Active",
+      "DefaultNavItems": [
+        {
+          "Label": "All Feedback",
+          "Icon": "fa-solid fa-comment-dots",
+          "ResourceType": "Custom",
+          "DriverClass": "ConversationFeedbackResource",
+          "isDefault": true
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4E621C4B-D29E-4EF9-A438-6930EC139A97"
+    },
+    "sync": {
+      "lastModified": "2026-05-24T13:07:45.690Z",
+      "checksum": "df07ed42a6a8b42d06da25c6e4f9b42efafe22b2cf52c537fa999e4ac64236ff"
+    }
+  }
+]

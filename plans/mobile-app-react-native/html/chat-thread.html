@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hybrid · Multi-agent conversation</title>
+<meta name="viewport" content="width=393, initial-scale=1">
+<style>
+  :root {
+    --bg: #fafaf7;
+    --surface: #ffffff;
+    --surface-2: #f6f5ef;
+    --ink: #0d0d10;
+    --ink-2: #4a4a52;
+    --ink-3: #8a8a93;
+    --line: rgba(13,13,16,0.06);
+    --line-2: rgba(13,13,16,0.10);
+    --brand: #264FAF;
+    --brand-soft: rgba(38,79,175,0.08);
+    --skip: #264FAF;
+    --research: #7c5cd6;
+    --user-bg: #f1efe9;
+    --positive: #1a8a5f;
+    --warn: #b87a1f;
+    --shadow-lg: 0 24px 60px rgba(13,13,16,0.10);
+    --shadow-card: 0 1px 2px rgba(13,13,16,0.04), 0 8px 20px rgba(13,13,16,0.06);
+    --shadow-dock: 0 -6px 24px rgba(13,13,16,0.06);
+  }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+    background: #e8e6df;
+    color: var(--ink);
+    min-height: 100vh;
+  }
+  .device-wrap {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 32px 16px;
+  }
+  .device {
+    width: 393px; height: 852px;
+    background: var(--bg);
+    border-radius: 54px;
+    box-shadow: var(--shadow-lg), 0 0 0 12px #1a1a1f, 0 0 0 13px #2a2a30;
+    position: relative;
+    overflow: hidden;
+  }
+  .statusbar {
+    height: 54px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 28px 8px;
+    font-size: 17px; font-weight: 600; letter-spacing: -0.02em;
+  }
+  .dynamic-island {
+    position: absolute; top: 11px; left: 50%; transform: translateX(-50%);
+    width: 124px; height: 36px; background: #000; border-radius: 20px; z-index: 10;
+  }
+  .home-indicator {
+    position: absolute; bottom: 9px; left: 50%; transform: translateX(-50%);
+    width: 134px; height: 5px; background: #0d0d10; border-radius: 3px; opacity: 0.85;
+  }
+
+  /* Top nav — conversation-centric, NOT agent-centric */
+  .nav-top {
+    height: 60px;
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 14px;
+    background: rgba(250,250,247,0.92);
+    backdrop-filter: saturate(180%) blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .icon-btn {
+    width: 38px; height: 38px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 11px; color: var(--ink);
+    flex-shrink: 0;
+  }
+  .conv-title {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .conv-title .t {
+    font-size: 15px; font-weight: 600;
+    letter-spacing: -0.01em;
+    max-width: 220px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .conv-title .agents-row {
+    display: inline-flex; align-items: center; gap: 5px;
+    margin-top: 3px;
+    font-size: 11px; color: var(--ink-3);
+  }
+  .agents-row .stack {
+    display: inline-flex;
+  }
+  .agents-row .av {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 1.5px solid var(--bg);
+    color: white; font-size: 8px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-left: -5px;
+  }
+  .agents-row .av:first-child { margin-left: 0; }
+  .agents-row .av.skip { background: var(--skip); }
+  .agents-row .av.research { background: var(--research); }
+  .agents-row .live-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #2ec4a3; box-shadow: 0 0 6px #2ec4a3;
+    margin-left: 4px;
+  }
+
+  /* Recent conversations strip — conversation-level, not per-agent */
+  .recents {
+    display: flex; gap: 6px;
+    padding: 8px 14px 10px;
+    overflow-x: auto;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .recents::-webkit-scrollbar { display: none; }
+  .rec-chip {
+    flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 11px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 12.5px; font-weight: 500;
+    color: var(--ink-2);
+    max-width: 180px;
+  }
+  .rec-chip.active {
+    background: var(--ink); color: white; border-color: var(--ink);
+  }
+  .rec-chip .pulse {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #2ec4a3; box-shadow: 0 0 0 2px rgba(46,196,163,0.18);
+  }
+  .rec-chip .convo-name {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .rec-chip .mini-stack {
+    display: inline-flex;
+  }
+  .rec-chip .mini-stack .av {
+    width: 13px; height: 13px; border-radius: 50%;
+    border: 1.5px solid var(--surface);
+    margin-left: -4px;
+  }
+  .rec-chip .mini-stack .av:first-child { margin-left: 0; }
+  .rec-chip.active .mini-stack .av { border-color: var(--ink); }
+
+  /* Thread */
+  .thread {
+    height: calc(852px - 54px - 60px - 48px - 38px - 76px - 28px);
+    overflow-y: auto;
+    padding: 14px 18px 16px;
+  }
+  .day-divider {
+    text-align: center;
+    color: var(--ink-3);
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.06em;
+    margin: 4px 0 14px;
+    text-transform: uppercase;
+  }
+
+  .msg-user {
+    margin-left: auto;
+    max-width: 86%;
+    background: var(--user-bg);
+    padding: 11px 15px;
+    border-radius: 18px 18px 4px 18px;
+    font-size: 15.5px; line-height: 1.45;
+    margin-bottom: 16px;
+  }
+
+  .agent-msg { margin-bottom: 18px; max-width: 100%; }
+  .agent-line {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-bottom: 8px;
+    font-size: 12px; font-weight: 600;
+  }
+  .agent-line .av {
+    width: 22px; height: 22px; border-radius: 50%;
+    color: white; font-weight: 700; font-size: 10px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .agent-line .av.skip { background: var(--skip); }
+  .agent-line .av.research { background: var(--research); }
+  .agent-line .name { font-size: 13px; color: var(--ink); }
+  .agent-line .meta {
+    font-size: 11px; font-weight: 500;
+    color: var(--ink-3);
+    margin-left: 2px;
+  }
+
+  /* Step indicators borrowed from B */
+  .step {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 500;
+    color: var(--ink-3);
+    margin-bottom: 4px;
+  }
+  .step .tick {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: rgba(26,138,95,0.15); color: var(--positive);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .msg-body {
+    font-size: 16px; line-height: 1.55;
+    color: var(--ink);
+    margin-top: 8px;
+  }
+  .msg-body strong { font-weight: 600; }
+
+  /* Inline artifact card (A's pattern) */
+  .artifact-card {
+    margin-top: 12px;
+    background: var(--surface);
+    border-radius: 18px;
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    border: 1px solid var(--line);
+  }
+  .ac-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px 8px;
+  }
+  .ac-icon {
+    width: 32px; height: 32px; border-radius: 9px;
+    background: var(--brand-soft); color: var(--brand);
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .ac-head .label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--brand);
+  }
+  .ac-head .title { font-size: 14px; font-weight: 600; margin-top: 1px; }
+  .ac-head .meta { font-size: 11.5px; color: var(--ink-3); }
+  .ac-body { padding: 0 14px 10px; }
+  .ac-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 0;
+    border-top: 1px solid var(--line);
+    font-size: 13.5px;
+  }
+  .ac-row .name { font-weight: 500; }
+  .ac-row .sub { color: var(--ink-3); font-size: 11.5px; }
+  .ac-row .amount { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ac-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 13px;
+    background: rgba(13,13,16,0.025);
+    border-top: 1px solid var(--line);
+    font-size: 12.5px;
+  }
+  .ac-foot .open {
+    color: var(--brand); font-weight: 600;
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+
+  /* Action chips */
+  .chips {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-top: 12px;
+  }
+  .chip {
+    padding: 7px 12px; border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    font-size: 12.5px; font-weight: 500;
+    color: var(--ink);
+  }
+
+  /* Collapsed artifact handle — minimal, ~32px, taps to expand bottom sheet */
+  .dock-handle {
+    position: absolute;
+    bottom: 76px; left: 0; right: 0;
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px 9px;
+    background: rgba(250,250,247,0.92);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .dh-icon {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: var(--brand-soft); color: var(--brand);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .dh-text {
+    font-size: 12.5px; color: var(--ink-2);
+    font-weight: 500;
+  }
+  .dh-text strong { color: var(--ink); font-weight: 600; }
+  .dh-stack { display: inline-flex; margin-left: 4px; }
+  .dh-stack .dot {
+    width: 13px; height: 13px; border-radius: 50%;
+    border: 1.5px solid var(--bg);
+    margin-left: -4px;
+  }
+  .dh-stack .dot:first-child { margin-left: 0; }
+  .dh-expand {
+    margin-left: auto;
+    color: var(--ink-3);
+    display: inline-flex; align-items: center; gap: 2px;
+    font-size: 11.5px; font-weight: 600;
+  }
+
+  /* Composer (A's calm style) */
+  .composer-wrap {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 8px 14px 22px;
+    background: var(--bg);
+    border-top: 1px solid var(--line);
+  }
+  .composer {
+    background: var(--surface);
+    border-radius: 24px;
+    box-shadow: var(--shadow-card);
+    padding: 6px 6px 6px 16px;
+    display: flex; align-items: center; gap: 4px;
+    border: 1px solid var(--line);
+  }
+  .composer input {
+    flex: 1; border: none; outline: none; background: transparent;
+    font-size: 15.5px; color: var(--ink); padding: 9px 0;
+    font-family: inherit;
+  }
+  .composer input::placeholder { color: var(--ink-3); }
+  .mic-btn {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: var(--brand); color: white;
+    display: inline-flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 14px rgba(38,79,175,0.35);
+  }
+  svg { display: block; }
+</style>
+</head>
+<body>
+<div class="device-wrap">
+  <div class="device">
+    <div class="dynamic-island"></div>
+    <div class="statusbar">
+      <div>9:41</div>
+      <div style="display:inline-flex; gap:6px; align-items:center;">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="6" width="3" height="6" rx="1"/><rect x="5" y="3" width="3" height="9" rx="1"/><rect x="10" y="0" width="3" height="12" rx="1"/></svg>
+        <svg width="26" height="12" viewBox="0 0 26 12" fill="currentColor"><rect x="0" y="1" width="22" height="10" rx="2.5" fill="none" stroke="currentColor"/><rect x="2" y="3" width="18" height="6" rx="1"/><rect x="23" y="4" width="2" height="4" rx="0.5"/></svg>
+      </div>
+    </div>
+
+    <!-- Top nav: conversation-centric -->
+    <div class="nav-top">
+      <button class="icon-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <div class="conv-title">
+        <div class="t">Acme Corp pipeline review</div>
+        <div class="agents-row">
+          <div class="stack">
+            <div class="av skip">S</div>
+            <div class="av research">R</div>
+          </div>
+          2 agents · 9 messages
+          <span class="live-dot"></span>
+        </div>
+      </div>
+      <button class="icon-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+
+    <!-- Recent conversations (multi-agent aware, not per-agent threads) -->
+    <div class="recents">
+      <div class="rec-chip active">
+        <span class="pulse"></span>
+        <span class="mini-stack">
+          <span class="av" style="background:#264FAF"></span>
+          <span class="av" style="background:#7c5cd6"></span>
+        </span>
+        <span class="convo-name">Acme pipeline review</span>
+      </div>
+      <div class="rec-chip">
+        <span class="mini-stack">
+          <span class="av" style="background:#264FAF; border-color:white;"></span>
+        </span>
+        <span class="convo-name">Q2 forecast</span>
+      </div>
+      <div class="rec-chip">
+        <span class="mini-stack">
+          <span class="av" style="background:#264FAF; border-color:white;"></span>
+          <span class="av" style="background:#1a8a5f; border-color:white;"></span>
+          <span class="av" style="background:#7c5cd6; border-color:white;"></span>
+        </span>
+        <span class="convo-name">Renewal risks deep-dive</span>
+      </div>
+      <div class="rec-chip">
+        <span class="mini-stack">
+          <span class="av" style="background:#d97757; border-color:white;"></span>
+        </span>
+        <span class="convo-name">Lead scoring</span>
+      </div>
+    </div>
+
+    <!-- Thread -->
+    <div class="thread">
+      <div class="day-divider">Today · 9:41 AM</div>
+
+      <div class="msg-user">Pull up Acme Corp's recent opportunities — anything over $50K still open?</div>
+
+      <div class="agent-msg">
+        <div class="agent-line">
+          <span class="av skip">S</span>
+          <span class="name">Skip</span>
+          <span class="meta">· 2.4s</span>
+        </div>
+        <div class="step">
+          <span class="tick"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="5 12 10 17 19 7"/></svg></span>
+          Queried Opportunities · 12 rows
+        </div>
+        <div class="step">
+          <span class="tick"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="5 12 10 17 19 7"/></svg></span>
+          Filtered open · &gt;$50K · 3 rows
+        </div>
+        <div class="msg-body">
+          Acme Corp has <strong>three open opportunities</strong> above $50K. Total pipeline <strong>$285K</strong>, weighted to about <strong>$148K</strong>.
+        </div>
+
+        <div class="artifact-card">
+          <div class="ac-head">
+            <div class="ac-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+            </div>
+            <div>
+              <div class="label">Data table</div>
+              <div class="title">Open opportunities · Acme Corp</div>
+              <div class="meta">3 records · sorted by amount</div>
+            </div>
+          </div>
+          <div class="ac-body">
+            <div class="ac-row">
+              <div>
+                <div class="name">Q2 platform expansion</div>
+                <div class="sub">Negotiation · close 6/15</div>
+              </div>
+              <div class="amount">$145K</div>
+            </div>
+            <div class="ac-row">
+              <div>
+                <div class="name">Renewal — Enterprise</div>
+                <div class="sub">Proposal · close 6/30</div>
+              </div>
+              <div class="amount">$84K</div>
+            </div>
+          </div>
+          <div class="ac-foot">
+            <span>Open full view</span>
+            <span class="open">View <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg></span>
+          </div>
+        </div>
+
+        <div class="chips">
+          <div class="chip">Who owns these?</div>
+          <div class="chip">By stage</div>
+          <div class="chip">Email summary</div>
+        </div>
+      </div>
+
+      <!-- multi-agent moment: user @-mentions a different agent -->
+      <div class="msg-user">Nice. <strong>@research</strong> any news on Acme this week?</div>
+
+      <div class="agent-msg">
+        <div class="agent-line">
+          <span class="av research">R</span>
+          <span class="name">Research</span>
+          <span class="meta">· just now · 4 sources</span>
+        </div>
+        <div class="step">
+          <span class="tick"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="5 12 10 17 19 7"/></svg></span>
+          Searched 12 sources · last 7 days
+        </div>
+        <div class="msg-body">
+          Two notable items. Acme announced a Series C extension on Monday, and their VP of Eng posted about an upcoming platform consolidation…
+        </div>
+      </div>
+    </div>
+
+    <!-- Collapsed artifact handle (multi-agent, agent-agnostic) — tap to expand -->
+    <div class="dock-handle">
+      <div class="dh-icon">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
+      </div>
+      <div class="dh-text"><strong>3 artifacts</strong> in this conversation</div>
+      <div class="dh-stack">
+        <span class="dot" style="background:#264FAF;"></span>
+        <span class="dot" style="background:#7c5cd6;"></span>
+        <span class="dot" style="background:#264FAF;"></span>
+      </div>
+      <div class="dh-expand">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 15 12 9 18 15"/></svg>
+      </div>
+    </div>
+
+    <!-- Composer (A's calm style preserved) -->
+    <div class="composer-wrap">
+      <div class="composer">
+        <input placeholder="Reply or @mention an agent…" />
+        <button class="mic-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="home-indicator"></div>
+  </div>
+</div>
+</body>
+</html>

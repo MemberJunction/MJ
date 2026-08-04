@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lists Feature — Mockup Index</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+<div class="index-shell">
+    <h1><i class="fa-solid fa-list-check" style="color: var(--mj-brand-primary)"></i> Lists Feature — Mockup Index</h1>
+    <div class="subtitle">High-fidelity HTML mockups covering existing functionality and all envisioned enhancements across Phases 0–5. Each mockup is a standalone HTML file using shared MJ design tokens (<code>styles.css</code>).</div>
+
+    <div style="background: var(--mj-status-warning-bg); border: 1px solid var(--mj-status-warning-border); color: var(--mj-status-warning-text); padding: 14px 18px; border-radius: var(--mj-radius-lg); margin-bottom: 32px; font-size: 13px; line-height: 1.6;">
+        <strong><i class="fa-solid fa-circle-info"></i> For implementing agents and reviewers:</strong> these mockups define visual <em>intent</em> only — layout, hierarchy, copy, states, badge colors and meanings, drop-warning treatment, button placement. <strong>Production implementation must NOT copy the HTML/CSS from these files.</strong> Use MJ design tokens (<code>_tokens.scss</code>), <code>@memberjunction/ng-ui-components</code>, AG Grid, <code>angular-split</code>, and the patterns in <code>CLAUDE.md</code>. See <a href="../plan.md#25-mockups-visual-intent-only--implement-with-mj-design-system">plan §2.5</a> for the full rule.
+    </div>
+
+    <div class="index-section">
+        <h2>Existing Functionality (baseline)</h2>
+        <div class="index-grid">
+            <a class="index-card" href="01-browse-table.html"><div class="num">01</div><div class="name">Browse — Table View</div><div class="desc">Current table view with search/owner/entity filters and inline action menus.</div><span class="phase phase-existing">EXISTING</span></a>
+            <a class="index-card" href="02-browse-cards.html"><div class="num">02</div><div class="name">Browse — Card View</div><div class="desc">Card grid showing entity icons, owner, share badges, and updated timestamps.</div><span class="phase phase-existing">EXISTING</span></a>
+            <a class="index-card" href="03-browse-hierarchy.html"><div class="num">03</div><div class="name">Browse — Hierarchy View</div><div class="desc">Hierarchical view rolling lists up by Category for navigation.</div><span class="phase phase-existing">EXISTING</span></a>
+            <a class="index-card" href="04-operations-current.html"><div class="num">04</div><div class="name">Operations — Current (Lists only)</div><div class="desc">Today's Venn-diagram operations panel taking up to three Lists as operands.</div><span class="phase phase-existing">EXISTING</span></a>
+            <a class="index-card" href="05-categories.html"><div class="num">05</div><div class="name">Categories Management</div><div class="desc">Hierarchical category tree with drag-and-drop reorganization.</div><span class="phase phase-existing">EXISTING</span></a>
+            <a class="index-card" href="06-list-detail.html"><div class="num">06</div><div class="name">Single List Detail</div><div class="desc">List members grid with status, sequence, and member actions.</div><span class="phase phase-existing">EXISTING</span></a>
+            <a class="index-card" href="07-add-to-list.html"><div class="num">07</div><div class="name">Add-to-List Dialog</div><div class="desc">Modal triggered from DataExplorer to add selected records to one or more Lists.</div><span class="phase phase-existing">EXISTING</span></a>
+        </div>
+    </div>
+
+    <div class="index-section">
+        <h2>Phase 0 — Foundation (shared component)</h2>
+        <div class="index-grid">
+            <a class="index-card" href="08-delta-confirm.html"><div class="num">08</div><div class="name">Delta-Confirm Component</div><div class="desc">Reusable preview/commit UX. The only path to mutating ops with possible row drops.</div><span class="phase phase-foundation">PHASE 0</span></a>
+        </div>
+    </div>
+
+    <div class="index-section">
+        <h2>Phase 1 — Lists ↔ Views Bridge</h2>
+        <div class="index-grid">
+            <a class="index-card" href="09-save-view-as-list.html"><div class="num">09</div><div class="name">Save View as List</div><div class="desc">User View toolbar with "Save as List" + materialization dialog with lineage options.</div><span class="phase phase-p1">PHASE 1</span></a>
+            <a class="index-card" href="10-operations-mixed.html"><div class="num">10</div><div class="name">Operations — Mixed Sources</div><div class="desc">Venn operations panel accepting Views and Lists interchangeably as operands.</div><span class="phase phase-p1">PHASE 1</span></a>
+            <a class="index-card" href="11-compose-into-target.html"><div class="num">11</div><div class="name">Compose into Target List</div><div class="desc">N-input composition (union/intersection/difference) materializing into a target.</div><span class="phase phase-p1">PHASE 1</span></a>
+            <a class="index-card" href="12-list-detail-lineage.html"><div class="num">12</div><div class="name">List Detail — Lineage Aware</div><div class="desc">Single list view showing source lineage badge and "Refresh from source" actions.</div><span class="phase phase-p1">PHASE 1</span></a>
+            <a class="index-card" href="13-refresh-additive.html"><div class="num">13</div><div class="name">Refresh — Additive Mode</div><div class="desc">Preview showing only adds — no drops, safer default for refresh-from-view.</div><span class="phase phase-p1">PHASE 1</span></a>
+            <a class="index-card" href="14-refresh-sync-drops.html"><div class="num">14</div><div class="name">Refresh — Sync (DROP WARNING)</div><div class="desc">Sync-mode refresh that removes records absent from source. Hero drop-warning UX.</div><span class="phase phase-p1">PHASE 1</span></a>
+        </div>
+    </div>
+
+    <div class="index-section">
+        <h2>Phase 2 — Finish Sharing</h2>
+        <div class="index-grid">
+            <a class="index-card" href="15-share-dialog.html"><div class="num">15</div><div class="name">Share Dialog</div><div class="desc">Permission picker (Viewer/Editor/Owner) for users and roles via ResourcePermission.</div><span class="phase phase-p2">PHASE 2</span></a>
+            <a class="index-card" href="16-invitations.html"><div class="num">16</div><div class="name">Invitations Management</div><div class="desc">Send/revoke pending email invitations with token-based accept flow.</div><span class="phase phase-p2">PHASE 2</span></a>
+            <a class="index-card" href="17-shared-with-me.html"><div class="num">17</div><div class="name">Browse — Shared With Me</div><div class="desc">New Browse tab listing Lists where the user has Viewer/Editor permission.</div><span class="phase phase-p2">PHASE 2</span></a>
+            <a class="index-card" href="18-audit-log.html"><div class="num">18</div><div class="name">Audit Log</div><div class="desc">Per-list activity feed: shares, refreshes, bulk operations.</div><span class="phase phase-p2">PHASE 2</span></a>
+            <a class="index-card" href="19-viewer-perspective.html"><div class="num">19</div><div class="name">Viewer Perspective (Gated UI)</div><div class="desc">List detail view as a Viewer — mutating actions hidden, audit visible.</div><span class="phase phase-p2">PHASE 2</span></a>
+        </div>
+    </div>
+
+    <div class="index-section">
+        <h2>Phase 3 — Audience Source Abstraction</h2>
+        <div class="index-grid">
+            <a class="index-card" href="20-audience-picker.html"><div class="num">20</div><div class="name">Audience Source Picker</div><div class="desc">Reusable component accepting List / View / Ad-hoc filter as audience input.</div><span class="phase phase-p3">PHASE 3</span></a>
+            <a class="index-card" href="21-communications-audience.html"><div class="num">21</div><div class="name">Communications — Audience</div><div class="desc">Bulk send flow using the audience picker plus field-mapping for the To field.</div><span class="phase phase-p3">PHASE 3</span></a>
+        </div>
+    </div>
+
+    <div class="index-section">
+        <h2>Phase 4 — Tags on Lists UI</h2>
+        <div class="index-grid">
+            <a class="index-card" href="22-tags-on-lists.html"><div class="num">22</div><div class="name">Tags on List Cards + Filter</div><div class="desc">Tag chips on list cards and a filter-by-tag chip row in the Browse toolbar.</div><span class="phase phase-p4">PHASE 4</span></a>
+        </div>
+    </div>
+
+    <div class="index-section">
+        <h2>Phase 5 — Polish</h2>
+        <div class="index-grid">
+            <a class="index-card" href="23-bulk-edit-members.html"><div class="num">23</div><div class="name">Bulk Edit Members</div><div class="desc">Multi-select toolbar on single-list view for status changes and move-to-list.</div><span class="phase phase-p5">PHASE 5</span></a>
+            <a class="index-card" href="24-move-records-delta.html"><div class="num">24</div><div class="name">Move Records via Delta</div><div class="desc">Move members to another list routed through the delta-confirm component.</div><span class="phase phase-p5">PHASE 5</span></a>
+            <a class="index-card" href="25-favorites-stats.html"><div class="num">25</div><div class="name">Favorites & Usage Stats</div><div class="desc">Star/pin lists and basic usage stats panel (member count, last modified).</div><span class="phase phase-p5">PHASE 5</span></a>
+            <a class="index-card" href="26-excel-export.html"><div class="num">26</div><div class="name">Excel Export</div><div class="desc">Export list members or operation results to Excel with column selection.</div><span class="phase phase-p5">PHASE 5</span></a>
+        </div>
+    </div>
+
+    <div class="index-section">
+        <h2>Architecture Reference</h2>
+        <div class="index-grid">
+            <a class="index-card" href="27-architecture.html"><div class="num">27</div><div class="name">Four-Layer Architecture</div><div class="desc">Visual map of Core → Resolver → DP Helper → Angular with Actions as a parallel consumer.</div><span class="phase phase-foundation">REFERENCE</span></a>
+        </div>
+    </div>
+</div>
+</body>
+</html>

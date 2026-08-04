@@ -478,10 +478,10 @@ cd /Users/jordanfanapour/Documents/GitHub/MJ/../Skip-Brain/apps/API && npm run b
 ## References
 
 ### MemberJunction Documentation
-- [CLAUDE.md](CLAUDE.md) - Main development guide
-- [migrations/CLAUDE.md](migrations/CLAUDE.md) - Migration guidelines
-- [packages/Actions/CLAUDE.md](packages/Actions/CLAUDE.md) - Actions design philosophy
-- [packages/Angular/CLAUDE.md](packages/Angular/CLAUDE.md) - Angular guidelines
+- [CLAUDE.md](../CLAUDE.md) - Main development guide
+- [migrations/CLAUDE.md](../migrations/CLAUDE.md) - Migration guidelines
+- [packages/Actions/CLAUDE.md](../packages/Actions/CLAUDE.md) - Actions design philosophy
+- [packages/Angular/CLAUDE.md](../packages/Angular/CLAUDE.md) - Angular guidelines
 
 ### External Resources
 - [Google AI API Error Codes](https://ai.google.dev/api/rest/v1/Status) - Gemini error handling
@@ -575,7 +575,7 @@ _This document will be updated as work progresses. Use it to resume work after m
   - [x] Test errorScope filtering works correctly
 
   **Implementation Details**:
-  - Created comprehensive test suite: [packages/AI/Prompts/src/__tests__/AIPromptRunner.failover.test.ts](packages/AI/Prompts/src/__tests__/AIPromptRunner.failover.test.ts)
+  - Created comprehensive test suite: [packages/AI/Prompts/src/__tests__/AIPromptRunner.failover.test.ts](../packages/AI/Prompts/src/__tests__/AIPromptRunner.failover.test.ts)
   - **Testing Framework**: Jest with TypeScript support (ts-jest)
   - 7 test cases covering all failover scenarios - **ALL PASSING** ✅
   - Tests simulate `executeModelWithFailover` with Phase 1 fix applied
@@ -594,7 +594,7 @@ _This document will be updated as work progresses. Use it to resume work after m
   ```
 
   **Test Configuration**:
-  - [jest.config.js](packages/AI/Prompts/jest.config.js) - Jest configuration matching other MJ packages
+  - [jest.config.js](../packages/React/test-harness/react-test-example/jest.config.js) - Jest configuration matching other MJ packages
   - [package.json](packages/AI/Prompts/package.json) - Added Jest dependencies (@types/jest, jest, ts-jest)
 
 - [ ] **Task 1.3**: Test in production-like environment

@@ -1,17 +1,21 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, RegisterForStartup, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import {
-    MJQueryEntity,
     MJQueryCategoryEntity,
     MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQueryEntityEntity,
-    MJQueryPermissionEntity
+    MJQueryPermissionEntity,
+    MJQueryDependencyEntity,
+    MJQuerySQLEntity,
+    MJSQLDialectEntity
 } from "../generated/entity_subclasses";
+import { MJQueryEntityExtended } from "../custom/MJQueryEntityExtended";
 
 /**
  * Caching of metadata for queries and related data, with auto-refresh on entity changes.
- * Replaces the static query metadata previously loaded by ProviderBase._localMetadata.
+ * Returns `MJQueryEntityExtended` instances which include child-relationship getters
+ * (QueryFields, QueryParameters, etc.) and business logic (UserCanRun, CategoryPath, etc.).
  */
 @RegisterForStartup()
 export class QueryEngine extends BaseEngine<QueryEngine> {
@@ -23,12 +27,15 @@ export class QueryEngine extends BaseEngine<QueryEngine> {
         return super.getInstance<QueryEngine>();
     }
 
-    private _queries: MJQueryEntity[] = [];
+    private _queries: MJQueryEntityExtended[] = [];
     private _categories: MJQueryCategoryEntity[] = [];
     private _fields: MJQueryFieldEntity[] = [];
     private _parameters: MJQueryParameterEntity[] = [];
     private _queryEntities: MJQueryEntityEntity[] = [];
     private _permissions: MJQueryPermissionEntity[] = [];
+    private _dependencies: MJQueryDependencyEntity[] = [];
+    private _querySQLs: MJQuerySQLEntity[] = [];
+    private _sqlDialects: MJSQLDialectEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
@@ -38,6 +45,9 @@ export class QueryEngine extends BaseEngine<QueryEngine> {
             { Type: 'entity', EntityName: 'MJ: Query Parameters', PropertyName: '_parameters', CacheLocal: true },
             { Type: 'entity', EntityName: 'MJ: Query Entities', PropertyName: '_queryEntities', CacheLocal: true },
             { Type: 'entity', EntityName: 'MJ: Query Permissions', PropertyName: '_permissions', CacheLocal: true },
+            { Type: 'entity', EntityName: 'MJ: Query Dependencies', PropertyName: '_dependencies', CacheLocal: true },
+            { Type: 'entity', EntityName: 'MJ: Query SQLs', PropertyName: '_querySQLs', CacheLocal: true },
+            { Type: 'entity', EntityName: 'MJ: SQL Dialects', PropertyName: '_sqlDialects', CacheLocal: true },
         ];
         await this.Load(configs, provider, forceRefresh, contextUser);
     }
@@ -45,51 +55,91 @@ export class QueryEngine extends BaseEngine<QueryEngine> {
     // --- Public getters ---
 
     /** All queries in the system */
-    public get Queries(): MJQueryEntity[] {
-        return this._queries;
+    public get Queries(): MJQueryEntityExtended[] {
+        return this.GetConfigData<MJQueryEntityExtended>('_queries');
     }
 
     /** All query categories */
     public get Categories(): MJQueryCategoryEntity[] {
-        return this._categories;
+        return this.GetConfigData<MJQueryCategoryEntity>('_categories');
+    }
+
+    /** Alias for `Categories` — matches IMetadataProvider naming convention */
+    public get QueryCategories(): MJQueryCategoryEntity[] {
+        return this.GetConfigData<MJQueryCategoryEntity>('_categories');
     }
 
     /** All query field definitions */
     public get Fields(): MJQueryFieldEntity[] {
-        return this._fields;
+        return this.GetConfigData<MJQueryFieldEntity>('_fields');
+    }
+
+    /** Alias for `Fields` — matches IMetadataProvider naming convention */
+    public get QueryFields(): MJQueryFieldEntity[] {
+        return this.GetConfigData<MJQueryFieldEntity>('_fields');
     }
 
     /** All query parameter definitions */
     public get Parameters(): MJQueryParameterEntity[] {
-        return this._parameters;
+        return this.GetConfigData<MJQueryParameterEntity>('_parameters');
+    }
+
+    /** Alias for `Parameters` — matches IMetadataProvider naming convention */
+    public get QueryParameters(): MJQueryParameterEntity[] {
+        return this.GetConfigData<MJQueryParameterEntity>('_parameters');
     }
 
     /** All query-to-entity relationship mappings */
     public get QueryEntities(): MJQueryEntityEntity[] {
-        return this._queryEntities;
+        return this.GetConfigData<MJQueryEntityEntity>('_queryEntities');
     }
 
     /** All query permission records */
     public get Permissions(): MJQueryPermissionEntity[] {
-        return this._permissions;
+        return this.GetConfigData<MJQueryPermissionEntity>('_permissions');
+    }
+
+    /** Alias for `Permissions` — matches IMetadataProvider naming convention */
+    public get QueryPermissions(): MJQueryPermissionEntity[] {
+        return this.GetConfigData<MJQueryPermissionEntity>('_permissions');
+    }
+
+    /** All query dependency records (composition references) */
+    public get Dependencies(): MJQueryDependencyEntity[] {
+        return this.GetConfigData<MJQueryDependencyEntity>('_dependencies');
+    }
+
+    /** Alias for `Dependencies` — matches IMetadataProvider naming convention */
+    public get QueryDependencies(): MJQueryDependencyEntity[] {
+        return this.GetConfigData<MJQueryDependencyEntity>('_dependencies');
+    }
+
+    /** All query SQL dialect-specific entries */
+    public get QuerySQLs(): MJQuerySQLEntity[] {
+        return this.GetConfigData<MJQuerySQLEntity>('_querySQLs');
+    }
+
+    /** All SQL dialect definitions */
+    public get SQLDialects(): MJSQLDialectEntity[] {
+        return this.GetConfigData<MJSQLDialectEntity>('_sqlDialects');
     }
 
     // --- Convenience helpers ---
 
     /** Returns only queries with Status === 'Approved' */
-    public get ApprovedQueries(): MJQueryEntity[] {
+    public get ApprovedQueries(): MJQueryEntityExtended[] {
         return this._queries.filter(q => q.Status === 'Approved');
     }
 
     /** Find a query by its ID */
-    public FindQueryByID(id: string): MJQueryEntity | undefined {
+    public FindQueryByID(id: string): MJQueryEntityExtended | undefined {
         if (!id) return undefined;
         const lower = id.trim().toLowerCase();
         return this._queries.find(q => q.ID.trim().toLowerCase() === lower);
     }
 
     /** Find a query by name, optionally scoped to a category */
-    public FindQueryByName(name: string, categoryId?: string): MJQueryEntity | undefined {
+    public FindQueryByName(name: string, categoryId?: string): MJQueryEntityExtended | undefined {
         if (!name) return undefined;
         const lowerName = name.trim().toLowerCase();
         return this._queries.find(q => {
@@ -116,7 +166,7 @@ export class QueryEngine extends BaseEngine<QueryEngine> {
     }
 
     /** Get all queries belonging to a specific category */
-    public GetQueriesByCategory(categoryId: string): MJQueryEntity[] {
+    public GetQueriesByCategory(categoryId: string): MJQueryEntityExtended[] {
         return this._queries.filter(q => UUIDsEqual(q.CategoryID, categoryId));
     }
 

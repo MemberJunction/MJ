@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bespoke (un-migrated) empty-states — current appearance</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+/* Design tokens — 1:1 from _tokens.scss (light = :root, dark = [data-theme="dark"]) */
+:root {
+  color-scheme: light;
+  --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mj-font-family-mono: 'JetBrains Mono','SF Mono',Consolas,monospace;
+  --mj-font-semibold: 600;
+  --mj-text-xs: 0.75rem; --mj-text-sm: 0.875rem; --mj-text-base: 1rem; --mj-text-lg: 1.125rem; --mj-text-xl: 1.25rem; --mj-text-2xl: 1.5rem;
+  --mj-space-1: 0.25rem; --mj-space-2: 0.5rem; --mj-space-3: 0.75rem; --mj-space-4: 1rem; --mj-space-5: 1.25rem; --mj-space-6: 1.5rem; --mj-space-8: 2rem; --mj-space-10: 2.5rem; --mj-space-12: 3rem; --mj-space-16: 4rem;
+  --mj-radius-sm: 4px; --mj-radius-md: 8px; --mj-radius-lg: 12px; --mj-radius-xl: 16px; --mj-radius-full: 9999px;
+  --mj-bg-page: #f8fafc; --mj-bg-surface: #ffffff; --mj-bg-surface-card: #f8fafc; --mj-bg-surface-sunken: #f1f5f9; --mj-bg-surface-elevated: #ffffff; --mj-bg-surface-hover: #f1f5f9; --mj-bg-surface-active: #e2e8f0;
+  --mj-border-default: #e2e8f0; --mj-border-subtle: #f1f5f9; --mj-border-strong: #cbd5e1;
+  --mj-text-primary: #1e293b; --mj-text-secondary: #475569; --mj-text-muted: #64748b; --mj-text-disabled: #94a3b8; --mj-text-inverse: #ffffff;
+  --mj-brand-primary: #0076b6; --mj-brand-primary-hover: #3395c8; --mj-brand-on-primary: #ffffff;
+  --mj-status-success: #22c55e; --mj-status-success-bg: #f0fdf4; --mj-status-success-text: #15803d;
+  --mj-status-warning: #f59e0b; --mj-status-warning-bg: #fffbeb; --mj-status-warning-text: #b45309;
+  --mj-status-error: #ef4444; --mj-status-error-bg: #fef2f2; --mj-status-error-text: #b91c1c;
+  --mj-status-info: #0076b6;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --mj-bg-page: #0f172a; --mj-bg-surface: #1e293b; --mj-bg-surface-card: #253347; --mj-bg-surface-sunken: #020617; --mj-bg-surface-elevated: #334155; --mj-bg-surface-hover: #475569; --mj-bg-surface-active: #64748b;
+  --mj-border-default: #334155; --mj-border-subtle: #1e293b; --mj-border-strong: #475569;
+  --mj-text-primary: #f1f5f9; --mj-text-secondary: #cbd5e1; --mj-text-muted: #94a3b8; --mj-text-disabled: #475569; --mj-text-inverse: #0f172a;
+  --mj-brand-primary: #2699cc; --mj-brand-primary-hover: #4dabd5; --mj-brand-on-primary: #ffffff;
+  --mj-status-success-bg: rgba(34,197,94,0.15); --mj-status-success-text: #dcfce7;
+  --mj-status-warning-bg: rgba(245,158,11,0.15); --mj-status-warning-text: #fef3c7;
+  --mj-status-error-bg: rgba(239,68,68,0.15); --mj-status-error-text: #fee2e2;
+}
+/* base mjButton (primary/outline/flat/secondary) */
+.mj-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 20px; border: 1px solid transparent; border-radius: var(--mj-radius-md); font-family: var(--mj-font-family); font-size: var(--mj-text-sm); font-weight: var(--mj-font-semibold); line-height: 1.5; min-height: 44px; cursor: pointer; white-space: nowrap; }
+.mj-btn--primary { background: var(--mj-brand-primary); color: var(--mj-brand-on-primary); border-color: var(--mj-brand-primary); }
+.mj-btn--outline { background: transparent; color: var(--mj-brand-primary); border-color: var(--mj-brand-primary); }
+.mj-btn--flat { background: transparent; color: var(--mj-text-secondary); border-color: transparent; padding: 8px 12px; }
+.mj-btn--secondary { background: var(--mj-bg-surface-sunken); color: var(--mj-text-primary); border-color: var(--mj-border-default); }
+/* gallery chrome */
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--mj-bg-page); color: var(--mj-text-primary); font-family: var(--mj-font-family); }
+.gallery-head { padding: 24px 32px; border-bottom: 1px solid var(--mj-border-default); }
+.gallery-head h1 { margin: 0 0 4px; font-size: 22px; }
+.gallery-head p { margin: 0; color: var(--mj-text-muted); font-size: 14px; max-width: 900px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px; padding: 24px 32px; }
+.cell { margin: 0; border: 1px solid var(--mj-border-default); border-radius: 12px; overflow: hidden; background: var(--mj-bg-surface); }
+.cell-label { padding: 8px 12px; font-size: 11px; font-family: var(--mj-font-family-mono); color: var(--mj-text-secondary); background: var(--mj-bg-surface-card); border-bottom: 1px solid var(--mj-border-default); word-break: break-all; }
+.cell-surface { min-height: 150px; display: flex; align-items: stretch; padding: 0; }
+.cell-surface > * { width: 100%; }
+.cell-surface em { margin: auto; color: var(--mj-text-disabled); font-size: 13px; padding: 24px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="gallery-head">
+  <h1>Bespoke (un-migrated) empty-states — current appearance</h1>
+  <p>The empty-state placeholders still using bespoke markup (not yet migrated to <code>&lt;mj-empty-state&gt;</code>), rendered from each one's real markup + CSS + design tokens, so you can see how they look today. Each card is labeled with its source file:line and class. Toggle <code>data-theme</code> on &lt;html&gt; for dark. Cards marked "not a standalone empty" are sub-elements/markers that matched the scan but aren't area placeholders.</p>
+</div>
+<div class="grid">
+<figure class="cell">
+  <figcaption class="cell-label">packages/Angular/Explorer/dashboards/src/Home/home-dashboard.component.html:47 — .pin-empty-state</figcaption>
+  <div class="cell-surface scope-b1-1">
+    <div class="pin-empty-state" style="padding:32px;">
+      <button type="button" class="pin-empty-close" title="Hide this">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <em>Bespoke chrome only — the dashed-border card + dismiss "x" that wraps an already-migrated &lt;mj-empty-state&gt; (icon/title/message render via the migrated component).</em>
+    </div>
+  </div>
+</figure>
+<style>
+  .scope-b1-1 .pin-empty-state {
+    position: relative;
+    background: var(--mj-bg-surface);
+    border-radius: var(--mj-radius-xl);
+    border: 2px dashed var(--mj-border-default);
+  }
+  .scope-b1-1 .pin-empty-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    font-size: var(--mj-text-sm);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .scope-b1-1 .pin-empty-close:hover {
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface-hover);
+  }
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">packages/Angular/Explorer/dashboards/src/Home/action-pin-config-dialog.component.html:76 — .apc-params-empty</figcaption>
+  <div class="cell-surface scope-b1-2">
+    <div class="apc-params-empty">This action takes no input parameters.</div>
+  </div>
+</figure>
+<style>
+  .scope-b1-2 .apc-params-empty {
+    padding: 16px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--mj-text-muted);
+    background: var(--mj-bg-surface-sunken);
+    border-radius: 8px;
+  }
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">packages/Angular/Explorer/dashboards/src/Lists/components/lists-categories-resource.component.ts:136 — .category-detail-panel.empty</figcaption>
+  <div class="cell-surface">
+    <em>not a standalone empty: the `.empty` class only adds flex-centering chrome around an already-migrated &lt;mj-empty-state Size="compact" Icon="fa-solid fa-arrow-left" Title="Select a category to view details"&gt;.</em>
+  </div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">packages/Angular/Explorer/dashboards/src/Lists/components/lists-operations-resource.component.ts:257 — .venn-empty</figcaption>
+  <div class="cell-surface">
+    <em>not a standalone empty: `.venn-empty` is a flex-centering wrapper around an already-migrated &lt;mj-empty-state Icon="fa-solid fa-circle-nodes" Title="Add Lists or Views to Compare" Message="..."&gt;.</em>
+  </div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">packages/Angular/Explorer/dashboards/src/Lists/components/lists-operations-resource.component.ts:351 — .results-empty</figcaption>
+  <div class="cell-surface scope-b1-5">
+    <div class="results-empty">
+      <i class="fa-solid fa-hand-pointer"></i>
+      <p>Click a region in the diagram or run an operation to see results</p>
+    </div>
+  </div>
+</figure>
+<style>
+  .scope-b1-5 .results-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    text-align: center;
+    color: var(--mj-text-muted);
+  }
+  .scope-b1-5 .results-empty i {
+    font-size: 32px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+  }
+  .scope-b1-5 .results-empty p {
+    font-size: 13px;
+    margin: 0;
+    max-width: 200px;
+  }
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">packages/Angular/Explorer/dashboards/src/Lists/components/lists-operations-resource.component.ts:669 — .list-options-empty</figcaption>
+  <div class="cell-surface scope-b1-6">
+    <div class="list-options-empty">
+      <i class="fa-solid fa-inbox"></i>
+      <p>No other lists available</p>
+    </div>
+  </div>
+</figure>
+<style>
+  .scope-b1-6 .list-options-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px 20px;
+    text-align: center;
+    color: var(--mj-text-muted);
+  }
+  .scope-b1-6 .list-options-empty i {
+    font-size: 28px;
+    margin-bottom: 10px;
+    opacity: 0.5;
+  }
+  .scope-b1-6 .list-options-empty p {
+    margin: 0;
+    font-size: 13px;
+  }
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">packages/Angular/Explorer/dashboards/src/Integration/components/pipelines/pipelines.component.html:154 — .map-table-empty</figcaption>
+  <div class="cell-surface scope-b1-7">
+    <div class="map-table-empty">
+      No entity maps match your filter.
+    </div>
+  </div>
+</figure>
+<style>
+  .scope-b1-7 .map-table-empty {
+    padding: 24px 18px;
+    text-align: center;
+    color: var(--mj-text-disabled);
+    font-size: 13px;
+  }
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">packages/Angular/Explorer/dashboards/src/Integration/components/connections/connections.component.html:664 — .detail-table-empty</figcaption>
+  <div class="cell-surface scope-b1-8">
+    <div class="detail-table-empty">
+      No entity maps match your filter.
+    </div>
+  </div>
+</figure>
+<style>
+  .scope-b1-8 .detail-table-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--mj-text-disabled);
+    font-size: 13px;
+  }
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">packages/Angular/Explorer/dashboards/src/DataExplorer/data-explorer-dashboard.component.html:302/327/353 — .qa-empty</figcaption>
+  <div class="cell-surface scope-b1-9">
+    <div class="qa-empty">No recent records</div>
+  </div>
+</figure>
+<style>
+  .scope-b1-9 .qa-empty {
+    padding: 20px 16px;
+    text-align: center;
+    color: var(--mj-text-muted);
+    font-size: 13px;
+  }
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">packages/Angular/Explorer/dashboards/src/DevTools/class-registry.component.html:93 — .cr-td-empty</figcaption>
+  <div class="cell-surface">
+    <em>not a standalone empty: lone table-cell marker — a `&lt;span class="cr-td-empty"&gt;(no key)&lt;/span&gt;` italic placeholder inside a registry table cell, not an area-level empty state.</em>
+  </div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">packages/Angular/Explorer/dashboards/src/Testing/components/testing-analytics.component.ts:293 — .empty-mini</figcaption>
+  <div class="cell-surface scope-b1-11">
+    <div class="empty-mini"><i class="fa-solid fa-spinner fa-spin"></i><span>Loading versions...</span></div>
+  </div>
+</figure>
+<style>
+  .scope-b1-11 .empty-mini {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    color: var(--mj-border-strong);
+    gap: 8px;
+  }
+  .scope-b1-11 .empty-mini i { font-size: 28px; opacity: 0.5; }
+  .scope-b1-11 .empty-mini span { font-size: 12px; }
+</style>
+<figure class="cell">
+  <figcaption class="cell-label">Explorer/dashboards/src/FormBuilder/form-builder-resource.component.html:189 &amp; 289 — .fb-rail-empty</figcaption>
+  <div class="cell-surface"><em>not a standalone empty: both occurrences are inline "Loading…" text markers (loading state, no icon/heading/CTA), not empty-state placeholders.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">Explorer/dashboards/src/FormBuilder/form-builder-resource.component.html:624 &amp; 626 — .fb-preview-picker-empty</figcaption>
+  <div class="cell-surface scope-b2-1">
+    <div class="fb-preview-picker-empty">No matches.</div>
+    <div class="fb-preview-picker-empty">No records in this entity.</div>
+  </div>
+</figure>
+<style>
+.scope-b2-1 .fb-preview-picker-empty {
+  color: var(--mj-text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">Explorer/dashboards/src/FormBuilder/form-builder-resource.component.html:633 — .fb-preview-empty (loading variant)</figcaption>
+  <div class="cell-surface scope-b2-2">
+    <div class="fb-preview-empty">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      <p>Loading preview…</p>
+    </div>
+  </div>
+</figure>
+<style>
+.scope-b2-2 .fb-preview-empty {
+  text-align: center;
+  max-width: 380px;
+  color: var(--mj-text-secondary);
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+.scope-b2-2 .fb-preview-empty i {
+  font-size: 24px;
+  color: var(--mj-brand-primary);
+  margin-bottom: 10px;
+}
+.scope-b2-2 .fb-preview-empty h4 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--mj-text-primary);
+}
+.scope-b2-2 .fb-preview-empty p {
+  margin: 4px 0;
+  font-size: 13px;
+}
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">Explorer/dashboards/src/AI/components/autotagging/tabs/taxonomy-tab.component.html:320 &amp; 363 — .at-tag-editor-empty</figcaption>
+  <div class="cell-surface scope-b2-3">
+    <div class="at-tag-editor-empty">No synonyms yet for this tag.</div>
+    <div class="at-tag-editor-empty">No scope restrictions — add one to limit visibility.</div>
+  </div>
+</figure>
+<style>
+.scope-b2-3 .at-tag-editor-empty {
+  padding: 16px;
+  color: var(--mj-text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">Explorer/dashboards/src/AI/components/autotagging/tabs/sources-tab.component.html:33 — .at-sources-empty-actions</figcaption>
+  <div class="cell-surface"><em>not a standalone empty: this is the [actions] slot inside an already-migrated &lt;mj-empty-state&gt; (.at-sources-empty), not a bespoke placeholder.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">Explorer/dashboards/src/AI/components/vectors/vector-management-resource.component.html:444 — .entity-picker-empty</figcaption>
+  <div class="cell-surface scope-b2-4">
+    <div class="entity-picker-empty">
+      No entities matching "invoice"
+    </div>
+  </div>
+</figure>
+<style>
+.scope-b2-4 .entity-picker-empty {
+  padding: 20px 14px;
+  text-align: center;
+  color: var(--mj-text-disabled);
+  font-size: 13px;
+}
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">Explorer/dashboards/src/AI/components/prompts/model-prompt-priority-matrix.component.html:251 — .cell-content.empty</figcaption>
+  <div class="cell-surface"><em>not a standalone empty: table-cell marker — an empty matrix cell rendering a clickable "+" assign indicator (.empty-cell-indicator) inside a grid cell, not an empty-state placeholder.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">Explorer/dashboards/src/ComponentStudio/component-studio-dashboard.component.html:163 — .empty-state-actions</figcaption>
+  <div class="cell-surface"><em>not a standalone empty: this is the actions/buttons block projected inside an already-migrated &lt;mj-empty-state&gt; ("Ready to Build"), not a bespoke placeholder.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">Explorer/dashboards/src/Communication/communication-logs-resource.component.ts:86 — .no-data</figcaption>
+  <div class="cell-surface"><em>not a standalone empty: this is a table &lt;td colspan="6" class="no-data"&gt; wrapping an already-migrated &lt;mj-empty-state&gt; ("No logs found…"), not a bespoke placeholder.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">Explorer/dashboards/src/Communication/communication-templates-resource.component.ts:76 — .content-type-chip.empty</figcaption>
+  <div class="cell-surface"><em>not a standalone empty: chip-pill modifier — a "No content" tag chip inside a template card's content-type list, not an empty-state placeholder. (The card-grid empty at line 90 is already a migrated &lt;mj-empty-state&gt;.)</em></div>
+</figure>
+<!-- BATCH 3 — bespoke empty-state extraction -->
+
+<figure class="cell">
+  <figcaption class="cell-label">explorer-settings/.../permission-dialog/permission-dialog.component.html:188 — .empty-permissions</figcaption>
+  <div class="cell-surface scope-b3-1">
+    <div class="empty-permissions">
+      <i class="fa-solid fa-shield-halved"></i>
+      <p>No role permissions configured</p>
+      <p class="empty-subtext">Add permissions for specific roles to control access to this entity</p>
+    </div>
+  </div>
+</figure>
+<style>
+.scope-b3-1 .empty-permissions {
+  text-align: center;
+  padding: 32px;
+  color: var(--mj-text-secondary);
+}
+.scope-b3-1 .empty-permissions i {
+  font-size: 2rem;
+  color: var(--mj-border-default);
+  margin-bottom: 16px;
+}
+.scope-b3-1 .empty-permissions p {
+  margin: 0 0 4px 0;
+  font-weight: 500;
+  color: var(--mj-text-primary);
+}
+.scope-b3-1 .empty-permissions .empty-subtext {
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+  margin: 0;
+}
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">explorer-core/.../resource-wrappers/search-results-resource.component.ts:123 — .search-no-results</figcaption>
+  <div class="cell-surface"><em>not a standalone bespoke empty: already migrated to &lt;mj-empty-state Variant="no-results" Icon="fa-solid fa-magnifying-glass-minus" Title="No results found"&gt;. The .search-no-results class only carries layout (flex sizing); the visual is the shared component.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">explorer-core/.../resource-wrappers/search-results-resource.component.ts:181 — .search-no-results-inline</figcaption>
+  <div class="cell-surface"><em>not a standalone bespoke empty: already migrated to &lt;mj-empty-state Variant="no-results" Icon="fa-solid fa-filter-circle-xmark"&gt;. The .search-no-results-inline class is layout-only (flex: 1).</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">explorer-core/.../conversation-feedback/conversation-feedback.html:109 — .feedback-empty-state</figcaption>
+  <div class="cell-surface"><em>not a standalone bespoke empty: already migrated to &lt;mj-empty-state Variant="no-results" Icon="fa-solid fa-comment-slash" Title="No feedback matches the current filters."&gt;.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">core-entity-forms/.../panels/ai-agents/agent-realtime.panel.html:26,61,87 — .rt-empty (deduped: one visual)</figcaption>
+  <div class="cell-surface scope-b3-5">
+    <div class="rt-empty">No co-agent pairings reference this agent.</div>
+    <div class="rt-empty">No bridge identities provisioned for this agent.</div>
+    <div class="rt-empty">No type configuration set — this agent uses its type's defaults.</div>
+  </div>
+</figure>
+<style>
+.scope-b3-5 .rt-empty {
+  font-size: 12px;
+  color: var(--mj-text-muted);
+  padding: 8px 0;
+}
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">core-entity-forms/.../custom/Lists/list-form.component.html:104 — .description-empty</figcaption>
+  <div class="cell-surface scope-b3-6">
+    <p class="description-empty">No description provided</p>
+  </div>
+</figure>
+<style>
+.scope-b3-6 .description-empty {
+  margin: 0;
+  color: var(--mj-text-disabled);
+  font-style: italic;
+}
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">core-entity-forms/.../custom/Tests/test-run-form.component.html:186 &amp; test-suite-run-form.component.html:174 — .tags-bar-empty (deduped: identical)</figcaption>
+  <div class="cell-surface scope-b3-7">
+    <span class="tags-bar-empty">No tags</span>
+  </div>
+</figure>
+<style>
+.scope-b3-7 .tags-bar-empty {
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+  opacity: 0.7;
+  flex: 1;
+}
+</style>
+
+<figure class="cell">
+  <figcaption class="cell-label">core-entity-forms/.../custom/AIAgents/FlowAgentType/flow-agent-form-section.component.html:11 — .flow-empty-state</figcaption>
+  <div class="cell-surface"><em>not a standalone bespoke empty: already migrated to &lt;mj-empty-state Variant="warning" Icon="fa-solid fa-circle-info" Title="Save the agent first to configure the workflow."&gt;.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">core-entity-forms/.../custom/AIAgents/ai-agent-form.component.html:623 — .empty-state-info</figcaption>
+  <div class="cell-surface"><em>not a standalone bespoke empty: this is projected content INSIDE a migrated &lt;mj-empty-state Icon="fa-solid fa-sitemap" Title="No Sub-Agents" ...&gt;. The .empty-state-info div holds two info-cards; the empty itself is the shared component.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">core-entity-forms/.../list-detail-grid/ng-list-detail-grid.component.html:12 — .list-detail-grid-empty</figcaption>
+  <div class="cell-surface"><em>not a standalone bespoke empty: already migrated to &lt;mj-empty-state Icon="fa-solid fa-rectangle-list" Title="Select a list to view its records"&gt;.</em></div>
+</figure>
+<!-- BATCH 4 — Generic packages. All 7 candidates were either ALREADY MIGRATED to
+     <mj-empty-state> or are inline markers/pills/cell-text, NOT standalone bespoke
+     empty-state placeholders. No faithfully-renderable bespoke empty cards in this batch. -->
+
+<figure class="cell">
+  <figcaption class="cell-label">dashboard-viewer.component.html:92 — .dashboard-empty</figcaption>
+  <div class="cell-surface"><em>not a standalone bespoke empty: already migrated to &lt;mj-empty-state&gt; (Icon/Title/Message/ActionText inputs). .dashboard-empty is just a host class on the migrated component.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">dashboard-browser.component.html:364 / 391 / 403 / 414 — .dashboard-empty (4 states)</figcaption>
+  <div class="cell-surface"><em>not standalone bespoke empties: all four states (Welcome / empty-folder / no-uncategorized / no-results) are already &lt;mj-empty-state&gt; with Size/Variant/Icon/Title/Message/ActionText inputs. .dashboard-empty is a host class only.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">dashboard-browser.component.html:372 — .empty-features</figcaption>
+  <div class="cell-surface"><em>not an empty state: it is a feature-list (Customizable layouts / Connect to your data / Share with your team) projected as content INTO the migrated Welcome &lt;mj-empty-state&gt; — part of that already-migrated card, not a separate placeholder.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">artifact-viewer-panel.component.html:207 — .attribute-empty-pill</figcaption>
+  <div class="cell-surface scope-b4-1">
+    <div class="attribute-item">
+      <label>Attribute Name</label>
+      <span class="attribute-empty-pill">Empty</span>
+    </div>
+  </div>
+</figure>
+<style>
+.scope-b4-1 .attribute-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: var(--mj-bg-surface);
+  border-radius: 6px;
+  border: 1px solid var(--mj-border-default);
+}
+.scope-b4-1 .attribute-item label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mj-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.scope-b4-1 .attribute-item span {
+  font-size: 13px;
+  color: var(--mj-text-primary);
+  word-break: break-word;
+}
+.scope-b4-1 .attribute-empty-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-disabled);
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+</style>
+<figure class="cell">
+  <figcaption class="cell-label">artifact-viewer-panel.component.html:207 — flag</figcaption>
+  <div class="cell-surface"><em>FLAG: .attribute-empty-pill is a pill modifier (a small "Empty" badge marking a missing attribute value inside an attribute row), NOT a standalone empty-state placeholder.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">component-artifact-viewer.component.html:84 / 86 — .form-artifact-picker-empty</figcaption>
+  <div class="cell-surface scope-b4-2">
+    <div class="form-artifact-picker-empty">No matches.</div>
+  </div>
+</figure>
+<style>
+.scope-b4-2 .form-artifact-picker-empty {
+  color: var(--mj-text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+</style>
+<figure class="cell">
+  <figcaption class="cell-label">component-artifact-viewer.component.html:84/86 — flag</figcaption>
+  <div class="cell-surface"><em>FLAG: inline italic helper text inside a record-picker dropdown ("No matches." / "Start typing to search."). A picker-state marker, not a standalone empty-state card. Two states render identical styling — deduped to one above.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">query-row-detail.component.html:125 / 186 — .field-value.empty</figcaption>
+  <div class="cell-surface scope-b4-3">
+    <div class="field-value empty">
+      <span class="value-text">(empty)</span>
+    </div>
+  </div>
+</figure>
+<style>
+.scope-b4-3 .field-value {
+  font-size: 13px;
+  color: var(--mj-text-primary);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.scope-b4-3 .field-value.empty {
+  color: var(--mj-text-disabled);
+  font-style: italic;
+}
+</style>
+<figure class="cell">
+  <figcaption class="cell-label">query-row-detail.component.html:125/186 — flag</figcaption>
+  <div class="cell-surface"><em>FLAG: .field-value.empty is a per-field cell marker rendering "(empty)" for a null field value within a record-detail field list. A null-value cell marker, not a standalone empty state. Both lines are the same marker (related-field section + regular-field section) — deduped.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">query-data-grid.component.html:93 — .empty-state</figcaption>
+  <div class="cell-surface"><em>not a standalone bespoke empty: already migrated to &lt;mj-empty-state&gt; (Icon="fa-database" Title="No results" Message="Run the query to see results"). .empty-state is a host class only.</em></div>
+</figure>
+
+<figure class="cell">
+  <figcaption class="cell-label">list-management-dialog.component.html:243 — .summary-empty</figcaption>
+  <div class="cell-surface scope-b4-4">
+    <div class="footer-summary">
+      <span class="summary-empty">No changes</span>
+    </div>
+  </div>
+</figure>
+<style>
+.scope-b4-4 .footer-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.scope-b4-4 .summary-empty {
+  color: var(--mj-text-muted);
+  font-size: 13px;
+}
+</style>
+<figure class="cell">
+  <figcaption class="cell-label">list-management-dialog.component.html:243 — flag</figcaption>
+  <div class="cell-surface"><em>FLAG: .summary-empty is a dialog-footer status marker ("No changes") shown when the change summary is empty. A footer status label, not a standalone empty-state placeholder.</em></div>
+</figure>
+<!-- BATCH 5 — Generic packages bespoke empty-state extraction -->
+
+<!-- ============================================================ -->
+<!-- erd-diagram.component.html:266 — .erd-empty -->
+<figure class="cell">
+  <figcaption class="cell-label">Generic/entity-relationship-diagram/.../erd-diagram.component.html:266 — .erd-empty</figcaption>
+  <div class="cell-surface"><em>not a standalone empty: migrated wrapper — renders <code>&lt;mj-empty-state&gt;</code> with class="erd-empty" (no bespoke icon/heading/message markup of its own)</em></div>
+</figure>
+
+<!-- ============================================================ -->
+<!-- flow-node.component.html:99 — .mj-flow-loop-body-empty -->
+<figure class="cell">
+  <figcaption class="cell-label">Generic/flow-editor/.../flow-node.component.html:99 — .mj-flow-loop-body-empty</figcaption>
+  <div class="cell-surface scope-b5-1">
+    <div class="mj-flow-loop-body-empty">
+      <i class="fa-solid fa-circle-question"></i>
+      <span>No body type selected</span>
+    </div>
+  </div>
+</figure>
+<style>
+  .scope-b5-1 .mj-flow-loop-body-empty {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--mj-status-warning-text);
+  }
+  .scope-b5-1 .mj-flow-loop-body-empty i {
+    font-size: 11px;
+    color: var(--mj-status-warning);
+  }
+</style>
+
+<!-- ============================================================ -->
+<!-- flow-editor.component.html:224 — .mj-flow-editor-empty -->
+<figure class="cell">
+  <figcaption class="cell-label">Generic/flow-editor/.../flow-editor.component.html:224 — .mj-flow-editor-empty</figcaption>
+  <div class="cell-surface"><em>not a standalone empty: migrated wrapper — <code>.mj-flow-editor-empty</code> is a positioning shell around <code>&lt;mj-empty-state&gt;</code>; only bespoke bit is the <code>.mj-flow-editor-empty-subtitle</code> &lt;p&gt; projected into it</em></div>
+</figure>
+
+<!-- ============================================================ -->
+<!-- search-scope-child-grid.component.html:22 — .scope-grid-empty -->
+<figure class="cell">
+  <figcaption class="cell-label">Generic/search/.../search-scope-child-grid.component.html:22 — .scope-grid-empty</figcaption>
+  <div class="cell-surface scope-b5-2">
+    <table class="scope-grid-table" style="width:100%;border-collapse:collapse;">
+      <tbody>
+        <tr>
+          <td colspan="2" class="scope-grid-empty">No records found.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</figure>
+<style>
+  .scope-b5-2 .scope-grid-empty {
+    padding: 16px;
+    text-align: center;
+    color: var(--mj-text-muted);
+    font-size: 0.875rem;
+  }
+</style>
+
+<!-- ============================================================ -->
+<!-- ai-prompt-selector.component.ts:47/49 — .ps-empty (inline) -->
+<figure class="cell">
+  <figcaption class="cell-label">Generic/entity-action-ux/.../ai-prompt-selector.component.ts:47/49 — .ps-empty</figcaption>
+  <div class="cell-surface scope-b5-3">
+    <div class="ps-empty">No prompts match &ldquo;invoice&rdquo;.</div>
+  </div>
+</figure>
+<style>
+  .scope-b5-3 .ps-empty {
+    padding: 16px;
+    text-align: center;
+    color: var(--mj-text-muted);
+    font-size: 13px;
+  }
+</style>
+
+<!-- ============================================================ -->
+<!-- entity-cards.component.html:108 — .no-results -->
+<figure class="cell">
+  <figcaption class="cell-label">Generic/entity-viewer/.../entity-cards.component.html:108 — .no-results</figcaption>
+  <div class="cell-surface"><em>not a standalone empty: migrated — renders <code>&lt;mj-empty-state Variant="no-results" Title="No records to display"&gt;</code> with class="no-results" (no bespoke markup)</em></div>
+</figure>
+
+<!-- ============================================================ -->
+<!-- entity-data-grid.component.ts:2542 — .cell-empty -->
+<figure class="cell">
+  <figcaption class="cell-label">Generic/entity-viewer/.../entity-data-grid.component.ts:2542 — .cell-empty</figcaption>
+  <div class="cell-surface"><em>not a standalone empty: AG-grid cell-renderer null marker — returns <code>&lt;span class="cell-empty"&gt;—&lt;/span&gt;</code> for null/undefined cell values, not an empty-state placeholder</em></div>
+</figure>
+
+<!-- ============================================================ -->
+<!-- kanban-board.component.ts:68 — .empty-column (inline) -->
+<figure class="cell">
+  <figcaption class="cell-label">Generic/kanban/.../kanban-board.component.ts:68 — .empty-column</figcaption>
+  <div class="cell-surface scope-b5-4">
+    <div class="empty-column">Drop here</div>
+  </div>
+</figure>
+<style>
+  .scope-b5-4 .empty-column {
+    text-align: center;
+    color: var(--mj-text-disabled);
+    font-size: var(--mj-text-sm);
+    padding: var(--mj-space-6) var(--mj-space-2);
+    border: 2px dashed var(--mj-border-subtle);
+    border-radius: var(--mj-radius-md);
+  }
+</style>
+
+<!-- ============================================================ -->
+<!-- timeline.component.ts:130 — .custom-empty -->
+<figure class="cell">
+  <figcaption class="cell-label">Generic/timeline/.../timeline.component.ts:130 — .custom-empty</figcaption>
+  <div class="cell-surface"><em>not a standalone empty: JSDoc example only — <code>&lt;div class="custom-empty"&gt;No events found&lt;/div&gt;</code> appears in a documentation comment, not real component markup. The real empty state uses <code>&lt;mj-empty-state&gt;</code> (timeline.component.html:45).</em></div>
+</figure>
+
+<!-- ============================================================ -->
+<!-- collections-full-view.component.ts:284 — .empty-collection-hint (inline) -->
+<figure class="cell">
+  <figcaption class="cell-label">Generic/conversations/.../collections-full-view.component.ts:284 — .empty-collection-hint</figcaption>
+  <div class="cell-surface"><em>not a standalone empty: sub-element projected into a migrated <code>&lt;mj-empty-state&gt;</code> — a single <code>&lt;p class="empty-collection-hint"&gt;</code> hint line, not a self-contained placeholder</em></div>
+</figure>
+
+<!-- ============================================================ -->
+<!-- artifact-collection-picker-modal.component.ts:117/125 — .empty-create-form / .empty-create-actions (inline) -->
+<figure class="cell">
+  <figcaption class="cell-label">Generic/conversations/.../artifact-collection-picker-modal.component.ts:117/125 — .empty-create-form (+ .empty-create-actions)</figcaption>
+  <div class="cell-surface scope-b5-5">
+    <div class="state-block muted">
+      <i class="fa-solid fa-folder-open"></i>
+      <p>No editable collections yet</p>
+      <div class="empty-create-form">
+        <input type="text" class="create-input" placeholder="Collection name" />
+        <div class="empty-create-actions">
+          <button class="mj-btn mj-btn--primary mj-btn--sm">Create</button>
+          <button class="mj-btn mj-btn--sm">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</figure>
+<style>
+  .scope-b5-5 .state-block {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 48px 24px; gap: 8px; color: var(--mj-text-muted);
+    text-align: center;
+  }
+  .scope-b5-5 .state-block i { font-size: 28px; opacity: .6; }
+  .scope-b5-5 .state-block p { margin: 0; font-size: 13.5px; }
+  .scope-b5-5 .create-input {
+    flex: 1; min-width: 0;
+    padding: 7px 10px;
+    font-size: 13.5px; color: var(--mj-text-primary);
+    background: var(--mj-bg-surface);
+    border: 1.5px solid var(--mj-border-strong);
+    border-radius: 6px;
+    outline: 0;
+    transition: all .12s ease;
+  }
+  .scope-b5-5 .create-input::placeholder { color: var(--mj-text-muted); }
+  .scope-b5-5 .empty-create-form {
+    display: flex; flex-direction: column; gap: 8px;
+    width: 100%; max-width: 280px; margin-top: 4px;
+  }
+  .scope-b5-5 .empty-create-actions { display: flex; gap: 8px; justify-content: center; }
+</style>
+
+<!-- ============================================================ -->
+<!-- artifact-collection-picker-modal.component.ts:295 — .chips-empty (inline) -->
+<figure class="cell">
+  <figcaption class="cell-label">Generic/conversations/.../artifact-collection-picker-modal.component.ts:295 — .chips-empty</figcaption>
+  <div class="cell-surface scope-b5-6">
+    <div class="chips-empty">
+      <i class="fa-solid fa-hand-pointer"></i>
+      <p>Pick a collection on the left</p>
+    </div>
+  </div>
+</figure>
+<style>
+  .scope-b5-6 .chips-empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 32px 16px; text-align: center; color: var(--mj-text-muted);
+    border: 1.5px dashed var(--mj-border-default); border-radius: 10px;
+  }
+  .scope-b5-6 .chips-empty i { font-size: 22px; margin-bottom: 8px; opacity: .55; }
+  .scope-b5-6 .chips-empty p { margin: 0; font-size: 12.5px; }
+</style>
+
+<!-- ============================================================ -->
+<!-- realtime-session-thread.component.html:58 — .thread-empty -->
+<figure class="cell">
+  <figcaption class="cell-label">Generic/conversations/.../realtime-session-thread.component.html:58 — .thread-empty</figcaption>
+  <div class="cell-surface scope-b5-7">
+    <div class="thread-empty">The live transcript and any delegated work will appear here.</div>
+  </div>
+</figure>
+<style>
+  .scope-b5-7 .thread-empty {
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--mj-text-disabled);
+    padding: 24px 0;
+  }
+</style>
+</div>
+</body>
+</html>

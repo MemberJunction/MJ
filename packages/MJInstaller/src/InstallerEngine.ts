@@ -40,6 +40,7 @@ import { PlatformCompatPhase } from './phases/PlatformCompatPhase.js';
 import { DependencyPhase } from './phases/DependencyPhase.js';
 import { CodeGenPhase } from './phases/CodeGenPhase.js';
 import { SmokeTestPhase } from './phases/SmokeTestPhase.js';
+import { ClaudePackDoctor } from './diagnostics/ClaudePackDoctor.js';
 import { InstallPlan, type CreatePlanInput, type RunOptions, type DoctorOptions, type InstallResult } from './models/InstallPlan.js';
 import { InstallState } from './models/InstallState.js';
 import { InstallConfigDefaults, resolveFromEnvironment, loadConfigFile, mergeConfigs, type PartialInstallConfig } from './models/InstallConfig.js';
@@ -117,6 +118,13 @@ export class InstallerEngine {
    */
   private resolvedConfig: PartialInstallConfig = {};
 
+  /**
+   * Concrete release tag resolved by the scaffold phase this run. Pinned into
+   * `mj.config.cjs` by the configure phase so later `mj migrate` runs target the
+   * same version as the installed code. Undefined when scaffold was skipped (resume).
+   */
+  private resolvedVersion?: string;
+
   // -------------------------------------------------------------------------
   // Public API
   // -------------------------------------------------------------------------
@@ -191,7 +199,7 @@ export class InstallerEngine {
     }
 
     const tag = input.Tag ?? 'latest';
-    return new InstallPlan(tag, input.Dir, config, skipPhases);
+    return new InstallPlan(tag, input.Dir, config, skipPhases, input.NoClaudePack ?? false);
   }
 
   /**
@@ -464,6 +472,13 @@ export class InstallerEngine {
     // Run auth configuration validation checks (fast — always runs)
     await this.runAuthValidationChecks(targetDir, diagnostics);
 
+    // Run Claude pack checks (fast — info-level if not installed)
+    const claudePackDoctor = new ClaudePackDoctor(
+      new FileSystemAdapter(),
+      (check, status, message, suggestedFix) => this.emitDiagnostic(check, status, message, suggestedFix)
+    );
+    await claudePackDoctor.RunChecks(targetDir, diagnostics);
+
     // Generate diagnostic report if requested
     if (generateReport) {
       const reportPath = await this.generateDoctorReport(targetDir, state, diagnostics, config, extended);
@@ -592,7 +607,11 @@ export class InstallerEngine {
       Yes: yes,
       Emitter: this.emitter,
       InstallMode: installMode,
+      IncludeClaudePack: !plan.NoClaudePack,
     });
+
+    // Remember the concrete resolved tag so the configure phase can pin it.
+    this.resolvedVersion = result.Version.Tag;
 
     this.emitter.Emit('log', {
       Type: 'log',
@@ -610,12 +629,17 @@ export class InstallerEngine {
     yes: boolean,
     overwriteConfig: boolean = false
   ): Promise<PhaseExecutionResult> {
+    // Prefer the tag resolved this run; on resume (scaffold skipped) fall back to
+    // the plan's explicit tag, but never pin the placeholder 'latest'.
+    const resolvedVersion = this.resolvedVersion ?? (plan.Tag !== 'latest' ? plan.Tag : undefined);
+
     const result = await this.configure.Run({
       Dir: plan.Dir,
       Config: { ...this.resolvedConfig, ...config },
       Yes: yes,
       Emitter: this.emitter,
       OverwriteConfig: overwriteConfig,
+      ResolvedVersion: resolvedVersion,
     });
 
     // Store resolved config for subsequent phases

@@ -1,8 +1,12 @@
-<div class="mapping-workspace">
-  <div class="workspace-header">
-    <h2><i class="fa-solid fa-diagram-project"></i> Mapping Workspace</h2>
-  </div>
+<mj-page-layout>
+  <mj-page-header
+    Title="Mapping Workspace"
+    Icon="fa-solid fa-diagram-project"
+    Subtitle="Build and validate entity field mappings">
+  </mj-page-header>
 
+  <mj-page-body [Flex]="true" [Padding]="false">
+<div class="mapping-workspace">
   @if (IsLoadingIntegrations) {
     <mj-loading text="Loading integrations..." size="medium"></mj-loading>
   } @else {
@@ -363,14 +367,13 @@
 
           <!-- Validation warnings -->
           @if (ActiveEditableFields.length > 0 && !MappingValidation.IsValid) {
-            <div class="validation-banner">
-              <i class="fa-solid fa-triangle-exclamation"></i>
+            <mj-alert Variant="warning">
               <div class="validation-warnings">
                 @for (warning of MappingValidation.Warnings; track warning) {
                   <span>{{ warning }}</span>
                 }
               </div>
-            </div>
+            </mj-alert>
           }
 
           <div class="field-mapping-header">
@@ -837,3 +840,5 @@
     </div>
   }
 </div>
+  </mj-page-body>
+</mj-page-layout>

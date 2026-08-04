@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conversation Timeline · Collapsed Session · Real-Time Agents</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+<style>
+  .conv { max-width: 760px; margin: 0 auto; }
+  .msg { display: flex; gap: 12px; margin-bottom: 18px; }
+  .msg--me { flex-direction: row-reverse; }
+  .msg-avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .msg--agent .msg-avatar { background: linear-gradient(135deg, var(--mj-color-brand-500), var(--mj-color-accent-400)); color: #fff; }
+  .msg--me .msg-avatar { background: var(--mj-bg-surface-elevated); color: var(--mj-text-secondary); border: 1px solid var(--mj-border-strong); }
+  .msg-bubble { padding: 11px 15px; border-radius: 14px; max-width: 560px; font-size: 14px; line-height: 1.55; }
+  .msg--agent .msg-bubble { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-top-left-radius: 4px; }
+  .msg--me .msg-bubble { background: var(--mj-brand-primary); color: #fff; border-top-right-radius: 4px; }
+  .msg-name { font-size: 11px; color: var(--mj-text-muted); font-weight: 600; margin-bottom: 4px; }
+  .msg--me .msg-name { text-align: right; }
+  .toggle-hint { font-size: 11px; color: var(--mj-text-muted); }
+  .state-tag { font-size:11px; font-weight:700; color: var(--mj-brand-primary); text-transform:uppercase; letter-spacing:0.05em; margin: 30px 0 12px; display:flex; align-items:center; gap:8px }
+  .state-tag::after { content:""; flex:1; height:1px; background: var(--mj-border-default); }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Index</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub" style="margin-left:2px">Conversation</span></div>
+    <div class="topbar-spacer"></div>
+    <span class="topbar-pill"><i class="fa-solid fa-comments"></i> Weather &amp; planning</span>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <div class="page-body">
+    <div class="conv">
+
+      <p class="state-tag"><i class="fa-solid fa-eye"></i> Collapsed (default)</p>
+
+      <!-- normal text messages -->
+      <div class="msg msg--me">
+        <div class="msg-avatar">AM</div>
+        <div><div class="msg-name">You · 3:38 pm</div><div class="msg-bubble">Hey Sage, quick question before my standup.</div></div>
+      </div>
+      <div class="msg msg--agent">
+        <div class="msg-avatar">S</div>
+        <div><div class="msg-name">Sage · 3:38 pm</div><div class="msg-bubble">Of course — what do you need?</div></div>
+      </div>
+
+      <!-- COLLAPSED voice session block -->
+      <div class="session-block" id="block1">
+        <div class="session-block__head" onclick="toggleBlock('block1')">
+          <div class="session-block__icon"><i class="fa-solid fa-microphone-lines"></i></div>
+          <div style="flex:1">
+            <div class="session-block__title">Voice session</div>
+            <div class="session-block__meta"><b>2 min</b> · <b>5 exchanges</b> · <b>1 agent run</b> · ended 3:42 pm</div>
+          </div>
+          <span class="pill pill--closed"><i class="fa-solid fa-circle-stop"></i> Closed</span>
+          <button class="btn btn--sm btn--primary" onclick="event.stopPropagation()"><i class="fa-solid fa-phone-volume"></i> Resume</button>
+          <button class="btn btn--sm" onclick="event.stopPropagation();toggleBlock('block1')"><i class="fa-solid fa-chevron-down" id="block1-chev"></i> <span id="block1-lbl">Expand</span></button>
+        </div>
+        <!-- expanded body -->
+        <div class="session-block__body hidden" id="block1-body">
+          <div class="row between center" style="margin-bottom:14px">
+            <span class="section-label" style="margin:0">Full transcript</span>
+            <a href="session-detail.html" style="font-size:12px;font-weight:600">Open full detail ↗</a>
+          </div>
+          <div class="thread" style="margin-bottom:18px">
+            <div class="turn turn--agent"><div class="turn-avatar">S</div><div><div class="turn-meta">Sage · voice</div><div class="bubble">Yep, I'm here. What's up?</div></div></div>
+            <div class="turn turn--agent"><div class="turn-avatar">S</div><div><div class="turn-meta">Sage · voice</div><div class="bubble">I'm the voice for Sage, the ambient helper in MJ. I help you navigate MJ, handle basic stuff, and pull in other agents when something needs real work.</div></div></div>
+            <div class="turn turn--user"><div class="turn-avatar">AM</div><div><div class="turn-meta"><span class="typed-tag">spoken</span> You</div><div class="bubble">what's the weather in LA, SF, and NYC?</div></div></div>
+            <div class="turn turn--agent"><div class="turn-avatar">S</div><div><div class="turn-meta">Sage · voice</div><div class="bubble">Got it, I'll have Sage check the weather for those three cities and then I'll share what comes back.</div></div></div>
+            <div class="turn turn--agent"><div class="turn-avatar">S</div><div><div class="turn-meta">Sage · voice</div><div class="bubble">Los Angeles is clear and about 78.5°. San Francisco is clear and about 67.8°. New York City is clear and about 76.2°.</div></div></div>
+          </div>
+
+          <span class="section-label">Delegated agent run</span>
+          <div class="run-node" style="margin-bottom:16px">
+            <div class="run-head">
+              <div class="avatar avatar--sage" style="width:28px;height:28px;font-size:11px">S</div>
+              <div style="flex:1"><div class="run-name">Sage · Weather lookup</div><div class="run-sub">AIAgentRun #a3f1 · 3 cities · 1.8s · 2 tool calls</div></div>
+              <span class="pill pill--active"><i class="fa-solid fa-check"></i> Completed</span>
+              <a href="session-detail.html" class="btn btn--sm" style="margin-left:8px">Open run ↗</a>
+            </div>
+          </div>
+
+          <span class="section-label">Result card produced</span>
+          <div class="result-card" style="margin-bottom:16px">
+            <div class="result-card__head"><span style="color:var(--mj-color-violet-300)">Weather</span><span class="via-tag" style="margin-left:auto">via Sage</span></div>
+            <div class="weather-row"><div class="weather-city"><div class="wc-icon"><i class="fa-solid fa-sun"></i></div><div><div class="weather-name">Los Angeles</div><div class="weather-cond">Clear</div></div></div><div class="weather-temp">78.5°</div></div>
+            <div class="weather-row"><div class="weather-city"><div class="wc-icon"><i class="fa-solid fa-sun"></i></div><div><div class="weather-name">San Francisco</div><div class="weather-cond">Clear</div></div></div><div class="weather-temp">67.8°</div></div>
+            <div class="weather-row"><div class="weather-city"><div class="wc-icon"><i class="fa-solid fa-sun"></i></div><div><div class="weather-name">New York City</div><div class="weather-cond">Clear</div></div></div><div class="weather-temp">76.2°</div></div>
+          </div>
+
+          <div class="row gap-lg wrap" style="padding-top:4px;border-top:1px solid var(--mj-border-default)">
+            <div class="kv" style="margin-top:14px"><span class="k">Channels used</span><span class="v"><i class="fa-solid fa-microphone-lines"></i> Voice <i class="fa-solid fa-comment" style="margin-left:6px"></i> Text</span></div>
+            <div class="kv" style="margin-top:14px"><span class="k">Usage</span><span class="v">4,210 tokens · $0.038</span></div>
+            <div class="kv" style="margin-top:14px"><span class="k">Model</span><span class="v">gpt-realtime-2</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- continuing text after the session -->
+      <div class="msg msg--me" style="margin-top:18px">
+        <div class="msg-avatar">AM</div>
+        <div><div class="msg-name">You · 3:43 pm</div><div class="msg-bubble">Perfect, thanks. I'll pack a light jacket for SF.</div></div>
+      </div>
+      <div class="msg msg--agent">
+        <div class="msg-avatar">S</div>
+        <div><div class="msg-name">Sage · 3:43 pm</div><div class="msg-bubble">Good call — SF runs cool in the evenings. Anything else before standup?</div></div>
+      </div>
+
+      <p class="toggle-hint" style="text-align:center;margin-top:24px"><i class="fa-solid fa-hand-pointer"></i> Click the voice-session block above to expand / collapse the full transcript &amp; runs.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleBlock(id){
+    var body = document.getElementById(id+'-body');
+    var chev = document.getElementById(id+'-chev');
+    var lbl = document.getElementById(id+'-lbl');
+    var open = body.classList.toggle('hidden') === false;
+    if(chev){ chev.className = open ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'; }
+    if(lbl){ lbl.textContent = open ? 'Collapse' : 'Expand'; }
+  }
+</script>
+</body>
+</html>

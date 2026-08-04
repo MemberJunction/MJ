@@ -95,10 +95,13 @@ export default class Export extends Command {
       const generateCSV = flags.csv;
       const generateMermaid = flags.mermaid;
 
-      // Prepare generator options
+      // Prepare generator options. The SQL generator is dialect-aware (PostgreSQL
+      // emits COMMENT ON; SQL Server emits sp_addextendedproperty), so pass the
+      // configured provider through; defaults to 'sqlserver' when no config.
       const generatorOptions = {
         approvedOnly: flags['approved-only'],
-        confidenceThreshold: parseFloat(flags['confidence-threshold'])
+        confidenceThreshold: parseFloat(flags['confidence-threshold']),
+        provider: (config?.database?.provider as 'sqlserver' | 'postgresql') || 'sqlserver'
       };
 
       // Generate SQL
@@ -119,7 +122,7 @@ export default class Export extends Command {
             spinner.start('Applying SQL to database');
             const { DatabaseConnection } = await import('../database/Database.js');
             const dbConfig = {
-              provider: (config.database.provider as 'sqlserver' | 'mysql' | 'postgresql' | 'oracle') || 'sqlserver',
+              provider: (config.database.provider as 'sqlserver' | 'postgresql') || 'sqlserver',
               host: config.database.server,
               port: config.database.port,
               database: config.database.database,

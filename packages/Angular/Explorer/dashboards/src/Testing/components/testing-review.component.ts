@@ -33,26 +33,37 @@ interface ReviewFormState {
   selector: 'app-testing-review',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <!-- Page Header -->
+    @if (HideToolbar) {
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    } @else {
+      <mj-page-layout>
+        <mj-page-header
+          Title="Human Review"
+          Icon="fa-solid fa-clipboard-check"
+          Subtitle="Human-in-the-loop review for test outcomes">
+          <div meta>
+            @if (PendingCount > 0) {
+              <mj-stat-badge
+                Icon="fa-solid fa-hourglass-half"
+                [Count]="PendingCount"
+                Label="pending"
+                Variant="warning">
+              </mj-stat-badge>
+            }
+          </div>
+          <div actions>
+            <mj-refresh-button [Loading]="IsRefreshing" (Clicked)="Refresh()"></mj-refresh-button>
+          </div>
+        </mj-page-header>
+        <mj-page-body>
+          <ng-container *ngTemplateOutlet="content"></ng-container>
+        </mj-page-body>
+      </mj-page-layout>
+    }
+
+    <ng-template #content>
+    <!-- Inner page content -->
     <div class="review-page">
-      <div class="page-header">
-        <div class="header-left">
-          <h2>
-            <i class="fa-solid fa-clipboard-check"></i>
-            Human Review
-          </h2>
-          @if (PendingCount > 0) {
-            <div class="pending-badge">
-              <span class="badge-count">{{ PendingCount }}</span>
-              <span class="badge-text">pending</span>
-            </div>
-          }
-        </div>
-        <button class="refresh-btn" (click)="Refresh()" [disabled]="IsRefreshing">
-          <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsRefreshing"></i>
-          {{ IsRefreshing ? 'Refreshing...' : 'Refresh' }}
-        </button>
-      </div>
 
       <!-- KPI Summary Row -->
       @if (Metrics) {
@@ -114,16 +125,18 @@ interface ReviewFormState {
       @if (CurrentView === 'queue') {
         <div class="content-card">
           @if (PendingItems.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-circle-check"></i>
-              <h3>All caught up!</h3>
-              <p>No tests currently require human review.</p>
-            </div>
+            <mj-empty-state Variant="success"
+              Title="All caught up!"
+              Message="No tests currently require human review." />
           } @else {
             <div class="queue-list">
               @for (item of PendingItems; track item.testRunID) {
-                <div class="queue-item" [class.expanded]="IsItemExpanded(item.testRunID)">
-                  <div class="queue-item-header" (click)="ToggleExpand(item.testRunID)">
+                <mj-accordion-panel
+                  Size="sm"
+                  [FlushBody]="true"
+                  [Expanded]="IsItemExpanded(item.testRunID)"
+                  (ExpandedChange)="OnItemExpandedChange(item.testRunID, $event)">
+                  <ng-template mjAccordionTitle>
                     <div class="item-info">
                       <div class="item-name">{{ item.testName }}</div>
                       <div class="item-meta">
@@ -135,24 +148,19 @@ interface ReviewFormState {
                         <app-test-status-badge [status]="$any(item.automatedStatus)"></app-test-status-badge>
                       </div>
                     </div>
-                    <div class="item-actions-area">
-                      <span class="reason-badge" [class]="'reason-' + item.reason">
-                        @if (item.reason === 'no-feedback') {
-                          <i class="fa-solid fa-comment-slash"></i> No Feedback
-                        } @else if (item.reason === 'high-score-failed') {
-                          <i class="fa-solid fa-triangle-exclamation"></i> Score Mismatch
-                        } @else {
-                          <i class="fa-solid fa-circle-question"></i> Needs Verification
-                        }
-                      </span>
-                      <button class="expand-toggle">
-                        <i class="fa-solid" [class.fa-chevron-down]="!IsItemExpanded(item.testRunID)"
-                           [class.fa-chevron-up]="IsItemExpanded(item.testRunID)"></i>
-                      </button>
-                    </div>
-                  </div>
-
-                  @if (IsItemExpanded(item.testRunID)) {
+                  </ng-template>
+                  <ng-template mjAccordionActions>
+                    <span class="reason-badge" [class]="'reason-' + item.reason">
+                      @if (item.reason === 'no-feedback') {
+                        <i class="fa-solid fa-comment-slash"></i> No Feedback
+                      } @else if (item.reason === 'high-score-failed') {
+                        <i class="fa-solid fa-triangle-exclamation"></i> Score Mismatch
+                      } @else {
+                        <i class="fa-solid fa-circle-question"></i> Needs Verification
+                      }
+                    </span>
+                  </ng-template>
+                  <ng-template mjAccordionBody>
                     <div class="review-form-panel">
                       <!-- Rating -->
                       <div class="form-section">
@@ -212,8 +220,8 @@ interface ReviewFormState {
                         </button>
                       </div>
                     </div>
-                  }
-                </div>
+                  </ng-template>
+                </mj-accordion-panel>
               }
             </div>
           }
@@ -243,11 +251,9 @@ interface ReviewFormState {
           </div>
 
           @if (FilteredHistoryItems.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-folder-open"></i>
-              <h3>No reviewed items</h3>
-              <p>Reviewed tests will appear here once feedback is submitted.</p>
-            </div>
+            <mj-empty-state Icon="fa-solid fa-folder-open"
+              Title="No reviewed items"
+              Message="Reviewed tests will appear here once feedback is submitted." />
           } @else {
             <div class="history-list">
               @for (item of FilteredHistoryItems; track item.id) {
@@ -322,15 +328,15 @@ interface ReviewFormState {
               Measures how often human reviewers agree with automated evaluation scores.
             </p>
             @if (AgreementRate < 70) {
-              <div class="calibration-warning">
-                <i class="fa-solid fa-triangle-exclamation"></i>
+              <mj-alert Variant="warning">
                 Low agreement may indicate evaluation criteria need refinement.
-              </div>
+              </mj-alert>
             }
           </div>
         </div>
       </div>
     </div>
+    </ng-template>
   `,
   styles: [`
     :host {
@@ -546,31 +552,10 @@ interface ReviewFormState {
       overflow-y: auto;
     }
 
-    .queue-item {
-      border-bottom: 1px solid var(--mj-bg-surface-sunken);
-      transition: background 0.2s ease;
-    }
-
-    .queue-item.expanded {
-      background: var(--mj-bg-surface-card);
-    }
-
-    .queue-item:last-child {
-      border-bottom: none;
-    }
-
-    .queue-item-header {
-      padding: 16px 20px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      cursor: pointer;
-      transition: background 0.2s ease;
-    }
-
-    .queue-item-header:hover {
-      background: color-mix(in srgb, var(--mj-brand-primary) 4%, var(--mj-bg-surface));
-    }
+    /* Queue items migrated to <mj-accordion-panel> — the panel owns the row
+       chrome (border, hover, expanded state) and the chevron toggle, so the
+       bespoke .queue-item / .queue-item-header / .expand-toggle styles were
+       removed. */
 
     .item-info {
       flex: 1;
@@ -602,12 +587,8 @@ interface ReviewFormState {
       gap: 5px;
     }
 
-    .item-actions-area {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-shrink: 0;
-    }
+    /* .item-actions-area removed — the reason badge now lives in the accordion's
+       [mjAccordionActions] slot, which provides its own flex container. */
 
     .reason-badge {
       display: inline-flex;
@@ -634,26 +615,14 @@ interface ReviewFormState {
       color: var(--mj-status-warning);
     }
 
-    .expand-toggle {
-      background: none;
-      border: none;
-      color: var(--mj-text-disabled);
-      cursor: pointer;
-      padding: 8px;
-      border-radius: 6px;
-      font-size: 14px;
-      transition: all 0.2s ease;
-    }
+    /* .expand-toggle removed — the bespoke chevron was replaced by
+       <mj-accordion-panel>'s built-in chevron. */
 
-    .expand-toggle:hover {
-      background: var(--mj-border-default);
-      color: var(--mj-text-muted);
-    }
-
-    /* Review Form */
+    /* Review Form — rendered in the accordion body ([FlushBody]="true"), so it
+       supplies its own padding; the header/body separator is owned by the
+       accordion (border-top removed to avoid a doubled line). */
     .review-form-panel {
       padding: 20px 20px 20px 36px;
-      border-top: 1px solid var(--mj-border-default);
       background: var(--mj-bg-surface);
     }
 
@@ -1011,31 +980,6 @@ interface ReviewFormState {
       white-space: normal;
     }
 
-    /* Empty State */
-    .empty-state {
-      padding: 60px 20px;
-      text-align: center;
-    }
-
-    .empty-state i {
-      font-size: 52px;
-      margin-bottom: 16px;
-      color: var(--mj-status-success);
-    }
-
-    .empty-state h3 {
-      font-size: 18px;
-      color: var(--mj-text-primary);
-      margin: 0 0 8px 0;
-      font-weight: 600;
-    }
-
-    .empty-state p {
-      font-size: 14px;
-      color: var(--mj-text-disabled);
-      margin: 0;
-    }
-
     /* Calibration Section */
     .calibration-section {
       background: var(--mj-bg-surface);
@@ -1105,34 +1049,9 @@ interface ReviewFormState {
       line-height: 1.6;
     }
 
-    .calibration-warning {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 16px;
-      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
-      border: 1px solid var(--mj-status-warning);
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--mj-status-warning);
-    }
 
-    .calibration-warning i {
-      color: var(--mj-status-warning);
-      font-size: 16px;
-      flex-shrink: 0;
-    }
-
-    /* Success toast animation */
-    .queue-item {
-      animation: fadeIn 0.2s ease;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-4px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+    /* (Removed .queue-item fadeIn animation — the queue-item wrapper no longer
+       exists; the accordion panel owns its own reveal.) */
 
     /* Responsive */
     @media (max-width: 1024px) {
@@ -1164,16 +1083,6 @@ interface ReviewFormState {
         font-size: 22px;
       }
 
-      .queue-item-header {
-        flex-wrap: wrap;
-      }
-
-      .item-actions-area {
-        width: 100%;
-        justify-content: flex-end;
-        margin-top: 8px;
-      }
-
       .correctness-row {
         flex-direction: column;
       }
@@ -1197,6 +1106,8 @@ interface ReviewFormState {
 })
 export class TestingReviewComponent implements OnInit, OnDestroy {
   @Input() initialState: Record<string, unknown> | null = null;
+  /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
+  @Input() HideToolbar = false;
   @Output() stateChange = new EventEmitter<Record<string, unknown>>();
 
   private destroy$ = new Subject<void>();
@@ -1281,6 +1192,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
       .subscribe(items => {
         this.PendingItems = items;
         this.PendingCount = items.length;
+        this.emitState();
         this.cdr.markForCheck();
       });
 
@@ -1288,6 +1200,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(metrics => {
         this.Metrics = metrics;
+        this.emitState();
         this.cdr.markForCheck();
       });
 
@@ -1319,12 +1232,20 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
     return UUIDsEqual(this.ExpandedItemId, testRunID);
   }
 
-  ToggleExpand(testRunID: string): void {
-    if (UUIDsEqual(this.ExpandedItemId, testRunID)) {
-      this.ExpandedItemId = null;
-    } else {
+  /**
+   * Accordion ExpandedChange handler for a review queue item. Single-expand
+   * (radio-like) model: expanding an item makes it the sole open one (the
+   * template's `IsItemExpanded` binding collapses the prior one) and resets the
+   * review form for the newly-opened item; collapsing the open item clears it.
+   * OnPush — drives change detection. Preserves the original ToggleExpand side
+   * effect (resetForm on open).
+   */
+  OnItemExpandedChange(testRunID: string, expanded: boolean): void {
+    if (expanded) {
       this.ExpandedItemId = testRunID;
       this.resetForm();
+    } else if (UUIDsEqual(this.ExpandedItemId, testRunID)) {
+      this.ExpandedItemId = null;
     }
     this.cdr.markForCheck();
   }
@@ -1390,6 +1311,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
     const target = event.target as HTMLInputElement;
     this.HistorySearchText = target.value;
     this.applyHistoryFilters();
+    this.emitState();
     this.cdr.markForCheck();
   }
 
@@ -1486,6 +1408,15 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
   }
 
   private emitState(): void {
-    this.stateChange.emit({ viewMode: this.CurrentView });
+    this.stateChange.emit({
+      viewMode: this.CurrentView,
+      // Richer state for the dashboard's agent context (queue depth, reviewed
+      // count, avg human rating, agreement rate, history search).
+      pendingCount: this.PendingCount,
+      reviewedCount: this.Metrics?.humanReviewedCount ?? 0,
+      averageHumanRating: this.Metrics?.humanAvgRating ?? 0,
+      agreementRate: this.Metrics?.agreementRate ?? 0,
+      historySearchText: this.HistorySearchText
+    });
   }
 }

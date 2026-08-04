@@ -1,0 +1,80 @@
+{
+  "name": "MJFormFields",
+  "title": "Form Fields (Sectioned)",
+  "description": "Renders an entity's complete editable field set, grouped into sections by EntityField.Category / GeneratedFormSectionType — the same sectioned layout (e.g. 'Personal Information', 'Professional Profile', collapsed 'System Metadata') as MemberJunction's generated (CodeGen) forms. Each field renders through MJFormField, so foreign keys become searchable dropdowns, value lists become selects, etc. Drop this into a form's edit mode and every field is present, sectioned, and enhanced with no per-field hand coding.",
+  "type": "form",
+  "location": "embedded",
+  "functionalRequirements": "Read the entity's fields from metadata and lay them out exactly like CodeGen forms:\n- Skip computed/virtual fields.\n- Route by GeneratedFormSectionType: 'Top' fields render above the sections (no heading); 'Category' fields group under their Category (default 'Details'); others fall into 'Details'.\n- Primary-key and audit fields (__mj_*, CreatedAt, UpdatedAt) go into a collapsed 'System Metadata' section, shown read-only.\n- Sections are collapsible; collapse state persists via savedUserSettings.\n- Every non-system field is rendered (no hand-picking).",
+  "technicalDesign": "Resolves the entity from utilities.md.Entities and groups its Fields (sorted by Sequence) using field.Category + field.GeneratedFormSectionType, mirroring buildDefaultFormScaffold. Renders each field via the MJFormField dependency, passing value = draft[field] ?? record[field] and emitting changes via onFieldChange(fieldName, value). The component is presentational + controlled: the parent form owns draft state and the save lifecycle; this component never mutates the record or writes via BaseEntity/Metadata. No top-level imports; React is the injected global.",
+  "dataRequirements": {
+    "mode": "props",
+    "description": "Receives the record + draft through props; resolves field metadata (Category, section type, FK, value lists) via utilities.md."
+  },
+  "properties": [
+    {
+      "name": "entityName",
+      "type": "string",
+      "description": "Name of the bound entity (for metadata lookup).",
+      "required": true
+    },
+    {
+      "name": "record",
+      "type": "Record<string, any>",
+      "description": "The bound record; per-field value fallback.",
+      "required": true
+    },
+    {
+      "name": "draft",
+      "type": "Record<string, any>",
+      "description": "Map of field name -> edited value (the form's draft state). Overrides record values per field.",
+      "required": false
+    },
+    {
+      "name": "mode",
+      "type": "'view' | 'edit' | 'create'",
+      "description": "Render mode passed through to each field.",
+      "required": false,
+      "defaultValue": "view",
+      "possibleValues": ["view", "edit", "create"]
+    },
+    {
+      "name": "editMode",
+      "type": "boolean",
+      "description": "Alternative to `mode`.",
+      "required": false
+    },
+    {
+      "name": "excludeFields",
+      "type": "Array<string>",
+      "description": "Field names to omit (e.g. fields already featured in a custom header).",
+      "required": false
+    },
+    {
+      "name": "showSystemSection",
+      "type": "boolean",
+      "description": "Whether to render the collapsed 'System Metadata' section (PK + audit fields, read-only).",
+      "required": false,
+      "defaultValue": true
+    }
+  ],
+  "events": [
+    {
+      "name": "fieldChange",
+      "description": "Fired when any field is edited. Wire it to the form's draft state.",
+      "parameters": [
+        { "name": "fieldName", "type": "string", "description": "The field that changed." },
+        { "name": "value", "type": "any", "description": "The new value." }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "MJFormField",
+      "namespace": "Generic/UI/Form",
+      "location": "registry",
+      "description": "Per-field enhanced input (FK search, value lists, dates, validation, links)."
+    }
+  ],
+  "code": "@file:../../code/generic/mj-form-fields.js",
+  "exampleUsage": "<MJFormFields\n  entityName={entityName}\n  record={record}\n  draft={draft}\n  mode={mode}\n  onFieldChange={(field, value) => setField(field, value)}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n  savedUserSettings={savedUserSettings}\n  onSaveUserSettings={onSaveUserSettings}\n/>"
+}

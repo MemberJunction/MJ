@@ -5,7 +5,7 @@
 **Author**: Architecture Team
 **Target Version**: Skyway v1.0
 **Repository**: https://github.com/MemberJunction/skyway
-**Related**: [MJ Multi-Database Platform Support](./multi-database-platform-support.md)
+**Related**: [MJ Multi-Database Platform Support](complete/postgres/multi-database-platform-support.md)
 
 ---
 

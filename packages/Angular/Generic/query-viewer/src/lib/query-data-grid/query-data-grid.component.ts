@@ -13,9 +13,8 @@ import {
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { RunQuery, RunQueryParams, Metadata, QueryInfo, QueryFieldInfo } from '@memberjunction/core';
+import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { RunQueryResult } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import {
     ColDef,
@@ -111,13 +110,13 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     // Inputs
     // ========================================
 
-    private _queryInfo: QueryInfo | null = null;
+    private _queryInfo: MJQueryEntityExtended | null = null;
     /**
      * The QueryInfo metadata for the query being displayed.
      * Used to derive column configurations and entity linking.
      */
     @Input()
-    set QueryInfo(value: QueryInfo | null) {
+    set QueryInfo(value: MJQueryEntityExtended | null) {
         const previous = this._queryInfo;
         // Flush state for the previous query before switching
         if (previous && value !== previous) {
@@ -128,7 +127,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
             this.onQueryInfoChanged();
         }
     }
-    get QueryInfo(): QueryInfo | null {
+    get QueryInfo(): MJQueryEntityExtended | null {
         return this._queryInfo;
     }
 
@@ -154,12 +153,31 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     }
 
     private _data: Record<string, unknown>[] = [];
+
+    /**
+     * Per-row synthetic identity for rows that have no natural key column, so the
+     * `getRowId` fallback can never return duplicate ids (ag-Grid silently merges
+     * rows that share an id). Keyed by the row object reference; entries are added
+     * as Data is assigned. A WeakMap so it never retains rows past their lifetime.
+     */
+    private _syntheticRowIds = new WeakMap<object, string>();
+    private _syntheticRowIdSeq = 0;
+
     /**
      * The query result data to display in the grid.
      */
     @Input()
     set Data(value: Record<string, unknown>[]) {
         this._data = value || [];
+
+        // Assign a stable synthetic id to each row up front, so the getRowId
+        // fallback (used only when a row has no natural key column) is
+        // collision-proof — rows with identical column values must NOT be merged.
+        for (const row of this._data) {
+            if (row && !this._syntheticRowIds.has(row)) {
+                this._syntheticRowIds.set(row, `mjrow_${this._syntheticRowIdSeq++}`);
+            }
+        }
 
         // If we have data but no columns from metadata or explicit configs, build from data
         if (this._data.length > 0 && this.Columns.length === 0 && !this._columnConfigs) {
@@ -291,6 +309,18 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
 
     /** Page size for server-side paging */
     @Input() PageSize: number = 100;
+
+    /**
+     * Optional provider that returns the FULL result set for export. When the grid is server-side
+     * paged, `Data` only holds the current page (default 100 rows), so exporting `Data` would silently
+     * cap the export at the page size (bug B3/C1). A host that owns the query (with its parameters) can
+     * supply this callback to fetch every matching row on demand; the grid awaits it when the user
+     * exports without an explicit row selection. When not provided, export falls back to the loaded page.
+     */
+    @Input() ExportDataProvider: (() => Promise<Record<string, unknown>[]>) | null = null;
+
+    /** True while an export is fetching the full result set via ExportDataProvider. */
+    public IsPreparingExport: boolean = false;
 
     /** Fired when the user navigates to a different page */
     @Output() PageChange = new EventEmitter<PageChangeEvent>();
@@ -424,7 +454,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         }
 
         // Build columns from query fields
-        this.Columns = buildColumnsFromQueryFields(this._queryInfo.Fields);
+        this.Columns = buildColumnsFromQueryFields(this._queryInfo.QueryFields);
 
         // Apply initial state if provided via prop (takes precedence)
         if (this.InitialGridState) {
@@ -998,10 +1028,17 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     /**
      * Opens the export dialog with current grid data
      */
-    public OpenExportDialog(): void {
+    public async OpenExportDialog(): Promise<void> {
         if (!this._data.length) return;
 
-        const data = this.getExportData();
+        this.IsPreparingExport = true;
+        this.cdr.detectChanges();
+        let data: ExportData;
+        try {
+            data = await this.resolveExportData();
+        } finally {
+            this.IsPreparingExport = false;
+        }
         const columns = this.getExportColumns();
         const fileName = this._queryInfo?.Name || 'query-export';
 
@@ -1032,7 +1069,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
      * Export grid data directly without showing dialog
      */
     public async Export(options?: Partial<ExportOptions>, download: boolean = true): Promise<ExportResult> {
-        const data = this.getExportData();
+        const data = await this.resolveExportData();
         const columns = this.getExportColumns();
         const fileName = options?.fileName || this._queryInfo?.Name || 'query-export';
 
@@ -1054,12 +1091,26 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Get the current grid data formatted for export
+     * Resolves the rows to export. An explicit row selection always wins. Otherwise, if a host
+     * supplied an ExportDataProvider, the full result set is fetched (so export isn't silently
+     * capped at the current page — bug B3/C1); if it isn't supplied or the fetch yields nothing,
+     * export falls back to the loaded page (`_data`).
      */
-    private getExportData(): ExportData {
-        // Use selected rows if any, otherwise all data
-        const rows = this.SelectedRows.length > 0 ? this.SelectedRows : this._data;
-        return rows as ExportData;
+    private async resolveExportData(): Promise<ExportData> {
+        if (this.SelectedRows.length > 0) {
+            return this.SelectedRows as ExportData;
+        }
+        if (this.ExportDataProvider) {
+            try {
+                const allRows = await this.ExportDataProvider();
+                if (allRows && allRows.length > 0) {
+                    return allRows as ExportData;
+                }
+            } catch {
+                // Fall through to the loaded page on any fetch failure.
+            }
+        }
+        return this._data as ExportData;
     }
 
     /**
@@ -1137,13 +1188,11 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     }
 
     public GetRowId = (params: GetRowIdParams): string => {
-        // Use data index as ID since query results don't have a guaranteed unique key
-        // We use JSON stringify on a subset of the data to create a deterministic key
         const data = params.data as Record<string, unknown>;
-        if (!data) return String(Math.random());
+        if (!data) return `mjrow_${this._syntheticRowIdSeq++}`;
 
-        // Try to find a unique identifier in the data
-        // Common patterns: ID, Id, id, RowNumber, __row_index
+        // Prefer a natural unique key when the result exposes one — this keeps row
+        // identity (and selection) stable across data refreshes.
         const idFields = ['ID', 'Id', 'id', 'RowNumber', 'RowNum', '__row_index'];
         for (const field of idFields) {
             if (data[field] !== undefined && data[field] !== null) {
@@ -1151,9 +1200,20 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
             }
         }
 
-        // Fallback: use first few fields to create a hash-like key
-        const keys = Object.keys(data).slice(0, 3);
-        return keys.map(k => String(data[k] ?? '')).join('_');
+        // No natural key — use the per-row synthetic id assigned when Data was set.
+        // The previous fallback hashed only the first 3 columns, so any rows that
+        // matched on those columns collided to the same id and ag-Grid dropped all
+        // but one (silently collapsing aggregate/GROUP BY results, or any query
+        // without an ID column). A per-row synthetic id can never collide.
+        // Trade-off: the id is per-object (not value-derived), so an id-less row
+        // loses its selection across a data refresh — acceptable for query results,
+        // where NOT dropping rows matters far more than preserving a selection.
+        let synthetic = this._syntheticRowIds.get(data);
+        if (!synthetic) {
+            synthetic = `mjrow_${this._syntheticRowIdSeq++}`;
+            this._syntheticRowIds.set(data, synthetic);
+        }
+        return synthetic;
     };
 
     // ========================================

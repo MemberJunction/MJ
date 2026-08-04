@@ -18,7 +18,7 @@ export class MJTestSuiteFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'hierarchy', sectionName: 'Hierarchy', isExpanded: true },
             { sectionKey: 'suiteIdentification', sectionName: 'Suite Identification', isExpanded: true },
-            { sectionKey: 'executionConfiguration', sectionName: 'Execution Configuration', isExpanded: false },
+            { sectionKey: 'executionConfiguration', sectionName: 'Execution Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTestSuites', sectionName: 'Test Suites', isExpanded: false },
             { sectionKey: 'mJTestSuiteRuns', sectionName: 'Test Suite Runs', isExpanded: false },

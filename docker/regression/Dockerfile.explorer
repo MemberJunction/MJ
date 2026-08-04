@@ -1,0 +1,63 @@
+# MemberJunction Explorer — Test Environment
+# Multi-stage build: builds Angular AOT app, then serves via nginx.
+# nginx proxies /api/ to mjapi:4000 so the browser never needs to resolve Docker hostnames.
+
+# ─── Stage 1: Build ────────────────────────────────────────────────────────
+FROM node:24-slim AS builder
+
+ARG AUTH0_DOMAIN
+ARG AUTH0_CLIENTID
+
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package.json package-lock.json turbo.json tsconfig.angular.json tsconfig.server.json ./
+COPY packages/ ./packages/
+COPY metadata/ ./metadata/
+
+# Overlay generated entity forms produced by the form-generator service.
+# `npm run regression:build` invokes gen-forms before `docker compose build`
+# whenever .docker-generated/ is missing, so by the time these COPYs run the
+# directories always exist with real content:
+#   MJExplorer-forms     → *.form.component.ts (Angular form components)
+#   GeneratedEntities    → entity subclass TypeScript exports the forms import
+COPY docker/regression/.docker-generated/MJExplorer-forms/ ./packages/MJExplorer/src/app/generated/
+COPY docker/regression/.docker-generated/GeneratedEntities/ ./packages/GeneratedEntities/src/generated/
+
+# Bake-time helpers (gen-environment-ts.cjs lives here)
+COPY docker/regression/scripts/ ./docker/regression/scripts/
+
+RUN NODE_OPTIONS=--max-old-space-size=8192 npm install
+
+# Generate environment.ts — GRAPHQL_URI must be an absolute URL because
+# graphql-request v7+ validates with new URL() which rejects relative paths.
+# nginx proxies /api/ to mjapi:4000.
+RUN AUTH0_DOMAIN="$AUTH0_DOMAIN" AUTH0_CLIENTID="$AUTH0_CLIENTID" \
+    node docker/regression/scripts/gen-environment-ts.cjs
+
+RUN NODE_OPTIONS=--max-old-space-size=16384 npm run build:explorer
+
+# ─── Stage 2: nginx serves static files + proxies GraphQL to mjapi ─────────
+FROM nginx:alpine
+
+COPY --from=builder /app/packages/MJExplorer/dist/MJExplorer/browser /usr/share/nginx/html
+
+# Bake the ephemeral-workspace flag into the static index.html so the
+# regression Explorer never persists or restores workspace (tab) state.
+# This makes each test's fresh BrowserContext start from a clean default
+# workspace, eliminating cross-test tab leakage that would otherwise occur
+# under a shared test user. WorkspaceStateManager reads this flag from
+# `window.__MJ_EPHEMERAL_WORKSPACE__` and short-circuits load + persist.
+# Production Explorer images do NOT inject this flag — behavior is unchanged.
+RUN sed -i 's|<head>|<head><script>window.__MJ_EPHEMERAL_WORKSPACE__=true;</script>|' /usr/share/nginx/html/index.html
+
+# nginx config: SPA routing + reverse proxy for GraphQL API.
+# The config maintains a $connection_upgrade map (Connection: "upgrade" for
+# WebSocket, "close" for HTTP) so GraphQL subscriptions work end-to-end.
+COPY docker/regression/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 4200
+
+CMD ["nginx", "-g", "daemon off;"]

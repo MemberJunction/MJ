@@ -153,10 +153,10 @@ export class QdrantDatabase extends VectorDBBase {
                 host: qdrantUrl,
             };
 
-            return this.WrapSuccessResponse(description);
+            return this.wrapSuccessResponse(description);
         } catch (ex) {
             LogError('Error getting Qdrant collection', undefined, ex);
-            return this.WrapFailureResponse(`Failed to get collection: ${params.id}`);
+            return this.wrapFailureResponse(`Failed to get collection: ${params.id}`);
         }
     }
 
@@ -182,10 +182,10 @@ export class QdrantDatabase extends VectorDBBase {
                 },
                 ...(params.additionalParams || {}),
             });
-            return this.WrapSuccessResponse(null);
+            return this.wrapSuccessResponse(null);
         } catch (ex) {
             LogError('Error creating Qdrant collection', undefined, ex);
-            return this.WrapFailureResponse(`Failed to create collection: ${params.id}`);
+            return this.wrapFailureResponse(`Failed to create collection: ${params.id}`);
         }
     }
 
@@ -199,10 +199,10 @@ export class QdrantDatabase extends VectorDBBase {
     public async DeleteIndex(params: BaseRequestParams): Promise<BaseResponse> {
         try {
             await this._client.deleteCollection(params.id);
-            return this.WrapSuccessResponse(null);
+            return this.wrapSuccessResponse(null);
         } catch (ex) {
             LogError('Error deleting Qdrant collection', undefined, ex);
-            return this.WrapFailureResponse(`Failed to delete collection: ${params.id}`);
+            return this.wrapFailureResponse(`Failed to delete collection: ${params.id}`);
         }
     }
 
@@ -220,10 +220,10 @@ export class QdrantDatabase extends VectorDBBase {
             await this._client.updateCollection(params.id, {
                 ...(params.data || {}),
             });
-            return this.WrapSuccessResponse(null);
+            return this.wrapSuccessResponse(null);
         } catch (ex) {
             LogError('Error updating Qdrant collection', undefined, ex);
-            return this.WrapFailureResponse(`Failed to update collection: ${params.id}`);
+            return this.wrapFailureResponse(`Failed to update collection: ${params.id}`);
         }
     }
 
@@ -254,7 +254,7 @@ export class QdrantDatabase extends VectorDBBase {
         try {
             const collectionName = this.ExtractCollectionName(params);
             if (!collectionName) {
-                return this.WrapFailureResponse('Collection name (id) is required for QueryIndex');
+                return this.wrapFailureResponse('Collection name (id) is required for QueryIndex');
             }
 
             const limit = params.topK || 10;
@@ -286,11 +286,11 @@ export class QdrantDatabase extends VectorDBBase {
                     with_vector: true,
                 });
                 if (points.length === 0) {
-                    return this.WrapFailureResponse(`Point not found: ${params.id}`);
+                    return this.wrapFailureResponse(`Point not found: ${params.id}`);
                 }
                 const pointVector = points[0].vector;
                 if (!pointVector || !Array.isArray(pointVector)) {
-                    return this.WrapFailureResponse('Point does not have a vector for querying');
+                    return this.wrapFailureResponse('Point does not have a vector for querying');
                 }
                 const response = await this._client.query(collectionName, {
                     query: pointVector as number[],
@@ -301,7 +301,7 @@ export class QdrantDatabase extends VectorDBBase {
                 });
                 scoredPoints = response.points as QdrantScoredPoint[];
             } else {
-                return this.WrapFailureResponse('Either vector or id is required for QueryIndex');
+                return this.wrapFailureResponse('Either vector or id is required for QueryIndex');
             }
 
             // Map Qdrant results to our standard format
@@ -312,13 +312,13 @@ export class QdrantDatabase extends VectorDBBase {
                 score: r.score,
             }));
 
-            return this.WrapSuccessResponse({
+            return this.wrapSuccessResponse({
                 matches,
                 namespace: '',
             });
         } catch (ex) {
             LogError('Error querying Qdrant collection', undefined, ex);
-            return this.WrapFailureResponse('Failed to query collection');
+            return this.wrapFailureResponse('Failed to query collection');
         }
     }
 
@@ -346,7 +346,7 @@ export class QdrantDatabase extends VectorDBBase {
     public async CreateRecords(records: VectorRecord[], indexName?: string): Promise<BaseResponse> {
         try {
             if (!indexName) {
-                return this.WrapFailureResponse('Collection name (indexName) is required for CreateRecords');
+                return this.wrapFailureResponse('Collection name (indexName) is required for CreateRecords');
             }
 
             const points = records.map((r) => ({
@@ -356,10 +356,10 @@ export class QdrantDatabase extends VectorDBBase {
             }));
 
             await this._client.upsert(indexName, { points });
-            return this.WrapSuccessResponse(null);
+            return this.wrapSuccessResponse(null);
         } catch (ex) {
             LogError('Error creating records in Qdrant', undefined, ex);
-            return this.WrapFailureResponse('Failed to create records');
+            return this.wrapFailureResponse('Failed to create records');
         }
     }
 
@@ -392,7 +392,7 @@ export class QdrantDatabase extends VectorDBBase {
             const ids: string[] = params.data?.ids || [params.id];
 
             if (!collectionName) {
-                return this.WrapFailureResponse('collectionName is required in params.data');
+                return this.wrapFailureResponse('collectionName is required in params.data');
             }
 
             const points = await this._client.retrieve(collectionName, {
@@ -407,10 +407,10 @@ export class QdrantDatabase extends VectorDBBase {
                 metadata: (p.payload || {}) as Record<string, string | boolean | number | string[]>,
             }));
 
-            return this.WrapSuccessResponse(records);
+            return this.wrapSuccessResponse(records);
         } catch (ex) {
             LogError('Error getting records from Qdrant', undefined, ex);
-            return this.WrapFailureResponse('Failed to get records');
+            return this.wrapFailureResponse('Failed to get records');
         }
     }
 
@@ -449,7 +449,7 @@ export class QdrantDatabase extends VectorDBBase {
             const collectionName = data.data?.collectionName as string | undefined;
 
             if (!collectionName) {
-                return this.WrapFailureResponse('collectionName is required in records.data for UpdateRecords');
+                return this.wrapFailureResponse('collectionName is required in records.data for UpdateRecords');
             }
 
             const recordsList: UpdateOptions[] = data.data?.records || [records];
@@ -474,10 +474,10 @@ export class QdrantDatabase extends VectorDBBase {
                 });
             }
 
-            return this.WrapSuccessResponse(null);
+            return this.wrapSuccessResponse(null);
         } catch (ex) {
             LogError('Error updating records in Qdrant', undefined, ex);
-            return this.WrapFailureResponse('Failed to update records');
+            return this.wrapFailureResponse('Failed to update records');
         }
     }
 
@@ -505,17 +505,17 @@ export class QdrantDatabase extends VectorDBBase {
     public async DeleteRecords(records: VectorRecord[], indexName?: string): Promise<BaseResponse> {
         try {
             if (!indexName) {
-                return this.WrapFailureResponse('Collection name (indexName) is required for DeleteRecords');
+                return this.wrapFailureResponse('Collection name (indexName) is required for DeleteRecords');
             }
 
             const ids = records.map((r) => r.id);
             await this._client.delete(indexName, {
                 points: ids,
             });
-            return this.WrapSuccessResponse(null);
+            return this.wrapSuccessResponse(null);
         } catch (ex) {
             LogError('Error deleting records from Qdrant', undefined, ex);
-            return this.WrapFailureResponse('Failed to delete records');
+            return this.wrapFailureResponse('Failed to delete records');
         }
     }
 
@@ -546,10 +546,10 @@ export class QdrantDatabase extends VectorDBBase {
                 });
             }
 
-            return this.WrapSuccessResponse(null);
+            return this.wrapSuccessResponse(null);
         } catch (ex) {
             LogError('Error deleting all records from Qdrant', undefined, ex);
-            return this.WrapFailureResponse('Failed to delete all records');
+            return this.wrapFailureResponse('Failed to delete all records');
         }
     }
 
@@ -691,19 +691,4 @@ export class QdrantDatabase extends VectorDBBase {
         return undefined;
     }
 
-    private WrapSuccessResponse(data: unknown): BaseResponse {
-        return {
-            success: true,
-            message: '',
-            data: data,
-        };
-    }
-
-    private WrapFailureResponse(message?: string): BaseResponse {
-        return {
-            success: false,
-            message: message || 'An error occurred',
-            data: null,
-        };
-    }
 }

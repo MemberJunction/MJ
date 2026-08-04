@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FormControl } from '@angular/forms';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { RunView } from '@memberjunction/core';
@@ -38,7 +39,7 @@ export interface ActionWithDetails extends MJActionEntity {
   templateUrl: './action-gallery.component.html',
   styleUrls: ['./action-gallery.component.css']
 })
-export class ActionGalleryComponent implements OnInit, OnDestroy {
+export class ActionGalleryComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @Input() config: ActionGalleryConfig = {
     selectionMode: false,
     multiSelect: false,
@@ -80,7 +81,8 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
   totalActions = 0;
   categoryCounts = new Map<string, number>();
   
-  constructor() {}
+  constructor() {
+        super();}
   
   ngOnInit() {
     // Set initial view mode
@@ -123,7 +125,7 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
     this.isLoading$.next(true);
     
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       
       // Load actions and categories in parallel
       const [actionsResult, categoriesResult] = await rv.RunViews([
@@ -312,7 +314,7 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
   }
   
   async loadActionDetails(action: ActionWithDetails) {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     
     try {
       const [paramsResult, resultCodesResult] = await rv.RunViews([
@@ -387,8 +389,12 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
     this.actionTestRequested.emit(action);
   }
   
+  // Backs the no-results empty-state "Clear Filters" CTA: resets every dimension
+  // the list narrows on — search AND the selected category — so the CTA actually
+  // returns results instead of appearing to do nothing.
   clearSearch() {
     this.searchControl.reset();
+    this.selectedCategory$.next('all');
     if (this.searchInput) {
       this.searchInput.nativeElement.focus();
     }

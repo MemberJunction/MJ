@@ -12,10 +12,15 @@ declare module '@memberjunction/ng-explorer-core' {
     export const ChatCollectionsResource: unknown;
     export const ChatConversationsResource: unknown;
     export const ChatTasksResource: unknown;
+    export const ConversationFeedbackResource: unknown;
     export const DashboardResource: unknown;
     export const EntityRecordResource: unknown;
     export const ListDetailResource: unknown;
     export const NotificationsResource: unknown;
+    export const OmnibarAgentProvider: unknown;
+    export const OmnibarCommandProvider: unknown;
+    export const OmnibarRecordProvider: unknown;
+    export const OmnibarSearchProvider: unknown;
     export const QueryResource: unknown;
     export const SearchResultsResource: unknown;
     export const UserViewResource: unknown;

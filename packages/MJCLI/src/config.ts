@@ -33,6 +33,7 @@ const DEFAULT_CLI_CONFIG = {
   baselineOnMigrate: true,
   transactionMode: 'per-migration' as const,
   mjRepoUrl: MJ_REPO_URL,
+  mjRepoBranch: 'main',
   migrationsLocation: 'filesystem:./migrations',
 };
 
@@ -59,7 +60,10 @@ const schemaPlaceholderSchema = z.object({
 // Schema for dynamic package entries managed by `mj app install/remove`
 const dynamicPackageEntrySchema = z.object({
   PackageName: z.string(),
-  StartupExport: z.string(),
+  // Server entries carry a named startup export invoked after import. Client
+  // entries are pure side-effect imports (their @RegisterClass decorators fire on
+  // load), so StartupExport is optional and unset for the client array.
+  StartupExport: z.string().optional(),
   AppName: z.string(),
   Enabled: z.boolean().default(true),
 });
@@ -81,9 +85,9 @@ const openAppsConfigSchema = z.object({
     overrideApps: z.array(z.string()).default([]),
   }).optional(),
   config: z.record(z.string(), z.unknown()).optional(),
-  /** Path to server workspace relative to repo root (default: 'packages/MJAPI') */
+  /** Path to server workspace relative to repo root (default: auto-detected — 'packages/MJAPI', else 'apps/MJAPI') */
   serverPackagePath: z.string().optional(),
-  /** Path to client workspace relative to repo root (default: 'packages/MJExplorer') */
+  /** Path to client workspace relative to repo root (default: auto-detected — 'packages/MJExplorer', else 'apps/MJExplorer') */
   clientPackagePath: z.string().optional(),
   /** Package manager to use: 'npm' | 'pnpm' | 'yarn' (default: auto-detected from lockfile) */
   packageManager: z.enum(['npm', 'pnpm', 'yarn']).optional(),
@@ -94,15 +98,17 @@ const openAppsConfigSchema = z.object({
     Path: z.string(),
     Role: z.enum(['server', 'client']),
   })).optional(),
-  /** File subpath within client workspace for bootstrap file */
-  clientBootstrapSubpath: z.string().optional(),
   /** Extra placeholders merged into migration SQL substitution (e.g. { mjSchema: '__mj' }) */
   migrationPlaceholders: z.record(z.string(), z.string()).optional(),
 }).optional();
 
-// Schema for dynamic packages section
+// Schema for dynamic packages section.
+// `server` is consumed by @memberjunction/server-bootstrap at MJAPI boot (B1).
+// `client` is consumed by `mj codegen manifest --open-app-client-bootstrap`, which
+// appends a side-effect import per entry to MJExplorer's class-registrations manifest.
 const dynamicPackagesSchema = z.object({
   server: z.array(dynamicPackageEntrySchema).optional(),
+  client: z.array(dynamicPackageEntrySchema).optional(),
 }).optional();
 
 // Schema for database-dependent config (required fields)
@@ -120,10 +126,23 @@ const mjConfigSchema = z.object({
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
+  // Default branch fetched when no explicit tag is given. `main` is the published-code
+  // branch; `next` is integration-only and never a default migrate/install target.
+  mjRepoBranch: z.string().optional().default('main'),
+  // Concrete release tag pinned by `mj install` so a bare `mj migrate` (no --tag)
+  // targets the same version as the installed code. Absent for monorepo developers,
+  // who fall back to the local `migrationsLocation`.
+  mjRepoVersion: z.string().optional(),
   baselineVersion: z.string().optional(),
   baselineOnMigrate: z.boolean().optional().default(true),
   outOfOrder: z.boolean().optional().default(false),
   transactionMode: z.enum(['per-run', 'per-migration']).optional().default('per-migration'),
+  // Startup mode for engine pre-warm during provider bootstrap ('full' | 'task').
+  // CLI commands default to 'task' (no pre-warm; engines lazy-load on first touch);
+  // MJ_STARTUP_MODE overrides per invocation (highest precedence).
+  startup: z.object({
+    mode: z.enum(['full', 'task']).optional(),
+  }).optional(),
   SQLOutput: z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
   }).passthrough().optional(),
@@ -146,10 +165,19 @@ const mjConfigSchemaOptional = z.object({
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
+  mjRepoBranch: z.string().optional().default('main'),
+  // Concrete release tag pinned by `mj install` so a bare `mj migrate` (no --tag)
+  // targets the same version as the installed code. Absent for monorepo developers,
+  // who fall back to the local `migrationsLocation`.
+  mjRepoVersion: z.string().optional(),
   baselineVersion: z.string().optional(),
   baselineOnMigrate: z.boolean().optional().default(true),
   outOfOrder: z.boolean().optional().default(false),
   transactionMode: z.enum(['per-run', 'per-migration']).optional().default('per-migration'),
+  // Same startup section as the validated schema — see comment there.
+  startup: z.object({
+    mode: z.enum(['full', 'task']).optional(),
+  }).optional(),
   SQLOutput: z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
   }).passthrough().optional(),

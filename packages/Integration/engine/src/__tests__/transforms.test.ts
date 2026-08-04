@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { FieldMappingEngine } from '../FieldMappingEngine.js';
 import type { ExternalRecord } from '../types.js';
 import type { ICompanyIntegrationFieldMap } from '../entity-types.js';
@@ -729,6 +729,56 @@ describe('transforms', () => {
                 'Entity'
             );
             expect(resultHigh[0].MappedFields['Level']).toBe('high');
+        });
+
+        it('should compile an identical expression only once across a batch', () => {
+            // Use a fresh engine so the compile cache starts empty for this assertion.
+            const localEngine = new FieldMappingEngine();
+            const compileSpy = vi.spyOn(global, 'Function');
+            try {
+                const pipeline: TransformStep[] = [
+                    { Type: 'custom', Config: { Expression: 'value * 2' } },
+                ];
+                const records = Array.from({ length: 25 }, (_, i) => record({ Val: i }));
+                const result = localEngine.Apply(
+                    records,
+                    [fieldMap('Val', 'Out', pipeline)],
+                    'Entity'
+                );
+
+                // Every record still executes correctly...
+                expect(result.map(r => r.MappedFields['Out'])).toEqual(
+                    records.map((_, i) => i * 2)
+                );
+                // ...but the expression was compiled exactly once, not 25 times.
+                expect(compileSpy).toHaveBeenCalledTimes(1);
+            } finally {
+                compileSpy.mockRestore();
+            }
+        });
+
+        it('should compile a malformed expression only once, re-throwing from cache per record', () => {
+            const localEngine = new FieldMappingEngine();
+            const compileSpy = vi.spyOn(global, 'Function');
+            try {
+                const pipeline: TransformStep[] = [
+                    // Syntax error -> new Function throws at compile time.
+                    { Type: 'custom', Config: { Expression: 'value +' }, OnError: 'Null' },
+                ];
+                const records = Array.from({ length: 10 }, (_, i) => record({ Val: i }));
+                const result = localEngine.Apply(
+                    records,
+                    [fieldMap('Val', 'Out', pipeline)],
+                    'Entity'
+                );
+
+                // OnError: 'Null' is honored for every record (behavior preserved)...
+                expect(result.every(r => r.MappedFields['Out'] === null)).toBe(true);
+                // ...yet the failing expression was only compiled once, then served from cache.
+                expect(compileSpy).toHaveBeenCalledTimes(1);
+            } finally {
+                compileSpy.mockRestore();
+            }
         });
     });
 });

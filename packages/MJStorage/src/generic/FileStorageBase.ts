@@ -1,3 +1,5 @@
+import { Readable } from 'stream';
+
 /**
  * Represents the payload returned by the CreatePreAuthUploadUrl method.
  * This type contains the necessary information for uploading a file to a storage provider.
@@ -23,6 +25,61 @@ export type CreatePreAuthUploadUrlPayload = {
 export type GetObjectParams = {
   objectId?: string;
   fullPath?: string;
+};
+
+/**
+ * Inclusive byte range for a streaming read, modelled on the HTTP `Range` header
+ * (`bytes=Start-End`). The range is **inclusive** on both ends, matching HTTP
+ * Range / Content-Range semantics.
+ *
+ * @property Start - The first byte offset to return (0-based, inclusive).
+ * @property End - Optional. The last byte offset to return (inclusive). When omitted,
+ *                 the stream runs from `Start` to the end of the object (EOF).
+ */
+export type ByteRange = {
+  Start: number;
+  End?: number;
+};
+
+/**
+ * Parameters for the {@link FileStorageBase.GetObjectStream} operation.
+ *
+ * Mirrors {@link GetObjectParams} for object resolution — prefer `objectId`
+ * (provider-native key) to bypass slow path resolution, falling back to `fullPath`.
+ * Optionally include a `Range` to request only a slice of the object.
+ *
+ * @property objectId - Provider-specific object ID (Box file ID, S3 key, Azure blob name, etc.).
+ *                      Bypasses path resolution for significantly faster access.
+ * @property fullPath - Full path to the object (e.g., 'media/video.mp4'). Requires path resolution.
+ * @property Range - Optional inclusive byte range. When omitted the whole object is streamed.
+ */
+export type GetObjectStreamParams = {
+  objectId?: string;
+  fullPath?: string;
+  Range?: ByteRange;
+};
+
+/**
+ * The result of a {@link FileStorageBase.GetObjectStream} operation.
+ *
+ * Carries a Node.js {@link Readable} stream the caller pipes to an HTTP response
+ * (or any other sink) without ever buffering the full object in memory, plus the
+ * metadata an HTTP layer needs to populate `Content-Type`, `Content-Length`, and
+ * (for ranged reads) `Content-Range` / `206 Partial Content`.
+ *
+ * @property Stream - The readable byte stream for the (possibly ranged) object content.
+ * @property ContentType - Optional MIME type of the object, when known from the provider response.
+ * @property ContentLength - Optional. For a full read, the total object size. For a ranged read,
+ *                           the number of bytes in the returned slice. Use to set `Content-Length`.
+ * @property ContentRange - Present only when a `Range` was honored. Provides the inclusive
+ *                          `Start`/`End` offsets actually returned and the `Total` object size,
+ *                          enough to build an HTTP `Content-Range: bytes Start-End/Total` header.
+ */
+export type ObjectStreamResult = {
+  Stream: Readable;
+  ContentType?: string;
+  ContentLength?: number;
+  ContentRange?: { Start: number; End: number; Total: number };
 };
 
 /**
@@ -64,6 +121,18 @@ export type StorageObjectMetadata = {
   cacheControl?: string;
   customMetadata?: Record<string, string>;
 };
+
+/**
+ * Builds an HTTP `Range` header value (`bytes=Start-End` or `bytes=Start-`) from a
+ * {@link ByteRange}. Shared by streaming-capable drivers so the inclusive-range
+ * semantics are encoded identically across providers.
+ *
+ * @param range - The inclusive byte range to encode.
+ * @returns A `bytes=...` string suitable for an HTTP `Range` header.
+ */
+export function BuildHttpRangeHeader(range: ByteRange): string {
+  return range.End == null ? `bytes=${range.Start}-` : `bytes=${range.Start}-${range.End}`;
+}
 
 /**
  * Represents the result of a ListObjects operation.
@@ -239,6 +308,27 @@ export class UnsupportedOperationError extends Error {
   constructor(methodName: string, providerName: string) {
     super(`Operation '${methodName}' is not supported by the ${providerName} provider`);
     this.name = 'UnsupportedOperationError';
+  }
+}
+
+/**
+ * Error thrown when {@link FileStorageBase.GetObjectStream} is called on a provider
+ * that does not support ranged/streaming downloads.
+ *
+ * Drivers that cannot stream inherit the base default implementation of
+ * `GetObjectStream`, which throws this error. Callers should introspect
+ * {@link FileStorageBase.SupportsStreaming} before calling `GetObjectStream`,
+ * or be prepared to catch this error and fall back to {@link FileStorageBase.GetObject}.
+ */
+export class StreamingNotSupportedError extends Error {
+  /**
+   * Creates a new StreamingNotSupportedError instance.
+   *
+   * @param providerName - The name of the storage provider that doesn't support streaming.
+   */
+  constructor(providerName: string) {
+    super(`Streaming (ranged download) is not supported by the ${providerName} provider`);
+    this.name = 'StreamingNotSupportedError';
   }
 }
 
@@ -619,6 +709,83 @@ export abstract class FileStorageBase {
    *          If the object does not exist, the promise will be rejected.
    */
   public abstract GetObject(params: GetObjectParams): Promise<Buffer>;
+
+  /**
+   * Indicates whether this provider supports streaming/ranged downloads via
+   * {@link GetObjectStream}.
+   *
+   * The base default is `false`. Streaming-capable drivers override this getter to
+   * return `true`. Callers MUST check this getter before calling `GetObjectStream`,
+   * or be ready to catch {@link StreamingNotSupportedError}.
+   *
+   * @example
+   * ```typescript
+   * if (storage.SupportsStreaming) {
+   *   const { Stream, ContentRange } = await storage.GetObjectStream({ objectId, Range: { Start, End } });
+   *   Stream.pipe(httpResponse);
+   * } else {
+   *   const buffer = await storage.GetObject({ objectId });
+   *   httpResponse.end(buffer);
+   * }
+   * ```
+   *
+   * @returns true if the provider can serve ranged, streamed reads; false otherwise.
+   */
+  public get SupportsStreaming(): boolean {
+    return false;
+  }
+
+  /**
+   * Streams an object's content (optionally a byte range) without buffering the whole
+   * object in memory.
+   *
+   * Use this instead of {@link GetObject} when serving large media (audio/video) over
+   * HTTP — pipe the returned {@link ObjectStreamResult.Stream} directly to the HTTP
+   * response and propagate `ContentType`/`ContentLength`/`ContentRange` to the response
+   * headers. `GetObject` returns the full object as a Buffer and is appropriate only for
+   * small payloads you need fully in memory.
+   *
+   * **Range semantics**: `params.Range` is an **inclusive** byte range
+   * (`{ Start, End }`), matching the HTTP `Range`/`Content-Range` model. Omit `End` to
+   * stream from `Start` to EOF. When a range is honored, the result's `ContentRange`
+   * carries the actual `Start`/`End` returned and the object's `Total` size — enough to
+   * emit `Content-Range: bytes Start-End/Total` and a `206 Partial Content` status. When
+   * no `Range` is supplied, the whole object is streamed and `ContentRange` is omitted.
+   *
+   * **Capability gating**: The base class provides a default implementation that throws
+   * {@link StreamingNotSupportedError}. This means drivers that don't support streaming
+   * inherit the throw automatically (no boilerplate stubs) and {@link SupportsStreaming}
+   * stays `false`. Callers MUST therefore either check `SupportsStreaming` first, or be
+   * prepared to catch `StreamingNotSupportedError` and fall back to `GetObject`.
+   *
+   * @example
+   * ```typescript
+   * if (!storage.SupportsStreaming) {
+   *   // fall back to a full buffered read
+   * }
+   * const result = await storage.GetObjectStream({
+   *   objectId: 'media/big-video.mp4',
+   *   Range: { Start: 0, End: 1_048_575 }, // first 1 MiB, inclusive
+   * });
+   * res.status(result.ContentRange ? 206 : 200);
+   * if (result.ContentType) res.setHeader('Content-Type', result.ContentType);
+   * if (result.ContentLength != null) res.setHeader('Content-Length', String(result.ContentLength));
+   * if (result.ContentRange) {
+   *   const { Start, End, Total } = result.ContentRange;
+   *   res.setHeader('Content-Range', `bytes ${Start}-${End}/${Total}`);
+   * }
+   * result.Stream.pipe(res);
+   * ```
+   *
+   * @param params - Object identifier (prefer `objectId`, fall back to `fullPath`) plus an
+   *                  optional inclusive `Range`.
+   * @returns A Promise resolving to an {@link ObjectStreamResult} with the readable stream
+   *          and accompanying content metadata.
+   * @throws StreamingNotSupportedError if the provider does not support streaming (the base default).
+   */
+  public GetObjectStream(params: GetObjectStreamParams): Promise<ObjectStreamResult> {
+    throw new StreamingNotSupportedError(this.providerName);
+  }
 
   /**
    * Uploads object data to the storage provider.

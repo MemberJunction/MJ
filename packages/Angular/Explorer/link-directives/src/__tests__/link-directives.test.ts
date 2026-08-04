@@ -13,6 +13,9 @@ vi.mock('@angular/core', () => ({
   Renderer2: class {},
   OnInit: class {},
   HostListener: () => () => {},
+  // Ivy compiler internals referenced by compiled @memberjunction/ng-base-types dist
+  ɵɵdefineDirective: () => ({}),
+  ɵsetClassMetadata: () => {},
 }));
 
 vi.mock('@memberjunction/core', () => ({

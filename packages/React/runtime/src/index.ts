@@ -86,10 +86,16 @@ export {
 
 // Export utilities
 
-export { 
+export {
   SetupStyles,
-  createDefaultComponentStyles 
+  createDefaultComponentStyles,
+  BuildStylesFromTheme
 } from './utilities/component-styles';
+
+export {
+  buildAntdThemeConfig,
+  wrapWithLibraryThemeProviders
+} from './utilities/component-library-theming';
 
 export {
   StandardLibraries,
@@ -139,6 +145,15 @@ export {
   unwrapComponents,
   unwrapAllComponents
 } from './utilities/component-unwrapper';
+
+export {
+  USER_STATE_KEY_PREFIX,
+  resolveUserStateScope,
+  userStateStorageKey,
+  parseStoredUserSettings,
+  mergeUserSettings,
+  applyUserSettingsUpdate
+} from './utilities/user-state';
 
 // Version information
 export const VERSION = '2.69.1';

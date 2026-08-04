@@ -5,6 +5,8 @@
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
 
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
@@ -87,9 +89,36 @@
 
     </mj-collapsible-panel>
 
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
     <!-- ========================================
          RELATED ENTITY PANELS
          ======================================== -->
+
+    <!-- File Categories Section -->
+    <mj-collapsible-panel
+        SectionKey="mJFileCategories"
+        SectionName="File Categories"
+        Icon="fa fa-folder"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJFileCategories')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: File Categories','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: File Categories')"
+                [AllowLoad]="IsSectionExpanded('mJFileCategories')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJFileCategories', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 
     <!-- Files Section -->
     <mj-collapsible-panel
@@ -116,29 +145,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- File Categories Section -->
-    <mj-collapsible-panel
-        SectionKey="mJFileCategories"
-        SectionName="File Categories"
-        Icon="fa fa-folder"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJFileCategories')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: File Categories','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: File Categories')"
-                [AllowLoad]="IsSectionExpanded('mJFileCategories')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJFileCategories', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

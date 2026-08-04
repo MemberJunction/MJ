@@ -22,7 +22,7 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
   template: `
     <div class="pdf-viewer">
       <mj-file-artifact-toolbar
-        [fileName]="artifactVersion?.FileName || 'document.pdf'"
+        [fileName]="artifactVersion.FileName || 'document.pdf'"
         [currentPage]="currentPage"
         [totalPages]="totalPages"
         [isDownloading]="isDownloading"

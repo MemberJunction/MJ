@@ -1,7 +1,6 @@
 // Action Explorer Components
 export * from './action-explorer.component';
 export * from './action-tree-panel.component';
-export * from './action-toolbar.component';
 export * from './action-breadcrumb.component';
 export * from './action-card.component';
 export * from './action-list-item.component';

@@ -187,8 +187,8 @@ export interface LazyChunk {
     subpath: string;
     /** The full import path for dynamic import (e.g., '@memberjunction/ng-dashboards/ai-dashboards.module') */
     importPath: string;
-    /** The generated variable name for the loader function */
-    loaderVarName: string;
+    /** The generated variable name for the chunk descriptor ({ chunkId, load }) */
+    chunkVarName: string;
     /** The @RegisterClass entries (base class + key pairs) that map to this chunk */
     entries: LazyChunkEntry[];
 }
@@ -263,7 +263,8 @@ function isPackageExcluded(packageName: string, excludePackages: string[]): bool
 function walkDependencyTree(
     appDir: string,
     log: (msg: string) => void,
-    excludePackages: string[] = []
+    excludePackages: string[] = [],
+    includeRootDevDependencies: boolean = true
 ): Map<string, string> {
     // Map of package name -> resolved directory
     const visited = new Map<string, string>();
@@ -280,8 +281,14 @@ function walkDependencyTree(
         log(`Excluding packages matching: ${excludePackages.join(', ')}`);
     }
 
-    // Seed queue with all direct dependencies (both deps and devDeps for the root app)
-    const allDeps = { ...appPkg.dependencies, ...appPkg.devDependencies };
+    // Seed queue with the root app's direct dependencies. devDeps are included by default
+    // (eager manifests may legitimately register classes from build-time packages), but the
+    // lazy-config walk passes false: lazy chunks become dynamic import() statements in a
+    // BROWSER bundle, and a build tool in devDependencies (e.g. @memberjunction/cli) must not
+    // drag its server-side dependency tree into the app's lazy-load surface.
+    const allDeps = includeRootDevDependencies
+        ? { ...appPkg.dependencies, ...appPkg.devDependencies }
+        : { ...appPkg.dependencies };
     for (const depName of Object.keys(allDeps)) {
         queue.push({ depName, fromDir: appDir });
     }
@@ -788,10 +795,87 @@ function filterToExportedClasses(
  * name and placing it in an exported array, we create a static code path that
  * the bundler cannot eliminate.
  */
+/**
+ * Topologically sort packages so dependencies come BEFORE their dependents.
+ *
+ * Why: classes registered via `@RegisterClass` use auto-incrementing priorities —
+ * the LAST class to register for a given (baseClass, key) pair wins the lookup.
+ * For subclass-overrides-base patterns (e.g. `MJAIPromptEntityExtended` from
+ * `@memberjunction/ai-core-plus` overriding `MJAIPromptEntity` from
+ * `@memberjunction/core-entities`), the base must be imported FIRST so the
+ * subclass registers second and wins. Alphabetical sort happened to put
+ * `ai-core-plus` (a) before `core-entities` (c), giving the base the higher
+ * priority and forcing apps to ship per-app re-registration hacks.
+ *
+ * Algorithm: Kahn's BFS, with alphabetical tiebreak inside each topo tier so
+ * the manifest stays deterministic. Packages outside `packageMap` are ignored
+ * when walking deps (we only care about ordering among the registered set).
+ * If a cycle is detected, the unresolved packages are appended alphabetically
+ * and a warning is logged — manifest is still generated, just at risk of the
+ * same priority-race bug for whichever pair the cycle spans.
+ */
+function topologicallySortPackages(
+    packageMap: Map<string, string[]>,
+    depTree: Map<string, string>,
+    log: (msg: string) => void
+): string[] {
+    const packageNames = Array.from(packageMap.keys());
+    const packageSet = new Set(packageNames);
+
+    // Build adjacency: for each pkg, its @memberjunction-deps that are also registered.
+    const depsOf = new Map<string, Set<string>>();
+    const dependentsOf = new Map<string, string[]>();
+    for (const pkg of packageNames) {
+        depsOf.set(pkg, new Set());
+        dependentsOf.set(pkg, []);
+    }
+    for (const pkg of packageNames) {
+        const pkgDir = depTree.get(pkg);
+        const pkgJson = pkgDir ? readPackageJson(pkgDir) : null;
+        if (!pkgJson) continue;
+        for (const depName of Object.keys(pkgJson.dependencies)) {
+            if (packageSet.has(depName) && depName !== pkg) {
+                depsOf.get(pkg)!.add(depName);
+                dependentsOf.get(depName)!.push(pkg);
+            }
+        }
+    }
+
+    // Kahn's: start with packages whose deps are all outside `packageMap`.
+    const remainingDeps = new Map<string, number>();
+    for (const pkg of packageNames) remainingDeps.set(pkg, depsOf.get(pkg)!.size);
+
+    const ready: string[] = packageNames.filter(p => remainingDeps.get(p) === 0).sort();
+    const result: string[] = [];
+    while (ready.length > 0) {
+        const pkg = ready.shift()!;
+        result.push(pkg);
+        for (const dependent of dependentsOf.get(pkg)!) {
+            const newCount = remainingDeps.get(dependent)! - 1;
+            remainingDeps.set(dependent, newCount);
+            if (newCount === 0) {
+                // Insert maintaining alphabetical order within this tier
+                const insertAt = ready.findIndex(p => p > dependent);
+                if (insertAt === -1) ready.push(dependent);
+                else ready.splice(insertAt, 0, dependent);
+            }
+        }
+    }
+
+    if (result.length < packageNames.length) {
+        const missing = packageNames.filter(p => !result.includes(p)).sort();
+        log(`[class-manifest] WARNING: dependency cycle detected among ${missing.length} package(s); appending alphabetically: ${missing.join(', ')}`);
+        result.push(...missing);
+    }
+    return result;
+}
+
 function generateManifestContent(
     classes: RegisteredClassInfo[],
     appName: string,
     totalDepsWalked: number,
+    depTree: Map<string, string>,
+    log: (msg: string) => void,
     filterBaseClasses?: string[]
 ): string {
     // Filter by base classes if specified
@@ -813,7 +897,12 @@ function generateManifestContent(
         }
     }
 
-    const sortedPackages = Array.from(packageMap.keys()).sort();
+    // Topo-sort packages so dependencies import (and therefore register) BEFORE
+    // their dependents. With ClassFactory's auto-priority semantics ("last
+    // registration wins"), this means subclass-overrides-base scenarios resolve
+    // to the subclass without per-app re-registration hacks. See
+    // {@link topologicallySortPackages} for the contract.
+    const sortedPackages = topologicallySortPackages(packageMap, depTree, log);
 
     // Build alias map: detect cross-package name collisions and assign unique aliases
     const aliasMap = buildAliasMap(packageMap, sortedPackages);
@@ -1497,7 +1586,7 @@ function groupClassesIntoChunks(
                 packageName: cls.packageName,
                 subpath,
                 importPath,
-                loaderVarName: buildLoaderVarName(cls.packageName, subpath),
+                chunkVarName: buildChunkVarName(cls.packageName, subpath),
                 entries: []
             });
         }
@@ -1517,7 +1606,38 @@ function groupClassesIntoChunks(
         });
     }
 
-    return Array.from(chunks.values()).sort((a, b) => a.importPath.localeCompare(b.importPath));
+    const sorted = Array.from(chunks.values()).sort((a, b) => a.importPath.localeCompare(b.importPath));
+    uniquifyChunkVarNames(sorted);
+    return sorted;
+}
+
+/**
+ * Ensures every chunk's descriptor variable name is unique in the generated file. Subpath-derived
+ * names collide when two packages expose the same subpath export (e.g. './plugins' in both
+ * codegen-lib and metadata-sync produced two `const loadPlugins` → TS2451). Non-colliding
+ * names are left untouched so existing generated files don't churn; every member of a colliding
+ * group is package-qualified, which is deterministic regardless of chunk discovery order.
+ */
+function uniquifyChunkVarNames(chunks: LazyChunk[]): void {
+    const byName = new Map<string, LazyChunk[]>();
+    for (const chunk of chunks) {
+        const group = byName.get(chunk.chunkVarName) ?? [];
+        group.push(chunk);
+        byName.set(chunk.chunkVarName, group);
+    }
+
+    for (const [name, group] of byName.entries()) {
+        if (group.length < 2) continue;
+        const suffix = name.replace(/^load/, '');
+        group.forEach((chunk, index) => {
+            const qualified = `${buildChunkVarName(chunk.packageName, '.')}${suffix}`;
+            // Same package + same-named subpaths can't happen (chunkKey is unique per subpath),
+            // but guard against pathological sanitized-name ties with an index suffix.
+            const stillTaken = group.some((other, i) => i < index &&
+                `${buildChunkVarName(other.packageName, '.')}${suffix}` === qualified);
+            chunk.chunkVarName = stillTaken ? `${qualified}${index}` : qualified;
+        });
+    }
 }
 
 /**
@@ -1565,29 +1685,36 @@ function findClassSubpathByFile(
 }
 
 /**
- * Builds a deterministic loader variable name from a package name and subpath.
+ * Builds a deterministic chunk-descriptor variable name from a package name and subpath.
+ *
+ * Both package name and subpath are included to prevent collisions when
+ * different packages export the same subpath (e.g. two packages both
+ * exporting `./plugins` would otherwise both produce `loadPlugins`).
  *
  * Examples:
- *   ('@memberjunction/ng-dashboards', './ai-dashboards.module') → 'loadAiDashboardsModule'
+ *   ('@memberjunction/ng-dashboards', './ai-dashboards.module') → 'loadNgDashboardsAiDashboardsModule'
  *   ('@memberjunction/ng-explorer-settings', '.')               → 'loadNgExplorerSettings'
+ *   ('@memberjunction/codegen-lib', './plugins')                → 'loadCodegenLibPlugins'
+ *   ('@memberjunction/metadata-sync', './plugins')              → 'loadMetadataSyncPlugins'
  */
-function buildLoaderVarName(packageName: string, subpath: string): string {
+function buildChunkVarName(packageName: string, subpath: string): string {
+    const pkgParts = sanitizePackageName(packageName).split('_').filter(Boolean);
+    const pkgPascal = pkgParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+
     if (subpath === '.') {
-        // Whole-package chunk: derive from package name
-        const parts = sanitizePackageName(packageName).split('_').filter(Boolean);
-        const pascalParts = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1));
-        return `load${pascalParts.join('')}`;
+        // Whole-package chunk: derive from package name only
+        return `load${pkgPascal}`;
     }
 
-    // Subpath chunk: derive from subpath name
+    // Subpath chunk: combine package name + subpath to avoid cross-package collisions
     const clean = subpath
         .replace(/^\.\//, '')
         .replace(/\.module$/, '-module')
         .replace(/\.[^.]+$/, ''); // strip file extensions
 
-    const parts = clean.split(/[-./]/).filter(Boolean);
-    const pascalParts = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1));
-    return `load${pascalParts.join('')}`;
+    const subParts = clean.split(/[-./]/).filter(Boolean);
+    const subPascal = subParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+    return `load${pkgPascal}${subPascal}`;
 }
 
 /**
@@ -1606,34 +1733,38 @@ function generateLazyConfigContent(chunks: LazyChunk[]): string {
         ' * When ClassFactory.GetRegistrationAsync() or CreateInstanceAsync() cannot find a',
         ' * registration synchronously, the registered lazy loader builds the compound key and',
         ' * looks it up here to dynamically import the chunk containing the class.',
+        ' *',
+        ' * Every entry carries an explicit `chunkId` — the dynamic import specifier — because many',
+        ' * compound keys share one chunk and the registry must be able to tell those chunks apart.',
+        ' * Do NOT collapse these into a shared helper that returns a closure: closures built by the',
+        ' * same helper are indistinguishable by identity-adjacent means (e.g. Function.toString()),',
+        ' * which silently merges all chunks into one.',
         ' */',
-        '',
-        '/** Helper to create a loader that all entries in a feature share. */',
-        'function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {',
-        '  return () => importFn().then(() => {});',
-        '}',
         ''
     ];
 
-    // Emit one loader variable per chunk
+    // Emit one chunk descriptor per chunk
     for (const chunk of chunks) {
         lines.push(`// --- ${chunk.packageName} → ${chunk.subpath} (${chunk.entries.length} entries) ---`);
-        lines.push(`const ${chunk.loaderVarName} = featureLoader(() => import('${chunk.importPath}'));`);
+        lines.push(`const ${chunk.chunkVarName} = {`);
+        lines.push(`  chunkId: '${chunk.importPath}',`);
+        lines.push(`  load: () => import('${chunk.importPath}').then(() => {})`);
+        lines.push('};');
         lines.push('');
     }
 
     // Emit the config record with compound keys
     lines.push('/**');
-    lines.push(' * Complete mapping of compound keys (BaseClassName::Key) to lazy-loading functions.');
+    lines.push(' * Complete mapping of compound keys (BaseClassName::Key) to their chunk descriptor.');
     lines.push(' * Covers all @RegisterClass decorated classes in lazy-loaded packages.');
     lines.push(' */');
-    lines.push('export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {');
+    lines.push('export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => Promise<void> }> = {');
 
     for (const chunk of chunks) {
         lines.push(`  // ${chunk.packageName} → ${chunk.subpath}`);
         for (const entry of chunk.entries) {
             const compoundKey = `${entry.baseClassName}::${entry.key}`;
-            lines.push(`  '${compoundKey}': ${chunk.loaderVarName},`);
+            lines.push(`  '${compoundKey}': ${chunk.chunkVarName},`);
         }
         lines.push('');
     }
@@ -1773,7 +1904,7 @@ export async function generateClassRegistrationsManifest(
     log(`Verified: ${verifiedClasses.length} exported, ${skipped.length} skipped (not in public API)`);
 
     // Generate manifest using only verified classes
-    const manifestContent = generateManifestContent(verifiedClasses, appPkg.name, depTree.size, filterBaseClasses);
+    const manifestContent = generateManifestContent(verifiedClasses, appPkg.name, depTree.size, depTree, log, filterBaseClasses);
     const absoluteOutputPath = path.resolve(outputPath);
     let manifestChanged = false;
 
@@ -1822,8 +1953,13 @@ export async function generateClassRegistrationsManifest(
         log('--- Lazy Config Generation ---');
 
         try {
-            // Walk full dep tree (no excludes) to find packages excluded from the eager manifest
-            const fullDepTree = walkDependencyTree(absoluteAppDir, log, []);
+            // Walk full dep tree (no excludes) to find packages excluded from the eager manifest.
+            // Runtime dependencies ONLY (includeRootDevDependencies=false): lazy chunks are
+            // dynamic import()s bundled into the browser app, so packages reachable only through
+            // a devDependency (build tooling like @memberjunction/cli) must never contribute
+            // chunks — they'd pull node-only code into the bundle and collide on loader names
+            // (two packages exposing './plugins' both produced `const loadPlugins`, #3139 fallout).
+            const fullDepTree = walkDependencyTree(absoluteAppDir, log, [], false);
 
             // Detect the package that hosts the lazy config file to prevent self-imports
             const hostPackageName = resolveHostPackage(lazyConfigPath, fullDepTree);

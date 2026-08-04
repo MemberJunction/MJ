@@ -13,6 +13,7 @@ vi.mock('@angular/core', () => ({
   Injector: class {},
 }));
 
+const __mockGlobalObjectStore: Record<string, unknown> = {};
 vi.mock('@memberjunction/global', () => ({
   MJGlobal: {
     Instance: {
@@ -23,6 +24,7 @@ vi.mock('@memberjunction/global', () => ({
       },
     }
   },
+  GetGlobalObjectStore: () => __mockGlobalObjectStore,
 }));
 
 vi.mock('@memberjunction/core', () => ({
@@ -338,6 +340,17 @@ describe('logout and cache clearing', () => {
     stubIndexedDB();
     await makeProvider().logout();
     expect(removeItem).not.toHaveBeenCalled();
+  });
+
+  it('should preserve the mj-theme-overlay brand mirror by default', async () => {
+    const { removeItem } = stubLocalStorage({
+      'mj-theme-overlay': '64A6B519-CFBA-4F25-98D4-8398D397E21C',
+      'mj-session-id': 'abc',
+    });
+    stubIndexedDB();
+    await makeProvider().logout();
+    expect(removeItem).toHaveBeenCalledWith('mj-session-id');
+    expect(removeItem).not.toHaveBeenCalledWith('mj-theme-overlay');
   });
 
   it('should delete the MJ_Metadata IndexedDB on logout', async () => {

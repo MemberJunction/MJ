@@ -15,7 +15,7 @@ import { AppContext, UserPayload } from '../types.js';
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { TestEngine } from '@memberjunction/testing-engine';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
+import { startLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { TestRunVariables, TestLogMessage, TestRunResult as EngineTestRunResult } from '@memberjunction/testing-engine-base';
 
 // ===== GraphQL Types =====
@@ -254,12 +254,17 @@ export class RunTestResolver extends ResolverBase {
         userPayload: UserPayload,
         user: UserInfo
     ): void {
+        // Keep-alive pulse so a long-running test never trips the client idle timeout.
+        // The client captures the testRunId from progress events for reconciliation.
+        const pulse = startLivenessPulse({ pubSub, sessionId: userPayload.sessionId, ownerUserId: userPayload.userRecord.ID, resolver: 'RunTestResolver' });
+
         this.executeTest(testId, verbose, environment, tags, variables, pubSub, userPayload, user)
             .catch((error: unknown) => {
                 const errorMessage = (error instanceof Error) ? error.message : 'Unknown background test execution error';
                 LogError(`🔥 Fire-and-forget test execution failed: ${errorMessage}`, undefined, error);
                 this.publishFireAndForgetError(pubSub, userPayload, testId, errorMessage);
-            });
+            })
+            .finally(() => pulse.stop());
     }
 
     /**
@@ -343,6 +348,12 @@ export class RunTestResolver extends ResolverBase {
         userPayload: UserPayload,
         user: UserInfo
     ): void {
+        // Keep-alive pulse so a long-running suite never trips the client idle timeout.
+        // (Suite reconciliation isn't wired: suite progress carries the per-test run id, not the
+        // Test Suite Run id, so the client has no handle to reconcile against — the pulse is the
+        // protection here.)
+        const pulse = startLivenessPulse({ pubSub, sessionId: userPayload.sessionId, ownerUserId: userPayload.userRecord.ID, resolver: 'RunTestResolver' });
+
         this.executeSuite(
             suiteId, verbose, environment, parallel, tags, variables,
             selectedTestIds, sequenceStart, sequenceEnd, pubSub, userPayload, user
@@ -350,7 +361,7 @@ export class RunTestResolver extends ResolverBase {
             const errorMessage = (error instanceof Error) ? error.message : 'Unknown background suite execution error';
             LogError(`🔥 Fire-and-forget suite execution failed: ${errorMessage}`, undefined, error);
             this.publishFireAndForgetSuiteError(pubSub, userPayload, suiteId, errorMessage);
-        });
+        }).finally(() => pulse.stop());
     }
 
     // ===== Result Building =====
@@ -482,51 +493,42 @@ export class RunTestResolver extends ResolverBase {
     // ===== PubSub Publishing =====
 
     private publishProgress(pubSub: PubSubEngine, data: TestExecutionStreamMessage, userPayload: UserPayload) {
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-            message: JSON.stringify({
-                resolver: 'RunTestResolver',
-                type: 'TestExecutionProgress',
-                status: 'ok',
-                data,
-            }),
-            sessionId: userPayload.sessionId,
-        });
+        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+            resolver: 'RunTestResolver',
+            type: 'TestExecutionProgress',
+            status: 'ok',
+            data,
+        }), userPayload);
     }
 
     private publishComplete(pubSub: PubSubEngine, userPayload: UserPayload, result: EngineTestRunResult) {
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-            message: JSON.stringify({
-                resolver: 'RunTestResolver',
-                type: 'TestExecutionComplete',
-                status: 'ok',
-                data: {
-                    sessionId: userPayload.sessionId,
-                    testRunId: result.testRunId,
-                    type: 'complete',
-                    result: JSON.stringify(result),
-                    timestamp: new Date()
-                },
-            }),
-            sessionId: userPayload.sessionId,
-        });
+        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+            resolver: 'RunTestResolver',
+            type: 'TestExecutionComplete',
+            status: 'ok',
+            data: {
+                sessionId: userPayload.sessionId,
+                testRunId: result.testRunId,
+                type: 'complete',
+                result: JSON.stringify(result),
+                timestamp: new Date()
+            },
+        }), userPayload);
     }
 
     private publishError(pubSub: PubSubEngine, userPayload: UserPayload, testId: string, errorMsg: string) {
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-            message: JSON.stringify({
-                resolver: 'RunTestResolver',
-                type: 'TestExecutionError',
-                status: 'error',
-                data: {
-                    sessionId: userPayload.sessionId,
-                    testRunId: testId,
-                    type: 'error',
-                    errorMessage: errorMsg,
-                    timestamp: new Date()
-                },
-            }),
-            sessionId: userPayload.sessionId,
-        });
+        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+            resolver: 'RunTestResolver',
+            type: 'TestExecutionError',
+            status: 'error',
+            data: {
+                sessionId: userPayload.sessionId,
+                testRunId: testId,
+                type: 'error',
+                errorMessage: errorMsg,
+                timestamp: new Date()
+            },
+        }), userPayload);
     }
 
     /**
@@ -539,24 +541,21 @@ export class RunTestResolver extends ResolverBase {
         testId: string,
         testRunResult: TestRunResult
     ) {
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-            message: JSON.stringify({
-                resolver: 'RunTestResolver',
-                type: 'FireAndForgetComplete',
-                status: 'ok',
-                data: {
-                    sessionId: userPayload.sessionId,
-                    testId,
-                    type: 'complete',
-                    success: testRunResult.success,
-                    errorMessage: testRunResult.errorMessage,
-                    executionTimeMs: testRunResult.executionTimeMs,
-                    result: testRunResult.result,
-                    timestamp: new Date()
-                },
-            }),
-            sessionId: userPayload.sessionId,
-        });
+        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+            resolver: 'RunTestResolver',
+            type: 'FireAndForgetComplete',
+            status: 'ok',
+            data: {
+                sessionId: userPayload.sessionId,
+                testId,
+                type: 'complete',
+                success: testRunResult.success,
+                errorMessage: testRunResult.errorMessage,
+                executionTimeMs: testRunResult.executionTimeMs,
+                result: testRunResult.result,
+                timestamp: new Date()
+            },
+        }), userPayload);
     }
 
     /**
@@ -568,23 +567,20 @@ export class RunTestResolver extends ResolverBase {
         testId: string,
         errorMessage: string
     ) {
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-            message: JSON.stringify({
-                resolver: 'RunTestResolver',
-                type: 'FireAndForgetComplete',
-                status: 'ok',
-                data: {
-                    sessionId: userPayload.sessionId,
-                    testId,
-                    type: 'complete',
-                    success: false,
-                    errorMessage,
-                    result: JSON.stringify({ success: false, errorMessage }),
-                    timestamp: new Date()
-                },
-            }),
-            sessionId: userPayload.sessionId,
-        });
+        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+            resolver: 'RunTestResolver',
+            type: 'FireAndForgetComplete',
+            status: 'ok',
+            data: {
+                sessionId: userPayload.sessionId,
+                testId,
+                type: 'complete',
+                success: false,
+                errorMessage,
+                result: JSON.stringify({ success: false, errorMessage }),
+                timestamp: new Date()
+            },
+        }), userPayload);
     }
 
     /**
@@ -597,24 +593,21 @@ export class RunTestResolver extends ResolverBase {
         suiteId: string,
         suiteRunResult: TestSuiteRunResult
     ) {
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-            message: JSON.stringify({
-                resolver: 'RunTestResolver',
-                type: 'FireAndForgetSuiteComplete',
-                status: 'ok',
-                data: {
-                    sessionId: userPayload.sessionId,
-                    suiteId,
-                    type: 'complete',
-                    success: suiteRunResult.success,
-                    errorMessage: suiteRunResult.errorMessage,
-                    executionTimeMs: suiteRunResult.executionTimeMs,
-                    result: suiteRunResult.result,
-                    timestamp: new Date()
-                },
-            }),
-            sessionId: userPayload.sessionId,
-        });
+        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+            resolver: 'RunTestResolver',
+            type: 'FireAndForgetSuiteComplete',
+            status: 'ok',
+            data: {
+                sessionId: userPayload.sessionId,
+                suiteId,
+                type: 'complete',
+                success: suiteRunResult.success,
+                errorMessage: suiteRunResult.errorMessage,
+                executionTimeMs: suiteRunResult.executionTimeMs,
+                result: suiteRunResult.result,
+                timestamp: new Date()
+            },
+        }), userPayload);
     }
 
     /**
@@ -626,22 +619,19 @@ export class RunTestResolver extends ResolverBase {
         suiteId: string,
         errorMessage: string
     ) {
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-            message: JSON.stringify({
-                resolver: 'RunTestResolver',
-                type: 'FireAndForgetSuiteComplete',
-                status: 'ok',
-                data: {
-                    sessionId: userPayload.sessionId,
-                    suiteId,
-                    type: 'complete',
-                    success: false,
-                    errorMessage,
-                    result: JSON.stringify({ success: false, errorMessage }),
-                    timestamp: new Date()
-                },
-            }),
-            sessionId: userPayload.sessionId,
-        });
+        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+            resolver: 'RunTestResolver',
+            type: 'FireAndForgetSuiteComplete',
+            status: 'ok',
+            data: {
+                sessionId: userPayload.sessionId,
+                suiteId,
+                type: 'complete',
+                success: false,
+                errorMessage,
+                result: JSON.stringify({ success: false, errorMessage }),
+                timestamp: new Date()
+            },
+        }), userPayload);
     }
 }

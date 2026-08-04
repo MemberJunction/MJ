@@ -1,5 +1,7 @@
-import { DatabasePlatform, UserInfo, QueryDependencySpec, QueryParameterInfo } from '@memberjunction/core';
-import { GetDialect, type SQLDialect } from '@memberjunction/sql-dialect';
+import { DatabasePlatform, UserInfo, QueryDependencySpec } from '@memberjunction/core';
+import { MJQueryParameterEntity } from '@memberjunction/core-entities';
+import { GetDialect } from '@memberjunction/sql-dialect';
+import { SQLParser } from '@memberjunction/sql-parser';
 import { QueryCompositionEngine, CompositionResult, CompositionCTEInfo } from './queryCompositionEngine.js';
 import { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
 import { QueryParameterProcessor, type QueryTemplateInput } from '@memberjunction/query-processor';
@@ -52,7 +54,7 @@ export interface RenderContext {
     /** Parameter values from the caller */
     Parameters?: Record<string, string>;
     /** Formal parameter definitions (for validation). Null = skip validation. */
-    ParameterDefinitions?: QueryParameterInfo[];
+    ParameterDefinitions?: MJQueryParameterEntity[];
     /** Whether the outer query uses Nunjucks templates */
     UsesTemplate?: boolean;
     /** Inline dependency specs for transient query testing */
@@ -63,9 +65,9 @@ export interface RenderContext {
      *  directly to processQueryTemplate for parameter validation. When omitted,
      *  a synthetic QueryTemplateInput is built from OriginalSQL + ParameterDefinitions. */
     QueryInfo?: QueryTemplateInput;
-    /** Paging parameters (omit to skip paging) */
+    /** Paging parameters (omit to skip paging). Mutually exclusive with {@link MaxRows}. */
     Paging?: { StartRow: number; MaxRows: number };
-    /** MaxRows safety limit for transient query testing */
+    /** MaxRows safety limit. Mutually exclusive with {@link Paging}. */
     MaxRows?: number;
 }
 
@@ -119,6 +121,16 @@ export class RenderPipeline {
      * @returns Final SQL, applied parameters, composition metadata, and diagnostic trace
      */
     static Run(sql: string, ctx: RenderContext): RenderResult {
+        const hasMaxRows = ctx.MaxRows != null && ctx.MaxRows > 0;
+        const hasPaging = ctx.Paging != null && QueryPagingEngine.ShouldPage(ctx.Paging.StartRow, ctx.Paging.MaxRows);
+        if (hasMaxRows && hasPaging) {
+            throw new Error(
+                'RenderPipeline.Run: ctx.MaxRows and ctx.Paging are mutually exclusive. ' +
+                'Use Paging for pagination (StartRow + MaxRows) or MaxRows alone for a safety cap. ' +
+                `Got MaxRows=${ctx.MaxRows} and Paging=${JSON.stringify(ctx.Paging)}.`
+            );
+        }
+
         let currentSQL = sql;
         let appliedParameters: Record<string, string> = {};
 
@@ -134,7 +146,7 @@ export class RenderPipeline {
         // Nunjucks. Strip them after composition (which correctly ignores
         // comment-embedded tokens) and before Nunjucks processes the SQL.
         // Comments are still visible in Trace.AfterComposition for debugging.
-        currentSQL = RenderPipeline.stripSQLComments(currentSQL);
+        currentSQL = SQLParser.StripComments(currentSQL, GetDialect(ctx.Platform));
 
         // ── Step 2: Nunjucks template evaluation ─────────────────────
         const templateResult = RenderPipeline.runTemplates(currentSQL, sql, ctx, compositionResult);
@@ -142,18 +154,26 @@ export class RenderPipeline {
         appliedParameters = templateResult.appliedParameters;
         const afterTemplates = currentSQL;
 
+        // ── Step 2.5: Safety validation (mutation + injection guard) ──
+        // The fully-resolved query is the point where composition and parameter
+        // substitution — the only injection vectors — are complete, and where
+        // StatementKind reflects the user's actual statement (paging wrapping
+        // below always produces a SELECT). Saved queries otherwise skip the
+        // dangerous-keyword validation that ad-hoc queries get at execution.
+        RenderPipeline.assertSafeToExecute(afterTemplates, ctx.Platform);
+
         // ── Step 3: MaxRows safety limit (if specified) ──────────────
-        if (ctx.MaxRows != null && ctx.MaxRows > 0) {
-            currentSQL = RenderPipeline.applyMaxRows(currentSQL, ctx.MaxRows, ctx.Platform);
+        if (hasMaxRows) {
+            currentSQL = QueryPagingEngine.WrapWithMaxRows(currentSQL, ctx.MaxRows!, ctx.Platform);
         }
 
         // ── Step 4: Paging (if requested) ────────────────────────────
         let pagingResult: PagingWrappedSQL | null = null;
         let afterPaging: string | null = null;
 
-        if (ctx.Paging && QueryPagingEngine.ShouldPage(ctx.Paging.StartRow, ctx.Paging.MaxRows)) {
+        if (hasPaging) {
             pagingResult = QueryPagingEngine.WrapWithPaging(
-                currentSQL, ctx.Paging.StartRow, ctx.Paging.MaxRows, ctx.Platform
+                currentSQL, ctx.Paging!.StartRow, ctx.Paging!.MaxRows, ctx.Platform
             );
             currentSQL = pagingResult.DataSQL;
             afterPaging = currentSQL;
@@ -172,6 +192,51 @@ export class RenderPipeline {
             },
             PagingResult: pagingResult,
         };
+    }
+
+    /**
+     * Defense-in-depth guard on the fully-resolved query: throws when the
+     * rendered SQL contains a write statement anywhere — a DML mutation
+     * (INSERT / UPDATE / DELETE / MERGE / REPLACE), DDL (DROP / CREATE / ALTER /
+     * TRUNCATE / RENAME), or EXEC / CALL / GRANT / REVOKE / USE.
+     *
+     * {@link SQLParser.HasWriteStatement} inspects EVERY top-level statement, so
+     * it catches both a single rendered mutation and a stacked-statement
+     * injection payload (e.g. `SELECT 1; DROP TABLE x`) that the first-statement
+     * `StatementKind` alone would miss. It is AST-precise: matching is on the
+     * statement type, so it cannot false-positive on legitimate read queries —
+     * the `REPLACE()` string function, parenthesized SELECTs, trailing
+     * semicolons, or benign `SET` / `DECLARE` prefixes all pass.
+     *
+     * A second, token-based check rejects stacked statements (an internal
+     * statement-separating `;`). Unlike the AST check it fires even when the
+     * trailing payload makes the SQL unparseable — e.g. `SELECT 1; EXEC
+     * xp_cmdshell '…'` or `SELECT 1; WAITFOR DELAY '…'` — which is the
+     * stacked-injection class the AST scan misses (the whole string fails to
+     * parse, so there is no AST to classify). A rendered read query must be a
+     * single statement.
+     *
+     * The broader dangerous-keyword scan
+     * ({@link SQLExpressionValidator.validateFullQuery}) deliberately stays on
+     * the ad-hoc execution path (untrusted free-text input); it is unsuitable as
+     * a blanket gate here because it rejects legitimate read constructs (the
+     * `REPLACE()` string function, parenthesized SELECTs, etc.).
+     */
+    private static assertSafeToExecute(sql: string, platform: DatabasePlatform): void {
+        const dialect = GetDialect(platform);
+        const parsed = new SQLParser(sql, dialect);
+        if (parsed.HasWriteStatement) {
+            throw new Error(
+                'RenderPipeline: rendered SQL contains a write statement ' +
+                '(mutation / DDL) — only a read query may be rendered for execution.',
+            );
+        }
+        if (SQLParser.HasStackedStatements(sql, dialect)) {
+            throw new Error(
+                'RenderPipeline: rendered SQL contains multiple statements ' +
+                '(a stacked-statement injection) — only a single read query may be rendered.',
+            );
+        }
     }
 
     /**
@@ -262,80 +327,6 @@ export class RenderPipeline {
         };
     }
 
-    private static applyMaxRows(sql: string, maxRows: number, platform: DatabasePlatform): string {
-        const trimmed = sql.trim();
-
-        if (/\bTOP\s+\d/i.test(trimmed) || /\bLIMIT\s+\d/i.test(trimmed)) {
-            return sql;
-        }
-
-        const dialect = RenderPipeline.getDialect(platform);
-        const limitResult = dialect.LimitClause(maxRows);
-
-        if (limitResult.prefix) {
-            // SQL Server style: inject TOP N after SELECT
-            return trimmed.replace(
-                /^(SELECT\s+(?:DISTINCT\s+)?)/i,
-                `$1${limitResult.prefix} `
-            );
-        }
-
-        // PostgreSQL style: append LIMIT N
-        const withoutSemicolon = trimmed.replace(/;\s*$/, '');
-        return `${withoutSemicolon}\n${limitResult.suffix}`;
-    }
-
-    private static getDialect(platform: DatabasePlatform): SQLDialect {
-        return GetDialect(platform);
-    }
-
-    /**
-     * Strips SQL comments (single-line -- and block comments) from a SQL string.
-     * Preserves single-quoted string literals to avoid stripping inside them.
-     */
-    private static stripSQLComments(sql: string): string {
-        let result = '';
-        let i = 0;
-
-        while (i < sql.length) {
-            // Single-quoted string literal — preserve as-is
-            if (sql[i] === "'") {
-                result += sql[i++];
-                while (i < sql.length) {
-                    if (sql[i] === "'" && i + 1 < sql.length && sql[i + 1] === "'") {
-                        result += "''";
-                        i += 2;
-                    } else if (sql[i] === "'") {
-                        result += sql[i++];
-                        break;
-                    } else {
-                        result += sql[i++];
-                    }
-                }
-            }
-            // Single-line comment: -- to end of line
-            else if (sql[i] === '-' && i + 1 < sql.length && sql[i + 1] === '-') {
-                while (i < sql.length && sql[i] !== '\n') i++;
-            }
-            // Block comment: /* ... */
-            else if (sql[i] === '/' && i + 1 < sql.length && sql[i + 1] === '*') {
-                i += 2;
-                while (i < sql.length) {
-                    if (sql[i] === '*' && i + 1 < sql.length && sql[i + 1] === '/') {
-                        i += 2;
-                        break;
-                    }
-                    i++;
-                }
-            }
-            // Normal character
-            else {
-                result += sql[i++];
-            }
-        }
-
-        return result;
-    }
 }
 
 // ════════════════════════════════════════════════════════════════════

@@ -1,5 +1,1189 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/external-data-sources@6.0.0
+  - @memberjunction/external-data-source-mongodb@6.0.0
+  - @memberjunction/external-data-source-mysql@6.0.0
+  - @memberjunction/external-data-source-oracle@6.0.0
+  - @memberjunction/external-data-source-postgres@6.0.0
+  - @memberjunction/external-data-source-sqlserver@6.0.0
+  - @memberjunction/external-data-source-snowflake@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/core-entities-server@6.0.0
+  - @memberjunction/postgresql-dataprovider@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/server-bootstrap-lite@6.0.0
+  - @memberjunction/ai-provider-bundle@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/cli-core@6.0.0
+  - @memberjunction/config@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+  - @memberjunction/sql-parser@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- 1e048ef: Fix MJ Explorer lazy module loading: chunks are now deduped by an explicit `chunkId` instead of loader source text (which collapsed all 18 chunks into one and stopped lazy-only registrations like `FeaturePipelinesResource` from ever loading), and lookups fall back to the subclass key alone so resolution survives build-mode renames of the base class (`_BaseResourceComponent`, `BaseResourceComponent2`). Failed chunk imports now retry on the next navigation instead of caching the rejection for the rest of the session. Downstream apps must regenerate their lazy config (`mj codegen manifest --lazy-config …`) after upgrading — generated entries changed shape from a loader function to `{ chunkId, load }`, and `GetSnapshot().chunkCount` was renamed `loadedChunkCount`.
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/server-bootstrap-lite@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/actions@5.51.0
+  - @memberjunction/external-data-sources@5.51.0
+  - @memberjunction/external-data-source-mongodb@5.51.0
+  - @memberjunction/external-data-source-mysql@5.51.0
+  - @memberjunction/external-data-source-oracle@5.51.0
+  - @memberjunction/external-data-source-postgres@5.51.0
+  - @memberjunction/external-data-source-sqlserver@5.51.0
+  - @memberjunction/external-data-source-snowflake@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/core-entities-server@5.51.0
+  - @memberjunction/postgresql-dataprovider@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/ai-provider-bundle@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/cli-core@5.51.0
+  - @memberjunction/config@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+  - @memberjunction/sql-parser@5.51.0
+
+## 5.50.0
+
+### Minor Changes
+
+- 54a037f: Gate reverse-relationship emission on actual GraphQL type availability, and add an opt-in `includeSchemas` scope.
+  - **Reverse-relationship emission is now decided by the generated entity set, not a schema/package heuristic.** A reverse-relationship (child-array) `@Field`/`@FieldResolver` references the related entity's GraphQL type by bare class name, so it only compiles when that class is declared in the file being generated. `isRelatedTypeOutOfScope` now answers that from `GeneratedTypeAvailability` — the exact set of entities handed to the generator for the file — with one exception: a core (`__mj`) related entity in a non-core file, which resolves through the `mj_core_schema_server_object_types` namespace import. The previous predicate inferred the set from the `entityPackageName` schema→package map alone, but `runCodeGen` narrows the generated entities by _both_ that map and the `excludeSchemas`/inclusion filters, so anything dropped by the latter still produced a dangling reference (`TS2304: Cannot find name`) — the break seen when a base Open App is generated alongside a dependent app that foreign-keys into it. The gate emits exactly the compilable subset of prior output, so any run that compiled before is unaffected.
+  - **New opt-in `includeSchemas` config (positive scope).** When set, CodeGen processes only the listed schemas. It is resolved into `excludeSchemas` — pure sugar over the existing exclude mechanism (in-scope ⇔ named in `includeSchemas` and not in `excludeSchemas`; no implicit includes, so the core schema must be listed explicitly). The authoritative resolution runs in `ManageMetadataBase.manageMetadata` against the **database's** schema list, so schemas MJ has never seen are excluded before `createNewEntities()` discovers their tables; a second idempotent pass in `runCodeGen` keeps the scope applied on the `--skipdb` path. Lets an Open App scope its CodeGen to its own schema without hand-maintaining an exclude list of every other installed app. Absent/empty leaves classic exclude-only behavior unchanged.
+
+  Both `GraphQLServerGeneratorBase` signature changes are additive (a new optional trailing `availability` parameter), so existing subclasses and callers keep compiling and retain their previous behavior.
+
+### Patch Changes
+
+- a3bd648: Fix two External Data Sources read/codegen bugs.
+
+  External read paths now resolve the remote object name via a new per-driver `ResolveObjectName(entity)` method on `BaseExternalDataSourceDriver`. SQL drivers (`BaseSqlExternalDataSourceDriver`) schema-qualify a bare name with the entity's `SchemaName` so objects in a non-default schema (e.g. medallion bronze/silver/gold, or any multi-schema source) resolve correctly; non-SQL drivers (e.g. MongoDB) return the name verbatim as a literal collection. The read router (`ExternalDataSourceReadRouterImpl`) no longer schema-qualifies the name itself, so a schema-qualified name can never reach a driver that treats the name literally — fixing a case where a MongoDB collection read would target a non-existent `schema.collection`.
+
+  CodeGen entity-subclass generation now hoists and de-duplicates the base-class import (e.g. `ReadOnlyExternalBaseEntity`) into the file header once per file instead of once per entity, fixing a TS2300 duplicate-identifier error in generated files that contain 2+ external entities. The import is hoisted only for entities that actually emit a class (those with a primary key), so a skipped PK-less entity can't leave a dangling import.
+
+- 76c0ffb: Exclude externally-owned entity schemas from generated GraphQL server code. `generateGraphQLServerCode` received the unfiltered `nonCoreEntities` list, so a package configured with external schemas emitted `@ObjectType` classes for entities owned by sibling packages. When two such packages were loaded together, `buildSchemaSync` threw `Schema must contain uniquely named types but contains multiple types named "..."` and the API crash-looped at boot. GraphQL generation now uses the same external-schema-filtered list already used for entity subclass and Angular generation.
+
+  Withholding those entities also withholds their `@ObjectType` class declarations, so relationship members that named them would have been dangling identifiers. A local entity with a one-to-many to an externally-owned entity emitted `@Field(() => [<external>_])` and a matching `@FieldResolver`, neither of which resolves once the class is no longer declared in the file — turning the boot crash into a TypeScript compile error. Those members are now omitted (with a comment naming the relationship) when the related entity's schema is owned by another package. MJ-core related entities are unaffected: they resolve through the `mj_core_schema_server_object_types` namespace import rather than a local declaration.
+
+- dd04a24: Widen the zod pin from `~3.24.4` to `^3.25.0` so it satisfies `@modelcontextprotocol/sdk`'s peer requirement (`zod ^3.25 || ^4.0`). The old tilde pin has no overlap with the SDK's peer range, which breaks strict package managers (pnpm) and MJCLI's oclif manifest generation under strict installs. zod 3.25.x keeps the classic v3 API at the root import, so this is a version-range correction with no behavior change.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [a3bd648]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai-prompts@5.50.0
+  - @memberjunction/server-bootstrap-lite@5.50.0
+  - @memberjunction/external-data-sources@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/core-entities-server@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/config@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/actions@5.50.0
+  - @memberjunction/external-data-source-mongodb@5.50.0
+  - @memberjunction/external-data-source-mysql@5.50.0
+  - @memberjunction/external-data-source-oracle@5.50.0
+  - @memberjunction/external-data-source-postgres@5.50.0
+  - @memberjunction/external-data-source-sqlserver@5.50.0
+  - @memberjunction/external-data-source-snowflake@5.50.0
+  - @memberjunction/generic-database-provider@5.50.0
+  - @memberjunction/sqlserver-dataprovider@5.50.0
+  - @memberjunction/postgresql-dataprovider@5.50.0
+  - @memberjunction/ai-provider-bundle@5.50.0
+  - @memberjunction/cli-core@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/sql-dialect@5.50.0
+  - @memberjunction/sql-parser@5.50.0
+
+## 5.49.0
+
+### Minor Changes
+
+- 70113b1: Align the integrations framework — resolution overlay, EM/EFM lifecycle, sync locking, watermark backfill, and the U1–U5/U7/U10/U11 upstream defects.
+
+  **Engine (`integration-engine`)**
+  - U1: `IntrospectSchema`/creation-pipeline mappings propagate `undefined` PK/FK flags instead of coercing to `false` — a sample's silence can no longer wipe a declared primary key (`SourceFieldInfo.IsPrimaryKey/IsForeignKey` widened to optional).
+  - Semantic overlay (`decideSemanticOverlay`): Description / DisplayName / IncrementalWatermarkField are external-wins-when-present, curated-fallback-when-silent (per-attribute overlay precedence).
+  - Content-hash basis: the content-hash match/write covers MAPPED fields only — a newly-appearing custom key no longer forces a row rewrite. Custom-key candidates + sizing statistics are aggregated in-memory per sync (`SyncResult.CustomKeyStats`, `foldCustomKeyStats`, `inferColumnTypeFromStats`) and flow to the promotion callback regardless of row skips. **Operational note (one-time):** because the content-hash basis becomes mapped-only, the first sync after this deploys re-hashes and re-writes every overflow-carrying row exactly once — a bounded one-time load spike plus Record-Changes churn — after which stored hashes converge and steady-state (skip-unchanged) writes resume.
+  - Maintenance lock (`AcquireMaintenanceLock`/`ReleaseMaintenanceLock`/`GetMaintenanceLock`): syncs refuse while a metadata refresh / schema evolution / RSU pipeline runs for the connection.
+  - U3: live sync progress is monotonic under concurrency (`RatchetProgressSnapshot`).
+  - U11: `IntrospectSchemaOptions.OnProgress` — determinate discovery progress (scanned/total).
+
+  **Server (`server`)**
+  - `IntegrationSchemaEvolution` is now the full re-resolution refresh: re-resolution → diff → removed objects' entity/field maps disabled (data kept) → changed objects' field maps reconciled + Pull watermarks reset (U10, backfills new columns) → new objects' tables created with entity maps born DISABLED (`autoEnableNewObjects` opts in) → RSU. Extended output: NewObjects/RemovedObjects/ChangedObjects/WatermarksReset.
+  - `IntegrationApplyAll`/`ApplyAllBatch`: `UnselectedAction` ('disable' default) — objects absent from the selection get their entity + field maps disabled; re-selection re-enables both. First-ever apply defaults to a FULL sync.
+  - U7: schedule creation is unique per (connection, job kind) — update-in-place instead of duplicates.
+  - U5: boot-time assert when RSU's additionalSchemaInfo write path diverges from CodeGen's read path.
+  - DAG exposure: `IntegrationListSourceObjects` items carry `DependsOn` parent names.
+  - U11: RSU status/progress expose CurrentStepName/StepIndex/StepTotal; pipeline steps carry StepIndex/StepTotal.
+
+  **SchemaEngine / schema-builder**
+  - additionalSchemaInfo per-table REPLACE semantics for soft FKs (`ClearForeignKeysForTables`) — a refresh's resolution replaces the prior run's FK entries for its tables.
+  - `RSUPendingWork`: `UnselectedAction` + `CreateDisabled` for the post-restart consumer; U11 step-index fields.
+
+  **CodeGenLib / PostgreSQLDataProvider**
+  - U2: `spUpdateExistingEntityFieldsFromSchema` honors `IsSoftPrimaryKey` on BOTH dialects (PG emitter + SQL Server migration) — schema sync no longer wipes resolved soft PKs.
+  - U4: a keyless entity now throws a named "has no primary key" error instead of emitting malformed record-change SQL.
+
+- 7d6e8fb: Large-schema CodeGen fix (PostgreSQL): filter system namespaces (`pg_catalog`, `information_schema`, `pg_toast*`, `pg_temp*`) in the four catalog-introspection views (`vwForeignKeys`, `vwTablePrimaryKeys`, `vwTableUniqueKeys`, `vwSQLTablesAndEntities`). They previously scanned the entire cluster catalog with no namespace filter, so `vwSQLColumnsAndEntityFields` paid per-column introspection for every system relation — a cost that grows as CodeGen inflates the catalog mid-run. MJ entities can never live in system namespaces, so no legitimate row is dropped.
+
+  The fix is applied in BOTH channels so it survives a PG baseline regeneration: the migration patches the deployed views, and `@memberjunction/sql-converter`'s `CatalogViewRule` (the generator that emits these views when a PG baseline is cut) now emits the same filter — previously only the migration carried it, so the next regenerated baseline would have silently reverted the fix.
+
+- fc1c693: SQL Server large-schema CodeGen fix: materialize the catalog-introspection views into #temp tables in `spUpdateExistingEntityFieldsFromSchema` before the reconciliation join. Joined directly, these views (over the `sys.*` catalog) get poor cardinality estimates and the optimizer nested-loops, going super-linear as CodeGen inflates the catalog mid-run — a single call measured 140s at 600 tables. #temp tables auto-get statistics so the join hash-joins (140s → 1.1s in isolation). Mirrors the pattern `spDeleteUnneededEntityFields` already uses. Migration only; behavior otherwise identical.
+
+### Patch Changes
+
+- 486b276: Advanced-generation (AI) CodeGen robustness + CPU hygiene:
+  - **Credential circuit breaker.** The advanced-generation path had no rate-limit, retry, or circuit-breaker and swallowed per-entity errors, so a keyless / mis-credentialed CodeGen run attempted a doomed LLM call for _every_ entity ("Invalid Vertex AI credentials" ×N) before finishing. `AdvancedGeneration` now trips a per-run circuit after 3 consecutive credential/authentication failures: it logs one clear message and the batch driver skips the remaining entities (no further round-trips, no error-log spam). A successful call resets the counter; non-credential errors don't trip it.
+  - **Field grouping.** The per-entity `allFields.filter(...)` in the advanced-generation batch driver was O(entities × fields) over the full pooled array (and dropped to the slow UUID-compare path on SQL Server upper-case IDs). Fields are now grouped into a `Map` by normalized EntityID once (O(total fields)), turning the per-entity lookup into O(1).
+
+  No behavior change on a normally-credentialed run beyond the CPU win; advanced generation is unchanged for entities that succeed.
+
+- a7733a9: Make CodeGen's auto-created application metadata idempotent. When CodeGen encounters a new schema it seeds an `__mj.Application` row plus its default `__mj.ApplicationRole` rows; these INSERTs were emitted bare into the generated migration, so replaying that block against a database where the rows already exist (e.g. after a schema teardown that leaves the app rows behind, an app reinstall, or a re-baseline) collided on `PK_Application_ID` / `UQ_ApplicationRole_App_Role`. Both INSERTs are now wrapped in the existing dialect-aware `conditionalInsert` guard (SQL Server `IF NOT EXISTS`, PostgreSQL `DO`-block) — the Application guarded on `ID`, the ApplicationRole on `(ApplicationID, RoleID)` — so the emitted SQL is safe to re-run. The guard is a no-op on a fresh database, matching the idempotency convention already used for the other folded metadata blocks.
+- 3b23275: feat(codegen): validate declared IS-A (Table-Per-Type) relationships.
+
+  IS-A intent is **declared, never inferred** — via the `additionalSchemaInfo` `ISARelationships` config or an `@lookup` on `Entity.ParentID` in a metadata-sync file. CodeGen now verifies that the declaration actually qualifies, instead of leaving a malformed one to fail confusingly at runtime.
+
+  **Gated on declared intent.** The check reads only entities with a non-null `ParentID`, so it is channel-agnostic (one check covers `ISARelationships`, `@lookup`, and any future mechanism) and has no blast radius: schema nobody declared as IS-A — including customer or external schema — is never examined and cannot be false-positived. There is no schema-shape inference anywhere in this change. On a 385-entity install it inspects 3 rows in ~9ms.
+
+  It reports **only provable-cannot-work defects** — never inference. A declared IS-A either passes silently or hard-fails on a certain defect: a composite PK on the child or the parent (the runtime routes one shared PK value and has no model for a multi-column subtype key), or a child PK type ≠ parent PK type (parent and child share one PK value, so it must be legal as both). Shapes that merely "look off" but still function — no physical FK to the parent, an FK to a different entity, a soft FK — pass silently: the runtime keys off `ParentID`, not the child PK's FK metadata, so those are valid working declarations and flagging them would misfire on correct schema.
+
+  Also included: an unresolvable-`ParentID` guard, kept as defense-in-depth only and documented as such — `FK_Entity_ParentID` makes that state unstorable, but the parent JOIN must be a `LEFT JOIN` regardless, and without the guard an unresolved parent would silently skip the remaining checks rather than fail.
+
+- ebe5b88: FK auto-indexing is now ON by default. `autoIndexForeignKeys()` previously returned `false`
+  when the `auto_index_foreign_keys` setting was absent, so any deployment that never set it
+  explicitly — including distribution installs, where the setting shipped commented out —
+  generated no `IDX_AUTO_MJ_FKEY_*` indexes at all.
+
+  **Notable behavior change:** after upgrading, a CodeGen run on a deployment that never set the
+  setting will begin emitting FK index DDL for new/modified entities where it previously emitted
+  none. The generated DDL is idempotent (`IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`), so
+  re-runs are no-ops. On large existing tables the initial index creation takes a lock and should
+  be scheduled accordingly. To keep the old behavior, set
+  `{ name: 'auto_index_foreign_keys', value: false }` explicitly in your config.
+
+  Rationale: neither SQL Server nor PostgreSQL auto-indexes FK columns, and MJ leans on them
+  heavily — generated base views join FK relationships, `RunView` filters on them, and CodeGen
+  emits cascade-delete logic that walks children by FK. A missing FK index degrades silently and
+  is hard to diagnose; a surplus index is cheap and trivially reversible.
+
+  `distribution.config.cjs` now ships the setting explicitly enabled so downstream installs are
+  immune to future default drift.
+
+  Additionally, `generateForeignKeyIndexes` moved from an `abstract` declaration to a template
+  method on `CodeGenDatabaseProvider`. Every dialect-independent decision — which fields qualify
+  as indexable foreign keys, and how the index name is composed and truncated — now lives in the
+  base class once; dialects supply only `formatIndexStatement`, `tableToken`, `columnToken`,
+  `indexPrefix`, and `maxIdentifierLength`.
+
+  This fixes a drift bug: the primary-key and virtual-field exclusions existed only in the
+  PostgreSQL provider, so SQL Server would emit a redundant index for a PK-that-is-also-FK (1:1
+  extension tables) and an invalid `CREATE INDEX` for a virtual field with no underlying column.
+  Both dialects now share the exclusions by construction. **Generated DDL is otherwise unchanged
+  and byte-identical** — index naming is deliberately NOT converged across dialects (SQL Server
+  names from `BaseTableCodeName`/`CodeName`, PostgreSQL from snake-cased `BaseTable`/`Name`), since
+  renaming would orphan every existing index in deployed databases.
+
+- 38c69a6: Large-schema CodeGen efficiency: batch the per-field metadata INSERTs in `createNewEntityFieldsFromSchema`. Previously one INSERT + one synchronous migration-log append per field (~40k on a 2k-table install, ~37s); now flushed in chunks through the existing `LogSQLBatchAndExecute`, preserving the exact per-row SQL and replayable migration output. createNew 37s → 10.6s. Both dialects.
+
+  Chunk size is configurable via the new top-level `metadataInsertBatchSize` CodeGen config field (default 250) for installs that want to tune round-trip size.
+
+- b64efd1: Large-schema CodeGen efficiency (PostgreSQL): route `executeSQLFileViaShell` / `regenerateBaseView` / `executeEntityPhased` through a pooled client instead of opening a fresh `new pg.Client()` per entity (~2,000 connection handshakes on a 2k-table install; far worse over a network-attached Aurora). Also applies the codegen `statement_timeout` GUC the ad-hoc clients lacked.
+- d23aa89: Large-schema CodeGen fix (PostgreSQL): eliminate the metadata-reconciliation quadratic. `spUpdateExistingEntityFieldsFromSchema` now materializes the catalog-introspection views into temp tables + `ANALYZE` before the reconciliation join (nested-loop → hash join; one call 77.8s → 0.5s at 600 tables), and `spDeleteUnneededEntityFields` uses `SET LOCAL enable_nestloop = off` to survive stale `pg_catalog` statistics in codegen Pass 2 (502s → 0.58s). Net: PG codegen at 2,000 tables ~87 min → ~85s.
+
+  Also carries the PostgreSQL half of the U2 soft-PK guard on this same sproc (a field with `IsSoftPrimaryKey` — resolved from `additionalSchemaInfo`, with no physical PK/unique constraint — is excluded from the PK/unique material-change predicate and its flags are frozen in the UPDATE, so the physical-schema sync no longer wipes it). The guard lives here, with the sproc it guards; the SQL Server half ships as a migration in the RSU-lifecycle PR.
+
+- 70c658c: Add configurable startup mode ('full' | 'task') for fast CLI/script boot. StartupManager.Startup() accepts startup options; 'task' mode skips all @RegisterForStartup engine pre-warm (engines lazy-load on first touch) while 'full' preserves existing behavior. Mode resolves via a shared four-level precedence chain (MJ_STARTUP_MODE env var > programmatic option > mj.config.cjs startup.mode > entry-point default). MJAPI defaults to 'full'; MJCLI, mj-sync, and CodeGen default to 'task'. Measured 14x CPU reduction on mj sync validate.
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [7db8ef5]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [6c910ef]
+- Updated dependencies [42a680a]
+- Updated dependencies [70113b1]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [38c220c]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/ai-prompts@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/core-entities-server@5.49.0
+  - @memberjunction/server-bootstrap-lite@5.49.0
+  - @memberjunction/generic-database-provider@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/actions@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/sql-parser@5.49.0
+  - @memberjunction/postgresql-dataprovider@5.49.0
+  - @memberjunction/sqlserver-dataprovider@5.49.0
+  - @memberjunction/aiengine@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/external-data-sources@5.49.0
+  - @memberjunction/external-data-source-mongodb@5.49.0
+  - @memberjunction/external-data-source-mysql@5.49.0
+  - @memberjunction/external-data-source-oracle@5.49.0
+  - @memberjunction/external-data-source-postgres@5.49.0
+  - @memberjunction/external-data-source-sqlserver@5.49.0
+  - @memberjunction/external-data-source-snowflake@5.49.0
+  - @memberjunction/cli-core@5.49.0
+  - @memberjunction/ai-provider-bundle@5.49.0
+  - @memberjunction/config@5.49.0
+  - @memberjunction/sql-dialect@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- 09e1b4b: Fix Apply to my Form (resolve spec code, handle Pending overrides, improve # typeahead), auto-add app schemas to excludeSchemas on OpenApp install/upgrade, surface RenderedSQL through RunQueryResult and TestQuerySQL, strip ORDER BY before outer-wrapping unparseable SQL in MaxRows, fix lazy-config loader variable name collisions in codegen manifest, and add read-only provider support and missing SQL function keywords in PostgreSQL provider
+- a94bd16: Fix `mj codegen manifest --lazy-config` generating invalid TypeScript when build tooling entered the app's dependency tree. Two fixes: (1) the lazy-config dependency walk now follows runtime `dependencies` only — packages reachable solely through a root `devDependency` (e.g. `@memberjunction/cli` and its server-side tree) no longer contribute browser lazy chunks; (2) loader variable names are package-qualified when two packages expose the same subpath export, so `./plugins` in two packages can never again emit duplicate `const loadPlugins` declarations (TS2451). Broke `next` after #3139 declared the CLI as a devDependency of MJExplorer.
+- Updated dependencies [09e1b4b]
+- Updated dependencies [80223ad]
+- Updated dependencies [c20723a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/generic-database-provider@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/postgresql-dataprovider@5.48.0
+  - @memberjunction/external-data-source-sqlserver@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/core-entities-server@5.48.0
+  - @memberjunction/sqlserver-dataprovider@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/ai-prompts@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/actions@5.48.0
+  - @memberjunction/external-data-sources@5.48.0
+  - @memberjunction/external-data-source-mongodb@5.48.0
+  - @memberjunction/external-data-source-mysql@5.48.0
+  - @memberjunction/external-data-source-oracle@5.48.0
+  - @memberjunction/external-data-source-postgres@5.48.0
+  - @memberjunction/external-data-source-snowflake@5.48.0
+  - @memberjunction/server-bootstrap-lite@5.48.0
+  - @memberjunction/ai-provider-bundle@5.48.0
+  - @memberjunction/cli-core@5.48.0
+  - @memberjunction/config@5.48.0
+  - @memberjunction/global@5.48.0
+  - @memberjunction/sql-dialect@5.48.0
+  - @memberjunction/sql-parser@5.48.0
+
+## 5.47.0
+
+### Minor Changes
+
+- 92ecbf8: Fix two PostgreSQL CodeGen bugs that turned every `mj codegen` run into a full ~380-entity regeneration instead of a differential (emitting ~184k lines of byte-identical views/sprocs each run):
+  1. **Base-view false "changed" detection.** `checkBaseViewChangedInDB` compared the generated view text against PostgreSQL's `pg_get_viewdef()`, which re-qualifies columns and normalizes whitespace/casing — so it never byte-matched and reported ~314/380 base views as "changed." On PostgreSQL this now compares the view's exposed **column set** (`information_schema.columns`) against the entity's expected fields instead of text: deterministic, immune to `pg_get_viewdef` reformatting, and it still catches a stale view whose columns drifted from metadata (the v5.46 OpenApp outage — a migration adds a column + metadata but doesn't re-bake the view) plus the missing-view self-heal (empty column set → force-recreate). SQL Server keeps its verbatim-definition text comparison.
+  2. **Sequence-renumber over-regeneration.** `spUpdateExistingEntityFieldsFromSchema` flagged an entity as modified for a pure `Sequence` renumber (a freshly-added field's temp `100037` → `19`), forcing a byte-identical view+sproc regen for dozens of entities. The renumber is still applied, but a Sequence-only change no longer marks the entity for regeneration.
+
+  Net: a fresh-migrated PG database regenerates only genuinely-changed entities, and a stale view (columns not matching metadata) is still healed.
+
+### Patch Changes
+
+- f4dce92: Fix PostgreSQL CRUD save/update/delete/cascade failing on entities whose primary key has a multi-word (camelCase/PascalCase) name.
+
+  The PG CodeGen provider declared CRUD function parameters with the canonical flat builder (`ParameterRef` → `p_<lower>`, e.g. `p_recordkey`) but _referenced_ the primary key in several body clauses via `toSnakeCase` (`p_record_key`). Because `toLowerCase()` and `toSnakeCase()` produce the _same_ string for single-word/`ID` keys, this was invisible on every `ID`-keyed entity — but a table keyed on a multi-word soft-PK (e.g. a connector's `recordKey`) generated a function that declared `p_recordkey` and referenced `p_record_key`, so every save/update/delete failed on PostgreSQL with `column "p_record_key" does not exist`.
+
+  All parameter names now route through the single `ParameterRef` builder in both `PostgreSQLCodeGenProvider` (create/update/delete/cascade bodies) and `PostgreSQLDataProvider` (the save-call binding). This is a no-op for `ID`/single-word keys and fixes multi-word keys. Regenerate CRUD functions (`mj codegen`) after upgrading to apply the fix — no data migration required.
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+- Updated dependencies [f4dce92]
+- Updated dependencies [936a286]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+  - @memberjunction/postgresql-dataprovider@5.47.0
+  - @memberjunction/sqlserver-dataprovider@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/ai-prompts@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/actions@5.47.0
+  - @memberjunction/external-data-sources@5.47.0
+  - @memberjunction/external-data-source-mongodb@5.47.0
+  - @memberjunction/external-data-source-mysql@5.47.0
+  - @memberjunction/external-data-source-oracle@5.47.0
+  - @memberjunction/external-data-source-postgres@5.47.0
+  - @memberjunction/external-data-source-sqlserver@5.47.0
+  - @memberjunction/external-data-source-snowflake@5.47.0
+  - @memberjunction/generic-database-provider@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/core-entities-server@5.47.0
+  - @memberjunction/server-bootstrap-lite@5.47.0
+  - @memberjunction/sql-parser@5.47.0
+  - @memberjunction/ai-provider-bundle@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/cli-core@5.47.0
+  - @memberjunction/config@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-prompts@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/actions@5.46.0
+  - @memberjunction/external-data-sources@5.46.0
+  - @memberjunction/external-data-source-mongodb@5.46.0
+  - @memberjunction/external-data-source-mysql@5.46.0
+  - @memberjunction/external-data-source-oracle@5.46.0
+  - @memberjunction/external-data-source-postgres@5.46.0
+  - @memberjunction/external-data-source-sqlserver@5.46.0
+  - @memberjunction/external-data-source-snowflake@5.46.0
+  - @memberjunction/generic-database-provider@5.46.0
+  - @memberjunction/core-entities-server@5.46.0
+  - @memberjunction/postgresql-dataprovider@5.46.0
+  - @memberjunction/sqlserver-dataprovider@5.46.0
+  - @memberjunction/server-bootstrap-lite@5.46.0
+  - @memberjunction/ai-provider-bundle@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/cli-core@5.46.0
+  - @memberjunction/config@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+  - @memberjunction/sql-parser@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+- Updated dependencies [00e573c]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/external-data-sources@5.45.1
+  - @memberjunction/external-data-source-sqlserver@5.45.1
+  - @memberjunction/external-data-source-mongodb@5.45.1
+  - @memberjunction/external-data-source-oracle@5.45.1
+  - @memberjunction/external-data-source-postgres@5.45.1
+  - @memberjunction/external-data-source-mysql@5.45.1
+  - @memberjunction/external-data-source-snowflake@5.45.1
+  - @memberjunction/aiengine@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/core-entities-server@5.45.1
+  - @memberjunction/server-bootstrap-lite@5.45.1
+  - @memberjunction/generic-database-provider@5.45.1
+  - @memberjunction/sqlserver-dataprovider@5.45.1
+  - @memberjunction/ai-provider-bundle@5.45.1
+  - @memberjunction/postgresql-dataprovider@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/actions-base@5.45.1
+  - @memberjunction/actions@5.45.1
+  - @memberjunction/cli-core@5.45.1
+  - @memberjunction/config@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/sql-dialect@5.45.1
+  - @memberjunction/sql-parser@5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- b7cf50f: CodeGen-integrated external-entity field sync (`manageExternalEntities`).
+
+  CodeGen now introspects the **remote** schema of external-data-source entities and syncs their `EntityField` metadata — the remote analogue of how it already manages view-backed `VirtualEntity` fields from `INFORMATION_SCHEMA`. This removes the manual-field-definition limitation for external entities.
+  - **`@memberjunction/core`**: the schema-introspection contracts (`ExternalObjectType` / `ExternalSchemaColumn` / `ExternalSchemaObject` / `ExternalSchemaDescriptor`) move here from the engine; `ExternalDataSourceReadRouter` gains abstract `IntrospectExternalSchema(externalDataSourceID, schemaName?, contextUser?, provider?)` — so build-time consumers reference them without a hard dependency on the engine/driver SDKs.
+  - **`@memberjunction/external-data-sources`**: `ExternalDataSourceReadRouterImpl.IntrospectExternalSchema` resolves the driver and delegates to its `IntrospectSchema`.
+  - **`@memberjunction/codegen-lib`**: a new `manageExternalEntities` / `manageSingleExternalEntity` pass (mirroring `manageSingleVirtualEntity`) introspects each external entity's remote object, maps native types to MJ types (`mapExternalNativeTypeToMJ` — best-effort across PostgreSQL/Snowflake/MongoDB, falling back to `nvarchar(MAX)`), and creates/updates/deletes `EntityField` rows, reusing the virtual-entity field machinery. Real PK info from introspection is honored (falling back to first-column-as-PK).
+
+  The pass resolves the router via `MJGlobal.ClassFactory`, so it requires the EDS engine + the relevant driver to be loaded in the CodeGen process; when none is registered it logs a clear message and skips (no effect on non-external entities). Native-type→MJ mapping is best-effort and refined by the existing LLM field-decoration pass + review.
+
+- f4f11fa: External Data Sources — read MJ entities and queries directly from remote systems (Snowflake, MongoDB, PostgreSQL) without replicating their data into the MJ database.
+
+  An Entity (or Query) that carries an `ExternalDataSourceID` is proxied live to a remote system through a pluggable driver, then returned through MJ's standard typed `RunView` / `RunQuery` / `Load` APIs. Behavior is fully additive: any entity/query with a null `ExternalDataSourceID` is unchanged and never touches the new code path.
+  - **`@memberjunction/core`**: new abstract `ExternalDataSourceReadRouter` — the dependency-inversion seam (`RunViewExternal` / `RunQueryExternal` / `GetCacheTTLSeconds`) that lets foundational providers reach the EDS engine via `MJGlobal.ClassFactory` without any compile-time dependency on driver SDKs or the credential subsystem. `EntityInfo` gains `ExternalDataSourceID` / `ExternalObjectName`. `LocalCacheManager.SetRunViewResult` gains an optional `ttlMs` (with read-time expiry) so external reads can be time-bounded like RunQuery already is.
+  - **`@memberjunction/core-entities`**: `ReadOnlyExternalBaseEntity` — `BaseEntity` subclass whose `Save`/`Delete` reject (populating `LatestResult`); MJ is never the system of record for external data.
+  - **`@memberjunction/external-data-sources`**: the server-only engine — `ExternalDataSourceReadRouterImpl` (registered for the ClassFactory), `BaseExternalDataSourceDriver` contract, and `ExternalDataSourceRouter` (per-source driver + connection-pool cache, credential resolution). `BaseExternalDataSourceDriver` now provides `withConnectionRetry` — on an auth/credential failure it evicts the cached connection (forcing a fresh credential resolve) and retries the read once, self-healing rotated/expired credentials without a process restart; each driver implements `invalidateConnection`.
+  - **Drivers** — `@memberjunction/external-data-source-postgres`, `…-snowflake` (PAT auth; `snowflake-sdk` as an optional peer loaded by dynamic import to avoid AWS-SDK version skew), `…-mongodb` (SQL-`WHERE`→Mongo filter translation, document-sampling introspection). Each wraps its read operations in the auth-retry self-heal and closes the evicted connection on the failure path.
+  - **`@memberjunction/generic-database-provider`**: external dispatch for `RunView`, `RunQuery`, and single-record `Load` — guarded by an `ExternalDataSourceID` null check so MJ-DB entities are untouched. Browser/Explorer reads flow through the same provider path, so they route externally transparently. External `RunQuery` results are checked against the query's declared `QueryField` metadata (case-insensitive); when a remote object's columns have drifted, a warning is logged naming the missing field(s) while the rows are still returned (non-fatal, per the plan). External reads (both `RunView` and `RunQuery`) are cached with a TTL sourced from the data source's `DefaultCacheTTLSeconds` — external data can't be event-invalidated, so it's time-bounded instead (mitigating per-query cost on warehouses); external `RunView` writes without a TTL are refused to prevent stale-forever entries. External reads also **refuse rather than silently bypass** Row-Level Security — if RLS would filter a user's rows the read is rejected with a clear error (RLS can't be enforced on a remote system; users exempt from RLS pass through), and the external single-record `Load` primary-key filter single-quote-escapes values to block SQL injection. Unsupported external RunView params (AfterKey/keyset pagination, Aggregates, a non-empty UserSearchString) now hard-fail with a clear error instead of being silently dropped — a dropped AfterKey would otherwise return the same page on every call (an infinite loop in deep-pagination jobs). External read results now run through the same row post-processing MJ-DB reads get (field decryption + datetime normalization), so an Encrypt-flagged external field no longer surfaces as ciphertext.
+  - **`@memberjunction/codegen-lib`**: external-backed entities now generate to extend `ReadOnlyExternalBaseEntity` (explicit custom subclasses still take precedence), and CodeGen skips all SQL-object generation (sprocs/views/permissions/FK-indexes) for them since no MJ table exists. GraphQL Create/Update/Delete mutation resolvers are still generated (gated only by `Allow*API`, like any entity) — they route through `entity.Save()`/`.Delete()`, which `ReadOnlyExternalBaseEntity` rejects before any sproc is reached, so an attempted write **fails loudly** with the read-only reason rather than silently lacking a resolver. (No sproc is generated for these entities, but none is ever called.)
+
+  Additional hardening: the Postgres driver now **verifies TLS server certificates by default** (`sslRejectUnauthorized`, opt-out only for knowingly-accepted self-signed dev endpoints) instead of silently accepting any certificate; an unbounded external `RunView` (no `MaxRows`) is capped to the entity's `UserViewMaxRows` or a 1000-row default so a single read can't pull an entire remote table; caller-supplied `ExtraFilter` / `OrderBy` clauses are screened for forbidden SQL keywords before reaching the driver (the same screen the MJ-DB path applies); and a saved **UserView** over an external entity now has its stored `WhereClause` / `OrderByClause` folded into the remote read (previously the external dispatch returned before they were applied, so a view silently returned unfiltered, unordered rows).
+
+  Dispatch-completeness fixes (an audit found read paths that bypassed external routing): CodeGen's PostgreSQL phased executor now skips external entities (it previously regenerated view/CRUD DDL and would `CREATE VIEW` against a non-existent base table); datasets fail loud per-item for external-backed entities rather than querying a non-existent MJ base view; `RunViewsWithCacheCheck` routes external entities to the standard external-dispatch path instead of issuing MJ-DB `COUNT/MAX` validation SQL; and external saved queries skip the outer `RunQuery` `CacheLocal` layer so only the TTL-correct `runExternalQueryWithCache` caches them. Two further validation tightenings: a saved view's merged `WhereClause`/`OrderByClause` is now re-screened for forbidden SQL keywords before reaching the driver, and non-quoted (numeric/boolean) primary-key values in the external `Load` filter are type-checked to block unquoted injection. Read-only is also enforced at the **provider layer** — `DatabaseProviderBase.Save`/`Delete` refuse any external-data-source entity regardless of its generated base class (a backstop for the edge case where an explicit custom subclass replaces `ReadOnlyExternalBaseEntity`). And the SQL drivers are **secure-by-default on transport**: Postgres/MongoDB refuse a plaintext connection to a non-local host unless TLS is enabled or `allowInsecureTransport: true` is explicitly set (local hosts stay exempt for dev).
+
+  The starter `ExternalDataSourceType` catalog now seeds **PostgreSQL, Snowflake, and MongoDB** (all `Active` — the shipped drivers), and a developer guide ships at `guides/EXTERNAL_DATA_SOURCES_GUIDE.md`.
+
+  Two new metadata tables (`ExternalDataSource`, `ExternalDataSourceType`) and additive `Entity` / `Query` columns ship in migration `v5.42`. Validated live end-to-end against real Snowflake and MongoDB. SQL Server as an external source is a deliberate fast-follow. Comprehensive unit tests across the engine, drivers, and CodeGen, plus CI-runnable Postgres/MongoDB driver integration suites.
+
+### Patch Changes
+
+- e370816: External-schema introspection: relationships (foreign keys), PascalCase contract, and Postgres FK discovery.
+  - **Relationships seam** — `ExternalSchemaObject` gains an optional, additive `Relationships?: ExternalSchemaRelationship[]`: referencing-side foreign-key descriptors with composite-key support via `ExternalSchemaRelationshipColumn` (`Column` → `ReferencedColumn` pairings, plus `ReferencedObject` / `ReferencedSchema` / optional constraint `Name`).
+  - **PascalCase contract** — the whole introspection contract (`ExternalSchemaColumn` / `ExternalSchemaObject` / `ExternalSchemaDescriptor` / the new relationship types) now uses PascalCase members (`Name`, `NativeType`, `Nullable`, `IsPrimaryKey`, `Columns`, `Objects`, `Database`, …), matching MJ's convention for public/exported members (every other exported `@memberjunction/core` interface is PascalCase). The three shipped drivers and CodeGen's `manageExternalEntities` are updated accordingly; contained to the EDS subsystem.
+  - **Postgres FK introspection** — the PostgreSQL driver now populates `Relationships` from `information_schema` (referential_constraints + key_column_usage paired via the unique-constraint position, so composite keys map correctly). MongoDB has no foreign keys, and Snowflake's `INFORMATION_SCHEMA` does not expose them reliably, so those leave `Relationships` empty.
+  - **CodeGen FK consumption (baseline)** — `manageExternalEntities` now consumes the introspected `Relationships`: for each single-column FK whose referenced remote object is _also_ an imported external entity in the same data source, it sets the FK field's `RelatedEntityID` + `RelatedEntityFieldName` + `IsSoftForeignKey`, then a second `manageEntityRelationships` pass materializes them into `EntityRelationship` records (the external FKs are processed after the main relationship pass, so they get their own). Composite FKs and references to non-imported objects are skipped with a log — that hardening is the follow-on. Verified end-to-end via CodeGen against a live Postgres source (an external `orders.customer_id → customers.id` FK becomes a Demo Customers → Demo Orders relationship). CodeGen also now loads the SQL Server / MySQL / Oracle driver packages so external entities backed by those sources can be introspected.
+  - **Connection model** — confirmed (and unit-tested) that a single driver instance holds one connection pool per configured data source (`Map<dataSourceId, pool>`), so any number of independent connections per driver type is supported.
+
+- e370816: Fix external-data-source single-record `Load` through the GraphQL transport (Explorer full-record forms).
+
+  The generated single-record GraphQL query resolver ran `SELECT * FROM <baseView>` directly, which has no analogue for external-data-source entities — their data is proxied live from a remote system and no MJ view exists — so opening an external record's **full** form in Explorer failed (`InnerLoad returned false`), even though the grid (`RunView`) and the provider-level single-record `Load` already routed externally.
+  - **`@memberjunction/server`**: new `ResolverBase.LoadExternalRecordByKey` loads an external record by primary key through a `BaseEntity` object, which the data provider dispatches to the external read router (the same path the grid uses), applying the same RLS gate and row post-processing (field decryption / datetime normalization) as the MJ-DB path.
+  - **`@memberjunction/codegen-lib`**: the single-record resolver template now branches on `ExternalDataSourceID` — external entities call `LoadExternalRecordByKey`, while every MJ-DB entity keeps the identical `SELECT * FROM <baseView>` path (the branch is inert without the feature). Record-access audit logging (`AuditRecordAccess`) is preserved on the external branch.
+
+  Verified end-to-end in Explorer against a live PostgreSQL source — the full read-only record form now renders the remote row.
+
+- b18fcd0: Preserve external-data-source entities through CodeGen's metadata management.
+
+  External-data-source entities (`Entity.ExternalDataSourceID` set) have no physical MJ table or view — their data is proxied live from a remote system — so CodeGen's `manage-metadata` pass would otherwise treat them as orphaned and prune them on every run, and never provision their fields. These guards are added, each the analogue of an existing `VirtualEntity` exclusion (found and fixed via an end-to-end CodeGen run against a live external source):
+  - **Entity pruning:** `checkAndRemoveMetadataForDeletedTables` skips entities whose `ExternalDataSourceID` is set via a single, dialect-agnostic code guard (the analogue of the `VirtualEntity` exclusion, kept in code rather than the per-dialect filter so it applies uniformly to SQL Server and PostgreSQL). Such entities always appear in `vwEntitiesWithMissingBaseTables` (no base table in `INFORMATION_SCHEMA`). The guard alone was firing as a no-op because that view is a `SELECT e.*` whose cached column list predated `ExternalDataSourceID` — so the v5.42 migration **recreates `vwEntitiesWithMissingBaseTables`** (re-expanding `*`) solely to re-expose the column to the guard. The view stays semantically unchanged — a pure "missing base table" detector — and the exclusion lives only in the code guard, not duplicated in the view.
+  - **Field pruning:** the `spDeleteUnneededEntityFields` stored proc (re-created in the v5.42 migration) excludes external-data-source entities, so their `EntityField` rows aren't deleted for being absent from the SQL catalog (`vwSQLColumnsAndEntityFields`).
+  - **Field provisioning:** `manageExternalEntities` now refreshes the in-memory metadata cache before syncing fields. Without it, `EntityByName()` returned null for entities created/seeded after CodeGen's startup load and field sync was silently skipped — so external entities never got their introspected fields. This mirrors the existing refresh for config-created virtual entities.
+  - **System-column ensuring:** `ensureCreatedAtUpdatedAtFieldsExist` skips external entities — they have no physical base table to add `__mj_CreatedAt/UpdatedAt/DeletedAt` columns to.
+
+  The create-new-fields-from-schema and `spUpdateExistingEntityFieldsFromSchema` paths are unaffected — they INNER JOIN to the SQL catalog, which yields no rows for external entities.
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [19ec4b0]
+- Updated dependencies [bc085e0]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/server-bootstrap-lite@5.45.0
+  - @memberjunction/core-entities-server@5.45.0
+  - @memberjunction/external-data-sources@5.45.0
+  - @memberjunction/external-data-source-sqlserver@5.45.0
+  - @memberjunction/external-data-source-mysql@5.45.0
+  - @memberjunction/external-data-source-oracle@5.45.0
+  - @memberjunction/external-data-source-postgres@5.45.0
+  - @memberjunction/external-data-source-snowflake@5.45.0
+  - @memberjunction/external-data-source-mongodb@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-prompts@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/actions@5.45.0
+  - @memberjunction/postgresql-dataprovider@5.45.0
+  - @memberjunction/sqlserver-dataprovider@5.45.0
+  - @memberjunction/ai@5.45.0
+  - @memberjunction/cli-core@5.45.0
+  - @memberjunction/ai-provider-bundle@5.45.0
+  - @memberjunction/config@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+  - @memberjunction/sql-parser@5.45.0
+
+## 5.44.0
+
+### Minor Changes
+
+- 7279819: Fixes PostgreSQL lowercase-schema entity class names breaking mixed-case OpenApp builds.
+
+### Patch Changes
+
+- e315b2f: IS-A Relationship codegen patch
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/aiengine@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core-entities-server@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/server-bootstrap-lite@5.44.0
+  - @memberjunction/ai-prompts@5.44.0
+  - @memberjunction/generic-database-provider@5.44.0
+  - @memberjunction/sqlserver-dataprovider@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/actions@5.44.0
+  - @memberjunction/postgresql-dataprovider@5.44.0
+  - @memberjunction/cli-core@5.44.0
+  - @memberjunction/ai-provider-bundle@5.44.0
+  - @memberjunction/config@5.44.0
+  - @memberjunction/sql-dialect@5.44.0
+  - @memberjunction/sql-parser@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- d94275b: refactor(codegen-lib): multi-provider `SetupDataSource` + PostgreSQL pool symmetry
+
+  **Why patch (not minor):** under the convention recent `@memberjunction/codegen-lib` entries
+  follow (see `5.42.0` — minor for `2f225e4` / `b7092ca`, both of which carried SQL migrations;
+  patch for `ded7a20`, which restructured `db-connection.ts` and added `getSqlConfig()` with no
+  migration), the semver bump is driven by whether the change ships a DB migration or schema
+  modification. This PR has no migration, no metadata changes, and no DB schema changes — it is
+  a pure code refactor + new optional `codegenPool` knobs + a new abstract `SetupDataSource()`
+  on the provider base. End-user behavior is unchanged when the new optional APIs / config keys
+  aren't touched, and no external code depends on the new exports yet — so `patch` is consistent
+  with the recent precedent.
+  - `RunCodeGenBase.setupDataSource()` now dispatches via `MJGlobal.Instance.ClassFactory.CreateInstance(CodeGenDatabaseProvider, dbPlatform)` instead of a hard-coded `if (platform === 'postgresql')` switch. Adding a new platform is a single `@RegisterClass` registration — no orchestrator change.
+  - `CodeGenDatabaseProvider` gains an abstract `SetupDataSource()` method; `SQLServerCodeGenProvider` and `PostgreSQLCodeGenProvider` own their respective implementations. The shared `DataSourceResult` interface moved to the base class.
+  - New `Config/pg-connection.ts` mirrors `Config/db-connection.ts`'s shape for PostgreSQL: lazy + module-cached pool via `PGConnectionManager`, plus a `getPgConfig()` accessor. Eliminates the previous function-local `pg.Pool` that was rebuilt on every `setupDataSource()`.
+  - New optional `codegenPool` config block (max, min, idleTimeoutMillis, connectionTimeoutMillis, statementTimeoutMs). When unset, underlying driver defaults apply — fully backwards compatible. `statementTimeoutMs` applies to both providers: it maps to mssql's `requestTimeout` and to PG's per-connection `statement_timeout` GUC.
+  - PG env vars (`PG_HOST` / `PG_PORT` / `PG_DATABASE` / `PG_USERNAME` / `PG_PASSWORD`) are now resolved once in `DEFAULT_CODEGEN_CONFIG` and flow through `configInfo`. When a PG*\* env var differs from its `DB*\*`counterpart, a`logWarning`records which one is winning and which one was overridden — silent precedence was the cause of "I set DB_HOST but it's still connecting to localhost" reports during dev. The provider reads`configInfo.dbHost` etc. directly — no second env-resolution layer at the connection site.
+
+  Documented in CLAUDE.md under "CodeGen Database Connections (SQL Server + PostgreSQL)".
+
+- fe89e68: Post-merge follow-up to PR #2854 (`refactor(codegen-lib): multi-provider SetupDataSource + PostgreSQL pool symmetry`), addressing review feedback. Bug-fix scope only — no migration, no schema changes — so this is patch under the same convention PR #2854 followed.
+
+  **Behavior fixes (silent regressions introduced by PR #2854):**
+  - **PG\_\* env-var precedence regressed when `dbPlatform` was set only in `mj.config.cjs`.** `_resolveConnEnv()` keyed its PG\** check on `_IS_PG_DEFAULT`, which derives from `process.env.DB_PLATFORM` alone. A user who set `dbPlatform: 'postgresql'` in their `mj.config.cjs` (no `DB_PLATFORM` env var) and supplied the host via `PG_HOST` would silently connect to `localhost`. New helper `applyPlatformDependentEnvVars()` runs *after\* `mergeConfigs(DEFAULT_CODEGEN_CONFIG, userConfig)` to re-apply PG\*\* precedence to any field the user didn't explicitly set in `mj.config.cjs`, restoring the pre-refactor behavior (`process.env.PG_HOST ?? configInfo.dbHost`). Wired into both the module-load merge and `initializeConfig()`.
+  - **SSL silently flipped on in `NODE_ENV=production`.** PR #2854's `buildPgConfig()` didn't set `SSL`, so `PGConnectionManager.Initialize()`'s `ssl: config.SSL ?? (process.env.NODE_ENV === 'production')` default kicked in — flipping codegen against non-SSL/locally-bridged PostgreSQL from off (the pre-refactor inline `pg.Pool` behavior) to on under any production shell. `buildPgConfig()` now passes `SSL: false` by default and exposes a new optional `codegenPool.ssl` knob (boolean or pg-ssl object) for callers that genuinely need SSL.
+  - **`statement_timeout` GUC missed the verify-SELECT-1 connection.** The runtime `connect` listener was attached _after_ `PGConnectionManager.Initialize()` had already opened, used, and released the first physical connection for its `SELECT 1` health check. That first warm client gets reused later without the GUC. The fix carries the timeout via the libpq `-c statement_timeout=<ms>` startup option (new optional `PGConnectionConfig.Options` field, threaded into the `pg.Pool` config), so every backend honors it from query #1 — including the verify connection. The runtime listener is removed entirely; the connect-string path is both correct and simpler.
+
+  **Warning hygiene:**
+  - The PG*\*/DB*\* precedence `console.warn` is now de-duplicated across the
+    module-load merge, the post-merge `applyPlatformDependentEnvVars` pass,
+    and any subsequent `initializeConfig()` calls. Without de-dup, a single
+    env-var divergence would emit 2–3 identical warnings; now it emits once
+    per `<pgEnv>:<ssEnv>` pair per process. A module-level set tracks which
+    pairs have already warned.
+
+  **Doc / API clarity:**
+  - `codegenPool` JSDoc + CLAUDE.md now spell out per-provider applicability: `statementTimeoutMs` is cross-platform; `max` / `min` / `idleTimeoutMillis` / `connectionTimeoutMillis` / `ssl` are PG-only today. Previously the docs claimed cross-platform application of pool-sizing knobs, but only `statementTimeoutMs` is wired into `buildSqlConfig()` — so a user setting `codegenPool.max: 50` for SQL Server was silently ignored.
+  - Added a `KEEP IN SYNC` comment near `DEFAULT_CODEGEN_CONFIG` pointing to `applyPlatformDependentEnvVars`'s `overrides` table — the two share the same set of PG*\*/DB*\* env-var pairs and must be updated together.
+  - Fixed JSDoc typo `@memberjunction/postgresql-data-provider` → `@memberjunction/postgresql-dataprovider`.
+
+  **Test quality:**
+  - `setupDataSource.test.ts` now exercises the actual `resolveCodeGenDatabaseProvider()` function the orchestrator delegates to, instead of re-implementing the factory call inline. The orchestrator's "not registered → throw with descriptive message" branch is now genuinely covered — previously the assertions would have kept passing even if the real method had drifted. The dispatch logic was extracted from `RunCodeGenBase.setupDataSource()` into a free function on `codeGenDatabaseProvider.ts` to make this possible without forcing the test to import the heavy `runCodeGen.ts` module.
+  - New `db-connection.test.ts` covers the SQL Server `codegenPool.statementTimeoutMs` → `dbRequestTimeout` → 120000 precedence chain — previously only validated E2E. `buildSqlConfig` is exported for the test (sole production caller remains `MSSQLConnection()`).
+  - New `applyPlatformDependentEnvVars.test.ts` covers the helper added by this PR: short-circuit on non-PG `dbPlatform`, PG\_\* override semantics, user-explicit precedence, non-numeric PG_PORT handling, and warning de-dup (single warning across multiple `initializeConfig()` calls). The function is exported solely for testing — production code only calls it internally.
+
+  **`@memberjunction/postgresql-dataprovider`:** additive — `PGConnectionConfig` gains an optional `Options` field threaded into `pg.PoolConfig.options`. Existing consumers that don't set it see identical behavior.
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [fe89e68]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [4e05350]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/postgresql-dataprovider@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/actions@5.43.0
+  - @memberjunction/ai-prompts@5.43.0
+  - @memberjunction/ai@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/sqlserver-dataprovider@5.43.0
+  - @memberjunction/aiengine@5.43.0
+  - @memberjunction/actions-base@5.43.0
+  - @memberjunction/generic-database-provider@5.43.0
+  - @memberjunction/core-entities-server@5.43.0
+  - @memberjunction/server-bootstrap-lite@5.43.0
+  - @memberjunction/cli-core@5.43.0
+  - @memberjunction/ai-provider-bundle@5.43.0
+  - @memberjunction/sql-parser@5.43.0
+  - @memberjunction/config@5.43.0
+
+## 5.42.0
+
+### Minor Changes
+
+- 2f225e4: CodeGen + SS→PG converter type-correctness on PostgreSQL:
+  - **codegen-lib / core / actions-base**: core + codegen type correctness on PostgreSQL, plus a
+    PG-only migration repairing TypeScript that the SS→PG baseline conversion corrupted in
+    GeneratedCode rows. _(migration → minor)_
+  - **sql-converter**: never quote identifiers inside string literals during SS→PG conversion. _(code → patch)_
+
+- b7092ca: PostgreSQL runtime correctness, found during fresh-DB PG end-to-end testing:
+  - **codegen-lib**: clean MJAPI engine load on PostgreSQL — `AutoUpdatePath` written as a
+    dialect-correct boolean literal, plus a PG-only migration removing orphan related-entity-name
+    virtual EntityField rows whose column the generated PG base view never emits (these crashed
+    EntityActionEngine / AI Credential Bindings / Scheduling with `column "..." does not exist`).
+  - **open-app-engine**: app uninstall now deletes all FK-dependent metadata (Entity Field Values,
+    Entity Settings) in dependency order and reports a real failure instead of swallowing errors
+    into a false "success".
+  - **postgresql-dataprovider**: dialect-correct per-field entity-search predicate (no `N'...'`
+    literal prefix, no `ESCAPE` clause) — fixes `syntax error at or near "ESCAPE"` on live search.
+
+### Patch Changes
+
+- ded7a20: Install-pipeline + codegen-lib bug fixes surfaced during E2E testing.
+
+  **Installer (`@memberjunction/installer`):**
+  - **ConfigurePhase** — checkpoint resume no longer corrupts `.env` on restart. The resume path now reads-then-merges instead of re-writing empty defaults, so a partially-completed install can pick up where it left off without losing user-entered credentials.
+  - **ConfigurePhase** — `syncEnvFieldsFromRoot()` now propagates `PG_HOST` / `PG_PORT` / `PG_DATABASE` / `PG_USERNAME` / `PG_PASSWORD` in addition to the SQL-Server-style `DB_*` keys, so a PostgreSQL install whose root `.env` uses PG-prefixed env vars keeps the MJAPI `.env` in sync on re-run.
+  - **ConfigurePhase / DependencyPhase** — `tagToNpmVersion()` does strict semver validation and falls back to `latest` for non-semver tags, so branch refs like `feature/some-branch` no longer get passed to `npm install --tag` (npm interprets those as GitHub shorthand and ssh-clones).
+  - **DatabaseProvisionPhase** — `mj-db-setup.sql` skips `CREATE LOGIN`, `CREATE USER`, `ALTER ROLE`, and `GRANT EXECUTE` when the configured DB user is a SQL Server built-in sysadmin (`sa`). `isBuiltInSysadmin()` guard added with 5 unit tests.
+  - **MigratePhase** — migration timeout is now configurable via the `MJ_INSTALL_MIGRATE_TIMEOUT_MIN` env var, with an accurate error message on timeout.
+  - **PreflightPhase + DatabaseProvisionPhase** — both phases now honor the actual `.env` target path during connectivity preflight, reading `PG_HOST` / `PG_PORT` first then falling back to `DB_HOST` / `DB_PORT`. Matches `codegen-lib`'s `DEFAULT_CODEGEN_CONFIG` precedence so a PG `.env` doesn't yield a false-negative "missing credentials" warning.
+  - **models/InstallConfig** — accept user-facing `AuthProviderValues` key shapes (`ClientID` / `TenantID` for entra, `Domain` / `ClientID` for auth0) and add a legacy-alias compat layer so existing camelCase `install.config.json` files (`dbUrl` / `codeGenLogin` / `msalWebClientId` / etc.) keep working alongside the new PascalCase shape.
+
+  **CodeGen-lib (`@memberjunction/codegen-lib`):**
+  - **`Config/db-connection.ts`** — mssql config is now built lazily inside `MSSQLConnection()` instead of destructured at module load. The previous behavior captured empty defaults before `initializeConfig()` populated them, producing `"config.server property is required"` at codegen time. The exported mutable `sqlConfig` `let` was refactored into a `getSqlConfig()` accessor function (no exposed mutable storage). JSDoc explicitly clarifies the file is SQL-Server-only.
+  - **`Config/config.ts`** — schema-validation failures in `initializeConfig()` now surface via `LogError`. A visible error beats a silent empty `configInfo` plus a downstream `"config.server"` crash.
+  - **`runCodeGen.ts`** — single consumer updated to use the new `getSqlConfig()` accessor instead of importing `sqlConfig` directly.
+
+- 6ac8ca4: feat(integration): v2 integration framework + unified connector set (GrowthZone, OpenWater, ORCID, PropFuel, Path LMS)
+
+  Consolidated integration-v2 work — framework hardening + five connectors — proven end-to-end via the
+  GraphQL stand-up path (clean DB, CreateConnection → ApplyAll → StartSync) on SQL Server.
+
+  **Integration core (`integration-engine`, `integration-engine-base`, `integration-schema-builder`):**
+  - Deterministic §4 content-hash identity stamp for keyless rows (stable storage key + idempotent re-sync).
+  - Door-before-child dependency ordering derived from soft-FK `parentObjectName`/`ReferencedType` — children
+    land in one pass (no ZERO_PARENTS, no second-sync self-heal).
+  - Adaptive rate-limit hooks (`RateLimitAcquire`/`Report`/`MaxConcurrency`) on `FetchContext`.
+  - Shared `auth-helpers` (`OAuth2TokenManager`); `KeySerialization`/`RecordFlatten` committed (were
+    imported-but-untracked — fresh clones could not build); `IntegrationEngineBase.SeedForTesting` for
+    offline replay harnesses.
+
+  **Schema correctness + sizing (`integration-engine`, `integration-schema-builder`):**
+  - `json`/`text`/`array`/`object` and unsized strings map to `NVARCHAR(MAX)`/unbounded text instead of
+    being collapsed to `nvarchar(255)` — a nested-array JSON or long field routinely exceeds 255 and was
+    dropped at sync time (OpenWater `Program.rounds` went from **0** rows to all of them). Bounded scalar
+    strings keep a small, space-efficient size (255 floor; declared length + headroom when the source
+    reports one; PK strings capped at the dialect index-key limit). Soft-PK columns are emitted nullable.
+  - String-overflow is **skip-and-surface** (`STRING_OVERFLOW_SKIPPED` SyncWarning via the new
+    `StringOverflowError`), not truncate or fail-the-batch.
+  - **Active-only materialization (phantom-skip):** `buildSourceSchemaFromPersistedRows` materializes only
+    `Status='Active'` objects/fields — no empty phantom tables, no wasted per-entity CodeGen/advancedGen cost.
+
+  **StartSync honesty (`server`):**
+  - `IntegrationStartSync` no longer returns optimistic `{Success:true, RunID:null}` for fast/no-op syncs;
+    it resolves the run by recency over a bounded poll (real `RunID`), and returns `Success:false` with a
+    message when no run record appears.
+
+  **Soft-PK config cache (`codegen-lib`):**
+  - `RunInProcess` invalidates `ManageMetadataBase`'s soft-PK/FK config cache per in-process run — the
+    path-keyed cache went stale in the long-lived MJAPI RSU CodeGen path ("No primary key found" → entity
+    never created → 0 rows synced until restart). Deterministic; the CLI `Run()` path is unchanged.
+
+  **Unified connector set (`integration-connectors`):**
+  - **GrowthZone** — OAuth2, 38 objects, idempotency + probe-amended pagination metadata.
+  - **OpenWater** — 25 objects, OpenAPI-complete.
+  - **ORCID** — 12 per-record objects, public-API live-verified.
+  - **PropFuel** — file-feed slice (rich REST API documented out-of-scope).
+  - **Path LMS (Blue Sky eLearn)** — GraphQL Reporting API, pull-only; GraphQL over `/graphql`, two-step
+    app-credential → bearer auth; credential-free discovery from the public SpectaQL schema (84 record
+    types / 1175 fields); per-object `AccessPath` walks the 16 GraphQL query doors to leaf records;
+    content-hash idempotency.
+  - All five validated under the v2 architecture (RealityProbe / completeness-diff / T12 idempotency).
+
+  **Migration + metadata (additive schema → minor):** ships forward migration(s) + integration metadata
+  seeds; additive only — no column drops, narrowing, renames, or new required params — backward-compatible
+  **minor** per the publish-then-no-breaking-changes policy.
+
+- 34152e1: Pluggable mj CLI with AI agent and automation friendly output: new cli-core package (BaseCLIPlugin + runtime host), json formatting for machine readable output and two tier progressive disclosure. with per-command runtime/timeout hints, and a fix for sync/push/pull hanging on DB-pool teardown after emitting results
+- Updated dependencies [256ab06]
+- Updated dependencies [c871a4d]
+- Updated dependencies [9b9b484]
+- Updated dependencies [d185a5c]
+- Updated dependencies [e7c2437]
+- Updated dependencies [37c73f6]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [5ada858]
+- Updated dependencies [2f225e4]
+- Updated dependencies [b7092ca]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+- Updated dependencies [34152e1]
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/ai-prompts@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/generic-database-provider@5.42.0
+  - @memberjunction/server-bootstrap-lite@5.42.0
+  - @memberjunction/actions@5.42.0
+  - @memberjunction/aiengine@5.42.0
+  - @memberjunction/sqlserver-dataprovider@5.42.0
+  - @memberjunction/actions-base@5.42.0
+  - @memberjunction/postgresql-dataprovider@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/core-entities-server@5.42.0
+  - @memberjunction/cli-core@5.42.0
+  - @memberjunction/ai@5.42.0
+  - @memberjunction/ai-provider-bundle@5.42.0
+  - @memberjunction/config@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+  - @memberjunction/sql-parser@5.42.0
+
+## 5.41.0
+
+### Minor Changes
+
+- cd6c5f0: Realtime AI Agents wave 3: consolidated v5.41 migration (sessions, channels, co-agent schema) with the AIAgentCoAgent affinity registry replacing AIAgentPairedAgent — typed relationship vocabulary (CoAgent implemented; Peer/Delegate/Fallback/Reviewer/Observer reserved), type-level co-agent defaults as junction rows (removing the only FK cycle in core MJ), and the full code sweep (engine cache, resolver resolution chain, server-side invariants, client pairing reads, regenerated manifests). Realtime UX: progressive-disclosure voice console with persisted captions preference, user-owned composer and tabs toggles, audio-reactive visuals; whiteboard pages/multi-select and review-persistence fixes. Gemini Live triggering turns ride realtime text so widget clicks/typed input/narration speak immediately on native-audio models. CodeGen: single-winner IsNameField enforcement with eligibility guardrail fixes, SCC-based cycle diagnostics, and clean-database bootstrap robustness (conditional engine registry datasets).
+
+### Patch Changes
+
+- a69b0fa: Fix CodeGen SP generation for PK-only entities, fix mj sync push exit code on failure, and use GetSystemUser for API Key scope checks
+- Updated dependencies [8fd6f59]
+- Updated dependencies [1e81848]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [1568bae]
+- Updated dependencies [4b3fb9d]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/core-entities-server@5.41.0
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/aiengine@5.41.0
+  - @memberjunction/server-bootstrap-lite@5.41.0
+  - @memberjunction/generic-database-provider@5.41.0
+  - @memberjunction/ai-core-plus@5.41.0
+  - @memberjunction/ai-provider-bundle@5.41.0
+  - @memberjunction/ai-prompts@5.41.0
+  - @memberjunction/actions-base@5.41.0
+  - @memberjunction/actions@5.41.0
+  - @memberjunction/postgresql-dataprovider@5.41.0
+  - @memberjunction/sqlserver-dataprovider@5.41.0
+  - @memberjunction/config@5.41.0
+  - @memberjunction/global@5.41.0
+  - @memberjunction/sql-dialect@5.41.0
+  - @memberjunction/sql-parser@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- Updated dependencies [da2ee38]
+  - @memberjunction/core-entities-server@5.40.2
+  - @memberjunction/sqlserver-dataprovider@5.40.2
+  - @memberjunction/server-bootstrap-lite@5.40.2
+  - @memberjunction/ai@5.40.2
+  - @memberjunction/ai-core-plus@5.40.2
+  - @memberjunction/aiengine@5.40.2
+  - @memberjunction/ai-prompts@5.40.2
+  - @memberjunction/ai-provider-bundle@5.40.2
+  - @memberjunction/actions-base@5.40.2
+  - @memberjunction/actions@5.40.2
+  - @memberjunction/config@5.40.2
+  - @memberjunction/generic-database-provider@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/global@5.40.2
+  - @memberjunction/postgresql-dataprovider@5.40.2
+  - @memberjunction/sql-dialect@5.40.2
+  - @memberjunction/sql-parser@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/aiengine@5.40.1
+  - @memberjunction/ai-prompts@5.40.1
+  - @memberjunction/actions-base@5.40.1
+  - @memberjunction/actions@5.40.1
+  - @memberjunction/generic-database-provider@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/core-entities-server@5.40.1
+  - @memberjunction/postgresql-dataprovider@5.40.1
+  - @memberjunction/sqlserver-dataprovider@5.40.1
+  - @memberjunction/server-bootstrap-lite@5.40.1
+  - @memberjunction/ai-provider-bundle@5.40.1
+  - @memberjunction/ai@5.40.1
+  - @memberjunction/config@5.40.1
+  - @memberjunction/global@5.40.1
+  - @memberjunction/sql-dialect@5.40.1
+  - @memberjunction/sql-parser@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- 804f9f6: Security audit fixes: parameterize SQL queries in GraphQL resolvers to prevent injection, validate entity read permissions on query execution, centralize permission logic in UserCanRun with recursive dependency checks, and fix UUID/multi-provider compliance violations.
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/generic-database-provider@5.40.0
+  - @memberjunction/sqlserver-dataprovider@5.40.0
+  - @memberjunction/server-bootstrap-lite@5.40.0
+  - @memberjunction/ai-core-plus@5.40.0
+  - @memberjunction/aiengine@5.40.0
+  - @memberjunction/ai-prompts@5.40.0
+  - @memberjunction/actions-base@5.40.0
+  - @memberjunction/actions@5.40.0
+  - @memberjunction/core-entities-server@5.40.0
+  - @memberjunction/postgresql-dataprovider@5.40.0
+  - @memberjunction/ai-provider-bundle@5.40.0
+  - @memberjunction/ai@5.40.0
+  - @memberjunction/config@5.40.0
+  - @memberjunction/global@5.40.0
+  - @memberjunction/sql-dialect@5.40.0
+  - @memberjunction/sql-parser@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- db4addf: feat(integration): Integration Framework Expansion — schema + metadata-driven CRUD base class, generated layer, cross-dialect hardening, and field-mapping cache
+
+  End-to-end increment expanding the integration framework: new per-operation write metadata on the schema, a generic metadata-driven CRUD base class, the regenerated entity/GraphQL/form layers that expose it, plus the cross-dialect (PostgreSQL + SQL Server) bug fixes and a field-mapping performance cache found while proving it live.
+
+  **Schema (v5.39.x migration)**
+  - `IntegrationObject`: explicit per-operation write columns — `CreateAPIPath`/`Method`/`BodyShape`/`BodyKey`/`IDLocation`, `UpdateAPIPath`/`Method`/`BodyShape`/`BodyKey`/`IDLocation`, `DeleteAPIPath`/`DeleteIDLocation`. The legacy `WriteAPIPath`/`WriteMethod` are kept one release as deprecated aliases.
+  - `IntegrationObject`: `IncrementalWatermarkField` — vendor cursor/timestamp field name driving the incremental sync filter.
+  - `IntegrationObject` + `IntegrationObjectField`: `MetadataSource` enum `{Declared, Discovered, Custom}` — provenance for merge precedence in `IntegrationSchemaSync`.
+
+  All schema changes are additive (new nullable fields + a new enum field) — no existing field is removed, renamed, or narrowed — so the bumps are **minor**.
+
+  **Engine / base class (`@memberjunction/integration-engine`)**
+  - `ExternalFieldSchema`: add `IsPrimaryKey` (distinct from `IsUniqueKey`). Fixes an `IntrospectSchema` bug where `IsPrimaryKey` was incorrectly mapped from `IsUniqueKey` — an object can have multiple unique fields but only one primary key.
+  - `BaseRESTIntegrationConnector`: new `TransformRecord` hook — optional per-record customization seam between `NormalizeResponse` and `ToExternalRecord` (default identity); override for vendor-specific record-level shape changes.
+  - `BaseRESTIntegrationConnector`: generic metadata-driven CRUD — `CreateRecord`/`UpdateRecord`/`DeleteRecord`/`GetRecord` read the per-operation columns and execute generically. Concrete connectors override only when an API is genuinely idiosyncratic. Replaces the hand-rolled write logic previously duplicated across every concrete connector.
+  - `FieldMappingEngine`: cache compiled `custom`-transform expressions instead of recompiling `new Function` once per field per record. A batch of N records sharing an expression compiles it once and executes the cached function N times, dropping per-record cost from `O(compile + execute)` to `O(execute)`. The cache stores a typed `CompiledExpression = (value, fields) => unknown` (no weak typing), caches compile failures too (a malformed expression is compiled once and the resulting `Error` re-thrown from cache per record, leaving `OnError` `Fail`/`Null`/`Skip` semantics unchanged), and is bounded by `MJLruCache` (1000-entry default) since the owning `IntegrationEngine` is a process-lifetime singleton.
+
+  **Generated layer (CodeGen for the v5.39.x migration)**
+  - `@memberjunction/core-entities` — `IntegrationObjectEntity` / `IntegrationObjectFieldEntity` gain strongly-typed accessors for the per-operation write columns, `IncrementalWatermarkField`, and the `MetadataSource` enum (`'Declared' | 'Discovered' | 'Custom'`).
+  - `@memberjunction/server` — regenerated resolvers / GraphQL types expose the new fields.
+  - `@memberjunction/ng-core-entity-forms` — regenerated `MJ: Integration Objects` / `MJ: Integration Object Fields` forms render the new fields.
+
+  **Cross-dialect hardening (PostgreSQL + SQL Server)**
+
+  Bugs found and fixed while proving the framework end-to-end on both dialects with live generated actions:
+  - `@memberjunction/codegen-lib` — PostgreSQL CRUD generation emitted the primary-key column twice for composite-PK entities, so association/junction tables never synced on PG; `PostgreSQLCodeGenProvider` now treats a multi-column PK as strategy-handled. Soft-PK/FK application uses dialect-aware identifier quoting and boolean literals (`this.dialect.QuoteIdentifier` / `BooleanLiteral`) so the pass runs correctly on PostgreSQL.
+  - `@memberjunction/server` — wired the PostgreSQL branch of the in-process CodeGen runner (`RuntimeSchemaManager.SetCodeGenRunner`) that previously existed only for SQL Server, so runtime schema sync no longer falls back to a hang-prone child process on PG. `IntegrationDiscoveryResolver` entity/field-map creation is now create-or-reuse (idempotent on re-apply), and its idempotency + operational list reads use `BypassCache` so create-vs-update decisions read committed state.
+  - `@memberjunction/integration-engine` — `MatchEngine.FindRecordMapEntry` and the bulk record-map load now read committed state (`BypassCache`), fixing duplicate-create after a direct-DB change; watermark save/load is idempotent to avoid a transaction-abort on retry. `LoadRunConfiguration` and every remaining operational decision-read — the upsert-by-identity record-map lookup, field-maps, the full-vs-incremental gate, write-back external-id lookup, orphan-sweep, and orphaned-run resume — now also `BypassCache`. This closes a Postgres-only gap where a freshly-toggled entity-map `Configuration` (e.g. enabling partition/Merkle reconcile) was read stale → the ChangeToken rollup was silently never written on PG, and removes the broader read-stale-then-decide bug class so the read-your-own-writes pipeline always decides from committed state on both dialects.
+  - `@memberjunction/core-actions` — the generated integration-action executor used stale entity names (`'Integrations'`, `'Company Integrations'`); corrected to `'MJ: Integrations'` / `'MJ: Company Integrations'` so `List`/`Get` invoke successfully.
+  - `@memberjunction/core-entities-server` — declares its previously-undeclared `@memberjunction/integration-pk-classifier` dependency (used by the server-side LLM PK-detection callback), fixing the missing-dependency check; covers the integration server-entity behavior (`MJCompanyIntegrationEntityServer`, `IntegrationLLMPKCallback`).
+  - Multi-provider safety — the post-pipeline metadata `Refresh()` calls in `IntegrationDiscoveryResolver` and `MJCompanyIntegrationEntityServer` now refresh the request's own provider (`provider ?? new Metadata()`) instead of the global default, satisfying the `MultiProviderCompliance` gate and refreshing the correct cache under a non-default provider.
+  - Dialect layer (`@memberjunction/sql-dialect`) — statement splitting for runtime schema migrations is now a dialect concern: `SplitStatements` (naive `;`-split on the base, dollar-quote-aware override on PostgreSQL so `DO $$…$$` blocks stay intact) instead of living in the schema-engine runtime.
+
+- Updated dependencies [26761b8]
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [eaee99f]
+- Updated dependencies [2d1b4e1]
+- Updated dependencies [3c53858]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [db4addf]
+- Updated dependencies [8c39dd9]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [a2aecc7]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/actions@5.39.0
+  - @memberjunction/core@5.39.0
+  - @memberjunction/postgresql-dataprovider@5.39.0
+  - @memberjunction/sqlserver-dataprovider@5.39.0
+  - @memberjunction/server-bootstrap-lite@5.39.0
+  - @memberjunction/generic-database-provider@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/core-entities-server@5.39.0
+  - @memberjunction/ai-prompts@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/aiengine@5.39.0
+  - @memberjunction/actions-base@5.39.0
+  - @memberjunction/ai-provider-bundle@5.39.0
+  - @memberjunction/config@5.39.0
+  - @memberjunction/sql-dialect@5.39.0
+  - @memberjunction/sql-parser@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- 6a3ac36: Fix AllowUpdateAPI clearing when EntityField transitions to virtual, use subqueries for organic key INSERTs for portable SQL, prevent permanent engine failure when MJAPI is temporarily unavailable, and centralize RLS exemption check in GetUserRowLevelSecurityWhereClause
+- 3d739a3: refactor(sql-parser): instance-based parser with dialect adapters, parse-preprocessing, instance-based count SQL, and a render-pipeline write-statement guard
+  - **`SQLParser` is now instance-based** (`new SQLParser(sql, dialect)`). AST inspection/mutation (`IsValid`, `StatementKind`, `HasWriteStatement`, `OuterCap`, `SetOuterCap`, `ClearOuterCap`, `ClearOrderBy`, `ToSQL`) and extraction (`ExtractCTEs`, `ExtractTableRefs`, `ExtractColumnRefs`, `ExtractSelectColumns`) are instance members; pure string/token utilities (`ParseSQL`, `SqlifyAST`, `StripComments`, `Tokenize`, `Analyze`, `HasUnwrappableTrailingClause`, `HasStackedStatements`, the MJ-template helpers, …) remain static.
+  - **Dialect-neutral row caps via an internal `ASTDialectAdapter`** (keyed by `ParserDialect`). The exported `SQLOuterCap` (with its `kind: 'top' | 'limit'`) is replaced by `RowCapInfo` with an explicit `form: 'numeric' | 'percent' | 'opaque'` discriminant. The `isSQLServerDialect()` quote-probe and the `dialect.PlatformKey === 'sqlserver'` branch in the row-cap path are gone (`outerWrap` now uses `dialect.LimitClause()`).
+  - **Parse-preprocessing fallback** in the constructor: on a direct-parse failure it aliases bracket-quoted identifiers with parser-defeating characters (`[Active People]`, `[my-cte]`) and splits a trailing `OPTION (...)` clause, then restores both on `ToSQL`. This lets Skip-style CTE queries and `OPTION` queries reach the precise AST row-cap path (`TOP N` / `LIMIT N`) instead of the OFFSET/FETCH or outer-wrap fallback.
+  - **Instance-based count SQL**: `QueryPagingEngine`'s count builder is unified onto the instance API (`ExtractCTEs` + `ClearOuterCap` + `ClearOrderBy` + `ToSQL`), removing the last `as unknown as Record<string, unknown>` cast and raw AST field pokes from the engine. The count now strips the outer cap on **both** dialects, so a paged query's `COUNT(*)` reflects the full set — fixing a PostgreSQL inconsistency where an explicit `LIMIT` previously yielded a capped count (SQL Server already stripped `TOP`).
+  - **Render-pipeline safety guard** (`RenderPipeline.Run`): a rendered query must be a single read statement, enforced by two complementary checks. (1) `SQLParser.HasWriteStatement` (AST) rejects a write _type_ anywhere — DML (INSERT/UPDATE/DELETE/MERGE/REPLACE), DDL (DROP/CREATE/ALTER/TRUNCATE/RENAME), or EXEC/CALL/GRANT/REVOKE/USE — catching single writes and parseable stacked writes (`SELECT 1; DROP TABLE x`). (2) `SQLParser.HasStackedStatements` (token scan) rejects any internal statement-separating `;`, catching stacked payloads that don't parse (`SELECT 1; EXEC xp_cmdshell '…'`, `SELECT 1; WAITFOR DELAY '…'`) — the class an AST scan misses because the whole string fails to parse. Both are precise: the `REPLACE()` string function and parenthesized SELECTs pass, and a single trailing `;` is fine; only genuine multi-statement inputs (including `SET` / `DECLARE` prefixes) are rejected. (The broad dangerous-keyword scan stays on the ad-hoc execution path, where input is untrusted free text.)
+  - **`SQLExpressionValidator`**: `FOR` is now allowed in `full_query` context so `FOR JSON` / `FOR XML` queries aren't wrongly rejected (`FOR UPDATE` remains blocked via the independent `UPDATE` keyword).
+
+  No behavior change for already-valid read queries; preprocessing only widens AST coverage, the count fix only affects paged queries that carried an explicit cap, and the guard only rejects writes/stacked statements. All consumers (`queryPagingEngine`, `queryCompositionEngine`, `query-extraction`, `manage-metadata`, `structuralParser`) migrated to the instance API.
+
+- Updated dependencies [6b6c321]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [8bd97f3]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/aiengine@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/generic-database-provider@5.38.0
+  - @memberjunction/sql-dialect@5.38.0
+  - @memberjunction/sql-parser@5.38.0
+  - @memberjunction/core-entities-server@5.38.0
+  - @memberjunction/sqlserver-dataprovider@5.38.0
+  - @memberjunction/server-bootstrap-lite@5.38.0
+  - @memberjunction/ai-prompts@5.38.0
+  - @memberjunction/actions-base@5.38.0
+  - @memberjunction/actions@5.38.0
+  - @memberjunction/postgresql-dataprovider@5.38.0
+  - @memberjunction/ai@5.38.0
+  - @memberjunction/ai-provider-bundle@5.38.0
+  - @memberjunction/config@5.38.0
+
+## 5.37.0
+
+### Minor Changes
+
+- baf3032: Add UNIQUE constraints to 17 pure junction tables in `__mj` so duplicate natural-key pairs fail loudly instead of silently accumulating. `__mj.Entity` has long had `UQ_Entity_Name` protecting its natural key, but the closely-related junction tables (ApplicationEntity, UserApplicationEntity, ActionLibrary, AIAgentArtifactType, AIModelAction, APIKeyApplication, AuthorizationRole, ComponentDependency, ComponentLibraryLink, EmployeeRole, EmployeeSkill, EntityAction, EntityCommunicationMessageType, FileEntityRecordLink, QueryPermission, ActionAuthorization, ActionContext) had no equivalent enforcement — CodeGen's blind `INSERT` paths and other writers could (and did, in production) accumulate semantic duplicates when input gating failed (entity delete/recreate cycles, parallel CodeGen runs, manual bootstrap scripts). Migration assumes the affected tables are free of duplicate `(FK1, FK2)` pairs before running; verified zero dups on the reference environment but databases with pre-existing duplicates must dedup before applying. Tightening change — writes producing duplicates now error rather than silently succeed.
+
+### Patch Changes
+
+- Updated dependencies [464f30c]
+- Updated dependencies [22b775f]
+- Updated dependencies [1af94d0]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/server-bootstrap-lite@5.37.0
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/actions@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/sql-parser@5.37.0
+  - @memberjunction/generic-database-provider@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/ai-prompts@5.37.0
+  - @memberjunction/core-entities-server@5.37.0
+  - @memberjunction/sqlserver-dataprovider@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/postgresql-dataprovider@5.37.0
+  - @memberjunction/ai-provider-bundle@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/config@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/sql-dialect@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- e215af2: Stop related-entity grid panels in generated forms from fetching data on form open, and decouple panel-height persistence from expansion state.
+  - `IsSectionExpanded()` now honors the collapsed default seeded by `initSections()` instead of falling back to the global expanded default, and the entity data grid defers its auto-load decision one microtask so a later `[AllowLoad]="false"` binding is applied before the load check runs.
+  - Fixed the underlying bug where persisting a panel's height silently marked the section expanded: a `ResizeObserver` fired on initial measurement and `updateSectionState` merged `DEFAULT_SECTION_STATE` (`isExpanded: true`) into a height-only write, so on the next form open that persisted value won over the seeded collapsed default. `FormSectionState.isExpanded` is now optional (`undefined` = no explicit user choice), `updateSectionState` no longer seeds the default, and the `ResizeObserver` skips its initial fire and only persists while expanded.
+  - Related-entity grids now lazy-load via an `IntersectionObserver` in `ExplorerEntityDataGridComponent`: a grid fetches only once its host scrolls into view, so off-screen and collapsed panels never fire a `RunView` on form open.
+  - CodeGen now seeds all field panels expanded by default (except System Metadata), with related-entity grids collapsed. **Visible UX change:** generated forms that previously opened with related-entity sections expanded will now show those sections collapsed. Regenerate forms to pick up the new defaults.
+
+- Updated dependencies [1c0fce9]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/server-bootstrap-lite@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/aiengine@5.36.0
+  - @memberjunction/ai-prompts@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/actions@5.36.0
+  - @memberjunction/generic-database-provider@5.36.0
+  - @memberjunction/core-entities-server@5.36.0
+  - @memberjunction/sqlserver-dataprovider@5.36.0
+  - @memberjunction/postgresql-dataprovider@5.36.0
+  - @memberjunction/ai-provider-bundle@5.36.0
+  - @memberjunction/ai@5.36.0
+  - @memberjunction/config@5.36.0
+  - @memberjunction/global@5.36.0
+  - @memberjunction/sql-dialect@5.36.0
+  - @memberjunction/sql-parser@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- 207cba4: Scope the Developer delete-permission grant migration to the `__mj` schema so it never touches customer-defined schemas, and flip CodeGen's default `CanDelete` for the Developer role to `true` so newly registered entities ship with the Developer role's full CRUD permissions.
+- ac4b9a5: **Multi-tenant switching** (`@memberjunction/global`, `@memberjunction/ng-explorer-core`): Add `TenantChanged` event type to `MJEventType`. Add `clearCacheByPredicate()` on `ComponentCacheManager` for selective tenant-scoped cache clearing. Add `ClearComponentCache()` and `ReloadAllTabs()` on `TabContainerComponent` — destroys cached components and reloads the active tab immediately (inactive tabs reload lazily). Shell subscribes to `TenantChanged` with two-phase protocol: `TenantChanging` shows the loading screen, `TenantChanged` reloads tabs and hides it. Loading screen CSS made `position: fixed` with `z-index: 99999` to fully cover viewport during switches.
+
+  **Open App fixes** (`@memberjunction/open-app-engine`): Make `mj app upgrade` idempotent when already at target version. Allow mixed-case schema names in Open App manifest validation.
+
+  **CodeGen fix** (`@memberjunction/codegen-lib`): Emit `override` modifier on generated `Save()` method to satisfy strict TypeScript when entity subclasses override the base `Save()`.
+
+  **AI Agents dashboard** (`@memberjunction/ng-dashboards`): Fix category filter not filtering results, make category filter extraction defensive, fix Reset Filters button. Rename Actions `ExecutionMonitoringComponent` to avoid name collision with dashboards package.
+
+  **Scheduling** (`@memberjunction/server`): Warn loudly when a scheduled job is configured to run more often than every 5 minutes.
+
+  **Palette** (`@memberjunction/ng-ui-components`): Add ARIA labels to icon-only buttons in dialogs and slides for accessibility compliance.
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [6f083dd]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/server-bootstrap-lite@5.35.0
+  - @memberjunction/generic-database-provider@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/ai-prompts@5.35.0
+  - @memberjunction/core-entities-server@5.35.0
+  - @memberjunction/postgresql-dataprovider@5.35.0
+  - @memberjunction/sqlserver-dataprovider@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/aiengine@5.35.0
+  - @memberjunction/actions-base@5.35.0
+  - @memberjunction/actions@5.35.0
+  - @memberjunction/ai-provider-bundle@5.35.0
+  - @memberjunction/ai@5.35.0
+  - @memberjunction/config@5.35.0
+  - @memberjunction/sql-dialect@5.35.0
+  - @memberjunction/sql-parser@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- 16e799c: no migration/metadata
+- Updated dependencies [3a35358]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/generic-database-provider@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/ai-prompts@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/actions@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/core-entities-server@5.34.1
+  - @memberjunction/postgresql-dataprovider@5.34.1
+  - @memberjunction/sqlserver-dataprovider@5.34.1
+  - @memberjunction/server-bootstrap-lite@5.34.1
+  - @memberjunction/ai-provider-bundle@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/config@5.34.1
+  - @memberjunction/global@5.34.1
+  - @memberjunction/sql-dialect@5.34.1
+  - @memberjunction/sql-parser@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- 003317f: Add `EntityField.IsComputed` flag to distinguish SQL Server computed columns and PostgreSQL generated columns from view-only virtual columns. Both flavors continue to be flagged `IsVirtual = 1`, so every existing IsVirtual consumer (sproc generation, GraphQL input types, IS-A inheritance, RLS, form generation) is unchanged. The new flag refines base-view JOIN-target selection in CodeGen — when an FK's related Name Field is `IsComputed = 1`, the generated view joins to the related entity's base table instead of its view, avoiding unnecessary view materialization and unblocking self-referencing FKs whose Name Field is computed. Includes the SQL Server migration that adds the column, extends the `vwSQLColumnsAndEntityFields` metadata view, and updates `spUpdateExistingEntityFieldsFromSchema` to sync the flag from the catalog. The CodeGenLib PostgreSQL provider's pending-fields query already projects `IsComputed`; the corresponding PG view + sproc updates and the PG migration counterpart are produced by the version build / release pipeline (SQLConverter + pg-migrate skill) and are not included here. After deploying, run CodeGen once to repopulate `IsComputed` and regenerate base views that depend on entities with computed Name Fields.
+- 5d6110f: Fix `generateInsertFieldString` silently dropping primary-key columns from generated `spCreate` statements for tables with composite primary keys or single non-UUID primary keys (e.g. string `Code` keys). The metadata discovery query hardcodes `AllowUpdateAPI=0` for every PK column — semantically correct for UPDATE (PKs aren't updatable via the API) but the CREATE-side filter was reading the same flag to decide what goes into the INSERT, which incorrectly stripped PKs the caller is _required_ to supply on create. Added an `isCallerSuppliedPK` exception that keeps PK columns in the INSERT when they're neither auto-generated (no IDENTITY, no UUID-with-default) nor explicitly excluded via `excludePrimaryKey=true`. The four other skip clauses (`excludePrimaryKey`, `autoGeneratedPrimaryKey`, `IsVirtual`, `AutoIncrement`) are unchanged — IDENTITY and UUID-with-default PKs are still stripped via their own dedicated clauses, and non-PK `AllowUpdateAPI=false` columns (audit timestamps, etc.) are still stripped because the new exception only fires when `IsPrimaryKey=true`. The `AllowUpdateAPI=0` metadata flag is left untouched — it correctly encodes "no API updates" for the UPDATE-side codegen. Five regression tests added covering composite PK, single non-UUID PK, and three canaries (IDENTITY PK omission, UUID-with-default PK omission, non-PK audit-column omission).
+- 0caffca: Emit `override` modifier on CodeGen-generated `Delete()`. Consumers compiling with `noImplicitOverride: true` were hitting TS4114. Compile-time-only; no runtime change. Fixes #2588
+- 1b258e6: Don't append ';' to logged SQL ending with a T-SQL 'GO' batch separator — 'GO;' is invalid in SSMS/sqlcmd.
+- 6d8ee1a: no migration
+- Updated dependencies [4b8d9ed]
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/core-entities-server@5.34.0
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/aiengine@5.34.0
+  - @memberjunction/ai-prompts@5.34.0
+  - @memberjunction/ai-provider-bundle@5.34.0
+  - @memberjunction/actions-base@5.34.0
+  - @memberjunction/actions@5.34.0
+  - @memberjunction/config@5.34.0
+  - @memberjunction/generic-database-provider@5.34.0
+  - @memberjunction/postgresql-dataprovider@5.34.0
+  - @memberjunction/sql-dialect@5.34.0
+  - @memberjunction/sql-parser@5.34.0
+  - @memberjunction/sqlserver-dataprovider@5.34.0
+  - @memberjunction/server-bootstrap-lite@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/global@5.34.0
+  - @memberjunction/ai@5.34.0
+
 ## 5.33.0
 
 ### Minor Changes

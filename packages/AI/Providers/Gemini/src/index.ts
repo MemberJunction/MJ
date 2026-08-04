@@ -1,11 +1,45 @@
 
 
 // Google Gemini Import
-import { GoogleGenAI, Content, Part, Blob} from "@google/genai";
+import { GoogleGenAI, Content, Part, Blob, FileData } from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage, ErrorAnalyzer, FileCapabilities } from "@memberjunction/ai";
-import { RegisterClass } from "@memberjunction/global";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities } from "@memberjunction/ai";
+import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
+
+/**
+ * Snapshot of a request's cacheable-prefix info, captured so the GEMINI_CACHE_DEBUG diagnostics
+ * can report it next to the provider's reported cache usage. The hash lets you compare two
+ * "identical" runs: if the systemInstruction hash differs, the prefix is NOT byte-stable (e.g. a
+ * timestamp/date is embedded in the system prompt), which silently defeats Gemini's implicit cache.
+ */
+type GeminiCacheDiagContext = {
+    model: string;
+    systemInstructionChars: number;
+    systemInstructionHash: string;
+    historyLength: number;
+};
+
+/** Minimal shape of the fields we read off Gemini's usageMetadata for diagnostics. */
+type GeminiUsageMetadataLike = {
+    promptTokenCount?: number;
+    cachedContentTokenCount?: number;
+    candidatesTokenCount?: number;
+};
+
+/**
+ * True when `error` represents a client-initiated cancellation rather than a genuine provider or
+ * network failure. Node's fetch (which @google/genai uses under the hood) rejects with a
+ * `DOMException` named `AbortError` when the supplied `AbortSignal` fires, and with `TimeoutError`
+ * when the signal came from `AbortSignal.timeout()`.
+ */
+function isGeminiCancellationError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') {
+        return false;
+    }
+    const name = (error as { name?: string }).name;
+    return name === 'AbortError' || name === 'TimeoutError';
+}
 
 @RegisterClass(BaseLLM, "GeminiLLM")
 export class GeminiLLM extends BaseLLM {
@@ -24,6 +58,15 @@ export class GeminiLLM extends BaseLLM {
         pendingContent: '',
         thinkingComplete: false
     };
+
+    // Diagnostic context for the in-flight streaming request, used only by the GEMINI_CACHE_DEBUG
+    // logging path so the final chunk's usage can be reported alongside the request's prefix info.
+    private _cacheDiagContext: GeminiCacheDiagContext | null = null;
+
+    // Cancellation token for the in-flight STREAMING request. The base class's streaming loop
+    // swallows mid-stream iteration errors, so finalizeStreamingResponse() consults this to detect
+    // that the stream ended because the caller aborted (rather than because the model finished).
+    private _streamingCancellationToken: AbortSignal | null = null;
 
     constructor(apiKey: string) {
         super(apiKey);
@@ -91,7 +134,8 @@ export class GeminiLLM extends BaseLLM {
      * Convert MJ effort level (1-100) to Gemini thinkingBudget (0-24576)
      *
      * Mapping strategy:
-     * - 1-33 (low): 1024-4096 tokens
+     * - 1 (minimal): 0 (disabled) on Flash; clamped to ~1024 on Pro
+     * - 2-33 (low): 1024-4096 tokens
      * - 34-66 (medium): 4097-12288 tokens
      * - 67-100 (high): 12289-24576 tokens
      * - undefined: No thinkingConfig (Gemini default ~8192)
@@ -124,16 +168,16 @@ export class GeminiLLM extends BaseLLM {
         const isFlashModel = lowerModel.includes('flash');
         const isProModel = lowerModel.includes('pro') && !isFlashModel;
 
-        // Very low effort (1-5) - try to disable thinking on Flash models
-        if (level <= 5 && isFlashModel) {
+        // Minimal effort (1) - disable thinking on Flash models
+        if (level === 1 && isFlashModel) {
             return 0; // Disable thinking (only works on Flash/Flash-Lite)
         }
 
         // For Pro models, minimum effective budget is ~1024
-        // For Flash models with effort > 5, use normal scaling
+        // For Flash models with effort >= 2, use normal scaling
         if (level <= 33) {
-            // Low: linear scale from 1024 to 4096
-            return Math.round(1024 + ((level - 1) / 32) * (4096 - 1024));
+            // Low (2-33): linear scale from 1024 to 4096
+            return Math.round(1024 + ((level - 2) / 31) * (4096 - 1024));
         } else if (level <= 66) {
             // Medium: linear scale from 4097 to 12288
             return Math.round(4097 + ((level - 34) / 32) * (12288 - 4097));
@@ -198,16 +242,19 @@ export class GeminiLLM extends BaseLLM {
      * Implementation of non-streaming chat completion for Gemini
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
+        const startTime = new Date();
         try {
+            // Fail fast if the caller already cancelled before we opened a socket.
+            this.throwIfCancelled(params.cancellationToken);
+
             // For text-only input, use the gemini-pro model
-            const startTime = new Date();
             const modelName = params.model || "gemini-pro";
             
             // Filter out system messages and extract system instruction content
             const noSystemMessages = params.messages.filter(m => m.role !== 'system');
             const sysPrompts = params.messages.filter(m => m.role === 'system');
             const systemInstructionText = sysPrompts.length > 0
-                ? sysPrompts.map(m => typeof m.content === 'string' ? m.content : m.content.map(v => v.content).join('\n')).join('\n\n')
+                ? sysPrompts.map(m => GeminiLLM.mjContentToSystemInstructionText(m.content)).join('\n\n')
                 : '';
 
             // Convert all non-system messages and apply role alternation
@@ -218,11 +265,10 @@ export class GeminiLLM extends BaseLLM {
             const history = tempMessages.slice(0, -1);
             const lastMessage = tempMessages.length > 0 ? tempMessages[tempMessages.length - 1] : null;
 
-            // Prepare the final message with system instructions prepended to the last user message
+            // The system prompt is passed via systemInstruction (below), NOT bundled into the user
+            // message — bundling put the stable prompt AFTER the variable history, defeating Gemini's
+            // implicit prompt caching. The final message is just the latest user turn's parts.
             let finalMessageParts: Part[] = [];
-            if (systemInstructionText) {
-                finalMessageParts.push({ text: systemInstructionText });
-            }
             if (lastMessage) {
                 finalMessageParts.push(...lastMessage.parts);
             }
@@ -234,8 +280,18 @@ export class GeminiLLM extends BaseLLM {
             // Create the model and then chat
             const modelOptions: Record<string, any> = {
                 temperature: params.temperature || 0.5,
-                responseType: params.responseFormat,
             };
+
+            switch (params.responseFormat) {
+                case 'JSON':
+                    modelOptions.responseMimeType = 'application/json';
+                    break;
+                case 'ModelSpecific':
+                    if (params.modelSpecificResponseFormat) {
+                        Object.assign(modelOptions, params.modelSpecificResponseFormat);
+                    }
+                    break;
+            }
 
             // Add supported parameters
             if (params.topP != null) {
@@ -273,18 +329,29 @@ export class GeminiLLM extends BaseLLM {
             // Ensure Gemini client is initialized
             const client = await this.ensureGeminiClient();
 
-            // Create chat with history (all messages except the last)
-            // Don't use systemInstruction parameter - we're bundling it with the user message
+            // Pass the system prompt as systemInstruction (a plain string — a string[] is invalid and
+            // was the original reason this was bundled into the message). It becomes the stable,
+            // cacheable prefix so Gemini's implicit cache can engage across turns.
+            // NOTE: @google/genai's sendMessage `config` REPLACES (not merges) the session config, so
+            // systemInstruction must ride in the per-request config (modelOptions) — that's the one
+            // that applies. We intentionally do NOT fold chatConfig (thinkingConfig) in here: that
+            // preserves the prior thinking behavior exactly (it stays on the session config) and avoids
+            // sending a thinking level some models reject.
+            const requestConfig: Record<string, unknown> = { ...modelOptions };
+            if (systemInstructionText) {
+                requestConfig.systemInstruction = systemInstructionText;
+            }
+            this.applyCancellationToken(requestConfig, params.cancellationToken);
+
             const chat = client.chats.create({
                 config: Object.keys(chatConfig).length > 0 ? chatConfig : undefined,
                 model: modelName,
                 history: history
             });
 
-            // Send the last message with system instructions prepended
             const result = await chat.sendMessage({
                 message: finalMessageParts,
-                config: modelOptions
+                config: requestConfig
             });
 
             // Check for blocked response or empty candidates
@@ -356,12 +423,36 @@ export class GeminiLLM extends BaseLLM {
             }
 
             const endTime = new Date();
+
+            // Gemini's cache convention: `promptTokenCount` INCLUDES cached tokens, reported
+            // separately as `cachedContentTokenCount`. Normalize to the uniform ModelUsage contract:
+            // promptTokens must be UNCACHED/net-new only, so subtract the cache-read count (clamped at
+            // 0) and record it disjointly. Gemini does not report a separate cache-write charge, so
+            // cacheWriteTokens stays 0. Full native prompt count = usage.totalInputTokens.
+            const geminiCachedTokens = result.usageMetadata?.cachedContentTokenCount ?? 0;
+            const geminiNetPromptTokens = Math.max(0, (result.usageMetadata?.promptTokenCount || 0) - geminiCachedTokens);
+            const geminiUsage = new ModelUsage(
+                geminiNetPromptTokens,
+                result.usageMetadata?.candidatesTokenCount || 0
+            );
+            geminiUsage.cacheReadTokens = geminiCachedTokens;
+
+            this.logCacheDiagnostics(
+                'non-streaming',
+                this.buildCacheDiagContext(modelName, systemInstructionText, history.length),
+                result.usageMetadata
+            );
+
             return {
                 success: true,
                 statusText: "OK",
                 startTime: startTime,
                 endTime: endTime,
                 timeElapsed: endTime.getTime() - startTime.getTime(),
+                cacheInfo: {
+                    cacheHit: geminiCachedTokens > 0,
+                    cachedTokenCount: geminiCachedTokens
+                },
                 data: {
                     choices: [{
                         message: {
@@ -372,16 +463,23 @@ export class GeminiLLM extends BaseLLM {
                         finish_reason: finishReason || "completed",
                         index: 0
                     }],
-                    usage: new ModelUsage(
-                        result.usageMetadata?.promptTokenCount || 0,
-                        result.usageMetadata?.candidatesTokenCount || 0
-                    )
+                    usage: geminiUsage
+                },
+                // Full native Gemini response (circular-safe) for review/audit — includes
+                // usageMetadata (cachedContentTokenCount etc.) and candidate/safety details.
+                modelSpecificResponseDetails: {
+                    provider: 'google',
+                    model: modelName,
+                    raw: ToJSONSafe(result)
                 },
                 errorMessage: "",
                 exception: null,
             }
         }
         catch (e) {
+            if (this.isCancelled(e, params.cancellationToken)) {
+                return this.buildCancelledResult(startTime, e, params.cancellationToken);
+            }
             return {
                 success: false,
                 statusText: e && e.message ? e.message : "Error",
@@ -397,6 +495,66 @@ export class GeminiLLM extends BaseLLM {
                 errorInfo: ErrorAnalyzer.analyzeError(e, 'Gemini')
             }
         }
+    }
+
+    /**
+     * Attach the caller's cancellation token to a Gemini per-request config. @google/genai reads
+     * `GenerateContentConfig.abortSignal` and forwards it to the underlying `fetch` call, so an
+     * abort tears down the HTTP socket instead of merely abandoning the promise.
+     */
+    private applyCancellationToken(requestConfig: Record<string, unknown>, token: AbortSignal | undefined): void {
+        if (token) {
+            requestConfig.abortSignal = token;
+        }
+    }
+
+    /** Throw immediately (before any socket is opened) when the caller has already cancelled. */
+    private throwIfCancelled(token: AbortSignal | undefined): void {
+        if (token?.aborted) {
+            throw this.createCancellationError(token);
+        }
+    }
+
+    /** The canonical abort error we raise for a pre-aborted request, shaped like fetch's own. */
+    private createCancellationError(token: AbortSignal): Error {
+        const error = new Error(this.describeCancellation(token));
+        error.name = 'AbortError';
+        return error;
+    }
+
+    /** True when this failure is the caller's cancellation rather than a provider/network fault. */
+    private isCancelled(error: unknown, token: AbortSignal | undefined): boolean {
+        return token?.aborted === true || isGeminiCancellationError(error);
+    }
+
+    /** Human-readable reason for a cancellation, preferring the signal's own reason when present. */
+    private describeCancellation(token: AbortSignal | undefined): string {
+        const reason: unknown = token?.reason;
+        if (reason instanceof Error && reason.message) {
+            return `Gemini request cancelled: ${reason.message}`;
+        }
+        if (typeof reason === 'string' && reason.length > 0) {
+            return `Gemini request cancelled: ${reason}`;
+        }
+        return 'Gemini request cancelled by caller';
+    }
+
+    /**
+     * Build the typed ChatResult for a cancelled request. Reported as a normal failed ChatResult —
+     * same shape as every other Gemini error path — never as an unhandled rejection.
+     */
+    private buildCancelledResult(startTime: Date, error: unknown, token?: AbortSignal | null): ChatResult {
+        const endTime = new Date();
+        const result = new ChatResult(false, startTime, endTime);
+        result.statusText = 'Cancelled';
+        result.errorMessage = this.describeCancellation(token ?? undefined);
+        result.exception = error;
+        result.errorInfo = ErrorAnalyzer.analyzeError(error, 'Gemini');
+        result.data = {
+            choices: [],
+            usage: new ModelUsage(0, 0)
+        };
+        return result;
     }
 
     private setThinkingConfig(chatConfig: any, useThinking: boolean, effortLevel: string | undefined, modelName: string, thinkingBudget: number) {
@@ -417,11 +575,11 @@ export class GeminiLLM extends BaseLLM {
                     numericLevel = 0;
                 }
 
-                if (!numericLevel || numericLevel <= 1) {
-                    geminiLevel = "MINIMAL" // if we don't have thinking setup and we're dealing with Gemini 3 series models, set thinking level to minimal
+                if (numericLevel === 1) {
+                    geminiLevel = "MINIMAL" // effort 1 is the minimum valid value and maps to minimal thinking on Gemini 3+ models
                 }
-                else if(numericLevel <= 33) {
-                    geminiLevel = "LOW" 
+                else if (numericLevel >= 2 && numericLevel <= 33) {
+                    geminiLevel = "LOW"
                 }
                 else if (numericLevel <= 66) {
                     geminiLevel = "MEDIUM" 
@@ -460,21 +618,24 @@ export class GeminiLLM extends BaseLLM {
             pendingContent: '',
             thinkingComplete: false
         };
+        this._streamingCancellationToken = null;
     }
-    
+
     /**
      * Create a streaming request for Gemini
      */
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
         // Reset streaming state for new request
         this.resetStreamingState();
+        this.throwIfCancelled(params.cancellationToken);
+        this._streamingCancellationToken = params.cancellationToken ?? null;
         const modelName = params.model || "gemini-pro";
 
         // Filter out system messages and extract system instruction content
         const noSystemMessages = params.messages.filter(m => m.role !== 'system');
         const sysPrompts = params.messages.filter(m => m.role === 'system');
         const systemInstructionText = sysPrompts.length > 0
-            ? sysPrompts.map(m => typeof m.content === 'string' ? m.content : m.content.map(v => v.content).join('\n')).join('\n\n')
+            ? sysPrompts.map(m => GeminiLLM.mjContentToSystemInstructionText(m.content)).join('\n\n')
             : '';
 
         // Convert all non-system messages and apply role alternation
@@ -485,11 +646,16 @@ export class GeminiLLM extends BaseLLM {
         const history = tempMessages.slice(0, -1);
         const lastMessage = tempMessages.length > 0 ? tempMessages[tempMessages.length - 1] : null;
 
-        // Prepare the final message with system instructions prepended to the last user message
+        // Capture the request's cacheable-prefix info so the final streamed chunk's usage can be
+        // logged next to it (GEMINI_CACHE_DEBUG only; processStreamingChunk reads this).
+        this._cacheDiagContext = process.env.GEMINI_CACHE_DEBUG
+            ? this.buildCacheDiagContext(modelName, systemInstructionText, history.length)
+            : null;
+
+        // System prompt is passed via systemInstruction (below), NOT bundled into the user message
+        // — bundling defeats Gemini's implicit prompt caching (stable prompt ends up after the
+        // variable history). The final message is just the latest user turn's parts.
         let finalMessageParts: Part[] = [];
-        if (systemInstructionText) {
-            finalMessageParts.push({ text: systemInstructionText });
-        }
         if (lastMessage) {
             finalMessageParts.push(...lastMessage.parts);
         }
@@ -501,8 +667,18 @@ export class GeminiLLM extends BaseLLM {
         // Create the model and then chat
         const modelOptions: Record<string, any> = {
             temperature: params.temperature || 0.5,
-            responseType: params.responseFormat,
         };
+
+        switch (params.responseFormat) {
+            case 'JSON':
+                modelOptions.responseMimeType = 'application/json';
+                break;
+            case 'ModelSpecific':
+                if (params.modelSpecificResponseFormat) {
+                    Object.assign(modelOptions, params.modelSpecificResponseFormat);
+                }
+                break;
+        }
 
         // Add supported parameters
         if (params.topP != null) {
@@ -540,18 +716,26 @@ export class GeminiLLM extends BaseLLM {
         // Ensure Gemini client is initialized
         const client = await this.ensureGeminiClient();
 
-        // Create chat with history (all messages except the last)
-        // Don't use systemInstruction parameter - we're bundling it with the user message
+        // systemInstruction (a plain string) is the stable, cacheable prefix. It must ride in the
+        // per-request config since @google/genai's sendMessage config REPLACES the session config.
+        // We do NOT fold chatConfig (thinkingConfig) in — that preserves prior thinking behavior and
+        // avoids sending a thinking level some models reject (see nonStreamingChatCompletion).
+        const requestConfig: Record<string, unknown> = { ...modelOptions };
+        if (systemInstructionText) {
+            requestConfig.systemInstruction = systemInstructionText;
+        }
+        this.applyCancellationToken(requestConfig, params.cancellationToken);
+
         const chat = client.chats.create({
             config: Object.keys(chatConfig).length > 0 ? chatConfig : undefined,
             model: modelName,
             history: history
         });
 
-        // Send the last message with system instructions prepended (streaming)
+        // Send the latest user message (streaming); system prompt rides in requestConfig.
         const streamResult = await chat.sendMessageStream({
             message: finalMessageParts,
-            config: modelOptions
+            config: requestConfig
         });
         
         // Return the stream for the for-await loop to work
@@ -568,39 +752,54 @@ export class GeminiLLM extends BaseLLM {
     } {
         let content = '';
         let finishReason = undefined;
-        
-        // Extract text from the chunk with the new SDK
-        if (chunk.candidates && 
-            chunk.candidates[0] && 
-            chunk.candidates[0].content && 
-            chunk.candidates[0].content[0] && 
-            chunk.candidates[0].content[0].parts) {
-            
-            // Find the text part
-            const textPart = chunk.candidates[0].content[0].parts.find((part: any) => part.text);
-            if (textPart?.text) {
-                const rawContent = textPart.text;
-                
-                // Add raw content to pending content for processing
-                this._streamingState.pendingContent += rawContent;
-                
-                // Process the pending content to extract thinking
+
+        // @google/genai shapes Candidate.content as a Content OBJECT (`{ parts: Part[] }`),
+        // not an array as the legacy @google/generative-ai SDK did. The old `content[0].parts`
+        // access always resolved to undefined on the new SDK, so the guard failed on every
+        // chunk and no text was ever appended -- that's why streaming appeared dead.
+        //
+        // A single chunk's `parts` array can also mix reasoning ({thought:true, text}) and
+        // answer ({text}) parts. Split them the same way the non-streaming path does, so
+        // the reasoning summary never leaks into the user-visible stream.
+        const parts: Array<{ text?: string; thought?: boolean }> | undefined =
+            chunk?.candidates?.[0]?.content?.parts;
+        if (Array.isArray(parts)) {
+            let visibleTextAdded = false;
+            for (const part of parts) {
+                if (!part?.text) continue;
+                if (part.thought) {
+                    this._streamingState.accumulatedThinking += part.text;
+                } else {
+                    this._streamingState.pendingContent += part.text;
+                    visibleTextAdded = true;
+                }
+            }
+            if (visibleTextAdded) {
                 content = this.processThinkingInStreamingContent();
             }
         }
-        
+
         // Check for finish reason if available
-        if (chunk.candidates && chunk.candidates[0] && chunk.candidates[0].finishReason) {
+        if (chunk?.candidates?.[0]?.finishReason) {
             finishReason = chunk.candidates[0].finishReason;
         }
 
-        // Extract usage from chunk if available (appears on final chunk)
+        // Extract usage from chunk if available (appears on final chunk). Normalize to the uniform
+        // ModelUsage contract: promptTokenCount INCLUDES cached, so subtract cachedContentTokenCount
+        // (clamped at 0) to get UNCACHED/net-new promptTokens; cacheReadTokens holds the disjoint
+        // cache-read subset.
         let usage = null;
         if (chunk.usageMetadata) {
+            const chunkCachedTokens = chunk.usageMetadata.cachedContentTokenCount ?? 0;
+            const chunkNetPromptTokens = Math.max(0, (chunk.usageMetadata.promptTokenCount || 0) - chunkCachedTokens);
             usage = new ModelUsage(
-                chunk.usageMetadata.promptTokenCount || 0,
+                chunkNetPromptTokens,
                 chunk.usageMetadata.candidatesTokenCount || 0
             );
+            usage.cacheReadTokens = chunkCachedTokens;
+
+            // Usage only appears on the final chunk — log the cache diagnostic once here.
+            this.logCacheDiagnostics('streaming', this._cacheDiagContext, chunk.usageMetadata);
         }
 
         return {
@@ -608,6 +807,70 @@ export class GeminiLLM extends BaseLLM {
             finishReason,
             usage
         };
+    }
+
+    /**
+     * Builds a {@link GeminiCacheDiagContext} snapshot for the current request. Cheap (one djb2
+     * pass over the system prompt); only called when GEMINI_CACHE_DEBUG is set.
+     */
+    private buildCacheDiagContext(modelName: string, systemInstructionText: string, historyLength: number): GeminiCacheDiagContext {
+        return {
+            model: modelName,
+            systemInstructionChars: systemInstructionText?.length ?? 0,
+            systemInstructionHash: this.stableHash(systemInstructionText ?? ''),
+            historyLength
+        };
+    }
+
+    /**
+     * Emits a one-line prompt-cache diagnostic for a Gemini call, gated behind the
+     * GEMINI_CACHE_DEBUG env var so it is silent in normal operation. Surfaces exactly what we need
+     * to explain a cache miss: whether a stable systemInstruction prefix was sent (chars + hash so
+     * two runs can be compared), the history depth, the provider's native token split
+     * (prompt/cached/net/completion), and whether a cache hit occurred. Warns when the input is
+     * below Gemini's implicit-cache minimum or when no systemInstruction was sent at all.
+     */
+    private logCacheDiagnostics(
+        context: 'non-streaming' | 'streaming',
+        diag: GeminiCacheDiagContext | null,
+        usageMetadata: GeminiUsageMetadataLike | null | undefined
+    ): void {
+        if (!process.env.GEMINI_CACHE_DEBUG || !diag) {
+            return;
+        }
+        const promptTokens = usageMetadata?.promptTokenCount ?? 0;
+        const cachedTokens = usageMetadata?.cachedContentTokenCount ?? 0;
+        const completion = usageMetadata?.candidatesTokenCount ?? 0;
+        const netPrompt = Math.max(0, promptTokens - cachedTokens);
+        const cacheHit = cachedTokens > 0;
+        // Implicit caching has a per-model minimum prefix (~1,024 tokens for Gemini 2.5 Flash, more
+        // for Pro). Below that floor a cache can never form, which is the most common silent cause.
+        const belowImplicitFloor = promptTokens < 1024;
+        const warnings = [
+            belowImplicitFloor ? 'prompt<1024 (below implicit-cache minimum)' : '',
+            diag.systemInstructionChars === 0 ? 'no-systemInstruction (no stable cacheable prefix)' : ''
+        ].filter(Boolean).join('; ');
+        console.log(
+            `[Gemini cache] ${context} model=${diag.model} ` +
+            `systemInstruction{chars=${diag.systemInstructionChars}, hash=${diag.systemInstructionHash}} ` +
+            `history=${diag.historyLength} ` +
+            `tokens{prompt=${promptTokens}, cached=${cachedTokens}, net=${netPrompt}, completion=${completion}} ` +
+            `cacheHit=${cacheHit}` +
+            (warnings ? ` WARN=${warnings}` : '')
+        );
+    }
+
+    /**
+     * djb2 string hash → 8-char hex. Non-cryptographic; used only to compare whether the system
+     * prompt prefix is byte-identical across two runs (a changing hash means the prefix is unstable
+     * and implicit caching cannot engage). Dependency-free on purpose to keep this provider-local.
+     */
+    private stableHash(s: string): string {
+        let h = 5381;
+        for (let i = 0; i < s.length; i++) {
+            h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+        }
+        return (h >>> 0).toString(16).padStart(8, '0');
     }
     
     /**
@@ -697,6 +960,15 @@ export class GeminiLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
+        // A mid-stream abort surfaces as an iteration error that the base class swallows, so the
+        // ONLY reliable signal here is the token itself. Report cancellation as a clean failure
+        // rather than passing off a truncated stream as a successful completion.
+        const cancellationToken = this._streamingCancellationToken;
+        if (cancellationToken?.aborted) {
+            const now = new Date();
+            return this.buildCancelledResult(now, this.createCancellationError(cancellationToken), cancellationToken);
+        }
+
         // Extract finish reason from last chunk if available
         let finishReason = 'stop';
         if (lastChunk?.candidates && lastChunk.candidates.length > 0 && lastChunk.candidates[0].finishReason) {
@@ -770,6 +1042,11 @@ export class GeminiLLM extends BaseLLM {
         result.statusText = 'success';
         result.errorMessage = null;
         result.exception = null;
+        const streamCachedTokens = usage?.cacheReadTokens || 0;
+        result.cacheInfo = {
+            cacheHit: streamCachedTokens > 0,
+            cachedTokenCount: streamCachedTokens
+        };
 
         return result;
     }
@@ -780,52 +1057,80 @@ export class GeminiLLM extends BaseLLM {
         throw new Error("Method not implemented.");   
     }
 
+    /**
+     * The default mimeType to assume for a media content block when neither an explicit
+     * `mimeType` nor a data-URL-embedded mime is available. Keyed by MJ content-block type.
+     */
+    private static geminiDefaultMimeForBlockType(type: string): string {
+        switch (type) {
+            case 'image_url': return 'image/png';
+            case 'audio_url': return 'audio/mpeg';
+            case 'video_url': return 'video/mp4';
+            default: return 'application/octet-stream';
+        }
+    }
+
+    /**
+     * Convert a single MJ content block into the matching Gemini {@link Part}. This is the one
+     * type-aware mapping site so that text-only behavior stays byte-identical and every media
+     * block (image/audio/video/file) becomes a real Gemini media part instead of a text blob of
+     * its data URL.
+     *
+     * - `text` → `{ text }` (unchanged).
+     * - any media block whose `content` is a `data:<mime>;base64,<b64>` data URL →
+     *   `{ inlineData: { mimeType, data } }` carrying the raw base64 (prefix stripped).
+     * - any media block whose `content` is an http(s) URL → `{ fileData: { mimeType, fileUri } }`,
+     *   Gemini's remote-file part (mirrors how geminiImage.ts reads fileData.fileUri).
+     * - a media block whose `content` is bare base64 (no data-URL prefix, but valid base64) →
+     *   `{ inlineData }`, preserving the prior behavior.
+     * - anything else (e.g. placeholder strings tagged onto a file_url block) → `{ text }` fallback.
+     */
+    private static mjContentBlockToGeminiPart(block: ChatMessageContentBlock): Part {
+        if (block.type === 'text') {
+            return { text: block.content };
+        }
+
+        // Remote http(s) URL → Gemini fileData part (no inlining of remote bytes).
+        if (/^https?:\/\//i.test(block.content)) {
+            const fileData: FileData = {
+                fileUri: block.content,
+                mimeType: block.mimeType || GeminiLLM.geminiDefaultMimeForBlockType(block.type),
+            };
+            return { fileData };
+        }
+
+        // Strip data-URL prefix if present — Gemini expects raw base64.
+        let rawBase64 = block.content;
+        let detectedMime: string | undefined;
+        const dataUrlMatch = rawBase64.match(/^data:([^;]+);base64,(.+)$/s);
+        if (dataUrlMatch) {
+            detectedMime = dataUrlMatch[1];
+            rawBase64 = dataUrlMatch[2];
+        }
+
+        // Guard: if content isn't a data URL and isn't valid base64, fall back to a text part.
+        // This handles placeholder strings (e.g. "[File: ... — accessible via artifact tools]")
+        // that were tagged as file_url content blocks.
+        if (!dataUrlMatch && !/^[A-Za-z0-9+/\r\n]+=*$/.test(rawBase64.substring(0, 100))) {
+            return { text: block.content };
+        }
+
+        // Use the inlineData property which expects a Blob with data and mimeType.
+        // Prefer the explicit mimeType from the content block; fall back to the data-URL
+        // detected mime, then type-based defaults.
+        const blob: Blob = {
+            data: rawBase64,
+            mimeType: block.mimeType || detectedMime || GeminiLLM.geminiDefaultMimeForBlockType(block.type),
+        };
+        return { inlineData: blob };
+    }
+
     public static MapMJContentToGeminiParts(content: ChatMessageContent): Array<Part> {
-        const parts: Array<Part> = [];
         if (Array.isArray(content)) {
-            for (const part of content) {
-                if (part.type === 'text') {
-                    parts.push({text: part.content});
-                }
-                else {
-                    // Strip data-URL prefix if present — Gemini expects raw base64
-                    let rawBase64 = part.content;
-                    let detectedMime: string | undefined;
-                    const dataUrlMatch = rawBase64.match(/^data:([^;]+);base64,(.+)$/s);
-                    if (dataUrlMatch) {
-                        detectedMime = dataUrlMatch[1];
-                        rawBase64 = dataUrlMatch[2];
-                    }
-
-                    // Guard: if content isn't valid base64, fall back to a text part.
-                    // This handles placeholder strings (e.g. "[File: ... — accessible via artifact tools]")
-                    // that were tagged as file_url content blocks.
-                    if (!dataUrlMatch && !/^[A-Za-z0-9+/\r\n]+=*$/.test(rawBase64.substring(0, 100))) {
-                        parts.push({text: part.content});
-                        continue;
-                    }
-
-                    // Use the inlineData property which expects a Blob with data and mimeType.
-                    // Prefer the explicit mimeType from the content block; fall back to
-                    // data-URL detected mime, then type-based defaults.
-                    const blob: Blob = {
-                        data: rawBase64,
-                        mimeType: part.mimeType || detectedMime || (
-                            part.type === 'image_url' ? 'image/jpeg' :
-                            part.type === 'audio_url' ? 'audio/mpeg' :
-                            part.type === 'video_url' ? 'video/mp4' :
-                            'application/octet-stream'
-                        ),
-                    }
-                    parts.push({inlineData: blob});
-                }
-            }
+            return content.map(block => GeminiLLM.mjContentBlockToGeminiPart(block));
         }
-        else {
-            // we know that message.content is a string
-            parts.push({text: content});
-        }
-        return parts;
+        // we know that message.content is a string
+        return [{ text: content }];
     }
 
     public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage): Content {
@@ -834,8 +1139,30 @@ export class GeminiLLM extends BaseLLM {
             parts: GeminiLLM.MapMJContentToGeminiParts(message.content)
         }
     }
+
+    /**
+     * Flatten an MJ message's content to a plain-text string for the Gemini systemInstruction.
+     * Images and other media MUST NOT ride in the system instruction — emitting a giant base64
+     * data URL there would both blow the cacheable prefix and fail to be interpreted as an image.
+     * So we keep only `text` blocks here; a pure-string content stays as-is.
+     */
+    private static mjContentToSystemInstructionText(content: ChatMessageContent): string {
+        if (typeof content === 'string') {
+            return content;
+        }
+        return content
+            .filter(block => block.type === 'text')
+            .map(block => block.content)
+            .join('\n');
+    }
 }
  
 
 // Export image generation
 export * from './geminiImage';
+
+// Export realtime (Gemini Live) driver
+export * from './geminiRealtime';
+
+// Export multimodal embeddings
+export * from './geminiEmbedding';

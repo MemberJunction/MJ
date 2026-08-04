@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Static File Server — Mode D Demo</title>
+    <style>
+        body { font: 16px/1.5 system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; color: #222; }
+        h1 { color: #264FAF; }
+        nav { margin: 16px 0; }
+        nav a { margin-right: 12px; }
+        footer { margin-top: 40px; color: #888; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h1>Mode D Demo</h1>
+    <p>This static page is served by an nginx container that the regression test-runner
+    reaches via its compose-network hostname. The point of this example is to demonstrate
+    the docker-compose <em>overlay</em> pattern — bring your own app alongside the runner.</p>
+
+    <nav>
+        <a href="/">Home</a>
+        <a href="/about.html">About</a>
+    </nav>
+
+    <footer>Served by nginx:alpine inside the mj-regression compose network.</footer>
+</body>
+</html>

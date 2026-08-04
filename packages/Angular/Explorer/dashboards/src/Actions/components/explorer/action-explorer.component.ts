@@ -7,19 +7,30 @@ import {
   ViewChild
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { takeUntil, debounceTime, combineLatestWith } from 'rxjs/operators';
+import { takeUntil, debounceTime, distinctUntilChanged, combineLatestWith } from 'rxjs/operators';
 import { CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { MJActionCategoryEntity, MJActionEntity, MJActionParamEntity, ResourceData } from '@memberjunction/core-entities';
 import { ActionEngineBase, MJActionEntityExtended } from '@memberjunction/actions-base';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 import {
   ActionExplorerStateService,
   ActionViewMode,
   SortConfig,
+  SortField,
+  SortDirection,
   ActionFilters
 } from '../../services/action-explorer-state.service';
 import { ActionTreePanelComponent } from './action-tree-panel.component';
+import { validateEnumParam, boundNameList } from '../../../shared/agent-tool-validation';
+import { findByIdOrNameOrError } from '../../agent-tool-helpers';
+
+interface SortOption {
+  field: SortField;
+  label: string;
+  icon: string;
+}
 @RegisterClass(BaseResourceComponent, 'ActionExplorerResource')
 @Component({
   standalone: false,
@@ -39,6 +50,16 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
   public CategoriesMap = new Map<string, MJActionCategoryEntity>();
 
   public ViewMode: ActionViewMode = 'card';
+  public SortField: SortField = 'name';
+  public SortDirection: SortDirection = 'asc';
+  public Filters: ActionFilters = {
+    searchTerm: '',
+    statuses: [],
+    types: [],
+    approvalStatuses: [],
+    hasExecutions: null
+  };
+
   public SelectedCategoryId = 'all';
   public NewCategoryParentId: string | null = null;
 
@@ -47,7 +68,46 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
   public SelectedActionForRun: MJActionEntity | null = null;
   public SelectedActionParams: MJActionParamEntity[] = [];
 
+  // ───── Toolbar option arrays + helpers (consolidated from former mj-action-toolbar) ─────
+
+  public readonly ViewToggleOptions: ViewToggleOption[] = [
+    { key: 'card',    icon: 'fa-solid fa-grip', title: 'Card view' },
+    { key: 'list',    icon: 'fa-solid fa-list', title: 'List view' },
+    { key: 'compact', icon: 'fa-solid fa-bars', title: 'Compact view' }
+  ];
+
+  public readonly SortOptions: SortOption[] = [
+    { field: 'name',     label: 'Name',         icon: 'fa-solid fa-font' },
+    { field: 'updated',  label: 'Last Updated', icon: 'fa-solid fa-clock' },
+    { field: 'status',   label: 'Status',       icon: 'fa-solid fa-circle-check' },
+    { field: 'type',     label: 'Type',         icon: 'fa-solid fa-tag' },
+    { field: 'category', label: 'Category',     icon: 'fa-solid fa-folder' }
+  ];
+
+  public readonly StatusOptions = [
+    { value: 'Active',   label: 'Active' },
+    { value: 'Pending',  label: 'Pending' },
+    { value: 'Disabled', label: 'Disabled' }
+  ];
+
+  public readonly TypeOptions = [
+    { value: 'Generated', label: 'AI Generated', icon: 'fa-solid fa-robot' },
+    { value: 'Custom',    label: 'Custom',       icon: 'fa-solid fa-code' }
+  ];
+
+  /** Allowed view modes (mirrors `ViewToggleOptions` / `ActionViewMode`). */
+  private readonly viewModeValues = ['card', 'list', 'compact'] as const;
+  /** Allowed sort fields (mirrors `SortOptions` / `SortField`). */
+  private readonly sortFieldValues = ['name', 'updated', 'status', 'type', 'category'] as const;
+  /** Allowed sort directions. */
+  private readonly sortDirectionValues = ['asc', 'desc'] as const;
+  /** Allowed action statuses (mirrors `StatusOptions`). */
+  private readonly statusValues = ['Active', 'Pending', 'Disabled'] as const;
+  /** Allowed action types (mirrors `TypeOptions`). */
+  private readonly typeValues = ['Generated', 'Custom'] as const;
+
   protected override destroy$ = new Subject<void>();
+  private searchInput$ = new Subject<string>();
 
   constructor(
     public StateService: ActionExplorerStateService,
@@ -59,9 +119,21 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
   ngOnInit(): void {
     super.ngOnInit();
     this.subscribeToState();
+    this.setupSearchDebounce();
     this.applyQueryParams(this.GetQueryParams());
     this.StateService.loadSavedState();
+    this.registerAgentTools();
     this.loadData();
+  }
+
+  private setupSearchDebounce(): void {
+    this.searchInput$.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$)
+    ).subscribe(term => {
+      this.StateService.setSearchTerm(term);
+    });
   }
 
   ngOnDestroy(): void {
@@ -76,6 +148,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
       takeUntil(this.destroy$)
     ).subscribe(mode => {
       this.ViewMode = mode;
+      this.publishAgentContext();
       this.cdr.markForCheck();
     });
 
@@ -86,6 +159,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
       this.SelectedCategoryId = id;
       this.applyFilters();
       this.UpdateQueryParams(this.StateService.buildQueryParams());
+      this.publishAgentContext();
       this.cdr.markForCheck();
     });
 
@@ -94,11 +168,232 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
       combineLatestWith(this.StateService.SortConfig$),
       debounceTime(50),
       takeUntil(this.destroy$)
-    ).subscribe(() => {
+    ).subscribe(([filters, sort]) => {
+      this.Filters = filters;
+      this.SortField = sort.field;
+      this.SortDirection = sort.direction;
       this.applyFilters();
       this.UpdateQueryParams(this.StateService.buildQueryParams());
+      this.publishAgentContext();
       this.cdr.markForCheck();
     });
+  }
+
+  // ================================================================
+  // AI Agent context + client tools
+  //
+  // 🚨 SAFETY BOUNDARY: This is the Actions app. Executing an action has real
+  // side effects (data mutation, emails, integrations). Action EXECUTION is
+  // intentionally NOT exposed to the agent — `onActionRun()` (which opens the
+  // run dialog) is deliberately NOT wired as a tool; running stays user-driven
+  // via that dialog. The agent may only FIND / FILTER / SORT / NAVIGATE
+  // actions. Every Handler is tolerant (never throws; returns a structured
+  // failure on bad input).
+  // ================================================================
+
+  /** Publish the current explorer state to the agent. Called on load and on every
+   *  view/filter/sort/category change. Deep context: view mode, sort, the selected
+   *  category (id + NAME), total/filtered counts, all filter state, and the bounded
+   *  list of currently-visible action names so the agent can pick one by name. */
+  private publishAgentContext(): void {
+    this.navigationService.SetAgentContext(this, {
+      ActiveViewMode: this.ViewMode,
+      CurrentSortField: this.SortField,
+      CurrentSortDirection: this.SortDirection,
+      SelectedCategoryId: this.SelectedCategoryId,
+      SelectedCategoryName: this.getSelectedCategoryLabel(),
+      TotalActionCount: this.Actions.length,
+      FilteredActionCount: this.FilteredActions.length,
+      CategoryCount: this.Categories.length,
+      CurrentSearchTerm: this.Filters.searchTerm,
+      SelectedStatuses: [...this.Filters.statuses],
+      SelectedTypes: [...this.Filters.types],
+      // What the user is looking at — bounded so the streamed note stays small
+      VisibleActionNames: boundNameList(this.FilteredActions.map(a => a.Name)),
+      AvailableCategoryNames: boundNameList(this.Categories.map(c => c.Name)),
+    });
+  }
+
+  /** Human label for the current category selection (resolves id → name; handles the special selections). */
+  private getSelectedCategoryLabel(): string {
+    if (this.SelectedCategoryId === 'all') return 'All Categories';
+    if (this.SelectedCategoryId === 'uncategorized') return 'Uncategorized';
+    return this.CategoriesMap.get(this.SelectedCategoryId)?.Name ?? this.SelectedCategoryId;
+  }
+
+  /** Register the read-only / navigational client tools the agent can invoke on this surface. */
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SwitchViewMode',
+        Description: 'Switch the explorer view mode. Allowed: card, list, compact.',
+        ParameterSchema: { type: 'object', properties: { mode: { type: 'string', enum: [...this.viewModeValues] } }, required: ['mode'] },
+        Handler: async (params) => {
+          const v = validateEnumParam(params['mode'], this.viewModeValues, 'mode');
+          if (!v.ok) return v.result;
+          this.setViewMode(v.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'SortActionsByField',
+        Description: 'Sort actions by a field and direction. field: name, updated, status, type, category. direction: asc, desc.',
+        ParameterSchema: {
+          type: 'object',
+          properties: {
+            field: { type: 'string', enum: [...this.sortFieldValues] },
+            direction: { type: 'string', enum: [...this.sortDirectionValues] },
+          },
+          required: ['field'],
+        },
+        Handler: async (params) => {
+          const f = validateEnumParam(params['field'], this.sortFieldValues, 'field');
+          if (!f.ok) return f.result;
+          // direction is optional; default to ascending when omitted.
+          let direction: SortDirection = 'asc';
+          if (params['direction'] !== undefined) {
+            const d = validateEnumParam(params['direction'], this.sortDirectionValues, 'direction');
+            if (!d.ok) return d.result;
+            direction = d.value;
+          }
+          this.StateService.setSortConfig({ field: f.value, direction });
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'SearchActions',
+        Description: 'Search the actions list by a free-text term (matches name and description).',
+        ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] },
+        Handler: async (params) => {
+          const term = typeof params['searchTerm'] === 'string' ? params['searchTerm'] : '';
+          this.onSearchInput(term);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'ClearExplorerSearch',
+        Description: 'Clear the explorer search term.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.clearSearch();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'SelectCategory',
+        Description: 'Select a category to filter the actions list. Use "all" for all categories or "uncategorized" for actions without a category; otherwise pass a category id.',
+        ParameterSchema: { type: 'object', properties: { categoryId: { type: 'string' } }, required: ['categoryId'] },
+        Handler: async (params) => {
+          const raw = params['categoryId'];
+          if (typeof raw !== 'string' || raw.trim() === '') {
+            return { Success: false, ErrorMessage: 'A non-empty categoryId is required (use "all" or "uncategorized" for the special selections).' };
+          }
+          if (raw !== 'all' && raw !== 'uncategorized' && !this.CategoriesMap.has(raw)) {
+            return { Success: false, ErrorMessage: `No category found with id "${raw}".` };
+          }
+          this.onCategorySelect(raw);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'SelectCategoryByName',
+        Description: 'Select a category to filter by its name (case-insensitive, exact then contains). Use the literal "all" or "uncategorized" for the special selections.',
+        ParameterSchema: { type: 'object', properties: { categoryName: { type: 'string' } }, required: ['categoryName'] },
+        Handler: async (params) => {
+          const raw = params['categoryName'];
+          if (typeof raw !== 'string' || raw.trim() === '') {
+            return { Success: false, ErrorMessage: 'A non-empty categoryName is required.' };
+          }
+          const lowered = raw.trim().toLowerCase();
+          if (lowered === 'all' || lowered === 'uncategorized') {
+            this.onCategorySelect(lowered);
+            return { Success: true };
+          }
+          const found = findByIdOrNameOrError(raw, this.Categories, 'category');
+          if (!found.ok) return found.result;
+          this.onCategorySelect(found.value.ID);
+          return { Success: true, Data: { Id: found.value.ID, Name: found.value.Name } };
+        },
+      },
+      {
+        Name: 'ToggleStatusFilter',
+        Description: 'Toggle a status in the status filter. Allowed: Active, Pending, Disabled.',
+        ParameterSchema: { type: 'object', properties: { status: { type: 'string', enum: [...this.statusValues] } }, required: ['status'] },
+        Handler: async (params) => {
+          const v = validateEnumParam(params['status'], this.statusValues, 'status');
+          if (!v.ok) return v.result;
+          this.toggleStatus(v.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'ToggleTypeFilter',
+        Description: 'Toggle a type in the type filter. Allowed: Generated (AI-generated), Custom.',
+        ParameterSchema: { type: 'object', properties: { type: { type: 'string', enum: [...this.typeValues] } }, required: ['type'] },
+        Handler: async (params) => {
+          const v = validateEnumParam(params['type'], this.typeValues, 'type');
+          if (!v.ok) return v.result;
+          this.toggleType(v.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'ClearExplorerFilters',
+        Description: 'Clear all status / type / search filters in the explorer.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.clearFilters();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'SetSortDirection',
+        Description: 'Set the sort direction without changing the sort field. Allowed: asc, desc.',
+        ParameterSchema: { type: 'object', properties: { direction: { type: 'string', enum: [...this.sortDirectionValues] } }, required: ['direction'] },
+        Handler: async (params) => {
+          const d = validateEnumParam(params['direction'], this.sortDirectionValues, 'direction');
+          if (!d.ok) return d.result;
+          this.StateService.setSortConfig({ field: this.SortField, direction: d.value });
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'OpenActionRecord',
+        Description: 'Open the detail record for an action by its id OR its name (navigation only — does NOT run the action). Name matching is case-insensitive (exact then contains).',
+        ParameterSchema: { type: 'object', properties: { action: { type: 'string' } }, required: ['action'] },
+        Handler: async (params) => {
+          const found = findByIdOrNameOrError(params['action'], this.Actions, 'action');
+          if (!found.ok) return found.result;
+          this.onActionClick(found.value);
+          return { Success: true, Data: { Id: found.value.ID, Name: found.value.Name } };
+        },
+      },
+      {
+        Name: 'NavigateToActionCategory',
+        Description: 'Open the category record that a given action belongs to (related-record navigation). Pass the action id or name. Fails if the action has no category.',
+        ParameterSchema: { type: 'object', properties: { action: { type: 'string' } }, required: ['action'] },
+        Handler: async (params) => {
+          const found = findByIdOrNameOrError(params['action'], this.Actions, 'action');
+          if (!found.ok) return found.result;
+          const categoryId = found.value.CategoryID;
+          if (!categoryId) {
+            return { Success: false, ErrorMessage: `Action "${found.value.Name}" has no category to navigate to.` };
+          }
+          const category = this.CategoriesMap.get(categoryId);
+          this.onEditCategory(category ?? ({ ID: categoryId } as MJActionCategoryEntity));
+          return { Success: true, Data: { CategoryId: categoryId, CategoryName: category?.Name ?? null } };
+        },
+      },
+      {
+        Name: 'RefreshExplorerData',
+        Description: 'Reload the action explorer data (actions + categories).',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          await this.onRefresh();
+          return { Success: true };
+        },
+      },
+    ]);
   }
 
   /**
@@ -146,6 +441,8 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
         this.Categories.forEach(c => categoryParentMap.set(c.ID, c.ParentID || null));
         this.StateService.expandPathToCategory(this.SelectedCategoryId, categoryParentMap);
       }
+
+      this.publishAgentContext();
 
     } catch (error) {
       LogError('Failed to load action explorer data', undefined, error);
@@ -279,6 +576,21 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     this.StateService.openNewActionPanel();
   }
 
+  /** True when search/filters or a category selection narrow the list. */
+  public get IsListNarrowed(): boolean {
+    return this.StateService.hasActiveFilters() || this.SelectedCategoryId !== 'all';
+  }
+
+  /** Empty-state CTA: reset filters when narrowed, otherwise create. */
+  public onEmptyStateAction(): void {
+    if (this.IsListNarrowed) {
+      this.StateService.clearFilters();
+      this.StateService.setSelectedCategoryId('all');
+    } else {
+      this.onNewAction();
+    }
+  }
+
   public onActionClick(action: MJActionEntityExtended): void {
     const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
     this.navigationService.OpenEntityRecord('MJ: Actions', key);
@@ -335,6 +647,58 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
   public async onActionCreated(): Promise<void> {
     // Refresh data to include new action
     await this.loadData();
+  }
+
+  // ───── Toolbar handlers (consolidated from former mj-action-toolbar) ─────
+
+  public onSearchInput(term: string): void {
+    this.searchInput$.next(term);
+  }
+
+  public clearSearch(): void {
+    this.StateService.setSearchTerm('');
+  }
+
+  public setViewMode(mode: ActionViewMode): void {
+    this.StateService.setViewMode(mode);
+  }
+
+  public setSortField(field: SortField): void {
+    this.StateService.setSortField(field);
+  }
+
+  public toggleStatus(status: string): void {
+    const current = [...this.Filters.statuses];
+    const i = current.indexOf(status);
+    if (i >= 0) current.splice(i, 1);
+    else current.push(status);
+    this.StateService.setStatusFilter(current);
+  }
+
+  public toggleType(type: string): void {
+    const current = [...this.Filters.types];
+    const i = current.indexOf(type);
+    if (i >= 0) current.splice(i, 1);
+    else current.push(type);
+    this.StateService.setTypeFilter(current);
+  }
+
+  public isStatusSelected(status: string): boolean {
+    return this.Filters.statuses.includes(status);
+  }
+
+  public isTypeSelected(type: string): boolean {
+    return this.Filters.types.includes(type);
+  }
+
+  public clearFilters(): void {
+    this.StateService.clearFilters();
+  }
+
+  /** Active filter count for the popover badge — counts only Status + Type
+   *  (searchTerm has its own search input, not part of the popover). */
+  public get StatusTypeFilterCount(): number {
+    return this.Filters.statuses.length + this.Filters.types.length;
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {

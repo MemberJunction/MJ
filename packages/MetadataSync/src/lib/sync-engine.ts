@@ -12,12 +12,13 @@ import path from 'path';
 import fs from 'fs-extra';
 import crypto from 'crypto';
 import axios from 'axios';
-import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetDialect, IsDateSQLType, IsUuidSQLType } from '@memberjunction/sql-dialect';
 import { EntityConfig, FolderConfig } from '../config';
 import { JsonPreprocessor } from './json-preprocessor';
 import { BatchContextIndex, BatchContextStub } from './batch-context-index';
+import { SyncMetadataEngine } from './sync-metadata-engine';
 import {
   METADATA_KEYWORDS,
   METADATA_KEYWORD_PREFIXES,
@@ -142,6 +143,28 @@ export interface RecordData {
 export class SyncEngine {
   private metadata: Metadata;
   private contextUser: UserInfo;
+  private syncMetadataEngine: SyncMetadataEngine | null = null;
+
+  public setMetadataEngine(engine: SyncMetadataEngine): void {
+    this.syncMetadataEngine = engine;
+  }
+
+  public getMetadataEngine(): SyncMetadataEngine | null {
+    return this.syncMetadataEngine;
+  }
+
+  /**
+   * Returns the metadata provider this engine is using.
+   *
+   * `mj sync` runs as a single-purpose CLI process with one configured
+   * provider per run, so this proxies to the global default (the only
+   * provider the process will ever see). Surfacing it through SyncEngine
+   * keeps callers from reaching for `Metadata.Provider` directly and makes
+   * it obvious which provider the sync is bound to.
+   */
+  public getProvider(): IMetadataProvider {
+    return Metadata.Provider; // global-provider-ok: CLI single-process; see class doc
+  }
 
   /**
    * Creates a new SyncEngine instance
@@ -504,6 +527,24 @@ export class SyncEngine {
    * }
    * ```
    */
+  /**
+   * Build a canonical, collision-safe cache key for a multi-field lookup.
+   * Encodes each field name + value so embedded `=` / `&` / `|` in user
+   * data can't run two distinct lookups into the same key.
+   */
+  private buildLookupCacheKey(
+    entityName: string,
+    lookupFields: Array<{fieldName: string, fieldValue: string}>
+  ): string {
+    const sortedFields = [...lookupFields].sort((a, b) => a.fieldName.localeCompare(b.fieldName));
+    const parts = sortedFields.map(f => {
+      const name = encodeURIComponent(f.fieldName.toLowerCase());
+      const value = encodeURIComponent((f.fieldValue ?? '').toLowerCase());
+      return `${name}=${value}`;
+    });
+    return `${encodeURIComponent(entityName.toLowerCase())}|${parts.join('&')}`;
+  }
+
   async resolveLookup(
     entityName: string,
     lookupFields: Array<{fieldName: string, fieldValue: string}>,
@@ -513,12 +554,30 @@ export class SyncEngine {
     allowDefer: boolean = false,
     originalValue?: string
   ): Promise<string> {
+    const lookupCacheKey = this.buildLookupCacheKey(entityName, lookupFields);
+    if (this.syncMetadataEngine) {
+      const cachedId = this.syncMetadataEngine.getCachedLookup(lookupCacheKey);
+      // Use `!== undefined` so legitimately-falsy PK values (empty string, '0')
+      // are still served from cache instead of forcing a re-query.
+      if (cachedId !== undefined) {
+        return cachedId;
+      }
+    }
+
+    const entityInfo = this.metadata.EntityByName(entityName);
+    if (!entityInfo) {
+      throw new Error(`Entity not found: ${entityName}`);
+    }
+
     // First check batch context for in-memory entities
     if (batchContext) {
       if (batchContext instanceof BatchContextIndex) {
         // O(1) indexed lookup
         const pkValue = batchContext.lookupByFields(entityName, lookupFields);
         if (pkValue !== undefined) {
+          if (this.syncMetadataEngine) {
+            this.syncMetadataEngine.setCachedLookup(lookupCacheKey, pkValue, entityName);
+          }
           return pkValue;
         }
       } else {
@@ -541,23 +600,45 @@ export class SyncEngine {
 
             if (allMatch) {
               // Found in batch context, return primary key
-              const entityInfo = this.metadata.EntityByName(entityName);
-              if (entityInfo && entityInfo.PrimaryKeys.length > 0) {
+              if (entityInfo.PrimaryKeys.length > 0) {
                 const pkeyField = entityInfo.PrimaryKeys[0].Name;
-                return entity.Get(pkeyField);
+                const id = entity.Get(pkeyField);
+                if (this.syncMetadataEngine) {
+                  this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
+                }
+                return id;
               }
             }
           }
         }
       }
     }
-    
+
+    // Scan preloaded entities in-memory if preloaded
+    if (this.syncMetadataEngine && this.syncMetadataEngine.isEntityPreloaded(entityName)) {
+      const cachedEntities = this.syncMetadataEngine.getCachedEntities(entityName);
+      for (const cachedEntity of cachedEntities) {
+        let allMatch = true;
+        for (const {fieldName, fieldValue} of lookupFields) {
+          const entityValue = cachedEntity.Get(fieldName);
+          const normalizedEntityValue = (entityValue?.toString() || '').toLowerCase().trim();
+          const normalizedLookupValue = (fieldValue?.toString() || '').toLowerCase().trim();
+          if (normalizedEntityValue !== normalizedLookupValue) {
+            allMatch = false;
+            break;
+          }
+        }
+        if (allMatch) {
+          const pkeyField = entityInfo.PrimaryKeys[0].Name;
+          const id = cachedEntity.Get(pkeyField);
+          this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
+          return id;
+        }
+      }
+    }
+
     // Not found in batch context, check database
     const rv = new RunView();
-    const entityInfo = this.metadata.EntityByName(entityName);
-    if (!entityInfo) {
-      throw new Error(`Entity not found: ${entityName}`);
-    }
     
     // Build compound filter for all lookup fields
     const filterParts: string[] = [];
@@ -629,6 +710,9 @@ export class SyncEngine {
       if (entityInfo.PrimaryKeys.length > 0) {
         const pkeyField = entityInfo.PrimaryKeys[0].Name;
         const id = result.Results[0][pkeyField];
+        if (this.syncMetadataEngine) {
+          this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
+        }
         return id;
       }
     }
@@ -684,6 +768,10 @@ export class SyncEngine {
       if (entityInfo.PrimaryKeys.length > 0) {
         const pkeyField = entityInfo.PrimaryKeys[0].Name;
         const newId = newEntity.Get(pkeyField);
+        if (this.syncMetadataEngine) {
+          this.syncMetadataEngine.setCachedLookup(lookupCacheKey, newId, entityName);
+          this.syncMetadataEngine.addEntityToCache(entityName, newEntity);
+        }
         return newId;
       }
     }
@@ -994,6 +1082,14 @@ export class SyncEngine {
     if (!entityInfo) {
       throw new Error(`Entity not found: ${entityName}`);
     }
+
+    if (this.syncMetadataEngine && this.syncMetadataEngine.isEntityPreloaded(entityName)) {
+      // O(1) PK lookup against the preload cache. The previous Array.find
+      // + per-entity serializePrimaryKey(GetAll()) was O(N×K) overall and
+      // dominated runtime for entities with large DB-side populations
+      // (Integration Object Fields: 38min → seconds).
+      return this.syncMetadataEngine.findCachedByPrimaryKey(entityName, primaryKey);
+    }
     
     // First, check if the record exists using RunView to avoid "Error in BaseEntity.Load" messages
     // when records don't exist (which is a normal scenario during sync operations)
@@ -1031,11 +1127,15 @@ export class SyncEngine {
     compositeKey.LoadFromSimpleObject(primaryKey);
     const loaded = await entity.InnerLoad(compositeKey);
     
-    return loaded ? entity : null;
+    const loadedEntity = loaded ? entity : null;
+    if (loadedEntity && this.syncMetadataEngine) {
+      this.syncMetadataEngine.addEntityToCache(entityName, loadedEntity);
+    }
+    return loadedEntity;
   }
   
   /**
-   * Process file content with {@include} references
+   * Process file content with `{@include}` references
    * 
    * Recursively processes a file's content to resolve `{@include path}` references.
    * Include references use JSDoc-style syntax and support:
@@ -1056,7 +1156,7 @@ export class SyncEngine {
    * const content = 'This is a {@include ./shared/header.md} example';
    * 
    * // Resolves to:
-   * const result = await processFileContentWithIncludes('/path/to/file.md', content);
+   * const result = await processFileContentWithIncludes(content, '/path/to/file.md');
    * // 'This is a [contents of header.md] example'
    * ```
    */
@@ -1104,8 +1204,12 @@ export class SyncEngine {
           new Set(visitedPaths) // Pass a copy to allow the same file in different branches
         );
         
-        // Replace the {@include} reference with the processed content
-        processedContent = processedContent.replace(fullMatch, processedInclude);
+        // Replace the {@include} reference with the processed content.
+        // Use a replacement FUNCTION so the included content is inserted verbatim —
+        // a string replacement would interpret its special `$`-sequences ($$, $&,
+        // $`, $') as replacement patterns and mangle the content. (Only those four
+        // are special for a string search; $n stays literal.)
+        processedContent = processedContent.replace(fullMatch, () => processedInclude);
       } catch (error) {
         // Enhance error message with context
         throw new Error(`Failed to process {@include ${trimmedPath}} in ${filePath}: ${error}`);

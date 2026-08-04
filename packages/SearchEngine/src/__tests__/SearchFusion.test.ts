@@ -2,16 +2,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SearchFusion, LabeledResultList } from '../generic/SearchFusion';
 import { SearchResultItem, SearchScoreBreakdown } from '../generic/search.types';
 
-// Mock the ComputeRRF function from @memberjunction/core
+// Mock the ComputeRRF function from @memberjunction/core.
+// Mirrors the real signature `(rankedLists, k?, weights?)` so the per-list
+// `weights` argument is honored — without it, weighted-fusion paths would tie
+// and fall back to insertion order, masking real weight-plumbing bugs. The
+// mock keys off each candidate's `Rank` excess property (test-double convention)
+// rather than array position, but the weighting math matches ComputeRRF.
 vi.mock('@memberjunction/core', () => ({
-    ComputeRRF: vi.fn((rankedLists: Array<Array<{ ID: string; Score: number; Rank: number }>>) => {
-        // Simple mock: merge all candidates, sum scores for duplicates, sort desc
+    ComputeRRF: vi.fn((
+        rankedLists: Array<Array<{ ID: string; Score: number; Rank: number }>>,
+        _k = 60,
+        weights?: number[]
+    ) => {
         const scores = new Map<string, number>();
-        for (const list of rankedLists) {
-            for (const candidate of list) {
+        for (let listIdx = 0; listIdx < rankedLists.length; listIdx++) {
+            const weight = weights?.[listIdx] ?? 1.0;
+            if (weight === 0) continue;
+            for (const candidate of rankedLists[listIdx]) {
                 const existing = scores.get(candidate.ID) ?? 0;
-                // Simplified RRF: 1 / (60 + rank)
-                scores.set(candidate.ID, existing + 1.0 / (60 + candidate.Rank));
+                // Simplified weighted RRF: weight * 1 / (60 + rank)
+                scores.set(candidate.ID, existing + weight * (1.0 / (60 + candidate.Rank)));
             }
         }
         return Array.from(scores.entries())
@@ -355,7 +365,7 @@ describe('SearchFusion', () => {
             expect(result).toHaveLength(3);
         });
 
-        it('honors per-scope weights (non-uniform path, bypasses ComputeRRF mock)', () => {
+        it('honors per-scope weights (passes the per-scope weights through to RRF in order)', () => {
             const map = new Map<string, SearchResultItem[]>();
             map.set('scope-a', [makeResult({ EntityName: 'E', RecordID: 'A', Score: 0.9 })]);
             map.set('scope-b', [makeResult({ EntityName: 'E', RecordID: 'B', Score: 0.9 })]);

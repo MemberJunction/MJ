@@ -1,0 +1,25 @@
+<!-- No Content Types Warning Dialog (z-index above slide-in panel) -->
+@if (Show) {
+    <div class="at-schedule-dialog-overlay" style="z-index: 10001;" (click)="Dismissed.emit()">
+        <div class="at-schedule-dialog" style="max-width: 440px; z-index: 10002;" (click)="$event.stopPropagation()">
+            <div class="at-schedule-dialog-header">
+                <span><i class="fa-solid fa-triangle-exclamation" style="color: var(--mj-status-warning); margin-right: 8px;"></i> Content Type Required</span>
+                <button class="at-close-btn" aria-label="Close warning" (click)="Dismissed.emit()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="at-schedule-dialog-body" style="text-align: center; padding: 24px;">
+                <p style="color: var(--mj-text-secondary); margin-bottom: 16px;">
+                    No content types have been configured yet. At least one content type is required before you can create a content source.
+                </p>
+                <p style="color: var(--mj-text-muted); font-size: 13px;">
+                    Go to the <strong>Content Types</strong> tab to create one.
+                </p>
+            </div>
+            <div class="at-schedule-dialog-footer">
+                <button class="at-action-btn at-primary-btn" (mousedown)="GoToTypes.emit()">
+                    <i class="fa-solid fa-arrow-right"></i> Go to Content Types
+                </button>
+                <button class="at-action-btn at-secondary-btn" (click)="Dismissed.emit()">Close</button>
+            </div>
+        </div>
+    </div>
+}

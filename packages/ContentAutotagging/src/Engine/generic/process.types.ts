@@ -14,6 +14,14 @@ export class ContentItemProcessParams {
     contentTypeID: string;
     contentFileTypeID: string;
     contentSourceTypeID: string;
+    /** The owning ContentSource ID — used to resolve the source-level classification context. */
+    contentSourceID?: string;
+    /**
+     * Effective classification-context string assembled from the org/content-type/source
+     * scopes and injected into the autotagging prompt as `classificationContext`. Resolved
+     * once per item before chunking so the (async) lookup isn't repeated per chunk.
+     */
+    classificationContext?: string;
 }
 
 export class ContentItemProcessResults {

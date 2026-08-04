@@ -9,5 +9,15 @@ export * from './lib/module';
 export * from './lib/recent-access.service';
 export * from './lib/theme.service';
 
+// DOM helpers
+export * from './lib/dom-utils';
+
+// Theming constants
+export * from './lib/ag-grid-theme-params';
+
 // Components
 export * from './lib/loading/loading.component';
+
+// Rich-text rendering (safe HTML/SVG sanitization)
+export * from './lib/rich-text/rich-text-sanitize';
+export * from './lib/rich-text/safe-rich-html.pipe';

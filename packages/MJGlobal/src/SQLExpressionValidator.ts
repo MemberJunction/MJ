@@ -72,7 +72,30 @@ export const FULL_QUERY_ALLOWED_KEYWORDS = [
 
   // IIF() uses IF internally, CASE WHEN patterns are common
   'IF',
+
+  // FOR JSON / FOR XML — legitimate trailing clauses on a full SELECT. The
+  // control-flow `FOR` loop this keyword guards against cannot appear in a
+  // standalone SELECT statement, so allowing FOR in full-query context is safe.
+  // (FOR UPDATE remains blocked via the independent UPDATE keyword.)
+  'FOR',
 ] as const;
+
+/**
+ * System catalog / metadata objects that must never be referenced from a user-supplied
+ * expression or ad-hoc query, in ANY context (including `full_query`). These sit outside
+ * MemberJunction's entity-permission model, so allowing them turns a validated SELECT into
+ * a schema-enumeration and credential-exfiltration primitive
+ * (e.g. `SELECT name, password_hash FROM sys.sql_logins`,
+ *  `SELECT * FROM INFORMATION_SCHEMA.COLUMNS`, `SELECT * FROM pg_catalog.pg_authid`).
+ * String literals are stripped before this check runs, so a literal value like `'sys.x'` is safe.
+ */
+export const BLOCKED_SYSTEM_OBJECT_PATTERNS: RegExp[] = [
+  /\bSYS\s*\.\s*\w/i,                      // SQL Server system catalog schema: sys.sql_logins, sys.objects, sys.fn_*, ...
+  /\bINFORMATION_SCHEMA\b/i,               // ANSI catalog views — schema/table/column enumeration
+  /\bSYSLOGINS\b/i,                        // legacy SQL Server logins view
+  /\bPG_CATALOG\s*\./i,                    // PostgreSQL system catalog schema
+  /\bPG_(AUTHID|SHADOW|USER|ROLES)\b/i,    // PostgreSQL credential / role catalogs
+];
 
 /**
  * Safe SQL functions allowed in expressions, organized by category
@@ -291,6 +314,20 @@ export class SQLExpressionValidator extends BaseSingleton<SQLExpressionValidator
           error: `Dangerous SQL keyword detected: ${keyword}`,
           trigger: keyword,
           suggestion: keyword === 'SELECT' ? 'Subqueries are not allowed. Use a direct expression instead.' : undefined
+        };
+      }
+    }
+
+    // Block references to database system catalogs / metadata objects in ALL contexts
+    // (including full_query). These live outside MemberJunction's entity-permission model, so
+    // permitting them turns a validated SELECT into a schema-enumeration / credential-exfiltration
+    // primitive. String literals were already stripped upstream, so legitimate literal values are safe.
+    for (const sysPattern of BLOCKED_SYSTEM_OBJECT_PATTERNS) {
+      if (sysPattern.test(textToCheck)) {
+        return {
+          valid: false,
+          error: 'Access to database system catalogs / metadata objects is not allowed',
+          trigger: 'system-object'
         };
       }
     }

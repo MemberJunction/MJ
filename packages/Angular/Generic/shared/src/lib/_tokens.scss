@@ -199,6 +199,23 @@
   --mj-status-info-text: var(--mj-color-info-700);
   --mj-status-info-border: var(--mj-color-info-500);
 
+  /* Data-Visualization Categorical Palette
+     Distinct series colors for charts/diagrams (Venn, donut, treemap, etc.).
+     Components read these instead of hardcoding a hex array; the interactive-
+     component theme bridge exposes them as `styles.chartPalette`. These are the
+     default (theme-agnostic) categorical hues — Phase 2 derivation re-tints them
+     from the org brand by overriding these same tokens. */
+  --mj-viz-1: #2196F3;  /* blue */
+  --mj-viz-2: #4CAF50;  /* green */
+  --mj-viz-3: #FF9800;  /* orange */
+  --mj-viz-4: #E91E63;  /* pink */
+  --mj-viz-5: #9C27B0;  /* purple */
+  --mj-viz-6: #00BCD4;  /* cyan */
+  --mj-viz-7: #F44336;  /* red */
+  --mj-viz-8: #8BC34A;  /* light green */
+  --mj-viz-9: #FF5722;  /* deep orange */
+  --mj-viz-10: #3F51B5; /* indigo */
+
   /* Application Accent (set per-application from metadata)
      Default uses amber accent, but apps can override to use primary/tertiary/custom */
   --mj-app-accent: var(--mj-brand-accent);
@@ -210,6 +227,11 @@
   --mj-highlight-hover: var(--mj-brand-accent-hover);
   --mj-highlight-subtle: var(--mj-brand-accent-subtle);
   --mj-on-highlight: var(--mj-brand-on-accent);
+
+  /* Search-match highlight — the <mark> wrapping typed-query matches in lists,
+     field labels, FK dropdowns, etc. Muted amber (not the garish browser default). */
+  --mj-search-highlight-bg: color-mix(in srgb, var(--mj-status-warning) 24%, transparent);
+  --mj-search-highlight-text: var(--mj-text-primary);
 
   /* Login Banner Gradient & Waves */
   --mj-login-grad-start: var(--mj-color-brand-900);
@@ -224,6 +246,9 @@
   --mj-logo-mark-inverse: url('/assets/mj-mark-white.svg');
   --mj-logo-wordmark: url('/assets/MJ_logo.svg');
   --mj-logo-color: #264FAF;
+  /* Header mark geometry. */
+  --mj-logo-width: 32px;
+  --mj-logo-height: 18px;
 
   /* ========================================
      TYPOGRAPHY
@@ -358,7 +383,11 @@
   
   --mj-bg-page: var(--mj-color-neutral-900);
   --mj-bg-surface: var(--mj-color-neutral-800);
-  --mj-bg-surface-card: #253347;
+  /* Card sits between surface (800) and elevated (700). Derived from the neutral
+     primitives (not a literal) so org brand overlays re-tint it in dark mode; the
+     68/32 srgb-linear split reproduces the historical #253347 with MJ's defaults
+     and matches the theme engine's mixHex(neutral-800, neutral-700, 0.32) exactly. */
+  --mj-bg-surface-card: color-mix(in srgb-linear, var(--mj-color-neutral-800) 68%, var(--mj-color-neutral-700));
   --mj-bg-surface-elevated: var(--mj-color-neutral-700);
   --mj-bg-surface-sunken: var(--mj-color-neutral-950);
   --mj-bg-surface-hover: var(--mj-color-neutral-600);
@@ -412,6 +441,10 @@
   --mj-status-warning-bg: rgba(245, 158, 11, 0.15);
   --mj-status-warning-text: var(--mj-color-warning-100);
   --mj-status-warning-border: var(--mj-color-warning-600);
+
+  /* Slightly stronger search highlight on dark surfaces so it stays visible. */
+  --mj-search-highlight-bg: color-mix(in srgb, var(--mj-status-warning) 30%, transparent);
+  --mj-search-highlight-text: var(--mj-text-primary);
 
   --mj-status-error-bg: rgba(239, 68, 68, 0.15);
   --mj-status-error-text: var(--mj-color-error-100);

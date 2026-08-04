@@ -2,8 +2,8 @@ import { Component } from '@angular/core';
 import { MJCommunicationProviderEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { JoinGridComponent } from "@memberjunction/ng-join-grid"
 import {  } from "@memberjunction/ng-entity-viewer"
+import { JoinGridComponent } from "@memberjunction/ng-join-grid"
 
 @RegisterClass(BaseFormComponent, 'MJ: Communication Providers') // Tell MemberJunction about this class
 @Component({
@@ -19,10 +19,10 @@ export class MJCommunicationProviderFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'providerDetails', sectionName: 'Provider Details', isExpanded: true },
             { sectionKey: 'operationalSettings', sectionName: 'Operational Settings', isExpanded: true },
-            { sectionKey: 'advancedCapabilities', sectionName: 'Advanced Capabilities', isExpanded: false },
+            { sectionKey: 'advancedCapabilities', sectionName: 'Advanced Capabilities', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJCommunicationProviderMessageTypes', sectionName: 'Message Types', isExpanded: false },
-            { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false }
+            { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false },
+            { sectionKey: 'mJCommunicationProviderMessageTypes', sectionName: 'Message Types', isExpanded: false }
         ]);
     }
 }

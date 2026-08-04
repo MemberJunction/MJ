@@ -170,10 +170,11 @@
             }
 
             @if (filteredItems.length === 0) {
-                <div class="no-items">
-                    <i class="fa-solid fa-inbox"></i>
-                    <p>No items found</p>
-                </div>
+                <mj-empty-state
+                    [Variant]="searchTerm ? 'no-results' : 'empty'"
+                    [Icon]="searchTerm ? 'fa-solid fa-magnifying-glass' : 'fa-solid fa-inbox'"
+                    [Title]="searchTerm ? 'No matching items' : 'No items found'"
+                    [Message]="searchTerm ? 'Try a different search term.' : ''" />
             }
         </div>
     }

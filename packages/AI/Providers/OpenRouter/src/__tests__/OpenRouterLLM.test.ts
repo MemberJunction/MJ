@@ -70,4 +70,18 @@ describe('OpenRouterLLM', () => {
       expect(llm.SupportsStreaming).toBe(true);
     });
   });
+
+  /* ---- Usage accounting opt-in ---- */
+  describe('getProviderRequestExtras', () => {
+    // The whole OpenRouter cost-capture story hinges on this: OpenRouter only returns usage.cost
+    // when the request opts into usage accounting. The inherited OpenAILLM merges these extras into
+    // both the streaming and non-streaming request bodies.
+    const extras = (instance: OpenRouterLLM): Record<string, unknown> =>
+      (instance as unknown as { getProviderRequestExtras: (p: unknown) => Record<string, unknown> })
+        .getProviderRequestExtras({});
+
+    it('requests OpenRouter usage accounting so the response includes cost', () => {
+      expect(extras(llm)).toEqual({ usage: { include: true } });
+    });
+  });
 });

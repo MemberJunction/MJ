@@ -1,7 +1,7 @@
-import { BaseSingleton, MJEvent, MJEventType, MJGlobal } from "@memberjunction/global";
+import { BaseSingleton, MJEvent, MJEventType, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { BehaviorSubject, Observable, Subject } from "rxjs";
-import { debounceTime } from "rxjs/operators";
+import { buffer, debounceTime, filter } from "rxjs/operators";
 
 import { UserInfo } from "./securityInfo";
 import { RunView, RunViewParams } from "../views/runView";
@@ -172,6 +172,18 @@ export interface EngineDataChangeEvent {
 }
 
 /**
+ * How a single entity event relates to a single config's backing array — the result of
+ * {@link BaseEngine.classifyEventForConfig}:
+ * - 'refresh': the array does not yet reflect the event; a refresh/immediate mutation is required
+ * - 'notify': the array already reflects the event; observers still need a notification
+ * - 'silent': a delete of a row absent from the array; no refresh and no notification
+ */
+export type EntityEventDisposition =
+    | { action: 'refresh' }
+    | { action: 'notify'; changeType: 'add' | 'update' | 'delete' }
+    | { action: 'silent' };
+
+/**
  * Abstract base class for any engine-style class which executes work on behalf of a caller typically using a provider-style architecture with plug-ins. This base class
  * provides a mechanism for loading metadata from the database and caching it for use by the engine. Subclasses must implement the Config abstract method and within that
  * generally it is recommended to call the Load method to load the metadata. Subclasses can also override the AdditionalLoading method to perform additional loading tasks.
@@ -187,19 +199,74 @@ export interface RemoteInvalidatePayload {
     recordData?: string;
 }
 
+/**
+ * Tracks the load state and data for a single engine property (entity or dataset config).
+ */
+export interface EngineDataMapEntry {
+    entityName?: string;
+    datasetName?: string;
+    data: unknown[];
+    loadedSuccessfully: boolean;
+    errorMessage?: string;
+    /**
+     * True when this config was skipped because the current user lacks read
+     * permission on its entity. The data array will be empty `[]`.
+     */
+    permissionDenied?: boolean;
+}
+
+/**
+ * Thrown when engine data is accessed but was never loaded because the
+ * current user lacks read permissions on the underlying entities.
+ *
+ * Consumers that want graceful degradation should check
+ * `engine.IsPermissionConstrained` BEFORE accessing properties.
+ * This exception is the safety net for code paths that forget to check.
+ */
+export class PermissionConstrainedError extends Error {
+    /** The engine class name (e.g., 'AIEngineBase', 'QueryEngine') */
+    public readonly EngineName: string;
+    /** The entity names that were denied */
+    public readonly DeniedEntities: string[];
+
+    constructor(engineName: string, deniedEntities: string[]) {
+        super(
+            `${engineName} data is not available — user lacks read permission ` +
+            `on: ${deniedEntities.join(', ')}. Check engine.IsPermissionConstrained ` +
+            `before accessing properties to handle this gracefully.`
+        );
+        this.name = 'PermissionConstrainedError';
+        this.EngineName = engineName;
+        this.DeniedEntities = deniedEntities;
+    }
+}
+
 export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
     private _contextUser: UserInfo;
     private _metadataConfigs: BaseEnginePropertyConfig[] = [];
     private _dynamicConfigs: Map<string, BaseEnginePropertyConfig> = new Map();
-    private _dataMap: Map<string, { entityName?: string, datasetName?: string, data: unknown[] }> = new Map();
+    private _dataMap: Map<string, EngineDataMapEntry> = new Map();
     private _expirationTimers: Map<string, number> = new Map();
     private _entityEventSubjects: Map<string, Subject<BaseEntityEvent>> = new Map();
     private _provider: IMetadataProvider;
     private _dataChange$ = new Subject<EngineDataChangeEvent>();
     private _cacheChangeUnsubscribers: (() => void)[] = [];
     private _propertySubjects: Map<string, BehaviorSubject<BaseEntity[]>> = new Map();
+    private _isPermissionConstrained: boolean = false;
+    private _deniedEntityNames: string[] = [];
+    /**
+     * Per-property monotonic full-refresh counter. Guards {@link LoadSingleEntityConfig}
+     * against overlapping full refreshes clobbering each other: when several full-refresh
+     * RunViews for the same property are in flight at once (e.g. a burst of saves each
+     * landing in its own debounce window because the round-trip exceeds the DebounceTime),
+     * only the latest-INITIATED refresh may commit its results. Without this, whichever
+     * RunView happens to RESOLVE last wins — which can be an earlier-initiated request that
+     * read a staler snapshot, leaving the cache "one operation behind" until a full reload
+     * reconciles it. Keyed by config PropertyName. See {@link beginConfigRefresh}.
+     */
+    private _configRefreshGeneration: Map<string, number> = new Map();
 
     /**
      * Returns an Observable for a specific engine array property. Subscribers receive the
@@ -284,6 +351,62 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             affectedEntity
         };
         this._dataChange$.next(event);
+    }
+
+    /**
+     * True when the engine loaded successfully but all entity configs were
+     * skipped because the current user lacks read permissions. Accessor
+     * properties will throw {@link PermissionConstrainedError} if accessed
+     * in this state. Check this flag first to degrade gracefully.
+     */
+    public get IsPermissionConstrained(): boolean {
+        return this._isPermissionConstrained;
+    }
+
+    /**
+     * Retrieves engine-loaded data for a config property by name. This is the
+     * canonical accessor for engine getter properties — it checks the data map
+     * for permission denial and throws {@link PermissionConstrainedError} with
+     * the specific denied entity name(s) if the config was skipped.
+     *
+     * Subclasses should use this in every getter that exposes engine-loaded data:
+     * ```typescript
+     * public get Models(): MJAIModelEntityExtended[] {
+     *     return this.GetConfigData<MJAIModelEntityExtended>('_models');
+     * }
+     * ```
+     *
+     * @param propertyName - The config property name (e.g., '_models', '_agents'),
+     *   matching the PropertyName used in the engine's Config() params array.
+     * @returns The data array for the property, or an empty array if not yet loaded.
+     * @throws {PermissionConstrainedError} if the property was skipped due to permission denial.
+     */
+    protected GetConfigData<E>(propertyName: string): E[] {
+        const entry = this._dataMap.get(propertyName);
+        if (entry?.permissionDenied) {
+            throw new PermissionConstrainedError(
+                this.constructor.name,
+                entry.entityName ? [entry.entityName] : this._deniedEntityNames
+            );
+        }
+        return ((this as Record<string, unknown>)[propertyName] as E[]) ?? [];
+    }
+
+    /**
+     * Check if a specific property was skipped due to permission denial.
+     * Forward-compatible with a future partial-loading approach.
+     */
+    public IsPropertyPermissionConstrained(propertyName: string): boolean {
+        const entry = this._dataMap.get(propertyName);
+        return entry?.permissionDenied === true;
+    }
+
+    /**
+     * List of entity names that were skipped due to permission denial.
+     * Empty if not permission-constrained. Useful for logging/diagnostics.
+     */
+    public get PermissionConstrainedEntities(): string[] {
+        return [...this._deniedEntityNames];
     }
 
     /**
@@ -416,6 +539,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
 
         if (!this._loaded || forceRefresh) {
+            // Reset permission-constrained state on fresh load or force refresh
+            // so permission changes mid-session take effect via Config(true).
+            this._isPermissionConstrained = false;
+            this._deniedEntityNames = [];
+
             // Start telemetry tracking for engine load
             const entityNames = configs
                 .filter(c => c.Type !== 'dataset' && c.EntityName)
@@ -445,13 +573,24 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Register with the engine registry
                 BaseEngineRegistry.Instance.RegisterEngine(this);
 
-                await this.LoadConfigs(configs, contextUser);
+                await this.LoadConfigs(configs, contextUser, forceRefresh);
                 await this.AdditionalLoading(contextUser); // Call the additional loading method
                 await this.SetupGlobalEventListener();
-                this._loaded = true;
 
-                // Notify registry that engine is loaded
-                BaseEngineRegistry.Instance.NotifyEngineLoaded(this);
+                // Only mark as loaded if all configs loaded successfully.
+                // If any config failed (e.g. network error during MJAPI restart),
+                // leaving _loaded=false allows EnsureLoaded()/Config() to retry on next attempt.
+                const hasFailures = Array.from(this._dataMap.values()).some(entry => !entry.loadedSuccessfully);
+                if (hasFailures) {
+                    const failedNames = Array.from(this._dataMap.entries())
+                        .filter(([, entry]) => !entry.loadedSuccessfully)
+                        .map(([key, entry]) => entry.entityName || entry.datasetName || key);
+                    LogError(`${this.constructor.name}: Not marking as loaded — ${failedNames.length} config(s) failed to load: ${failedNames.join(', ')}. Will retry on next Config()/EnsureLoaded() call.`);
+                } else {
+                    this._loaded = true;
+                    // Notify registry that engine is loaded
+                    BaseEngineRegistry.Instance.NotifyEngineLoaded(this);
+                }
             } catch (e) {
                 LogError(e);
             } finally {
@@ -462,64 +601,86 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**********************************************************************
-     * This section is for handling caching of multiple instances when needed
-     * We use the primary singleton as the instance to store a cache of instances
-     * that are tied to specific providers. This is useful when we have multiple
-     * providers in a given app going to different connections.
+     * This section is for handling caching of multiple instances when needed.
+     * We cache engine instances keyed by the **connection** they target — not by
+     * the provider object reference. Multiple per-request providers pointing at
+     * the same database share one cached engine instance.
+     *
+     * Keying by IMetadataProvider.InstanceConnectionString (a stable
+     * credential-free identifier like `mssql://host:port/db`) means:
+     *   - Multi-server clients still get separate engine instances per server
+     *     (different connection strings → different cache entries)
+     *   - Per-request providers on the server hit the cache (same connection
+     *     string as the persistent startup provider) instead of allocating a
+     *     fresh engine and running a full DB load every request
+     *   - Transient provider objects never get pinned by the cache, so they're
+     *     GC-eligible at end of request as designed
      *********************************************************************/
-    // private static _providerInstances: Map<{provider: IMetadataProvider, subclassConstructor: any}, any> = new Map();
-    // private static get ProviderInstances(): Map<{provider: IMetadataProvider, subclassConstructor: any}, any> {
-    //     return BaseEngine._providerInstances;
-    // }
-    private static _providerInstances: { provider: IMetadataProvider, subclassConstructor: any, instance: any }[] = [];
-    private static get ProviderInstances(): { provider: IMetadataProvider, subclassConstructor: any, instance: any }[] {
-        return BaseEngine._providerInstances;
-    }    
+    private static _providerInstances: Map<string, Map<Function, BaseEngine<unknown>>> = new Map();
 
     /**
-     * This method will check for the existence of an instance of this engine class that is tied to a specific provider. If one exists, it will return it, otherwise it will create a new instance
+     * Returns the cached engine instance for this engine subclass on the connection the given
+     * provider points to, creating one if none exists yet. Lookup is keyed by the provider's
+     * `InstanceConnectionString` so multiple provider objects targeting the same connection
+     * share a single cached engine.
      */
     public static GetProviderInstance<T>(provider: IMetadataProvider, subclassConstructor: new () => BaseEngine<T>): BaseEngine<T> {
-        const existingEntry = BaseEngine.ProviderInstances.find(
-            entry => entry.provider === provider && entry.subclassConstructor === subclassConstructor
-        );
+        const connectionKey = provider?.InstanceConnectionString;
+        if (connectionKey) {
+            const perConnectionMap = BaseEngine._providerInstances.get(connectionKey);
+            if (perConnectionMap) {
+                const existing = perConnectionMap.get(subclassConstructor);
+                if (existing) {
+                    return existing as BaseEngine<T>;
+                }
+            }
+        }
 
-        if (existingEntry) {
-            return existingEntry.instance;
-        }
-        else {
-            // we don't have an existing instance for this provider, so we need to create one
-            const newInstance = new subclassConstructor(); 
-            newInstance.SetProvider(provider);
-//            BaseEngine.ProviderInstances.set({provider, subclassConstructor}, newInstance);
-            //BaseEngine.ProviderInstances.push({ provider, subclassConstructor, instance: newInstance });
-                    
-            return newInstance;
-        }
+        const newInstance = new subclassConstructor();
+        newInstance.SetProvider(provider); // SetProvider -> CheckAddToProviderInstances handles registration
+        return newInstance;
     }
 
     /**
-     * Internal method to set the provider when an engine is loaded
-     * @param provider 
+     * Removes all cached engine instances for the given connection. Call this when a connection
+     * is being torn down (e.g. multi-tenant client logging out) to release the cached engines'
+     * memory eagerly. For normal server operation this is rarely needed — the cache is bounded
+     * by (distinct connections × engine classes), which is small.
+     */
+    public static RemoveConnectionInstances(connectionKey: string): void {
+        BaseEngine._providerInstances.delete(connectionKey);
+    }
+
+    /**
+     * Internal method to set the provider when an engine is loaded. Once this engine instance has
+     * a provider bound, subsequent calls are no-ops — preventing transient per-request providers
+     * from displacing the persistent provider that first bound to this connection. The cache key
+     * is the connection (not the object), so the first persistent provider to load an engine for
+     * a connection "owns" the engine for that connection's lifetime.
      */
     protected SetProvider(provider: IMetadataProvider) {
-        this._provider = provider;
-//        BaseEngine.ProviderInstances.set({provider: this.ProviderToUse, subclassConstructor: this.constructor} /*use default provider if one wasn't provided to use*/, <T><any>this);
-
-        this.CheckAddToProviderInstances(this.ProviderToUse);
+        // First-wins on the persistent _provider binding so transient per-request providers
+        // can't displace the persistent provider that first owned this engine.
+        if (!this._provider && provider) {
+            this._provider = provider;
+        }
+        // Always register under the incoming provider's connection key (or ProviderToUse if
+        // none was passed) so future GetProviderInstance lookups for that connection can find
+        // this engine. Multiple registrations for the same key are idempotent.
+        this.CheckAddToProviderInstances(provider || this.ProviderToUse);
     }
 
     protected CheckAddToProviderInstances(provider: IMetadataProvider) {
-        const existingEntry = BaseEngine.ProviderInstances.find(
-            entry => entry.provider === provider && entry.subclassConstructor === this.constructor
-        );
-
-        if (!existingEntry) {
-            BaseEngine.ProviderInstances.push({
-                provider: provider,
-                subclassConstructor: this.constructor,
-                instance: this
-            });
+        if (!provider) return; // no provider available (e.g. global default not yet initialized)
+        const connectionKey = provider.InstanceConnectionString;
+        if (!connectionKey) return; // provider not fully configured yet — skip registration
+        let perConnectionMap = BaseEngine._providerInstances.get(connectionKey);
+        if (!perConnectionMap) {
+            perConnectionMap = new Map();
+            BaseEngine._providerInstances.set(connectionKey, perConnectionMap);
+        }
+        if (!perConnectionMap.has(this.constructor)) {
+            perConnectionMap.set(this.constructor, this);
         }
     }
 
@@ -575,6 +736,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     protected async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
         try {
+            // If the engine is permission-constrained, don't attempt to reload
+            // configs in response to entity events — the user can't read them
+            // anyway. Use Config(true) to re-check if permissions change.
+            if (this._isPermissionConstrained) {
+                return true;
+            }
+
             if (event.type === 'remote-invalidate') {
                 return await this.HandleRemoteInvalidateEvent(event);
             }
@@ -593,9 +761,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const allCanUseImmediate = matchingConfigs.every(config => this.canUseImmediateMutation(config));
 
                 if (allCanUseImmediate) {
-                    // Process immediately without debounce - synchronous array mutations
+                    // Process immediately without debounce - mutation requires await because the
+                    // entity must be cloned (with its provider rebound) before being cached
                     for (const config of matchingConfigs) {
-                        this.applyImmediateMutation(config, event);
+                        await this.applyImmediateMutation(config, event);
                     }
                     return true;
                 } else {
@@ -658,10 +827,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Fall through to server fetch if direct delete failed
             }
 
-            // Fallback: re-fetch from server (missing data or apply failure)
+            // Fallback: re-fetch from server (missing data or apply failure). Bypass the cache
+            // for the same reason as the local-event path: this fetch runs BECAUSE a
+            // (cross-server) write signaled the cache stale, so reading back through it would
+            // re-sync the pre-write snapshot.
             let refreshCount = 0;
             for (const config of matchingConfigs) {
-                await this.LoadSingleConfig(config, this._contextUser);
+                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true);
+                if (!this.configLoadedSuccessfully(config.PropertyName)) {
+                    // Same one-shot hazard as the debounced path: the invalidation event is
+                    // consumed, so a transient failure here needs a bounded retry too.
+                    this.scheduleEventRefreshRetry(config, 1);
+                }
                 refreshCount++;
             }
 
@@ -711,11 +888,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                 if (index >= 0) {
                     currentData[index] = entity;
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'update', entity);
                 } else {
                     currentData.push(entity);
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'add', entity);
                 }
                 this.emitPropertyChange(config.PropertyName);
@@ -759,7 +936,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 if (index >= 0) {
                     const removed = currentData[index];
                     currentData.splice(index, 1);
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'delete', removed);
                     this.emitPropertyChange(config.PropertyName);
                 }
@@ -775,13 +952,19 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
-     * This method handles the debouncing process, by default using the EntityEventDebounceTime property to set the debounce time. Debouncing is 
-     * done on a per-entity basis, meaning that if the debounce time passes for a specific entity name, the event will be processed. This is done to
+     * This method handles the debouncing process, by default using the EntityEventDebounceTime property to set the debounce time. Debouncing is
+     * done on a per-entity basis, meaning that if the debounce time passes for a specific entity name, the events will be processed. This is done to
      * prevent multiple events from being processed in quick succession for a single entity which would cause a lot of wasted processing.
-     * 
-     * Override this method if you want to change how debouncing time such as having variable debounce times per-entity, etc.
-     * @param event 
-     * @returns 
+     *
+     * ALL events raised during the debounce window are buffered and delivered as one batch to
+     * {@link ProcessEntityEvents} — not just the last one. The refresh-vs-skip decision must be
+     * an OR over every coalesced event: judging only the last event would let an
+     * already-applied write (e.g., an engine method's in-place save of a cached instance)
+     * mask an earlier fresh-instance save the array has never seen.
+     *
+     * Override this method if you want to change how debouncing works, such as having variable debounce times per-entity, etc.
+     * @param event
+     * @returns
      */
     protected async DebounceIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
         try {
@@ -798,9 +981,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
                 const subject = new Subject<BaseEntityEvent>();
                 subject.pipe(
-                    debounceTime(debounceTimeValue)
-                ).subscribe(async (e) => {
-                    await this.ProcessEntityEvent(e);
+                    // Collect every event in the window; the debounced stream closes the buffer,
+                    // so the batch is emitted once the entity has been quiet for the full window.
+                    buffer(subject.pipe(debounceTime(debounceTimeValue))),
+                    filter(batch => batch.length > 0)
+                ).subscribe(async (batch) => {
+                    await this.ProcessEntityEvents(batch);
                 });
                 this._entityEventSubjects.set(entityName, subject);
             }
@@ -828,58 +1014,83 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
     
     /**
-     * This method does the actual work of processing the entity event. It is not directly called from the event handler because we want to first debounce the events
-     * which also introduces a delay which is usually desirable so that our processing is typically outside of the scope of any transaction processing that would have
-     * originated the event.
-     *
-     * This is the best method to override if you want to change the actual processing of an entity event but do NOT want to modify the debouncing behavior.
+     * Back-compat single-event wrapper around {@link ProcessEntityEvents}. The debounced
+     * pipeline delivers full batches to ProcessEntityEvents — override THAT method to change
+     * event-processing behavior; this wrapper exists for subclasses/tests that process one
+     * event at a time.
      */
     protected async ProcessEntityEvent(event: BaseEntityEvent): Promise<void> {
+        return this.ProcessEntityEvents([event]);
+    }
+
+    /**
+     * Does the actual work of processing all entity events coalesced into one debounce window.
+     * Not called directly from the event handler because we first debounce the events, which also
+     * introduces a delay that is usually desirable so processing happens outside the scope of any
+     * transaction processing that originated the events.
+     *
+     * Per matching config, the decision is an OR over the whole batch:
+     * - If ANY event's changes are not yet reflected in the config's array, run the refresh
+     *   (or apply each such event via immediate mutation when the config allows it). A single
+     *   full refresh covers every event in the window.
+     * - Else, if any event's changes were already applied (in-place save of a cached instance,
+     *   manual push after create), notify observers once — the refresh is redundant but the
+     *   notification is not.
+     * - Deletes of rows absent from the array stay silent: "already spliced by engine code"
+     *   (that code owns the notification, see {@link notifyAlreadyAppliedMutation}) is
+     *   indistinguishable from "never matched this config's Filter", and notifying would
+     *   assert phantom deletes to filtered configs' observers.
+     *
+     * A transiently-failed refresh schedules a bounded retry via
+     * {@link scheduleEventRefreshRetry} — without it, the consumed debounce event would leave
+     * observers permanently stale until an unrelated event arrived.
+     *
+     * This is the best method to override if you want to change the actual processing of entity
+     * events but do NOT want to modify the debouncing behavior.
+     */
+    protected async ProcessEntityEvents(events: BaseEntityEvent[]): Promise<void> {
+        if (!events || events.length === 0) {
+            return;
+        }
         try {
-            const entityName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
+            const entityName = events[0].baseEntity.EntityInfo.Name.toLowerCase().trim();
             let refreshCount = 0;
 
             for (const config of this.Configs) {
                 if (config.AutoRefresh && config.Type === 'entity' && config.EntityName?.trim().toLowerCase() === entityName) {
-                    // For UPDATE events, check if the exact object is already in our array.
-                    // If so, it's already been mutated in place - no need to refresh.
-                    if (event.type === 'save' && event.saveSubType === 'update') {
-                        if (this.isEntityAlreadyInArray(config, event.baseEntity)) {
-                            // Object already in array and updated in place, skip refresh
-                            // LogStatus(`>>> Skipping refresh for ${config.PropertyName} - object already in array`);
-                            continue;
-                        }
-                    }
+                    const classified = events.map(e => ({ event: e, disposition: this.classifyEventForConfig(config, e) }));
+                    const needingWork = classified.filter(c => c.disposition.action === 'refresh');
 
-                    // For CREATE events, check if the entity was already added to our array
-                    // (e.g., by engine methods like InstallApplication that manually push).
-                    if (event.type === 'save' && event.saveSubType === 'create') {
-                        if (this.isEntityAlreadyInArray(config, event.baseEntity)) {
-                            // Object already in array (manually added), skip refresh
-                            // LogStatus(`>>> Skipping refresh for ${config.PropertyName} - newly created object already in array`);
-                            continue;
+                    if (needingWork.length > 0) {
+                        // Check if we can use immediate array mutation instead of running a view
+                        if (this.canUseImmediateMutation(config)) {
+                            // Apply, in order, every event the array hasn't seen yet
+                            for (const c of needingWork) {
+                                await this.applyImmediateMutation(config, c.event);
+                            }
+                        } else {
+                            // One full refresh covers every event in the window. Bypass the cache:
+                            // this refresh is triggered BY a save/delete of this very entity, so a
+                            // cached view result is precisely what may be stale. Reading true DB
+                            // state guarantees the engine cache reflects the write that just fired
+                            // the event — otherwise a filtered/ordered config (which can't be
+                            // updated in place, e.g. UserInfoEngine's per-user '_UserApplications')
+                            // re-syncs the PRE-write snapshot and the UI sits "one operation behind"
+                            // until a full page reload repopulates the cache.
+                            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true);
+                            if (!this.configLoadedSuccessfully(config.PropertyName)) {
+                                this.scheduleEventRefreshRetry(config, 1);
+                            }
+                            refreshCount++;
                         }
-                    }
-
-                    // For DELETE events, check if the entity was already removed from our array
-                    // (e.g., by engine methods like UninstallApplication that manually splice).
-                    // Also check by primary key since the object reference may still exist but be removed.
-                    if (event.type === 'delete') {
-                        if (!this.isEntityInArrayByRefOrKey(config, event.baseEntity)) {
-                            // Object not in array (already removed), skip refresh
-                            // LogStatus(`>>> Skipping refresh for ${config.PropertyName} - deleted object not in array`);
-                            continue;
-                        }
-                    }
-
-                    // Check if we can use immediate array mutation instead of running a view
-                    if (this.canUseImmediateMutation(config)) {
-                        // LogStatus(`>>> Immediate mutation for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${event.baseEntity.EntityInfo.Name}`);
-                        this.applyImmediateMutation(config, event);
                     } else {
-                        // LogStatus(`>>> Refreshing metadata for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${event.baseEntity.EntityInfo.Name}, pkey: ${event.baseEntity.PrimaryKey.ToString()}`);
-                        await this.LoadSingleConfig(config, this._contextUser);
-                        refreshCount++;
+                        // No event requires a refresh. If any event's changes were already
+                        // applied to the array, notify observers once (latest such event wins);
+                        // otherwise every event was a silent delete-of-absent-row.
+                        const lastNotify = [...classified].reverse().find(c => c.disposition.action === 'notify');
+                        if (lastNotify && lastNotify.disposition.action === 'notify') {
+                            this.notifyAlreadyAppliedMutation(config, lastNotify.disposition.changeType, lastNotify.event.baseEntity);
+                        }
                     }
                 }
             }
@@ -897,6 +1108,39 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         catch (e) {
             LogError(e);
         }
+    }
+
+    /**
+     * Classifies a single entity event against a single config's backing array:
+     * - 'refresh' — the array does not yet reflect this event's changes; a refresh
+     *   (or immediate mutation) is required.
+     * - 'notify' — the array already reflects the change (in-place save of the array's own
+     *   cached instance, or a manually-pushed create); observers still need a notification.
+     * - 'silent' — a delete of a row absent from the array; "already spliced" is
+     *   indistinguishable from "never matched the Filter", so no notification is emitted
+     *   (manual-splice engine code owns that notification).
+     *
+     * For deletes, the by-key membership check uses the event payload's pre-delete OldValues
+     * snapshot — BaseEntity.Delete() calls NewRecord() right after raising the event, which
+     * wipes field values and REGENERATES the primary key, so the live entity's key can never
+     * match the deleted row by the time the debounced handler runs.
+     */
+    protected classifyEventForConfig(config: BaseEnginePropertyConfig, event: BaseEntityEvent): EntityEventDisposition {
+        if (event.type === 'save') {
+            if (event.saveSubType === 'update' || event.saveSubType === 'create') {
+                if (this.isEntityAlreadyInArray(config, event.baseEntity)) {
+                    return { action: 'notify', changeType: event.saveSubType === 'create' ? 'add' : 'update' };
+                }
+            }
+            return { action: 'refresh' };
+        }
+        if (event.type === 'delete') {
+            const oldValues = (event.payload as { OldValues?: Record<string, unknown> } | undefined)?.OldValues;
+            return this.isEntityInArrayByRefOrKey(config, event.baseEntity, oldValues)
+                ? { action: 'refresh' }
+                : { action: 'silent' };
+        }
+        return { action: 'silent' };
     }
 
     /**
@@ -918,14 +1162,19 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     /**
      * Checks if an entity is in the config's data array by object reference OR by primary key match.
      * Used for DELETE events where we need to know if the entity still exists in the array.
-     * The object reference may still exist (entity.Delete() just marks it deleted), but if it was
-     * manually spliced out by engine code, we check by primary key as fallback.
+     *
+     * For deletes, pass `preDeleteValues` (the event payload's OldValues snapshot): by the time
+     * the debounced handler runs, BaseEntity.Delete() has already called NewRecord(), which wipes
+     * the entity's fields and regenerates its primary key — so a by-key check against the live
+     * entity can never match the deleted row. Same hazard (and same OldValues workaround) as
+     * LocalCacheManager.HandleBaseEntityEvent.
      *
      * @param config - The configuration to check
      * @param entity - The entity to look for
+     * @param preDeleteValues - Pre-delete field snapshot (delete event payload's OldValues)
      * @returns true if the entity is in the array (by reference or by primary key)
      */
-    protected isEntityInArrayByRefOrKey(config: BaseEnginePropertyConfig, entity: BaseEntity): boolean {
+    protected isEntityInArrayByRefOrKey(config: BaseEnginePropertyConfig, entity: BaseEntity, preDeleteValues?: Record<string, unknown>): boolean {
         const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
         if (!currentData) {
             return false;
@@ -936,8 +1185,117 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return true;
         }
 
-        // Fallback: check by primary key
+        // Preferred by-key check: build the key from the pre-delete snapshot
+        if (preDeleteValues) {
+            const key = new CompositeKey();
+            key.LoadFromEntityInfoAndRecord(entity.EntityInfo, preDeleteValues);
+            if (key.KeyValuePairs.length > 0 && !key.KeyValuePairs.some(kv => kv.Value == null)) {
+                return currentData.some(e => e.PrimaryKey.Equals(key));
+            }
+        }
+
+        // Fallback: check by the entity's current primary key
         return this.findEntityIndexByPrimaryKeys(currentData, entity) >= 0;
+    }
+
+    /**
+     * Emits change notifications for a config whose backing array ALREADY reflects the
+     * entity event — e.g., engine code saved the array's own cached instance in place,
+     * or manually pushed a newly created entity after Save. In those cases
+     * {@link ProcessEntityEvent} safely skips the redundant refresh, but the notification
+     * must NOT be skipped: without it, `DataChange$` and `ObserveProperty` subscribers
+     * (and anything derived from them downstream) never learn the array changed and are
+     * stranded on stale state.
+     *
+     * Engine subclasses that manually SPLICE a deleted row out of a config's array must
+     * call this themselves ('delete') right after splicing — the debounced event handler
+     * cannot distinguish "already spliced" from "never matched this config's Filter", so
+     * it stays silent for absent rows.
+     *
+     * Deliberately does not run AdditionalLoading — the skip paths never did, and
+     * engines that maintain their arrays manually own any derived-data updates themselves.
+     */
+    protected notifyAlreadyAppliedMutation(
+        config: BaseEnginePropertyConfig,
+        changeType: 'add' | 'update' | 'delete',
+        entity: BaseEntity
+    ): void {
+        // Don't emit for configs that were skipped due to permission denial or never
+        // loaded — an emission with fabricated empty data would invite consumers to
+        // read engine getters that throw PermissionConstrainedError.
+        const mapEntry = this._dataMap.get(config.PropertyName);
+        if (mapEntry?.permissionDenied) {
+            return;
+        }
+        const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
+        if (!currentData) {
+            return;
+        }
+        this.NotifyDataChange(config, currentData, changeType, entity);
+        this.emitPropertyChange(config.PropertyName);
+    }
+
+    /**
+     * True when the config's last load attempt left it in a successfully-loaded state.
+     * Reads the same map entry {@link HandleSingleViewResult} writes — a transient failure
+     * (network, server restart) records loadedSuccessfully=false; a permission denial is
+     * recorded as loaded-empty (true) and is deliberately NOT retryable.
+     */
+    protected configLoadedSuccessfully(propertyName: string): boolean {
+        return this._dataMap.get(propertyName)?.loadedSuccessfully === true;
+    }
+
+    private _eventRefreshRetryTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
+    /**
+     * Maximum number of retries for an event-triggered config refresh that failed transiently.
+     * Overridable by subclasses that want more or less persistence.
+     */
+    protected get MaxEventRefreshRetries(): number {
+        return 2;
+    }
+
+    /**
+     * Schedules a bounded, backed-off retry of a config refresh that failed transiently during
+     * entity-event processing. Without this, one failed RunView after a save would permanently
+     * strand every observer on stale data — the debounced event is already consumed, so nothing
+     * else re-runs the refresh until an unrelated event for the same entity arrives.
+     *
+     * At most one retry is pending per property at a time; a retry that succeeds notifies
+     * observers through the normal HandleSingleViewResult → NotifyDataChange path. Permission
+     * denials never reach here (HandleSingleViewResult marks them loaded-empty).
+     *
+     * @param config - The config whose refresh failed
+     * @param attempt - 1-based attempt number; delays back off linearly (2s, 4s, ...)
+     */
+    protected scheduleEventRefreshRetry(config: BaseEnginePropertyConfig, attempt: number): void {
+        const key = config.PropertyName;
+        if (this._eventRefreshRetryTimers.has(key)) {
+            return; // a retry is already pending for this property
+        }
+        if (attempt > this.MaxEventRefreshRetries) {
+            LogError(`BaseEngine: giving up on event-triggered refresh of ${config.EntityName} → ${key} after ${this.MaxEventRefreshRetries} retries`);
+            return;
+        }
+        const delayMs = 2000 * attempt;
+        const timer = setTimeout(async () => {
+            this._eventRefreshRetryTimers.delete(key);
+            try {
+                // Bypass the cache: this retries an event-triggered refresh, so the cache is
+                // still the stale copy the original write invalidated — reading through it
+                // could "succeed" with stale data and reinstate the one-operation-behind bug.
+                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true);
+                if (this.configLoadedSuccessfully(key)) {
+                    await this.AdditionalLoading(this._contextUser);
+                } else {
+                    this.scheduleEventRefreshRetry(config, attempt + 1);
+                }
+            }
+            catch (e) {
+                LogError(e);
+            }
+        }, delayMs);
+        this._eventRefreshRetryTimers.set(key, timer);
     }
 
     /**
@@ -1011,10 +1369,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Applies an immediate array mutation based on the entity event type.
      * This is faster than running a full view refresh for simple add/update/delete operations.
      *
+     * On save, the cached entry is a clone owned by this engine's provider — not the saver's
+     * entity instance. Storing the saver's instance would pin the saver's provider (often a
+     * per-request provider) inside the engine's cache for the engine's full lifetime, which
+     * leaks the provider and all its associated state.
+     *
      * @param config - The configuration for the property being mutated
      * @param event - The entity event containing the affected entity and event type
      */
-    protected applyImmediateMutation(config: BaseEnginePropertyConfig, event: BaseEntityEvent): void {
+    protected async applyImmediateMutation(config: BaseEnginePropertyConfig, event: BaseEntityEvent): Promise<void> {
         const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
         if (!currentData) {
             // No existing array, nothing to mutate
@@ -1024,45 +1387,59 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const entity = event.baseEntity;
 
         if (event.type === 'save') {
+            // Clone the entity so the cache holds an instance owned by THIS engine's provider,
+            // not the saving provider. Falling back to the original entity here would reintroduce
+            // the leak, so on clone failure we bail and let the next full refresh fix the cache.
+            const cached = await this.cloneEntityForCache(entity, config);
+            if (!cached) {
+                LogError(`BaseEngine.applyImmediateMutation: failed to clone entity for ${config.EntityName}; skipping immediate mutation`);
+                return;
+            }
+
             if (event.saveSubType === 'create') {
                 // For create, first check if the exact object is already in the array
                 const existsByRef = currentData.indexOf(entity) >= 0;
-                // if already in the array, nothing to do, but we keep going
-                // in the method as there is stuff below the outer if block
                 if (!existsByRef) {
                     // Check by composite primary key in case it was added with a different object reference
                     const indexByKey = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (indexByKey >= 0) {
                         // Already exists by key, treat as update
-                        currentData[indexByKey] = entity;
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
-                        this.NotifyDataChange(config, currentData, 'update', entity);
+                        currentData[indexByKey] = cached;
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                        this.NotifyDataChange(config, currentData, 'update', cached);
                     } else {
                         // Add the new entity to the array
-                        currentData.push(entity);
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
-                        this.NotifyDataChange(config, currentData, 'add', entity);
+                        currentData.push(cached);
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                        this.NotifyDataChange(config, currentData, 'add', cached);
                     }
+                } else {
+                    // Already in the array by reference (engine code pushed it manually after
+                    // Save) — the array is current, but DataChange$ subscribers still need to
+                    // hear about the change. Pass the in-array instance, not the clone.
+                    this.NotifyDataChange(config, currentData, 'add', entity);
                 }
             } else {
                 // Update: first check if the exact object is already in the array
-                // if already in the array, we don't do anything but we keep going
-                // in the method so stuff at end can be done 
                 const existsByRef = currentData.indexOf(entity) >= 0;
                 if (!existsByRef) {
                     // Find by composite primary key and replace
                     const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (index >= 0) {
-                        currentData[index] = entity;
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
-                        this.NotifyDataChange(config, currentData, 'update', entity);
+                        currentData[index] = cached;
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                        this.NotifyDataChange(config, currentData, 'update', cached);
                     } else {
                         // Entity not found in array - this shouldn't happen normally,
                         // but if it does, add it (might have been created before we started listening)
-                        currentData.push(entity);
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
-                        this.NotifyDataChange(config, currentData, 'add', entity);
+                        currentData.push(cached);
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                        this.NotifyDataChange(config, currentData, 'add', cached);
                     }
+                } else {
+                    // In-place save of the array's own cached instance — the array is already
+                    // current, but DataChange$ subscribers still need to hear about the change.
+                    this.NotifyDataChange(config, currentData, 'update', entity);
                 }
             }
         } else if (event.type === 'delete') {
@@ -1075,7 +1452,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
             if (index >= 0) {
                 currentData.splice(index, 1);
-                this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                 this.NotifyDataChange(config, currentData, 'delete', entity);
             }
         }
@@ -1090,6 +1467,30 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Log status but don't fail - cache will self-correct on next fetch
                 LogStatus(`BaseEngine: Failed to sync local cache for ${config.EntityName}: ${e}`);
             });
+        }
+    }
+
+    /**
+     * Creates a fresh BaseEntity owned by this engine's provider and populates it from the
+     * given source entity's field values. Used by applyImmediateMutation to avoid pinning
+     * the source entity's provider inside this engine's cache.
+     */
+    protected async cloneEntityForCache(source: BaseEntity, config: BaseEnginePropertyConfig): Promise<BaseEntity | null> {
+        try {
+            const provider = this.ProviderToUse;
+            if (!provider) {
+                return null;
+            }
+            const fresh = await provider.GetEntityObject<BaseEntity>(config.EntityName, this._contextUser);
+            if (!fresh) {
+                return null;
+            }
+            fresh.LoadFromData(source.GetAll());
+            return fresh;
+        }
+        catch (e) {
+            LogError(e);
+            return null;
         }
     }
 
@@ -1119,16 +1520,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             connectionString = (provider as ProviderBase).InstanceConnectionString;
         }
 
-        // Generate the same fingerprint that would be used when loading this data
-        const params: RunViewParams = {
-            EntityName: config.EntityName,
-            ExtraFilter: config.Filter || '',
-            OrderBy: config.OrderBy || '',
-            ResultType: 'entity_object',
-            MaxRows: -1,
-            StartRow: 0
-        };
-        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, connectionString);
+        // Use the shared builder so the fingerprint matches what LoadSingleEntityConfig
+        // and RegisterCacheChangeCallbacks produce — prevents silent cache-slot mismatches
+        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
+            this.BuildRunViewParamsForConfig(config),
+            connectionString
+        );
 
         // Build CompositeKey from the entity's primary key fields
         const key = entity.PrimaryKey;
@@ -1188,7 +1585,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             // Compare all primary key values
             return primaryKeys.every((pk, idx) => {
                 const entityValue = (e as unknown as Record<string, unknown>)[pk.Name];
-                return entityValue === targetKeyValues[idx];
+                const targetValue = targetKeyValues[idx];
+                // UUID columns must compare case-insensitively: the SAME id can arrive with
+                // different casing depending on its source (a client-minted lowercase UUID from
+                // BaseEntity.NewRecord vs. an uppercase value loaded from SQL Server). A raw `===`
+                // then misses the match, and the caller's "not found → add it" branch appends a
+                // DUPLICATE copy of the row into the engine cache. Drive this off metadata
+                // (EntityFieldInfo.IsUniqueIdentifier, which is PG-aware) — never a string-shape
+                // heuristic. See guides/UUID_COMPARISON_GUIDE.md.
+                if (pk.IsUniqueIdentifier) {
+                    return UUIDsEqual(entityValue as string | null | undefined, targetValue as string | null | undefined);
+                }
+                return entityValue === targetValue;
             });
         });
     }
@@ -1212,53 +1620,171 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Loads the specified metadata configurations.
      * @param configs - The metadata configurations to load
      * @param contextUser - The context user information
+     * @param bypassCache - When true, bypasses all server-side caching (RunView and dataset) to fetch fresh data
+     *   directly from the database. Passed through from {@link Load} when `forceRefresh` is true (i.e., `Config(true)`).
      */
-    protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo): Promise<void> {
+    protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
 
         // now, break up the configs into two chunks, datasets and views of entities so we can load all the views in a single network call via RunViews()
         const entityConfigs = this._metadataConfigs.filter(c => c.Type === 'entity');
         const datasetConfigs = this._metadataConfigs.filter(c => c.Type === 'dataset');
 
-        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser)),
-                           this.LoadMultipleEntityConfigs(entityConfigs, contextUser)]);
+        // All-or-nothing permission check: if the user lacks read access on ANY
+        // entity config, skip ALL entity configs for this engine. Returns the
+        // original array unchanged when permissions pass, or an empty array when
+        // any entity is denied (marking the engine as permission-constrained).
+        const entityConfigsToLoad = this.CheckPermissionsOrSkipAll(entityConfigs, contextUser);
+
+        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
+                           this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
 
         // Register cross-server cache change callbacks for entity configs
         this.RegisterCacheChangeCallbacks(entityConfigs);
     }
 
     /**
+     * All-or-nothing permission gate: checks `CanRead` on every entity config. If ANY
+     * entity is denied, ALL configs are skipped — the engine is marked permission-constrained
+     * and its data arrays are set to empty `[]`. This prevents noisy permission-denied errors
+     * and endless retry loops for users with limited permissions (e.g., org-scoped SaaS roles).
+     *
+     * On the server side with a system user (who has all permissions), this method returns
+     * the original configs unchanged — no behavior change for privileged users.
+     *
+     * @returns The original configs array (all permissions pass) or an empty array (any denied)
+     */
+    protected CheckPermissionsOrSkipAll(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): BaseEnginePropertyConfig[] {
+        if (configs.length === 0) return configs;
+
+        // Determine the user to check permissions for — on the client side contextUser
+        // may be undefined, so fall back to the current logged-in user from Metadata.
+        const user = contextUser || this.ProviderToUse?.CurrentUser;
+        if (!user) return configs; // Can't check without a user — proceed with normal loading
+
+        const md = this.ProviderToUse;
+        const deniedEntities: string[] = [];
+
+        for (const config of configs) {
+            if (!config.EntityName) continue;
+            const entityInfo = md.EntityByName(config.EntityName);
+            if (!entityInfo) continue; // Entity not in metadata — let RunView handle it
+            const perms = entityInfo.GetUserPermisions(user);
+            if (!perms || !perms.CanRead) {
+                deniedEntities.push(config.EntityName);
+            }
+        }
+
+        if (deniedEntities.length > 0) {
+            LogStatus(`${this.constructor.name}: Skipping ${configs.length} entity config(s) — user ${user.Email} lacks read permission on: ${deniedEntities.join(', ')}`);
+
+            // Mark all entity configs as successfully loaded with empty data.
+            // This is not a failure — it's expected behavior for limited-permission users.
+            // Marking as successful allows the engine to set _loaded = true and avoid
+            // endless retry loops from EnsureLoaded().
+            for (const config of configs) {
+                if (config.AddToObject !== false) {
+                    (this as Record<string, unknown>)[config.PropertyName] = [];
+                }
+                this._dataMap.set(config.PropertyName, {
+                    entityName: config.EntityName,
+                    data: [],
+                    loadedSuccessfully: true,
+                    permissionDenied: true,
+                });
+            }
+
+            this._isPermissionConstrained = true;
+            this._deniedEntityNames = deniedEntities;
+
+            return []; // Return empty — don't attempt any RunView calls
+        }
+
+        return configs;
+    }
+
+    /**
      * Loads a single metadata configuration.
      * @param config - The metadata configuration to load
      * @param contextUser - The context user information
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
-    protected async LoadSingleConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
-        if (config.Type === 'dataset') 
-            return await this.LoadSingleDatasetConfig(config, contextUser);
+    protected async LoadSingleConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
+        if (config.Type === 'dataset')
+            return await this.LoadSingleDatasetConfig(config, contextUser, bypassCache);
         else
-            return await this.LoadSingleEntityConfig(config, contextUser);
-    }    
+            return await this.LoadSingleEntityConfig(config, contextUser, bypassCache);
+    }
 
     /**
-     * Handles the process of loading a single config of type 'entity'.
-     * @param config
-     * @param contextUser
+     * Opens a new full-refresh "generation" for a property and returns its token. Each call
+     * bumps the property's monotonic counter, so a token is the latest iff no later refresh
+     * for that property has begun since. See {@link _configRefreshGeneration}.
      */
-    protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
-        const p = this.RunViewProviderToUse;
-        const rv = new RunView(p);
-        const result = await rv.RunView({
+    protected beginConfigRefresh(propertyName: string): number {
+        const next = (this._configRefreshGeneration.get(propertyName) ?? 0) + 1;
+        this._configRefreshGeneration.set(propertyName, next);
+        return next;
+    }
+
+    /**
+     * True when `generation` is still the most recent token handed out by
+     * {@link beginConfigRefresh} for `propertyName` — i.e. no newer full refresh for this
+     * property has started since. A refresh whose token is stale must NOT commit its results:
+     * a newer refresh was initiated afterward and read a more-recent state.
+     */
+    protected isLatestConfigRefresh(propertyName: string, generation: number): boolean {
+        return this._configRefreshGeneration.get(propertyName) === generation;
+    }
+
+    /**
+     * Builds the RunViewParams for an engine config. Used by LoadSingleEntityConfig,
+     * LoadMultipleEntityConfigs, RegisterCacheChangeCallbacks, and syncLocalCacheForConfig
+     * to ensure the fingerprint-affecting params (EntityName, ExtraFilter, OrderBy,
+     * IgnoreMaxRows) are always consistent — preventing cache key mismatches that break
+     * cross-server invalidation via Redis pub/sub and local cache upsert/remove operations.
+     */
+    protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false): RunViewParams {
+        return {
             EntityName: config.EntityName,
             ResultType: config.ResultType || this.EngineDefaultResultType,
             ExtraFilter: config.Filter,
             OrderBy: config.OrderBy,
             IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
-            _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
+            _fromEngine: true,   // Mark as engine-initiated to avoid false positive telemetry warnings
             CacheLocal: config.CacheLocal,
-            CacheLocalTTL: config.CacheLocalTTL
-        }, contextUser);
+            CacheLocalTTL: config.CacheLocalTTL,
+            BypassCache: bypassCache
+        } as RunViewParams;
+    }
 
-        this.HandleSingleViewResult(config, result);
+    /**
+     * Handles the process of loading a single config of type 'entity'.
+     * @param config
+     * @param contextUser
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
+     */
+    protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
+        // Claim a refresh generation BEFORE the awaited RunView. If another full refresh for
+        // this same property starts while our RunView is in flight, ours becomes stale and must
+        // not commit — otherwise concurrent refreshes (the filtered/OrderBy path, e.g.
+        // UserInfoEngine's per-user '_UserApplications') apply out of initiation-order and the
+        // cache ends up "one operation behind". See _configRefreshGeneration.
+        const generation = this.beginConfigRefresh(config.PropertyName);
+        const p = this.RunViewProviderToUse;
+        const rv = new RunView(p);
+        const result = await rv.RunView(this.BuildRunViewParamsForConfig(config, bypassCache), contextUser);
+
+        // A newer full refresh superseded us while we awaited — drop this (staler) snapshot
+        // rather than clobber the newer one. The newer refresh owns the assignment, the
+        // observer notification, and (on failure) the retry, so bailing here leaves no
+        // observer un-notified. The single-refresh path is unaffected: its generation is
+        // still the latest when its RunView returns.
+        if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
+            return;
+        }
+
+        this.HandleSingleViewResult(config, result, contextUser);
         this.emitPropertyChange(config.PropertyName);
     }
 
@@ -1267,12 +1793,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param config 
      * @param result 
      */
-    protected HandleSingleViewResult(config: BaseEnginePropertyConfig, result: RunViewResult) {
+    protected HandleSingleViewResult(config: BaseEnginePropertyConfig, result: RunViewResult, contextUser?: UserInfo) {
         if (result.Success) {
             if (config.AddToObject !== false) {
                 (this as any)[config.PropertyName] = result.Results;
             }
-            this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: result.Results });
+            this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: result.Results, loadedSuccessfully: true });
 
             // Notify listeners that this property's data has changed
             this.NotifyDataChange(config, result.Results);
@@ -1280,36 +1806,96 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (config.Expiration) {
                 this.SetExpirationTimer(config.PropertyName, config.Expiration);
             }
+        } else if (!this.ContextUserCanReadConfigEntity(config.EntityName, contextUser)) {
+            // PERMANENT failure: the user lacks Read on this entity, so a retry will
+            // never succeed for this role. Load the property empty and mark it loaded
+            // so a restricted / app-scoped user (e.g. a magic-link guest) doesn't hang
+            // the shell looping on "not marking as loaded". Security is unaffected —
+            // the user still gets no data. Logged at status level, not error, because
+            // for a restricted role this is expected, not a fault.
+            this.MarkConfigEmptyLoaded(config);
+            LogStatus(`BaseEngine: ${config.EntityName} not readable by current role — loaded empty (restricted-role degradation).`);
+        } else {
+            // TRANSIENT failure (network, MJAPI restart, etc.) — leave loadedSuccessfully
+            // false so EnsureLoaded()/Config() retries on the next attempt.
+            this._dataMap.set(config.PropertyName, {
+                entityName: config.EntityName,
+                data: [],
+                loadedSuccessfully: false,
+                errorMessage: result.ErrorMessage
+            });
+            LogError(`BaseEngine: Failed to load ${config.EntityName} into ${config.PropertyName}: ${result.ErrorMessage}`);
         }
+    }
+
+    /**
+     * Returns false ONLY when we can positively determine that the effective user
+     * lacks Read permission on `entityName`. Unknown cases (no entity name, no
+     * resolvable user, entity not in metadata) return true — so the default is to
+     * treat a failure as transient/retryable and server-side system-user loads
+     * (full access) are unaffected.
+     *
+     * Used by {@link HandleSingleViewResult} to classify a FAILED config load:
+     * a load that failed because the user can't read the entity is a PERMANENT
+     * condition (a retry will never succeed for this role), so the engine should
+     * load that property empty rather than loop on "not marking as loaded" — which
+     * is what hangs the Explorer shell for a restricted / app-scoped user (e.g. a
+     * magic-link guest). Security is unaffected: the user still receives no data.
+     *
+     * This is a classifier consulted AFTER a failure, never a predictive pre-skip —
+     * so a readable entity is always actually queried, and stale/late client
+     * permission metadata can never cause a readable entity to be silently skipped.
+     */
+    protected ContextUserCanReadConfigEntity(entityName: string | undefined, contextUser: UserInfo | undefined): boolean {
+        if (!entityName) {
+            return true;
+        }
+        // Engines on the client commonly load with a null contextUser (the server
+        // resolves the user from the token), so fall back to the provider's
+        // CurrentUser — otherwise the gate can't see a restricted role and would let
+        // the query through to a server-side permission denial.
+        const user = contextUser ?? this.ProviderToUse?.CurrentUser;
+        if (!user) {
+            return true;
+        }
+        const entityInfo = this.ProviderToUse?.EntityByName(entityName);
+        if (!entityInfo) {
+            return true; // unknown entity — let the normal not-found handling apply
+        }
+        return entityInfo.GetUserPermisions(user).CanRead;
+    }
+
+    /**
+     * Records a config as successfully loaded with an EMPTY result set. Used when a
+     * load failed permanently because the context user lacks Read on the entity:
+     * the engine exposes an empty array (not a hang) and is marked loaded so shell
+     * boot can complete for a restricted role.
+     */
+    protected MarkConfigEmptyLoaded(config: BaseEnginePropertyConfig): void {
+        if (config.AddToObject !== false) {
+            (this as any)[config.PropertyName] = [];
+        }
+        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: [], loadedSuccessfully: true });
+        this.NotifyDataChange(config, []);
     }
 
     /**
      * Handles the process of loading multiple entity configs in a single network call via RunViews()
      * @param configs
      * @param contextUser
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
-    protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): Promise<void> {
+    protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         if (configs && configs.length > 0) {
             const p = this.RunViewProviderToUse;
             const rv = new RunView(p);
-            const viewConfigs = configs.map(c => {
-                return <RunViewParams>{
-                    EntityName: c.EntityName,
-                    ResultType: c.ResultType || this.EngineDefaultResultType,
-                    ExtraFilter: c.Filter,
-                    OrderBy: c.OrderBy,
-                    IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
-                    _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
-                    CacheLocal: c.CacheLocal,
-                    CacheLocalTTL: c.CacheLocalTTL
-                };
-            });
+            const viewConfigs = configs.map(c => this.BuildRunViewParamsForConfig(c, bypassCache));
             const results = await rv.RunViews(viewConfigs, contextUser);
 
             // Process results and record entity loads for redundancy detection
             const entityNames: string[] = [];
             for (let i = 0; i < configs.length; i++) {
-                this.HandleSingleViewResult(configs[i], results[i]);
+                this.HandleSingleViewResult(configs[i], results[i], contextUser);
                 this.emitPropertyChange(configs[i].PropertyName);
                 if (configs[i].EntityName) {
                     entityNames.push(configs[i].EntityName);
@@ -1327,14 +1913,44 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
     /**
      * Handles the process of loading a single config of type 'dataset'.
-     * @param config 
-     * @param contextUser 
+     * @param config
+     * @param contextUser
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database.
+     *   Uses {@link IMetadataProvider.GetDatasetByName} with `forceRefresh` to skip all cache reads,
+     *   then {@link IMetadataProvider.CacheDataset} to store fresh results for subsequent non-forced calls.
      */
-    protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
+    protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         const p = this.ProviderToUse;
-        const result: DatasetResultType = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
+        // When bypassing cache, use GetDatasetByName with forceRefresh to skip all cache reads,
+        // then CacheDataset to store the fresh results for subsequent non-forced calls.
+        // Otherwise, use GetAndCacheDatasetByName which validates staleness before returning cached data.
+        let result: DatasetResultType;
+        if (bypassCache) {
+            result = await p.GetDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser, undefined, true);
+            await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
+        } else {
+            result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
+        }
         if (!result) {
-            LogError(`LoadSingleDatasetConfig: GetAndCacheDatasetByName("${config.DatasetName}") returned undefined/null — provider: ${p?.constructor?.name}`);
+            const errorMsg = `GetAndCacheDatasetByName("${config.DatasetName}") returned undefined/null — provider: ${p?.constructor?.name}`;
+            LogError(`LoadSingleDatasetConfig: ${errorMsg}`);
+            this._dataMap.set(config.PropertyName, {
+                datasetName: config.DatasetName,
+                data: [],
+                loadedSuccessfully: false,
+                errorMessage: errorMsg
+            });
+            return;
+        }
+        if (!result.Success) {
+            const errorMsg = result.Status || `Dataset "${config.DatasetName}" load returned Success=false`;
+            LogError(`BaseEngine: Failed to load dataset ${config.DatasetName} into ${config.PropertyName}: ${errorMsg}`);
+            this._dataMap.set(config.PropertyName, {
+                datasetName: config.DatasetName,
+                data: [],
+                loadedSuccessfully: false,
+                errorMessage: errorMsg
+            });
             return;
         }
         if (result.Success) {
@@ -1362,7 +1978,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     }
                 }
             }
-            this._dataMap.set(config.PropertyName, { datasetName: config.DatasetName, data: result.Results });
+            this._dataMap.set(config.PropertyName, { datasetName: config.DatasetName, data: result.Results, loadedSuccessfully: true });
 
             if (config.Expiration) {
                 this.SetExpirationTimer(config.PropertyName, config.Expiration);
@@ -1398,12 +2014,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
         for (const config of entityConfigs) {
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
-                {
-                    EntityName: config.EntityName,
-                    ExtraFilter: config.Filter,
-                    OrderBy: config.OrderBy,
-                    ResultType: 'entity_object',
-                } as RunViewParams,
+                this.BuildRunViewParamsForConfig(config),
                 connectionPrefix
             );
 
@@ -1522,6 +2133,38 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     public get Loaded(): boolean {
         return this._loaded;
+    }
+
+    /**
+     * Returns true if the specified property loaded successfully during engine startup.
+     * Returns false if the property failed to load (e.g., RunView error) or was never loaded.
+     * Consumers can use this to detect partial load failures and trigger recovery.
+     */
+    public PropertyLoadedSuccessfully(propertyName: string): boolean {
+        const entry = this._dataMap.get(propertyName);
+        return entry?.loadedSuccessfully ?? false;
+    }
+
+    /**
+     * Returns true if ALL configured properties loaded successfully.
+     * Useful as a quick health check after engine startup.
+     */
+    public get AllPropertiesLoadedSuccessfully(): boolean {
+        if (this._dataMap.size === 0) return false;
+        for (const entry of this._dataMap.values()) {
+            if (!entry.loadedSuccessfully) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Returns a read-only snapshot of all engine property load states.
+     * Each entry maps a property name to its load status, including entity/dataset name,
+     * row count, success/failure flag, and error message if applicable.
+     * Used by dev tools for diagnostics and health monitoring.
+     */
+    public get DataMapEntries(): ReadonlyMap<string, EngineDataMapEntry> {
+        return this._dataMap;
     }
 
     /**

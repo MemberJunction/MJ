@@ -1,0 +1,171 @@
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+    <!-- Clean channel header -->
+    <div class="channel-header">
+        <div class="channel-header-left">
+            <div class="channel-icon">
+                <i class="fas" [ngClass]="ChannelIcon"></i>
+            </div>
+            <div class="channel-info">
+                <h2>{{ record.Name || 'AI Agent Channel' }}</h2>
+                @if (record.Description) {
+                    <p class="channel-description">{{ record.Description }}</p>
+                }
+                <div class="channel-meta">
+                    <span class="transport-pill" [attr.data-transport]="record.TransportType">
+                        <i class="fas fa-network-wired"></i> {{ record.TransportType }}
+                    </span>
+                    <span class="plugin-chip" title="Server plugin class (resolved via ClassFactory on the server)">
+                        <i class="fas fa-server"></i> <span class="mono">{{ record.ServerPluginClass }}</span>
+                    </span>
+                    <span class="plugin-chip" title="Client plugin class (resolved via ClassFactory on the client)">
+                        <i class="fas fa-display"></i> <span class="mono">{{ record.ClientPluginClass }}</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="channel-header-right">
+            <span class="active-badge" [class.active-badge--inactive]="!record.IsActive">
+                <i class="fas" [ngClass]="record.IsActive ? 'fa-circle-check' : 'fa-circle-xmark'"></i>
+                {{ record.IsActive ? 'Active' : 'Inactive' }}
+            </span>
+        </div>
+    </div>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <!-- Channel Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="channelConfiguration"
+        SectionName="Channel Configuration"
+        Icon="fa fa-info-circle"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IsActive"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+    </mj-collapsible-panel>
+
+    <!-- Technical Implementation Section -->
+    <mj-collapsible-panel
+        SectionKey="technicalImplementation"
+        SectionName="Technical Implementation"
+        Icon="fa fa-code"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ServerPluginClass"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ClientPluginClass"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TransportType"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ConfigSchema"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+    </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <!-- AI Agent Session Channels (instances of this channel across sessions) -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentSessionChannels"
+        SectionName="AI Agent Session Channels"
+        Icon="fa fa-plug"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentSessionChannels')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Session Channels','ChannelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Session Channels')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentSessionChannels')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessionChannels', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+</mj-record-form-container>
+}

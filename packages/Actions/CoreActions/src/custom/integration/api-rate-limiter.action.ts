@@ -1,18 +1,28 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass, BaseSingleton } from "@memberjunction/global";
+import { RegisterClass, BaseSingleton, MJLruCache } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import axios, { AxiosRequestConfig } from "axios";
-import { Subject, from, Observable } from "rxjs";
+import { Subject, Subscription, from, Observable } from "rxjs";
 import { concatMap, delay, map, catchError } from "rxjs/operators";
 
 /**
- * Rate limiter singleton for managing API requests across action instances
+ * Rate limiter singleton for managing API requests across action instances.
+ *
+ * `limiters` is keyed by the caller-supplied `RateLimitKey` action parameter, so its key
+ * space is not bounded at compile time (a dynamic key per record/tenant/timestamp would
+ * grow it without bound). Bounded via `MJLruCache` rather than a raw `Map`; the `onEvict`
+ * hook disposes the evicted `APIRateLimiter`'s RxJS subscription so it doesn't also leak.
  */
-class APIRateLimiterManager extends BaseSingleton<APIRateLimiterManager> {
-    private limiters: Map<string, APIRateLimiter> = new Map();
+export class APIRateLimiterManager extends BaseSingleton<APIRateLimiterManager> {
+    private limiters: MJLruCache<string, APIRateLimiter>;
 
     public constructor() {
         super();
+        this.limiters = new MJLruCache<string, APIRateLimiter>({
+            maxSize: 200,
+            ttlMs: 60 * 60 * 1000,
+            onEvict: (_key, limiter) => limiter.dispose(),
+        });
     }
 
     static get Instance(): APIRateLimiterManager {
@@ -20,14 +30,16 @@ class APIRateLimiterManager extends BaseSingleton<APIRateLimiterManager> {
     }
 
     getRateLimiter(key: string, config: RateLimitConfig): APIRateLimiter {
-        if (!this.limiters.has(key)) {
-            this.limiters.set(key, new APIRateLimiter(config));
+        let limiter = this.limiters.Get(key);
+        if (!limiter) {
+            limiter = new APIRateLimiter(config);
+            this.limiters.Set(key, limiter);
         }
-        return this.limiters.get(key)!;
+        return limiter;
     }
 }
 
-interface RateLimitConfig {
+export interface RateLimitConfig {
     maxRequestsPerMinute: number;
     maxConcurrent: number;
     retryOnRateLimit: boolean;
@@ -42,17 +54,30 @@ interface QueuedRequest {
     retryCount: number;
 }
 
-class APIRateLimiter {
+export class APIRateLimiter {
     private requestQueue$ = new Subject<QueuedRequest>();
+    private queueSubscription: Subscription;
     private requestCount = 0;
     private windowStart = Date.now();
     private activeRequests = 0;
 
     constructor(private config: RateLimitConfig) {
         // Process queue with rate limiting
-        this.requestQueue$.pipe(
+        this.queueSubscription = this.requestQueue$.pipe(
             concatMap(request => this.processRequest(request))
         ).subscribe();
+    }
+
+    /**
+     * Releases this limiter's RxJS subscription and completes its queue Subject.
+     * Called by `APIRateLimiterManager`'s `MJLruCache` `onEvict` hook when this limiter
+     * ages out or is displaced by LRU pressure — without it, the `concatMap().subscribe()`
+     * above stays live (and referenced by the Subject) for the life of the process even
+     * after the limiter is no longer reachable from `limiters`.
+     */
+    public dispose(): void {
+        this.queueSubscription.unsubscribe();
+        this.requestQueue$.complete();
     }
 
     async execute(axiosConfig: AxiosRequestConfig): Promise<any> {

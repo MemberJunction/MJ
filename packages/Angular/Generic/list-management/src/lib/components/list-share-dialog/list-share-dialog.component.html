@@ -151,15 +151,11 @@
         }
         <!-- Empty state -->
         @if (currentShares.length === 0 && !loading) {
-          <div class="empty-state">
-            <i class="fa-solid fa-share-nodes empty-icon"></i>
-            <p>This list hasn't been shared with anyone yet.</p>
-            @if (canModifyShares) {
-              <p class="empty-hint">
-                Use the search above to find users or roles to share with.
-              </p>
-            }
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-share-nodes"
+            Title="Not shared yet"
+            [Message]="EmptyShareMessage"
+            Size="compact" />
         }
         <!-- Read-only notice -->
         @if (!canModifyShares) {
@@ -170,9 +166,28 @@
         }
       }
     </div>
+    <!-- Notify-by-email toggle (mockup 15). Sits above the action footer so
+         the user can flip it after adding shares but before clicking Done. -->
+    @if (canModifyShares) {
+      <div class="notify-toggle">
+        <input id="share-notify" type="checkbox" [(ngModel)]="notifyByEmail" />
+        <label for="share-notify">
+          <i class="fa-solid fa-envelope"></i>
+          Send email notification to new shares
+        </label>
+      </div>
+    }
     <mj-dialog-actions>
       <button mjButton variant="primary" (click)="onDone()">Done</button>
+      <button mjButton variant="outline" (click)="manageInvitations.emit()">
+        <i class="fa-solid fa-envelope-open-text"></i>
+        Manage Invitations
+      </button>
       <button mjButton (click)="onCancel()">Cancel</button>
+      <a class="audit-log-link" (click)="viewAuditLog.emit(); $event.preventDefault()" href="#">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        View audit log
+      </a>
     </mj-dialog-actions>
   </mj-dialog>
 }

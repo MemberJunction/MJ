@@ -51,9 +51,13 @@ export interface MJEnvironmentConfig {
   GRAPHQL_WS_URI: string;
 
   /**
-   * Authentication provider type
+   * Authentication provider type — matches the key a provider registers with via
+   * `@RegisterClass(MJAuthBase, '<type>')`. Built-in providers are listed for
+   * autocomplete, but any string is valid so third parties can plug in their own
+   * provider without editing this union. Resolved at runtime by string key through
+   * `ClassFactory.GetRegistration(MJAuthBase, authType)`.
    */
-  AUTH_TYPE: 'msal' | 'auth0' | 'okta' | 'cognito';
+  AUTH_TYPE: 'msal' | 'auth0' | 'okta' | 'cognito' | 'workos' | 'magic-link' | (string & {});
 
   /**
    * MemberJunction core schema name in the database
@@ -81,6 +85,30 @@ export interface MJEnvironmentConfig {
    * Auth0 client ID (for Auth0 auth)
    */
   AUTH0_CLIENTID?: string;
+
+  /**
+   * WorkOS AuthKit client ID (for WorkOS auth)
+   * @example 'client_01HABCDEF...'
+   */
+  WORKOS_CLIENTID?: string;
+
+  /**
+   * WorkOS OAuth redirect URI (for WorkOS auth). Must be registered in the WorkOS dashboard.
+   * Defaults to `window.location.origin` when omitted.
+   */
+  WORKOS_REDIRECT_URI?: string;
+
+  /**
+   * WorkOS API hostname override (for WorkOS auth). Rarely needed — only for custom
+   * domains or a proxy in front of the WorkOS API.
+   */
+  WORKOS_API_HOSTNAME?: string;
+
+  /**
+   * Enables WorkOS AuthKit dev mode (localStorage-backed session, tolerant of missing
+   * third-party cookies). Use only in local development.
+   */
+  WORKOS_DEV_MODE?: boolean;
 
   /**
    * Master kill switch for the Angular service worker app-shell pre-cache.

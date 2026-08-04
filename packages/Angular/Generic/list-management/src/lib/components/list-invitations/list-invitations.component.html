@@ -1,0 +1,109 @@
+<div class="invitations">
+  <!-- Send new invitation -->
+  <div class="invitation-send">
+    <div class="invitation-send__heading">Send invitation</div>
+    <form class="invitation-send__form" (submit)="$event.preventDefault(); SendInvitation()">
+      <input
+        class="mj-input invitation-send__email"
+        type="email"
+        [(ngModel)]="newEmail"
+        name="newEmail"
+        placeholder="recipient@example.com"
+        required />
+      <select class="mj-input mj-select invitation-send__role" [(ngModel)]="newRole" name="newRole">
+        <option value="Viewer">Viewer</option>
+        <option value="Editor">Editor</option>
+      </select>
+      <input
+        class="mj-input invitation-send__ttl"
+        type="number"
+        [(ngModel)]="newTtlHours"
+        name="newTtlHours"
+        title="Hours until expiry"
+        min="1"
+        max="720" />
+      <button mjButton variant="primary" type="submit" [disabled]="!canSend">
+        @if (submitting) {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+        } @else {
+          <i class="fa-solid fa-paper-plane"></i>
+        }
+        {{ submitting ? 'Sending…' : 'Send' }}
+      </button>
+    </form>
+  </div>
+
+  @if (errorMessage) {
+    <div class="invitation-error">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      {{ errorMessage }}
+    </div>
+  }
+
+  <!-- Status tabs -->
+  <div class="invitation-tabs">
+    @for (s of ['Pending', 'Accepted', 'Expired', 'Revoked']; track s) {
+      <button
+        class="invitation-tab"
+        [class.invitation-tab--active]="activeTab === s"
+        (click)="setTab($any(s))">
+        {{ s }}
+        <span class="invitation-tab__count">{{ countFor($any(s)) }}</span>
+      </button>
+    }
+  </div>
+
+  @if (loading) {
+    <div class="invitation-state">
+      <mj-loading text="Loading invitations..." size="medium"></mj-loading>
+    </div>
+  } @else if (visibleInvitations.length === 0) {
+    <div class="invitation-state invitation-state--empty">
+      <i class="fa-solid fa-envelope"></i>
+      <span>No {{ activeTab.toLowerCase() }} invitations.</span>
+    </div>
+  } @else {
+    <table class="invitation-table">
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Sent</th>
+          <th>Expiry</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (inv of visibleInvitations; track inv.ID) {
+          <tr>
+            <td>{{ inv.Email }}</td>
+            <td>
+              <span class="role-chip" [class.role-chip--editor]="inv.Role === 'Editor'">
+                {{ inv.Role }}
+              </span>
+            </td>
+            <td>{{ inv.CreatedAt.toLocaleDateString() }}</td>
+            <td>{{ formatExpiry(inv.ExpiresAt) }}</td>
+            <td class="invitation-actions">
+              @if (activeTab === 'Pending') {
+                <button mjButton size="sm" variant="outline" (click)="Resend(inv)" title="Send a fresh invitation">
+                  <i class="fa-solid fa-paper-plane"></i>
+                  Resend
+                </button>
+                <button mjButton size="sm" variant="danger" (click)="Revoke(inv.ID)">
+                  <i class="fa-solid fa-xmark"></i>
+                  Revoke
+                </button>
+              } @else if (activeTab === 'Expired') {
+                <button mjButton size="sm" variant="outline" (click)="Resend(inv)">
+                  <i class="fa-solid fa-rotate-right"></i>
+                  Re-send
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>

@@ -1,5 +1,2726 @@
 # @memberjunction/server-bootstrap
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agent-manager@6.0.0
+  - @memberjunction/ai-agents@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/database-designer-actions@6.0.0
+  - @memberjunction/database-designer-core@6.0.0
+  - @memberjunction/ai-form-builder@6.0.0
+  - @memberjunction/tag-engine-base@6.0.0
+  - @memberjunction/computer-use-engine@6.0.0
+  - @memberjunction/predictive-studio@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/ai-recommendations-rex@6.0.0
+  - @memberjunction/ai-bridge-livekit@6.0.0
+  - @memberjunction/ai-bridge-ringcentral@6.0.0
+  - @memberjunction/ai-bridge-teams@6.0.0
+  - @memberjunction/ai-bridge-twilio@6.0.0
+  - @memberjunction/ai-bridge-vonage@6.0.0
+  - @memberjunction/ai-bridge-server@6.0.0
+  - @memberjunction/remote-browser-selfhost@6.0.0
+  - @memberjunction/remote-browser-server@6.0.0
+  - @memberjunction/ai-reranker@6.0.0
+  - @memberjunction/ai-segmentation@6.0.0
+  - @memberjunction/ai-vector-dupe@6.0.0
+  - @memberjunction/ai-vectors-memory@6.0.0
+  - @memberjunction/ai-vectors-pinecone@6.0.0
+  - @memberjunction/ai-vectors-qdrant@6.0.0
+  - @memberjunction/ai-vectors-sqlserver@6.0.0
+  - @memberjunction/ai-vectors-pgvector@6.0.0
+  - @memberjunction/actions-apollo@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/actions-bizapps-accounting@6.0.0
+  - @memberjunction/actions-bizapps-crm@6.0.0
+  - @memberjunction/actions-bizapps-formbuilders@6.0.0
+  - @memberjunction/actions-bizapps-lms@6.0.0
+  - @memberjunction/actions-bizapps-social@6.0.0
+  - @memberjunction/actions-content-autotag@6.0.0
+  - @memberjunction/core-actions@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/action-runtime-host@6.0.0
+  - @memberjunction/archiving-action@6.0.0
+  - @memberjunction/archiving-engine@6.0.0
+  - @memberjunction/auth-providers@6.0.0
+  - @memberjunction/codegen-lib@6.0.0
+  - @memberjunction/communication-types@6.0.0
+  - @memberjunction/entity-communications-base@6.0.0
+  - @memberjunction/communication-ms-graph@6.0.0
+  - @memberjunction/communication-sendgrid@6.0.0
+  - @memberjunction/content-autotagging@6.0.0
+  - @memberjunction/doc-utils@6.0.0
+  - @memberjunction/encryption@6.0.0
+  - @memberjunction/external-data-sources@6.0.0
+  - @memberjunction/external-data-source-mongodb@6.0.0
+  - @memberjunction/external-data-source-mysql@6.0.0
+  - @memberjunction/external-data-source-oracle@6.0.0
+  - @memberjunction/external-data-source-postgres@6.0.0
+  - @memberjunction/external-data-source-sqlserver@6.0.0
+  - @memberjunction/external-data-source-snowflake@6.0.0
+  - @memberjunction/integration-actions@6.0.0
+  - @memberjunction/integration-connectors@6.0.0
+  - @memberjunction/integration-engine@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/core-entities-server@6.0.0
+  - @memberjunction/data-context-server@6.0.0
+  - @memberjunction/queue@6.0.0
+  - @memberjunction/server@6.0.0
+  - @memberjunction/storage@6.0.0
+  - @memberjunction/messaging-adapters@6.0.0
+  - @memberjunction/react-linter@6.0.0
+  - @memberjunction/record-comparison@6.0.0
+  - @memberjunction/record-set-processor@6.0.0
+  - @memberjunction/scheduling-actions@6.0.0
+  - @memberjunction/scheduling-engine-base@6.0.0
+  - @memberjunction/scheduling-engine@6.0.0
+  - @memberjunction/search-engine@6.0.0
+  - @memberjunction/server-extensions-core@6.0.0
+  - @memberjunction/templates@6.0.0
+  - @memberjunction/testing-engine@6.0.0
+  - @memberjunction/testing-integration@6.0.0
+  - @memberjunction/esignature@6.0.0
+  - @memberjunction/geo-core@6.0.0
+  - @memberjunction/ai-provider-bundle@6.0.0
+  - @memberjunction/esignature-docusign@6.0.0
+  - @memberjunction/esignature-dropboxsign@6.0.0
+  - @memberjunction/esignature-pandadoc@6.0.0
+  - @memberjunction/ai-anthropic@6.0.0
+  - @memberjunction/ai-assemblyai@6.0.0
+  - @memberjunction/ai-azure@6.0.0
+  - @memberjunction/ai-bedrock@6.0.0
+  - @memberjunction/ai-betty-bot@6.0.0
+  - @memberjunction/ai-blackforestlabs@6.0.0
+  - @memberjunction/ai-cerebras@6.0.0
+  - @memberjunction/ai-cohere@6.0.0
+  - @memberjunction/ai-elevenlabs@6.0.0
+  - @memberjunction/ai-fireworks@6.0.0
+  - @memberjunction/ai-gemini@6.0.0
+  - @memberjunction/ai-groq@6.0.0
+  - @memberjunction/ai-heygen@6.0.0
+  - @memberjunction/ai-huggingface@6.0.0
+  - @memberjunction/ai-inception@6.0.0
+  - @memberjunction/ai-inworld@6.0.0
+  - @memberjunction/ai-lmstudio@6.0.0
+  - @memberjunction/ai-llamacpp@6.0.0
+  - @memberjunction/ai-local-embeddings@6.0.0
+  - @memberjunction/ai-minimax@6.0.0
+  - @memberjunction/ai-mistral@6.0.0
+  - @memberjunction/ai-ollama@6.0.0
+  - @memberjunction/ai-openai@6.0.0
+  - @memberjunction/ai-openrouter@6.0.0
+  - @memberjunction/ai-vertex@6.0.0
+  - @memberjunction/ai-zhipu@6.0.0
+  - @memberjunction/ai-xai@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [c382605]
+- Updated dependencies [1e048ef]
+- Updated dependencies [a8fc549]
+  - @memberjunction/server@5.51.0
+  - @memberjunction/ai-agents@5.51.0
+  - @memberjunction/codegen-lib@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-agent-manager@5.51.0
+  - @memberjunction/database-designer-core@5.51.0
+  - @memberjunction/ai-form-builder@5.51.0
+  - @memberjunction/predictive-studio@5.51.0
+  - @memberjunction/core-actions@5.51.0
+  - @memberjunction/action-runtime-host@5.51.0
+  - @memberjunction/messaging-adapters@5.51.0
+  - @memberjunction/record-set-processor@5.51.0
+  - @memberjunction/scheduling-engine@5.51.0
+  - @memberjunction/testing-engine@5.51.0
+  - @memberjunction/ai-engine-base@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/database-designer-actions@5.51.0
+  - @memberjunction/tag-engine-base@5.51.0
+  - @memberjunction/computer-use-engine@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/ai-recommendations-rex@5.51.0
+  - @memberjunction/ai-bridge-livekit@5.51.0
+  - @memberjunction/ai-bridge-ringcentral@5.51.0
+  - @memberjunction/ai-bridge-teams@5.51.0
+  - @memberjunction/ai-bridge-twilio@5.51.0
+  - @memberjunction/ai-bridge-vonage@5.51.0
+  - @memberjunction/ai-bridge-server@5.51.0
+  - @memberjunction/remote-browser-selfhost@5.51.0
+  - @memberjunction/remote-browser-server@5.51.0
+  - @memberjunction/ai-reranker@5.51.0
+  - @memberjunction/ai-segmentation@5.51.0
+  - @memberjunction/ai-vector-dupe@5.51.0
+  - @memberjunction/ai-vectors-memory@5.51.0
+  - @memberjunction/ai-vectors-pinecone@5.51.0
+  - @memberjunction/ai-vectors-qdrant@5.51.0
+  - @memberjunction/ai-vectors-sqlserver@5.51.0
+  - @memberjunction/ai-vectors-pgvector@5.51.0
+  - @memberjunction/actions-apollo@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/actions-bizapps-accounting@5.51.0
+  - @memberjunction/actions-bizapps-crm@5.51.0
+  - @memberjunction/actions-bizapps-formbuilders@5.51.0
+  - @memberjunction/actions-bizapps-lms@5.51.0
+  - @memberjunction/actions-bizapps-social@5.51.0
+  - @memberjunction/actions-content-autotag@5.51.0
+  - @memberjunction/actions@5.51.0
+  - @memberjunction/archiving-action@5.51.0
+  - @memberjunction/archiving-engine@5.51.0
+  - @memberjunction/auth-providers@5.51.0
+  - @memberjunction/communication-types@5.51.0
+  - @memberjunction/entity-communications-base@5.51.0
+  - @memberjunction/communication-ms-graph@5.51.0
+  - @memberjunction/communication-sendgrid@5.51.0
+  - @memberjunction/content-autotagging@5.51.0
+  - @memberjunction/doc-utils@5.51.0
+  - @memberjunction/encryption@5.51.0
+  - @memberjunction/external-data-sources@5.51.0
+  - @memberjunction/external-data-source-mongodb@5.51.0
+  - @memberjunction/external-data-source-mysql@5.51.0
+  - @memberjunction/external-data-source-oracle@5.51.0
+  - @memberjunction/external-data-source-postgres@5.51.0
+  - @memberjunction/external-data-source-sqlserver@5.51.0
+  - @memberjunction/external-data-source-snowflake@5.51.0
+  - @memberjunction/integration-actions@5.51.0
+  - @memberjunction/integration-connectors@5.51.0
+  - @memberjunction/integration-engine@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/core-entities-server@5.51.0
+  - @memberjunction/data-context-server@5.51.0
+  - @memberjunction/queue@5.51.0
+  - @memberjunction/storage@5.51.0
+  - @memberjunction/react-linter@5.51.0
+  - @memberjunction/record-comparison@5.51.0
+  - @memberjunction/scheduling-actions@5.51.0
+  - @memberjunction/scheduling-engine-base@5.51.0
+  - @memberjunction/search-engine@5.51.0
+  - @memberjunction/server-extensions-core@5.51.0
+  - @memberjunction/templates@5.51.0
+  - @memberjunction/testing-integration@5.51.0
+  - @memberjunction/esignature@5.51.0
+  - @memberjunction/geo-core@5.51.0
+  - @memberjunction/ai-provider-bundle@5.51.0
+  - @memberjunction/esignature-docusign@5.51.0
+  - @memberjunction/esignature-dropboxsign@5.51.0
+  - @memberjunction/esignature-pandadoc@5.51.0
+  - @memberjunction/ai-anthropic@5.51.0
+  - @memberjunction/ai-assemblyai@5.51.0
+  - @memberjunction/ai-azure@5.51.0
+  - @memberjunction/ai-bedrock@5.51.0
+  - @memberjunction/ai-betty-bot@5.51.0
+  - @memberjunction/ai-blackforestlabs@5.51.0
+  - @memberjunction/ai-cerebras@5.51.0
+  - @memberjunction/ai-cohere@5.51.0
+  - @memberjunction/ai-elevenlabs@5.51.0
+  - @memberjunction/ai-fireworks@5.51.0
+  - @memberjunction/ai-gemini@5.51.0
+  - @memberjunction/ai-groq@5.51.0
+  - @memberjunction/ai-heygen@5.51.0
+  - @memberjunction/ai-huggingface@5.51.0
+  - @memberjunction/ai-inception@5.51.0
+  - @memberjunction/ai-inworld@5.51.0
+  - @memberjunction/ai-lmstudio@5.51.0
+  - @memberjunction/ai-llamacpp@5.51.0
+  - @memberjunction/ai-local-embeddings@5.51.0
+  - @memberjunction/ai-minimax@5.51.0
+  - @memberjunction/ai-mistral@5.51.0
+  - @memberjunction/ai-ollama@5.51.0
+  - @memberjunction/ai-openai@5.51.0
+  - @memberjunction/ai-openrouter@5.51.0
+  - @memberjunction/ai-vertex@5.51.0
+  - @memberjunction/ai-zhipu@5.51.0
+  - @memberjunction/ai-xai@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- 623dfc5: Break CodeGen FK cycle between AIAgentRun, AIPromptRun, and ConversationDetail. Move SummaryPromptRunID from ConversationDetail to a new ConversationCompactionRun audit table. Remove AgentRunID from AIPromptRun (derivable via AIAgentRunStep.TargetLogID). Remove agentRunId from AIPromptParams and all write sites across the prompt/agent stack.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [54a037f]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [dd04a24]
+- Updated dependencies [ce6374c]
+- Updated dependencies [a3bd648]
+- Updated dependencies [fab223d]
+- Updated dependencies [86832fa]
+- Updated dependencies [deb02b4]
+- Updated dependencies [8b4c6b2]
+- Updated dependencies [0686d52]
+- Updated dependencies [9efcfe6]
+- Updated dependencies [c7b6710]
+- Updated dependencies [764d6f6]
+- Updated dependencies [408e4bf]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [1e0008f]
+- Updated dependencies [03fc891]
+- Updated dependencies [76c0ffb]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-agents@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai-prompts@5.50.0
+  - @memberjunction/computer-use-engine@5.50.0
+  - @memberjunction/server@5.50.0
+  - @memberjunction/codegen-lib@5.50.0
+  - @memberjunction/content-autotagging@5.50.0
+  - @memberjunction/actions-content-autotag@5.50.0
+  - @memberjunction/external-data-sources@5.50.0
+  - @memberjunction/testing-integration@5.50.0
+  - @memberjunction/communication-types@5.50.0
+  - @memberjunction/communication-ms-graph@5.50.0
+  - @memberjunction/ai-segmentation@5.50.0
+  - @memberjunction/search-engine@5.50.0
+  - @memberjunction/core-entities-server@5.50.0
+  - @memberjunction/integration-engine@5.50.0
+  - @memberjunction/communication-sendgrid@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/core-actions@5.50.0
+  - @memberjunction/integration-connectors@5.50.0
+  - @memberjunction/storage@5.50.0
+  - @memberjunction/testing-engine@5.50.0
+  - @memberjunction/ai-agent-manager@5.50.0
+  - @memberjunction/ai-engine-base@5.50.0
+  - @memberjunction/database-designer-actions@5.50.0
+  - @memberjunction/database-designer-core@5.50.0
+  - @memberjunction/ai-form-builder@5.50.0
+  - @memberjunction/tag-engine-base@5.50.0
+  - @memberjunction/predictive-studio@5.50.0
+  - @memberjunction/ai-recommendations-rex@5.50.0
+  - @memberjunction/ai-bridge-livekit@5.50.0
+  - @memberjunction/ai-bridge-ringcentral@5.50.0
+  - @memberjunction/ai-bridge-teams@5.50.0
+  - @memberjunction/ai-bridge-twilio@5.50.0
+  - @memberjunction/ai-bridge-vonage@5.50.0
+  - @memberjunction/ai-bridge-server@5.50.0
+  - @memberjunction/remote-browser-server@5.50.0
+  - @memberjunction/ai-reranker@5.50.0
+  - @memberjunction/ai-vector-dupe@5.50.0
+  - @memberjunction/actions-apollo@5.50.0
+  - @memberjunction/actions-bizapps-accounting@5.50.0
+  - @memberjunction/actions-bizapps-crm@5.50.0
+  - @memberjunction/actions-bizapps-formbuilders@5.50.0
+  - @memberjunction/actions-bizapps-lms@5.50.0
+  - @memberjunction/actions-bizapps-social@5.50.0
+  - @memberjunction/actions@5.50.0
+  - @memberjunction/action-runtime-host@5.50.0
+  - @memberjunction/archiving-engine@5.50.0
+  - @memberjunction/entity-communications-base@5.50.0
+  - @memberjunction/doc-utils@5.50.0
+  - @memberjunction/encryption@5.50.0
+  - @memberjunction/external-data-source-mongodb@5.50.0
+  - @memberjunction/external-data-source-mysql@5.50.0
+  - @memberjunction/external-data-source-oracle@5.50.0
+  - @memberjunction/external-data-source-postgres@5.50.0
+  - @memberjunction/external-data-source-sqlserver@5.50.0
+  - @memberjunction/external-data-source-snowflake@5.50.0
+  - @memberjunction/integration-actions@5.50.0
+  - @memberjunction/queue@5.50.0
+  - @memberjunction/messaging-adapters@5.50.0
+  - @memberjunction/react-linter@5.50.0
+  - @memberjunction/record-comparison@5.50.0
+  - @memberjunction/record-set-processor@5.50.0
+  - @memberjunction/scheduling-actions@5.50.0
+  - @memberjunction/scheduling-engine-base@5.50.0
+  - @memberjunction/scheduling-engine@5.50.0
+  - @memberjunction/templates@5.50.0
+  - @memberjunction/esignature@5.50.0
+  - @memberjunction/geo-core@5.50.0
+  - @memberjunction/remote-browser-selfhost@5.50.0
+  - @memberjunction/ai-vectors-memory@5.50.0
+  - @memberjunction/ai-vectors-pinecone@5.50.0
+  - @memberjunction/ai-vectors-qdrant@5.50.0
+  - @memberjunction/ai-vectors-sqlserver@5.50.0
+  - @memberjunction/ai-vectors-pgvector@5.50.0
+  - @memberjunction/archiving-action@5.50.0
+  - @memberjunction/auth-providers@5.50.0
+  - @memberjunction/data-context-server@5.50.0
+  - @memberjunction/server-extensions-core@5.50.0
+  - @memberjunction/ai-anthropic@5.50.0
+  - @memberjunction/ai-assemblyai@5.50.0
+  - @memberjunction/ai-azure@5.50.0
+  - @memberjunction/ai-bedrock@5.50.0
+  - @memberjunction/ai-betty-bot@5.50.0
+  - @memberjunction/ai-blackforestlabs@5.50.0
+  - @memberjunction/ai-cerebras@5.50.0
+  - @memberjunction/ai-cohere@5.50.0
+  - @memberjunction/ai-elevenlabs@5.50.0
+  - @memberjunction/ai-fireworks@5.50.0
+  - @memberjunction/ai-gemini@5.50.0
+  - @memberjunction/ai-groq@5.50.0
+  - @memberjunction/ai-heygen@5.50.0
+  - @memberjunction/ai-huggingface@5.50.0
+  - @memberjunction/ai-inception@5.50.0
+  - @memberjunction/ai-inworld@5.50.0
+  - @memberjunction/ai-lmstudio@5.50.0
+  - @memberjunction/ai-llamacpp@5.50.0
+  - @memberjunction/ai-local-embeddings@5.50.0
+  - @memberjunction/ai-minimax@5.50.0
+  - @memberjunction/ai-mistral@5.50.0
+  - @memberjunction/ai-ollama@5.50.0
+  - @memberjunction/ai-openai@5.50.0
+  - @memberjunction/ai-openrouter@5.50.0
+  - @memberjunction/ai-vertex@5.50.0
+  - @memberjunction/ai-zhipu@5.50.0
+  - @memberjunction/ai-xai@5.50.0
+  - @memberjunction/ai-provider-bundle@5.50.0
+  - @memberjunction/esignature-docusign@5.50.0
+  - @memberjunction/esignature-dropboxsign@5.50.0
+  - @memberjunction/esignature-pandadoc@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- 6c910ef: Dialect-aware query extraction with QuerySQL-triggered re-extraction, PG double-quoted identifier unwrapping in SQL parser, lazy-load QueryEngine in MJQuerySQLEntityServer, and suppress full_access scope probe from API key usage logs
+- 1a15bd2: Add the **"Integration Test" `TestType`** — a headless, metadata-driven integration tier that runs the real MJ provider stack (live SQL Server / GraphQL, real cache managers + engines, real entity saves; no browser, no mocks) inside the Testing Framework, focused first on cache-integrity. The standalone `tsx` cache suites in `packages/MJServer/integration-test-scripts/` are graduated into first-class check bundles on one shared registry, so the same definitions run identically via the `npm run test:integration` aggregator **and** via `mj test` / `TestRun` (the `IntegrationTestDriver`) — a single source of truth.
+
+  **New package `@memberjunction/testing-integration`.** Dedicated-process bootstrap that installs an instrumented `LocalCacheManager` as the first caller (`bootstrapIntegrationServer` / `bootstrapIntegrationClient` / `installInstrumentedCacheFirst`, gated by `MJ_INTEGRATION_TEST=1`); the `IntegrationCheckRegistry` + `NamedCheck` contract; the `InstrumentedLocalStorageProvider` / `UniqueFilter` / `TestRunner` / `ai-verify` proof primitives; and the `IntegrationTestDriver` (`@RegisterClass(BaseTestDriver, 'IntegrationTestDriver')`), which dispatches a Test's configured bundles against one bootstrapped context and maps each check to an `OracleResult`. `@memberjunction/testing-cli`'s run/suite commands install the instrumented cache first under `MJ_INTEGRATION_TEST=1` (byte-for-byte unchanged otherwise); the old `lib/harness.ts` becomes a thin re-export shim. The pre-built `@memberjunction/server-bootstrap` class-registration manifest is regenerated (and the package gains a `@memberjunction/testing-integration` dependency) so `IntegrationTestDriver` is registered in-process and survives tree-shaking.
+
+  **Graduated check bundles (single source of truth).** Every standalone suite is now a thin dispatcher of a registry bundle with a metadata `Test` record (IT01–IT23) joined to an "Integration Tests" suite:
+  - **Deterministic server:** `server-cache` (S1–S31), `runquery-cache`, `dataset-cache`, `aggregates-cache` (AGG1–3), `record-process`, `record-process-facade`, `scheduled-jobs`, `field-rules-bulk-update`, `remote-operations`, `ai-skills`, `api-keys`, `predictive-studio` seams, `rls-isolation` (RLS1–RLS10 — the two overlapping RLS implementations were merged into one canonical bundle), plus the final three graduated in this pass: `lists` (LS1–3, keyset pagination), `open-app-teardown` (OAT1–2, the FK-graph cascade + link-less Application cleanup — adds a `@memberjunction/open-app-engine` dependency), and `user-routines` (UR1–16, the entity servers + dispatcher end-to-end).
+  - **Deterministic client** (needs a live MJAPI; skips cleanly otherwise): `remote-op-wire-progress` (the client bootstrap now derives a `ws(s)://` subscription URL from the HTTP endpoint so the RO-3 progress WebSocket actually connects — it previously passed an empty `wsurl` and threw `Invalid URL` the moment a live MJAPI was reachable, so the check could never pass), and `rls-isolation-client` (RLS7 — the client smart-cache companion to `rls-isolation`, now given its own seeded-Skip IT record instead of being a driver-only orphan).
+  - **Live-model** (`RUN_AGENT_TESTS`): `prompt-runner`, `agent-runner`, `concurrent`, `remote-op-ai-authoring`.
+
+  **tsx↔metadata sibling parity is now enforced.** The check logic lives once in a registry bundle; its two "siblings" are a `tsx` dispatcher script and a metadata `Test` record — both thin pointers. A new `sibling-parity.test.ts` drift-check (unit test) fails the build if any registered bundle is missing a dispatcher or an IT record, or if either points at a non-existent bundle (a small, reasoned `NO_TSX_DISPATCHER` allowlist covers deliberately driver/MJAPI-only bundles like `rls-isolation-client`). Backed by a new `IntegrationCheckRegistry.GetBundleNames()`; the coverage-loss guard was extended to the three new bundles. This closed the last three un-graduated `tsx` suites and the one registry-only bundle so all bundles now have both siblings.
+
+  **Tiering & gating.** A single tier model (`tiers.ts`: `deterministic` | `mutation` | `live-model`, with `IsTierEnabled()` reading `RUN_MUTATION_TESTS` / `RUN_AGENT_TESTS`) is honored identically by the aggregator and the driver, so a flag skip-passes the same way on both paths.
+
+  **Engine-level fixture lifecycle.** A per-bundle `BundleLifecycle` (Setup → run → Teardown in FK-safe order) plus suite-scoped `SuiteFixtureContext` (`@memberjunction/testing-engine-base`) with additive `BaseTestDriver.SetupSuite()` / `TeardownSuite()` hooks; `TestEngine.RunSuite` guarantees teardown + run-status update in a `finally` (pass / fail / thrown `Execute` / timeout), and a thrown `Execute` now resolves to a `Status='Error'` `TestRun` instead of wedging `'Running'`. Mutating suites self-clean identically on both front-ends.
+
+  **RLS / multi-user cache isolation.** New version-controlled seed metadata — a purpose-built **"Integration Test: RLS Scoped Reader"** role (scoped read on `MJ: AI Agent Runs` via `UserID = '{{UserID}}'` and nothing else) plus three inert, login-less test accounts — so the strongest RLS checks (fingerprint divergence / server-superset no-cross-serve / live no-leak) **execute for real** instead of skipping on an admin-only DB. Accounts are `Type='User'`, no auth linkage, clearly named, safe to delete. **The test-only integration records — the IT01–IT23 Tests, the integration suite, AND these RLS principals — live in a dedicated optional sibling root `metadata-optional/integration-test/`, NOT the default-pushed `metadata/` tree**, so none of it (least of all the synthetic `IsActive` accounts) ever reaches a production DB that only syncs `metadata/`. (The inert `Integration Test` TestType definition stays in normal `metadata/test-types/` — it's just a type row, no data or security surface — and the IT records `@lookup` it by name.) Seed the optional records with `mj sync push --dir=metadata-optional/integration-test`; the RLS checks skip-as-pass (with the exact push command logged) when absent.
+
+  **Dashboard legibility.** The custom `MJ: Test Runs` form's `getCheckResults()` now reads `ResultDetails` as the bare `OracleResult[]` the engine actually writes (fixing per-check rendering for all engine runs; mapping extracted into an Angular-free, unit-tested `test-run-checks.ts`), and the runs view binds `<mj-execution-context>` to the run's machine/CI fields. The Test Run dialog's "Execution Failed" banner no longer renders empty — a `failureMessage` getter falls back through top-level `errorMessage` → a synthesized per-test summary → the single test's message → a generic note (applies to every TestType).
+
+  **CI / release gate.** New `run-all.ts` aggregator + root `npm run test:integration` spawn each deterministic server suite in its own process (so each owns `LocalCacheManager.Initialize` as first caller) and collapse the per-suite `0/1/2` exit codes into one. The deterministic SQL Server tier is a blocking PR gate.
+
+  **Cross-platform & cross-server seams.** `DbConfig` gains a `Platform` field (`DB_PLATFORM` ∈ {sqlserver, postgresql}, default sqlserver) and `bootstrapIntegrationServer` dispatches accordingly (the PG path ships behind the tracked PG user-cache prerequisite; no PG CI lane yet). A `RUN_CROSS_SERVER=1` spec proves a `Save()` in one MJAPI invalidates a cached read in a second sharing one DB + Redis.
+
+  **RunView cache-layer fixes (`@memberjunction/core`).** Four real bugs the new suites surfaced, fixed in `localCacheManager.ts` + `providerBase.ts`:
+  - **SECURITY:** the cache-hit path returned _before_ the DB provider's read-permission gate, so a user lacking `CanRead` could be served rows a permitted user had warmed (an observed cross-user data leak). `PreRunView` and the `RunViews` batch now skip the cache when the user lacks read permission on the entity, falling through to the DB path's proper denial (server-cache S31).
+  - **SECURITY:** closed the **ViewID-only** variant of that bypass. The S31 gate keys off the entity resolved from `params.EntityName`; a `ViewID`/`ViewName`-only request (the Explorer-standard saved-view shape) resolved no entity there, so a read-denied user could still hit a slot a permitted user warmed for the same ViewID. `ProviderBase.cacheDeniedForViewOnlyRequest` (both cache paths) now resolves `ViewEntity` synchronously and applies the `CanRead` gate, or **fails closed** for a `ViewID`/`ViewName`-only request whose entity is only known after the async view lookup the cache-hit path skips. This also closes the RLS cross-serve for view-by-ID (two differently-scoped users no longer share a ViewID slot). Pinned by `providerBase.viewOnlyCacheGate.test.ts` + integration check server-cache **S31b** (**operators: prioritize this upgrade — S31 + S31b are both data-leak fixes**).
+  - **SECURITY:** a **stored view's identity** now participates in the RunView cache fingerprint (`vw:` segment). A saved view carries its own server-side `WhereClause` that is not reflected in `params.ExtraFilter`, so a filtered view and a plain unfiltered read of the same entity previously produced identical fingerprints and cross-served — the view was handed the unfiltered slot and returned rows _outside its own WhereClause_. Keyed by ViewID / ViewName / ViewEntity PK, appended only when a view identifier is present → plain entity+filter fingerprints stay byte-identical, no cache invalidation (server-cache S29).
+  - **`IgnoreMaxRows`** now participates in the RunView cache fingerprint, so an `IgnoreMaxRows` request no longer collides with (and is served) the capped slot for the same entity. Appended only when true → existing fingerprints stay byte-identical, no cache invalidation (server-cache S28).
+  - **`AggregateResults`** are remapped to the caller's requested order on a cache hit; the aggregate fingerprint is order-insensitive by design, so a reordered request must not inherit the warming caller's order (aggregates-cache AGG3).
+
+  **Review-response hardening (PR #3020).** Beyond S31b above: a lifecycle bundle's `Setup` and `Teardown` now run inside ONE `try/finally` on both front-ends (driver + tsx dispatchers), and every mutating fixture publishes its handle up-front + populates it as records are created — so a mid-`Setup` crash still tears down whatever was created instead of orphaning it (`runquery-cache` aligned to the shared lifecycle pattern). A single hung check is now bounded by the remaining run budget (a per-check race) instead of running past the driver timeout forever. The integration CI gate's trigger surface was widened (`migrations/**`, the `metadata-optional/**` root, `mj.config.cjs`/`tsconfig*`/`turbo.json`) and given a `push:` backstop mirroring the unit-test gate; the non-`Active` suite-membership exclusion is now surfaced with a concise always-on log; the testing CLI fails fast when it cannot install the instrumented cache first; and the sibling-parity drift-check was extended to cover the `run-all.ts` aggregator wiring and suite-join membership. `mj sync push` now honors `MJ_MIGRATION_REQUEST_TIMEOUT` (MetadataSync's env-driven config defaults, mirroring MJCLI) so the CI metadata push gets the same cold-server request-timeout headroom as `mj migrate` — mssql's 15s default could otherwise abort the push mid-transaction under embedding-on-save + engine-load latency on a cold runner.
+
+  One related cache gap is **deliberately deferred** and documented in-check as a self-healing skip-as-pass: cross-entity **denormalization** invalidation (server-cache S30) — renaming a parent record does not invalidate cached child rows that denormalize its name, because invalidation keys on the changed entity, not on dependent entities. Fixing it requires fanning invalidation out to dependent entities (a broad, higher-risk change), tracked separately; the check re-arms automatically once that lands.
+
+  All changes are additive / back-compat. Verified live against `mj_integrations` via both the `tsx` scripts and the `IntegrationTestDriver` (server-cache 31/31 with `RUN_MUTATION_TESTS`, aggregates-cache 3/3, rls-isolation 9/9; MJCore unit tests 1484/1484, testing-integration 145/145, testing-engine 45/45, testing-cli 23/23); golden-equivalence (`scripts/integration-golden-diff.mjs`) enforces no coverage loss between the two front-ends.
+
+- e945700: Fix a null-dereference crash when a `RunView` with `ResultType: 'entity_object'` (or a `Fields` projection) materializes an entity whose registered class cannot be constructed in the current runtime context — for example a server-only `*EntityServer` subclass instantiated inside a client/GraphQL process, where its constructor intentionally throws. `ProviderBase.GetEntityObject` now falls back to the generic `BaseEntity` (the same class a context without that subclass registered — a real browser client — resolves), and `TransformSimpleObjectToEntityObject` emits a clear, actionable error instead of dereferencing `null.constructor`. Surfaced by a client-first integration RunView sweep across all entities. Also corrects the ServerBootstrap class-registration manifest count constant (975 → 976) to match the actual registration array length.
+- Updated dependencies [486b276]
+- Updated dependencies [5e93c10]
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [0e52ff6]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [3d0255b]
+- Updated dependencies [243523e]
+- Updated dependencies [88d707b]
+- Updated dependencies [7af258e]
+- Updated dependencies [ea945da]
+- Updated dependencies [7db8ef5]
+- Updated dependencies [a7733a9]
+- Updated dependencies [3b23275]
+- Updated dependencies [505c8b5]
+- Updated dependencies [693973b]
+- Updated dependencies [ebe5b88]
+- Updated dependencies [6c910ef]
+- Updated dependencies [88d707b]
+- Updated dependencies [48fa886]
+- Updated dependencies [314f667]
+- Updated dependencies [70113b1]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [f1ab36f]
+- Updated dependencies [4a03c37]
+- Updated dependencies [38c69a6]
+- Updated dependencies [7d6e8fb]
+- Updated dependencies [b64efd1]
+- Updated dependencies [d23aa89]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [de86aa5]
+- Updated dependencies [85575cf]
+- Updated dependencies [9fb3fda]
+- Updated dependencies [5473e9a]
+- Updated dependencies [3355951]
+- Updated dependencies [9e2278c]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [373c5f6]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [fc1c693]
+- Updated dependencies [70c658c]
+- Updated dependencies [b5a8e3f]
+- Updated dependencies [9d6e3d9]
+- Updated dependencies [78a5e44]
+  - @memberjunction/codegen-lib@5.49.0
+  - @memberjunction/server@5.49.0
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-agents@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/ai-prompts@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/core-entities-server@5.49.0
+  - @memberjunction/testing-integration@5.49.0
+  - @memberjunction/communication-types@5.49.0
+  - @memberjunction/communication-sendgrid@5.49.0
+  - @memberjunction/communication-ms-graph@5.49.0
+  - @memberjunction/scheduling-engine@5.49.0
+  - @memberjunction/core-actions@5.49.0
+  - @memberjunction/auth-providers@5.49.0
+  - @memberjunction/ai-cohere@5.49.0
+  - @memberjunction/ai-gemini@5.49.0
+  - @memberjunction/ai-mistral@5.49.0
+  - @memberjunction/ai-azure@5.49.0
+  - @memberjunction/ai-bedrock@5.49.0
+  - @memberjunction/actions@5.49.0
+  - @memberjunction/integration-engine@5.49.0
+  - @memberjunction/testing-engine@5.49.0
+  - @memberjunction/ai-anthropic@5.49.0
+  - @memberjunction/ai-betty-bot@5.49.0
+  - @memberjunction/ai-cerebras@5.49.0
+  - @memberjunction/ai-fireworks@5.49.0
+  - @memberjunction/ai-groq@5.49.0
+  - @memberjunction/ai-inception@5.49.0
+  - @memberjunction/ai-lmstudio@5.49.0
+  - @memberjunction/ai-ollama@5.49.0
+  - @memberjunction/ai-openai@5.49.0
+  - @memberjunction/predictive-studio@5.49.0
+  - @memberjunction/ai-xai@5.49.0
+  - @memberjunction/ai-huggingface@5.49.0
+  - @memberjunction/ai-vectors-pinecone@5.49.0
+  - @memberjunction/search-engine@5.49.0
+  - @memberjunction/templates@5.49.0
+  - @memberjunction/ai-agent-manager@5.49.0
+  - @memberjunction/ai-engine-base@5.49.0
+  - @memberjunction/database-designer-actions@5.49.0
+  - @memberjunction/database-designer-core@5.49.0
+  - @memberjunction/ai-form-builder@5.49.0
+  - @memberjunction/tag-engine-base@5.49.0
+  - @memberjunction/computer-use-engine@5.49.0
+  - @memberjunction/ai-recommendations-rex@5.49.0
+  - @memberjunction/ai-bridge-livekit@5.49.0
+  - @memberjunction/ai-bridge-ringcentral@5.49.0
+  - @memberjunction/ai-bridge-teams@5.49.0
+  - @memberjunction/ai-bridge-twilio@5.49.0
+  - @memberjunction/ai-bridge-vonage@5.49.0
+  - @memberjunction/ai-bridge-server@5.49.0
+  - @memberjunction/remote-browser-selfhost@5.49.0
+  - @memberjunction/remote-browser-server@5.49.0
+  - @memberjunction/ai-reranker@5.49.0
+  - @memberjunction/ai-vector-dupe@5.49.0
+  - @memberjunction/ai-vectors-memory@5.49.0
+  - @memberjunction/ai-vectors-qdrant@5.49.0
+  - @memberjunction/ai-vectors-sqlserver@5.49.0
+  - @memberjunction/ai-vectors-pgvector@5.49.0
+  - @memberjunction/actions-apollo@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/actions-bizapps-accounting@5.49.0
+  - @memberjunction/actions-bizapps-crm@5.49.0
+  - @memberjunction/actions-bizapps-formbuilders@5.49.0
+  - @memberjunction/actions-bizapps-lms@5.49.0
+  - @memberjunction/actions-bizapps-social@5.49.0
+  - @memberjunction/actions-content-autotag@5.49.0
+  - @memberjunction/action-runtime-host@5.49.0
+  - @memberjunction/archiving-action@5.49.0
+  - @memberjunction/archiving-engine@5.49.0
+  - @memberjunction/entity-communications-base@5.49.0
+  - @memberjunction/content-autotagging@5.49.0
+  - @memberjunction/doc-utils@5.49.0
+  - @memberjunction/encryption@5.49.0
+  - @memberjunction/external-data-sources@5.49.0
+  - @memberjunction/external-data-source-mongodb@5.49.0
+  - @memberjunction/external-data-source-mysql@5.49.0
+  - @memberjunction/external-data-source-oracle@5.49.0
+  - @memberjunction/external-data-source-postgres@5.49.0
+  - @memberjunction/external-data-source-sqlserver@5.49.0
+  - @memberjunction/external-data-source-snowflake@5.49.0
+  - @memberjunction/integration-actions@5.49.0
+  - @memberjunction/integration-connectors@5.49.0
+  - @memberjunction/data-context-server@5.49.0
+  - @memberjunction/queue@5.49.0
+  - @memberjunction/storage@5.49.0
+  - @memberjunction/messaging-adapters@5.49.0
+  - @memberjunction/react-linter@5.49.0
+  - @memberjunction/record-comparison@5.49.0
+  - @memberjunction/record-set-processor@5.49.0
+  - @memberjunction/scheduling-actions@5.49.0
+  - @memberjunction/scheduling-engine-base@5.49.0
+  - @memberjunction/server-extensions-core@5.49.0
+  - @memberjunction/esignature@5.49.0
+  - @memberjunction/geo-core@5.49.0
+  - @memberjunction/ai-assemblyai@5.49.0
+  - @memberjunction/ai-blackforestlabs@5.49.0
+  - @memberjunction/ai-elevenlabs@5.49.0
+  - @memberjunction/ai-heygen@5.49.0
+  - @memberjunction/ai-inworld@5.49.0
+  - @memberjunction/ai-llamacpp@5.49.0
+  - @memberjunction/ai-local-embeddings@5.49.0
+  - @memberjunction/ai-minimax@5.49.0
+  - @memberjunction/ai-openrouter@5.49.0
+  - @memberjunction/ai-vertex@5.49.0
+  - @memberjunction/ai-zhipu@5.49.0
+  - @memberjunction/esignature-docusign@5.49.0
+  - @memberjunction/esignature-dropboxsign@5.49.0
+  - @memberjunction/esignature-pandadoc@5.49.0
+  - @memberjunction/ai-provider-bundle@5.49.0
+
+## 5.48.0
+
+### Minor Changes
+
+- c20723a: Add a self-hosted **HuggingFace speech-to-speech** realtime (voice) provider, sitting side-by-side with the cloud realtime providers (OpenAI, Gemini, ElevenLabs, AssemblyAI) with no host changes. It treats HuggingFace's open-source VAD → STT → LLM → TTS stack (in its OpenAI-Realtime-compatible `/v1/realtime` mode) as a `Realtime` model — private-by-design (audio never leaves owned infrastructure), cost-free, and component-swappable.
+
+  Because the endpoint is self-hosted, the shipped client-direct audio topology runs through a new provider-agnostic **MJAPI realtime proxy**: the driver mints a one-time ticket into a shared `RealtimeProxyRegistry` (`@memberjunction/ai`) and hands the browser a `wss://<mjapi-public>/realtime-proxy?ticket=…` URL, so the internal endpoint + auth never reach the browser and the box needs no browser-facing ingress. Adds the new `@memberjunction/ai-huggingface` driver package, the `HuggingFaceRealtimeClient` (`@memberjunction/ai-realtime-client`), the `RealtimeProxyServer` + single upgrade-router in `@memberjunction/server`, the class-registration manifest entry (`@memberjunction/server-bootstrap`), and the client-load wiring (`@memberjunction/ng-conversations`), plus the `Hugging Face` vendor + `HuggingFace Speech-to-Speech` model metadata (low PowerRank — opt-in). Additive only; endpoint/auth/sample-rate are deployment config.
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [80223ad]
+- Updated dependencies [8a88366]
+- Updated dependencies [2143b98]
+- Updated dependencies [c20723a]
+- Updated dependencies [a94bd16]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/server@5.48.0
+  - @memberjunction/codegen-lib@5.48.0
+  - @memberjunction/external-data-source-sqlserver@5.48.0
+  - @memberjunction/ai-agents@5.48.0
+  - @memberjunction/ai-huggingface@5.48.0
+  - @memberjunction/core-actions@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/core-entities-server@5.48.0
+  - @memberjunction/ai-agent-manager@5.48.0
+  - @memberjunction/ai-engine-base@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/database-designer-actions@5.48.0
+  - @memberjunction/database-designer-core@5.48.0
+  - @memberjunction/ai-form-builder@5.48.0
+  - @memberjunction/tag-engine-base@5.48.0
+  - @memberjunction/computer-use-engine@5.48.0
+  - @memberjunction/predictive-studio@5.48.0
+  - @memberjunction/ai-prompts@5.48.0
+  - @memberjunction/ai-recommendations-rex@5.48.0
+  - @memberjunction/ai-bridge-livekit@5.48.0
+  - @memberjunction/ai-bridge-ringcentral@5.48.0
+  - @memberjunction/ai-bridge-teams@5.48.0
+  - @memberjunction/ai-bridge-twilio@5.48.0
+  - @memberjunction/ai-bridge-vonage@5.48.0
+  - @memberjunction/ai-bridge-server@5.48.0
+  - @memberjunction/remote-browser-selfhost@5.48.0
+  - @memberjunction/remote-browser-server@5.48.0
+  - @memberjunction/ai-reranker@5.48.0
+  - @memberjunction/ai-vector-dupe@5.48.0
+  - @memberjunction/ai-vectors-memory@5.48.0
+  - @memberjunction/ai-vectors-pinecone@5.48.0
+  - @memberjunction/ai-vectors-qdrant@5.48.0
+  - @memberjunction/ai-vectors-sqlserver@5.48.0
+  - @memberjunction/ai-vectors-pgvector@5.48.0
+  - @memberjunction/actions-apollo@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/actions-bizapps-accounting@5.48.0
+  - @memberjunction/actions-bizapps-crm@5.48.0
+  - @memberjunction/actions-bizapps-formbuilders@5.48.0
+  - @memberjunction/actions-bizapps-lms@5.48.0
+  - @memberjunction/actions-bizapps-social@5.48.0
+  - @memberjunction/actions-content-autotag@5.48.0
+  - @memberjunction/actions@5.48.0
+  - @memberjunction/action-runtime-host@5.48.0
+  - @memberjunction/archiving-action@5.48.0
+  - @memberjunction/archiving-engine@5.48.0
+  - @memberjunction/auth-providers@5.48.0
+  - @memberjunction/communication-types@5.48.0
+  - @memberjunction/entity-communications-base@5.48.0
+  - @memberjunction/communication-ms-graph@5.48.0
+  - @memberjunction/communication-sendgrid@5.48.0
+  - @memberjunction/content-autotagging@5.48.0
+  - @memberjunction/doc-utils@5.48.0
+  - @memberjunction/encryption@5.48.0
+  - @memberjunction/external-data-sources@5.48.0
+  - @memberjunction/external-data-source-mongodb@5.48.0
+  - @memberjunction/external-data-source-mysql@5.48.0
+  - @memberjunction/external-data-source-oracle@5.48.0
+  - @memberjunction/external-data-source-postgres@5.48.0
+  - @memberjunction/external-data-source-snowflake@5.48.0
+  - @memberjunction/integration-actions@5.48.0
+  - @memberjunction/integration-connectors@5.48.0
+  - @memberjunction/integration-engine@5.48.0
+  - @memberjunction/data-context-server@5.48.0
+  - @memberjunction/queue@5.48.0
+  - @memberjunction/storage@5.48.0
+  - @memberjunction/messaging-adapters@5.48.0
+  - @memberjunction/react-linter@5.48.0
+  - @memberjunction/record-comparison@5.48.0
+  - @memberjunction/record-set-processor@5.48.0
+  - @memberjunction/scheduling-actions@5.48.0
+  - @memberjunction/scheduling-engine-base@5.48.0
+  - @memberjunction/scheduling-engine@5.48.0
+  - @memberjunction/search-engine@5.48.0
+  - @memberjunction/server-extensions-core@5.48.0
+  - @memberjunction/templates@5.48.0
+  - @memberjunction/testing-engine@5.48.0
+  - @memberjunction/esignature@5.48.0
+  - @memberjunction/geo-core@5.48.0
+  - @memberjunction/ai-anthropic@5.48.0
+  - @memberjunction/ai-assemblyai@5.48.0
+  - @memberjunction/ai-azure@5.48.0
+  - @memberjunction/ai-bedrock@5.48.0
+  - @memberjunction/ai-betty-bot@5.48.0
+  - @memberjunction/ai-blackforestlabs@5.48.0
+  - @memberjunction/ai-cerebras@5.48.0
+  - @memberjunction/ai-cohere@5.48.0
+  - @memberjunction/ai-elevenlabs@5.48.0
+  - @memberjunction/ai-fireworks@5.48.0
+  - @memberjunction/ai-gemini@5.48.0
+  - @memberjunction/ai-groq@5.48.0
+  - @memberjunction/ai-heygen@5.48.0
+  - @memberjunction/ai-inception@5.48.0
+  - @memberjunction/ai-inworld@5.48.0
+  - @memberjunction/ai-lmstudio@5.48.0
+  - @memberjunction/ai-llamacpp@5.48.0
+  - @memberjunction/ai-local-embeddings@5.48.0
+  - @memberjunction/ai-minimax@5.48.0
+  - @memberjunction/ai-mistral@5.48.0
+  - @memberjunction/ai-ollama@5.48.0
+  - @memberjunction/ai-openai@5.48.0
+  - @memberjunction/ai-openrouter@5.48.0
+  - @memberjunction/ai-vertex@5.48.0
+  - @memberjunction/ai-zhipu@5.48.0
+  - @memberjunction/ai-xai@5.48.0
+  - @memberjunction/ai-provider-bundle@5.48.0
+  - @memberjunction/esignature-docusign@5.48.0
+  - @memberjunction/esignature-dropboxsign@5.48.0
+  - @memberjunction/esignature-pandadoc@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [92ecbf8]
+- Updated dependencies [f4dce92]
+- Updated dependencies [46a06ac]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/codegen-lib@5.47.0
+  - @memberjunction/predictive-studio@5.47.0
+  - @memberjunction/ai-agent-manager@5.47.0
+  - @memberjunction/ai-agents@5.47.0
+  - @memberjunction/ai-engine-base@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/database-designer-actions@5.47.0
+  - @memberjunction/database-designer-core@5.47.0
+  - @memberjunction/ai-form-builder@5.47.0
+  - @memberjunction/tag-engine-base@5.47.0
+  - @memberjunction/computer-use-engine@5.47.0
+  - @memberjunction/ai-prompts@5.47.0
+  - @memberjunction/ai-recommendations-rex@5.47.0
+  - @memberjunction/ai-bridge-livekit@5.47.0
+  - @memberjunction/ai-bridge-ringcentral@5.47.0
+  - @memberjunction/ai-bridge-teams@5.47.0
+  - @memberjunction/ai-bridge-twilio@5.47.0
+  - @memberjunction/ai-bridge-vonage@5.47.0
+  - @memberjunction/ai-bridge-server@5.47.0
+  - @memberjunction/remote-browser-selfhost@5.47.0
+  - @memberjunction/remote-browser-server@5.47.0
+  - @memberjunction/ai-reranker@5.47.0
+  - @memberjunction/ai-vector-dupe@5.47.0
+  - @memberjunction/ai-vectors-memory@5.47.0
+  - @memberjunction/ai-vectors-pinecone@5.47.0
+  - @memberjunction/ai-vectors-qdrant@5.47.0
+  - @memberjunction/ai-vectors-sqlserver@5.47.0
+  - @memberjunction/ai-vectors-pgvector@5.47.0
+  - @memberjunction/actions-apollo@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/actions-bizapps-accounting@5.47.0
+  - @memberjunction/actions-bizapps-crm@5.47.0
+  - @memberjunction/actions-bizapps-formbuilders@5.47.0
+  - @memberjunction/actions-bizapps-lms@5.47.0
+  - @memberjunction/actions-bizapps-social@5.47.0
+  - @memberjunction/actions-content-autotag@5.47.0
+  - @memberjunction/core-actions@5.47.0
+  - @memberjunction/actions@5.47.0
+  - @memberjunction/action-runtime-host@5.47.0
+  - @memberjunction/archiving-action@5.47.0
+  - @memberjunction/archiving-engine@5.47.0
+  - @memberjunction/auth-providers@5.47.0
+  - @memberjunction/communication-types@5.47.0
+  - @memberjunction/entity-communications-base@5.47.0
+  - @memberjunction/communication-ms-graph@5.47.0
+  - @memberjunction/communication-sendgrid@5.47.0
+  - @memberjunction/content-autotagging@5.47.0
+  - @memberjunction/doc-utils@5.47.0
+  - @memberjunction/encryption@5.47.0
+  - @memberjunction/external-data-sources@5.47.0
+  - @memberjunction/external-data-source-mongodb@5.47.0
+  - @memberjunction/external-data-source-mysql@5.47.0
+  - @memberjunction/external-data-source-oracle@5.47.0
+  - @memberjunction/external-data-source-postgres@5.47.0
+  - @memberjunction/external-data-source-sqlserver@5.47.0
+  - @memberjunction/external-data-source-snowflake@5.47.0
+  - @memberjunction/integration-actions@5.47.0
+  - @memberjunction/integration-connectors@5.47.0
+  - @memberjunction/integration-engine@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/core-entities-server@5.47.0
+  - @memberjunction/data-context-server@5.47.0
+  - @memberjunction/queue@5.47.0
+  - @memberjunction/server@5.47.0
+  - @memberjunction/storage@5.47.0
+  - @memberjunction/messaging-adapters@5.47.0
+  - @memberjunction/react-linter@5.47.0
+  - @memberjunction/record-comparison@5.47.0
+  - @memberjunction/record-set-processor@5.47.0
+  - @memberjunction/scheduling-actions@5.47.0
+  - @memberjunction/scheduling-engine-base@5.47.0
+  - @memberjunction/scheduling-engine@5.47.0
+  - @memberjunction/search-engine@5.47.0
+  - @memberjunction/server-extensions-core@5.47.0
+  - @memberjunction/templates@5.47.0
+  - @memberjunction/testing-engine@5.47.0
+  - @memberjunction/esignature@5.47.0
+  - @memberjunction/geo-core@5.47.0
+  - @memberjunction/ai-provider-bundle@5.47.0
+  - @memberjunction/esignature-docusign@5.47.0
+  - @memberjunction/esignature-dropboxsign@5.47.0
+  - @memberjunction/esignature-pandadoc@5.47.0
+  - @memberjunction/ai-anthropic@5.47.0
+  - @memberjunction/ai-assemblyai@5.47.0
+  - @memberjunction/ai-azure@5.47.0
+  - @memberjunction/ai-bedrock@5.47.0
+  - @memberjunction/ai-betty-bot@5.47.0
+  - @memberjunction/ai-blackforestlabs@5.47.0
+  - @memberjunction/ai-cerebras@5.47.0
+  - @memberjunction/ai-cohere@5.47.0
+  - @memberjunction/ai-elevenlabs@5.47.0
+  - @memberjunction/ai-fireworks@5.47.0
+  - @memberjunction/ai-gemini@5.47.0
+  - @memberjunction/ai-groq@5.47.0
+  - @memberjunction/ai-heygen@5.47.0
+  - @memberjunction/ai-inception@5.47.0
+  - @memberjunction/ai-inworld@5.47.0
+  - @memberjunction/ai-lmstudio@5.47.0
+  - @memberjunction/ai-llamacpp@5.47.0
+  - @memberjunction/ai-local-embeddings@5.47.0
+  - @memberjunction/ai-minimax@5.47.0
+  - @memberjunction/ai-mistral@5.47.0
+  - @memberjunction/ai-ollama@5.47.0
+  - @memberjunction/ai-openai@5.47.0
+  - @memberjunction/ai-openrouter@5.47.0
+  - @memberjunction/ai-vertex@5.47.0
+  - @memberjunction/ai-zhipu@5.47.0
+  - @memberjunction/ai-xai@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/server@5.46.0
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-engine-base@5.46.0
+  - @memberjunction/ai-agents@5.46.0
+  - @memberjunction/ai-prompts@5.46.0
+  - @memberjunction/ai-agent-manager@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/database-designer-actions@5.46.0
+  - @memberjunction/database-designer-core@5.46.0
+  - @memberjunction/ai-form-builder@5.46.0
+  - @memberjunction/tag-engine-base@5.46.0
+  - @memberjunction/computer-use-engine@5.46.0
+  - @memberjunction/predictive-studio@5.46.0
+  - @memberjunction/ai-recommendations-rex@5.46.0
+  - @memberjunction/ai-bridge-livekit@5.46.0
+  - @memberjunction/ai-bridge-ringcentral@5.46.0
+  - @memberjunction/ai-bridge-teams@5.46.0
+  - @memberjunction/ai-bridge-twilio@5.46.0
+  - @memberjunction/ai-bridge-vonage@5.46.0
+  - @memberjunction/ai-bridge-server@5.46.0
+  - @memberjunction/remote-browser-selfhost@5.46.0
+  - @memberjunction/remote-browser-server@5.46.0
+  - @memberjunction/ai-reranker@5.46.0
+  - @memberjunction/ai-vector-dupe@5.46.0
+  - @memberjunction/ai-vectors-memory@5.46.0
+  - @memberjunction/ai-vectors-pinecone@5.46.0
+  - @memberjunction/ai-vectors-qdrant@5.46.0
+  - @memberjunction/ai-vectors-sqlserver@5.46.0
+  - @memberjunction/ai-vectors-pgvector@5.46.0
+  - @memberjunction/actions-apollo@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/actions-bizapps-accounting@5.46.0
+  - @memberjunction/actions-bizapps-crm@5.46.0
+  - @memberjunction/actions-bizapps-formbuilders@5.46.0
+  - @memberjunction/actions-bizapps-lms@5.46.0
+  - @memberjunction/actions-bizapps-social@5.46.0
+  - @memberjunction/actions-content-autotag@5.46.0
+  - @memberjunction/core-actions@5.46.0
+  - @memberjunction/actions@5.46.0
+  - @memberjunction/action-runtime-host@5.46.0
+  - @memberjunction/archiving-action@5.46.0
+  - @memberjunction/archiving-engine@5.46.0
+  - @memberjunction/auth-providers@5.46.0
+  - @memberjunction/codegen-lib@5.46.0
+  - @memberjunction/communication-types@5.46.0
+  - @memberjunction/entity-communications-base@5.46.0
+  - @memberjunction/communication-ms-graph@5.46.0
+  - @memberjunction/communication-sendgrid@5.46.0
+  - @memberjunction/content-autotagging@5.46.0
+  - @memberjunction/doc-utils@5.46.0
+  - @memberjunction/encryption@5.46.0
+  - @memberjunction/external-data-sources@5.46.0
+  - @memberjunction/external-data-source-mongodb@5.46.0
+  - @memberjunction/external-data-source-mysql@5.46.0
+  - @memberjunction/external-data-source-oracle@5.46.0
+  - @memberjunction/external-data-source-postgres@5.46.0
+  - @memberjunction/external-data-source-sqlserver@5.46.0
+  - @memberjunction/external-data-source-snowflake@5.46.0
+  - @memberjunction/integration-actions@5.46.0
+  - @memberjunction/integration-connectors@5.46.0
+  - @memberjunction/integration-engine@5.46.0
+  - @memberjunction/core-entities-server@5.46.0
+  - @memberjunction/data-context-server@5.46.0
+  - @memberjunction/queue@5.46.0
+  - @memberjunction/storage@5.46.0
+  - @memberjunction/messaging-adapters@5.46.0
+  - @memberjunction/react-linter@5.46.0
+  - @memberjunction/record-comparison@5.46.0
+  - @memberjunction/record-set-processor@5.46.0
+  - @memberjunction/scheduling-actions@5.46.0
+  - @memberjunction/scheduling-engine-base@5.46.0
+  - @memberjunction/scheduling-engine@5.46.0
+  - @memberjunction/search-engine@5.46.0
+  - @memberjunction/server-extensions-core@5.46.0
+  - @memberjunction/templates@5.46.0
+  - @memberjunction/testing-engine@5.46.0
+  - @memberjunction/esignature@5.46.0
+  - @memberjunction/geo-core@5.46.0
+  - @memberjunction/ai-provider-bundle@5.46.0
+  - @memberjunction/esignature-docusign@5.46.0
+  - @memberjunction/esignature-dropboxsign@5.46.0
+  - @memberjunction/esignature-pandadoc@5.46.0
+  - @memberjunction/ai-anthropic@5.46.0
+  - @memberjunction/ai-assemblyai@5.46.0
+  - @memberjunction/ai-azure@5.46.0
+  - @memberjunction/ai-bedrock@5.46.0
+  - @memberjunction/ai-betty-bot@5.46.0
+  - @memberjunction/ai-blackforestlabs@5.46.0
+  - @memberjunction/ai-cerebras@5.46.0
+  - @memberjunction/ai-cohere@5.46.0
+  - @memberjunction/ai-elevenlabs@5.46.0
+  - @memberjunction/ai-fireworks@5.46.0
+  - @memberjunction/ai-gemini@5.46.0
+  - @memberjunction/ai-groq@5.46.0
+  - @memberjunction/ai-heygen@5.46.0
+  - @memberjunction/ai-inception@5.46.0
+  - @memberjunction/ai-inworld@5.46.0
+  - @memberjunction/ai-lmstudio@5.46.0
+  - @memberjunction/ai-llamacpp@5.46.0
+  - @memberjunction/ai-local-embeddings@5.46.0
+  - @memberjunction/ai-minimax@5.46.0
+  - @memberjunction/ai-mistral@5.46.0
+  - @memberjunction/ai-ollama@5.46.0
+  - @memberjunction/ai-openai@5.46.0
+  - @memberjunction/ai-openrouter@5.46.0
+  - @memberjunction/ai-vertex@5.46.0
+  - @memberjunction/ai-zhipu@5.46.0
+  - @memberjunction/ai-xai@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+- Updated dependencies [00e573c]
+- Updated dependencies [1740db3]
+- Updated dependencies [108a1d3]
+- Updated dependencies [aedfe44]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/server@5.45.1
+  - @memberjunction/external-data-sources@5.45.1
+  - @memberjunction/external-data-source-sqlserver@5.45.1
+  - @memberjunction/external-data-source-mongodb@5.45.1
+  - @memberjunction/external-data-source-oracle@5.45.1
+  - @memberjunction/external-data-source-postgres@5.45.1
+  - @memberjunction/external-data-source-mysql@5.45.1
+  - @memberjunction/external-data-source-snowflake@5.45.1
+  - @memberjunction/integration-connectors@5.45.1
+  - @memberjunction/ai-agent-manager@5.45.1
+  - @memberjunction/ai-agents@5.45.1
+  - @memberjunction/ai-engine-base@5.45.1
+  - @memberjunction/database-designer-core@5.45.1
+  - @memberjunction/ai-form-builder@5.45.1
+  - @memberjunction/computer-use-engine@5.45.1
+  - @memberjunction/predictive-studio@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/ai-reranker@5.45.1
+  - @memberjunction/ai-vector-dupe@5.45.1
+  - @memberjunction/core-actions@5.45.1
+  - @memberjunction/action-runtime-host@5.45.1
+  - @memberjunction/codegen-lib@5.45.1
+  - @memberjunction/content-autotagging@5.45.1
+  - @memberjunction/core-entities-server@5.45.1
+  - @memberjunction/messaging-adapters@5.45.1
+  - @memberjunction/record-set-processor@5.45.1
+  - @memberjunction/scheduling-engine@5.45.1
+  - @memberjunction/templates@5.45.1
+  - @memberjunction/testing-engine@5.45.1
+  - @memberjunction/database-designer-actions@5.45.1
+  - @memberjunction/ai-vectors-pinecone@5.45.1
+  - @memberjunction/communication-ms-graph@5.45.1
+  - @memberjunction/queue@5.45.1
+  - @memberjunction/search-engine@5.45.1
+  - @memberjunction/actions-content-autotag@5.45.1
+  - @memberjunction/ai-provider-bundle@5.45.1
+  - @memberjunction/react-linter@5.45.1
+  - @memberjunction/tag-engine-base@5.45.1
+  - @memberjunction/ai-anthropic@5.45.1
+  - @memberjunction/ai-assemblyai@5.45.1
+  - @memberjunction/ai-azure@5.45.1
+  - @memberjunction/ai-bedrock@5.45.1
+  - @memberjunction/ai-betty-bot@5.45.1
+  - @memberjunction/ai-blackforestlabs@5.45.1
+  - @memberjunction/ai-cerebras@5.45.1
+  - @memberjunction/ai-cohere@5.45.1
+  - @memberjunction/ai-elevenlabs@5.45.1
+  - @memberjunction/ai-fireworks@5.45.1
+  - @memberjunction/ai-gemini@5.45.1
+  - @memberjunction/ai-groq@5.45.1
+  - @memberjunction/ai-heygen@5.45.1
+  - @memberjunction/ai-inception@5.45.1
+  - @memberjunction/ai-inworld@5.45.1
+  - @memberjunction/ai-lmstudio@5.45.1
+  - @memberjunction/ai-llamacpp@5.45.1
+  - @memberjunction/ai-local-embeddings@5.45.1
+  - @memberjunction/ai-minimax@5.45.1
+  - @memberjunction/ai-mistral@5.45.1
+  - @memberjunction/ai-ollama@5.45.1
+  - @memberjunction/ai-openai@5.45.1
+  - @memberjunction/ai-openrouter@5.45.1
+  - @memberjunction/ai-recommendations-rex@5.45.1
+  - @memberjunction/ai-vertex@5.45.1
+  - @memberjunction/ai-zhipu@5.45.1
+  - @memberjunction/ai-xai@5.45.1
+  - @memberjunction/ai-bridge-livekit@5.45.1
+  - @memberjunction/ai-bridge-ringcentral@5.45.1
+  - @memberjunction/ai-bridge-teams@5.45.1
+  - @memberjunction/ai-bridge-twilio@5.45.1
+  - @memberjunction/ai-bridge-vonage@5.45.1
+  - @memberjunction/ai-bridge-server@5.45.1
+  - @memberjunction/remote-browser-selfhost@5.45.1
+  - @memberjunction/remote-browser-server@5.45.1
+  - @memberjunction/ai-vectors-memory@5.45.1
+  - @memberjunction/ai-vectors-qdrant@5.45.1
+  - @memberjunction/ai-vectors-sqlserver@5.45.1
+  - @memberjunction/ai-vectors-pgvector@5.45.1
+  - @memberjunction/actions-apollo@5.45.1
+  - @memberjunction/actions-base@5.45.1
+  - @memberjunction/actions-bizapps-accounting@5.45.1
+  - @memberjunction/actions-bizapps-crm@5.45.1
+  - @memberjunction/actions-bizapps-formbuilders@5.45.1
+  - @memberjunction/actions-bizapps-lms@5.45.1
+  - @memberjunction/actions-bizapps-social@5.45.1
+  - @memberjunction/actions@5.45.1
+  - @memberjunction/archiving-action@5.45.1
+  - @memberjunction/archiving-engine@5.45.1
+  - @memberjunction/auth-providers@5.45.1
+  - @memberjunction/communication-types@5.45.1
+  - @memberjunction/entity-communications-base@5.45.1
+  - @memberjunction/communication-sendgrid@5.45.1
+  - @memberjunction/doc-utils@5.45.1
+  - @memberjunction/encryption@5.45.1
+  - @memberjunction/integration-actions@5.45.1
+  - @memberjunction/integration-engine@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/data-context-server@5.45.1
+  - @memberjunction/storage@5.45.1
+  - @memberjunction/record-comparison@5.45.1
+  - @memberjunction/scheduling-actions@5.45.1
+  - @memberjunction/scheduling-engine-base@5.45.1
+  - @memberjunction/server-extensions-core@5.45.1
+  - @memberjunction/esignature@5.45.1
+  - @memberjunction/esignature-docusign@5.45.1
+  - @memberjunction/esignature-dropboxsign@5.45.1
+  - @memberjunction/esignature-pandadoc@5.45.1
+  - @memberjunction/geo-core@5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- b2927f1: Omnibus fixes: (1) skill-granted sub-agent execution — resolveSubAgentByName now resolves from the same runtime-effective set the prompt offers and validation approves (skill activations / subAgentChanges), the resolved entity threads into child dispatch, and execution-time not-found retries are bounded by the shared validation-retry cap with a self-correcting available-sub-agents message (fixes an infinite delegation loop observed live on Research Agent → Infographic Agent); (2) RunView dedup/linger cache write-invalidation on entity events (@memberjunction/core); (3) regenerated class-registration manifests.
+
+### Patch Changes
+
+- 21e33fe: Move Skip to a client-side Open App and remove server-embedded agent; scope-gate query/view/search resolvers with API-key scope authorization; add credential-store fallback for component registry keys; support Open App in-process lifecycle hooks with interactive prompts.
+- bc085e0: Add SQL Server, MySQL, and Oracle External Data Source drivers.
+
+  Three new relational drivers, each registered via `@RegisterClass(BaseExternalDataSourceDriver, ...)` and structured like the reference PostgreSQL driver (per-`ExternalDataSource` connection pooling so a single driver instance holds any number of independent connections, secure-by-default transport, auth-retry self-heal, read-only):
+  - **`@memberjunction/external-data-source-sqlserver`** (`SQLServerExternalDriver`, node-mssql) — T-SQL: bracket-quoted identifiers, `TOP` / `OFFSET..FETCH` paging, `@named` parameters, `INFORMATION_SCHEMA` + `sys.*` introspection of tables/views/columns/primary keys and foreign keys.
+  - **`@memberjunction/external-data-source-mysql`** (`MySQLExternalDriver`, mysql2) — backtick-quoted identifiers, `LIMIT/OFFSET` paging, `?` positional parameters, `INFORMATION_SCHEMA` introspection including foreign keys (referenced table/column read directly from `KEY_COLUMN_USAGE`).
+  - **`@memberjunction/external-data-source-oracle`** (`OracleExternalDriver`, node-oracledb in **Thin mode** — no Instant Client required) — double-quoted identifiers, `OFFSET..FETCH` paging, `:named` bind parameters, and `ALL_*` catalog introspection (tables/views/columns/primary keys/foreign keys).
+
+  All three introspect **foreign keys** (composite-key aware) into the schema contract's `Relationships`. Each seeds an `ExternalDataSourceType` row (`metadata/external-data-source-types`) and is registered in the server-bootstrap class manifest. Each ships unit tests (SQL building, FK grouping, and — for MySQL, whose pool is lazy — per-source connection caching) plus an opt-in live integration suite (`RUN_SQLSERVER_INTEGRATION` / `RUN_MYSQL_INTEGRATION` / `RUN_ORACLE_INTEGRATION`) that self-seeds a customers/orders/view fixture (with a FK) and exercises connect, read, projection, filtered paging, view reads, single-record load, parameterized native joins, full introspection, and clean error handling — verified live against SQL Server, MySQL, and Oracle respectively.
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [19ec4b0]
+- Updated dependencies [bc085e0]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [e370816]
+- Updated dependencies [f99cbc1]
+- Updated dependencies [11d5b4e]
+- Updated dependencies [fbee64c]
+- Updated dependencies [81a8aa2]
+- Updated dependencies [82ca89b]
+- Updated dependencies [b2927f1]
+- Updated dependencies [b18fcd0]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+- Updated dependencies [d461df0]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/server@5.45.0
+  - @memberjunction/core-entities-server@5.45.0
+  - @memberjunction/external-data-sources@5.45.0
+  - @memberjunction/codegen-lib@5.45.0
+  - @memberjunction/ai-agents@5.45.0
+  - @memberjunction/external-data-source-sqlserver@5.45.0
+  - @memberjunction/external-data-source-mysql@5.45.0
+  - @memberjunction/external-data-source-oracle@5.45.0
+  - @memberjunction/external-data-source-postgres@5.45.0
+  - @memberjunction/external-data-source-snowflake@5.45.0
+  - @memberjunction/external-data-source-mongodb@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/integration-engine@5.45.0
+  - @memberjunction/ai-engine-base@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/scheduling-engine@5.45.0
+  - @memberjunction/scheduling-engine-base@5.45.0
+  - @memberjunction/ai-agent-manager@5.45.0
+  - @memberjunction/database-designer-actions@5.45.0
+  - @memberjunction/database-designer-core@5.45.0
+  - @memberjunction/ai-form-builder@5.45.0
+  - @memberjunction/tag-engine-base@5.45.0
+  - @memberjunction/computer-use-engine@5.45.0
+  - @memberjunction/predictive-studio@5.45.0
+  - @memberjunction/ai-prompts@5.45.0
+  - @memberjunction/ai-recommendations-rex@5.45.0
+  - @memberjunction/ai-bridge-livekit@5.45.0
+  - @memberjunction/ai-bridge-ringcentral@5.45.0
+  - @memberjunction/ai-bridge-teams@5.45.0
+  - @memberjunction/ai-bridge-twilio@5.45.0
+  - @memberjunction/ai-bridge-vonage@5.45.0
+  - @memberjunction/ai-bridge-server@5.45.0
+  - @memberjunction/remote-browser-selfhost@5.45.0
+  - @memberjunction/remote-browser-server@5.45.0
+  - @memberjunction/ai-reranker@5.45.0
+  - @memberjunction/ai-vector-dupe@5.45.0
+  - @memberjunction/ai-vectors-memory@5.45.0
+  - @memberjunction/ai-vectors-pinecone@5.45.0
+  - @memberjunction/ai-vectors-qdrant@5.45.0
+  - @memberjunction/ai-vectors-sqlserver@5.45.0
+  - @memberjunction/ai-vectors-pgvector@5.45.0
+  - @memberjunction/actions-apollo@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/actions-bizapps-accounting@5.45.0
+  - @memberjunction/actions-bizapps-crm@5.45.0
+  - @memberjunction/actions-bizapps-formbuilders@5.45.0
+  - @memberjunction/actions-bizapps-lms@5.45.0
+  - @memberjunction/actions-bizapps-social@5.45.0
+  - @memberjunction/actions-content-autotag@5.45.0
+  - @memberjunction/core-actions@5.45.0
+  - @memberjunction/actions@5.45.0
+  - @memberjunction/action-runtime-host@5.45.0
+  - @memberjunction/archiving-action@5.45.0
+  - @memberjunction/archiving-engine@5.45.0
+  - @memberjunction/auth-providers@5.45.0
+  - @memberjunction/communication-types@5.45.0
+  - @memberjunction/entity-communications-base@5.45.0
+  - @memberjunction/communication-ms-graph@5.45.0
+  - @memberjunction/communication-sendgrid@5.45.0
+  - @memberjunction/content-autotagging@5.45.0
+  - @memberjunction/doc-utils@5.45.0
+  - @memberjunction/encryption@5.45.0
+  - @memberjunction/integration-actions@5.45.0
+  - @memberjunction/integration-connectors@5.45.0
+  - @memberjunction/data-context-server@5.45.0
+  - @memberjunction/queue@5.45.0
+  - @memberjunction/storage@5.45.0
+  - @memberjunction/messaging-adapters@5.45.0
+  - @memberjunction/react-linter@5.45.0
+  - @memberjunction/record-comparison@5.45.0
+  - @memberjunction/record-set-processor@5.45.0
+  - @memberjunction/scheduling-actions@5.45.0
+  - @memberjunction/search-engine@5.45.0
+  - @memberjunction/server-extensions-core@5.45.0
+  - @memberjunction/templates@5.45.0
+  - @memberjunction/testing-engine@5.45.0
+  - @memberjunction/esignature@5.45.0
+  - @memberjunction/geo-core@5.45.0
+  - @memberjunction/ai-anthropic@5.45.0
+  - @memberjunction/ai-assemblyai@5.45.0
+  - @memberjunction/ai-azure@5.45.0
+  - @memberjunction/ai-bedrock@5.45.0
+  - @memberjunction/ai-betty-bot@5.45.0
+  - @memberjunction/ai-blackforestlabs@5.45.0
+  - @memberjunction/ai-cerebras@5.45.0
+  - @memberjunction/ai-cohere@5.45.0
+  - @memberjunction/ai-elevenlabs@5.45.0
+  - @memberjunction/ai-fireworks@5.45.0
+  - @memberjunction/ai-gemini@5.45.0
+  - @memberjunction/ai-groq@5.45.0
+  - @memberjunction/ai-heygen@5.45.0
+  - @memberjunction/ai-inception@5.45.0
+  - @memberjunction/ai-inworld@5.45.0
+  - @memberjunction/ai-lmstudio@5.45.0
+  - @memberjunction/ai-llamacpp@5.45.0
+  - @memberjunction/ai-local-embeddings@5.45.0
+  - @memberjunction/ai-minimax@5.45.0
+  - @memberjunction/ai-mistral@5.45.0
+  - @memberjunction/ai-ollama@5.45.0
+  - @memberjunction/ai-openai@5.45.0
+  - @memberjunction/ai-openrouter@5.45.0
+  - @memberjunction/ai-vertex@5.45.0
+  - @memberjunction/ai-zhipu@5.45.0
+  - @memberjunction/ai-xai@5.45.0
+  - @memberjunction/esignature-docusign@5.45.0
+  - @memberjunction/esignature-dropboxsign@5.45.0
+  - @memberjunction/esignature-pandadoc@5.45.0
+  - @memberjunction/ai-provider-bundle@5.45.0
+
+## 5.44.0
+
+### Minor Changes
+
+- 6f74b17: Add an LLM/agentic reasoning pass on top of the embedding/vector duplicate-detection pipeline — "vectors filter, reasoning validates". A small/fast LLM judges high-probability vector candidates (Merge / NotDuplicate / Uncertain) to shrink the human-review set, strengthening or weakening the vector score rather than replacing it. Adds a dual-provider reasoning seam (Prompt/Agent), per-entity gating (EnableLLMReasoning, ReasoningThreshold, AutomationLevel), per-candidate verdict/audit columns, the new @memberjunction/record-comparison engine + resolver/client, and an in-place reasoning UI in the duplicates dashboard. Fully back-compat: EnableLLMReasoning defaults to 0, leaving the vector-only path byte-for-byte unchanged.
+
+### Patch Changes
+
+- 89ea055: feat(ai): SupportsBatchEmbeddings + safe default EmbedTexts on BaseEmbeddings; rename GeminiEmbedding2 → GeminiEmbedding
+
+  `BaseEmbeddings.EmbedTexts` is now a concrete dispatcher on a new `SupportsBatchEmbeddings` getter (default `false`): providers with a native batch endpoint return `true` and implement `embedBatch()`; everyone else inherits a safe per-text fallback (`embedPerText` — bounded concurrency, per-text retry-with-backoff, a hard 1:1 count guard, and a graceful empty-on-failure contract) that can never silently collapse a batch into fewer/blended vectors. A provider that claims batch support but doesn't implement `embedBatch()` throws, keeping the flag and the implementation honest.
+
+  Per-text embedding on the fallback path (and in Gemini's own `EmbedTexts`) now retries transient failures with bounded exponential backoff before giving up, so one transient 429/500 among N texts no longer degrades the whole batch — addressing the failure-rate-scales-with-N concern from review.
+
+  The OpenAI, Azure, Cohere, and Mistral embedding providers declare `SupportsBatchEmbeddings = true` and move their array call into `embedBatch()`. This generalizes the `GeminiEmbedding2` batch-collapse fix to the whole embedding layer and prevents the class of bug for any future provider that only implements single-text `EmbedText`.
+
+  Also renames the `GeminiEmbedding2` class (and its `@RegisterClass` key / `DriverClass`) to `GeminiEmbedding` — the class outlives any single model version. The `DriverClass` change is carried by the AI-models metadata (`metadata/ai-models/.ai-models.json`) and the regenerated class-registration manifests in the bootstrap packages; no hand-written migration.
+
+- Updated dependencies [eb38a42]
+- Updated dependencies [3633fbb]
+- Updated dependencies [d88568e]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [91842c3]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [a7c1f2f]
+- Updated dependencies [d44e430]
+- Updated dependencies [e315b2f]
+- Updated dependencies [6f74b17]
+- Updated dependencies [18b5bf0]
+- Updated dependencies [04f7863]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [00997ee]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-agents@5.44.0
+  - @memberjunction/ai-engine-base@5.44.0
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/server@5.44.0
+  - @memberjunction/core-entities-server@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/ai-openai@5.44.0
+  - @memberjunction/ai-azure@5.44.0
+  - @memberjunction/ai-cohere@5.44.0
+  - @memberjunction/ai-mistral@5.44.0
+  - @memberjunction/ai-gemini@5.44.0
+  - @memberjunction/codegen-lib@5.44.0
+  - @memberjunction/ai-vector-dupe@5.44.0
+  - @memberjunction/ai-vectors-memory@5.44.0
+  - @memberjunction/record-comparison@5.44.0
+  - @memberjunction/predictive-studio@5.44.0
+  - @memberjunction/storage@5.44.0
+  - @memberjunction/esignature@5.44.0
+  - @memberjunction/auth-providers@5.44.0
+  - @memberjunction/ai-agent-manager@5.44.0
+  - @memberjunction/database-designer-core@5.44.0
+  - @memberjunction/ai-form-builder@5.44.0
+  - @memberjunction/core-actions@5.44.0
+  - @memberjunction/action-runtime-host@5.44.0
+  - @memberjunction/messaging-adapters@5.44.0
+  - @memberjunction/record-set-processor@5.44.0
+  - @memberjunction/scheduling-engine@5.44.0
+  - @memberjunction/testing-engine@5.44.0
+  - @memberjunction/ai-prompts@5.44.0
+  - @memberjunction/computer-use-engine@5.44.0
+  - @memberjunction/ai-reranker@5.44.0
+  - @memberjunction/content-autotagging@5.44.0
+  - @memberjunction/templates@5.44.0
+  - @memberjunction/ai-vectors-pinecone@5.44.0
+  - @memberjunction/communication-ms-graph@5.44.0
+  - @memberjunction/queue@5.44.0
+  - @memberjunction/search-engine@5.44.0
+  - @memberjunction/database-designer-actions@5.44.0
+  - @memberjunction/tag-engine-base@5.44.0
+  - @memberjunction/ai-recommendations-rex@5.44.0
+  - @memberjunction/ai-bridge-livekit@5.44.0
+  - @memberjunction/ai-bridge-server@5.44.0
+  - @memberjunction/remote-browser-server@5.44.0
+  - @memberjunction/actions-apollo@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/actions-bizapps-accounting@5.44.0
+  - @memberjunction/actions-bizapps-crm@5.44.0
+  - @memberjunction/actions-bizapps-formbuilders@5.44.0
+  - @memberjunction/actions-bizapps-lms@5.44.0
+  - @memberjunction/actions-bizapps-social@5.44.0
+  - @memberjunction/actions-content-autotag@5.44.0
+  - @memberjunction/actions@5.44.0
+  - @memberjunction/archiving-engine@5.44.0
+  - @memberjunction/communication-types@5.44.0
+  - @memberjunction/entity-communications-base@5.44.0
+  - @memberjunction/communication-sendgrid@5.44.0
+  - @memberjunction/doc-utils@5.44.0
+  - @memberjunction/encryption@5.44.0
+  - @memberjunction/integration-actions@5.44.0
+  - @memberjunction/integration-connectors@5.44.0
+  - @memberjunction/integration-engine@5.44.0
+  - @memberjunction/react-linter@5.44.0
+  - @memberjunction/scheduling-actions@5.44.0
+  - @memberjunction/scheduling-engine-base@5.44.0
+  - @memberjunction/geo-core@5.44.0
+  - @memberjunction/remote-browser-selfhost@5.44.0
+  - @memberjunction/ai-vectors-qdrant@5.44.0
+  - @memberjunction/ai-vectors-sqlserver@5.44.0
+  - @memberjunction/ai-vectors-pgvector@5.44.0
+  - @memberjunction/archiving-action@5.44.0
+  - @memberjunction/data-context-server@5.44.0
+  - @memberjunction/server-extensions-core@5.44.0
+  - @memberjunction/ai-anthropic@5.44.0
+  - @memberjunction/ai-assemblyai@5.44.0
+  - @memberjunction/ai-bedrock@5.44.0
+  - @memberjunction/ai-betty-bot@5.44.0
+  - @memberjunction/ai-blackforestlabs@5.44.0
+  - @memberjunction/ai-cerebras@5.44.0
+  - @memberjunction/ai-elevenlabs@5.44.0
+  - @memberjunction/ai-fireworks@5.44.0
+  - @memberjunction/ai-groq@5.44.0
+  - @memberjunction/ai-heygen@5.44.0
+  - @memberjunction/ai-inception@5.44.0
+  - @memberjunction/ai-inworld@5.44.0
+  - @memberjunction/ai-lmstudio@5.44.0
+  - @memberjunction/ai-llamacpp@5.44.0
+  - @memberjunction/ai-local-embeddings@5.44.0
+  - @memberjunction/ai-minimax@5.44.0
+  - @memberjunction/ai-ollama@5.44.0
+  - @memberjunction/ai-openrouter@5.44.0
+  - @memberjunction/ai-vertex@5.44.0
+  - @memberjunction/ai-zhipu@5.44.0
+  - @memberjunction/ai-xai@5.44.0
+  - @memberjunction/esignature-docusign@5.44.0
+  - @memberjunction/esignature-dropboxsign@5.44.0
+  - @memberjunction/esignature-pandadoc@5.44.0
+  - @memberjunction/ai-provider-bundle@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [d94275b]
+- Updated dependencies [fe89e68]
+- Updated dependencies [aa21fef]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [9200b13]
+- Updated dependencies [a975e3d]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/codegen-lib@5.43.0
+  - @memberjunction/ai-agents@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/actions@5.43.0
+  - @memberjunction/record-set-processor@5.43.0
+  - @memberjunction/ai-prompts@5.43.0
+  - @memberjunction/ai-bridge-server@5.43.0
+  - @memberjunction/ai-gemini@5.43.0
+  - @memberjunction/ai-openai@5.43.0
+  - @memberjunction/server@5.43.0
+  - @memberjunction/integration-engine@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/react-linter@5.43.0
+  - @memberjunction/ai-agent-manager@5.43.0
+  - @memberjunction/ai-engine-base@5.43.0
+  - @memberjunction/database-designer-actions@5.43.0
+  - @memberjunction/database-designer-core@5.43.0
+  - @memberjunction/ai-form-builder@5.43.0
+  - @memberjunction/tag-engine-base@5.43.0
+  - @memberjunction/computer-use-engine@5.43.0
+  - @memberjunction/ai-recommendations-rex@5.43.0
+  - @memberjunction/ai-bridge-livekit@5.43.0
+  - @memberjunction/remote-browser-selfhost@5.43.0
+  - @memberjunction/remote-browser-server@5.43.0
+  - @memberjunction/ai-reranker@5.43.0
+  - @memberjunction/ai-vectors-memory@5.43.0
+  - @memberjunction/ai-vectors-pinecone@5.43.0
+  - @memberjunction/ai-vectors-qdrant@5.43.0
+  - @memberjunction/ai-vectors-sqlserver@5.43.0
+  - @memberjunction/ai-vectors-pgvector@5.43.0
+  - @memberjunction/actions-apollo@5.43.0
+  - @memberjunction/actions-base@5.43.0
+  - @memberjunction/actions-bizapps-accounting@5.43.0
+  - @memberjunction/actions-bizapps-crm@5.43.0
+  - @memberjunction/actions-bizapps-formbuilders@5.43.0
+  - @memberjunction/actions-bizapps-lms@5.43.0
+  - @memberjunction/actions-bizapps-social@5.43.0
+  - @memberjunction/actions-content-autotag@5.43.0
+  - @memberjunction/core-actions@5.43.0
+  - @memberjunction/action-runtime-host@5.43.0
+  - @memberjunction/archiving-action@5.43.0
+  - @memberjunction/archiving-engine@5.43.0
+  - @memberjunction/auth-providers@5.43.0
+  - @memberjunction/communication-types@5.43.0
+  - @memberjunction/entity-communications-base@5.43.0
+  - @memberjunction/communication-ms-graph@5.43.0
+  - @memberjunction/communication-sendgrid@5.43.0
+  - @memberjunction/content-autotagging@5.43.0
+  - @memberjunction/doc-utils@5.43.0
+  - @memberjunction/encryption@5.43.0
+  - @memberjunction/integration-actions@5.43.0
+  - @memberjunction/integration-connectors@5.43.0
+  - @memberjunction/core-entities-server@5.43.0
+  - @memberjunction/data-context-server@5.43.0
+  - @memberjunction/queue@5.43.0
+  - @memberjunction/storage@5.43.0
+  - @memberjunction/messaging-adapters@5.43.0
+  - @memberjunction/scheduling-actions@5.43.0
+  - @memberjunction/scheduling-engine-base@5.43.0
+  - @memberjunction/scheduling-engine@5.43.0
+  - @memberjunction/search-engine@5.43.0
+  - @memberjunction/server-extensions-core@5.43.0
+  - @memberjunction/templates@5.43.0
+  - @memberjunction/testing-engine@5.43.0
+  - @memberjunction/esignature@5.43.0
+  - @memberjunction/geo-core@5.43.0
+  - @memberjunction/ai-anthropic@5.43.0
+  - @memberjunction/ai-assemblyai@5.43.0
+  - @memberjunction/ai-azure@5.43.0
+  - @memberjunction/ai-bedrock@5.43.0
+  - @memberjunction/ai-betty-bot@5.43.0
+  - @memberjunction/ai-blackforestlabs@5.43.0
+  - @memberjunction/ai-cerebras@5.43.0
+  - @memberjunction/ai-cohere@5.43.0
+  - @memberjunction/ai-elevenlabs@5.43.0
+  - @memberjunction/ai-fireworks@5.43.0
+  - @memberjunction/ai-groq@5.43.0
+  - @memberjunction/ai-heygen@5.43.0
+  - @memberjunction/ai-inception@5.43.0
+  - @memberjunction/ai-inworld@5.43.0
+  - @memberjunction/ai-lmstudio@5.43.0
+  - @memberjunction/ai-llamacpp@5.43.0
+  - @memberjunction/ai-local-embeddings@5.43.0
+  - @memberjunction/ai-minimax@5.43.0
+  - @memberjunction/ai-mistral@5.43.0
+  - @memberjunction/ai-ollama@5.43.0
+  - @memberjunction/ai-openrouter@5.43.0
+  - @memberjunction/ai-vertex@5.43.0
+  - @memberjunction/ai-zhipu@5.43.0
+  - @memberjunction/ai-xai@5.43.0
+  - @memberjunction/esignature-docusign@5.43.0
+  - @memberjunction/esignature-dropboxsign@5.43.0
+  - @memberjunction/esignature-pandadoc@5.43.0
+  - @memberjunction/ai-provider-bundle@5.43.0
+
+## 5.42.0
+
+### Minor Changes
+
+- 9b9b484: Field active-status enforcement relocation, plus the "Meet" app rename, quieter operational logging, and a telemetry suppression refinement.
+
+  **Field active-status enforcement (`@memberjunction/core`, `@memberjunction/generic-database-provider`)**
+  - Deprecated-field warnings and disabled-field exceptions are now enforced at the field-access boundary genuine code flows through — `BaseEntity.Get()`, `Set()`, and `SetMany()` (what the generated strongly-typed accessors call) — instead of on the low-level `EntityField.Value` accessor. This flips a leaky blocklist (assert on every `.Value` touch, then suppress at each internal call site) into a precise allowlist, and fixes false deprecation warnings emitted on every load/save of a record that merely _contains_ a deprecated column (e.g. `"MJ: AI Agent Runs".AgentState`) even when no code uses it.
+  - New memoized `EntityInfo.HasInactiveFields` fast-path gate: entities whose fields are all `Active` (the vast majority) pay only a single cached boolean check in the hot read/write paths.
+  - `EntityField.ActiveStatusAssertions` is retained as a `@deprecated` no-op for backward compatibility; the six now-redundant internal suppression toggles were removed. Warning caller strings are now accurate (`BaseEntity.Get`/`Set`) instead of the misleading `"EntityField.Value setter"`.
+
+  **Telemetry (`@memberjunction/core`)**
+  - Suppress "load this into a dedicated engine cache" telemetry suggestions for entities that have explicitly opted out of caching (`EntityInfo.AllowCaching = false`), reusing the existing flag as the single source of truth.
+
+  **Quieter operational logging (`@memberjunction/scheduling-engine`, `@memberjunction/ai-agents`, `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`)**
+  - Scheduled-job no-op runs (e.g. the Agent Memory Manager finding no new activity) now collapse to the engine's `Starting`/`Completed` heartbeat; the per-agent and memory-manager internal traces are verbose-only.
+  - Cleaner server startup logging: transient boot spinner, true total timing, less redundant output, and the `CustomColumnPromoter` registration log demoted to verbose-only.
+
+  **"Meet" app + local LiveKit dev (`@memberjunction/ng-explorer-core`, `@memberjunction/livekit-room-server`, `@memberjunction/auth-providers`, `@memberjunction/server`)**
+  - Renamed the Realtime app to "Meet", with the Live Room now defaulting to the Realtime co-agent instead of starting with no agent, plus a local LiveKit dev server and supporting docs.
+
+### Patch Changes
+
+- 08c016c: Add `@memberjunction/ai-bridge-livekit-native` — the real native LiveKit room client that wraps `@livekit/rtc-node` behind the `NativeRoomModule` contract `LiveKitNativeMeetingSdk` expects, giving the agent two-way audio (publish the agent's voice + subscribe to per-participant audio for diarized hearing) in a live LiveKit room. `@livekit/rtc-node` is an optionalDependency loaded lazily, so the package builds/tests with no addon (fake-module tests). Also regenerates the pre-built class-registration manifests to include `LoopbackBridge` from `@memberjunction/ai-bridge-server`.
+- Updated dependencies [256ab06]
+- Updated dependencies [c871a4d]
+- Updated dependencies [9b9b484]
+- Updated dependencies [d185a5c]
+- Updated dependencies [a37bc0c]
+- Updated dependencies [3080b58]
+- Updated dependencies [e7c2437]
+- Updated dependencies [03aa04d]
+- Updated dependencies [6a3288b]
+- Updated dependencies [37c73f6]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [ded7a20]
+- Updated dependencies [6ac8ca4]
+- Updated dependencies [78f834d]
+- Updated dependencies [8c896c4]
+- Updated dependencies [5fde509]
+- Updated dependencies [4ec1732]
+- Updated dependencies [6520bea]
+- Updated dependencies [008f449]
+- Updated dependencies [4b9361b]
+- Updated dependencies [675b8b8]
+- Updated dependencies [5ebf0e9]
+- Updated dependencies [4027e6f]
+- Updated dependencies [2f225e4]
+- Updated dependencies [b7092ca]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [e4235fd]
+- Updated dependencies [3ee0f22]
+- Updated dependencies [e8be085]
+- Updated dependencies [da5a3dd]
+- Updated dependencies [34152e1]
+  - @memberjunction/ai-agents@5.42.0
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/ai-prompts@5.42.0
+  - @memberjunction/server@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/scheduling-engine@5.42.0
+  - @memberjunction/auth-providers@5.42.0
+  - @memberjunction/computer-use-engine@5.42.0
+  - @memberjunction/remote-browser-server@5.42.0
+  - @memberjunction/integration-connectors@5.42.0
+  - @memberjunction/actions@5.42.0
+  - @memberjunction/communication-types@5.42.0
+  - @memberjunction/templates@5.42.0
+  - @memberjunction/core-actions@5.42.0
+  - @memberjunction/ai-agent-manager@5.42.0
+  - @memberjunction/ai-vectors-memory@5.42.0
+  - @memberjunction/codegen-lib@5.42.0
+  - @memberjunction/integration-engine@5.42.0
+  - @memberjunction/ai-bridge-livekit@5.42.0
+  - @memberjunction/ai-bridge-server@5.42.0
+  - @memberjunction/actions-base@5.42.0
+  - @memberjunction/archiving-engine@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/record-set-processor@5.42.0
+  - @memberjunction/core-entities-server@5.42.0
+  - @memberjunction/database-designer-core@5.42.0
+  - @memberjunction/ai-form-builder@5.42.0
+  - @memberjunction/action-runtime-host@5.42.0
+  - @memberjunction/messaging-adapters@5.42.0
+  - @memberjunction/testing-engine@5.42.0
+  - @memberjunction/ai-engine-base@5.42.0
+  - @memberjunction/ai-reranker@5.42.0
+  - @memberjunction/content-autotagging@5.42.0
+  - @memberjunction/database-designer-actions@5.42.0
+  - @memberjunction/tag-engine-base@5.42.0
+  - @memberjunction/ai-recommendations-rex@5.42.0
+  - @memberjunction/remote-browser-selfhost@5.42.0
+  - @memberjunction/ai-vectors-pinecone@5.42.0
+  - @memberjunction/ai-vectors-qdrant@5.42.0
+  - @memberjunction/ai-vectors-sqlserver@5.42.0
+  - @memberjunction/ai-vectors-pgvector@5.42.0
+  - @memberjunction/actions-apollo@5.42.0
+  - @memberjunction/actions-bizapps-accounting@5.42.0
+  - @memberjunction/actions-bizapps-crm@5.42.0
+  - @memberjunction/actions-bizapps-formbuilders@5.42.0
+  - @memberjunction/actions-bizapps-lms@5.42.0
+  - @memberjunction/actions-bizapps-social@5.42.0
+  - @memberjunction/actions-content-autotag@5.42.0
+  - @memberjunction/archiving-action@5.42.0
+  - @memberjunction/entity-communications-base@5.42.0
+  - @memberjunction/communication-ms-graph@5.42.0
+  - @memberjunction/communication-sendgrid@5.42.0
+  - @memberjunction/doc-utils@5.42.0
+  - @memberjunction/encryption@5.42.0
+  - @memberjunction/integration-actions@5.42.0
+  - @memberjunction/data-context-server@5.42.0
+  - @memberjunction/queue@5.42.0
+  - @memberjunction/storage@5.42.0
+  - @memberjunction/react-linter@5.42.0
+  - @memberjunction/scheduling-actions@5.42.0
+  - @memberjunction/scheduling-engine-base@5.42.0
+  - @memberjunction/search-engine@5.42.0
+  - @memberjunction/server-extensions-core@5.42.0
+  - @memberjunction/esignature@5.42.0
+  - @memberjunction/geo-core@5.42.0
+  - @memberjunction/ai-anthropic@5.42.0
+  - @memberjunction/ai-assemblyai@5.42.0
+  - @memberjunction/ai-azure@5.42.0
+  - @memberjunction/ai-bedrock@5.42.0
+  - @memberjunction/ai-betty-bot@5.42.0
+  - @memberjunction/ai-blackforestlabs@5.42.0
+  - @memberjunction/ai-cerebras@5.42.0
+  - @memberjunction/ai-cohere@5.42.0
+  - @memberjunction/ai-elevenlabs@5.42.0
+  - @memberjunction/ai-fireworks@5.42.0
+  - @memberjunction/ai-gemini@5.42.0
+  - @memberjunction/ai-groq@5.42.0
+  - @memberjunction/ai-heygen@5.42.0
+  - @memberjunction/ai-inception@5.42.0
+  - @memberjunction/ai-inworld@5.42.0
+  - @memberjunction/ai-lmstudio@5.42.0
+  - @memberjunction/ai-llamacpp@5.42.0
+  - @memberjunction/ai-local-embeddings@5.42.0
+  - @memberjunction/ai-minimax@5.42.0
+  - @memberjunction/ai-mistral@5.42.0
+  - @memberjunction/ai-ollama@5.42.0
+  - @memberjunction/ai-openai@5.42.0
+  - @memberjunction/ai-openrouter@5.42.0
+  - @memberjunction/ai-vertex@5.42.0
+  - @memberjunction/ai-zhipu@5.42.0
+  - @memberjunction/ai-xai@5.42.0
+  - @memberjunction/esignature-docusign@5.42.0
+  - @memberjunction/esignature-dropboxsign@5.42.0
+  - @memberjunction/esignature-pandadoc@5.42.0
+  - @memberjunction/ai-provider-bundle@5.42.0
+
+## 5.41.0
+
+### Minor Changes
+
+- cd6c5f0: Realtime AI Agents wave 3: consolidated v5.41 migration (sessions, channels, co-agent schema) with the AIAgentCoAgent affinity registry replacing AIAgentPairedAgent — typed relationship vocabulary (CoAgent implemented; Peer/Delegate/Fallback/Reviewer/Observer reserved), type-level co-agent defaults as junction rows (removing the only FK cycle in core MJ), and the full code sweep (engine cache, resolver resolution chain, server-side invariants, client pairing reads, regenerated manifests). Realtime UX: progressive-disclosure voice console with persisted captions preference, user-owned composer and tabs toggles, audio-reactive visuals; whiteboard pages/multi-select and review-persistence fixes. Gemini Live triggering turns ride realtime text so widget clicks/typed input/narration speak immediately on native-audio models. CodeGen: single-winner IsNameField enforcement with eligibility guardrail fixes, SCC-based cycle diagnostics, and clean-database bootstrap robustness (conditional engine registry datasets).
+- a5f5472: Remote Browser channel + new realtime voice providers + computer-use enrichment.
+  - **Remote Browser channel** (`@memberjunction/remote-browser-*`): an in-house realtime channel where an agent drives a live, CDP-connected browser while it talks (sales demos, support walkthroughs, trainer agents). New `AIRemoteBrowserProvider` registry (migration V202606161000) with JSONType capability gating; a universal `remote-browser-base` (driver family + `RemoteBrowserEngineBase`), a shared `remote-browser-cdp` kit (one lossless action mapper + `CdpRemoteBrowserSession`), a `remote-browser-server` engine + `RemoteBrowserChannel` (control arbiter, control modes AgentOnly/ViewOnly/Collaborative vs strategies ComputerUse/NativeAI), and five thin backends (Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).
+  - **computer-use** enriched additively into a complete browser-I/O + perception engine: CSS-selector-aware actions, CDP screencast, MouseMove, accessibility-snapshot/QueryElement/GetVisibleText/GetTitle/WaitForLoadState — every consumer benefits, existing vision/coordinate path unchanged.
+  - **New realtime model providers**: xAI Grok Voice (`@memberjunction/ai-xai`, OpenAI-Realtime-compatible) and Inworld (`@memberjunction/ai-inworld`), with vendor/model seeds.
+  - **Console logging improvements** across `@memberjunction/ai-core-plus`, `ai-engine-base`, `ai-prompts`, `aiengine`, `cli`, `generic-database-provider`, `metadata-sync`, and the bootstrap/forms packages.
+
+### Patch Changes
+
+- 15b743b: Real-Time AI Agents — Sessions, Channels & the Realtime Model (plans/ai-agent-sessions.md). Adds the AIAgentSession/AIAgentChannel/AIAgentSessionChannel schema (+ AgentSessionID on AIAgentRun/ConversationDetail, CloseReason on AIAgentSession); the BaseRealtimeModel server primitive with OpenAIRealtime + GeminiRealtime drivers (server-bridged StartSession and client-direct ephemeral-token CreateClientSession, optional SendContextNote/RequestSpokenUpdate interim updates); the new @memberjunction/ai-realtime-client package with the BaseRealtimeClient browser abstraction + OpenAI/Gemini client drivers resolved via ClassFactory by provider key; the Realtime agent type + Voice Co-Agent with RealtimeSessionRunner/RealtimeToolBroker, AgentMemoryContextBuilder extraction, server session lifecycle (SessionManager, SessionJanitor, start/close/heartbeat + client-direct resolvers with delegated-run progress streaming, AwaitingFeedback resume, co-agent observability runs, user-selectable realtime model); the full-panel realtime voice call UX in ng-conversations (phone trigger + agent/model picker, banner/thread/activity rail, delegation working/result cards with provenance, ephemeral paced first-person progress narration driven by DB prompt templates, in-call text composer); Realtime Voice admin (AI Analytics dashboard sections, session/channel custom forms, agent Runs|Sessions execution history); and Query Builder/Strategist reliability fixes (entity catalog in prompt, Get Entity Details sample caps + semantic fallback, plan formatting). Also: the standalone @memberjunction/ng-whiteboard package (collaborative board with agent tool API, sandboxed interactive widgets + input bridge, markdown panels, exports, cancelable before/after events); ElevenLabs Agents + AssemblyAI Voice Agent realtime provider pairs (4-provider matrix, zero contract changes); session review mode with multi-leg resume carryover (timeline dividers, artifact junction closure, prior-transcript model hydration); delegation cancel channel; usage telemetry relay; Realtime Co-Agent rename with run-step/prompt-run observability.
+- Updated dependencies [8fd6f59]
+- Updated dependencies [a69b0fa]
+- Updated dependencies [6f227ab]
+- Updated dependencies [1e81848]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [34d17e2]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [cb1c102]
+- Updated dependencies [1568bae]
+- Updated dependencies [4b3fb9d]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/core-entities-server@5.41.0
+  - @memberjunction/server@5.41.0
+  - @memberjunction/codegen-lib@5.41.0
+  - @memberjunction/ai-agents@5.41.0
+  - @memberjunction/ai-xai@5.41.0
+  - @memberjunction/scheduling-engine@5.41.0
+  - @memberjunction/ai-gemini@5.41.0
+  - @memberjunction/ai-cohere@5.41.0
+  - @memberjunction/ai-vertex@5.41.0
+  - @memberjunction/ai-engine-base@5.41.0
+  - @memberjunction/ai-elevenlabs@5.41.0
+  - @memberjunction/ai-core-plus@5.41.0
+  - @memberjunction/ai-openai@5.41.0
+  - @memberjunction/ai-assemblyai@5.41.0
+  - @memberjunction/core-actions@5.41.0
+  - @memberjunction/remote-browser-server@5.41.0
+  - @memberjunction/remote-browser-selfhost@5.41.0
+  - @memberjunction/ai-inworld@5.41.0
+  - @memberjunction/ai-provider-bundle@5.41.0
+  - @memberjunction/ai-agent-manager@5.41.0
+  - @memberjunction/database-designer-actions@5.41.0
+  - @memberjunction/database-designer-core@5.41.0
+  - @memberjunction/ai-form-builder@5.41.0
+  - @memberjunction/tag-engine-base@5.41.0
+  - @memberjunction/computer-use-engine@5.41.0
+  - @memberjunction/ai-recommendations-rex@5.41.0
+  - @memberjunction/ai-reranker@5.41.0
+  - @memberjunction/ai-vectors-memory@5.41.0
+  - @memberjunction/ai-vectors-pinecone@5.41.0
+  - @memberjunction/ai-vectors-qdrant@5.41.0
+  - @memberjunction/ai-vectors-sqlserver@5.41.0
+  - @memberjunction/ai-vectors-pgvector@5.41.0
+  - @memberjunction/actions-apollo@5.41.0
+  - @memberjunction/actions-base@5.41.0
+  - @memberjunction/actions-bizapps-accounting@5.41.0
+  - @memberjunction/actions-bizapps-crm@5.41.0
+  - @memberjunction/actions-bizapps-formbuilders@5.41.0
+  - @memberjunction/actions-bizapps-lms@5.41.0
+  - @memberjunction/actions-bizapps-social@5.41.0
+  - @memberjunction/actions-content-autotag@5.41.0
+  - @memberjunction/actions@5.41.0
+  - @memberjunction/action-runtime-host@5.41.0
+  - @memberjunction/archiving-action@5.41.0
+  - @memberjunction/archiving-engine@5.41.0
+  - @memberjunction/auth-providers@5.41.0
+  - @memberjunction/communication-types@5.41.0
+  - @memberjunction/entity-communications-base@5.41.0
+  - @memberjunction/communication-ms-graph@5.41.0
+  - @memberjunction/communication-sendgrid@5.41.0
+  - @memberjunction/content-autotagging@5.41.0
+  - @memberjunction/doc-utils@5.41.0
+  - @memberjunction/encryption@5.41.0
+  - @memberjunction/integration-actions@5.41.0
+  - @memberjunction/integration-connectors@5.41.0
+  - @memberjunction/integration-engine@5.41.0
+  - @memberjunction/data-context-server@5.41.0
+  - @memberjunction/queue@5.41.0
+  - @memberjunction/storage@5.41.0
+  - @memberjunction/messaging-adapters@5.41.0
+  - @memberjunction/react-linter@5.41.0
+  - @memberjunction/scheduling-actions@5.41.0
+  - @memberjunction/scheduling-engine-base@5.41.0
+  - @memberjunction/search-engine@5.41.0
+  - @memberjunction/server-extensions-core@5.41.0
+  - @memberjunction/templates@5.41.0
+  - @memberjunction/testing-engine@5.41.0
+  - @memberjunction/esignature@5.41.0
+  - @memberjunction/geo-core@5.41.0
+  - @memberjunction/ai-anthropic@5.41.0
+  - @memberjunction/ai-azure@5.41.0
+  - @memberjunction/ai-bedrock@5.41.0
+  - @memberjunction/ai-betty-bot@5.41.0
+  - @memberjunction/ai-blackforestlabs@5.41.0
+  - @memberjunction/ai-cerebras@5.41.0
+  - @memberjunction/ai-fireworks@5.41.0
+  - @memberjunction/ai-groq@5.41.0
+  - @memberjunction/ai-heygen@5.41.0
+  - @memberjunction/ai-inception@5.41.0
+  - @memberjunction/ai-lmstudio@5.41.0
+  - @memberjunction/ai-llamacpp@5.41.0
+  - @memberjunction/ai-local-embeddings@5.41.0
+  - @memberjunction/ai-minimax@5.41.0
+  - @memberjunction/ai-mistral@5.41.0
+  - @memberjunction/ai-ollama@5.41.0
+  - @memberjunction/ai-openrouter@5.41.0
+  - @memberjunction/ai-zhipu@5.41.0
+  - @memberjunction/esignature-docusign@5.41.0
+  - @memberjunction/esignature-dropboxsign@5.41.0
+  - @memberjunction/esignature-pandadoc@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- 3da89ef: Add configurable CORS origins and opt-in rate limiting to MJ Server, add client-side permission evaluation for component artifacts, and fix CI publish failures in light-command and db-auto-doc bootstrap
+- Updated dependencies [3da89ef]
+- Updated dependencies [1131ff9]
+- Updated dependencies [da2ee38]
+  - @memberjunction/server@5.40.2
+  - @memberjunction/core-entities-server@5.40.2
+  - @memberjunction/ai-agents@5.40.2
+  - @memberjunction/core-actions@5.40.2
+  - @memberjunction/codegen-lib@5.40.2
+  - @memberjunction/ai-agent-manager@5.40.2
+  - @memberjunction/database-designer-core@5.40.2
+  - @memberjunction/ai-form-builder@5.40.2
+  - @memberjunction/action-runtime-host@5.40.2
+  - @memberjunction/messaging-adapters@5.40.2
+  - @memberjunction/scheduling-engine@5.40.2
+  - @memberjunction/testing-engine@5.40.2
+  - @memberjunction/communication-ms-graph@5.40.2
+  - @memberjunction/actions-content-autotag@5.40.2
+  - @memberjunction/database-designer-actions@5.40.2
+  - @memberjunction/computer-use-engine@5.40.2
+  - @memberjunction/ai-engine-base@5.40.2
+  - @memberjunction/ai-core-plus@5.40.2
+  - @memberjunction/tag-engine-base@5.40.2
+  - @memberjunction/ai-anthropic@5.40.2
+  - @memberjunction/ai-azure@5.40.2
+  - @memberjunction/ai-bedrock@5.40.2
+  - @memberjunction/ai-betty-bot@5.40.2
+  - @memberjunction/ai-blackforestlabs@5.40.2
+  - @memberjunction/ai-provider-bundle@5.40.2
+  - @memberjunction/ai-cerebras@5.40.2
+  - @memberjunction/ai-cohere@5.40.2
+  - @memberjunction/ai-elevenlabs@5.40.2
+  - @memberjunction/ai-fireworks@5.40.2
+  - @memberjunction/ai-gemini@5.40.2
+  - @memberjunction/ai-groq@5.40.2
+  - @memberjunction/ai-heygen@5.40.2
+  - @memberjunction/ai-inception@5.40.2
+  - @memberjunction/ai-lmstudio@5.40.2
+  - @memberjunction/ai-llamacpp@5.40.2
+  - @memberjunction/ai-local-embeddings@5.40.2
+  - @memberjunction/ai-minimax@5.40.2
+  - @memberjunction/ai-mistral@5.40.2
+  - @memberjunction/ai-ollama@5.40.2
+  - @memberjunction/ai-openai@5.40.2
+  - @memberjunction/ai-openrouter@5.40.2
+  - @memberjunction/ai-recommendations-rex@5.40.2
+  - @memberjunction/ai-vertex@5.40.2
+  - @memberjunction/ai-zhipu@5.40.2
+  - @memberjunction/ai-xai@5.40.2
+  - @memberjunction/ai-reranker@5.40.2
+  - @memberjunction/ai-vectors-memory@5.40.2
+  - @memberjunction/ai-vectors-pinecone@5.40.2
+  - @memberjunction/ai-vectors-qdrant@5.40.2
+  - @memberjunction/ai-vectors-sqlserver@5.40.2
+  - @memberjunction/ai-vectors-pgvector@5.40.2
+  - @memberjunction/actions-apollo@5.40.2
+  - @memberjunction/actions-base@5.40.2
+  - @memberjunction/actions-bizapps-accounting@5.40.2
+  - @memberjunction/actions-bizapps-crm@5.40.2
+  - @memberjunction/actions-bizapps-formbuilders@5.40.2
+  - @memberjunction/actions-bizapps-lms@5.40.2
+  - @memberjunction/actions-bizapps-social@5.40.2
+  - @memberjunction/actions@5.40.2
+  - @memberjunction/archiving-action@5.40.2
+  - @memberjunction/archiving-engine@5.40.2
+  - @memberjunction/auth-providers@5.40.2
+  - @memberjunction/communication-types@5.40.2
+  - @memberjunction/entity-communications-base@5.40.2
+  - @memberjunction/communication-sendgrid@5.40.2
+  - @memberjunction/content-autotagging@5.40.2
+  - @memberjunction/doc-utils@5.40.2
+  - @memberjunction/encryption@5.40.2
+  - @memberjunction/integration-actions@5.40.2
+  - @memberjunction/integration-connectors@5.40.2
+  - @memberjunction/integration-engine@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/data-context-server@5.40.2
+  - @memberjunction/queue@5.40.2
+  - @memberjunction/storage@5.40.2
+  - @memberjunction/react-linter@5.40.2
+  - @memberjunction/scheduling-actions@5.40.2
+  - @memberjunction/scheduling-engine-base@5.40.2
+  - @memberjunction/search-engine@5.40.2
+  - @memberjunction/server-extensions-core@5.40.2
+  - @memberjunction/templates@5.40.2
+  - @memberjunction/esignature@5.40.2
+  - @memberjunction/esignature-docusign@5.40.2
+  - @memberjunction/esignature-dropboxsign@5.40.2
+  - @memberjunction/esignature-pandadoc@5.40.2
+  - @memberjunction/geo-core@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-agent-manager@5.40.1
+  - @memberjunction/ai-agents@5.40.1
+  - @memberjunction/ai-engine-base@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/database-designer-actions@5.40.1
+  - @memberjunction/database-designer-core@5.40.1
+  - @memberjunction/ai-form-builder@5.40.1
+  - @memberjunction/tag-engine-base@5.40.1
+  - @memberjunction/computer-use-engine@5.40.1
+  - @memberjunction/ai-recommendations-rex@5.40.1
+  - @memberjunction/ai-reranker@5.40.1
+  - @memberjunction/ai-vectors-memory@5.40.1
+  - @memberjunction/ai-vectors-pinecone@5.40.1
+  - @memberjunction/ai-vectors-qdrant@5.40.1
+  - @memberjunction/ai-vectors-sqlserver@5.40.1
+  - @memberjunction/ai-vectors-pgvector@5.40.1
+  - @memberjunction/actions-apollo@5.40.1
+  - @memberjunction/actions-base@5.40.1
+  - @memberjunction/actions-bizapps-accounting@5.40.1
+  - @memberjunction/actions-bizapps-crm@5.40.1
+  - @memberjunction/actions-bizapps-formbuilders@5.40.1
+  - @memberjunction/actions-bizapps-lms@5.40.1
+  - @memberjunction/actions-bizapps-social@5.40.1
+  - @memberjunction/actions-content-autotag@5.40.1
+  - @memberjunction/core-actions@5.40.1
+  - @memberjunction/actions@5.40.1
+  - @memberjunction/action-runtime-host@5.40.1
+  - @memberjunction/archiving-action@5.40.1
+  - @memberjunction/archiving-engine@5.40.1
+  - @memberjunction/auth-providers@5.40.1
+  - @memberjunction/codegen-lib@5.40.1
+  - @memberjunction/communication-types@5.40.1
+  - @memberjunction/entity-communications-base@5.40.1
+  - @memberjunction/communication-ms-graph@5.40.1
+  - @memberjunction/communication-sendgrid@5.40.1
+  - @memberjunction/content-autotagging@5.40.1
+  - @memberjunction/doc-utils@5.40.1
+  - @memberjunction/encryption@5.40.1
+  - @memberjunction/integration-actions@5.40.1
+  - @memberjunction/integration-connectors@5.40.1
+  - @memberjunction/integration-engine@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/core-entities-server@5.40.1
+  - @memberjunction/data-context-server@5.40.1
+  - @memberjunction/queue@5.40.1
+  - @memberjunction/server@5.40.1
+  - @memberjunction/storage@5.40.1
+  - @memberjunction/messaging-adapters@5.40.1
+  - @memberjunction/react-linter@5.40.1
+  - @memberjunction/scheduling-actions@5.40.1
+  - @memberjunction/scheduling-engine-base@5.40.1
+  - @memberjunction/scheduling-engine@5.40.1
+  - @memberjunction/search-engine@5.40.1
+  - @memberjunction/server-extensions-core@5.40.1
+  - @memberjunction/templates@5.40.1
+  - @memberjunction/testing-engine@5.40.1
+  - @memberjunction/esignature@5.40.1
+  - @memberjunction/geo-core@5.40.1
+  - @memberjunction/ai-provider-bundle@5.40.1
+  - @memberjunction/esignature-docusign@5.40.1
+  - @memberjunction/esignature-dropboxsign@5.40.1
+  - @memberjunction/esignature-pandadoc@5.40.1
+  - @memberjunction/ai-anthropic@5.40.1
+  - @memberjunction/ai-azure@5.40.1
+  - @memberjunction/ai-bedrock@5.40.1
+  - @memberjunction/ai-betty-bot@5.40.1
+  - @memberjunction/ai-blackforestlabs@5.40.1
+  - @memberjunction/ai-cerebras@5.40.1
+  - @memberjunction/ai-cohere@5.40.1
+  - @memberjunction/ai-elevenlabs@5.40.1
+  - @memberjunction/ai-fireworks@5.40.1
+  - @memberjunction/ai-gemini@5.40.1
+  - @memberjunction/ai-groq@5.40.1
+  - @memberjunction/ai-heygen@5.40.1
+  - @memberjunction/ai-inception@5.40.1
+  - @memberjunction/ai-lmstudio@5.40.1
+  - @memberjunction/ai-llamacpp@5.40.1
+  - @memberjunction/ai-local-embeddings@5.40.1
+  - @memberjunction/ai-minimax@5.40.1
+  - @memberjunction/ai-mistral@5.40.1
+  - @memberjunction/ai-ollama@5.40.1
+  - @memberjunction/ai-openai@5.40.1
+  - @memberjunction/ai-openrouter@5.40.1
+  - @memberjunction/ai-vertex@5.40.1
+  - @memberjunction/ai-zhipu@5.40.1
+  - @memberjunction/ai-xai@5.40.1
+
+## 5.40.0
+
+### Minor Changes
+
+- 253a188: Knowledge Hub Classify redesign
+  - **Clustering**: new `@memberjunction/clustering-engine` (framework-agnostic fetch → cluster → reduce → LLM-name pipeline), a "Run Cluster Analysis" action, a `RunClusterAnalysis` GraphQL resolver, a `GraphQLClusterClient` transport, and the Angular `ClusteringService` thinned to delegate to the server.
+  - **View-type plug-in architecture (entity viewer)**: `ViewType` registry + `ViewTypeEngine` + `IViewTypeDescriptor`/`IViewRenderer`/`IViewPropSheet` contracts in `ng-entity-viewer`, with Grid/Cards/Timeline/Map descriptors. The host now **dynamic-mounts** any registered plug-in view type (via `ViewContainerRef`) with zero host changes, and the switcher shows the active type's icon + label, collapsing from an icon strip to a dropdown as the list grows. **Cluster view type** added in `@memberjunction/ng-clustering` (descriptor + `IViewRenderer` wrapper over the scatter + `IViewPropSheet` + an Entity-Document availability engine) — available on any entity with vectors, reusing the same `ClusteringService`. The active view type persists to `UserView.ViewTypeID` (new source of truth; backfilled from the legacy `DisplayState.defaultMode`) and per-view-type config to `UserView.DisplayState.viewTypeConfigs` (new typed `IViewTypeConfigEntry`). `ViewType.Icon` is now `ExtendedType='Icon'` for the admin icon picker. See `packages/Angular/Generic/entity-viewer/VIEW_TYPE_PLUGINS.md`.
+  - **Classify UX**: per-tab scroll fix, Refresh buttons, meaningful content-item display names, loading states, `BaseEntityEvent` reactivity, and load-more pagination.
+  - **Audit & analytics**: direct tag→prompt-run lineage (`AIPromptRunID` + `Reasoning` on Content Item Tags), `ClassifyAnalyticsEngine`, reusable item grid + drilldown, and an Overview analytics section.
+  - **Setup & onboarding**: contextual prompt injection (org/content-type/source aggregation), `generateSeedTaxonomy` (clustering-backed) + resolver, source-form domain-context UI, org-context editor, inline Entity Document creation, seed-taxonomy review, and a guided setup wizard.
+  - **Visualize surface**: Knowledge Hub "Clusters" tab generalized to a "Visualize" host with Clusters / Tag Cloud modes, a `TagCloudEngine`, and a shared record drilldown.
+  - **Foundations**: `ApplicationSettingEngine` (global + app-scoped settings), and the `tag-engine` → `tag-engine-base` split so browser code no longer pulls server-only AI dependencies.
+  - **Fix**: stop server-only packages (`templates` → `aiengine`/`ai-provider-bundle`, storage, vector-DB and LLM provider SDKs) from leaking into the browser class-registration manifest, which previously broke the MJExplorer cold build. Added CLAUDE.md guardrails to the Bootstrap and BootstrapLite packages.
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [7bbfd62]
+- Updated dependencies [f2cca15]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+- Updated dependencies [b2e1937]
+- Updated dependencies [9ddea03]
+- Updated dependencies [6ea4de7]
+- Updated dependencies [54c9526]
+  - @memberjunction/server@5.40.0
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/codegen-lib@5.40.0
+  - @memberjunction/ai-agents@5.40.0
+  - @memberjunction/auth-providers@5.40.0
+  - @memberjunction/content-autotagging@5.40.0
+  - @memberjunction/core-actions@5.40.0
+  - @memberjunction/tag-engine-base@5.40.0
+  - @memberjunction/esignature@5.40.0
+  - @memberjunction/esignature-docusign@5.40.0
+  - @memberjunction/esignature-dropboxsign@5.40.0
+  - @memberjunction/esignature-pandadoc@5.40.0
+  - @memberjunction/scheduling-engine@5.40.0
+  - @memberjunction/ai-agent-manager@5.40.0
+  - @memberjunction/ai-engine-base@5.40.0
+  - @memberjunction/ai-core-plus@5.40.0
+  - @memberjunction/database-designer-actions@5.40.0
+  - @memberjunction/database-designer-core@5.40.0
+  - @memberjunction/ai-form-builder@5.40.0
+  - @memberjunction/computer-use-engine@5.40.0
+  - @memberjunction/ai-recommendations-rex@5.40.0
+  - @memberjunction/ai-reranker@5.40.0
+  - @memberjunction/ai-vectors-memory@5.40.0
+  - @memberjunction/ai-vectors-pinecone@5.40.0
+  - @memberjunction/ai-vectors-qdrant@5.40.0
+  - @memberjunction/ai-vectors-sqlserver@5.40.0
+  - @memberjunction/ai-vectors-pgvector@5.40.0
+  - @memberjunction/actions-apollo@5.40.0
+  - @memberjunction/actions-base@5.40.0
+  - @memberjunction/actions-bizapps-accounting@5.40.0
+  - @memberjunction/actions-bizapps-crm@5.40.0
+  - @memberjunction/actions-bizapps-formbuilders@5.40.0
+  - @memberjunction/actions-bizapps-lms@5.40.0
+  - @memberjunction/actions-bizapps-social@5.40.0
+  - @memberjunction/actions-content-autotag@5.40.0
+  - @memberjunction/actions@5.40.0
+  - @memberjunction/action-runtime-host@5.40.0
+  - @memberjunction/archiving-action@5.40.0
+  - @memberjunction/archiving-engine@5.40.0
+  - @memberjunction/communication-types@5.40.0
+  - @memberjunction/entity-communications-base@5.40.0
+  - @memberjunction/communication-ms-graph@5.40.0
+  - @memberjunction/communication-sendgrid@5.40.0
+  - @memberjunction/doc-utils@5.40.0
+  - @memberjunction/encryption@5.40.0
+  - @memberjunction/integration-actions@5.40.0
+  - @memberjunction/integration-connectors@5.40.0
+  - @memberjunction/integration-engine@5.40.0
+  - @memberjunction/core-entities-server@5.40.0
+  - @memberjunction/data-context-server@5.40.0
+  - @memberjunction/queue@5.40.0
+  - @memberjunction/storage@5.40.0
+  - @memberjunction/messaging-adapters@5.40.0
+  - @memberjunction/react-linter@5.40.0
+  - @memberjunction/scheduling-actions@5.40.0
+  - @memberjunction/scheduling-engine-base@5.40.0
+  - @memberjunction/search-engine@5.40.0
+  - @memberjunction/server-extensions-core@5.40.0
+  - @memberjunction/templates@5.40.0
+  - @memberjunction/testing-engine@5.40.0
+  - @memberjunction/geo-core@5.40.0
+  - @memberjunction/ai-provider-bundle@5.40.0
+  - @memberjunction/ai-anthropic@5.40.0
+  - @memberjunction/ai-azure@5.40.0
+  - @memberjunction/ai-bedrock@5.40.0
+  - @memberjunction/ai-betty-bot@5.40.0
+  - @memberjunction/ai-blackforestlabs@5.40.0
+  - @memberjunction/ai-cerebras@5.40.0
+  - @memberjunction/ai-cohere@5.40.0
+  - @memberjunction/ai-elevenlabs@5.40.0
+  - @memberjunction/ai-fireworks@5.40.0
+  - @memberjunction/ai-gemini@5.40.0
+  - @memberjunction/ai-groq@5.40.0
+  - @memberjunction/ai-heygen@5.40.0
+  - @memberjunction/ai-inception@5.40.0
+  - @memberjunction/ai-lmstudio@5.40.0
+  - @memberjunction/ai-llamacpp@5.40.0
+  - @memberjunction/ai-local-embeddings@5.40.0
+  - @memberjunction/ai-minimax@5.40.0
+  - @memberjunction/ai-mistral@5.40.0
+  - @memberjunction/ai-ollama@5.40.0
+  - @memberjunction/ai-openai@5.40.0
+  - @memberjunction/ai-openrouter@5.40.0
+  - @memberjunction/ai-vertex@5.40.0
+  - @memberjunction/ai-zhipu@5.40.0
+  - @memberjunction/ai-xai@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- 7dfacc7: Add support for storing and querying embeddings inside the application's own database instead of a separate vector service. `VectorDBBase` gains an `IColocatedVectorHost` adapter (implemented by the PostgreSQL and SQL Server data providers) and a `ColocatedQuery` API; the new `PgVectorColocated` provider does vector + keyword (RRF) search in one statement, and the new `@memberjunction/ai-vectors-sqlserver` package adds a SQL Server 2025 native `VECTOR` provider with sibling-table and entity-column storage modes. `VectorSearchProvider` and `EntityVectorSyncer` route these indexes through the borrowed connection.
+- Updated dependencies [26761b8]
+- Updated dependencies [3d4510c]
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [f60e340]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [0bef51b]
+- Updated dependencies [a1e2776]
+- Updated dependencies [93a99a4]
+- Updated dependencies [3c53858]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [db4addf]
+- Updated dependencies [8c39dd9]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [a2aecc7]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [984f74e]
+- Updated dependencies [315ff4d]
+- Updated dependencies [f1e52fa]
+- Updated dependencies [a101a34]
+  - @memberjunction/actions@5.39.0
+  - @memberjunction/ai-agents@5.39.0
+  - @memberjunction/server@5.39.0
+  - @memberjunction/scheduling-engine@5.39.0
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-vectors-pgvector@5.39.0
+  - @memberjunction/ai-vectors-sqlserver@5.39.0
+  - @memberjunction/search-engine@5.39.0
+  - @memberjunction/integration-engine@5.39.0
+  - @memberjunction/integration-connectors@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/codegen-lib@5.39.0
+  - @memberjunction/core-actions@5.39.0
+  - @memberjunction/core-entities-server@5.39.0
+  - @memberjunction/ai-gemini@5.39.0
+  - @memberjunction/ai-anthropic@5.39.0
+  - @memberjunction/ai-azure@5.39.0
+  - @memberjunction/ai-bedrock@5.39.0
+  - @memberjunction/ai-cerebras@5.39.0
+  - @memberjunction/ai-fireworks@5.39.0
+  - @memberjunction/ai-groq@5.39.0
+  - @memberjunction/ai-openai@5.39.0
+  - @memberjunction/ai-engine-base@5.39.0
+  - @memberjunction/ai-openrouter@5.39.0
+  - @memberjunction/react-linter@5.39.0
+  - @memberjunction/computer-use-engine@5.39.0
+  - @memberjunction/database-designer-actions@5.39.0
+  - @memberjunction/ai-form-builder@5.39.0
+  - @memberjunction/actions-apollo@5.39.0
+  - @memberjunction/actions-bizapps-accounting@5.39.0
+  - @memberjunction/actions-bizapps-crm@5.39.0
+  - @memberjunction/actions-bizapps-formbuilders@5.39.0
+  - @memberjunction/actions-bizapps-lms@5.39.0
+  - @memberjunction/actions-bizapps-social@5.39.0
+  - @memberjunction/actions-content-autotag@5.39.0
+  - @memberjunction/action-runtime-host@5.39.0
+  - @memberjunction/archiving-action@5.39.0
+  - @memberjunction/integration-actions@5.39.0
+  - @memberjunction/scheduling-actions@5.39.0
+  - @memberjunction/ai-agent-manager@5.39.0
+  - @memberjunction/database-designer-core@5.39.0
+  - @memberjunction/messaging-adapters@5.39.0
+  - @memberjunction/testing-engine@5.39.0
+  - @memberjunction/tag-engine-base@5.39.0
+  - @memberjunction/ai-recommendations-rex@5.39.0
+  - @memberjunction/ai-reranker@5.39.0
+  - @memberjunction/ai-vectors-memory@5.39.0
+  - @memberjunction/ai-vectors-pinecone@5.39.0
+  - @memberjunction/ai-vectors-qdrant@5.39.0
+  - @memberjunction/actions-base@5.39.0
+  - @memberjunction/archiving-engine@5.39.0
+  - @memberjunction/communication-types@5.39.0
+  - @memberjunction/entity-communications-base@5.39.0
+  - @memberjunction/communication-ms-graph@5.39.0
+  - @memberjunction/communication-sendgrid@5.39.0
+  - @memberjunction/content-autotagging@5.39.0
+  - @memberjunction/doc-utils@5.39.0
+  - @memberjunction/encryption@5.39.0
+  - @memberjunction/data-context-server@5.39.0
+  - @memberjunction/queue@5.39.0
+  - @memberjunction/storage@5.39.0
+  - @memberjunction/scheduling-engine-base@5.39.0
+  - @memberjunction/server-extensions-core@5.39.0
+  - @memberjunction/templates@5.39.0
+  - @memberjunction/geo-core@5.39.0
+  - @memberjunction/ai-provider-bundle@5.39.0
+  - @memberjunction/ai-vertex@5.39.0
+  - @memberjunction/ai-betty-bot@5.39.0
+  - @memberjunction/ai-blackforestlabs@5.39.0
+  - @memberjunction/ai-cohere@5.39.0
+  - @memberjunction/ai-elevenlabs@5.39.0
+  - @memberjunction/ai-heygen@5.39.0
+  - @memberjunction/ai-inception@5.39.0
+  - @memberjunction/ai-lmstudio@5.39.0
+  - @memberjunction/ai-llamacpp@5.39.0
+  - @memberjunction/ai-local-embeddings@5.39.0
+  - @memberjunction/ai-minimax@5.39.0
+  - @memberjunction/ai-mistral@5.39.0
+  - @memberjunction/ai-ollama@5.39.0
+  - @memberjunction/ai-zhipu@5.39.0
+  - @memberjunction/ai-xai@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- ebb0e3d: Eliminate provider.Refresh() from query save/delete paths, introduce MJQueryEntityExtended with child-relationship getters and business logic, migrate all QueryInfo consumers outside MJCore to use QueryEngine and entity types, remove dead QueryCacheManager, and replace 12 redundant RunView calls with QueryEngine cache reads. Fixes major performance bottleneck on large-entity deployments where every query save reloaded the entire metadata graph.
+- Updated dependencies [6b6c321]
+- Updated dependencies [67d6562]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [b2ad244]
+- Updated dependencies [275afda]
+- Updated dependencies [8bd97f3]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [918d663]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [b2e6782]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [b26d0ee]
+- Updated dependencies [3d739a3]
+- Updated dependencies [48dc77a]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/ai-agents@5.38.0
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/computer-use-engine@5.38.0
+  - @memberjunction/testing-engine@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/content-autotagging@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/server@5.38.0
+  - @memberjunction/codegen-lib@5.38.0
+  - @memberjunction/search-engine@5.38.0
+  - @memberjunction/core-actions@5.38.0
+  - @memberjunction/core-entities-server@5.38.0
+  - @memberjunction/ai-agent-manager@5.38.0
+  - @memberjunction/database-designer-core@5.38.0
+  - @memberjunction/ai-form-builder@5.38.0
+  - @memberjunction/action-runtime-host@5.38.0
+  - @memberjunction/messaging-adapters@5.38.0
+  - @memberjunction/scheduling-engine@5.38.0
+  - @memberjunction/ai-engine-base@5.38.0
+  - @memberjunction/ai-reranker@5.38.0
+  - @memberjunction/templates@5.38.0
+  - @memberjunction/ai-vectors-pinecone@5.38.0
+  - @memberjunction/communication-ms-graph@5.38.0
+  - @memberjunction/queue@5.38.0
+  - @memberjunction/database-designer-actions@5.38.0
+  - @memberjunction/tag-engine-base@5.38.0
+  - @memberjunction/ai-recommendations-rex@5.38.0
+  - @memberjunction/ai-vectors-memory@5.38.0
+  - @memberjunction/ai-vectors-qdrant@5.38.0
+  - @memberjunction/ai-vectors-pgvector@5.38.0
+  - @memberjunction/actions-apollo@5.38.0
+  - @memberjunction/actions-base@5.38.0
+  - @memberjunction/actions-bizapps-accounting@5.38.0
+  - @memberjunction/actions-bizapps-crm@5.38.0
+  - @memberjunction/actions-bizapps-formbuilders@5.38.0
+  - @memberjunction/actions-bizapps-lms@5.38.0
+  - @memberjunction/actions-bizapps-social@5.38.0
+  - @memberjunction/actions-content-autotag@5.38.0
+  - @memberjunction/actions@5.38.0
+  - @memberjunction/archiving-action@5.38.0
+  - @memberjunction/archiving-engine@5.38.0
+  - @memberjunction/communication-types@5.38.0
+  - @memberjunction/entity-communications-base@5.38.0
+  - @memberjunction/communication-sendgrid@5.38.0
+  - @memberjunction/doc-utils@5.38.0
+  - @memberjunction/encryption@5.38.0
+  - @memberjunction/integration-actions@5.38.0
+  - @memberjunction/integration-connectors@5.38.0
+  - @memberjunction/integration-engine@5.38.0
+  - @memberjunction/data-context-server@5.38.0
+  - @memberjunction/storage@5.38.0
+  - @memberjunction/react-linter@5.38.0
+  - @memberjunction/scheduling-actions@5.38.0
+  - @memberjunction/scheduling-engine-base@5.38.0
+  - @memberjunction/server-extensions-core@5.38.0
+  - @memberjunction/geo-core@5.38.0
+  - @memberjunction/ai-anthropic@5.38.0
+  - @memberjunction/ai-azure@5.38.0
+  - @memberjunction/ai-bedrock@5.38.0
+  - @memberjunction/ai-betty-bot@5.38.0
+  - @memberjunction/ai-blackforestlabs@5.38.0
+  - @memberjunction/ai-cerebras@5.38.0
+  - @memberjunction/ai-cohere@5.38.0
+  - @memberjunction/ai-elevenlabs@5.38.0
+  - @memberjunction/ai-fireworks@5.38.0
+  - @memberjunction/ai-gemini@5.38.0
+  - @memberjunction/ai-groq@5.38.0
+  - @memberjunction/ai-heygen@5.38.0
+  - @memberjunction/ai-inception@5.38.0
+  - @memberjunction/ai-lmstudio@5.38.0
+  - @memberjunction/ai-llamacpp@5.38.0
+  - @memberjunction/ai-local-embeddings@5.38.0
+  - @memberjunction/ai-minimax@5.38.0
+  - @memberjunction/ai-mistral@5.38.0
+  - @memberjunction/ai-ollama@5.38.0
+  - @memberjunction/ai-openai@5.38.0
+  - @memberjunction/ai-openrouter@5.38.0
+  - @memberjunction/ai-vertex@5.38.0
+  - @memberjunction/ai-zhipu@5.38.0
+  - @memberjunction/ai-xai@5.38.0
+  - @memberjunction/ai-provider-bundle@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- 464f30c: Refresh pre-built class registration manifests from a full repo-wide rebuild.
+- Updated dependencies [e32f21f]
+- Updated dependencies [baf3032]
+- Updated dependencies [22b775f]
+- Updated dependencies [1af94d0]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/core-actions@5.37.0
+  - @memberjunction/codegen-lib@5.37.0
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/server@5.37.0
+  - @memberjunction/actions@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/actions-content-autotag@5.37.0
+  - @memberjunction/ai-agent-manager@5.37.0
+  - @memberjunction/ai-agents@5.37.0
+  - @memberjunction/ai-engine-base@5.37.0
+  - @memberjunction/database-designer-core@5.37.0
+  - @memberjunction/computer-use-engine@5.37.0
+  - @memberjunction/ai-reranker@5.37.0
+  - @memberjunction/action-runtime-host@5.37.0
+  - @memberjunction/content-autotagging@5.37.0
+  - @memberjunction/core-entities-server@5.37.0
+  - @memberjunction/messaging-adapters@5.37.0
+  - @memberjunction/scheduling-engine@5.37.0
+  - @memberjunction/templates@5.37.0
+  - @memberjunction/testing-engine@5.37.0
+  - @memberjunction/database-designer-actions@5.37.0
+  - @memberjunction/actions-apollo@5.37.0
+  - @memberjunction/actions-bizapps-accounting@5.37.0
+  - @memberjunction/actions-bizapps-crm@5.37.0
+  - @memberjunction/actions-bizapps-formbuilders@5.37.0
+  - @memberjunction/actions-bizapps-lms@5.37.0
+  - @memberjunction/actions-bizapps-social@5.37.0
+  - @memberjunction/archiving-action@5.37.0
+  - @memberjunction/integration-actions@5.37.0
+  - @memberjunction/scheduling-actions@5.37.0
+  - @memberjunction/tag-engine-base@5.37.0
+  - @memberjunction/ai-recommendations-rex@5.37.0
+  - @memberjunction/ai-vectors-memory@5.37.0
+  - @memberjunction/ai-vectors-pinecone@5.37.0
+  - @memberjunction/ai-vectors-qdrant@5.37.0
+  - @memberjunction/ai-vectors-pgvector@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/archiving-engine@5.37.0
+  - @memberjunction/communication-types@5.37.0
+  - @memberjunction/entity-communications-base@5.37.0
+  - @memberjunction/communication-ms-graph@5.37.0
+  - @memberjunction/communication-sendgrid@5.37.0
+  - @memberjunction/doc-utils@5.37.0
+  - @memberjunction/encryption@5.37.0
+  - @memberjunction/integration-connectors@5.37.0
+  - @memberjunction/integration-engine@5.37.0
+  - @memberjunction/data-context-server@5.37.0
+  - @memberjunction/queue@5.37.0
+  - @memberjunction/storage@5.37.0
+  - @memberjunction/scheduling-engine-base@5.37.0
+  - @memberjunction/search-engine@5.37.0
+  - @memberjunction/server-extensions-core@5.37.0
+  - @memberjunction/geo-core@5.37.0
+  - @memberjunction/ai-provider-bundle@5.37.0
+  - @memberjunction/ai-anthropic@5.37.0
+  - @memberjunction/ai-azure@5.37.0
+  - @memberjunction/ai-bedrock@5.37.0
+  - @memberjunction/ai-betty-bot@5.37.0
+  - @memberjunction/ai-blackforestlabs@5.37.0
+  - @memberjunction/ai-cerebras@5.37.0
+  - @memberjunction/ai-cohere@5.37.0
+  - @memberjunction/ai-elevenlabs@5.37.0
+  - @memberjunction/ai-fireworks@5.37.0
+  - @memberjunction/ai-gemini@5.37.0
+  - @memberjunction/ai-groq@5.37.0
+  - @memberjunction/ai-heygen@5.37.0
+  - @memberjunction/ai-inception@5.37.0
+  - @memberjunction/ai-lmstudio@5.37.0
+  - @memberjunction/ai-llamacpp@5.37.0
+  - @memberjunction/ai-local-embeddings@5.37.0
+  - @memberjunction/ai-minimax@5.37.0
+  - @memberjunction/ai-mistral@5.37.0
+  - @memberjunction/ai-ollama@5.37.0
+  - @memberjunction/ai-openai@5.37.0
+  - @memberjunction/ai-openrouter@5.37.0
+  - @memberjunction/ai-vertex@5.37.0
+  - @memberjunction/ai-zhipu@5.37.0
+  - @memberjunction/ai-xai@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- 1c0fce9: Section 10 interior chrome pattern applied to every MJ Explorer left-rail shell (Admin × 4, AI Analytics, Knowledge Hub × 4, Testing Explorer, Database Designer, SQL Logging, Dev Tools inspectors, API Keys, App Roles). New shared primitives — `<mj-left-nav>` with optional tree support, two-row `<mj-page-header-interior>`, paired `<mj-page-body-interior>` — replace bespoke per-shell sidebar and chrome implementations across ~25 sub-pages. Chrome slot discipline audit standardizes tab-nav placement, `[meta]` badge content, and `[actions]` ordering across ~65 dashboards; two pre-existing bugs fixed along the way (nested `:has()` SyntaxError that silently hid the interior toolbar row, and an invisible page-header drop shadow).
+- Updated dependencies [f29b7c0]
+- Updated dependencies [e215af2]
+- Updated dependencies [97270c7]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/server@5.36.0
+  - @memberjunction/codegen-lib@5.36.0
+  - @memberjunction/integration-connectors@5.36.0
+  - @memberjunction/core-actions@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/actions-content-autotag@5.36.0
+  - @memberjunction/ai-agent-manager@5.36.0
+  - @memberjunction/ai-agents@5.36.0
+  - @memberjunction/ai-engine-base@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/database-designer-actions@5.36.0
+  - @memberjunction/database-designer-core@5.36.0
+  - @memberjunction/tag-engine-base@5.36.0
+  - @memberjunction/computer-use-engine@5.36.0
+  - @memberjunction/ai-recommendations-rex@5.36.0
+  - @memberjunction/ai-reranker@5.36.0
+  - @memberjunction/actions-apollo@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/actions-bizapps-accounting@5.36.0
+  - @memberjunction/actions-bizapps-crm@5.36.0
+  - @memberjunction/actions-bizapps-formbuilders@5.36.0
+  - @memberjunction/actions-bizapps-lms@5.36.0
+  - @memberjunction/actions-bizapps-social@5.36.0
+  - @memberjunction/actions@5.36.0
+  - @memberjunction/action-runtime-host@5.36.0
+  - @memberjunction/archiving-engine@5.36.0
+  - @memberjunction/communication-types@5.36.0
+  - @memberjunction/entity-communications-base@5.36.0
+  - @memberjunction/communication-ms-graph@5.36.0
+  - @memberjunction/communication-sendgrid@5.36.0
+  - @memberjunction/content-autotagging@5.36.0
+  - @memberjunction/doc-utils@5.36.0
+  - @memberjunction/encryption@5.36.0
+  - @memberjunction/integration-actions@5.36.0
+  - @memberjunction/integration-engine@5.36.0
+  - @memberjunction/core-entities-server@5.36.0
+  - @memberjunction/queue@5.36.0
+  - @memberjunction/storage@5.36.0
+  - @memberjunction/messaging-adapters@5.36.0
+  - @memberjunction/scheduling-actions@5.36.0
+  - @memberjunction/scheduling-engine-base@5.36.0
+  - @memberjunction/scheduling-engine@5.36.0
+  - @memberjunction/search-engine@5.36.0
+  - @memberjunction/templates@5.36.0
+  - @memberjunction/testing-engine@5.36.0
+  - @memberjunction/geo-core@5.36.0
+  - @memberjunction/ai-vectors-memory@5.36.0
+  - @memberjunction/ai-vectors-pinecone@5.36.0
+  - @memberjunction/ai-vectors-qdrant@5.36.0
+  - @memberjunction/ai-vectors-pgvector@5.36.0
+  - @memberjunction/archiving-action@5.36.0
+  - @memberjunction/data-context-server@5.36.0
+  - @memberjunction/server-extensions-core@5.36.0
+  - @memberjunction/ai-provider-bundle@5.36.0
+  - @memberjunction/ai-anthropic@5.36.0
+  - @memberjunction/ai-azure@5.36.0
+  - @memberjunction/ai-bedrock@5.36.0
+  - @memberjunction/ai-betty-bot@5.36.0
+  - @memberjunction/ai-blackforestlabs@5.36.0
+  - @memberjunction/ai-cerebras@5.36.0
+  - @memberjunction/ai-cohere@5.36.0
+  - @memberjunction/ai-elevenlabs@5.36.0
+  - @memberjunction/ai-fireworks@5.36.0
+  - @memberjunction/ai-gemini@5.36.0
+  - @memberjunction/ai-groq@5.36.0
+  - @memberjunction/ai-heygen@5.36.0
+  - @memberjunction/ai-inception@5.36.0
+  - @memberjunction/ai-lmstudio@5.36.0
+  - @memberjunction/ai-llamacpp@5.36.0
+  - @memberjunction/ai-local-embeddings@5.36.0
+  - @memberjunction/ai-minimax@5.36.0
+  - @memberjunction/ai-mistral@5.36.0
+  - @memberjunction/ai-ollama@5.36.0
+  - @memberjunction/ai-openai@5.36.0
+  - @memberjunction/ai-openrouter@5.36.0
+  - @memberjunction/ai-vertex@5.36.0
+  - @memberjunction/ai-zhipu@5.36.0
+  - @memberjunction/ai-xai@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- c1f1cad: Add pluggable geocoding provider abstraction with Google, Geocod.io, and HERE implementations (expands GeoCodeSource enum and adds provider registry). Polish the Home dashboard pin empty state with a dismissible "Don't show this again" preference persisted via UserInfoEngine, and speed up the Add Pin panel by reading from cached DashboardEngine, UserViewEngine, QueryEngine, and ActionEngineBase singletons instead of firing fresh RunViews on every open, with background pre-warm on home load.
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [77e4782]
+- Updated dependencies [32c4a02]
+- Updated dependencies [7332992]
+- Updated dependencies [9580189]
+- Updated dependencies [e9d4b1c]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [c3f4154]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/geo-core@5.35.0
+  - @memberjunction/core-actions@5.35.0
+  - @memberjunction/server@5.35.0
+  - @memberjunction/ai-agents@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/core-entities-server@5.35.0
+  - @memberjunction/codegen-lib@5.35.0
+  - @memberjunction/ai-gemini@5.35.0
+  - @memberjunction/ai-agent-manager@5.35.0
+  - @memberjunction/ai-engine-base@5.35.0
+  - @memberjunction/database-designer-actions@5.35.0
+  - @memberjunction/database-designer-core@5.35.0
+  - @memberjunction/tag-engine-base@5.35.0
+  - @memberjunction/computer-use-engine@5.35.0
+  - @memberjunction/ai-recommendations-rex@5.35.0
+  - @memberjunction/ai-reranker@5.35.0
+  - @memberjunction/ai-vectors-memory@5.35.0
+  - @memberjunction/ai-vectors-pinecone@5.35.0
+  - @memberjunction/ai-vectors-qdrant@5.35.0
+  - @memberjunction/ai-vectors-pgvector@5.35.0
+  - @memberjunction/actions-apollo@5.35.0
+  - @memberjunction/actions-base@5.35.0
+  - @memberjunction/actions-bizapps-accounting@5.35.0
+  - @memberjunction/actions-bizapps-crm@5.35.0
+  - @memberjunction/actions-bizapps-formbuilders@5.35.0
+  - @memberjunction/actions-bizapps-lms@5.35.0
+  - @memberjunction/actions-bizapps-social@5.35.0
+  - @memberjunction/actions-content-autotag@5.35.0
+  - @memberjunction/actions@5.35.0
+  - @memberjunction/action-runtime-host@5.35.0
+  - @memberjunction/archiving-action@5.35.0
+  - @memberjunction/archiving-engine@5.35.0
+  - @memberjunction/communication-types@5.35.0
+  - @memberjunction/entity-communications-base@5.35.0
+  - @memberjunction/communication-ms-graph@5.35.0
+  - @memberjunction/communication-sendgrid@5.35.0
+  - @memberjunction/content-autotagging@5.35.0
+  - @memberjunction/doc-utils@5.35.0
+  - @memberjunction/encryption@5.35.0
+  - @memberjunction/integration-actions@5.35.0
+  - @memberjunction/integration-connectors@5.35.0
+  - @memberjunction/integration-engine@5.35.0
+  - @memberjunction/data-context-server@5.35.0
+  - @memberjunction/queue@5.35.0
+  - @memberjunction/storage@5.35.0
+  - @memberjunction/messaging-adapters@5.35.0
+  - @memberjunction/scheduling-actions@5.35.0
+  - @memberjunction/scheduling-engine-base@5.35.0
+  - @memberjunction/scheduling-engine@5.35.0
+  - @memberjunction/search-engine@5.35.0
+  - @memberjunction/server-extensions-core@5.35.0
+  - @memberjunction/templates@5.35.0
+  - @memberjunction/testing-engine@5.35.0
+  - @memberjunction/ai-provider-bundle@5.35.0
+  - @memberjunction/ai-vertex@5.35.0
+  - @memberjunction/ai-anthropic@5.35.0
+  - @memberjunction/ai-azure@5.35.0
+  - @memberjunction/ai-bedrock@5.35.0
+  - @memberjunction/ai-betty-bot@5.35.0
+  - @memberjunction/ai-blackforestlabs@5.35.0
+  - @memberjunction/ai-cerebras@5.35.0
+  - @memberjunction/ai-cohere@5.35.0
+  - @memberjunction/ai-elevenlabs@5.35.0
+  - @memberjunction/ai-fireworks@5.35.0
+  - @memberjunction/ai-groq@5.35.0
+  - @memberjunction/ai-heygen@5.35.0
+  - @memberjunction/ai-inception@5.35.0
+  - @memberjunction/ai-lmstudio@5.35.0
+  - @memberjunction/ai-llamacpp@5.35.0
+  - @memberjunction/ai-local-embeddings@5.35.0
+  - @memberjunction/ai-minimax@5.35.0
+  - @memberjunction/ai-mistral@5.35.0
+  - @memberjunction/ai-ollama@5.35.0
+  - @memberjunction/ai-openai@5.35.0
+  - @memberjunction/ai-openrouter@5.35.0
+  - @memberjunction/ai-zhipu@5.35.0
+  - @memberjunction/ai-xai@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+- Updated dependencies [5abf790]
+- Updated dependencies [16e799c]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/server@5.34.1
+  - @memberjunction/ai-agents@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/codegen-lib@5.34.1
+  - @memberjunction/ai-agent-manager@5.34.1
+  - @memberjunction/ai-engine-base@5.34.1
+  - @memberjunction/database-designer-actions@5.34.1
+  - @memberjunction/database-designer-core@5.34.1
+  - @memberjunction/tag-engine-base@5.34.1
+  - @memberjunction/computer-use-engine@5.34.1
+  - @memberjunction/ai-recommendations-rex@5.34.1
+  - @memberjunction/ai-reranker@5.34.1
+  - @memberjunction/ai-vectors-memory@5.34.1
+  - @memberjunction/ai-vectors-pinecone@5.34.1
+  - @memberjunction/ai-vectors-qdrant@5.34.1
+  - @memberjunction/ai-vectors-pgvector@5.34.1
+  - @memberjunction/actions-apollo@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/actions-bizapps-accounting@5.34.1
+  - @memberjunction/actions-bizapps-crm@5.34.1
+  - @memberjunction/actions-bizapps-formbuilders@5.34.1
+  - @memberjunction/actions-bizapps-lms@5.34.1
+  - @memberjunction/actions-bizapps-social@5.34.1
+  - @memberjunction/actions-content-autotag@5.34.1
+  - @memberjunction/core-actions@5.34.1
+  - @memberjunction/actions@5.34.1
+  - @memberjunction/action-runtime-host@5.34.1
+  - @memberjunction/archiving-action@5.34.1
+  - @memberjunction/archiving-engine@5.34.1
+  - @memberjunction/communication-types@5.34.1
+  - @memberjunction/entity-communications-base@5.34.1
+  - @memberjunction/communication-ms-graph@5.34.1
+  - @memberjunction/communication-sendgrid@5.34.1
+  - @memberjunction/content-autotagging@5.34.1
+  - @memberjunction/doc-utils@5.34.1
+  - @memberjunction/encryption@5.34.1
+  - @memberjunction/integration-actions@5.34.1
+  - @memberjunction/integration-connectors@5.34.1
+  - @memberjunction/integration-engine@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/core-entities-server@5.34.1
+  - @memberjunction/data-context-server@5.34.1
+  - @memberjunction/queue@5.34.1
+  - @memberjunction/storage@5.34.1
+  - @memberjunction/messaging-adapters@5.34.1
+  - @memberjunction/scheduling-actions@5.34.1
+  - @memberjunction/scheduling-engine-base@5.34.1
+  - @memberjunction/scheduling-engine@5.34.1
+  - @memberjunction/search-engine@5.34.1
+  - @memberjunction/server-extensions-core@5.34.1
+  - @memberjunction/templates@5.34.1
+  - @memberjunction/testing-engine@5.34.1
+  - @memberjunction/ai-provider-bundle@5.34.1
+  - @memberjunction/ai-anthropic@5.34.1
+  - @memberjunction/ai-azure@5.34.1
+  - @memberjunction/ai-bedrock@5.34.1
+  - @memberjunction/ai-betty-bot@5.34.1
+  - @memberjunction/ai-blackforestlabs@5.34.1
+  - @memberjunction/ai-cerebras@5.34.1
+  - @memberjunction/ai-cohere@5.34.1
+  - @memberjunction/ai-elevenlabs@5.34.1
+  - @memberjunction/ai-fireworks@5.34.1
+  - @memberjunction/ai-gemini@5.34.1
+  - @memberjunction/ai-groq@5.34.1
+  - @memberjunction/ai-heygen@5.34.1
+  - @memberjunction/ai-inception@5.34.1
+  - @memberjunction/ai-lmstudio@5.34.1
+  - @memberjunction/ai-llamacpp@5.34.1
+  - @memberjunction/ai-local-embeddings@5.34.1
+  - @memberjunction/ai-minimax@5.34.1
+  - @memberjunction/ai-mistral@5.34.1
+  - @memberjunction/ai-ollama@5.34.1
+  - @memberjunction/ai-openai@5.34.1
+  - @memberjunction/ai-openrouter@5.34.1
+  - @memberjunction/ai-vertex@5.34.1
+  - @memberjunction/ai-zhipu@5.34.1
+  - @memberjunction/ai-xai@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [9081314]
+- Updated dependencies [4b8d9ed]
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [5d6110f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [1b258e6]
+- Updated dependencies [e999e0d]
+- Updated dependencies [7ccaf70]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [8dad9c5]
+- Updated dependencies [72cb92e]
+  - @memberjunction/server@5.34.0
+  - @memberjunction/core-entities-server@5.34.0
+  - @memberjunction/ai-agent-manager@5.34.0
+  - @memberjunction/ai-agents@5.34.0
+  - @memberjunction/ai-engine-base@5.34.0
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/database-designer-actions@5.34.0
+  - @memberjunction/database-designer-core@5.34.0
+  - @memberjunction/tag-engine-base@5.34.0
+  - @memberjunction/computer-use-engine@5.34.0
+  - @memberjunction/ai-azure@5.34.0
+  - @memberjunction/ai-bedrock@5.34.0
+  - @memberjunction/ai-betty-bot@5.34.0
+  - @memberjunction/ai-blackforestlabs@5.34.0
+  - @memberjunction/ai-provider-bundle@5.34.0
+  - @memberjunction/ai-cerebras@5.34.0
+  - @memberjunction/ai-cohere@5.34.0
+  - @memberjunction/ai-elevenlabs@5.34.0
+  - @memberjunction/ai-fireworks@5.34.0
+  - @memberjunction/ai-groq@5.34.0
+  - @memberjunction/ai-heygen@5.34.0
+  - @memberjunction/ai-inception@5.34.0
+  - @memberjunction/ai-lmstudio@5.34.0
+  - @memberjunction/ai-llamacpp@5.34.0
+  - @memberjunction/ai-local-embeddings@5.34.0
+  - @memberjunction/ai-minimax@5.34.0
+  - @memberjunction/ai-ollama@5.34.0
+  - @memberjunction/ai-openrouter@5.34.0
+  - @memberjunction/ai-recommendations-rex@5.34.0
+  - @memberjunction/ai-vertex@5.34.0
+  - @memberjunction/ai-zhipu@5.34.0
+  - @memberjunction/ai-xai@5.34.0
+  - @memberjunction/ai-reranker@5.34.0
+  - @memberjunction/ai-vectors-memory@5.34.0
+  - @memberjunction/ai-vectors-pinecone@5.34.0
+  - @memberjunction/ai-vectors-qdrant@5.34.0
+  - @memberjunction/ai-vectors-pgvector@5.34.0
+  - @memberjunction/actions-apollo@5.34.0
+  - @memberjunction/actions-base@5.34.0
+  - @memberjunction/actions-bizapps-accounting@5.34.0
+  - @memberjunction/actions-bizapps-crm@5.34.0
+  - @memberjunction/actions-bizapps-formbuilders@5.34.0
+  - @memberjunction/actions-bizapps-lms@5.34.0
+  - @memberjunction/actions-bizapps-social@5.34.0
+  - @memberjunction/actions-content-autotag@5.34.0
+  - @memberjunction/core-actions@5.34.0
+  - @memberjunction/actions@5.34.0
+  - @memberjunction/action-runtime-host@5.34.0
+  - @memberjunction/archiving-action@5.34.0
+  - @memberjunction/archiving-engine@5.34.0
+  - @memberjunction/codegen-lib@5.34.0
+  - @memberjunction/communication-types@5.34.0
+  - @memberjunction/entity-communications-base@5.34.0
+  - @memberjunction/communication-sendgrid@5.34.0
+  - @memberjunction/content-autotagging@5.34.0
+  - @memberjunction/doc-utils@5.34.0
+  - @memberjunction/encryption@5.34.0
+  - @memberjunction/integration-actions@5.34.0
+  - @memberjunction/integration-connectors@5.34.0
+  - @memberjunction/integration-engine@5.34.0
+  - @memberjunction/data-context-server@5.34.0
+  - @memberjunction/storage@5.34.0
+  - @memberjunction/messaging-adapters@5.34.0
+  - @memberjunction/scheduling-actions@5.34.0
+  - @memberjunction/scheduling-engine-base@5.34.0
+  - @memberjunction/scheduling-engine@5.34.0
+  - @memberjunction/search-engine@5.34.0
+  - @memberjunction/server-extensions-core@5.34.0
+  - @memberjunction/templates@5.34.0
+  - @memberjunction/testing-engine@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/communication-ms-graph@5.34.0
+  - @memberjunction/queue@5.34.0
+  - @memberjunction/ai-anthropic@5.34.0
+  - @memberjunction/ai-gemini@5.34.0
+  - @memberjunction/ai-mistral@5.34.0
+  - @memberjunction/ai-openai@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

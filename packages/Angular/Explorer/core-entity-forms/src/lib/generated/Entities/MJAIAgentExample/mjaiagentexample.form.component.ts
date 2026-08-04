@@ -17,9 +17,9 @@ export class MJAIAgentExampleFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'ownershipScope', sectionName: 'Ownership & Scope', isExpanded: true },
             { sectionKey: 'exampleDetails', sectionName: 'Example Details', isExpanded: true },
-            { sectionKey: 'sourceProvenance', sectionName: 'Source Provenance', isExpanded: false },
-            { sectionKey: 'semanticIndexing', sectionName: 'Semantic Indexing', isExpanded: false },
-            { sectionKey: 'usageLifecycle', sectionName: 'Usage & Lifecycle', isExpanded: false },
+            { sectionKey: 'sourceProvenance', sectionName: 'Source Provenance', isExpanded: true },
+            { sectionKey: 'semanticIndexing', sectionName: 'Semantic Indexing', isExpanded: true },
+            { sectionKey: 'usageLifecycle', sectionName: 'Usage & Lifecycle', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

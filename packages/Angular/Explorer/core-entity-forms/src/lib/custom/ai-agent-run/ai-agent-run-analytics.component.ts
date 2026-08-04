@@ -2,7 +2,7 @@ import { Component, Input, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetec
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RunView } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import * as d3 from 'd3';
 import { AIAgentRunCostService } from './ai-agent-run-cost.service';
@@ -16,8 +16,18 @@ interface PromptMetrics {
   byVendor: Map<string, { count: number; totalTime: number; avgTime: number }>;
   byPrompt: Map<string, { count: number; totalTime: number; avgTime: number }>;
   statusBreakdown: { success: number; failed: number; timeout: number };
-  costBreakdown: { totalCost: number; byModel: Map<string, number>; byVendor: Map<string, number> };
-  tokenUsage: { totalInput: number; totalOutput: number; byModel: Map<string, { input: number; output: number }> };
+  costBreakdown: {
+    totalCost: number;
+    byModel: Map<string, number>;
+    byVendor: Map<string, number>;
+    // Rate-derived dollar split (computed from AIModelCost rates). inputCost folds uncached + cache
+    // read + cache write; savings = what it would have cost with no caching minus actual.
+    inputCost: number;
+    outputCost: number;
+    savings: number;
+    unratedCost: number; // stored cost of runs whose model+vendor had no rate row (breakdown excludes them)
+  };
+  tokenUsage: { totalInput: number; totalOutput: number; totalCacheRead: number; totalCacheWrite: number; byModel: Map<string, { input: number; output: number }> };
 }
 
 interface ActionMetrics {
@@ -120,6 +130,12 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
   // Data
   agentRun: SimpleAgentRun | null = null;
   allPromptRuns: MJAIPromptRunEntity[] = [];
+
+  // Per model+vendor cache pricing (currency-per-token), loaded from AIModelCost for the cost split.
+  private cacheRates = new Map<string, { inputRate: number; outputRate: number; cacheReadRate: number; cacheWriteRate: number }>();
+  private static readonly UNIT_DIVISORS: Record<string, number> = {
+    'Per Million Tokens': 1_000_000, 'Per Hundred Thousand Tokens': 100_000, 'Per Thousand Tokens': 1_000
+  };
   allActionLogs: SimpleActionLog[] = [];
   allSteps: SimpleAgentRunStep[] = [];
   subAgentRuns: SimpleAgentRun[] = [];
@@ -337,6 +353,9 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     
     // Load all prompt runs for the agent run hierarchy
     this.allPromptRuns = await this.loadAllPromptRuns(agentRunIds);
+
+    // Load cache pricing so cost can be split (input/output) and cache savings computed
+    await this.loadCacheRates();
     
     if (results[2].Success) {
       const actionSteps = results[2].Results || [];
@@ -374,8 +393,8 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
       byVendor: new Map(),
       byPrompt: new Map(),
       statusBreakdown: { success: 0, failed: 0, timeout: 0 },
-      costBreakdown: { totalCost: 0, byModel: new Map(), byVendor: new Map() },
-      tokenUsage: { totalInput: 0, totalOutput: 0, byModel: new Map() }
+      costBreakdown: { totalCost: 0, byModel: new Map(), byVendor: new Map(), inputCost: 0, outputCost: 0, savings: 0, unratedCost: 0 },
+      tokenUsage: { totalInput: 0, totalOutput: 0, totalCacheRead: 0, totalCacheWrite: 0, byModel: new Map() }
     };
   }
   
@@ -401,6 +420,34 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     };
   }
   
+  /** Stable rate-map key for a model+vendor pair. */
+  private rateKey(modelID: string | null | undefined, vendorID: string | null | undefined): string {
+    return `${NormalizeUUID(modelID ?? '')}|${NormalizeUUID(vendorID ?? '')}`;
+  }
+
+  /** Load active realtime AIModelCost rates and normalize each to currency-per-token. */
+  private async loadCacheRates() {
+    this.cacheRates.clear();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const res = await rv.RunView({
+      EntityName: 'MJ: AI Model Costs',
+      ExtraFilter: `Status='Active' AND ProcessingType='Realtime'`,
+      Fields: ['ModelID', 'VendorID', 'InputPricePerUnit', 'OutputPricePerUnit', 'CacheReadPricePerUnit', 'CacheWritePricePerUnit', 'UnitType'],
+      ResultType: 'simple'
+    });
+    if (!res.Success) return;
+    for (const row of res.Results || []) {
+      const divisor = AIAgentRunAnalyticsComponent.UNIT_DIVISORS[row.UnitType ?? ''] ?? 1_000_000;
+      const input = (row.InputPricePerUnit ?? 0) / divisor;
+      this.cacheRates.set(this.rateKey(row.ModelID, row.VendorID), {
+        inputRate: input,
+        outputRate: (row.OutputPricePerUnit ?? 0) / divisor,
+        cacheReadRate: (row.CacheReadPricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor,
+        cacheWriteRate: (row.CacheWritePricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor
+      });
+    }
+  }
+
   private calculatePromptMetrics() {
     const metrics = this.initializePromptMetrics();
     
@@ -459,7 +506,25 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
       const outputTokens = promptRun.TokensCompletion || 0;
       metrics.tokenUsage.totalInput += inputTokens;
       metrics.tokenUsage.totalOutput += outputTokens;
-      
+      // Provider prompt-cache tokens (read = cache hits, write = cache creation). Summed from the
+      // child prompt runs' persisted TokensCacheRead/TokensCacheWrite columns.
+      const cacheReadTokens = promptRun.TokensCacheRead || 0;
+      const cacheWriteTokens = promptRun.TokensCacheWrite || 0;
+      metrics.tokenUsage.totalCacheRead += cacheReadTokens;
+      metrics.tokenUsage.totalCacheWrite += cacheWriteTokens;
+
+      // Rate-derived cost split + cache savings. inputCost folds uncached + cache read + cache write
+      // (each at its own rate); savings = the discount vs. pricing all input at the full input rate.
+      // Runs whose model+vendor has no rate row are tracked separately so the split isn't silently off.
+      const rate = this.cacheRates.get(this.rateKey(promptRun.ModelID, promptRun.VendorID));
+      if (rate) {
+        metrics.costBreakdown.inputCost += inputTokens * rate.inputRate + cacheReadTokens * rate.cacheReadRate + cacheWriteTokens * rate.cacheWriteRate;
+        metrics.costBreakdown.outputCost += outputTokens * rate.outputRate;
+        metrics.costBreakdown.savings += cacheReadTokens * (rate.inputRate - rate.cacheReadRate) + cacheWriteTokens * (rate.inputRate - rate.cacheWriteRate);
+      } else {
+        metrics.costBreakdown.unratedCost += cost;
+      }
+
       const modelTokens = metrics.tokenUsage.byModel.get(model) || { input: 0, output: 0 };
       modelTokens.input += inputTokens;
       modelTokens.output += outputTokens;
@@ -661,6 +726,32 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     if (cost < 0.01) return `$${cost.toFixed(4)}`;
     if (cost < 1) return `$${cost.toFixed(3)}`;
     return `$${cost.toFixed(2)}`;
+  }
+
+  /** Total tokens the models processed across this run, including cached input (true throughput). */
+  get totalTokensProcessed(): number {
+    const u = this.promptMetrics.tokenUsage;
+    return u.totalInput + u.totalOutput + u.totalCacheRead + u.totalCacheWrite;
+  }
+
+  /** Rate-derived input-side dollars (uncached + cache read + cache write). */
+  get inputCost(): number { return this.promptMetrics.costBreakdown.inputCost; }
+  /** Rate-derived output dollars. */
+  get outputCost(): number { return this.promptMetrics.costBreakdown.outputCost; }
+  /** Net dollars saved by caching vs. pricing all input at the full input rate. */
+  get cacheSavings(): number { return this.promptMetrics.costBreakdown.savings; }
+  /** Savings as a % of what the run would have cost with no caching. */
+  get cacheSavingsPct(): number {
+    const cb = this.promptMetrics.costBreakdown;
+    const fullPrice = cb.totalCost + cb.savings;
+    return fullPrice > 0 ? (cb.savings / fullPrice) * 100 : 0;
+  }
+
+  /** Percentage of input tokens served from the provider's prompt cache across this agent run. */
+  get cacheHitRatePct(): number {
+    const u = this.promptMetrics.tokenUsage;
+    const totalInput = u.totalInput + u.totalCacheRead + u.totalCacheWrite;
+    return totalInput > 0 ? (u.totalCacheRead / totalInput) * 100 : 0;
   }
   
   refresh() {

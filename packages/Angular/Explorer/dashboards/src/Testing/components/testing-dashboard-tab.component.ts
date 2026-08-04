@@ -34,6 +34,25 @@ interface TestAlert {
   selector: 'app-testing-dashboard-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (HideToolbar) {
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    } @else {
+      <mj-page-layout>
+        <mj-page-header
+          Title="Testing Overview"
+          Icon="fa-solid fa-gauge-high"
+          Subtitle="Test health, recent activity, and KPIs">
+          <div actions>
+            <mj-refresh-button [Loading]="IsLoading" (Clicked)="OnRefresh()"></mj-refresh-button>
+          </div>
+        </mj-page-header>
+        <mj-page-body>
+          <ng-container *ngTemplateOutlet="content"></ng-container>
+        </mj-page-body>
+      </mj-page-layout>
+    }
+
+    <ng-template #content>
     <!-- Full-page loading state -->
     @if (IsLoading) {
       <div class="full-page-loading">
@@ -41,18 +60,6 @@ interface TestAlert {
       </div>
     } @else {
       <div class="dashboard-container">
-
-        <!-- Page Header -->
-        <div class="page-header">
-          <h2 class="page-title">
-            <i class="fa-solid fa-gauge-high"></i>
-            Testing Dashboard
-          </h2>
-          <button class="refresh-btn" (click)="OnRefresh()" [disabled]="IsLoading">
-            <i class="fa-solid fa-refresh" [class.spinning]="IsLoading"></i>
-            Refresh
-          </button>
-        </div>
 
         <!-- KPI Row -->
         <div class="kpi-row">
@@ -116,7 +123,8 @@ interface TestAlert {
                   </div>
                 </div>
               } @empty {
-                <div class="empty-state">No completed test runs found</div>
+                <mj-empty-state Size="compact" Icon="fa-solid fa-flask-vial"
+                  Title="No completed test runs found" />
               }
             </div>
           </div>
@@ -150,7 +158,8 @@ interface TestAlert {
                     </div>
                   </div>
                 } @empty {
-                  <div class="empty-state">No test suites found</div>
+                  <mj-empty-state Size="compact" Icon="fa-solid fa-layer-group"
+                    Title="No test suites found" />
                 }
               </div>
             </div>
@@ -181,10 +190,8 @@ interface TestAlert {
                     <app-test-status-badge [status]="alert.status"></app-test-status-badge>
                   </div>
                 } @empty {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-check-circle" style="color: var(--mj-status-success); margin-right: 6px;"></i>
-                    No alerts - all tests healthy
-                  </div>
+                  <mj-empty-state Variant="success" Size="compact"
+                    Title="No alerts - all tests healthy" />
                 }
               </div>
             </div>
@@ -193,6 +200,7 @@ interface TestAlert {
         </div>
       </div>
     }
+    </ng-template>
   `,
   styles: [`
     /* ===== Layout ===== */
@@ -564,17 +572,6 @@ interface TestAlert {
       color: var(--mj-text-disabled);
     }
 
-    /* ===== Empty State ===== */
-    .empty-state {
-      padding: 32px 20px;
-      text-align: center;
-      color: var(--mj-text-disabled);
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
     /* ===== Responsive ===== */
     @media (max-width: 900px) {
       .lower-grid {
@@ -591,6 +588,8 @@ interface TestAlert {
 export class TestingDashboardTabComponent implements OnInit, OnDestroy {
 
   @Input() initialState: Record<string, unknown> | null = null;
+  /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
+  @Input() HideToolbar = false;
   @Output() stateChange = new EventEmitter<Record<string, unknown>>();
 
   private destroy$ = new Subject<void>();

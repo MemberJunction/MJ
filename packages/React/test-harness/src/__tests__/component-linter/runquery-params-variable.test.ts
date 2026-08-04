@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ComponentLinter, LintResult } from '../../lib/component-linter';
+import { ComponentLinter, LintResult } from '@memberjunction/react-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /** Spec with a query that has optional parameters */

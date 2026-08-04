@@ -1,7 +1,7 @@
 /**
  * Explorer Modules Bundle
  *
- * Consolidates all MemberJunction Explorer modules and Kendo UI modules into a single import.
+ * Consolidates all MemberJunction Explorer modules into a single import.
  * This dramatically reduces boilerplate in application module files and provides
  * a consistent set of MJ functionality across all applications.
  *
@@ -32,14 +32,13 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 
 
 /**
- * MJExplorerModulesBundle - Consolidated bundle of all MJ Explorer and Kendo UI modules
+ * MJExplorerModulesBundle - Consolidated bundle of all MJ Explorer modules
  *
- * Re-exports all commonly used MJ Explorer modules and Kendo UI modules to drastically
+ * Re-exports all commonly used MJ Explorer modules to drastically
  * reduce boilerplate in application module files.
  *
  * This module provides:
  * - All MemberJunction Explorer functionality (forms, grids, directives, shell)
- * - All Kendo UI components (grid, layout, inputs, dialogs, etc.)
  * - Workspace initialization
  * - User settings and preferences
  *
@@ -55,8 +54,6 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
     ContainerDirectivesModule,
     ExplorerSettingsModule,
     ShellModule,
-
-    // Kendo UI Modules (consolidated)
   ]
 })
 export class MJExplorerModulesBundle {}

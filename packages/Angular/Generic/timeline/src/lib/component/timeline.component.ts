@@ -31,6 +31,7 @@ import {
 } from '@angular/core';
 
 import { Subject } from 'rxjs';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { takeUntil, debounceTime } from 'rxjs/operators';
 
 import {
@@ -141,7 +142,7 @@ const DEFAULT_ICONS = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None
 })
-export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewInit {
+export class TimelineComponent<T = any> extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   // ============================================================================
   // INPUTS - DATA
   // ============================================================================
@@ -162,7 +163,13 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
     // Check if groups actually changed (different date field, label, or data)
     const groupsChanged = this.didGroupsChange(prevGroups, this._groups);
 
-    if (this.allowLoad && hasGroups) {
+    // Defer the FIRST load until the view is ready (ngAfterViewInit). When this component is
+    // dynamic-mounted, the host sets `groups` via setInput BEFORE the view initializes; running the
+    // first refresh here would render nothing (ViewChildren/DOM not ready) yet still set `_hasLoaded`,
+    // so ngAfterViewInit's real refresh would be skipped and the timeline would show "No events"
+    // until something forced a re-refresh (e.g. changing the date field). Only refresh from the setter
+    // once the view is ready.
+    if (this.allowLoad && hasGroups && this._viewReady) {
       if (!this._hasLoaded) {
         // First load
         this.refresh();
@@ -173,6 +180,8 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
     }
   }
   private _groups: TimelineGroup<T>[] = [];
+  /** True once ngAfterViewInit has run — the view is ready to render refreshed events. */
+  private _viewReady = false;
 
   /**
    * Check if timeline groups have meaningfully changed
@@ -509,7 +518,8 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
     private cdr: ChangeDetectorRef,
     private elementRef: ElementRef,
     private ngZone: NgZone
-  ) {}
+  ) {
+        super();}
 
   // ============================================================================
   // LIFECYCLE HOOKS
@@ -528,7 +538,10 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
   }
 
   ngAfterViewInit(): void {
-    if (this.allowLoad && !this._hasLoaded) {
+    // The view is now ready — first loads triggered by the `groups`/`allowLoad` setters were deferred
+    // to here so refreshed events actually render (see the `groups` setter).
+    this._viewReady = true;
+    if (this.allowLoad && !this._hasLoaded && this._groups.length > 0) {
       this.refresh();
     }
 
@@ -1165,7 +1178,7 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
   private async loadFromEntity(group: TimelineGroup<T>): Promise<T[]> {
     try {
       const { RunView } = await import('@memberjunction/core');
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       const result = await rv.RunView({
         EntityName: group.EntityName,

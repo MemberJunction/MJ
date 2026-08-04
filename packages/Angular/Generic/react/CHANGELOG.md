@@ -1,5 +1,496 @@
 # @memberjunction/ng-react
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-vectors-memory@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-notifications@6.0.0
+  - @memberjunction/graphql-dataprovider@6.0.0
+  - @memberjunction/interactive-component-types@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/react-runtime@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- a8fc549: - Fix BaseEngine cache callback fingerprint mismatch that broke cross-server invalidation via Redis pub/sub by extracting a shared BuildRunViewParamsForConfig method to ensure consistent RunViewParams across LoadSingleEntityConfig, LoadMultipleEntityConfigs, and RegisterCacheChangeCallbacks
+  - Eliminate React CDN script execution order race condition in library-loader by enforcing sequential script loading
+  - Make ChangeDetectorRef optional in BaseResourceComponent to prevent NG0201 injection errors
+  - Regenerate spDeleteAIPrompt and spDeleteAIConfiguration stored procedures to remove stale AIPromptRun.AgentRunID cascade references
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/react-runtime@5.51.0
+  - @memberjunction/ai-vectors-memory@5.51.0
+  - @memberjunction/ng-base-types@5.51.0
+  - @memberjunction/ng-notifications@5.51.0
+  - @memberjunction/graphql-dataprovider@5.51.0
+  - @memberjunction/interactive-component-types@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ng-base-types@5.50.0
+  - @memberjunction/ng-notifications@5.50.0
+  - @memberjunction/graphql-dataprovider@5.50.0
+  - @memberjunction/react-runtime@5.50.0
+  - @memberjunction/ai-vectors-memory@5.50.0
+  - @memberjunction/interactive-component-types@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [88d707b]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [85575cf]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/graphql-dataprovider@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai-vectors-memory@5.49.0
+  - @memberjunction/ng-base-types@5.49.0
+  - @memberjunction/ng-notifications@5.49.0
+  - @memberjunction/interactive-component-types@5.49.0
+  - @memberjunction/react-runtime@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ai-vectors-memory@5.48.0
+  - @memberjunction/ng-base-types@5.48.0
+  - @memberjunction/ng-notifications@5.48.0
+  - @memberjunction/graphql-dataprovider@5.48.0
+  - @memberjunction/interactive-component-types@5.48.0
+  - @memberjunction/react-runtime@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-vectors-memory@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-notifications@5.47.0
+  - @memberjunction/graphql-dataprovider@5.47.0
+  - @memberjunction/interactive-component-types@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/react-runtime@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-vectors-memory@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-notifications@5.46.0
+  - @memberjunction/graphql-dataprovider@5.46.0
+  - @memberjunction/interactive-component-types@5.46.0
+  - @memberjunction/react-runtime@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@5.45.1
+- @memberjunction/ng-notifications@5.45.1
+- @memberjunction/react-runtime@5.45.1
+- @memberjunction/ai-vectors-memory@5.45.1
+- @memberjunction/ng-base-types@5.45.1
+- @memberjunction/interactive-component-types@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/graphql-dataprovider@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-vectors-memory@5.45.0
+  - @memberjunction/ng-base-types@5.45.0
+  - @memberjunction/ng-notifications@5.45.0
+  - @memberjunction/interactive-component-types@5.45.0
+  - @memberjunction/react-runtime@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/graphql-dataprovider@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai-vectors-memory@5.44.0
+  - @memberjunction/ng-notifications@5.44.0
+  - @memberjunction/react-runtime@5.44.0
+  - @memberjunction/ng-base-types@5.44.0
+  - @memberjunction/interactive-component-types@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/ai-vectors-memory@5.43.0
+  - @memberjunction/ng-base-types@5.43.0
+  - @memberjunction/ng-notifications@5.43.0
+  - @memberjunction/graphql-dataprovider@5.43.0
+  - @memberjunction/interactive-component-types@5.43.0
+  - @memberjunction/react-runtime@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [5fde509]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [438ce4a]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/ai-vectors-memory@5.42.0
+  - @memberjunction/graphql-dataprovider@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/react-runtime@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ng-base-types@5.42.0
+  - @memberjunction/ng-notifications@5.42.0
+  - @memberjunction/interactive-component-types@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- 133dfa7: Interactive components: persist `savedUserSettings` per-user, cross-device
+
+  The existing interactive-component settings contract (`savedUserSettings` in /
+  `onSaveUserSettings` out) is now durably persisted **per-user, cross-device** via
+  `UserInfoEngine`, automatically scoped per component — with no change to the component
+  contract. The Angular host (`MJReactComponent`) seeds `savedUserSettings` from the
+  store on load and saves (debounced) on every `onSaveUserSettings` call, under the key
+  `InteractiveComponents_UserState_Root/<scope>` where scope defaults to
+  `<namespace>/<name>` (override via the new
+  `UserStateScope` input). Set the new `PersistUserSettings` input to `false` to opt out
+  and own persistence via the `userSettingsChanged` output instead.
+
+  Saves **merge, never replace**: the host overlays each `onSaveUserSettings` payload
+  onto the saved settings, so a component that passes only the changed keys (or spreads
+  a stale prop) cannot wipe other preferences. Removing a key requires explicit intent —
+  set its value to `null`.
+  - `@memberjunction/react-runtime`: new framework-agnostic `user-state` helpers
+    (`resolveUserStateScope`, `userStateStorageKey`, `parseStoredUserSettings`,
+    `mergeUserSettings`, `applyUserSettingsUpdate`) plus unit tests.
+  - `@memberjunction/react-test-harness`: `ComponentExecutionOptions.savedUserSettings`
+    seeds the prop and `onSaveUserSettings` now merges into a real in-memory snapshot
+    with the same null-removes-key semantics as the production host.
+
+  Fully additive — existing components that already use the blob gain durable
+  persistence for free.
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [34d17e2]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [133dfa7]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/graphql-dataprovider@5.41.0
+  - @memberjunction/react-runtime@5.41.0
+  - @memberjunction/ng-notifications@5.41.0
+  - @memberjunction/ai-vectors-memory@5.41.0
+  - @memberjunction/ng-base-types@5.41.0
+  - @memberjunction/interactive-component-types@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@5.40.2
+- @memberjunction/ng-base-types@5.40.2
+- @memberjunction/ng-notifications@5.40.2
+- @memberjunction/graphql-dataprovider@5.40.2
+- @memberjunction/interactive-component-types@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/react-runtime@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-vectors-memory@5.40.1
+  - @memberjunction/ng-base-types@5.40.1
+  - @memberjunction/ng-notifications@5.40.1
+  - @memberjunction/graphql-dataprovider@5.40.1
+  - @memberjunction/interactive-component-types@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/react-runtime@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [7bbfd62]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/graphql-dataprovider@5.40.0
+  - @memberjunction/ai-vectors-memory@5.40.0
+  - @memberjunction/ng-base-types@5.40.0
+  - @memberjunction/ng-notifications@5.40.0
+  - @memberjunction/interactive-component-types@5.40.0
+  - @memberjunction/react-runtime@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [f60e340]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [315ff4d]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/graphql-dataprovider@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/react-runtime@5.39.0
+  - @memberjunction/ai-vectors-memory@5.39.0
+  - @memberjunction/ng-base-types@5.39.0
+  - @memberjunction/ng-notifications@5.39.0
+  - @memberjunction/interactive-component-types@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- d285996: Runtime forms substrate — Component-based entity forms swappable at runtime via EntityFormOverride. New form-role contract (FormHostProps, BeforeSave/Delete/EditModeChangeRequested events) in interactive-component-types. InteractiveFormComponent wrapper in ng-base-forms owns BaseEntity lifecycle while React stays pure. componentProps input on mj-react-component for host-supplied data context. FormResolverService + SingleRecordComponent wedge route entities to override Components with User > Role > Global scope precedence; zero behavior change when no override exists.
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [d285996]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [918d663]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [b26d0ee]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/interactive-component-types@5.38.0
+  - @memberjunction/graphql-dataprovider@5.38.0
+  - @memberjunction/ai-vectors-memory@5.38.0
+  - @memberjunction/ng-base-types@5.38.0
+  - @memberjunction/ng-notifications@5.38.0
+  - @memberjunction/react-runtime@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [dadbde9]
+- Updated dependencies [4f15f31]
+  - @memberjunction/graphql-dataprovider@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ng-notifications@5.37.0
+  - @memberjunction/react-runtime@5.37.0
+  - @memberjunction/ai-vectors-memory@5.37.0
+  - @memberjunction/ng-base-types@5.37.0
+  - @memberjunction/interactive-component-types@5.37.0
+  - @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [f29b7c0]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/graphql-dataprovider@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ng-notifications@5.36.0
+  - @memberjunction/react-runtime@5.36.0
+  - @memberjunction/ng-base-types@5.36.0
+  - @memberjunction/ai-vectors-memory@5.36.0
+  - @memberjunction/interactive-component-types@5.36.0
+  - @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [77e4782]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/graphql-dataprovider@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/ai-vectors-memory@5.35.0
+  - @memberjunction/ng-base-types@5.35.0
+  - @memberjunction/ng-notifications@5.35.0
+  - @memberjunction/interactive-component-types@5.35.0
+  - @memberjunction/react-runtime@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/graphql-dataprovider@5.34.1
+  - @memberjunction/react-runtime@5.34.1
+  - @memberjunction/ai-vectors-memory@5.34.1
+  - @memberjunction/ng-base-types@5.34.1
+  - @memberjunction/ng-notifications@5.34.1
+  - @memberjunction/interactive-component-types@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ai-vectors-memory@5.34.0
+  - @memberjunction/ng-base-types@5.34.0
+  - @memberjunction/ng-notifications@5.34.0
+  - @memberjunction/interactive-component-types@5.34.0
+  - @memberjunction/react-runtime@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/graphql-dataprovider@5.34.0
+  - @memberjunction/global@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

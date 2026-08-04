@@ -156,9 +156,9 @@
         }
 
         <!-- Empty State -->
-        <div class="empty-state">
-          <i class="fa-solid fa-search empty-icon"></i>
-          <p>Search across all your conversations, messages, artifacts, collections, and tasks</p>
+        <mj-empty-state
+          Icon="fa-solid fa-magnifying-glass"
+          Message="Search across all your conversations, messages, artifacts, collections, and tasks">
           <div class="search-tips">
             <h4>Tips:</h4>
             <ul>
@@ -167,14 +167,13 @@
               <li>Use keyboard shortcuts to navigate</li>
             </ul>
           </div>
-        </div>
+        </mj-empty-state>
       } @else if (results.total === 0) {
         <!-- No Results -->
-        <div class="no-results">
-          <i class="fa-solid fa-search-minus empty-icon"></i>
-          <p>No results found for "{{ searchQuery }}"</p>
-          <p class="no-results-hint">Try adjusting your filters or search terms</p>
-        </div>
+        <mj-empty-state
+          Variant="no-results"
+          [Title]="NoResultsMessage"
+          Message="Try adjusting your filters or search terms" />
       } @else {
         <!-- Results Summary -->
         <div class="results-summary">

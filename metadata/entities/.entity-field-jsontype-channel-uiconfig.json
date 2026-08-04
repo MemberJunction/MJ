@@ -1,0 +1,37 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on UIConfig (MJ: AI Agent Channels entity) so CodeGen emits",
+      "a typed UIConfigObject accessor returning MJAIAgentChannelEntity_IChannelUIConfig.",
+      "The EntityField row must exist (created by a CodeGen pass over the new column) before",
+      "this @lookup resolves on push."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Channels"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IChannelUIConfig",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IChannelUIConfig.ts"
+          },
+          "_comments": [
+            "UIConfig field — channel-definition presentation/chrome config object"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Channels&Name=UIConfig"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:48.714Z",
+            "checksum": "a15acd764283cc664237f06864d5e848a20b89fd389c13de69304a354ae98d5c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Channels"
+    }
+  }
+]

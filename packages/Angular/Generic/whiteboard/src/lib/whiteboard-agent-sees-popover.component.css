@@ -1,0 +1,108 @@
+/* "What the agent sees" perception popover — ported pixel-faithfully from
+   plans/realtime/mockups/whiteboard.html (.sees-pop) + mockups.css (.codeblock, .pill--sage). */
+
+:host {
+  /* agent (violet) accent — derived the same way as the other realtime components */
+  --sage: var(--mj-color-violet-400, #a78bfa);
+  --sage-bg: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 14%, transparent);
+  --sage-border: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 45%, transparent);
+
+  display: block;
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 60;
+  width: 420px;
+  cursor: default;
+  text-align: left;
+}
+
+.sees-pop {
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--sage-border);
+  border-radius: var(--mj-radius-lg, 12px);
+  box-shadow: var(--mj-shadow-2xl, 0 25px 50px -12px rgba(0, 0, 0, 0.45));
+  animation: wb-pop-fade 160ms ease;
+}
+@keyframes wb-pop-fade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sees-pop__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--mj-border-default);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mj-color-violet-300, var(--mj-text-primary));
+}
+
+.pill {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: var(--mj-radius-full, 9999px);
+  font-size: 9.5px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.pill--sage {
+  background: var(--sage-bg);
+  color: var(--mj-color-violet-300, var(--mj-text-secondary));
+  border-color: var(--sage-border);
+}
+
+.sees-pop__body {
+  padding: 12px 14px;
+}
+.sees-pop__cap {
+  font-size: 11.5px;
+  color: var(--mj-text-secondary);
+  line-height: 1.5;
+  margin: 0 0 10px;
+  font-weight: 400;
+}
+
+.codeblock {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md, 8px);
+  background: var(--mj-bg-surface-sunken);
+  font-family: var(--mj-font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--mj-text-secondary);
+  max-height: 190px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* token tints — matching the mockup's static code-editor palette (intentionally literal;
+   these mirror VS Code's dark JSON colors and stay constant across themes) */
+.codeblock ::ng-deep .ck { color: #9cdcfe; }
+.codeblock ::ng-deep .cs { color: #ce9178; }
+.codeblock ::ng-deep .cn { color: #b5cea8; }
+.codeblock .cc,
+.codeblock ::ng-deep .cc { color: #6a9955; }
+
+.sees-pop__foot {
+  display: flex;
+  gap: 14px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--mj-border-subtle, var(--mj-border-default));
+  font-size: 10.5px;
+  color: var(--mj-text-muted);
+  font-weight: 500;
+  flex-wrap: wrap;
+}
+.sees-pop__foot b {
+  color: var(--mj-text-secondary);
+}

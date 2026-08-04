@@ -17,7 +17,8 @@ export class MJSearchScopeExternalIndexFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'scopeIdentification', sectionName: 'Scope Identification', isExpanded: true },
             { sectionKey: 'indexConfiguration', sectionName: 'Index Configuration', isExpanded: true },
-            { sectionKey: 'advancedSettings', sectionName: 'Advanced Settings', isExpanded: false },
+            { sectionKey: 'advancedSettings', sectionName: 'Advanced Settings', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

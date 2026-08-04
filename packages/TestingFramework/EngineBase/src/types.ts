@@ -121,6 +121,14 @@ export interface TestRunOptions {
    * run > suite > test > type
    */
   variables?: TestRunVariables;
+
+  /**
+   * Override the test's RepeatCount field at runtime.
+   * Useful for flaky-test detection: forces every test in the run to execute
+   * N times so the suite runner can compute score variance.
+   * If undefined, the test's own RepeatCount is used.
+   */
+  repeatCountOverride?: number;
 }
 
 /**
@@ -164,6 +172,13 @@ export interface SuiteRunOptions extends TestRunOptions {
    * Tests with sequence numbers greater than this value will be skipped.
    */
   sequenceEnd?: number;
+
+  /**
+   * Delay in milliseconds between test executions.
+   * Useful for avoiding rate limits (e.g., Auth0 brute-force protection)
+   * when tests perform repeated logins from the same IP.
+   */
+  delayBetweenTests?: number;
 }
 
 /**
@@ -775,4 +790,29 @@ export interface TestRunOutputItem {
    * Additional metadata as JSON (e.g., URL at time of capture, tool calls, error info)
    */
   metadata?: Record<string, unknown>;
+}
+
+/**
+ * Per-suite-run fixture state established by a driver's `SetupSuite` and torn down
+ * (guaranteed, via a `finally` in `TestEngine.RunSuite`) by `TeardownSuite`. Threaded
+ * into every `Execute` call of that suite run via `DriverExecutionContext.fixtures`.
+ *
+ * Keyed by `SuiteRunID` so the per-`TypeID` cached driver instance cannot leak one
+ * suite run's fixtures into another. Driver-specific payload lives under `Data`;
+ * rows the driver created and must delete are recorded in `CreatedRecords` so a
+ * best-effort teardown can sweep them.
+ *
+ * Suite hooks only fire for `mj test suite` (a suite run exists); they do NOT fire
+ * for the standalone `mj test run` path, which has no suite — so fixture-dependent
+ * tests must be run via a suite.
+ */
+export interface SuiteFixtureContext {
+  /** The MJTestSuiteRunEntity.ID this fixture set belongs to. */
+  SuiteRunID: string;
+
+  /** Driver-specific fixture payload (discovered users, created query/category IDs, …). */
+  Data: Record<string, unknown>;
+
+  /** Rows the driver created and must delete; teardown sweeps these best-effort. */
+  CreatedRecords: { EntityName: string; PrimaryKeyID: string }[];
 }

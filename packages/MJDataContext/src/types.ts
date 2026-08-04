@@ -1,5 +1,5 @@
-import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey, IMetadataProvider } from "@memberjunction/core";
-import { MJDataContextEntity, MJDataContextItemEntity, MJDataContextItemEntityType, MJUserViewEntityExtended } from "@memberjunction/core-entities";
+import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey, IMetadataProvider } from "@memberjunction/core";
+import { MJDataContextEntity, MJDataContextItemEntity, MJDataContextItemEntityType, MJUserViewEntityExtended, MJQueryEntityExtended, QueryEngine } from "@memberjunction/core-entities";
 import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 
 /**
@@ -188,12 +188,12 @@ export class DataContextItem {
      * @param query 
      * @returns 
      */
-    public static FromQuery(query: QueryInfo) {
+    public static FromQuery(query: MJQueryEntityExtended) {
         const instance = DataContext.CreateDataContextItem();
         instance.Type = 'query';
         instance.QueryID = query.ID;
         instance.RecordName = query.Name;
-        instance.Fields = query.Fields.map(f => {
+        instance.Fields = query.QueryFields.map(f => {
             return {
                 Name: f.Name,
                 Type: f.SQLBaseType,
@@ -273,10 +273,10 @@ export class DataContextItem {
                 this.EntityID = dataContextItem.EntityID;  
                 break;
             case 'query':
-                this.QueryID = dataContextItem.QueryID; // map the QueryID in our database to the RecordID field in the object model for runtime use
-                const q = provider.Queries.find((q) => UUIDsEqual(q.ID, this.QueryID));
+                this.QueryID = dataContextItem.QueryID;
+                const q = QueryEngine.Instance.Queries.find((q) => UUIDsEqual(q.ID, this.QueryID));
                 this.RecordName = q?.Name;
-                this.SQL = q.SQL;
+                this.SQL = q?.SQL;
                 break;
             case 'sql':
                 this.CodeName = dataContextItem.CodeName;

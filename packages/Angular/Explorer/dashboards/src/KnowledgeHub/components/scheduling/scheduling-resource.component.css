@@ -1,9 +1,35 @@
 /* ── Host ─────────────────────────────────────────────────────── */
 :host {
-    display: block;
-    padding: 28px 32px 40px;
-    max-width: 1200px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
     min-width: 0;
+}
+
+/* Embedded mode: inline controls row instead of <mj-page-header>. */
+.embedded-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.embedded-search {
+    flex: 1;
+    max-width: 320px;
+}
+
+.embedded-spacer {
+    flex: 1;
+}
+
+/* Status select used in the [toolbar] slot. */
+.kh-toolbar-select {
+    width: auto;
+    min-width: 140px;
+    min-height: 32px;
+    padding: 4px 28px 4px 12px;
+    font-size: 0.8125rem;
 }
 
 /* ── Page Header ──────────────────────────────────────────────── */
@@ -392,28 +418,6 @@
     justify-content: center;
     align-items: center;
     padding: 60px;
-}
-
-/* ── Empty state ──────────────────────────────────────────────── */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    color: var(--mj-text-muted);
-    text-align: center;
-}
-.empty-state i {
-    font-size: 40px;
-    margin-bottom: 12px;
-}
-.empty-state p {
-    font-size: 14px;
-    margin-bottom: 4px;
-}
-.empty-state span {
-    font-size: 12px;
 }
 
 /* Scheduling App Link */

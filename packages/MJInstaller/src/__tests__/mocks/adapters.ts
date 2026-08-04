@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import type { ProcessResult } from '../../adapters/ProcessRunner.js';
+import type { ProcessResult, ProcessOptions } from '../../adapters/ProcessRunner.js';
 import type { SqlConnectivityResult } from '../../adapters/SqlServerAdapter.js';
 import type { VersionInfo } from '../../models/VersionInfo.js';
 
@@ -8,24 +8,24 @@ import type { VersionInfo } from '../../models/VersionInfo.js';
  */
 export function createMockFileSystem() {
   return {
-    ExtractZip: vi.fn<[string, string], Promise<string[]>>().mockResolvedValue([]),
-    CreateDirectory: vi.fn<[string], Promise<void>>().mockResolvedValue(undefined),
-    DirectoryExists: vi.fn<[string], Promise<boolean>>().mockResolvedValue(true),
-    FileExists: vi.fn<[string], Promise<boolean>>().mockResolvedValue(true),
-    IsDirectoryEmpty: vi.fn<[string], Promise<boolean>>().mockResolvedValue(true),
-    ListDirectoryEntries: vi.fn<[string], Promise<string[]>>().mockResolvedValue([]),
-    GetFreeDiskSpace: vi.fn<[string], Promise<number>>().mockResolvedValue(10_000_000_000),
-    CanWrite: vi.fn<[string], Promise<boolean>>().mockResolvedValue(true),
-    CreateTempDir: vi.fn<[string?], Promise<string>>().mockResolvedValue('/tmp/mj-install-test'),
-    RemoveDir: vi.fn<[string], Promise<void>>().mockResolvedValue(undefined),
-    RemoveFile: vi.fn<[string], Promise<void>>().mockResolvedValue(undefined),
-    ReadJSON: vi.fn().mockResolvedValue({}),
-    WriteJSON: vi.fn<[string, unknown], Promise<void>>().mockResolvedValue(undefined),
-    WriteText: vi.fn<[string, string], Promise<void>>().mockResolvedValue(undefined),
-    ReadText: vi.fn<[string], Promise<string>>().mockResolvedValue(''),
-    ListFiles: vi.fn<[string, RegExp?], Promise<string[]>>().mockResolvedValue([]),
-    GetModifiedTime: vi.fn<[string], Promise<number | null>>().mockResolvedValue(Date.now()),
-    FindFiles: vi.fn<[string, string, number?], Promise<string[]>>().mockResolvedValue([]),
+    ExtractZip: vi.fn<(zipPath: string, targetDir: string) => Promise<string[]>>().mockResolvedValue([]),
+    CreateDirectory: vi.fn<(dirPath: string) => Promise<void>>().mockResolvedValue(undefined),
+    DirectoryExists: vi.fn<(dirPath: string) => Promise<boolean>>().mockResolvedValue(true),
+    FileExists: vi.fn<(filePath: string) => Promise<boolean>>().mockResolvedValue(true),
+    IsDirectoryEmpty: vi.fn<(dirPath: string) => Promise<boolean>>().mockResolvedValue(true),
+    ListDirectoryEntries: vi.fn<(dirPath: string) => Promise<string[]>>().mockResolvedValue([]),
+    GetFreeDiskSpace: vi.fn<(dirPath: string) => Promise<number>>().mockResolvedValue(10_000_000_000),
+    CanWrite: vi.fn<(dirPath: string) => Promise<boolean>>().mockResolvedValue(true),
+    CreateTempDir: vi.fn<(prefix?: string) => Promise<string>>().mockResolvedValue('/tmp/mj-install-test'),
+    RemoveDir: vi.fn<(dirPath: string) => Promise<void>>().mockResolvedValue(undefined),
+    RemoveFile: vi.fn<(filePath: string) => Promise<void>>().mockResolvedValue(undefined),
+    ReadJSON: vi.fn<(filePath: string) => Promise<unknown>>().mockResolvedValue({}),
+    WriteJSON: vi.fn<(filePath: string, data: unknown) => Promise<void>>().mockResolvedValue(undefined),
+    WriteText: vi.fn<(filePath: string, content: string) => Promise<void>>().mockResolvedValue(undefined),
+    ReadText: vi.fn<(filePath: string) => Promise<string>>().mockResolvedValue(''),
+    ListFiles: vi.fn<(dirPath: string, pattern?: RegExp) => Promise<string[]>>().mockResolvedValue([]),
+    GetModifiedTime: vi.fn<(filePath: string) => Promise<number | null>>().mockResolvedValue(Date.now()),
+    FindFiles: vi.fn<(dirPath: string, filename: string, maxDepth?: number) => Promise<string[]>>().mockResolvedValue([]),
   };
 }
 
@@ -43,11 +43,11 @@ export function createMockProcessRunner() {
   };
 
   return {
-    Run: vi.fn().mockResolvedValue({ ...defaultResult }),
-    RunSimple: vi.fn<[string, string[], string?], Promise<string>>().mockResolvedValue(''),
-    CommandExists: vi.fn<[string], Promise<boolean>>().mockResolvedValue(true),
-    killTree: vi.fn<[number | undefined], void>(),
-    killByPort: vi.fn<[number], void>(),
+    Run: vi.fn<(command: string, args: string[], options?: ProcessOptions) => Promise<ProcessResult>>().mockResolvedValue({ ...defaultResult }),
+    RunSimple: vi.fn<(command: string, args: string[], cwd?: string) => Promise<string>>().mockResolvedValue(''),
+    CommandExists: vi.fn<(command: string) => Promise<boolean>>().mockResolvedValue(true),
+    killTree: vi.fn<(pid: number | undefined) => void>(),
+    killByPort: vi.fn<(port: number) => void>(),
   };
 }
 
@@ -63,7 +63,7 @@ export function createMockSqlAdapter() {
   };
 
   return {
-    CheckConnectivity: vi.fn().mockResolvedValue({ ...defaultResult }),
+    CheckConnectivity: vi.fn<(config: unknown) => Promise<SqlConnectivityResult>>().mockResolvedValue({ ...defaultResult }),
   };
 }
 
@@ -82,9 +82,9 @@ export function createMockGitHubProvider() {
   };
 
   return {
-    ListReleases: vi.fn().mockResolvedValue([{ ...defaultVersion }]),
-    GetReleaseByTag: vi.fn().mockResolvedValue({ ...defaultVersion }),
-    DownloadRelease: vi.fn<[string, string, ((p: number) => void)?], Promise<void>>().mockResolvedValue(undefined),
+    ListReleases: vi.fn<(includePrerelease?: boolean) => Promise<VersionInfo[]>>().mockResolvedValue([{ ...defaultVersion }]),
+    GetReleaseByTag: vi.fn<(tag: string) => Promise<VersionInfo>>().mockResolvedValue({ ...defaultVersion }),
+    DownloadRelease: vi.fn<(downloadUrl: string, destPath: string, onProgress?: (p: number) => void) => Promise<void>>().mockResolvedValue(undefined),
   };
 }
 

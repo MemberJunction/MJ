@@ -1,156 +1,13 @@
-.agent-requests-container {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    padding: 20px;
-    background: var(--mj-bg-page);
-}
+/* Container is now provided by <mj-page-layout>; body padding moved to .filter-bar / list sections below */
 
-/* Header */
-.requests-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-    gap: 12px;
-}
-
-.page-title {
-    margin: 0;
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.page-title i {
-    color: var(--mj-brand-primary);
-}
-
-.pending-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 22px;
-    height: 22px;
-    padding: 0 6px;
-    border-radius: 11px;
-    font-size: 12px;
-    font-weight: 700;
-    background: var(--mj-status-warning);
-    color: var(--mj-text-inverse);
-}
-
-/* Search */
-.search-box {
-    position: relative;
-    width: 280px;
-}
-
-.search-icon {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--mj-text-muted);
-    font-size: 13px;
-}
-
-.search-input {
-    width: 100%;
-    padding: 8px 12px 8px 32px;
-    border: 1px solid var(--mj-border-default);
-    border-radius: 6px;
-    font-size: 13px;
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-primary);
-    box-sizing: border-box;
-}
-
-.search-input:focus {
-    outline: none;
-    border-color: var(--mj-border-focus);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-}
-
-/* Filters */
-.filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-}
-
-.filter-group {
-    display: flex;
-    gap: 8px;
-}
-
-.filter-select {
-    padding: 6px 10px;
-    border: 1px solid var(--mj-border-default);
-    border-radius: 6px;
-    font-size: 13px;
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-primary);
-}
-
-.clear-filters-btn {
-    padding: 6px 12px;
-    border: none;
-    border-radius: 6px;
-    font-size: 12px;
-    background: var(--mj-bg-surface-hover);
-    color: var(--mj-text-secondary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.clear-filters-btn:hover {
-    background: var(--mj-bg-surface-active);
-    color: var(--mj-text-primary);
-}
+/* Search & filters now live in <mj-page-header>'s toolbar/actions via shared components. */
 
 /* Loading */
 .loading-container {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 60px 0;
-}
-
-/* Empty State */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 80px 20px;
-    text-align: center;
-}
-
-.empty-icon {
-    font-size: 48px;
-    color: var(--mj-text-disabled);
-    margin-bottom: 16px;
-}
-
-.empty-text {
-    margin: 0 0 8px 0;
-    font-size: 16px;
-    color: var(--mj-text-secondary);
-}
-
-.empty-subtext {
-    margin: 0;
-    font-size: 13px;
-    color: var(--mj-text-muted);
+    padding: 60px 20px;
 }
 
 /* Request Cards */
@@ -159,6 +16,7 @@
     flex-direction: column;
     gap: 8px;
     flex: 1;
+    padding: 0 20px 20px;
     overflow-y: auto;
 }
 

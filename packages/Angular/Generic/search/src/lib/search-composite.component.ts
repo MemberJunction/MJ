@@ -24,7 +24,7 @@ import { takeUntil } from 'rxjs/operators';
 import { SearchService, RecentSearch } from './search.service';
 import { SearchInputComponent } from './search-input.component';
 import { SearchSuggestComponent } from './search-suggest.component';
-import { SearchResultItem, SearchScopeInfo } from './search-types';
+import { SearchResultItem, SearchScopeInfo, RecentRecordItem } from './search-types';
 
 @Component({
     standalone: false,
@@ -72,6 +72,11 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
      */
     @Input() EnableScopeSelector = true;
 
+    /** Promo row pass-throughs — see SearchSuggestComponent for semantics. */
+    @Input() ShowPromo = false;
+    @Input() PromoText = '';
+    @Input() PromoActionLabel = 'Turn on';
+
     // --- Outputs ---
 
     /** Emitted when a result is selected from the preview dropdown */
@@ -83,17 +88,31 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
     /** Emitted when the user clicks "See all N results" */
     @Output() SeeAllRequested = new EventEmitter<string>();
 
+    /** Promo pass-throughs (accept carries the current query). */
+    @Output() PromoAccepted = new EventEmitter<string>();
+    @Output() PromoDismissed = new EventEmitter<void>();
+
+    /** Emitted when the user selects a recently opened record from the dropdown */
+    @Output() RecentRecordSelected = new EventEmitter<RecentRecordItem>();
+
     // --- Internal state ---
 
     public Query = '';
     public IsSuggestOpen = false;
 
     /** The current min relevance percent from the suggest dropdown filter */
+    /** Programmatically focus the search input (e.g. a host-owned Ctrl/Cmd+K chord). */
+    public Focus(): void {
+        this.searchInputRef?.Focus();
+    }
+
     public get MinRelevancePercent(): number {
         return this.searchSuggestRef?.MinRelevancePercent ?? 0;
     }
     public PreviewResults: SearchResultItem[] = [];
     public RecentSearches: RecentSearch[] = [];
+    /** Recently opened records for the dropdown's idle state (max 3 shown). */
+    public RecentRecords: RecentRecordItem[] = [];
     public PreviewTotalCount = 0;
     public IsPreviewLoading = false;
     private previewSearchVersion = 0;
@@ -117,6 +136,7 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
     ngOnInit(): void {
         this.subscribeToRecentSearches();
         this.searchService.LoadRecentSearches(); // fire-and-forget — loads from UserInfoEngine
+        this.refreshRecentRecords(); // fire-and-forget — recently opened records
         if (this.EnableScopeSelector) {
             this.subscribeToScopes();
             this.searchService.LoadScopes(); // fire-and-forget — populates Scopes$
@@ -159,6 +179,27 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
                     this.searchSuggestRef.SelectHighlighted();
                 }
                 break;
+            case 'Tab': {
+                // Tab walks the dropdown suggestions (mirrors ArrowDown/Up) before
+                // leaving the widget — same model as the palette and overlay. DOM
+                // focus stays in the input (combobox pattern); only the highlight
+                // moves. Once the highlight walks off either end, Tab proceeds
+                // naturally (forward → the promo row / next control; backward →
+                // out of the bar).
+                const suggest = this.searchSuggestRef;
+                const count = suggest?.NavigableItemCount ?? 0;
+                if (!suggest || count === 0) {
+                    break;
+                }
+                if (!event.shiftKey && suggest.HighlightedIndex < count - 1) {
+                    event.preventDefault();
+                    suggest.NavigateDown();
+                } else if (event.shiftKey && suggest.HighlightedIndex > 0) {
+                    event.preventDefault();
+                    suggest.NavigateUp();
+                }
+                break;
+            }
         }
     }
 
@@ -212,6 +253,15 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
 
     /** Handle result selection from suggest dropdown */
     public OnResultSelected(result: SearchResultItem): void {
+        // Direct navigation bypasses ExecuteSearch (which is what normally records
+        // recents), so record the query here — the same compensation the omnibar
+        // palette applies in its Execute(). Enter/see-all paths don't need this:
+        // they land on the results page, whose full search records with the real
+        // count (addToRecentSearches dedups by query, so no double entries).
+        const typed = this.Query.trim();
+        if (typed.length > 0) {
+            this.searchService.RecordRecentSearch(typed, this.PreviewTotalCount);
+        }
         this.ResultSelected.emit(result);
         this.closeSuggest();
     }
@@ -248,7 +298,25 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
     private openSuggest(): void {
         this.IsSuggestOpen = true;
         this.searchSuggestRef?.ResetHighlight();
+        // Refresh in the background so a record opened since the last dropdown
+        // appears; name resolution is memoized in the service, so repeat opens
+        // are cheap.
+        this.refreshRecentRecords();
         this.cdr.detectChanges();
+    }
+
+    /** Load/refresh the recently-opened-records list (fail-soft, fire-and-forget). */
+    private refreshRecentRecords(): void {
+        void this.searchService.GetRecentlyOpenedRecords(3).then((records) => {
+            this.RecentRecords = records;
+            this.cdr.detectChanges();
+        });
+    }
+
+    /** Recently-opened-record selection from the dropdown → bubble to the host. */
+    public OnRecentRecordSelected(record: RecentRecordItem): void {
+        this.RecentRecordSelected.emit(record);
+        this.closeSuggest();
     }
 
     private closeSuggest(): void {

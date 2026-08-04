@@ -53,13 +53,3 @@
   margin-left: 4px;
 }
 
-.no-items-message, .no-views-message {
-  padding: 12px;
-  background-color: var(--mj-bg-surface-card);
-  border-radius: 4px;
-  color: var(--mj-text-muted);
-  text-align: center;
-  font-size: 14px;
-  margin-top: 5px;
-  border: 1px dashed var(--mj-border-default);
-}

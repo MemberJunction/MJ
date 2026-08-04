@@ -1,0 +1,203 @@
+/**
+ * Dry-run preview dialog — net-new rules only. The slide-in shell (.at-slide-*)
+ * is owned by the host (ViewEncapsulation.None) and already styles the panel.
+ * Disposition pills use semantic status tokens so they adapt to dark mode.
+ */
+
+.dry-run-panel {
+    width: 640px;
+    max-width: 92vw;
+}
+
+.dry-source-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95rem;
+    color: var(--mj-text-primary);
+    margin-bottom: 12px;
+}
+.dry-source-line i {
+    color: var(--mj-text-secondary);
+}
+.dry-source-name {
+    font-weight: 600;
+}
+
+/* "nothing persisted" banner */
+.dry-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--mj-status-info) 8%, var(--mj-bg-surface));
+    border: 1px solid var(--mj-status-info-border);
+    color: var(--mj-status-info-text);
+    font-size: 0.85rem;
+    line-height: 1.4;
+    margin-bottom: 14px;
+}
+.dry-banner i {
+    margin-top: 2px;
+}
+
+/* effective config row */
+.dry-effective {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.dry-eff-item {
+    font-size: 0.8rem;
+    color: var(--mj-text-secondary);
+}
+.dry-eff-item b {
+    color: var(--mj-text-primary);
+}
+
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+}
+.pill.purple {
+    background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+}
+
+/* estimate line */
+.dry-estimate {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: var(--mj-text-secondary);
+    margin-bottom: 12px;
+}
+.dry-est-note {
+    font-style: italic;
+    color: var(--mj-text-muted);
+}
+
+/* summary counts */
+.dry-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+/* disposition pills (status-token backed) */
+.disp {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+.disp-apply {
+    background: var(--mj-status-success-bg);
+    color: var(--mj-status-success-text);
+    border: 1px solid var(--mj-status-success-border);
+}
+.disp-inbox {
+    background: var(--mj-status-warning-bg);
+    color: var(--mj-status-warning-text);
+    border: 1px solid var(--mj-status-warning-border);
+}
+.disp-create {
+    background: var(--mj-status-info-bg);
+    color: var(--mj-status-info-text);
+    border: 1px solid var(--mj-status-info-border);
+}
+.disp-reject {
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error-text);
+    border: 1px solid var(--mj-status-error-border);
+}
+
+/* table */
+.dry-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+    margin-bottom: 14px;
+}
+.dry-table thead th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--mj-border-default);
+}
+.dry-table tbody td {
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    color: var(--mj-text-primary);
+    vertical-align: middle;
+}
+.dry-table tbody tr:hover {
+    background: var(--mj-bg-surface-hover);
+}
+.dry-cell-tag {
+    font-weight: 500;
+}
+.dry-cell-matched {
+    color: var(--mj-text-secondary);
+}
+.dry-col-score {
+    text-align: right;
+    width: 64px;
+}
+.dry-mono {
+    font-family: var(--mj-font-mono, monospace);
+    color: var(--mj-text-secondary);
+}
+
+.dry-disclaimer {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 0.78rem;
+    color: var(--mj-text-muted);
+    line-height: 1.4;
+    margin-bottom: 16px;
+}
+.dry-disclaimer i {
+    margin-top: 2px;
+    color: var(--mj-status-warning);
+}
+
+.dry-empty {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--mj-text-muted);
+}
+.dry-empty i {
+    font-size: 1.8rem;
+    margin-bottom: 10px;
+    color: var(--mj-text-disabled);
+}
+.dry-empty p {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    max-width: 420px;
+    margin: 0 auto;
+}
+
+.dry-footer {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}

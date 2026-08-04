@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Option C — Agent-Led · User Routines</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+:root{color-scheme:light;
+--mj-color-brand-300:#4dabd5;--mj-color-brand-400:#2699cc;--mj-color-brand-500:#0076b6;--mj-color-brand-600:#006aa3;--mj-color-brand-700:#005a8a;--mj-color-brand-900:#092340;
+--mj-color-neutral-0:#fff;--mj-color-neutral-50:#f8fafc;--mj-color-neutral-100:#f1f5f9;--mj-color-neutral-200:#e2e8f0;--mj-color-neutral-300:#cbd5e1;--mj-color-neutral-400:#94a3b8;--mj-color-neutral-500:#64748b;--mj-color-neutral-600:#475569;--mj-color-neutral-700:#334155;--mj-color-neutral-800:#1e293b;--mj-color-neutral-900:#0f172a;--mj-color-neutral-950:#020617;
+--mj-color-success-500:#22c55e;--mj-color-success-700:#15803d;--mj-color-success-50:#f0fdf4;
+--mj-color-warning-500:#f59e0b;--mj-color-warning-700:#b45309;--mj-color-warning-50:#fffbeb;
+--mj-color-error-500:#ef4444;--mj-color-error-700:#b91c1c;--mj-color-error-50:#fef2f2;
+--mj-color-violet-600:#7c3aed;--mj-color-tertiary-600:#0891b2;
+--mj-bg-page:var(--mj-color-neutral-50);--mj-bg-surface:var(--mj-color-neutral-0);--mj-bg-surface-card:var(--mj-color-neutral-50);--mj-bg-surface-sunken:var(--mj-color-neutral-100);--mj-bg-surface-hover:var(--mj-color-neutral-100);--mj-bg-surface-elevated:var(--mj-color-neutral-0);
+--mj-text-primary:var(--mj-color-neutral-800);--mj-text-secondary:var(--mj-color-neutral-600);--mj-text-muted:var(--mj-color-neutral-500);
+--mj-border-default:var(--mj-color-neutral-200);--mj-border-subtle:var(--mj-color-neutral-100);--mj-border-strong:var(--mj-color-neutral-300);
+--mj-brand-primary:var(--mj-color-brand-500);--mj-brand-primary-hover:var(--mj-color-brand-600);
+--mj-status-success:var(--mj-color-success-500);--mj-status-success-text:var(--mj-color-success-700);--mj-status-success-bg:var(--mj-color-success-50);
+--mj-status-warning:var(--mj-color-warning-500);--mj-status-warning-text:var(--mj-color-warning-700);--mj-status-warning-bg:var(--mj-color-warning-50);
+--mj-status-error:var(--mj-color-error-500);--mj-status-error-text:var(--mj-color-error-700);--mj-status-error-bg:var(--mj-color-error-50);
+--shadow-1:0 1px 2px rgba(15,23,42,.06),0 1px 3px rgba(15,23,42,.08);--shadow-2:0 4px 12px rgba(15,23,42,.10);}
+[data-theme="dark"]{color-scheme:dark;
+--mj-bg-page:var(--mj-color-neutral-900);--mj-bg-surface:var(--mj-color-neutral-800);--mj-bg-surface-card:#253347;--mj-bg-surface-sunken:var(--mj-color-neutral-950);--mj-bg-surface-hover:var(--mj-color-neutral-600);--mj-bg-surface-elevated:var(--mj-color-neutral-700);
+--mj-text-primary:var(--mj-color-neutral-100);--mj-text-secondary:var(--mj-color-neutral-300);--mj-text-muted:var(--mj-color-neutral-400);
+--mj-border-default:var(--mj-color-neutral-700);--mj-border-subtle:var(--mj-color-neutral-800);--mj-border-strong:var(--mj-color-neutral-600);
+--mj-brand-primary:var(--mj-color-brand-400);--mj-brand-primary-hover:var(--mj-color-brand-300);
+--mj-status-success-bg:rgba(34,197,94,.15);--mj-status-success-text:#dcfce7;
+--mj-status-warning-bg:rgba(245,158,11,.15);--mj-status-warning-text:#fef3c7;
+--mj-status-error-bg:rgba(239,68,68,.15);--mj-status-error-text:#fee2e2;
+--shadow-1:0 1px 2px rgba(0,0,0,.4);--shadow-2:0 4px 14px rgba(0,0,0,.5);}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--mj-bg-page);color:var(--mj-text-primary);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+.thesis{background:linear-gradient(90deg,var(--mj-color-brand-900),var(--mj-color-brand-700));color:#fff;padding:10px 20px;display:flex;gap:18px;align-items:center;font-size:13px;flex:0 0 auto}
+.thesis b{font-size:14px}.thesis .tag{background:rgba(255,255,255,.15);padding:2px 10px;border-radius:10px;font-size:11px;letter-spacing:.4px}
+.thesis .spacer{flex:1}
+.theme-btn{background:rgba(255,255,255,.15);color:#fff;padding:6px 14px;border-radius:8px;font-size:12px}
+.app{flex:1;display:flex;min-height:0}
+.sidebar{width:272px;background:var(--mj-bg-surface);border-right:1px solid var(--mj-border-default);display:flex;flex-direction:column;overflow-y:auto}
+.sb-head{padding:14px 14px 8px;display:flex;align-items:center;gap:8px}
+.sb-head h2{font-size:15px;flex:1}
+.icon-btn{width:30px;height:30px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:var(--mj-text-secondary)}
+.icon-btn:hover{background:var(--mj-bg-surface-hover);color:var(--mj-text-primary)}
+.sb-sec{font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--mj-text-muted);padding:14px 16px 5px;display:flex;align-items:center;gap:8px}
+.sb-sec .n{background:var(--mj-bg-surface-sunken);border-radius:8px;padding:0 7px;font-size:10.5px}
+.convo{padding:8px 14px;margin:1px 8px;border-radius:8px;cursor:pointer}
+.convo:hover{background:var(--mj-bg-surface-hover)}
+.convo.active{background:color-mix(in srgb,var(--mj-brand-primary) 10%,transparent)}
+.convo .t{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.convo .s{font-size:12px;color:var(--mj-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ⟡ C: routines in the sidebar, first-class like conversations */
+.rt-item{padding:8px 14px;margin:1px 8px;border-radius:8px;cursor:pointer;display:flex;gap:9px;align-items:center}
+.rt-item:hover{background:var(--mj-bg-surface-hover)}
+.rt-item.active{background:color-mix(in srgb,var(--mj-color-violet-600) 10%,transparent)}
+.st{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.st.ok{background:var(--mj-status-success)}.st.err{background:var(--mj-status-error)}.st.pause{background:var(--mj-text-muted)}
+.rt-item .m{flex:1;min-width:0}
+.rt-item .t{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rt-item .s{font-size:11.5px;color:var(--mj-text-muted)}
+.rt-item .unread{background:var(--mj-color-violet-600);color:#fff;font-size:10px;font-weight:700;border-radius:8px;padding:1px 6px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--mj-color-brand-500);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto}
+.chat{flex:1;display:flex;flex-direction:column;min-width:0}
+.chat-head{background:var(--mj-bg-surface);border-bottom:1px solid var(--mj-border-default);padding:10px 20px;display:flex;align-items:center;gap:12px}
+.chat-head h1{font-size:15px;font-weight:650;display:flex;gap:10px;align-items:center}
+.rt-flag{display:inline-flex;gap:6px;align-items:center;background:color-mix(in srgb,var(--mj-color-violet-600) 12%,transparent);color:var(--mj-color-violet-600);font-size:11px;font-weight:700;padding:3px 11px;border-radius:11px}
+[data-theme="dark"] .rt-flag{color:#c4b5fd}
+.msgs{flex:1;overflow-y:auto;padding:0 0 20px}
+/* ⟡ C: pinned routine spec card at the top of a routine thread */
+.pin{max-width:780px;margin:18px auto 22px;padding:0 24px}
+.pin-card{border:1px solid var(--mj-border-default);border-left:4px solid var(--mj-color-violet-600);background:var(--mj-bg-surface);border-radius:12px;box-shadow:var(--shadow-1);padding:14px 18px}
+.pin-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.pin-top b{font-size:14px;flex:1}
+.mini-btn{border:1px solid var(--mj-border-default);border-radius:7px;padding:4px 12px;font-size:12px;font-weight:600;color:var(--mj-text-secondary)}
+.mini-btn:hover{border-color:var(--mj-brand-primary);color:var(--mj-brand-primary)}
+.spec{font-size:13px;color:var(--mj-text-secondary);line-height:1.7}
+.spec .chip{display:inline-flex;gap:6px;align-items:center;background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-default);border-radius:12px;padding:2px 11px;font-weight:600;color:var(--mj-text-primary);font-size:12.5px;cursor:pointer;position:relative}
+.spec .chip:hover{border-color:var(--mj-brand-primary)}
+.spec .chip i.caret{font-size:9px;color:var(--mj-text-muted)}
+.hist-strip{display:flex;gap:4px;align-items:center;margin-top:10px;font-size:11.5px;color:var(--mj-text-muted)}
+.hist-strip .d{width:9px;height:9px;border-radius:3px}
+.d.ok{background:var(--mj-status-success)}.d.chg{background:var(--mj-color-violet-600)}.d.err{background:var(--mj-status-error)}.d.skip{background:var(--mj-border-strong)}
+.mrow{max-width:780px;margin:0 auto 16px;padding:0 24px;display:flex;gap:12px}
+.bubble{background:var(--mj-bg-surface);border:1px solid var(--mj-border-subtle);border-radius:12px;padding:12px 16px;box-shadow:var(--shadow-1);flex:1;font-size:13.5px}
+.mrow.user .bubble{background:color-mix(in srgb,var(--mj-brand-primary) 7%,var(--mj-bg-surface))}
+.mname{font-size:12px;font-weight:700;margin-bottom:4px;color:var(--mj-text-secondary)}
+.mtime{font-size:11px;color:var(--mj-text-muted);font-weight:400;margin-left:6px}
+.daysep{max-width:780px;margin:4px auto 16px;padding:0 24px;display:flex;align-items:center;gap:12px;color:var(--mj-text-muted);font-size:11.5px}
+.daysep::before,.daysep::after{content:"";height:1px;background:var(--mj-border-default);flex:1}
+.alert .bubble{border-left:3px solid var(--mj-status-warning)}
+.alert-badge{display:inline-flex;gap:6px;align-items:center;background:var(--mj-status-warning-bg);color:var(--mj-status-warning-text);font-size:11px;font-weight:700;padding:2px 10px;border-radius:10px;margin-left:8px}
+/* ⟡ C: the agent's routine PROPOSAL card */
+.proposal{border:1.5px solid var(--mj-color-violet-600);border-radius:14px;background:var(--mj-bg-surface);box-shadow:var(--shadow-2);overflow:hidden;margin-top:10px}
+.pr-head{display:flex;gap:10px;align-items:center;padding:12px 16px;background:color-mix(in srgb,var(--mj-color-violet-600) 7%,var(--mj-bg-surface));border-bottom:1px solid var(--mj-border-subtle);font-size:13px}
+.pr-head .ic{width:28px;height:28px;border-radius:8px;background:var(--mj-color-violet-600);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+.pr-body{padding:15px 18px;font-size:14px;line-height:2.15}
+.pr-body .chip{display:inline-flex;gap:6px;align-items:center;background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-default);border-radius:13px;padding:2px 12px;font-weight:650;font-size:13px;cursor:pointer;position:relative;white-space:nowrap}
+.pr-body .chip:hover{border-color:var(--mj-color-violet-600)}
+.pr-body .chip .caret{font-size:9px;color:var(--mj-text-muted)}
+.chip.open{border-color:var(--mj-color-violet-600);background:color-mix(in srgb,var(--mj-color-violet-600) 8%,transparent)}
+/* popover on the schedule chip */
+.pop{position:absolute;top:34px;left:0;width:270px;background:var(--mj-bg-surface-elevated);border:1px solid var(--mj-border-default);border-radius:12px;box-shadow:var(--shadow-2);z-index:20;font-weight:400;line-height:1.5}
+.pop .opt{padding:9px 14px;font-size:12.5px;display:flex;gap:9px;align-items:center;color:var(--mj-text-secondary)}
+.pop .opt:hover{background:var(--mj-bg-surface-hover)}
+.pop .opt.sel{color:var(--mj-brand-primary);font-weight:650}
+.pop .opt.sel i{visibility:visible}
+.pop .opt i{width:14px;visibility:hidden}
+.pop .free{border-top:1px solid var(--mj-border-subtle);padding:10px 14px;font-size:12.5px;color:var(--mj-text-muted);font-style:italic}
+.pr-foot{display:flex;gap:10px;padding:12px 16px;border-top:1px solid var(--mj-border-subtle)}
+.btn{border-radius:9px;padding:8px 18px;font-size:13px;font-weight:600}
+.btn.primary{background:var(--mj-color-violet-600);color:#fff}
+.btn.primary:hover{opacity:.92}
+.btn.ghost{color:var(--mj-text-secondary)}
+.btn.ghost:hover{background:var(--mj-bg-surface-hover)}
+.composer{padding:12px 24px 16px;max-width:828px;margin:0 auto;width:100%}
+.comp-box{background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:14px;box-shadow:var(--shadow-1);padding:11px 13px}
+.comp-box .txt{font-size:13.5px;padding:2px 2px 10px}
+.comp-box .txt .ph{color:var(--mj-text-muted)}
+.comp-icons{display:flex;gap:4px;align-items:center}
+.comp-icons .spacer{flex:1}
+.send{width:30px;height:30px;border-radius:8px;background:var(--mj-brand-primary);color:#fff;display:inline-flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<div class="thesis">
+  <span class="tag">OPTION C</span>
+  <div><b>Agent-Led</b> — no forms, ever. You <i>ask</i> for a routine (or click ⟲) and the agent proposes it back as an editable sentence with tap-to-adjust chips; each routine becomes a first-class thread in the sidebar where its runs post as messages, with a pinned spec card on top. <b>Best for:</b> business users; the most AI-native and most differentiated. <b>Tradeoff:</b> precision configuration is slower (chips/popovers vs. a form); relies on NL schedule parsing done well.</div>
+  <div class="spacer"></div>
+  <button class="theme-btn" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'"><i class="fa-solid fa-circle-half-stroke"></i> Toggle dark</button>
+</div>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sb-head"><h2>Conversations</h2><button class="icon-btn"><i class="fa-solid fa-pen-to-square"></i></button></div>
+    <div class="convo"><div class="t">Pipeline review with Query Builder</div><div class="s">You: how did new pipeline do…</div></div>
+    <div class="convo active"><div class="t">Competitor pricing research</div><div class="s">You: watch competitor pricing daily</div></div>
+    <div class="convo"><div class="t">Q3 membership renewals</div><div class="s">Skip: The renewal forecast…</div></div>
+    <!-- ⟡ routines as first-class sidebar section -->
+    <div class="sb-sec"><i class="fa-solid fa-rotate"></i> Routines <span class="n">4</span><span style="flex:1"></span><i class="fa-solid fa-plus" style="cursor:pointer"></i></div>
+    <div class="rt-item"><span class="st ok"></span><div class="m"><div class="t">Morning Pipeline Digest</div><div class="s">ran 7:00 AM · next tomorrow</div></div><span class="unread">1</span></div>
+    <div class="rt-item active"><span class="st ok"></span><div class="m"><div class="t">Competitor Price Watch</div><div class="s">change detected · 11:42 AM</div></div><span class="unread">2</span></div>
+    <div class="rt-item"><span class="st err"></span><div class="m"><div class="t">Weekly Churn Snapshot</div><div class="s">last run failed · Mon 6:00</div></div></div>
+    <div class="rt-item"><span class="st pause"></span><div class="m"><div class="t">AP Invoice Anomaly Watch</div><div class="s">paused</div></div></div>
+  </aside>
+  <main class="chat">
+    <div class="chat-head">
+      <h1>Competitor Price Watch <span class="rt-flag"><i class="fa-solid fa-binoculars"></i> Watch routine</span></h1>
+      <span style="flex:1"></span>
+      <button class="mini-btn"><i class="fa-solid fa-play"></i> Run now</button>
+      <button class="mini-btn"><i class="fa-solid fa-pause"></i> Pause</button>
+    </div>
+    <div class="msgs">
+      <!-- pinned spec card: the routine IS a sentence with chips -->
+      <div class="pin">
+        <div class="pin-card">
+          <div class="pin-top"><i class="fa-solid fa-thumbtack" style="color:var(--mj-text-muted);font-size:12px"></i><b>Routine</b>
+            <span style="font-size:11.5px;color:var(--mj-text-muted)">created Jun 12 from this conversation</span></div>
+          <div class="spec">
+            <span class="chip"><i class="fa-solid fa-robot" style="color:var(--mj-color-violet-600)"></i> Research Agent <i class="fa-solid fa-chevron-down caret"></i></span>
+            checks competitor pricing pages
+            <span class="chip"><i class="fa-regular fa-clock"></i> every 4 hours <i class="fa-solid fa-chevron-down caret"></i></span>
+            with <span class="chip"><i class="fa-solid fa-wand-magic-sparkles" style="color:#2563EB"></i> Web Research</span>
+            and pings me <span class="chip"><i class="fa-solid fa-binoculars"></i> only when prices change <i class="fa-solid fa-chevron-down caret"></i></span>
+            via <span class="chip"><i class="fa-solid fa-bell"></i> in-app + email <i class="fa-solid fa-chevron-down caret"></i></span>
+          </div>
+          <div class="hist-strip">
+            <span class="d ok"></span><span class="d ok"></span><span class="d ok"></span><span class="d chg"></span><span class="d ok"></span><span class="d ok"></span><span class="d chg"></span>
+            <span style="margin-left:8px">last 7 runs · 2 changes caught · <span style="color:var(--mj-brand-primary);font-weight:600;cursor:pointer">full history ⧉</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="daysep">Today</div>
+      <!-- quiet run (watch found nothing) is a subtle one-liner -->
+      <div class="daysep" style="margin-bottom:14px;font-style:italic">7:42 AM — checked, no changes <i class="fa-regular fa-eye" style="font-size:10px"></i></div>
+      <!-- change-detected run posts a real message -->
+      <div class="mrow alert">
+        <span class="avatar" style="background:var(--mj-color-violet-600)">RA</span>
+        <div class="bubble">
+          <div class="mname">Research Agent <span class="mtime">11:42 AM</span><span class="alert-badge"><i class="fa-solid fa-bolt"></i> Change detected</span></div>
+          Two competitors moved prices since the last check: <b>Fonteva</b> raised Professional tier <b>+8%</b> ($94 → $102/user), and <b>Nimble AMS</b> introduced a new "Starter" tier at <b>$39/user</b> undercutting your entry point. Impacted comparison pages and screenshots are in the artifact. <span style="color:var(--mj-brand-primary);font-weight:600;font-size:12.5px">View full run ⧉</span>
+        </div>
+      </div>
+      <!-- creating a NEW routine conversationally, with proposal card + open popover -->
+      <div class="mrow user">
+        <span class="avatar">AN</span>
+        <div class="bubble"><div class="mname">You <span class="mtime">11:58 AM</span></div>
+          this is great — also watch their job postings and tell me weekly what roles they're hiring for</div>
+      </div>
+      <div class="mrow">
+        <span class="avatar" style="background:var(--mj-color-violet-600)">RA</span>
+        <div class="bubble">
+          <div class="mname">Research Agent <span class="mtime">11:58 AM</span></div>
+          Happy to. Here's the routine I'll set up — tap anything to adjust:
+          <div class="proposal">
+            <div class="pr-head"><span class="ic"><i class="fa-solid fa-rotate"></i></span><b>New routine — Competitor Hiring Watch</b></div>
+            <div class="pr-body">
+              I'll research
+              <span class="chip">competitor job postings <i class="fa-solid fa-chevron-down caret"></i></span>
+              <span class="chip open">every Friday at 8:00 AM <i class="fa-solid fa-chevron-down caret"></i>
+                <span class="pop">
+                  <span class="opt"><i class="fa-solid fa-check"></i> Every morning · 8:00</span>
+                  <span class="opt sel"><i class="fa-solid fa-check"></i> Weekly · Friday 8:00</span>
+                  <span class="opt"><i class="fa-solid fa-check"></i> Every other week</span>
+                  <span class="opt"><i class="fa-solid fa-check"></i> Monthly · 1st</span>
+                  <span class="free">…or just type it: "tuesdays after standup"</span>
+                </span>
+              </span>
+              (<span class="chip">America/Chicago <i class="fa-solid fa-chevron-down caret"></i></span>),
+              summarize new roles by function, and notify you
+              <span class="chip">every run <i class="fa-solid fa-chevron-down caret"></i></span>
+              via <span class="chip"><i class="fa-solid fa-bell"></i> in-app <i class="fa-solid fa-chevron-down caret"></i></span>
+            </div>
+            <div class="pr-foot">
+              <button class="btn primary"><i class="fa-solid fa-check"></i>&nbsp; Start routine</button>
+              <button class="btn ghost">Not now</button>
+              <span style="flex:1"></span>
+              <span style="font-size:12px;color:var(--mj-text-muted);align-self:center">First run: Fri Jul 4, 8:00 AM</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="composer">
+      <div class="comp-box">
+        <div class="txt"><span class="ph">Reply — or say things like “pause this”, “run it now”, “switch to daily”…</span></div>
+        <div class="comp-icons">
+          <button class="icon-btn"><i class="fa-solid fa-clipboard-check"></i></button>
+          <button class="icon-btn"><i class="fa-solid fa-paperclip"></i></button>
+          <span class="spacer"></span>
+          <button class="icon-btn"><i class="fa-solid fa-microphone"></i></button>
+          <button class="send"><i class="fa-solid fa-arrow-up"></i></button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

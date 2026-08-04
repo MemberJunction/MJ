@@ -4,9 +4,18 @@ import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJAPIKeyEntity, MJAPIScopeEntity, MJAPIKeyUsageLogEntity, MJAPIApplicationEntity, ResourceData } from '@memberjunction/core-entities';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
+import { TabConfig } from '@memberjunction/ng-ui-components';
 import { Subject } from 'rxjs';
 import { APIKeyFilter, APIKeyListComponent } from './api-key-list.component';
 import { APIKeyCreateResult } from './api-key-create-dialog.component';
+import { validateEnumParam, validateStringParam } from '../shared/agent-tool-validation';
+import {
+    buildAPIKeysAgentContext,
+    VALID_API_KEYS_TABS,
+    VALID_API_KEYS_FILTERS,
+    APIKeysTab,
+    APIKeysFilter,
+} from './api-keys-agent-context';
 
 /** Activity types for recent activity display */
 type ActivityAction = 'Created' | 'Updated' | 'Revoked' | 'Used' | 'Extended';
@@ -60,7 +69,6 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     public CurrentView: ViewType = 'overview';
     public ListFilter: APIKeyFilter = 'all';
     public MainTab: MainTab = 'keys';
-    public NavOpen = false;
 
     // Application and scope counts for tab badges
     public ApplicationCount = 0;
@@ -87,6 +95,8 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     public ShowCreateDialog = false;
     public ShowEditPanel = false;
     public SelectedKeyId: string | null = null;
+    /** Friendly Label of the selected key (NEVER the key value/hash/prefix). */
+    public SelectedKeyLabel: string | null = null;
 
     // Default UI config for categories without explicit configuration
     private readonly defaultUIConfig = {
@@ -108,7 +118,172 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
 
     async ngOnInit(): Promise<void> {
         super.ngOnInit();
+        this.registerAgentClientTools();
         await this.loadData();
+        this.publishAgentContext();
+    }
+
+    // ================================================================
+    // AI Agent Context & Client Tools
+    //
+    // 🚨 SAFETY BOUNDARY — READ-ONLY / NAVIGATIONAL ONLY 🚨
+    // API Keys is a highly security-sensitive admin surface. The agent context
+    // and client tools registered here are strictly NAVIGATIONAL + READ-ONLY:
+    // tab switches, status filtering, search, key-LABEL selection (opens the view
+    // panel), and data refresh. The mutating operations on this component (create
+    // key, revoke key, extend expiration, edit) are DELIBERATELY NOT exposed to
+    // the agent — they must remain human-initiated.
+    //
+    // Context exposes ONLY: navigation state, aggregate counts, a health score,
+    // and bounded FRIENDLY DISPLAY names — key Labels (user-chosen friendly names
+    // like "CI pipeline", NOT the key value), Application names, and Scope
+    // category names. It NEVER exposes the key's hashed value (`Hash`), its
+    // `KeyPrefix` (part of the key material), the cleartext key/token shown once
+    // at creation, or any other reveal-able secret. None of those values are ever
+    // read into the published context. See api-keys-agent-context.ts for the
+    // metadata-only context contract and the no-secret-leak unit test.
+    // ================================================================
+
+    /**
+     * Publish the current API Keys dashboard state to the AI agent. Re-invoked on
+     * every meaningful state change (data load, tab switch, selection). Only
+     * counts, navigation state, and friendly display names are exposed — never
+     * key secrets, hashes, or prefixes.
+     */
+    private publishAgentContext(): void {
+        this.navigationService.SetAgentContext(this, buildAPIKeysAgentContext({
+            MainTab: this.MainTab,
+            CurrentView: this.CurrentView,
+            ListFilter: this.ListFilter,
+            IsLoading: this.IsLoading,
+
+            TotalKeys: this.TotalKeys,
+            ActiveKeys: this.ActiveKeys,
+            RevokedKeys: this.RevokedKeys,
+            ExpiringSoonCount: this.ExpiringSoonCount,
+            ExpiredKeys: this.ExpiredKeys,
+            NeverUsedKeys: this.NeverUsedKeys,
+            ApplicationCount: this.ApplicationCount,
+            ScopeCount: this.ScopeCount,
+            HealthScore: this.getHealthScore(),
+
+            // Friendly display names ONLY — never key material.
+            KeyLabels: this.APIKeys.map(k => k.Label).filter(l => !!l),
+            TopUsedKeyLabels: this.TopUsedKeys.map(k => k.Label).filter(l => !!l),
+            ApplicationNames: APIKeysEngineBase.Instance.Applications.map(a => a.Name).filter(n => !!n),
+            ScopeCategoryNames: this.ScopeStats.map(s => s.category).filter(c => !!c),
+
+            SelectedKeyId: this.SelectedKeyId,
+            SelectedKeyLabel: this.SelectedKeyLabel,
+        }));
+    }
+
+    /**
+     * Register the read-only / navigational client tools the agent may invoke.
+     * Every Handler is tolerant: validates input and returns
+     * `{ Success: false, ErrorMessage }` rather than throwing.
+     */
+    private registerAgentClientTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SwitchAPIKeysTab',
+                Description: 'Switch the active API Keys tab. Valid tabs: keys, applications, scopes, usage.',
+                ParameterSchema: { type: 'object', properties: { tab: { type: 'string', enum: ['keys', 'applications', 'scopes', 'usage'] } }, required: ['tab'] },
+                Handler: async (params: Record<string, unknown>) => this.handleSwitchTabTool(params),
+            },
+            {
+                Name: 'FilterAPIKeysByStatus',
+                Description: 'Show the API key list filtered by status. Valid filters: all, active, revoked, expiring, expired, never-used.',
+                ParameterSchema: { type: 'object', properties: { filter: { type: 'string', enum: ['all', 'active', 'revoked', 'expiring', 'expired', 'never-used'] } }, required: ['filter'] },
+                Handler: async (params: Record<string, unknown>) => this.handleFilterByStatusTool(params),
+            },
+            {
+                Name: 'SearchAPIKeys',
+                Description: 'Search the API key list by label or other text. Switches to the list view if needed.',
+                ParameterSchema: { type: 'object', properties: { searchText: { type: 'string' } }, required: ['searchText'] },
+                Handler: async (params: Record<string, unknown>) => this.handleSearchTool(params),
+            },
+            {
+                Name: 'SelectAPIKey',
+                Description: 'Select an API key by its friendly Label (e.g. "CI pipeline") to open its details panel for VIEWING. Read-only — opens the panel for inspection; does NOT reveal the key value/hash and does NOT edit, revoke, or rotate. Returns the matched key Label, or the available Labels on a miss.',
+                ParameterSchema: { type: 'object', properties: { label: { type: 'string' } }, required: ['label'] },
+                Handler: async (params: Record<string, unknown>) => this.handleSelectKeyTool(params),
+            },
+            {
+                Name: 'RefreshAPIKeyData',
+                Description: 'Reload all API key dashboard data. Read-only — does not create, revoke, or modify any keys.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => this.handleRefreshTool(),
+            },
+        ]);
+    }
+
+    private static readonly API_KEYS_TABS = VALID_API_KEYS_TABS;
+    private static readonly API_KEYS_FILTERS = VALID_API_KEYS_FILTERS;
+
+    private handleSwitchTabTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateEnumParam(params?.['tab'], APIKeysResourceComponent.API_KEYS_TABS, 'tab');
+        if (!v.ok) return v.result;
+        this.switchTab(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    private handleFilterByStatusTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateEnumParam(params?.['filter'], APIKeysResourceComponent.API_KEYS_FILTERS, 'filter');
+        if (!v.ok) return v.result;
+        this.MainTab = 'keys';
+        this.showListView(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    private handleSearchTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateStringParam(params?.['searchText'], 'searchText');
+        if (!v.ok) return v.result;
+        // Ensure the list view is active so the list component (and its search box) exists.
+        this.MainTab = 'keys';
+        this.showListView(this.ListFilter);
+        this.cdr.detectChanges();
+        if (this.keyListComponent) {
+            this.keyListComponent.SearchText = v.value;
+            this.keyListComponent.onSearch();
+        }
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /**
+     * Resolve an API key by its friendly Label (exact, case-insensitive, then
+     * partial-contains) and open its details panel for VIEWING. Read-only: opens
+     * the inspection panel; never reveals the key value/hash/prefix and never
+     * edits, revokes, or rotates.
+     */
+    private handleSelectKeyTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateStringParam(params?.['label'], 'label');
+        if (!v.ok) return v.result;
+        const query = v.value.trim().toLowerCase();
+        if (!query) return { Success: false, ErrorMessage: 'label must be a non-empty string.' };
+
+        const exact = this.APIKeys.find(k => (k.Label ?? '').toLowerCase() === query);
+        const match = exact ?? this.APIKeys.find(k => (k.Label ?? '').toLowerCase().includes(query));
+        if (!match) {
+            const available = this.APIKeys.map(k => k.Label).filter(l => !!l).slice(0, 25).join(', ');
+            return { Success: false, ErrorMessage: `No API key matches Label "${v.value}". Available labels: ${available || '(none)'}.` };
+        }
+        this.MainTab = 'keys';
+        this.openEditPanel(match);
+        return { Success: true };
+    }
+
+    private async handleRefreshTool(): Promise<{ Success: boolean; ErrorMessage?: string }> {
+        try {
+            await this.refresh();
+            this.publishAgentContext();
+            return { Success: true };
+        } catch (e) {
+            return { Success: false, ErrorMessage: e instanceof Error ? e.message : 'Refresh failed.' };
+        }
     }
 
     ngOnDestroy(): void {
@@ -334,6 +509,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     public showListView(filter: APIKeyFilter = 'all'): void {
         this.ListFilter = filter;
         this.CurrentView = 'list';
+        this.publishAgentContext();
     }
 
     /**
@@ -371,7 +547,9 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      */
     public openEditPanel(key: MJAPIKeyEntity): void {
         this.SelectedKeyId = key.ID;
+        this.SelectedKeyLabel = key.Label;
         this.ShowEditPanel = true;
+        this.publishAgentContext();
     }
 
     /**
@@ -401,6 +579,8 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     public onEditPanelClosed(): void {
         this.ShowEditPanel = false;
         this.SelectedKeyId = null;
+        this.SelectedKeyLabel = null;
+        this.publishAgentContext();
     }
 
     /**
@@ -563,28 +743,55 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     }
 
     /**
-     * Switch to a main tab
+     * Switch to a main tab. Resets to the overview view when returning to the
+     * Keys tab so the user always lands on the dashboard, not a stale list view.
      */
     public switchTab(tab: MainTab): void {
         this.MainTab = tab;
-        // Reset to overview when switching back to keys
         if (tab === 'keys') {
             this.CurrentView = 'overview';
         }
+        this.publishAgentContext();
     }
 
     /**
-     * Toggle mobile navigation
+     * L2 tabs rendered as `<mj-tab-nav>` in the interior chrome's [toolbar] slot.
+     * Badges reflect live counts; Usage Analytics has no badge by design.
      */
-    public toggleNav(): void {
-        this.NavOpen = !this.NavOpen;
+    public get tabsConfig(): TabConfig[] {
+        return [
+            { key: 'keys',         icon: 'fa-solid fa-key',           label: 'API Keys',         badge: this.TotalKeys },
+            { key: 'applications', icon: 'fa-solid fa-cube',          label: 'Applications',     badge: this.ApplicationCount },
+            { key: 'scopes',       icon: 'fa-solid fa-shield-halved', label: 'Scopes',           badge: this.ScopeCount },
+            { key: 'usage',        icon: 'fa-solid fa-chart-line',    label: 'Usage Analytics' }
+        ];
     }
 
-    /**
-     * Close mobile navigation
-     */
-    public closeNav(): void {
-        this.NavOpen = false;
+    /** Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output. */
+    public onTabChange(key: string): void {
+        if (key === 'keys' || key === 'applications' || key === 'scopes' || key === 'usage') {
+            this.switchTab(key);
+        }
+    }
+
+    /** Title rendered in the interior chrome — varies per tab. */
+    public get currentTabTitle(): string {
+        switch (this.MainTab) {
+            case 'keys':         return 'API Keys';
+            case 'applications': return 'API Applications';
+            case 'scopes':       return 'API Scopes';
+            case 'usage':        return 'Usage Analytics';
+        }
+    }
+
+    /** Subtitle rendered in the interior chrome — varies per tab to give context. */
+    public get currentTabSubtitle(): string {
+        switch (this.MainTab) {
+            case 'keys':         return 'Manage API keys for external integrations and services';
+            case 'applications': return 'Register and manage API applications';
+            case 'scopes':       return 'Permission scopes that can be granted to API keys';
+            case 'usage':        return 'Track usage patterns and analytics across all API keys';
+        }
     }
 
     /**

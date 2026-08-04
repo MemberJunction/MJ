@@ -67,6 +67,47 @@ export class CronExpressionHelper {
     }
 
     /**
+     * Estimate the minimum interval (in ms) between consecutive executions of
+     * a cron expression by sampling the next several runs and returning the
+     * smallest gap. Returns `Number.POSITIVE_INFINITY` if the expression cannot
+     * be parsed or yields fewer than two runs in the sample window.
+     *
+     * @param cronExpression - Cron expression string
+     * @param timezone - IANA timezone
+     * @param sampleSize - Number of consecutive runs to sample (default: 6)
+     * @param fromDate - Optional date to start sampling from (defaults to now)
+     */
+    public static GetMinIntervalMs(
+        cronExpression: string,
+        timezone: string,
+        sampleSize: number = 6,
+        fromDate?: Date
+    ): number {
+        try {
+            const interval = cronParser.parseExpression(cronExpression, {
+                currentDate: fromDate || new Date(),
+                tz: timezone
+            });
+
+            let previous: Date | null = null;
+            let minGap = Number.POSITIVE_INFINITY;
+            for (let i = 0; i < sampleSize; i++) {
+                const next = interval.next().toDate();
+                if (previous) {
+                    const gap = next.getTime() - previous.getTime();
+                    if (gap > 0 && gap < minGap) {
+                        minGap = gap;
+                    }
+                }
+                previous = next;
+            }
+            return minGap;
+        } catch {
+            return Number.POSITIVE_INFINITY;
+        }
+    }
+
+    /**
      * Validate a cron expression
      *
      * @param cronExpression - Cron expression to validate

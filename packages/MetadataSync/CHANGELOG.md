@@ -1,5 +1,635 @@
 # @memberjunction/metadata-sync
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/graphql-dataprovider@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/core-entities-server@6.0.0
+  - @memberjunction/postgresql-dataprovider@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/server-bootstrap-lite@6.0.0
+  - @memberjunction/cli-core@6.0.0
+  - @memberjunction/config@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/server-bootstrap-lite@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/graphql-dataprovider@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/core-entities-server@5.51.0
+  - @memberjunction/postgresql-dataprovider@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/cli-core@5.51.0
+  - @memberjunction/config@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- dd04a24: Widen the zod pin from `~3.24.4` to `^3.25.0` so it satisfies `@modelcontextprotocol/sdk`'s peer requirement (`zod ^3.25 || ^4.0`). The old tilde pin has no overlap with the SDK's peer range, which breaks strict package managers (pnpm) and MJCLI's oclif manifest generation under strict installs. zod 3.25.x keeps the classic v3 API at the root import, so this is a version-range correction with no behavior change.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/server-bootstrap-lite@5.50.0
+  - @memberjunction/core-entities-server@5.50.0
+  - @memberjunction/config@5.50.0
+  - @memberjunction/generic-database-provider@5.50.0
+  - @memberjunction/graphql-dataprovider@5.50.0
+  - @memberjunction/sqlserver-dataprovider@5.50.0
+  - @memberjunction/postgresql-dataprovider@5.50.0
+  - @memberjunction/cli-core@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/sql-dialect@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- 1a15bd2: Add the **"Integration Test" `TestType`** — a headless, metadata-driven integration tier that runs the real MJ provider stack (live SQL Server / GraphQL, real cache managers + engines, real entity saves; no browser, no mocks) inside the Testing Framework, focused first on cache-integrity. The standalone `tsx` cache suites in `packages/MJServer/integration-test-scripts/` are graduated into first-class check bundles on one shared registry, so the same definitions run identically via the `npm run test:integration` aggregator **and** via `mj test` / `TestRun` (the `IntegrationTestDriver`) — a single source of truth.
+
+  **New package `@memberjunction/testing-integration`.** Dedicated-process bootstrap that installs an instrumented `LocalCacheManager` as the first caller (`bootstrapIntegrationServer` / `bootstrapIntegrationClient` / `installInstrumentedCacheFirst`, gated by `MJ_INTEGRATION_TEST=1`); the `IntegrationCheckRegistry` + `NamedCheck` contract; the `InstrumentedLocalStorageProvider` / `UniqueFilter` / `TestRunner` / `ai-verify` proof primitives; and the `IntegrationTestDriver` (`@RegisterClass(BaseTestDriver, 'IntegrationTestDriver')`), which dispatches a Test's configured bundles against one bootstrapped context and maps each check to an `OracleResult`. `@memberjunction/testing-cli`'s run/suite commands install the instrumented cache first under `MJ_INTEGRATION_TEST=1` (byte-for-byte unchanged otherwise); the old `lib/harness.ts` becomes a thin re-export shim. The pre-built `@memberjunction/server-bootstrap` class-registration manifest is regenerated (and the package gains a `@memberjunction/testing-integration` dependency) so `IntegrationTestDriver` is registered in-process and survives tree-shaking.
+
+  **Graduated check bundles (single source of truth).** Every standalone suite is now a thin dispatcher of a registry bundle with a metadata `Test` record (IT01–IT23) joined to an "Integration Tests" suite:
+  - **Deterministic server:** `server-cache` (S1–S31), `runquery-cache`, `dataset-cache`, `aggregates-cache` (AGG1–3), `record-process`, `record-process-facade`, `scheduled-jobs`, `field-rules-bulk-update`, `remote-operations`, `ai-skills`, `api-keys`, `predictive-studio` seams, `rls-isolation` (RLS1–RLS10 — the two overlapping RLS implementations were merged into one canonical bundle), plus the final three graduated in this pass: `lists` (LS1–3, keyset pagination), `open-app-teardown` (OAT1–2, the FK-graph cascade + link-less Application cleanup — adds a `@memberjunction/open-app-engine` dependency), and `user-routines` (UR1–16, the entity servers + dispatcher end-to-end).
+  - **Deterministic client** (needs a live MJAPI; skips cleanly otherwise): `remote-op-wire-progress` (the client bootstrap now derives a `ws(s)://` subscription URL from the HTTP endpoint so the RO-3 progress WebSocket actually connects — it previously passed an empty `wsurl` and threw `Invalid URL` the moment a live MJAPI was reachable, so the check could never pass), and `rls-isolation-client` (RLS7 — the client smart-cache companion to `rls-isolation`, now given its own seeded-Skip IT record instead of being a driver-only orphan).
+  - **Live-model** (`RUN_AGENT_TESTS`): `prompt-runner`, `agent-runner`, `concurrent`, `remote-op-ai-authoring`.
+
+  **tsx↔metadata sibling parity is now enforced.** The check logic lives once in a registry bundle; its two "siblings" are a `tsx` dispatcher script and a metadata `Test` record — both thin pointers. A new `sibling-parity.test.ts` drift-check (unit test) fails the build if any registered bundle is missing a dispatcher or an IT record, or if either points at a non-existent bundle (a small, reasoned `NO_TSX_DISPATCHER` allowlist covers deliberately driver/MJAPI-only bundles like `rls-isolation-client`). Backed by a new `IntegrationCheckRegistry.GetBundleNames()`; the coverage-loss guard was extended to the three new bundles. This closed the last three un-graduated `tsx` suites and the one registry-only bundle so all bundles now have both siblings.
+
+  **Tiering & gating.** A single tier model (`tiers.ts`: `deterministic` | `mutation` | `live-model`, with `IsTierEnabled()` reading `RUN_MUTATION_TESTS` / `RUN_AGENT_TESTS`) is honored identically by the aggregator and the driver, so a flag skip-passes the same way on both paths.
+
+  **Engine-level fixture lifecycle.** A per-bundle `BundleLifecycle` (Setup → run → Teardown in FK-safe order) plus suite-scoped `SuiteFixtureContext` (`@memberjunction/testing-engine-base`) with additive `BaseTestDriver.SetupSuite()` / `TeardownSuite()` hooks; `TestEngine.RunSuite` guarantees teardown + run-status update in a `finally` (pass / fail / thrown `Execute` / timeout), and a thrown `Execute` now resolves to a `Status='Error'` `TestRun` instead of wedging `'Running'`. Mutating suites self-clean identically on both front-ends.
+
+  **RLS / multi-user cache isolation.** New version-controlled seed metadata — a purpose-built **"Integration Test: RLS Scoped Reader"** role (scoped read on `MJ: AI Agent Runs` via `UserID = '{{UserID}}'` and nothing else) plus three inert, login-less test accounts — so the strongest RLS checks (fingerprint divergence / server-superset no-cross-serve / live no-leak) **execute for real** instead of skipping on an admin-only DB. Accounts are `Type='User'`, no auth linkage, clearly named, safe to delete. **The test-only integration records — the IT01–IT23 Tests, the integration suite, AND these RLS principals — live in a dedicated optional sibling root `metadata-optional/integration-test/`, NOT the default-pushed `metadata/` tree**, so none of it (least of all the synthetic `IsActive` accounts) ever reaches a production DB that only syncs `metadata/`. (The inert `Integration Test` TestType definition stays in normal `metadata/test-types/` — it's just a type row, no data or security surface — and the IT records `@lookup` it by name.) Seed the optional records with `mj sync push --dir=metadata-optional/integration-test`; the RLS checks skip-as-pass (with the exact push command logged) when absent.
+
+  **Dashboard legibility.** The custom `MJ: Test Runs` form's `getCheckResults()` now reads `ResultDetails` as the bare `OracleResult[]` the engine actually writes (fixing per-check rendering for all engine runs; mapping extracted into an Angular-free, unit-tested `test-run-checks.ts`), and the runs view binds `<mj-execution-context>` to the run's machine/CI fields. The Test Run dialog's "Execution Failed" banner no longer renders empty — a `failureMessage` getter falls back through top-level `errorMessage` → a synthesized per-test summary → the single test's message → a generic note (applies to every TestType).
+
+  **CI / release gate.** New `run-all.ts` aggregator + root `npm run test:integration` spawn each deterministic server suite in its own process (so each owns `LocalCacheManager.Initialize` as first caller) and collapse the per-suite `0/1/2` exit codes into one. The deterministic SQL Server tier is a blocking PR gate.
+
+  **Cross-platform & cross-server seams.** `DbConfig` gains a `Platform` field (`DB_PLATFORM` ∈ {sqlserver, postgresql}, default sqlserver) and `bootstrapIntegrationServer` dispatches accordingly (the PG path ships behind the tracked PG user-cache prerequisite; no PG CI lane yet). A `RUN_CROSS_SERVER=1` spec proves a `Save()` in one MJAPI invalidates a cached read in a second sharing one DB + Redis.
+
+  **RunView cache-layer fixes (`@memberjunction/core`).** Four real bugs the new suites surfaced, fixed in `localCacheManager.ts` + `providerBase.ts`:
+  - **SECURITY:** the cache-hit path returned _before_ the DB provider's read-permission gate, so a user lacking `CanRead` could be served rows a permitted user had warmed (an observed cross-user data leak). `PreRunView` and the `RunViews` batch now skip the cache when the user lacks read permission on the entity, falling through to the DB path's proper denial (server-cache S31).
+  - **SECURITY:** closed the **ViewID-only** variant of that bypass. The S31 gate keys off the entity resolved from `params.EntityName`; a `ViewID`/`ViewName`-only request (the Explorer-standard saved-view shape) resolved no entity there, so a read-denied user could still hit a slot a permitted user warmed for the same ViewID. `ProviderBase.cacheDeniedForViewOnlyRequest` (both cache paths) now resolves `ViewEntity` synchronously and applies the `CanRead` gate, or **fails closed** for a `ViewID`/`ViewName`-only request whose entity is only known after the async view lookup the cache-hit path skips. This also closes the RLS cross-serve for view-by-ID (two differently-scoped users no longer share a ViewID slot). Pinned by `providerBase.viewOnlyCacheGate.test.ts` + integration check server-cache **S31b** (**operators: prioritize this upgrade — S31 + S31b are both data-leak fixes**).
+  - **SECURITY:** a **stored view's identity** now participates in the RunView cache fingerprint (`vw:` segment). A saved view carries its own server-side `WhereClause` that is not reflected in `params.ExtraFilter`, so a filtered view and a plain unfiltered read of the same entity previously produced identical fingerprints and cross-served — the view was handed the unfiltered slot and returned rows _outside its own WhereClause_. Keyed by ViewID / ViewName / ViewEntity PK, appended only when a view identifier is present → plain entity+filter fingerprints stay byte-identical, no cache invalidation (server-cache S29).
+  - **`IgnoreMaxRows`** now participates in the RunView cache fingerprint, so an `IgnoreMaxRows` request no longer collides with (and is served) the capped slot for the same entity. Appended only when true → existing fingerprints stay byte-identical, no cache invalidation (server-cache S28).
+  - **`AggregateResults`** are remapped to the caller's requested order on a cache hit; the aggregate fingerprint is order-insensitive by design, so a reordered request must not inherit the warming caller's order (aggregates-cache AGG3).
+
+  **Review-response hardening (PR #3020).** Beyond S31b above: a lifecycle bundle's `Setup` and `Teardown` now run inside ONE `try/finally` on both front-ends (driver + tsx dispatchers), and every mutating fixture publishes its handle up-front + populates it as records are created — so a mid-`Setup` crash still tears down whatever was created instead of orphaning it (`runquery-cache` aligned to the shared lifecycle pattern). A single hung check is now bounded by the remaining run budget (a per-check race) instead of running past the driver timeout forever. The integration CI gate's trigger surface was widened (`migrations/**`, the `metadata-optional/**` root, `mj.config.cjs`/`tsconfig*`/`turbo.json`) and given a `push:` backstop mirroring the unit-test gate; the non-`Active` suite-membership exclusion is now surfaced with a concise always-on log; the testing CLI fails fast when it cannot install the instrumented cache first; and the sibling-parity drift-check was extended to cover the `run-all.ts` aggregator wiring and suite-join membership. `mj sync push` now honors `MJ_MIGRATION_REQUEST_TIMEOUT` (MetadataSync's env-driven config defaults, mirroring MJCLI) so the CI metadata push gets the same cold-server request-timeout headroom as `mj migrate` — mssql's 15s default could otherwise abort the push mid-transaction under embedding-on-save + engine-load latency on a cold runner.
+
+  One related cache gap is **deliberately deferred** and documented in-check as a self-healing skip-as-pass: cross-entity **denormalization** invalidation (server-cache S30) — renaming a parent record does not invalidate cached child rows that denormalize its name, because invalidation keys on the changed entity, not on dependent entities. Fixing it requires fanning invalidation out to dependent entities (a broad, higher-risk change), tracked separately; the check re-arms automatically once that lands.
+
+  All changes are additive / back-compat. Verified live against `mj_integrations` via both the `tsx` scripts and the `IntegrationTestDriver` (server-cache 31/31 with `RUN_MUTATION_TESTS`, aggregates-cache 3/3, rls-isolation 9/9; MJCore unit tests 1484/1484, testing-integration 145/145, testing-engine 45/45, testing-cli 23/23); golden-equivalence (`scripts/integration-golden-diff.mjs`) enforces no coverage loss between the two front-ends.
+
+- 04cdd67: Fix `{@include}` composition corrupting included content that contains `$`-sequences. The include reference was replaced via `String.prototype.replace(fullMatch, processedInclude)`, which interprets the four string-search special sequences `$$`, `$&`, `` $` ``, and `$'` in the replacement string as special patterns — so an included file containing any of those had its content mangled (e.g. `$&` re-inserted the matched `{@include ...}` text, `` $` ``/`$'` spliced in surrounding text). The replacement now uses a function (`() => processedInclude`) so included content is emitted verbatim.
+- 38c220c: Parse PostgreSQL NUMERIC/DECIMAL and BIGINT values to JS numbers. node-postgres returns both types as strings by default, so on Postgres-backed installs every decimal/bigint column surfaced as a string through RunView/GraphQL — Explorer UI code that assumes numbers threw `TypeError: cost.toFixed is not a function` on every change-detection cycle (AI Agent Run → Analytics tab console flood) and token totals string-concatenated instead of summing (e.g. 16,972 + 437 rendered as 16,972,437). New pool-scoped `MJPostgresTypes` parser config (exported for external pool creators): NUMERIC → parseFloat (matching the SQL Server provider's tedious semantics), BIGINT → Number with string passthrough beyond the safe-integer range. Applied to the provider's own pool and MetadataSync's shared pool; binary-format values and all other OIDs keep pg defaults.
+- 70c658c: Add configurable startup mode ('full' | 'task') for fast CLI/script boot. StartupManager.Startup() accepts startup options; 'task' mode skips all @RegisterForStartup engine pre-warm (engines lazy-load on first touch) while 'full' preserves existing behavior. Mode resolves via a shared four-level precedence chain (MJ_STARTUP_MODE env var > programmatic option > mj.config.cjs startup.mode > entry-point default). MJAPI defaults to 'full'; MJCLI, mj-sync, and CodeGen default to 'task'. Measured 14x CPU reduction on mj sync validate.
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [6c910ef]
+- Updated dependencies [88d707b]
+- Updated dependencies [70113b1]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [38c220c]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/core-entities-server@5.49.0
+  - @memberjunction/server-bootstrap-lite@5.49.0
+  - @memberjunction/graphql-dataprovider@5.49.0
+  - @memberjunction/generic-database-provider@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/postgresql-dataprovider@5.49.0
+  - @memberjunction/sqlserver-dataprovider@5.49.0
+  - @memberjunction/cli-core@5.49.0
+  - @memberjunction/config@5.49.0
+  - @memberjunction/sql-dialect@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [f613d0d]
+  - @memberjunction/generic-database-provider@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/postgresql-dataprovider@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/core-entities-server@5.48.0
+  - @memberjunction/sqlserver-dataprovider@5.48.0
+  - @memberjunction/graphql-dataprovider@5.48.0
+  - @memberjunction/server-bootstrap-lite@5.48.0
+  - @memberjunction/cli-core@5.48.0
+  - @memberjunction/config@5.48.0
+  - @memberjunction/global@5.48.0
+  - @memberjunction/sql-dialect@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+- Updated dependencies [f4dce92]
+- Updated dependencies [936a286]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+  - @memberjunction/postgresql-dataprovider@5.47.0
+  - @memberjunction/sqlserver-dataprovider@5.47.0
+  - @memberjunction/generic-database-provider@5.47.0
+  - @memberjunction/graphql-dataprovider@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/core-entities-server@5.47.0
+  - @memberjunction/server-bootstrap-lite@5.47.0
+  - @memberjunction/cli-core@5.47.0
+  - @memberjunction/config@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/generic-database-provider@5.46.0
+  - @memberjunction/graphql-dataprovider@5.46.0
+  - @memberjunction/core-entities-server@5.46.0
+  - @memberjunction/postgresql-dataprovider@5.46.0
+  - @memberjunction/sqlserver-dataprovider@5.46.0
+  - @memberjunction/server-bootstrap-lite@5.46.0
+  - @memberjunction/cli-core@5.46.0
+  - @memberjunction/config@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@5.45.1
+- @memberjunction/core-entities-server@5.45.1
+- @memberjunction/server-bootstrap-lite@5.45.1
+- @memberjunction/generic-database-provider@5.45.1
+- @memberjunction/sqlserver-dataprovider@5.45.1
+- @memberjunction/postgresql-dataprovider@5.45.1
+- @memberjunction/cli-core@5.45.1
+- @memberjunction/config@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+- @memberjunction/sql-dialect@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- 21e33fe: Move Skip to a client-side Open App and remove server-embedded agent; scope-gate query/view/search resolvers with API-key scope authorization; add credential-store fallback for component registry keys; support Open App in-process lifecycle hooks with interactive prompts.
+- 037f3af: Fix: honor the configured request timeout on the MetadataSync/OpenApp provider pool. `mj app remove` (and other `mj app …` / `mj sync` commands sharing this provider) built the SQL Server connection without `requestTimeout`, so it silently fell back to mssql's 15s default — dropping a large app schema could time out regardless of `dbRequestTimeout` config. The configured value now flows through `toMJConfig` → `MJConfig.dbRequestTimeout` → the mssql pool's `requestTimeout` (and the PostgreSQL client's `statement_timeout` for parity). When unset, each driver's own default still applies.
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [19ec4b0]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/server-bootstrap-lite@5.45.0
+  - @memberjunction/graphql-dataprovider@5.45.0
+  - @memberjunction/core-entities-server@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/postgresql-dataprovider@5.45.0
+  - @memberjunction/sqlserver-dataprovider@5.45.0
+  - @memberjunction/cli-core@5.45.0
+  - @memberjunction/config@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/graphql-dataprovider@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core-entities-server@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/server-bootstrap-lite@5.44.0
+  - @memberjunction/generic-database-provider@5.44.0
+  - @memberjunction/sqlserver-dataprovider@5.44.0
+  - @memberjunction/postgresql-dataprovider@5.44.0
+  - @memberjunction/cli-core@5.44.0
+  - @memberjunction/config@5.44.0
+  - @memberjunction/sql-dialect@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [fe89e68]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [4e05350]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/postgresql-dataprovider@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/sqlserver-dataprovider@5.43.0
+  - @memberjunction/generic-database-provider@5.43.0
+  - @memberjunction/graphql-dataprovider@5.43.0
+  - @memberjunction/core-entities-server@5.43.0
+  - @memberjunction/server-bootstrap-lite@5.43.0
+  - @memberjunction/cli-core@5.43.0
+  - @memberjunction/config@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- a72af01: Batch the deletion-audit database lookups so a large `mj sync push` no longer appears to hang for tens of minutes.
+  - **FK reference scan (`DatabaseReferenceScanner.scanForReferences`)**: group records-to-delete by entity and issue one `RunView` per (target entity, referencing FK field) using a chunked `IN (...)` filter, instead of one serial query per (record × referencing field). Found rows are attributed back to the exact deleted record via the FK value (case-insensitive, to handle SQL Server upper / PostgreSQL lower GUIDs). Metadata membership is resolved via a precomputed O(1) `Set` rather than re-scanning every metadata record per reference.
+  - **Existence check (`DeletionAuditor.checkRecordExistence`)**: single-primary-key entities are resolved with batched `IN (...)` queries instead of one `loadEntity` round-trip per record; composite-key / unknown entities keep the per-record fallback. Safe defaults preserved — a record whose key can't be determined, or whose query fails, is treated as still-existing so a real delete is never silently skipped.
+  - The batched queries pass `IgnoreMaxRows: true` so a scan matching more rows than the referencing entity's `UserViewMaxRows` cap is not silently truncated (which would miss references).
+
+  No behavioral change to the audit output; tests added for both batched paths.
+
+- 34152e1: Pluggable mj CLI with AI agent and automation friendly output: new cli-core package (BaseCLIPlugin + runtime host), json formatting for machine readable output and two tier progressive disclosure. with per-command runtime/timeout hints, and a fix for sync/push/pull hanging on DB-pool teardown after emitting results
+- Updated dependencies [9b9b484]
+- Updated dependencies [5ada858]
+- Updated dependencies [5fde509]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [b7092ca]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+- Updated dependencies [34152e1]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/generic-database-provider@5.42.0
+  - @memberjunction/server-bootstrap-lite@5.42.0
+  - @memberjunction/sqlserver-dataprovider@5.42.0
+  - @memberjunction/graphql-dataprovider@5.42.0
+  - @memberjunction/postgresql-dataprovider@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/core-entities-server@5.42.0
+  - @memberjunction/cli-core@5.42.0
+  - @memberjunction/config@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+
+## 5.41.0
+
+### Minor Changes
+
+- cd6c5f0: Realtime AI Agents wave 3: consolidated v5.41 migration (sessions, channels, co-agent schema) with the AIAgentCoAgent affinity registry replacing AIAgentPairedAgent — typed relationship vocabulary (CoAgent implemented; Peer/Delegate/Fallback/Reviewer/Observer reserved), type-level co-agent defaults as junction rows (removing the only FK cycle in core MJ), and the full code sweep (engine cache, resolver resolution chain, server-side invariants, client pairing reads, regenerated manifests). Realtime UX: progressive-disclosure voice console with persisted captions preference, user-owned composer and tabs toggles, audio-reactive visuals; whiteboard pages/multi-select and review-persistence fixes. Gemini Live triggering turns ride realtime text so widget clicks/typed input/narration speak immediately on native-audio models. CodeGen: single-winner IsNameField enforcement with eligibility guardrail fixes, SCC-based cycle diagnostics, and clean-database bootstrap robustness (conditional engine registry datasets).
+- a5f5472: Remote Browser channel + new realtime voice providers + computer-use enrichment.
+  - **Remote Browser channel** (`@memberjunction/remote-browser-*`): an in-house realtime channel where an agent drives a live, CDP-connected browser while it talks (sales demos, support walkthroughs, trainer agents). New `AIRemoteBrowserProvider` registry (migration V202606161000) with JSONType capability gating; a universal `remote-browser-base` (driver family + `RemoteBrowserEngineBase`), a shared `remote-browser-cdp` kit (one lossless action mapper + `CdpRemoteBrowserSession`), a `remote-browser-server` engine + `RemoteBrowserChannel` (control arbiter, control modes AgentOnly/ViewOnly/Collaborative vs strategies ComputerUse/NativeAI), and five thin backends (Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).
+  - **computer-use** enriched additively into a complete browser-I/O + perception engine: CSS-selector-aware actions, CDP screencast, MouseMove, accessibility-snapshot/QueryElement/GetVisibleText/GetTitle/WaitForLoadState — every consumer benefits, existing vision/coordinate path unchanged.
+  - **New realtime model providers**: xAI Grok Voice (`@memberjunction/ai-xai`, OpenAI-Realtime-compatible) and Inworld (`@memberjunction/ai-inworld`), with vendor/model seeds.
+  - **Console logging improvements** across `@memberjunction/ai-core-plus`, `ai-engine-base`, `ai-prompts`, `aiengine`, `cli`, `generic-database-provider`, `metadata-sync`, and the bootstrap/forms packages.
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [1e81848]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [34d17e2]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/core-entities-server@5.41.0
+  - @memberjunction/graphql-dataprovider@5.41.0
+  - @memberjunction/server-bootstrap-lite@5.41.0
+  - @memberjunction/generic-database-provider@5.41.0
+  - @memberjunction/postgresql-dataprovider@5.41.0
+  - @memberjunction/sqlserver-dataprovider@5.41.0
+  - @memberjunction/config@5.41.0
+  - @memberjunction/global@5.41.0
+  - @memberjunction/sql-dialect@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- Updated dependencies [da2ee38]
+  - @memberjunction/core-entities-server@5.40.2
+  - @memberjunction/sqlserver-dataprovider@5.40.2
+  - @memberjunction/server-bootstrap-lite@5.40.2
+  - @memberjunction/config@5.40.2
+  - @memberjunction/generic-database-provider@5.40.2
+  - @memberjunction/graphql-dataprovider@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/core-entities@5.40.2
+  - @memberjunction/global@5.40.2
+  - @memberjunction/postgresql-dataprovider@5.40.2
+  - @memberjunction/sql-dialect@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/generic-database-provider@5.40.1
+  - @memberjunction/graphql-dataprovider@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/core-entities-server@5.40.1
+  - @memberjunction/postgresql-dataprovider@5.40.1
+  - @memberjunction/sqlserver-dataprovider@5.40.1
+  - @memberjunction/server-bootstrap-lite@5.40.1
+  - @memberjunction/config@5.40.1
+  - @memberjunction/global@5.40.1
+  - @memberjunction/sql-dialect@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [7bbfd62]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/generic-database-provider@5.40.0
+  - @memberjunction/sqlserver-dataprovider@5.40.0
+  - @memberjunction/graphql-dataprovider@5.40.0
+  - @memberjunction/server-bootstrap-lite@5.40.0
+  - @memberjunction/core-entities-server@5.40.0
+  - @memberjunction/postgresql-dataprovider@5.40.0
+  - @memberjunction/config@5.40.0
+  - @memberjunction/global@5.40.0
+  - @memberjunction/sql-dialect@5.40.0
+
+## 5.39.0
+
+### Minor Changes
+
+- 26761b8: fix(actions): surface real action errors instead of swallowing them
+
+  `ActionEngine.InternalRunAction`'s catch block called `LogError(message, e)`, but `LogError`'s second positional parameter is `logToFileName` — so the thrown `Error` was consumed as a (non-string) filename and never printed. Every failed action logged only `Error running action <name>:` with no message or stack. It now uses `LogErrorEx({ message, error })` so the real message and stack trace are logged, and the returned result `Message` handles non-`Error` throws.
+
+  feat(metadata-sync): only warn about missing required fields for NEW records
+
+  The "Required field X is missing" best-practice warning fired for existing records too (e.g. `BaseView` on `MJ: Entities`), even though the value is already persisted in the DB. Since metadata files commonly set only a subset of fields on an update, this produced noise that masked genuine warnings. The validator now threads the record's `primaryKey` presence down to the required-field check and runs it only for new (unsaved) records.
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [f60e340]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [eaee99f]
+- Updated dependencies [2d1b4e1]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/graphql-dataprovider@5.39.0
+  - @memberjunction/postgresql-dataprovider@5.39.0
+  - @memberjunction/sqlserver-dataprovider@5.39.0
+  - @memberjunction/server-bootstrap-lite@5.39.0
+  - @memberjunction/generic-database-provider@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/core-entities-server@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/config@5.39.0
+  - @memberjunction/sql-dialect@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- 67d6562: Add full-stack MJ Explorer regression test suite — Docker-based runner with Computer Use engine, parallel workers via HeadlessBrowserEngine, bacpac mode, standalone compose for external use, and `mj test regression init` templates (remote-mj, generic-web, bring-your-own-app, static-file-server). Includes ephemeral workspace guard for cross-test isolation and stabilizes the suite at 25/25.
+- c0b40c0: `mj sync push` performance overhaul and a related `BaseEntity` fix for fixed-width string columns.
+
+  Measured on a representative ~36,500-record `metadata/` tree (mostly idempotent, including a `metadata/integrations/` dir with 23,789 records):
+  - Full sync (incl. integrations): ~6m 49s → **~1m 4s** (~6.5×)
+  - Partial sync (excluding integrations): ~1m 37s → **~30.5s** (~3.2×)
+
+  ### `@memberjunction/metadata-sync`
+  - **`SyncMetadataEngine`** (new, extends `BaseEngine`) preloads every touched entity once via `BaseEngine.Load` and exposes the result through dynamic per-entity property slots that the sync path consults instead of round-tripping the DB per record. Preload is _unfiltered_ — metadata entities are bounded by design and loading all rows is faster than computing a giant `WHERE … IN (…)` clause, plus it lets `@lookup:` resolution hit the cache even for records not in local files. Oversize warning fires above 100,000 rows on any single entity.
+  - **O(1) PK index** built after preload completes. Each per-entity slot is mirrored into a `Map<serializedPK, BaseEntity>`; `loadEntity` uses it for hash lookups instead of the previous `Array.find(... serializePrimaryKey(GetAll()))` scan. This was the single biggest fix — on `MJ: Integration Object Fields` the naïve scan was ~1.2B comparisons (~38 min); the Map drops it to seconds. Self-healing array-scan fallback handles drift from `BaseEngine` event-driven slot mutations.
+  - **Resolved-lookup + file content caches**. Resolved `@lookup:` keys memoized in a per-entity-scoped `Map<lookupKey, ID>`; parsed `@include`-preprocessed file contents memoized and invalidated at every write site so multi-pass writes always see fresh contents.
+  - **Skip preload for unresolved PK refs** (`@lookup:` / `@parent:` / `@root:` / `@file:` / `@env:` / `@template:`) — those values resolve later in the per-record path. Without this guard the preload would inline literal `@lookup:…` strings into a `WHERE ID = '…'` filter and SQL Server would reject the uniqueidentifier cast.
+  - `SyncEngine.getProvider()` is now the single entry point for provider plumbing in cache and lookup writes — no more reaching for `Metadata.Provider` directly.
+
+  ### `@memberjunction/core`, `@memberjunction/sql-dialect`
+
+  Fixed-width / space-padded character types (`nchar`/`char` on SQL Server; `char`/`character`/`bpchar` on PostgreSQL) used to surface their storage padding through `BaseEntity.Get`, causing `Dirty` to compare `"Input     "` against `"Input"` and false-positive every record as dirty. Once preload populated the in-memory comparison this manifested as thousands of spurious "updates" per sync (~4,279 on `MJ: Action Params` alone).
+  - New `IsFixedWidthStringSQLType` predicate in `@memberjunction/sql-dialect` plus an abstract `FixedWidthStringTypeNames` getter on `SQLDialect` so the list of fixed-width type names stays in one place per dialect.
+  - New `EntityFieldInfo.FixedWidthColumn` getter delegating to the predicate.
+  - `EntityField.Value` setter and `BaseEntity.Get` raw fast-path now rtrim string values when `FixedWidthColumn` is true, memoizing back into `_raw` so the trim runs at most once per field per record.
+
+  The `BaseEntity` change is independent of MetadataSync but was exposed by the preload work and is required for the "Unchanged" counts in `mj sync` to be accurate.
+
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [b26d0ee]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/generic-database-provider@5.38.0
+  - @memberjunction/sql-dialect@5.38.0
+  - @memberjunction/graphql-dataprovider@5.38.0
+  - @memberjunction/core-entities-server@5.38.0
+  - @memberjunction/sqlserver-dataprovider@5.38.0
+  - @memberjunction/server-bootstrap-lite@5.38.0
+  - @memberjunction/postgresql-dataprovider@5.38.0
+  - @memberjunction/config@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [464f30c]
+- Updated dependencies [dadbde9]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/server-bootstrap-lite@5.37.0
+  - @memberjunction/graphql-dataprovider@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/generic-database-provider@5.37.0
+  - @memberjunction/core-entities-server@5.37.0
+  - @memberjunction/sqlserver-dataprovider@5.37.0
+  - @memberjunction/postgresql-dataprovider@5.37.0
+  - @memberjunction/config@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/sql-dialect@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [f29b7c0]
+- Updated dependencies [1c0fce9]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/graphql-dataprovider@5.36.0
+  - @memberjunction/server-bootstrap-lite@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/generic-database-provider@5.36.0
+  - @memberjunction/core-entities-server@5.36.0
+  - @memberjunction/sqlserver-dataprovider@5.36.0
+  - @memberjunction/postgresql-dataprovider@5.36.0
+  - @memberjunction/config@5.36.0
+  - @memberjunction/global@5.36.0
+  - @memberjunction/sql-dialect@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [6f083dd]
+- Updated dependencies [77e4782]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/server-bootstrap-lite@5.35.0
+  - @memberjunction/generic-database-provider@5.35.0
+  - @memberjunction/graphql-dataprovider@5.35.0
+  - @memberjunction/core-entities-server@5.35.0
+  - @memberjunction/postgresql-dataprovider@5.35.0
+  - @memberjunction/sqlserver-dataprovider@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/config@5.35.0
+  - @memberjunction/sql-dialect@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/generic-database-provider@5.34.1
+  - @memberjunction/graphql-dataprovider@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/core-entities-server@5.34.1
+  - @memberjunction/postgresql-dataprovider@5.34.1
+  - @memberjunction/sqlserver-dataprovider@5.34.1
+  - @memberjunction/server-bootstrap-lite@5.34.1
+  - @memberjunction/config@5.34.1
+  - @memberjunction/global@5.34.1
+  - @memberjunction/sql-dialect@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [4b8d9ed]
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/core-entities-server@5.34.0
+  - @memberjunction/config@5.34.0
+  - @memberjunction/generic-database-provider@5.34.0
+  - @memberjunction/postgresql-dataprovider@5.34.0
+  - @memberjunction/sql-dialect@5.34.0
+  - @memberjunction/sqlserver-dataprovider@5.34.0
+  - @memberjunction/server-bootstrap-lite@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/graphql-dataprovider@5.34.0
+  - @memberjunction/global@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

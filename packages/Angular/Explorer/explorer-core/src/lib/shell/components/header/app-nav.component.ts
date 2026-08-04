@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ChangeDetectionStrategy, ElementRef, ViewChild, HostListener } from '@angular/core';
 import { BaseApplication, DynamicNavItem, NavItem, WorkspaceStateManager, WorkspaceConfiguration } from '@memberjunction/ng-base-application';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Subject, takeUntil } from 'rxjs';
@@ -14,6 +14,12 @@ export interface NavItemClickEvent {
 /**
  * Horizontal navigation items for the current app.
  * Uses OnPush change detection and reactive state management for optimal performance.
+ *
+ * Overflow behavior (priority+ pattern): when the header can't fit every nav item,
+ * trailing items collapse into a "More" dropdown instead of squeezing the header's
+ * action cluster off-screen. Item widths are measured once per nav-items change
+ * (all items render for one frame, widths are cached), then every resize recomputes
+ * the fit from the cache — no re-measure, no layout thrash.
  */
 @Component({
   standalone: false,
@@ -22,11 +28,10 @@ export interface NavItemClickEvent {
   styleUrls: ['./app-nav.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AppNavComponent implements OnInit, OnDestroy {
+export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
   private destroy$ = new Subject<void>();
   private _app: BaseApplication | null = null;
   private _cachedNavItems: NavItem[] = [];
-  private _cachedAppColor: string = 'var(--mj-brand-primary)';
   private _servicesInjected = false;
 
   /**
@@ -48,13 +53,55 @@ export class AppNavComponent implements OnInit, OnDestroy {
   // Map of nav item key (Route or Label) to active state
   private activeStateMap = new Map<string, boolean>();
 
+  // ---- Overflow (priority+) state ----
+  /** Cached natural pixel width of each nav item, parallel to navItems order */
+  private itemWidths: number[] = [];
+  /** Measured width of the More button (fallback used until first render) */
+  private moreBtnWidth = 120;
+  /** Left offset (px, relative to host) where the More dropdown anchors */
+  public MoreDropdownLeft = 0;
+  /** True when even one item + More can't fit — the lone visible pill
+   *  shrinks with an ellipsis instead of clipping the More button. */
+  public Tight = false;
+  /** Flex gap between nav items — measured from the rendered row (falls back
+   *  to --mj-space-1's default of 4px until first measurement) */
+  private itemGap = 4;
+  /** How many leading nav items are currently visible inline */
+  public VisibleCount = Number.MAX_SAFE_INTEGER;
+  /** Whether the More dropdown is open */
+  public MoreOpen = false;
+  /** True while nav items are being (re)loaded for skeleton display */
+  public Loading = false;
+
+  private resizeObserver: ResizeObserver | null = null;
+  private _overflowEnabled = true;
+
+  @ViewChild('navList') private navListRef?: ElementRef<HTMLElement>;
+  @ViewChild('moreBtn') private moreBtnRef?: ElementRef<HTMLElement>;
+
   @Output() navItemClick = new EventEmitter<NavItemClickEvent>();
   @Output() navItemDismiss = new EventEmitter<NavItem>();
+
+  /**
+   * Disable the priority+ overflow behavior. Used by the mobile drawer instance,
+   * where items stack vertically and can never overflow horizontally.
+   */
+  @Input()
+  set OverflowEnabled(value: boolean) {
+    this._overflowEnabled = value;
+    if (!value) {
+      this.VisibleCount = Number.MAX_SAFE_INTEGER;
+    }
+  }
+  get OverflowEnabled(): boolean {
+    return this._overflowEnabled;
+  }
 
   constructor(
     private workspaceManager: WorkspaceStateManager,
     private sharedService: SharedService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private host: ElementRef<HTMLElement>
   ) {}
 
   /**
@@ -67,6 +114,7 @@ export class AppNavComponent implements OnInit, OnDestroy {
       this._cachedNavItems = []; // Clear stale items immediately so previous app's items don't flash
       this.activeStateMap.clear();
       this._servicesInjected = false; // Reset injection flag
+      this.Loading = value != null; // Skeleton until GetNavItems resolves
       this.updateCachedData();
       this.cdr.markForCheck();
     }
@@ -89,7 +137,24 @@ export class AppNavComponent implements OnInit, OnDestroy {
       });
   }
 
+  ngAfterViewInit(): void {
+    if (this._overflowEnabled && typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => this.recomputeFit());
+      this.resizeObserver.observe(this.host.nativeElement);
+    }
+    // Widths measured before webfonts arrive are stale (Explorer's Montserrat
+    // loads late over the fallback stack) — invalidate the cache once fonts
+    // settle so the fit is computed against real glyph metrics.
+    if (this._overflowEnabled && typeof document !== 'undefined' && document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        this.itemWidths = [];
+        this.recomputeFit();
+      });
+    }
+  }
+
   ngOnDestroy(): void {
+    this.resizeObserver?.disconnect();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -129,17 +194,213 @@ export class AppNavComponent implements OnInit, OnDestroy {
 
       // Only show items with Status 'Active' or undefined (default to Active)
       this._cachedNavItems = items.filter(item => !item.Status || item.Status === 'Active');
-
-      this._cachedAppColor = this._app.GetColor() || 'var(--mj-brand-primary)';
     } else {
       this._cachedNavItems = [];
-      this._cachedAppColor = 'var(--mj-brand-primary)';
     }
+
+    this.Loading = false;
 
     // Update active states after nav items change
     const config = this.workspaceManager.GetConfiguration();
     this.updateActiveStates(config);
+
+    // New item set: show everything for one frame so natural widths can be
+    // measured (the row clips, so the temporary full row is invisible),
+    // then collapse to fit. Tight mode MUST be off during measurement — its
+    // flex-shrink would record squeezed widths and poison the fit arithmetic.
+    this.VisibleCount = Number.MAX_SAFE_INTEGER;
+    this.MoreOpen = false;
+    this.Tight = false;
+    this.syncChangeDetection();
+
+    if (this._overflowEnabled) {
+      requestAnimationFrame(() => {
+        this.measureItemWidths();
+        this.recomputeFit();
+      });
+    }
+  }
+
+  /**
+   * Cache the natural width of every nav item. Called in the frame after a new
+   * item set renders (all items visible, flex-shrink: 0, so widths are natural
+   * even if the row is clipped by overflow: hidden).
+   */
+  private measureItemWidths(): void {
+    const list = this.navListRef?.nativeElement;
+    if (!list) {
+      return;
+    }
+    const els = Array.from(list.querySelectorAll<HTMLElement>('.nav-item:not(.nav-more-btn)'));
+    if (els.length !== this._cachedNavItems.length) {
+      return; // View out of sync (mid-CD) — the next update cycle re-measures
+    }
+    this.itemWidths = els.map(el => el.offsetWidth);
+    // Measure the real flex gap (rem-based tokens can differ from the 4px
+    // fallback if the root font-size changes)
+    const gap = parseFloat(getComputedStyle(list).columnGap);
+    if (!Number.isNaN(gap)) {
+      this.itemGap = gap;
+    }
+  }
+
+  /**
+   * Decide how many items fit in the host's current width; the rest collapse
+   * into the More dropdown. Pure arithmetic over cached widths — safe to call
+   * on every resize.
+   */
+  private recomputeFit(): void {
+    if (!this._overflowEnabled || this._cachedNavItems.length === 0) {
+      return;
+    }
+    const hostWidth = this.host.nativeElement.clientWidth;
+    if (hostWidth === 0) {
+      return; // Hidden (mobile breakpoint) — leave state alone
+    }
+    if (!this.ensureFreshWidthCache()) {
+      return; // Cache still stale — a retry frame is already scheduled
+    }
+    if (this.moreBtnRef?.nativeElement) {
+      this.moreBtnWidth = this.moreBtnRef.nativeElement.offsetWidth || this.moreBtnWidth;
+    }
+    const fit = this.computeFitCount(hostWidth);
+    this.applyFit(fit.count, fit.tight);
+  }
+
+  /**
+   * Self-heal for the item-width cache: if it's stale or missing (the
+   * measurement frame can race the first render after a reload/app switch),
+   * expand to the full item set, re-measure, and retry next frame until it
+   * converges. Returns true when the cache matches the current item set.
+   */
+  private ensureFreshWidthCache(): boolean {
+    if (this.itemWidths.length === this._cachedNavItems.length) {
+      return true;
+    }
+    if (this.VisibleCount < this._cachedNavItems.length || this.Tight) {
+      this.VisibleCount = Number.MAX_SAFE_INTEGER;
+      this.Tight = false; // Never measure with tight-mode shrink applied
+      this.syncChangeDetection();
+    }
+    this.measureItemWidths();
+    if (this.itemWidths.length !== this._cachedNavItems.length) {
+      requestAnimationFrame(() => this.recomputeFit());
+      return false;
+    }
+    return true;
+  }
+
+  /** Pure fit arithmetic: how many leading items fit beside the More button */
+  private computeFitCount(hostWidth: number): { count: number; tight: boolean } {
+    const gap = this.itemGap;
+    const n = this.itemWidths.length;
+    const totalAll = this.itemWidths.reduce((a, b) => a + b, 0) + gap * (n - 1);
+    if (totalAll <= hostWidth) {
+      return { count: Number.MAX_SAFE_INTEGER, tight: false }; // Everything fits
+    }
+    // Reserve room for the More button, then fit as many leading items as possible
+    let used = this.moreBtnWidth;
+    let fit = 0;
+    for (let i = 0; i < n; i++) {
+      const next = used + gap + this.itemWidths[i];
+      if (next > hostWidth) {
+        break;
+      }
+      used = next;
+      fit++;
+    }
+    // Never collapse below one visible item; tight = even the lone item + More overflows
+    return { count: Math.max(1, fit), tight: fit === 0 };
+  }
+
+  /** Commit a fit result, closing More if nothing overflows; CD only on change */
+  private applyFit(count: number, tight: boolean): void {
+    if (count === this.VisibleCount && tight === this.Tight) {
+      return;
+    }
+    this.VisibleCount = count;
+    this.Tight = tight;
+    if (this.OverflowItems.length === 0) {
+      this.MoreOpen = false;
+    }
+    this.syncChangeDetection();
+  }
+
+  /**
+   * markForCheck + synchronous detectChanges. In Angular 21 zoneless mode,
+   * markForCheck() alone is unreliable when the trigger is an RxJS
+   * subscription or rAF callback not tracked by the zoneless scheduler — the
+   * dirty flag is set but no follow-up tick is scheduled. detectChanges()
+   * throws if invoked re-entrantly during an in-flight CD pass; that's
+   * harmless (the in-flight pass picks up our markForCheck), hence the catch.
+   */
+  private syncChangeDetection(): void {
     this.cdr.markForCheck();
+    try {
+      this.cdr.detectChanges();
+    } catch {
+      // Re-entrant CD — harmless.
+    }
+  }
+
+  /** Items rendered inline in the header row */
+  get InlineItems(): NavItem[] {
+    return this._cachedNavItems.slice(0, this.VisibleCount);
+  }
+
+  /** Items collapsed into the More dropdown */
+  get OverflowItems(): NavItem[] {
+    return this.VisibleCount >= this._cachedNavItems.length
+      ? []
+      : this._cachedNavItems.slice(this.VisibleCount);
+  }
+
+  /** True when any overflowed item is the active one (More button shows active tint) */
+  get OverflowHasActive(): boolean {
+    return this.OverflowItems.some(item => this.isActive(item));
+  }
+
+  /** Open/close the More dropdown, anchoring it under the More button and clamping it inside the host */
+  ToggleMore(event: MouseEvent): void {
+    event.stopPropagation();
+    this.MoreOpen = !this.MoreOpen;
+    if (this.MoreOpen) {
+      // Anchor the dropdown under the More button; once the dropdown has
+      // rendered, clamp it so its right edge stays inside the host.
+      this.MoreDropdownLeft = this.moreBtnRef?.nativeElement?.offsetLeft ?? 0;
+      requestAnimationFrame(() => {
+        const dropdown = this.host.nativeElement.querySelector<HTMLElement>('.nav-more-dropdown');
+        if (dropdown) {
+          const maxLeft = this.host.nativeElement.clientWidth - dropdown.offsetWidth;
+          this.MoreDropdownLeft = Math.max(0, Math.min(this.MoreDropdownLeft, maxLeft));
+          this.cdr.markForCheck();
+          try {
+            this.cdr.detectChanges();
+          } catch {
+            // Re-entrant CD — harmless.
+          }
+        }
+      });
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Close the More dropdown on any outside click or Escape */
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (this.MoreOpen && !this.host.nativeElement.contains(event.target as Node)) {
+      this.MoreOpen = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** Close the More dropdown on Escape */
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.MoreOpen) {
+      this.MoreOpen = false;
+      this.cdr.markForCheck();
+    }
   }
 
   /**
@@ -222,13 +483,6 @@ export class AppNavComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Get cached app color (no computation in getter)
-   */
-  get appColor(): string {
-    return this._cachedAppColor;
-  }
-
-  /**
    * Check if nav item is active (uses cached state from Map)
    */
   isActive(item: NavItem): boolean {
@@ -247,6 +501,7 @@ export class AppNavComponent implements OnInit, OnDestroy {
    * Handle nav item click
    */
   onNavClick(item: NavItem, event?: MouseEvent): void {
+    this.MoreOpen = false;
     this.navItemClick.emit({
       item,
       shiftKey: event?.shiftKey || false

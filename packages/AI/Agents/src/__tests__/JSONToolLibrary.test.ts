@@ -18,10 +18,11 @@ describe('JSONToolLibrary', () => {
 
     // Slice 1: GetToolList returns 4 tools
     describe('GetToolList', () => {
-        it('should return 4 tool definitions', () => {
+        it('should return 4 subclass tools plus inherited get_full (5 total)', () => {
             const tools = lib.GetToolList();
-            expect(tools).toHaveLength(4);
+            expect(tools).toHaveLength(5);
             const names = tools.map(t => t.name);
+            expect(names).toContain('get_full');
             expect(names).toContain('json_path');
             expect(names).toContain('json_keys');
             expect(names).toContain('json_search');

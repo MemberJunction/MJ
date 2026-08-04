@@ -1,3 +1,27 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Integration Schedules"
+    Icon="fa-solid fa-calendar-check"
+    Subtitle="When and how often integrations sync">
+    <!-- [meta] retains the conditional "running" status pill (genuine
+         signal); integrations/scheduled count badges dropped per chrome
+         slot discipline audit Task B — both mirrored the visible list. -->
+    @if (LockedCount > 0) {
+      <div meta>
+        <mj-stat-badge
+          Icon="fa-solid fa-spinner fa-spin"
+          [Count]="LockedCount"
+          Label="running"
+          Variant="running">
+        </mj-stat-badge>
+      </div>
+    }
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="LoadData()"></mj-refresh-button>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
 <!-- Loading state -->
 @if (IsLoading) {
   <div class="loading-container">
@@ -6,29 +30,6 @@
 } @else {
   <div class="schedules-root">
 
-    <!-- ================================================================= -->
-    <!-- HEADER -->
-    <!-- ================================================================= -->
-    <div class="section-header">
-      <div class="header-left">
-        <h2 class="section-title">
-          <i class="fa-solid fa-calendar-check"></i>
-          Sync Schedules
-        </h2>
-        <span class="header-meta">{{ Schedules.length }} integration{{ Schedules.length === 1 ? '' : 's' }}</span>
-        <span class="header-meta">{{ ScheduledCount }} scheduled</span>
-        @if (LockedCount > 0) {
-          <span class="header-meta running-badge">
-            <i class="fa-solid fa-spinner fa-spin"></i>
-            {{ LockedCount }} running
-          </span>
-        }
-      </div>
-      <button class="btn btn-outline" (click)="LoadData()">
-        <i class="fa-solid fa-arrows-rotate"></i>
-        Refresh
-      </button>
-    </div>
 
     <!-- ================================================================= -->
     <!-- TIMELINE (24-hour visual) -->
@@ -276,11 +277,11 @@
       }
 
       @if (Schedules.length === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-calendar-xmark"></i>
-          <p>No integrations found</p>
-        </div>
+        <mj-empty-state Icon="fa-solid fa-calendar-xmark"
+          Title="No integrations found" />
       }
     </div>
   </div>
 }
+  </mj-page-body>
+</mj-page-layout>

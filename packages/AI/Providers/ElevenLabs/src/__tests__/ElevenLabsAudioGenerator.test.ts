@@ -62,8 +62,15 @@ vi.mock('@memberjunction/ai', () => {
     createdBy: string = '';
     creationTimeStamp: number = 0;
   }
+  // Minimal stand-in for the realtime base class (the package index re-exports the
+  // ElevenLabsRealtime driver, which extends it at module-load time).
+  class MockBaseRealtimeModel {
+    protected apiKey: string;
+    constructor(apiKey: string) { this.apiKey = apiKey; }
+  }
   return {
     BaseAudioGenerator: MockBaseAudioGenerator,
+    BaseRealtimeModel: MockBaseRealtimeModel,
     TextToSpeechParams: class {},
     SpeechResult: MockSpeechResult,
     SpeechToTextParams: class {},

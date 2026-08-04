@@ -1,5 +1,98 @@
 # @memberjunction/sql-dialect
 
+## 6.0.0
+
+## 5.51.0
+
+## 5.50.0
+
+## 5.49.0
+
+## 5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- 06a1e44: Make the Open-App metadata teardown dialect-driven with full PostgreSQL parity. The FK-graph cascade in `RemoveAppEntityMetadata` (introduced for SQL Server) now runs on **both SQL Server and PostgreSQL**: identifier quoting comes from the provider's `SQLDialect` (`QuoteSchema`/`QuoteIdentifier`) and the FK-graph catalog query comes from a new `SQLDialect.ForeignKeyGraphSQL(schema)` (SQL Server `sys.foreign_keys`; PostgreSQL `pg_catalog.pg_constraint`, with source-column nullability + composite-FK column-count). Previously PostgreSQL fell back to a hardcoded ~6-entity delete list that **under-deleted** (missing e.g. `RecordChange`), so a used PG app could fail remove/reinstall on a foreign-key violation — that path is now the same complete cascade as SQL Server. The provider-selection gate is `has-a-Dialect` (no longer `!== 'postgresql'`), and only a caller that passes no provider uses the legacy entity-layer fallback. Polymorphic tables are covered via their real single-column `EntityID` FK (nullable → `SET NULL`, NOT-NULL → `DELETE`); the FK-less `RecordID` string half is out of scope (a separate single-record-delete concern).
+- 31da520: Open-App teardown review follow-ups. Completes the "Dialect owns it" direction and hardens the seam:
+  - **`SQLDialect.AtomicBatchScript(statements)`** (new, SS + PG) now owns the all-or-nothing transaction/session wrapper, so `buildTeardownBatchScript` no longer sniffs `PlatformKey` — the last platform branch leaves the OpenApp engine.
+  - `RemoveAppEntityMetadata` is now exported from the package index; a deterministic, self-cleaning **integration suite** (`open-app-teardown-tests.ts`, registered in `run-all.ts`) codifies the used-app remove/reinstall scenario (blocking `RecordChange` + link-less fixed-GUID `Application` → clean teardown → re-create without `PK_Application` collision).
+  - `RemoveApp` now passes the context's bound provider (not `undefined`) into `RemoveAppEntityMetadata`, so its metadata reads honor the multi-provider rule instead of the process-global `Metadata`.
+  - **PostgreSQL schema-name case-sensitivity** (found via a full PG install → remove lifecycle — the true test of PG parity): PostgreSQL folds unquoted identifiers, so an app whose manifest declares schema `__mj_BizAppsTasks` is created + registered on the `Entity` rows as `__mj_bizappstasks`, while the `OpenApp` record keeps the manifest casing. `RemoveAppEntityMetadata`'s case-sensitive `SchemaName = '…'` therefore matched **zero** entities on PG — the teardown silently cleared nothing yet reported success (masked on SQL Server by case-insensitive collation). The entity lookup, the SchemaInfo cleanup, and `buildRootDoomedPredicate` now compare `LOWER(SchemaName) = LOWER(…)`, so the teardown works on PostgreSQL. Without this, the FK-graph PG "parity" was mechanism-correct but never actually deleted anything for a real CLI-installed app.
+  - **Reinstall idempotency** (found via a full install → remove → reinstall lifecycle): `mj app remove` soft-removes (keeps the `OpenApp` row + its `OpenAppDependency` rows), so a reinstall reused that record and the blind dependency insert collided on `UQ_OpenAppDep`. `RecordInstallationAtomically` now clears any pre-existing dependency rows for the app in the same transaction group before re-recording (delete-then-insert, atomic — mirrors the upgrade path). Reinstall of a previously-removed app now succeeds.
+  - SQL Server `ForeignKeyGraphSQL` gains `ORDER BY fk.name` (deterministic edge/statement order) and a note that disabled FKs are intentionally included (conservative-safe).
+  - Docs corrected to match the has-a-Dialect gate (both dialects run the cascade); the migration-declared-`Application` scan is documented as SQL-Server-only (a PostgreSQL follow-up); `RunFkGraphTeardown`/`RemoveAppEntityMetadata` now warn that the raw-SQL teardown bypasses the `BaseEntity` pipeline (no cache invalidation) for in-process callers; the cross-schema-FK limitation and the downloaded-migrations temp-dir cleanup are addressed.
+
+## 5.46.0
+
+## 5.45.1
+
+## 5.45.0
+
+## 5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- b98366b: Integration framework hardening for wide-catalog and multi-level connectors (extracted from the 20-connector close-out; no connector-specific code).
+  - **Wide-table safety (dialect-driven in-row size + column-count limits).** The row-size knowledge now lives in the dialect abstraction, not in platform string-branching: `SQLDialect` gains `MaxInRowSizeBytes` (SQL Server `8060`, PostgreSQL `null`), `MaxColumnCount` (SQL Server `1024`, PostgreSQL `1600`), and `EstimateInRowBytes(rawSqlType)` (SQL Server's per-type in-row footprint; base default a conservative off-row pointer). `SchemaBuilder` consumes these via `GetDialect()` — for a dialect with a hard in-row limit it keeps all primary-key columns + a declared-priority core subset within budget, defers the rest (they still sync and land in `__mj_integration_CustomOverflow`), and emits a structured warning instead of shipping a table that fails every `INSERT` with `Cannot create a row of size … greater than 8060`; a dialect with no in-row limit (PostgreSQL/TOAST) only gets a soft advisory near its column-count cap. `IntegrationEngine` adds an env-clamped per-table column ceiling (`MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE`, max 1000 = SQL Server's 1024 minus framework column headroom) so column-count-driven failures degrade to a reversible auto-disable at apply time. Proven on netFORUM (wide objects 8/17 → 15/17, zero 8060 INSERT failures); 17 row-size unit tests.
+  - **Multi-level template-var traversal.** `BaseRESTIntegrationConnector.ResolveParentForVar` adds a per-variable parent map (`Configuration.parentObjectNames` `{ "<var>": "<SiblingObject>" }`, with optional `parentObjectIDFieldNames`), checked before the existing single-valued `parentObjectName`. This lets a path with more than one template variable (e.g. `/events/{eventCode}/sessions/{sessionCode}/…`) resolve each variable to its own parent object instead of collapsing both to one parent and tripping the `PARENT_CYCLE` guard (→ 0 rows). Backward-compatible: connectors that declare no `parentObjectNames` are unaffected.
+  - **Large-catalog ApplyAll performance.** `IntegrationDiscoveryResolver.createEntityAndFieldMaps` reuses the already-in-memory persisted field schema (built in Phase 1) instead of issuing a live per-object `DiscoverFields` describe in a sequential loop, and resolves the target entity via an `O(1)` `schema.table → EntityInfo` map instead of an `O(N²)` scan. This removes the per-object round-trips and ~millions of comparisons that pushed very large catalogs (e.g. Salesforce's ~1,695 objects) past the client timeout with zero maps created.
+
+## 5.42.0
+
+## 5.41.0
+
+## 5.40.2
+
+## 5.40.1
+
+## 5.40.0
+
+## 5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- c0b40c0: `mj sync push` performance overhaul and a related `BaseEntity` fix for fixed-width string columns.
+
+  Measured on a representative ~36,500-record `metadata/` tree (mostly idempotent, including a `metadata/integrations/` dir with 23,789 records):
+  - Full sync (incl. integrations): ~6m 49s → **~1m 4s** (~6.5×)
+  - Partial sync (excluding integrations): ~1m 37s → **~30.5s** (~3.2×)
+
+  ### `@memberjunction/metadata-sync`
+  - **`SyncMetadataEngine`** (new, extends `BaseEngine`) preloads every touched entity once via `BaseEngine.Load` and exposes the result through dynamic per-entity property slots that the sync path consults instead of round-tripping the DB per record. Preload is _unfiltered_ — metadata entities are bounded by design and loading all rows is faster than computing a giant `WHERE … IN (…)` clause, plus it lets `@lookup:` resolution hit the cache even for records not in local files. Oversize warning fires above 100,000 rows on any single entity.
+  - **O(1) PK index** built after preload completes. Each per-entity slot is mirrored into a `Map<serializedPK, BaseEntity>`; `loadEntity` uses it for hash lookups instead of the previous `Array.find(... serializePrimaryKey(GetAll()))` scan. This was the single biggest fix — on `MJ: Integration Object Fields` the naïve scan was ~1.2B comparisons (~38 min); the Map drops it to seconds. Self-healing array-scan fallback handles drift from `BaseEngine` event-driven slot mutations.
+  - **Resolved-lookup + file content caches**. Resolved `@lookup:` keys memoized in a per-entity-scoped `Map<lookupKey, ID>`; parsed `@include`-preprocessed file contents memoized and invalidated at every write site so multi-pass writes always see fresh contents.
+  - **Skip preload for unresolved PK refs** (`@lookup:` / `@parent:` / `@root:` / `@file:` / `@env:` / `@template:`) — those values resolve later in the per-record path. Without this guard the preload would inline literal `@lookup:…` strings into a `WHERE ID = '…'` filter and SQL Server would reject the uniqueidentifier cast.
+  - `SyncEngine.getProvider()` is now the single entry point for provider plumbing in cache and lookup writes — no more reaching for `Metadata.Provider` directly.
+
+  ### `@memberjunction/core`, `@memberjunction/sql-dialect`
+
+  Fixed-width / space-padded character types (`nchar`/`char` on SQL Server; `char`/`character`/`bpchar` on PostgreSQL) used to surface their storage padding through `BaseEntity.Get`, causing `Dirty` to compare `"Input     "` against `"Input"` and false-positive every record as dirty. Once preload populated the in-memory comparison this manifested as thousands of spurious "updates" per sync (~4,279 on `MJ: Action Params` alone).
+  - New `IsFixedWidthStringSQLType` predicate in `@memberjunction/sql-dialect` plus an abstract `FixedWidthStringTypeNames` getter on `SQLDialect` so the list of fixed-width type names stays in one place per dialect.
+  - New `EntityFieldInfo.FixedWidthColumn` getter delegating to the predicate.
+  - `EntityField.Value` setter and `BaseEntity.Get` raw fast-path now rtrim string values when `FixedWidthColumn` is true, memoizing back into `_raw` so the trim runs at most once per field per record.
+
+  The `BaseEntity` change is independent of MetadataSync but was exposed by the preload work and is required for the "Unchanged" counts in `mj sync` to be accurate.
+
+## 5.37.0
+
+## 5.36.0
+
+## 5.35.0
+
+## 5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+
 ## 5.33.0
 
 ### Minor Changes

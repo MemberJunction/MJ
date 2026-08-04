@@ -7,6 +7,64 @@ import { PillColorUtil } from '../pill/pill.component';
 import { HighlightUtil } from '../utils/highlight.util';
 
 /**
+ * Precomputed display field value for a card, resolved once per record per
+ * (records/filter/template) change rather than via per-CD method calls.
+ */
+interface CardDisplayFieldVM {
+  /** The underlying display field definition (name/type/label). */
+  field: CardDisplayField;
+  /** Boolean value (used when field.type === 'boolean'). */
+  booleanValue: boolean;
+  /** Numeric display string (used when field.type === 'number'). */
+  numericValue: string;
+  /** Date display string (used when field.type === 'date'). */
+  dateValue: string;
+  /** Highlighted text HTML (used for default/text fields). */
+  highlightedText: string;
+}
+
+/**
+ * Precomputed, per-record view-model backing a single card. Built once whenever
+ * the source records, filter text, or template change — NOT on every Angular
+ * change-detection cycle. Mirrors the canonical precompute pattern used by
+ * conversations' MessageItemComponent (`_messageClasses` / `buildMessageClasses`).
+ */
+interface CardViewModel {
+  /** The original record (passed through to event emitters). */
+  record: Record<string, unknown>;
+  /** Stable PK concatenated string — computed ONCE here instead of 4-5x/CD. */
+  pkString: string;
+  /** Stable track id for @for (falls back to record_<index> when no PK). */
+  trackId: string;
+  /** Whether this card is the currently selected record. */
+  isSelected: boolean;
+  /** Avatar/background color derived from the PK hash. */
+  color: string;
+  /** How to render the thumbnail (image/icon/none). */
+  thumbnailType: 'image' | 'icon' | 'none';
+  /** Thumbnail URL/value (image src or icon class). */
+  thumbnailUrl: string;
+  /** Two-letter initials shown when there is no thumbnail. */
+  initials: string;
+  /** Highlighted combined title HTML. */
+  highlightedTitle: string;
+  /** Raw subtitle value (used for the pill rendering path). */
+  subtitleValue: string;
+  /** Highlighted subtitle HTML (used for the non-pill rendering path). */
+  highlightedSubtitle: string;
+  /** Highlighted description HTML (empty when no description field). */
+  highlightedDescription: string;
+  /** Precomputed display field VMs in template order. */
+  displayFields: CardDisplayFieldVM[];
+  /** Raw badge value (used for the footer pill). */
+  badgeValue: string;
+  /** Whether this record matched on a hidden (non-visible) field. */
+  hasHiddenFieldMatch: boolean;
+  /** Display name of the hidden field that matched ('' when none). */
+  hiddenMatchFieldName: string;
+}
+
+/**
  * EntityCardsComponent - Card-based view for entity records
  *
  * This component provides an auto-generated card layout for displaying
@@ -103,6 +161,15 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
   /** Flag to trigger scroll to selected card after view renders */
   private pendingScrollToSelected: boolean = false;
 
+  /**
+   * Precomputed per-record view-models bound by the template's @for. Rebuilt
+   * only when the source records, filter, selection, hidden matches, or template
+   * change — never per change-detection cycle. This eliminates the 4-5
+   * buildPkString() allocations + 4 RegExp-building highlight calls that the
+   * previous per-card-per-CD method bindings incurred.
+   */
+  public cardViewModels: CardViewModel[] = [];
+
   ngOnInit(): void {
     this.standaloneMode = this.records === null;
 
@@ -113,6 +180,8 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
     if (this.standaloneMode && this.entity) {
       this.loadData();
     }
+
+    this.buildCardViewModels();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -137,6 +206,23 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
     // When selectedRecordId changes programmatically, scroll to the selected card
     if (changes['selectedRecordId'] && this.selectedRecordId) {
       this.pendingScrollToSelected = true;
+    }
+
+    // Rebuild the precomputed VMs whenever any input that affects card *content*
+    // changes. cardTemplate is included because effectiveTemplate derives from it.
+    // A selection-only change must NOT trigger a full rebuild — that would re-run
+    // the expensive per-card buildPkString()/CompositeKey allocations and the 4
+    // RegExp-building highlightMatch() calls for every card on every selection
+    // click (O(n) heavy work). Instead we only flip the cheap isSelected flags.
+    const contentChanged = !!(changes['records'] || changes['filterText'] ||
+        changes['hiddenFieldMatches'] || changes['entity'] || changes['cardTemplate']);
+    if (contentChanged) {
+      // Full rebuild also recomputes isSelected correctly (buildCardViewModel does).
+      this.buildCardViewModels();
+    } else if (changes['selectedRecordId']) {
+      // Selection-only change: just update the isSelected flags on the existing
+      // VMs (string compare per card — no rebuild, no regex, no allocation).
+      this.updateSelectionFlags();
     }
   }
 
@@ -188,6 +274,7 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
 
       if (result.Success) {
         this.internalRecords = result.Results;
+        this.buildCardViewModels();
       }
     } catch (error) {
       console.error('Error loading cards data:', error);
@@ -462,6 +549,129 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
     });
   }
 
+  // ========================================
+  // PRECOMPUTED VIEW-MODELS (perf)
+  // ========================================
+
+  /**
+   * Rebuild the precomputed per-record view-models. Called from ngOnInit,
+   * ngOnChanges (on any render-affecting input), and after standalone loadData.
+   * Doing this work here — once per data/filter/selection change — instead of via
+   * template method bindings avoids re-running it on every Angular CD cycle.
+   */
+  private buildCardViewModels(): void {
+    const records = this.effectiveRecords;
+    this.cardViewModels = records.map((record, index) => this.buildCardViewModel(record, index));
+  }
+
+  /**
+   * Cheaply update the isSelected flag on the EXISTING card view-models in place,
+   * preserving the array and every VM object reference. Called when ONLY
+   * selectedRecordId changes — avoids a full buildCardViewModels() rebuild (which
+   * re-runs buildPkString() allocations + RegExp-building highlightMatch() calls
+   * per card). Uses the already-computed vm.pkString, so this is a plain string
+   * compare per card with zero allocation or regex work.
+   */
+  private updateSelectionFlags(): void {
+    for (const vm of this.cardViewModels) {
+      vm.isSelected = vm.pkString.length > 0 && vm.pkString === this.selectedRecordId;
+    }
+  }
+
+  /**
+   * Build a single card view-model, computing the PK string exactly once and
+   * reusing it for selection, color, hidden-match, and track-id derivation.
+   */
+  private buildCardViewModel(record: Record<string, unknown>, index: number): CardViewModel {
+    const pkString = this.computePkString(record);
+    const trackId = pkString && pkString.trim().length > 0 ? pkString : `record_${index}`;
+    const template = this.effectiveTemplate;
+
+    const subtitleField = template?.subtitleField ?? null;
+    const subtitleValue = subtitleField ? this.getFieldValue(record, subtitleField) : '';
+    const descriptionField = template?.descriptionField ?? null;
+
+    return {
+      record,
+      pkString,
+      trackId,
+      isSelected: pkString.length > 0 && pkString === this.selectedRecordId,
+      color: this.computeRecordColor(pkString),
+      thumbnailType: this.getThumbnailType(record),
+      thumbnailUrl: this.getThumbnailUrl(record),
+      initials: this.getInitials(record),
+      highlightedTitle: this.highlightMatch(this.getCombinedTitle(record)),
+      subtitleValue,
+      highlightedSubtitle: this.highlightMatch(subtitleValue),
+      highlightedDescription: descriptionField
+        ? this.highlightMatch(this.getTextValue(record, descriptionField, 100))
+        : '',
+      displayFields: this.buildDisplayFieldVMs(record, template),
+      badgeValue: template?.badgeField ? this.getFieldValue(record, template.badgeField) : '',
+      hasHiddenFieldMatch: this.computeHasHiddenFieldMatch(pkString),
+      hiddenMatchFieldName: this.computeHiddenMatchFieldName(pkString)
+    };
+  }
+
+  /**
+   * Precompute the display-field VMs for a record, in template order.
+   */
+  private buildDisplayFieldVMs(record: Record<string, unknown>, template: CardTemplate | null): CardDisplayFieldVM[] {
+    if (!template || template.displayFields.length === 0) return [];
+    return template.displayFields.map(field => ({
+      field,
+      booleanValue: this.getBooleanValue(record, field.name),
+      numericValue: this.getNumericValue(record, field.name),
+      dateValue: this.getDateValue(record, field.name),
+      highlightedText: this.highlightMatch(this.getTextValue(record, field.name, 40))
+    }));
+  }
+
+  /**
+   * Compute the PK concatenated string for a record. Returns '' when no entity
+   * or on error, so callers can treat it as "no stable key".
+   */
+  private computePkString(record: Record<string, unknown>): string {
+    if (!this.entity) return '';
+    try {
+      return buildPkString(record, this.entity);
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * Derive the avatar/background color from an already-computed PK string.
+   */
+  private computeRecordColor(pkString: string): string {
+    if (!this.entity || !pkString) return 'var(--mj-brand-primary)';
+    const colors = ['var(--mj-brand-primary)', 'var(--mj-status-success)', 'var(--mj-status-warning)', 'var(--mj-brand-primary)', 'var(--mj-status-error)', 'var(--mj-brand-primary)', 'var(--mj-text-muted)', 'var(--mj-text-secondary)'];
+    let hash = 0;
+    for (let i = 0; i < pkString.length; i++) {
+      hash = pkString.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  }
+
+  /**
+   * Whether the record (by PK string) matched on a hidden field.
+   */
+  private computeHasHiddenFieldMatch(pkString: string): boolean {
+    if (!this.entity || !pkString) return false;
+    return this.hiddenFieldMatches.has(pkString);
+  }
+
+  /**
+   * Resolve the display name of the hidden field that matched, from a PK string.
+   */
+  private computeHiddenMatchFieldName(pkString: string): string {
+    if (!this.entity || !pkString) return '';
+    const fieldName = this.hiddenFieldMatches.get(pkString);
+    if (!fieldName) return '';
+    const field = this.entity.Fields.find(f => f.Name === fieldName);
+    return field ? field.DisplayNameOrName : fieldName;
+  }
+
   /**
    * Get the combined title from all title fields for a record.
    * Joins multiple IsNameField values with spaces (e.g., "Elizabeth Rodriguez").
@@ -555,14 +765,7 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
   }
 
   getRecordColor(record: Record<string, unknown>): string {
-    if (!this.entity) return 'var(--mj-brand-primary)';
-    const colors = ['var(--mj-brand-primary)', 'var(--mj-status-success)', 'var(--mj-status-warning)', 'var(--mj-brand-primary)', 'var(--mj-status-error)', 'var(--mj-brand-primary)', 'var(--mj-text-muted)', 'var(--mj-text-secondary)'];
-    const pk = buildPkString(record, this.entity);
-    let hash = 0;
-    for (let i = 0; i < pk.length; i++) {
-      hash = pk.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return colors[Math.abs(hash) % colors.length];
+    return this.computeRecordColor(this.computePkString(record));
   }
 
   isEnumField(fieldName: string): boolean {

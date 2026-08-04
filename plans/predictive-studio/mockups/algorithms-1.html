@@ -1,0 +1,225 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Algorithm Catalog</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  /* ---- Option 1: matrix-first hero + slide-in detail drawer ---- */
+  .legend { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .legend .li { display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:var(--mj-text-secondary); }
+  .legend .sw { width:14px; height:14px; border-radius:4px; }
+
+  .matrix-wrap { overflow:hidden; }
+  table.matrix { width:100%; border-collapse:separate; border-spacing:0; }
+  table.matrix th, table.matrix td { padding:0; }
+  table.matrix thead th { position:sticky; top:0; background:var(--mj-bg-surface); z-index:2; }
+  .colhead { padding:12px 10px 13px; text-align:center; border-bottom:2px solid var(--mj-border-default); }
+  .colhead .alg { font-weight:700; font-size:13px; color:var(--mj-text-primary); cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  .colhead .alg i { color:var(--mj-brand-primary); font-size:13px; }
+  .colhead .pt { font-size:10.5px; color:var(--mj-text-muted); margin-top:3px; }
+  .colhead .alg:hover { color:var(--mj-brand-primary); }
+  .corner { text-align:left; padding:12px 14px; border-bottom:2px solid var(--mj-border-default); font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--mj-text-muted); font-weight:700; }
+  .scen { padding:13px 14px; border-bottom:1px solid var(--mj-border-subtle); }
+  .scen .nm { font-weight:650; font-size:13px; }
+  .scen .sub { font-size:11.5px; color:var(--mj-text-muted); margin-top:1px; }
+  .mcell { padding:9px 8px; border-bottom:1px solid var(--mj-border-subtle); text-align:center; position:relative; cursor:pointer; }
+  .mcell:hover { background:var(--mj-bg-surface-hover); }
+  table.matrix tbody tr:hover .scen { background:var(--mj-bg-surface-hover); }
+  .lvl { min-width:104px; width:100%; }
+  .rationale { font-size:11px; color:var(--mj-text-muted); margin-top:5px; line-height:1.35; max-width:140px; margin-left:auto; margin-right:auto; }
+
+  /* drawer */
+  .scrim { position:fixed; inset:0; background:rgba(20,33,51,.34); z-index:40; }
+  .drawer { position:fixed; top:0; right:0; height:100vh; width:430px; background:var(--mj-bg-surface); box-shadow:var(--shadow-lg); z-index:41; display:flex; flex-direction:column; border-left:1px solid var(--mj-border-default); }
+  .drawer .dh { display:flex; align-items:flex-start; gap:13px; padding:20px 22px; border-bottom:1px solid var(--mj-border-subtle); }
+  .drawer .dh .ic { width:46px; height:46px; border-radius:12px; display:grid; place-items:center; font-size:20px; background:var(--mj-brand-soft); color:var(--mj-brand-primary); flex:0 0 auto; }
+  .drawer .db { padding:20px 22px; overflow-y:auto; flex:1; }
+  .hp { display:grid; grid-template-columns:1fr auto; gap:8px; padding:9px 0; border-bottom:1px solid var(--mj-border-subtle); font-size:13px; }
+  .hp .hk { color:var(--mj-text-secondary); font-weight:600; }
+  .hp .hv { font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:12px; color:var(--mj-text-primary); }
+  .closex { margin-left:auto; cursor:pointer; color:var(--mj-text-muted); font-size:16px; }
+  .closex:hover { color:var(--mj-text-primary); }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav"><div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a>
+  <a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a>
+  <a class="active"><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div>
+  <a><i class="fa-solid fa-flask"></i> Experiments</a><a><i class="fa-solid fa-cubes"></i> Model Registry</a><a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div><a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main">
+ <div class="ps-topbar">
+   <div><div class="crumb">Build / Algorithm Catalog</div><h1>Recommendation Matrix</h1></div>
+   <div class="spacer"></div>
+   <button class="btn ghost"><i class="fa-solid fa-circle-question"></i> How this works</button>
+   <button class="btn"><i class="fa-solid fa-download"></i> Export</button>
+   <button class="btn primary"><i class="fa-solid fa-diagram-project"></i> New Pipeline</button>
+ </div>
+ <div class="ps-content">
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-body" style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:280px;">
+        <h3 style="font-size:15px;">Which algorithm fits your problem?</h3>
+        <div class="muted small" style="margin-top:3px;">Pick the row that matches your scenario, then read across. Greener is a stronger fit. Click any algorithm name or cell for details and rationale.</div>
+      </div>
+      <div class="legend">
+        <div class="li"><span class="sw" style="background:#1f9d57"></span>Primary</div>
+        <div class="li"><span class="sw" style="background:#3f86c4"></span>Strong</div>
+        <div class="li"><span class="sw" style="background:#d98213"></span>Viable</div>
+        <div class="li"><span class="sw" style="background:#98a4b6"></span>Weak</div>
+        <div class="li"><span class="sw" style="background:#e4e8ee;border:1px solid var(--mj-border-default)"></span>Not recommended</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card matrix-wrap">
+   <table class="matrix">
+    <thead><tr>
+      <th class="corner">Scenario  ╲  Algorithm</th>
+      <th><div class="colhead"><span class="alg" onclick="openDrawer('xgb')"><i class="fa-solid fa-bolt"></i>XGBoost</span><div class="pt">classification · regression</div></div></th>
+      <th><div class="colhead"><span class="alg" onclick="openDrawer('lgbm')"><i class="fa-solid fa-feather"></i>LightGBM</span><div class="pt">classification · regression</div></div></th>
+      <th><div class="colhead"><span class="alg" onclick="openDrawer('logreg')"><i class="fa-solid fa-wave-square"></i>Logistic Reg.</span><div class="pt">classification</div></div></th>
+      <th><div class="colhead"><span class="alg" onclick="openDrawer('rf')"><i class="fa-solid fa-tree"></i>Random Forest</span><div class="pt">classification · regression</div></div></th>
+      <th><div class="colhead"><span class="alg" onclick="openDrawer('ridge')"><i class="fa-solid fa-ruler"></i>Ridge Reg.</span><div class="pt">regression</div></div></th>
+      <th><div class="colhead"><span class="alg" onclick="openDrawer('mlp')"><i class="fa-solid fa-network-wired"></i>MLP</span><div class="pt">classification · regression</div></div></th>
+    </tr></thead>
+    <tbody>
+     <tr>
+       <td><div class="scen"><div class="nm">Binary classification</div><div class="sub">Predict yes / no</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Primary">Primary</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Strong">Strong</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Viable">Viable</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Strong">Strong</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-NotRecommended">N/A</span><div class="rationale">Regression-only — can't model a yes/no target.</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Viable">Viable</span></div></td>
+     </tr>
+     <tr>
+       <td><div class="scen"><div class="nm">Regression</div><div class="sub">Predict a number</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Primary">Primary</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Strong">Strong</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-NotRecommended">N/A</span><div class="rationale">Classification-only — use Ridge for a numeric target.</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Strong">Strong</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Strong">Strong</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Viable">Viable</span></div></td>
+     </tr>
+     <tr>
+       <td><div class="scen"><div class="nm">Interpretability required</div><div class="sub">Explain every prediction</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Weak">Weak</span><div class="rationale">Feature importances, not simple coefficients — prefer Logistic / Ridge when stakeholders need the why.</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Weak">Weak</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Primary">Primary</span><div class="rationale">Simple signed coefficients — defensible per-prediction reasons.</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Viable">Viable</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Primary">Primary</span><div class="rationale">Signed weights map directly to each driver's effect.</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-NotRecommended">No</span><div class="rationale">A black-box network — no readable explanation.</div></div></td>
+     </tr>
+     <tr>
+       <td><div class="scen"><div class="nm">Minimal tuning</div><div class="sub">Business-user friendly</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Viable">Viable</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Viable">Viable</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Strong">Strong</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Primary">Primary</span><div class="rationale">Works well out of the box with almost no settings to choose.</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Strong">Strong</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Weak">Weak</span></div></td>
+     </tr>
+     <tr>
+       <td><div class="scen"><div class="nm">Large / wide dataset</div><div class="sub">Speed matters</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Strong">Strong</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Primary">Primary</span><div class="rationale">Histogram-based splits — trains fastest on big, wide data.</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Strong">Strong</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Viable">Viable</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Strong">Strong</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Viable">Viable</span></div></td>
+     </tr>
+     <tr>
+       <td><div class="scen"><div class="nm">Embedding / LLM-feature-heavy</div><div class="sub">Dense numeric vectors</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Strong">Strong</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Strong">Strong</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Viable">Viable</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Viable">Viable</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Viable">Viable</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Primary">Primary</span><div class="rationale">Neural nets thrive on dense embeddings from LLM features.</div></div></td>
+     </tr>
+     <tr>
+       <td><div class="scen"><div class="nm">Small dataset</div><div class="sub">Few hundred rows</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Viable">Viable</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Viable">Viable</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Primary">Primary</span><div class="rationale">Few parameters — resists overfitting on limited data.</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Strong">Strong</span></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Primary">Primary</span><div class="rationale">Regularization keeps it stable when rows are scarce.</div></div></td>
+       <td><div class="mcell"><span class="lvl lvl-Weak">Weak</span></div></td>
+     </tr>
+    </tbody>
+   </table>
+  </div>
+ </div>
+</main>
+</div>
+
+<!-- detail drawer -->
+<div class="scrim" id="scrim" style="display:none" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer" style="display:none">
+ <div class="dh">
+   <div class="ic"><i class="fa-solid fa-bolt" id="d-ic"></i></div>
+   <div>
+     <h3 style="font-size:16px;" id="d-name">XGBoost</h3>
+     <div class="mono muted" id="d-key" style="font-size:12px;margin-top:2px;">xgboost</div>
+   </div>
+   <i class="fa-solid fa-xmark closex" onclick="closeDrawer()"></i>
+ </div>
+ <div class="db">
+   <div class="section-title">Problem types</div>
+   <div class="row wrap" id="d-pt" style="margin:6px 0 16px;"><span class="badge blue">Classification</span><span class="badge blue">Regression</span></div>
+
+   <div class="section-title">Interpretability</div>
+   <div id="d-interp" style="margin:6px 0 16px;"><span class="badge amber"><i class="fa-solid fa-chart-simple"></i> Feature importances</span></div>
+
+   <div class="section-title">Best for</div>
+   <div class="row wrap" id="d-best" style="margin:6px 0 16px;"><span class="tag">Binary classification</span><span class="tag">Regression</span><span class="tag">Tabular data</span></div>
+
+   <div class="section-title">Key hyperparameters</div>
+   <div id="d-hp" style="margin-top:6px;">
+     <div class="hp"><span class="hk">n_estimators</span><span class="hv">100 – 1000</span></div>
+     <div class="hp"><span class="hk">max_depth</span><span class="hv">3 – 10</span></div>
+     <div class="hp"><span class="hk">learning_rate</span><span class="hv">0.01 – 0.3</span></div>
+     <div class="hp"><span class="hk">subsample</span><span class="hv">0.6 – 1.0</span></div>
+   </div>
+
+   <div class="divider" style="margin:18px 0;"></div>
+   <button class="btn primary" style="width:100%;justify-content:center;"><i class="fa-solid fa-diagram-project"></i> Use in a pipeline</button>
+ </div>
+</div>
+
+<script>
+ const ALG = {
+  xgb:{name:'XGBoost',key:'xgboost',ic:'fa-bolt',pt:['Classification','Regression'],interp:['amber','fa-chart-simple','Feature importances'],best:['Binary classification','Regression','Large / wide data','Embedding features'],
+       hp:[['n_estimators','100 – 1000'],['max_depth','3 – 10'],['learning_rate','0.01 – 0.3'],['subsample','0.6 – 1.0']]},
+  lgbm:{name:'LightGBM',key:'lightgbm',ic:'fa-feather',pt:['Classification','Regression'],interp:['amber','fa-chart-simple','Feature importances'],best:['Large / wide data','Speed','Regression','Classification'],
+       hp:[['num_leaves','15 – 255'],['max_depth','-1 (none) – 12'],['learning_rate','0.01 – 0.3'],['min_child_samples','5 – 100']]},
+  logreg:{name:'Logistic Regression',key:'logistic_regression',ic:'fa-wave-square',pt:['Classification'],interp:['green','fa-list-ol','Signed coefficients'],best:['Interpretability','Small dataset','Minimal tuning','Binary classification'],
+       hp:[['C (inverse reg.)','0.001 – 100'],['penalty','l1 · l2 · elasticnet'],['solver','lbfgs · liblinear'],['max_iter','100 – 1000']]},
+  rf:{name:'Random Forest',key:'random_forest',ic:'fa-tree',pt:['Classification','Regression'],interp:['amber','fa-chart-simple','Feature importances'],best:['Minimal tuning','Small dataset','Robust baseline','Classification'],
+       hp:[['n_estimators','100 – 500'],['max_depth','None · 5 – 30'],['max_features','sqrt · log2'],['min_samples_leaf','1 – 20']]},
+  ridge:{name:'Ridge Regression',key:'ridge',ic:'fa-ruler',pt:['Regression'],interp:['green','fa-list-ol','Signed coefficients'],best:['Interpretability','Regression','Small dataset','Minimal tuning'],
+       hp:[['alpha (reg.)','0.01 – 100'],['solver','auto · cholesky · sag'],['fit_intercept','true · false'],['max_iter','None · 1000']]},
+  mlp:{name:'Multilayer Perceptron',key:'mlp',ic:'fa-network-wired',pt:['Classification','Regression'],interp:['red','fa-eye-slash','No simple explanation'],best:['Embedding features','LLM-feature-heavy','Complex patterns'],
+       hp:[['hidden_layer_sizes','(64,) – (256,128)'],['activation','relu · tanh'],['alpha (L2)','1e-5 – 1e-1'],['learning_rate_init','1e-4 – 1e-2']]},
+ };
+ const BCLS={green:'green',amber:'amber',red:'red'};
+ function openDrawer(id){
+   const a=ALG[id];
+   document.getElementById('d-ic').className='fa-solid '+a.ic;
+   document.getElementById('d-name').textContent=a.name;
+   document.getElementById('d-key').textContent=a.key;
+   document.getElementById('d-pt').innerHTML=a.pt.map(p=>`<span class="badge blue">${p}</span>`).join('');
+   document.getElementById('d-interp').innerHTML=`<span class="badge ${BCLS[a.interp[0]]}"><i class="fa-solid ${a.interp[1]}"></i> ${a.interp[2]}</span>`;
+   document.getElementById('d-best').innerHTML=a.best.map(b=>`<span class="tag">${b}</span>`).join('');
+   document.getElementById('d-hp').innerHTML=a.hp.map(h=>`<div class="hp"><span class="hk">${h[0]}</span><span class="hv">${h[1]}</span></div>`).join('');
+   document.getElementById('scrim').style.display='block';
+   document.getElementById('drawer').style.display='flex';
+ }
+ function closeDrawer(){document.getElementById('scrim').style.display='none';document.getElementById('drawer').style.display='none';}
+ openDrawer('xgb'); closeDrawer();
+</script>
+</body></html>

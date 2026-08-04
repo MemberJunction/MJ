@@ -21,6 +21,23 @@ External System → Connector → FieldMappingEngine → MatchEngine → MJ Enti
 | `WatermarkService` | Manages incremental sync watermarks |
 | `IntegrationOrchestrator` | Top-level coordinator that runs end-to-end sync |
 
+### Field mapping — the shared transform engine
+
+`FieldMappingEngine` owns only the **integration-specific** concerns: source flattening, field-map
+iteration, and unmapped-field overflow capture. The actual per-value transform pipeline
+(`direct` / `regex` / `split` / `combine` / `lookup` / `format` / `coerce` / `substring` / `custom`) is
+**not** implemented here — it's the shared `FieldTransformEngine` in
+[`@memberjunction/global`](../../MJGlobal/README.md#field-rules-engine), so integration sync and the
+rules-based bulk-update tool run the *exact same* transform implementation (fix or extend a transform
+once, everywhere benefits).
+
+Integration is the right home **when the other side is a live external system** — it owns the protocol,
+auth, discovery, match resolution, sync direction, watermarks, and dead-lettering, and borrows the
+shared engine only for the field transforms. When *both* sides are MJ data (updating an entity from its
+own fields / related entities / provided context), use
+[`EntityFieldRules`](../../MJCore/README.md#entity-field-rules) in `@memberjunction/core` instead — same
+engine underneath, metadata-aware on top.
+
 ## Quick Start
 
 ```typescript
@@ -157,3 +174,37 @@ const result = await orchestrator.RunSync(
 - `DiscoverFields(companyIntegration, objectName, contextUser)` — Lists fields on an object
 - `FetchChanges(ctx)` — Fetches a batch of changed records
 - `GetDefaultFieldMappings(objectName, entityName)` — Suggests default mappings
+
+## Environment Variables
+
+Operator-tunable knobs read from the process environment. All are optional with safe defaults.
+
+### Schema materialization caps (operator guardrails)
+
+These bound what a `create-tables` / RSU apply (`IntegrationApplyAll` / `ApplyAllBatch` / `ApplySchemaBatch`) may materialize. They are **deliberately env-only — NOT per-connection or GraphQL-settable** — because a cap a user could raise via the same API they apply with would be no guardrail. An over-limit selection is **rejected with a clear error (never truncated)**; discovery still surfaces every object/field, only materialization is capped.
+
+| Var | Default | Effect |
+|---|---|---|
+| `MJ_INTEGRATION_MAX_TABLES` | unset = unbounded | Max tables a single apply may select; over-limit → apply rejected. |
+| `MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE` | unset = unbounded | Max columns any one selected table may have; over-limit → apply rejected. |
+
+### Discovery (stage-2 streaming field discovery — no-describe / file-feed sources only)
+
+Bound the data sample used to build a column corpus + lightweight PK guess (NOT a full scan). Also overridable **per-connection** via `IntegrationSetSyncConfig` (`discoveryBatchSize` / `discoveryMaxRecords` / `discoveryTimeBudgetMs`); precedence is explicit-opts > per-connection Configuration > env > default.
+
+| Var | Default | Effect |
+|---|---|---|
+| `MJ_INTEGRATION_DISCOVERY_MAX_RECORDS` | 500 | Max records sampled before discovery stops and uses what it gathered. |
+| `MJ_INTEGRATION_DISCOVERY_BATCH_SIZE` | 500 | Records per `FetchChanges` page during discovery. |
+| `MJ_INTEGRATION_DISCOVERY_TIME_BUDGET_MS` | 300000 (5 min) | Wall-clock budget for the read-path discovery sweep. |
+| `MJ_INTEGRATION_DISCOVERY_COMPOSITE_ROW_CAP` | 2000 | Row cap for composite-PK uniqueness checking. |
+| `MJ_INTEGRATION_DISCOVERY_MAX_DISTINCT` | 100000 | Cap on distinct values tracked per field for uniqueness inference. |
+| `MJ_INTEGRATION_DISCOVERY_SAMPLE_VALUE_CAP` | 10 | Sample values retained per field (for type/shape inference). |
+
+### Sync / runtime
+
+| Var | Default | Effect |
+|---|---|---|
+| `MJ_INTEGRATION_FULL_PUSH_MAX_RECORDS` | unset = unbounded | Cap on records pushed in a single full push. |
+| `MJ_INTEGRATION_MAX_RUNS_PER_CI` | 100 | Run-history rows retained per CompanyIntegration (≤0 disables pruning). |
+| `MJ_INTEGRATION_VERBOSE_RECORD_LOGS` | off | When `true`, emits per-record console logs (structured artifacts are unaffected either way). |

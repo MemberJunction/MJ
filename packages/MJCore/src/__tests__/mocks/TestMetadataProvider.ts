@@ -186,6 +186,8 @@ export class TestMetadataProvider extends ProviderBase {
                 EntityDocumentTypes: [],
                 Libraries: [],
                 ExplorerNavigationItems: [],
+                EntityOrganicKeys: [],
+                EntityOrganicKeyRelatedEntities: [],
             };
 
             return {
@@ -217,6 +219,8 @@ export class TestMetadataProvider extends ProviderBase {
                     { Code: 'EntityDocumentTypes', EntityName: 'MJ: Entity Document Types', EntityID: '20', Results: baseData.EntityDocumentTypes || [] },
                     { Code: 'Libraries', EntityName: 'MJ: Libraries', EntityID: '21', Results: baseData.Libraries || [] },
                     { Code: 'ExplorerNavigationItems', EntityName: 'MJ: Explorer Navigation Items', EntityID: '22', Results: baseData.ExplorerNavigationItems || [] },
+                    { Code: 'EntityOrganicKeys', EntityName: 'MJ: Entity Organic Keys', EntityID: '23', Results: baseData.EntityOrganicKeys || [] },
+                    { Code: 'EntityOrganicKeyRelatedEntities', EntityName: 'MJ: Entity Organic Key Related Entities', EntityID: '24', Results: baseData.EntityOrganicKeyRelatedEntities || [] },
                 ],
             };
         }

@@ -1,7 +1,7 @@
 import { IMetadataProvider, LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
-import { MJTemplateContentEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
+import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
 import nunjucks from 'nunjucks';
-import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
 import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
   
@@ -43,66 +43,117 @@ export class TemplateEntityLoader extends nunjucks.Loader {
 /**
  * TemplateEngine is used for accessing template metadata/caching it, and rendering templates
  */
-export class TemplateEngineServer extends TemplateEngineBase {
+export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     public static get Instance(): TemplateEngineServer {
         return super.getInstance<TemplateEngineServer>();
     }
 
-    private _oneTimeLoadingComplete: boolean = false;
-    override Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-        // call the base class to ensure we get the config loaded
-        this.ClearTemplateCache(); // clear the template cache before we load the config
-        return super.Config(forceRefresh, contextUser, provider);
+    /**
+     * Composition over inheritance (mirrors AIEngine/AIEngineBase): this is the server-side template
+     * RENDERER (nunjucks environment + compiled-template cache) wrapping the single TemplateEngineBase
+     * metadata cache, which it proxies. Previously this EXTENDED the base, so TemplateEngineServer.Instance
+     * was a SECOND BaseEngine singleton that loaded a full second copy of the `Template_Metadata` dataset
+     * (a silent double dataset-load — it never tripped the duplicate-RunView telemetry, but doubled memory).
+     */
+    private get Base(): TemplateEngineBase {
+        return TemplateEngineBase.Instance;
     }
-    protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
-        // pass along the call to our base class so it can do whatever it wants
-        await super.AdditionalLoading(contextUser);
 
-        // clear our template cache as we are going to reload all of the templates
-        this.ClearTemplateCache();
-        if (!this._oneTimeLoadingComplete) {
-            this._oneTimeLoadingComplete = true; // flag to make sure we don't do this again
+    /** Server-side context user, captured on Config() and settable directly (mirrors AIEngine). */
+    private _contextUser?: UserInfo;
+    private _oneTimeLoadingComplete: boolean = false;
 
-            // do this after the templates are loaded and doing it inside AdditionalLoading() ensures it is done after the templates are loaded and
-            // only done once
-            this._templateLoader = new TemplateEntityLoader();
-            this._nunjucksEnv = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape: true, dev: true });
+    /**
+     * Loads the single TemplateEngineBase metadata cache, then (re)initializes the render layer. The base
+     * runs its own AdditionalLoading (associating content/params with each template) inside its Config();
+     * afterwards we drop any stale compiled templates and one-time-initialize the nunjucks environment.
+     *
+     * NOTE: when this extended the base, the nunjucks setup lived in an AdditionalLoading() override that
+     * the base's Load() invoked. Under composition the base's Load() calls the BASE's AdditionalLoading,
+     * not ours, so we drive the render-layer init explicitly here after the cache is loaded.
+     */
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        if (contextUser) {
+            this._contextUser = contextUser;
+        }
+        await this.Base.Config(forceRefresh, contextUser, provider);
+        this.ClearTemplateCache(); // base templates (re)loaded — drop any stale compiled templates
+        this.ensureNunjucksInitialized(contextUser);
+    }
 
-            // Add custom filters
-            this.addCustomFilters();
+    /** One-time nunjucks environment + registered-extension setup, performed after the base templates load. */
+    private ensureNunjucksInitialized(contextUser?: UserInfo): void {
+        if (this._oneTimeLoadingComplete) {
+            return;
+        }
+        this._oneTimeLoadingComplete = true;
 
-            // get all of the extensions that are registered and register them with nunjucks
-            const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
-            if (extensions && extensions.length > 0) {
-                for (const ext of extensions) {
-                    const SubClassConstructor = ext.SubClass as new (contextUser: UserInfo) => TemplateExtensionBase;
-                    const instance = new SubClassConstructor(contextUser!);
-                    if (ext.Key) {
-                        this._nunjucksEnv.addExtension(ext.Key, instance);
-                    }
+        this._templateLoader = new TemplateEntityLoader();
+        this._nunjucksEnv = this.createConfiguredNunjucksEnv(true);
+        this._nunjucksEnvNoAutoescape = undefined; // rebound lazily against the fresh loader on next no-autoescape render
+
+        // get all of the extensions that are registered and register them with nunjucks
+        const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
+        if (extensions && extensions.length > 0) {
+            for (const ext of extensions) {
+                const SubClassConstructor = ext.SubClass as new (contextUser: UserInfo) => TemplateExtensionBase;
+                const instance = new SubClassConstructor(contextUser!);
+                if (ext.Key) {
+                    this._nunjucksEnv.addExtension(ext.Key, instance);
                 }
             }
         }
     }
 
+    /** True once the underlying TemplateEngineBase cache has loaded. */
+    public get Loaded(): boolean { return this.Base.Loaded; }
+    public get ContextUser(): UserInfo { return this._contextUser ?? this.Base.ContextUser; }
+    public set ContextUser(value: UserInfo) { this._contextUser = value; }
+
+    // ── Proxied cached collections + lookup (single source of truth: TemplateEngineBase.Instance) ──
+    public get Templates(): MJTemplateEntityExtended[] { return this.Base.Templates; }
+    public get TemplateContentTypes(): MJTemplateContentTypeEntity[] { return this.Base.TemplateContentTypes; }
+    public get TemplateCategories(): MJTemplateCategoryEntity[] { return this.Base.TemplateCategories; }
+    public get TemplateContents(): MJTemplateContentEntity[] { return this.Base.TemplateContents; }
+    public get TemplateParams(): MJTemplateParamEntity[] { return this.Base.TemplateParams; }
+    public FindTemplate(templateName: string): MJTemplateEntityExtended { return this.Base.FindTemplate(templateName); }
+
     public SetupNunjucks(): void {
         this._templateLoader = new TemplateEntityLoader();
-        this._nunjucksEnv = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape: true, dev: true });
-        
-        // Add custom filters
-        this.addCustomFilters();
+        this._nunjucksEnv = this.createConfiguredNunjucksEnv(true);
+        this._nunjucksEnvNoAutoescape = undefined; // rebound lazily against the fresh loader on next no-autoescape render
     }
 
     private _nunjucksEnv: nunjucks.Environment;
+    /**
+     * Lazily-created sibling of {@link _nunjucksEnv} with `autoescape: false`, used only by
+     * {@link RenderTemplateSimple} when a caller opts out of escaping (e.g. plain-text email subject lines,
+     * where `Acme & Co` must not become `Acme &amp; Co`). Mirrors the main env's custom filters but — like
+     * {@link SetupNunjucks} — intentionally omits the registered extensions; this env serves ad-hoc string
+     * renders, not the stored-Template extension surface. Reset to `undefined` whenever the loader is rebuilt.
+     */
+    private _nunjucksEnvNoAutoescape?: nunjucks.Environment;
     private _templateLoader: TemplateEntityLoader;
 
     /**
-     * Adds custom filters to the Nunjucks environment
+     * Builds a Nunjucks environment bound to the shared template loader with our custom filters applied.
+     * Single source of truth for env construction so the autoescape and no-autoescape environments never drift.
+     * @param autoescape whether the environment HTML-escapes rendered output
      */
-    private addCustomFilters(): void {
+    private createConfiguredNunjucksEnv(autoescape: boolean): nunjucks.Environment {
+        const env = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape, dev: true });
+        this.addCustomFilters(env);
+        return env;
+    }
+
+    /**
+     * Adds custom filters to the given Nunjucks environment
+     * @param env the environment to register the filters on
+     */
+    private addCustomFilters(env: nunjucks.Environment): void {
         // Add a json filter for converting objects to JSON strings
         // This is similar to the built-in 'dump' filter but with more control
-        this._nunjucksEnv.addFilter('json', (obj: any, indent: number = 2) => {
+        env.addFilter('json', (obj: any, indent: number = 2) => {
             try {
                 return JSON.stringify(obj, null, indent);
             } catch (error) {
@@ -111,7 +162,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
         });
 
         // Add a jsoninline filter for compact JSON output
-        this._nunjucksEnv.addFilter('jsoninline', (obj: any) => {
+        env.addFilter('jsoninline', (obj: any) => {
             try {
                 return JSON.stringify(obj);
             } catch (error) {
@@ -120,7 +171,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
         });
 
         // Add a jsonparse filter for parsing JSON strings
-        this._nunjucksEnv.addFilter('jsonparse', (str: string) => {
+        env.addFilter('jsonparse', (str: string) => {
             try {
                 return JSON.parse(str);
             } catch (error) {
@@ -216,13 +267,16 @@ export class TemplateEngineServer extends TemplateEngineBase {
      * Simple rendering utilty method. Use this to render any valid Nunjucks Template within the Nunjucks environment created by the Template Engine
      * without having to use the stored metadata (Templates/Template Contents/Template Params/etc) within the MJ database. This is useful when you have 
      * a template that is stored elsewhere or dynamically created and you just want to render it with some data.
-     * @param templateText 
-     * @param data 
-     * @returns 
+     * @param templateText
+     * @param data
+     * @param options optional render controls. `autoescape` (default `true`) toggles HTML-entity escaping — pass
+     *   `false` for plain-text contexts such as email subject lines, where `Acme & Co` must not become `Acme &amp; Co`.
+     * @returns
      */
-    public async RenderTemplateSimple(templateText: string, data: any): Promise<TemplateRenderResult> {
+    public async RenderTemplateSimple(templateText: string, data: any, options?: { autoescape?: boolean }): Promise<TemplateRenderResult> {
         try {
-            const template = this.createNunjucksTemplate(templateText);
+            const env = this.getSimpleRenderEnv(options?.autoescape ?? true);
+            const template = this.createNunjucksTemplate(templateText, env);
             const result = await this.renderTemplateAsync(template, data);
             return {
                 Success: true,
@@ -264,12 +318,28 @@ export class TemplateEngineServer extends TemplateEngineBase {
     }
 
     /**
-     * Simple utility method to create a new Nunjucks template object and bind it to our Nunjucks environment.
-     * @param templateText 
-     * @returns 
+     * Simple utility method to create a new Nunjucks template object and bind it to a Nunjucks environment.
+     * @param templateText
+     * @param env the environment to bind to; defaults to the shared autoescape environment
+     * @returns
      */
-    protected createNunjucksTemplate(templateText: string): any {
-        return new nunjucks.Template(templateText, this._nunjucksEnv);
+    protected createNunjucksTemplate(templateText: string, env: nunjucks.Environment = this._nunjucksEnv): any {
+        return new nunjucks.Template(templateText, env);
+    }
+
+    /**
+     * Resolves the Nunjucks environment for an ad-hoc {@link RenderTemplateSimple} render. The autoescape:false
+     * variant is created lazily on first use and cached, so callers that never opt out pay nothing.
+     * @param autoescape whether the returned environment HTML-escapes output
+     */
+    private getSimpleRenderEnv(autoescape: boolean): nunjucks.Environment {
+        if (autoescape) {
+            return this._nunjucksEnv;
+        }
+        if (!this._nunjucksEnvNoAutoescape) {
+            this._nunjucksEnvNoAutoescape = this.createConfiguredNunjucksEnv(false);
+        }
+        return this._nunjucksEnvNoAutoescape;
     }
 
     public ClearTemplateCache() {

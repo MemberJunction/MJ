@@ -1,11 +1,14 @@
 import { defineProject, mergeConfig } from 'vitest/config';
-import sharedConfig from '../../../../vitest.shared';
+import domSharedConfig from '../../../../vitest.dom.shared';
 
+// Single DOM preset: the existing __tests__ specs are filesystem/package-json
+// assertions (no vi.mock('@angular/core')) and run fine under jsdom alongside the
+// new *.component.dom.test.ts component specs. See guides/ANGULAR_TESTING_GUIDE.md.
 export default mergeConfig(
-  sharedConfig,
+  domSharedConfig,
   defineProject({
     test: {
-      environment: 'node',
+      name: '@memberjunction/ng-file-storage',
     },
   })
 );

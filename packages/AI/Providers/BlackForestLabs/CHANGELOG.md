@@ -1,5 +1,194 @@
 # @memberjunction/ai-blackforestlabs
 
+## 6.0.0
+
+### Patch Changes
+
+- @memberjunction/ai@6.0.0
+- @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.51.0
+- @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [c221553]
+- Updated dependencies [0ba33b3]
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [15e3017]
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [c20723a]
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.47.0
+- @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.46.0
+- @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [c1f2d3d]
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [9f6aa87]
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [0fa3cbc]
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ai@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [15b743b]
+- Updated dependencies [1568bae]
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.2
+- @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.1
+- @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.0
+- @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [30f598d]
+- Updated dependencies [3d739a3]
+  - @memberjunction/global@5.38.0
+  - @memberjunction/ai@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.37.0
+- @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.36.0
+- @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/global@5.35.0
+  - @memberjunction/ai@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.34.1
+- @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [389d356]
+  - @memberjunction/global@5.34.0
+  - @memberjunction/ai@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

@@ -1,0 +1,31 @@
+<div class="cig-wrap">
+  @if (IsLoading && Rows.length === 0) {
+    <mj-loading text="Loading items..." size="small"></mj-loading>
+  } @else if (Rows.length === 0) {
+    <mj-empty-state class="cig-empty" Icon="fa-solid fa-inbox" Title="No content items found." />
+  } @else {
+    <ag-grid-angular
+      class="cig-grid"
+      [theme]="Theme"
+      [columnDefs]="ColumnDefs"
+      [defaultColDef]="DefaultColDef"
+      [gridOptions]="GridOptions"
+      [rowData]="Rows"
+      (gridReady)="OnGridReady($event)"
+      (rowClicked)="OnRowClicked($event)">
+    </ag-grid-angular>
+
+    <div class="cig-footer">
+      <span class="cig-count">Showing {{ Rows.length }} of {{ TotalCount }} items</span>
+      @if (HasMore) {
+        <button mjButton variant="secondary" size="sm" (click)="LoadMore()" [disabled]="IsLoadingMore">
+          @if (IsLoadingMore) {
+            <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+          } @else {
+            <i class="fa-solid fa-chevron-down"></i> Load more
+          }
+        </button>
+      }
+    </div>
+  }
+</div>

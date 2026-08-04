@@ -1,0 +1,118 @@
+<mj-page-header-interior
+    Title="Tag Health"
+    Subtitle="Automated taxonomy-quality signals from the latest classification runs">
+  <div actions>
+    <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsLoading">
+      @if (IsLoading) {
+        <i class="fa-solid fa-spinner fa-spin"></i> <span class="mj-action-label">Refreshing…</span>
+      } @else {
+        <i class="fa-solid fa-arrows-rotate"></i> <span class="mj-action-label">Refresh</span>
+      }
+    </button>
+  </div>
+</mj-page-header-interior>
+
+<mj-page-body-interior [Padding]="false" [Flex]="true">
+  <div class="at-main-area">
+    @if (IsLoading) {
+      <div class="at-page-body">
+        <mj-loading text="Loading tag-health signals…"></mj-loading>
+      </div>
+    } @else {
+      <div class="ch-grid">
+        @for (card of Cards; track card.Meta.Reason) {
+          <div class="ch-card" [class]="'ch-' + card.Meta.Variant">
+
+            <!-- Card head: big count + signal title + explanation -->
+            <div class="ch-top">
+              <div class="ch-big">
+                {{ card.Items.length }} <small>{{ card.Meta.CountNoun }}</small>
+              </div>
+              <h5 class="ch-title">
+                <i [class]="card.Meta.Icon"></i> {{ card.Meta.Title }}
+              </h5>
+              <p class="ch-explain">{{ card.Meta.Explanation }}</p>
+            </div>
+
+            @if (card.Items.length === 0) {
+              <mj-empty-state class="ch-empty" Variant="success" Size="compact" Icon="fa-solid fa-circle-check"
+                [Title]="'No ' + card.Meta.Title.toLowerCase() + ' right now.'" />
+            } @else {
+              <!-- Top examples (capped at PreviewLimit) -->
+              <div class="ch-list">
+                @for (s of card.Items.slice(0, PreviewLimit); track s.ID) {
+                  <div class="ch-item" [class.ch-item-busy]="IsRowBusy(s)">
+                    <div class="ch-item-main">
+                      <span class="ch-item-name">{{ s.ProposedName }}</span>
+                      @if (card.Meta.Reason === 'MergeCandidate' && s.BestMatchTag) {
+                        <span class="ch-item-arrow"><i class="fa-solid fa-arrow-right-long"></i></span>
+                        <span class="ch-item-target">{{ s.BestMatchTag }}</span>
+                      }
+                    </div>
+                    <div class="ch-item-side">
+                      <span class="ch-score">{{ FormatScore(s.BestMatchScore) }}</span>
+
+                      @switch (card.Meta.Reason) {
+                        @case ('MergeCandidate') {
+                          <button mjButton variant="primary" size="sm"
+                                  (click)="Merge(s)" [disabled]="IsRowBusy(s) || !s.BestMatchTagID">
+                            <i class="fa-solid fa-code-merge"></i> Merge
+                          </button>
+                          <button mjButton variant="secondary" size="sm"
+                                  (click)="Dismiss(s)" [disabled]="IsRowBusy(s)">
+                            Dismiss
+                          </button>
+                        }
+                        @case ('LowUsage') {
+                          <button mjButton variant="warning" size="sm"
+                                  (click)="Deprecate(s)" [disabled]="IsRowBusy(s)">
+                            <i class="fa-solid fa-arrow-trend-down"></i> Deprecate
+                          </button>
+                          <button mjButton variant="secondary" size="sm"
+                                  (click)="Dismiss(s)" [disabled]="IsRowBusy(s)">
+                            Dismiss
+                          </button>
+                        }
+                        @case ('WideNode') {
+                          <button mjButton variant="primary" size="sm"
+                                  (click)="ReviewInTaxonomy(s)" [disabled]="IsRowBusy(s)">
+                            <i class="fa-solid fa-sitemap"></i> Review
+                          </button>
+                          <button mjButton variant="secondary" size="sm"
+                                  (click)="Dismiss(s)" [disabled]="IsRowBusy(s)">
+                            Dismiss
+                          </button>
+                        }
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <!-- Card footer: overflow hint + bulk action -->
+              <div class="ch-foot">
+                @if (card.Items.length > PreviewLimit) {
+                  <span class="ch-more">+{{ card.Items.length - PreviewLimit }} more</span>
+                } @else {
+                  <span class="ch-more"></span>
+                }
+
+                @if (card.Meta.Reason === 'MergeCandidate' && HighConfidenceCount(card) > 0) {
+                  <button mjButton variant="primary" size="sm"
+                          (click)="MergeAllHighConfidence(card)" [disabled]="IsBulkActing">
+                    @if (IsBulkActing) {
+                      <i class="fa-solid fa-spinner fa-spin"></i> Merging…
+                    } @else {
+                      <i class="fa-solid fa-layer-group"></i>
+                      Merge all high-confidence ({{ HighConfidenceCount(card) }})
+                    }
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+</mj-page-body-interior>

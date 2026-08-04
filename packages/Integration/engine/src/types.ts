@@ -32,6 +32,7 @@ export type SyncErrorCode =
     | 'TRANSFORM_ERROR'
     | 'MATCH_RESOLUTION_ERROR'
     | 'DATABASE_ERROR'
+    | 'WRITE_VERIFICATION_ERROR'
     | 'WATERMARK_INVALID'
     | 'CONFIGURATION_ERROR'
     | 'UNKNOWN_ERROR';
@@ -61,6 +62,19 @@ export function ClassifyError(error: unknown): { Code: SyncErrorCode; Severity: 
     if (lower.includes('duplicate') || lower.includes('unique constraint') || lower.includes('primary key')) {
         return { Code: 'DUPLICATE_KEY', Severity: 'Warning' };
     }
+    // "no rows returned" from a Create's mandatory read-back (spCreate's `SELECT * FROM vw... WHERE
+    // <key columns>`) is a DETERMINISTIC failure — almost always a null/mismatched key-column value
+    // (the U1 class of bug: a PK column silently absent from the generated INSERT/EXEC call, so
+    // `WHERE col = NULL` matches zero rows). Retrying the SAME write with the SAME inputs reproduces
+    // the SAME miss every time — this is NOT a transient condition. Checked BEFORE the generic
+    // 'sql'-substring catch-all below (which this message would otherwise match, since the mssql
+    // driver's own error text is "SQL Error: ..."), and deliberately excluded from
+    // `IsRetryableError` — misclassifying it as `DATABASE_ERROR` sends it through exponential-backoff
+    // retry for the full retry budget before dead-lettering, burning many minutes for a failure that
+    // was never going to resolve on retry.
+    if (lower.includes('no rows returned')) {
+        return { Code: 'WRITE_VERIFICATION_ERROR', Severity: 'Critical' };
+    }
     if (lower.includes('validation') || lower.includes('validate')) {
         return { Code: 'VALIDATION_ERROR', Severity: 'Warning' };
     }
@@ -76,7 +90,11 @@ export function ClassifyError(error: unknown): { Code: SyncErrorCode; Severity: 
     if (lower.includes('configuration') || lower.includes('config')) {
         return { Code: 'CONFIGURATION_ERROR', Severity: 'Critical' };
     }
-    if (lower.includes('connect') || lower.includes('econnrefused') || lower.includes('sql')) {
+    // Genuinely transient/connection-level signals only — NOT a bare 'sql' substring, which matches
+    // almost any DB-flavored error message (including the deterministic one above) and made this
+    // catch-all classify far too much as retryable.
+    if (lower.includes('connect') || lower.includes('econnrefused') || lower.includes('deadlock')
+        || lower.includes('connection') || lower.includes('pool')) {
         return { Code: 'DATABASE_ERROR', Severity: 'Critical' };
     }
     if (lower.includes('connector')) {
@@ -111,6 +129,37 @@ export interface MappedRecord {
     ChangeType: RecordChangeType;
     /** ID of an existing MJ record if matched */
     MatchedMJRecordID?: string;
+    /**
+     * Source keys the record returned that have NO active field map — the "extra" fields
+     * the target table has no column for (yet). Computed at {@link MapSingleRecord} as
+     * `keys(ExternalRecord.Fields) − active map SourceFieldNames`. Empty/undefined in the
+     * common case (everything mapped). When non-empty, the engine parks it as JSON in the
+     * `__mj_integration_CustomOverflow` system column so a post-sync RSU pass can promote
+     * pervasive keys to real columns. Backend staging only — see {@link CustomOverflow}.
+     */
+    UnmappedFields?: Record<string, unknown>;
+}
+
+/**
+ * Per-key statistics for CUSTOM (unmapped) source keys observed during a sync — aggregated
+ * IN MEMORY across every fetched record, REGARDLESS of whether the row was written or the
+ * content-hash fast path skipped it. Custom-overflow behaviour: a newly-appearing custom
+ * column must NOT affect the row-hash match (so unchanged rows stay skip-cheap), yet its
+ * presence + sizing statistics must still surface as a promotion candidate at sync end. This
+ * out-of-band aggregation is what makes both true at once — candidates and generous sizing
+ * stats exist even when every row was skipped.
+ */
+export interface CustomKeyStat {
+    /** The unmapped source key as it appears in `ExternalRecord.Fields`. */
+    Key: string;
+    /** Records in which the key appeared with a non-null value. */
+    Occurrences: number;
+    /** Total records scanned for this entity map this run. */
+    TotalRecords: number;
+    /** Longest observed String(value).length — sizes the future column generously. */
+    MaxLength: number;
+    /** Bounded sample of observed values, for type inference at promotion time. */
+    SampleValues: unknown[];
 }
 
 /** Aggregate result of a sync operation */
@@ -141,7 +190,72 @@ export interface SyncResult {
     EntityMapResults?: EntityMapSyncResult[];
     /** Duration of the sync in milliseconds */
     Duration?: number;
+    /**
+     * True if this map hit a rate-limit/throttle during fetch. Feeds the per-layer AIMD controller
+     * so a throttle (not just a per-request token-bucket backoff) also reduces in-flight concurrency.
+     * Transient signal — not persisted.
+     */
+    Throttled?: boolean;
+    /**
+     * Outcome of the post-sync custom-column promotion pass (gaps.md §2). Present only when a
+     * promotion callback is registered AND ran; undefined for a customs-free sync (the common
+     * case). Lets the resolver surface SchemaUpdatePending to the client.
+     */
+    SchemaUpdate?: SchemaPromotionResult;
+    /**
+     * Custom (unmapped) source keys observed this run, keyed by target MJ entity name — the
+     * out-of-band candidate statistics gathered regardless of row writes/skips (see
+     * {@link CustomKeyStat}). Undefined for a customs-free sync.
+     */
+    CustomKeyStats?: Record<string, CustomKeyStat[]>;
 }
+
+/** Outcome of the post-sync custom-column promotion pass (gaps.md §2 / M2). */
+export interface SchemaPromotionResult {
+    /** Whether any new column was promoted to real schema this run. */
+    Promoted: boolean;
+    /** The columns promoted, per target entity. */
+    ColumnsAdded: Array<{ EntityName: string; ColumnName: string }>;
+    /**
+     * Whether a schema change was applied that needs an MJAPI restart for the new columns to
+     * be exposed over GraphQL — surfaced so the client reads the restart as intentional, not a
+     * crash. False when nothing was promoted. (Restart orchestration itself: M3.)
+     */
+    SchemaUpdatePending: boolean;
+    /** Non-fatal detail when promotion was attempted but partially/fully failed. */
+    Message?: string;
+    /**
+     * Non-fatal problems encountered during promotion (RSU/DDL failure, IOF or field-map save
+     * failure, per-pass churn-cap deferral, a missing entity map). The engine surfaces each as a
+     * structured SyncWarning on the run stream so the operator sees what didn't promote — promotion
+     * NEVER fails the sync, but a swallowed problem must not be invisible.
+     */
+    Warnings?: string[];
+}
+
+/**
+ * Server-registered hook that runs the post-sync custom-column promotion (gaps.md §2). The
+ * engine never depends on RSU/CodeGen — the server registers an implementation that performs
+ * the coverage scan → RSU ADD COLUMN → IOF/field-map. Self-gated INSIDE the callback: a cheap
+ * EXISTS over the overflow column means a customs-free sync does no promotion work, so the
+ * two-stage process collapses to single-stage (1×) when there is nothing to promote.
+ *
+ * ContextUser/Provider are typed `unknown` to avoid a circular import; the engine passes a real
+ * UserInfo / IMetadataProvider and the server implementation narrows them back.
+ */
+export type PostSyncSchemaPromotionCallback = (ctx: {
+    CompanyIntegrationID: string;
+    ContextUser: unknown;
+    SyncedEntityNames: string[];
+    Provider?: unknown;
+    /**
+     * The sync's in-memory custom-key statistics (keyed by entity name). Supplements the
+     * overflow-column scan: with the Content-hash basis (overflow excluded from matching),
+     * unchanged rows never write their overflow JSON, so the column scan alone under-reports —
+     * these stats carry the candidates + sizing evidence for exactly those skipped rows.
+     */
+    CustomKeyStats?: Record<string, CustomKeyStat[]>;
+}) => Promise<SchemaPromotionResult>;
 
 /** Per-entity-map result within a sync run */
 export interface EntityMapSyncResult {
@@ -264,6 +378,17 @@ export interface IntegrationSyncOptions {
 export interface SourceSchemaInfo {
     /** All objects (tables, API entities) discovered in the source system. */
     Objects: SourceObjectInfo[];
+    /**
+     * §7 — TRUE only when this schema is an AUTHORITATIVE live enumeration of the FULL gamut the
+     * credentials expose (a real list/describe endpoint that returns everything accessible). When true,
+     * a comprehensive refresh may DEACTIVATE declared/discovered objects/fields ABSENT from it (the
+     * source genuinely dropped them). When false/undefined — the default, and the case for stubbed
+     * discovery (`DiscoverObjects` returns nothing) or a CACHE-DRIVEN IntrospectSchema (which just
+     * re-reads persisted metadata) or any partial/scoped discovery — deactivation is FORBIDDEN, because
+     * absence proves nothing and would wrongly wipe the Declared metadata that is the only source.
+     * Set by the connector's `DiscoveryIsAuthoritative` getter; never assume true.
+     */
+    IsAuthoritative?: boolean;
 }
 
 /** Options controlling scope of IntrospectSchema. */
@@ -276,6 +401,13 @@ export interface IntrospectSchemaOptions {
      * user-selected subset whenever possible.
      */
     ObjectNames?: string[];
+    /**
+     * U11 — optional live progress callback: invoked after each object's describe completes
+     * (or is skipped) with (scanned, total). Lets a caller drive a DETERMINATE discovery bar
+     * ("scanned N of M objects") instead of an indeterminate spinner. Best-effort — the
+     * default IntrospectSchema invokes it; connector overrides may or may not.
+     */
+    OnProgress?: (scanned: number, total: number) => void;
 }
 
 /** One source object (table, API entity) discovered during introspection. */
@@ -292,6 +424,14 @@ export interface SourceObjectInfo {
     PrimaryKeyFields: string[];
     /** Foreign key relationships to other source objects. */
     Relationships: SourceRelationshipInfo[];
+    /**
+     * Source field name that marks "last changed" for incremental sync.
+     * When introspecting a source whose docs (or describe response) name a
+     * watermark field, surface it here so SchemaBuilder/IntegrationSchemaSync
+     * can populate IntegrationObject.IncrementalWatermarkField. Leave undefined
+     * when the source does not expose a documented watermark.
+     */
+    IncrementalWatermarkField?: string;
 }
 
 /** One field/column in a source object discovered during introspection. */
@@ -304,8 +444,17 @@ export interface SourceFieldInfo {
     Description?: string;
     /** Generic source type (e.g., "string", "integer", "datetime", "boolean"). */
     SourceType: string;
-    /** Whether the field is required/non-nullable. */
+    /**
+     * Whether the field must be provided when creating a new record.
+     * Semantically distinct from AllowsNull — see ExternalFieldSchema.IsRequired.
+     */
     IsRequired: boolean;
+    /**
+     * Whether NULL is a permitted value at rest. Distinct from IsRequired.
+     * Undefined ⇒ source did not declare; default to permissive (nullable).
+     * Honest gap rather than fabricated NOT NULL.
+     */
+    AllowsNull?: boolean;
     /** Maximum length for string types (null if not applicable). */
     MaxLength: number | null;
     /** Precision for numeric types (null if not applicable). */
@@ -314,10 +463,35 @@ export interface SourceFieldInfo {
     Scale: number | null;
     /** Default value expression (null if none). */
     DefaultValue: string | null;
-    /** Whether this field is part of the primary key. */
-    IsPrimaryKey: boolean;
-    /** Whether this field is a foreign key. */
-    IsForeignKey: boolean;
+    /**
+     * Whether this field is part of the primary key.
+     *
+     * `undefined` means the SOURCE HAD NO OPINION (a sample/list API that doesn't
+     * report PKs) — semantically distinct from an explicit `false` (the source
+     * affirmed it is NOT a PK). The persist overlay (`decideBooleanOverlay`)
+     * treats `undefined` as no-opinion so a Declared `true` survives; coercing
+     * silence to `false` here is the U1 bug that wiped declared PKs (the
+     * keyless-entity root). Never write `?? false` when mapping into this field.
+     */
+    IsPrimaryKey?: boolean;
+    /**
+     * Whether this field is constrained as unique. Distinct from IsPrimaryKey —
+     * an object can have several unique fields (email, phone) of which only one
+     * is the PK. Both flags should be set independently when the source distinguishes
+     * them; SchemaBuilder uses this for DDL UNIQUE constraint emission.
+     */
+    IsUniqueKey?: boolean;
+    /**
+     * Whether the field is read-only (computed, system-managed, or otherwise
+     * not user-writable). Affects whether the field is included in
+     * Create/Update operation bodies.
+     */
+    IsReadOnly?: boolean;
+    /**
+     * Whether this field is a foreign key. `undefined` = the source had no
+     * opinion (see IsPrimaryKey) — distinct from an affirmed `false`.
+     */
+    IsForeignKey?: boolean;
     /** If FK, which source object it references (null if not a FK). */
     ForeignKeyTarget: string | null;
 }
@@ -361,6 +535,28 @@ export interface UpdateRecordContext extends CRUDContext {
     /** Field values to update */
     Attributes: Record<string, unknown>;
     /** Optional relationship data to update */
+    Relationships?: Record<string, unknown>;
+}
+
+/**
+ * Context for upserting a record in an external system — a single idempotent
+ * create-or-update keyed by a unique business property (not the system PK).
+ *
+ * Upsert exists to define create-then-update race conditions out of existence:
+ * a search-then-create sequence has a window in which a concurrent writer can
+ * create the same record, producing a duplicate-key conflict (e.g. HubSpot
+ * `409 Contact already exists`). A single keyed upsert call has no such window.
+ */
+export interface UpsertRecordContext extends CRUDContext {
+    /** Field values for the record (must include the upsert-key property's value) */
+    Attributes: Record<string, unknown>;
+    /**
+     * The unique business property to match on (e.g. 'email' for HubSpot contacts).
+     * Optional override; when omitted, the connector resolves a per-object default
+     * from its own metadata. Connectors that cannot resolve a default MUST fail loudly.
+     */
+    IDProperty?: string;
+    /** Optional relationship data */
     Relationships?: Record<string, unknown>;
 }
 

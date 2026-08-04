@@ -205,14 +205,6 @@ export interface MediaOutput {
     refId?: string;
 
     /**
-     * Controls whether this media should be persisted to the database.
-     * Default behavior (undefined or true): media is persisted to AIAgentRunMedia and ConversationDetailAttachment.
-     * Set to false for intercepted/working media that shouldn't be saved (e.g., generated but not used in output).
-     * @since 3.1.0
-     */
-    persist?: boolean;
-
-    /**
      * Agent notes describing what this media represents.
      * Used for internal tracking, debugging, and can be persisted for audit purposes.
      * @since 3.1.0
@@ -331,6 +323,26 @@ export type AgentClientToolInvocation = {
 };
 
 /**
+ * A single stage of an Agent Pipeline: an object with exactly one verb key + its args. Either a
+ * capability (`{ tool, with?, pipeInto? }`), a pure operator (`{ where: "..." }`,
+ * `{ select: [...] }`, `{ sort, first, last, count, distinct, flatten, jsonpath, lines, grep,
+ * head, tail }`), or a control construct (`{ map: { as, do } }`, `{ let: { name, value } }`).
+ * Structured JSON values flow between stages; the server validates the precise shape.
+ */
+export interface AgentPipelineStage {
+    [verb: string]: unknown;
+}
+
+/**
+ * An Agent Pipeline emitted by the agent: a server-side dataflow whose stages run sequentially,
+ * each stage's structured value feeding the next. Only the FINAL stage's value is returned to the
+ * agent — intermediate values never enter the context window.
+ */
+export interface AgentPipelineRequest {
+    steps: AgentPipelineStage[];
+}
+
+/**
  * Response from a client tool execution — returned to the server when
  * the client finishes running the tool.
  */
@@ -407,6 +419,68 @@ export type AgentSubAgentRequest<TContext = any> = {
 }
 
 /**
+ * A skill the agent's response requested be activated (by catalog name — the agent only
+ * ever sees name + description in its prompt, per progressive disclosure).
+ */
+export type AgentSkillActivationRequest = {
+    /** Name of the skill (MJ: AI Skills.Name) to activate */
+    name: string;
+    /**
+     * Brief agent-stated rationale for why this skill is being activated. Optional — supplied
+     * by the LLM when it self-activates a skill mid-run, and carried through to the run step's
+     * {@link AgentSkillInvocation} record for observability. User-requested activations
+     * (/skill mentions) don't carry a reason.
+     */
+    reason?: string;
+}
+
+/**
+ * One skill's involvement in an agent run step, recorded in `AIAgentRunStep.Skills`
+ * (a JSON array of these, or null when no skills are in play). This is the observability
+ * contract for skills: every step touched by a skill records WHICH skill, HOW it entered
+ * the run, and the PROVENANCE OF AUTHORITY that admitted it.
+ *
+ * Population rules (implemented in BaseAgent):
+ * - **Skill steps** record the activation(s) that step performed (with {@link Reason} when
+ *   agent-initiated).
+ * - **Prompt steps** record the full set of skills in effect for that turn, so prompt
+ *   injection is always visible.
+ * - **Actions / Sub-Agent steps** record the skill(s) through which the executed tool
+ *   became available; null/absent means the tool was a native agent grant.
+ *
+ * The canonical JSON-type interface for CodeGen lives at
+ * `metadata/entities/JSONType-interfaces/AgentSkillInvocation.ts` — keep the two in sync.
+ */
+export type AgentSkillInvocation = {
+    /** ID of the activated skill (MJ: AI Skills.ID) */
+    SkillID: string;
+    /** Name of the activated skill at activation time */
+    SkillName: string;
+    /** How the skill entered the run: explicit user request (/skill mention) or agent self-activation */
+    ActivationType: 'requested' | 'auto';
+    /** The gate values that admitted this skill — the provenance of authority */
+    Provenance: AgentSkillInvocationProvenance;
+    /** Agent-stated rationale (only for ActivationType='auto', from skillActivations[].reason) */
+    Reason?: string;
+}
+
+/**
+ * The gate values in effect when a skill was admitted to a run — recorded so an auditor can
+ * see exactly which configuration allowed the activation, even if the configuration has
+ * since changed.
+ */
+export type AgentSkillInvocationProvenance = {
+    /** The agent's AcceptsSkills value at activation ('All' or 'Limited' — 'None' can never activate) */
+    AgentAcceptsSkills: string;
+    /** The skill's ActivationMode at activation ('Auto' | 'RequestedOnly') */
+    SkillActivationMode: string;
+    /** The agent's SkillActivationMode at activation ('Auto' | 'RequestedOnly') */
+    AgentSkillActivationMode: string;
+    /** Who pulled the trigger: the user's /skill request or the agent's own decision */
+    RequestedBy: 'user-request' | 'agent-decision';
+}
+
+/**
  * Represents the next step determination from an agent type.
  * 
  * Agent types analyze the output of prompt execution and determine what should
@@ -433,6 +507,10 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * - 'sub-agent': The agent should spawn a sub-agent to handle a specific task
      * - 'actions': The agent should perform one or more actions using the Actions framework
      * - 'chat': The agent needs to communicate with the user before proceeding
+     * - 'Skill' / 'Plan': non-terminal steps (like 'ClientTools') that never conclude a run, so
+     *   they are NOT part of the generated `MJAIAgentRun.FinalStep` union below. Use an explicit
+     *   `'Skill' as typeof nextStep.step` / `'Plan' as typeof nextStep.step` assertion at
+     *   assignment/switch sites, mirroring the existing 'ClientTools' pattern.
      *
      * Note: To expand a compacted message, set step to 'Retry', set messageIndex to the message to expand,
      * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
@@ -465,6 +543,8 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     retryInstructions?: string;
     /** Sub-agent details when step is 'sub-agent' */
     subAgent?: AgentSubAgentRequest<TContext>;
+    /** Multiple sub-agents executing in parallel when step is 'sub-agent' */
+    subAgents?: AgentSubAgentRequest<TContext>[];
     /** Array of actions to execute when step is 'actions' */
     actions?: AgentAction[];
     /** Message to send to user when step is 'chat' */
@@ -513,6 +593,32 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     artifactToolCalls?: { artifactId: string; tool: string; input: Record<string, unknown> }[];
     /**
+     * Conversation-history retrieval tool calls from the agent's response — page exact
+     * stored messages back in by their persisted Sequence handles, or search history.
+     * Processed inline (zero turn cost) alongside artifact tool calls; only honored
+     * when the run has a conversationId.
+     * NOTE: structural duplicate of ConversationToolCall in @memberjunction/ai-agents
+     * (CorePlus sits below Agents and cannot import from it), mirroring how
+     * artifactToolCalls duplicates ArtifactToolCall above.
+     */
+    conversationToolCalls?: { tool: string; input: Record<string, unknown> }[];
+    /**
+     * Durable memory writes from the agent's response. Each entry records a
+     * fact/preference that persists across runs as a provisional agent note.
+     * Processed inline (zero turn cost) alongside artifact tool calls; only
+     * honored when the agent has AllowMemoryWrite enabled.
+     * NOTE: structural duplicate of MemoryWriteRequest in @memberjunction/ai-agents
+     * (CorePlus sits below Agents and cannot import from it), mirroring how
+     * artifactToolCalls duplicates ArtifactToolCall above.
+     */
+    memoryWrites?: { note: string; type: 'Preference' | 'Context'; scopeHint?: 'user' | 'agent' }[];
+    /**
+     * A tool pipeline from the agent's response. Chains tool invocations server-side so
+     * intermediate outputs never enter the context window — only the final step's output is
+     * returned to the agent. Processed inline (zero turn cost) alongside artifact tool calls.
+     */
+    pipeline?: AgentPipelineRequest;
+    /**
      * Media outputs to promote to the agent's final outputs.
      * When set, these media items will be added to the agent's mediaOutputs collection
      * and stored in AIAgentRunMedia.
@@ -524,6 +630,17 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * Each invocation maps to a registered ClientToolMetadata by Name.
      */
     clientTools?: AgentClientToolInvocation[];
+    /**
+     * Skills to activate when step is 'Skill'. Each activation appends the skill's Instructions
+     * to context and enables its bundled Actions/sub-agents for the remainder of the run — it
+     * does not spawn a nested agent run.
+     */
+    skillActivations?: AgentSkillActivationRequest[];
+    /**
+     * The plan text when step is 'Plan' (Plan Mode). Presented to the human for approval/edit
+     * via the standard response-form HITL flow before the agent may execute Actions/Sub-Agents.
+     */
+    planDetails?: { plan: string };
     /**
      * When true, the agent should terminate after executing the current step.
      * Used by ClientTools: the main loop needs `terminate: false` so it continues
@@ -595,10 +712,12 @@ export type ExecuteAgentResult<P = any> = {
     /**
      * Multi-modal outputs generated by the agent.
      * Contains media that the agent explicitly promoted to its outputs.
-     * This flows to ConversationDetailAttachment for UI display.
+     * All media items are persisted by default (flows through `AgentRunner` to
+     * `AIAgentRunMedia` + `ConversationDetailAttachment`, then auto-paired to
+     * `MJ: Artifact Versions` via the server-side hook).
      *
-     * Media items with `refId` are used for placeholder resolution (${media:xxx}).
-     * Media items with `persist: false` are excluded from database persistence.
+     * Media items with `refId` are used for placeholder resolution (`${media:xxx}`)
+     * in structured payload / actionable commands.
      * Sub-agents return their mediaOutputs to parents for bubbling up.
      *
      * @since 3.1.0
@@ -666,7 +785,7 @@ export type NextStepDecision = {
 export type NextStepDetails <P = any> = 
     | { type: 'Prompt'; promptId: string; promptName: string; payload?: P }
     | { type: 'Actions'; actions: AgentAction[]; payload?: P }
-    | { type: 'Sub-Agent'; subAgent: AgentSubAgentRequest; payload?: P }
+    | { type: 'Sub-Agent'; subAgent?: AgentSubAgentRequest; subAgents?: AgentSubAgentRequest[]; payload?: P }
     | { type: 'Retry'; retryReason: string; retryInstructions: string; payload?: P }
     | { type: 'Chat'; message: string; payload?: P }
     | { type: 'Complete'; payload?: P };
@@ -702,13 +821,57 @@ export type AgentExecutionStreamingCallback = (chunk: {
     stepEntityId?: string;
     /** Model name producing this content (for prompt steps) */
     modelName?: string;
+    /**
+     * Content discriminator for chat-client rendering. `'final-response'` marks chunks
+     * that are deltas of the user-facing final reply — safe for the conversation client
+     * to accumulate and render into the message bubble as they arrive. Chunks WITHOUT a
+     * kind are raw prompt output (e.g. a Loop agent's streamed JSON turn envelope) and
+     * are not rendered by the conversation client. Emitters that compose the final
+     * answer as plain prose (outside the turn envelope) set this on their compose
+     * stream; future kinds (e.g. inter-turn progress narration) extend this union.
+     */
+    kind?: 'final-response';
 }) => void;
+
+/**
+ * An input artifact attached to an agent run. Surfaced to the agent via the
+ * artifact tool manifest and reached through artifact tool calls (json_path,
+ * json_search, etc.) rather than inlined into the prompt.
+ *
+ * This is the typed contract for `ExecuteAgentParams.inputArtifacts`. Lives in
+ * core-plus rather than ai-agents so callers (AgentRunner, base-agent, external
+ * orchestrators) can construct params without importing the runtime package.
+ */
+export interface InputArtifact {
+    name: string;
+    typeName: string;
+    content: string | Buffer;
+    /** MIME type of the artifact content (e.g., 'application/pdf').
+     *  Populated for file-backed artifacts from ArtifactVersion.MimeType. */
+    mimeType?: string;
+    /** Optional: class name from ArtifactType.ToolLibraryClass metadata.
+     *  When set, used for plugin-based resolution via ClassFactory. */
+    toolLibraryClass?: string;
+    /** Optional annotation surfaced verbatim on the artifact's manifest entry
+     *  (e.g. "configured for Inline but exceeds inline size cap; delivered via
+     *  tools"). Lets the resolver communicate routing decisions to the LLM. */
+    annotation?: string;
+    /** Resolved DefaultDeliveryMode for this artifact's type. When 'ToolsOnly',
+     *  the agent reaches the content via tool calls and we MUST NOT also offer
+     *  it as a native file input (otherwise we double-deliver: 1 MB JSON would
+     *  go through both the tool manager AND the native-file-input text fallback,
+     *  leaking the full content into the prompt). */
+    deliveryMode?: 'Inline' | 'ToolsOnly';
+    /** Per-instance override that forces ToolsOnly regardless of type default. */
+    forceToolsOnly?: boolean;
+}
 
 /**
  * Parameters required to execute an AI Agent.
  *
  * @template TContext - Type of the context object passed through agent and action execution.
  *                      This allows for type-safe context propagation throughout the execution hierarchy.
+ *                      TContext may be a class instance with getters and methods — never spread it.
  *                      Defaults to any for backward compatibility.
  * @template P - Type of the payload passed to the agent execution
  * @template TAgentTypeParams - Type of agent-type-specific execution parameters.
@@ -814,19 +977,39 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     parentRun?: MJAIAgentRunEntityExtended;
     /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
     data?: Record<string, any>;
+    /**
+     * Optional input artifacts for this run. Consumed by the agent's
+     * ArtifactToolManager: each artifact is registered, surfaced in the
+     * `_ARTIFACT_MANIFEST` template variable, and reached by the LLM via
+     * artifact tool calls (json_path, json_search, etc.).
+     *
+     * Not propagated to sub-agents — sub-agents that need artifact access
+     * gather their own from the conversation in `AgentRunner`.
+     *
+     * @see InputArtifact
+     */
+    inputArtifacts?: InputArtifact[];
     /** Optional payload to pass to the agent execution, type depends on agent implementation. Payload is the ongoing dynamic state of the agent run. */
     payload?: P;
-    /** 
+    /**
      * Optional additional context data to pass to the agent execution.
-     * This context is propagated to all sub-agents and actions throughout 
+     * This context is propagated to all sub-agents and actions throughout
      * the execution hierarchy. Use this for runtime-specific data such as:
      * - Environment-specific configuration (API endpoints, feature flags)
      * - User-specific settings or preferences
      * - Session-specific data (request IDs, correlation IDs)
      * - External service credentials or connection information
-     * 
-     * Note: Avoid including sensitive data like passwords or API keys 
-     * unless absolutely necessary, as context may be passed to multiple 
+     *
+     * **IMPORTANT — class instances are supported and must be preserved.**
+     * TContext may be a class with getters, methods, and private state
+     * (e.g., Skip's `SkipAgentContext`). Any code that touches this object
+     * must NOT spread it into a plain object (`{...context}`) because the
+     * spread operator strips the prototype chain, destroying all getters
+     * and methods. Instead, mutate properties directly on the original
+     * object when augmentation is needed.
+     *
+     * Note: Avoid including sensitive data like passwords or API keys
+     * unless absolutely necessary, as context may be passed to multiple
      * agents and actions.
      */
     context?: TContext;
@@ -886,10 +1069,25 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     /**
      * Optional conversation detail ID to associate with this agent execution.
      * When provided, this value is stored in the ConversationDetailID column within
-     * the to be created AIAgentRun record. This allows for linking the agent run 
+     * the to be created AIAgentRun record. This allows for linking the agent run
      * to a specific conversation detail for tracking and reporting purposes.
      */
     conversationDetailId?: string;
+
+    /**
+     * Optional conversation ID — the PREFERRED input for conversation-driven runs.
+     * All durable cross-turn context features (persistent summary compaction, the
+     * summary-windowed context assembly via `ConversationEngine.AssembleContextWindow`
+     * over `LoadWindowRowsFresh` rows, and conversation-history retrieval tools) are
+     * gated on this being present.
+     * When absent, the agent behaves exactly as before: the caller supplies
+     * `conversationMessages` and only in-turn (per-run) context management applies —
+     * programmatic runs, internal sub-agent invocations, and tests need no change.
+     * When present alongside caller-supplied `conversationMessages`, the supplied
+     * messages win (deliberate override/escape hatch); the id still flows to the run
+     * record and gates the compaction/retrieval features.
+     */
+    conversationId?: string;
 
     /**
      * Optional flag to automatically populate the payload from the last run.
@@ -901,6 +1099,38 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * bandwidth by avoiding passing large payloads back and forth.
      */
     autoPopulateLastRunPayload?: boolean;
+
+    /**
+     * Per-request Plan Mode toggle. Defaults OFF (undefined/false) — no behavior change unless
+     * explicitly set. When true AND `agent.SupportsPlanMode` is on (the agent-level capability
+     * gate, default ON/opt-out) AND this is a root agent (depth 0), the agent must present a
+     * `Plan` next step and get human approval via the standard `MJ: AI Agent Requests` /
+     * response-form HITL flow before it may execute Actions or Sub-Agents. Ignored entirely for
+     * Realtime/session-driven and Proxy agents (those opt the capability OFF at the agent level).
+     *
+     * On a continuation run (`lastRunId` set, after the user responds to the plan-approval
+     * request), the framework re-resolves whether that prior run's plan was approved — callers
+     * do not need to re-derive or persist this themselves.
+     *
+     * @since 5.44.0
+     */
+    planMode?: boolean;
+
+    /**
+     * Skills the caller (typically an end user via a `/skill-name` mention in the composer)
+     * explicitly requests be active for this run, identified by `AISkill.ID`. The framework
+     * treats these as pre-activation hints: at run start each requested skill is activated
+     * (its Instructions appended + bundled Actions/sub-agents surfaced) **only if it survives
+     * the guard** — it must be in the set the agent accepts ({@link MJAIAgentEntityExtended.AcceptsSkills}
+     * gate) AND the requesting user must have Run permission on it (open-by-default via
+     * `AISkillPermissionHelper`). Requested skills that fail either check are silently dropped,
+     * never surfaced to the model — so a client can never smuggle in a skill the user or agent
+     * isn't entitled to. Root-agent only (skills don't cascade to sub-agents). Defaults to none.
+     *
+     * @since 5.44.0
+     */
+    requestedSkillIDs?: string[];
+
     /**
      * Optional AI Configuration ID to use for this agent execution.
      * When provided, this configuration will be passed to all prompts executed
@@ -1195,6 +1425,29 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     actionChanges?: ActionChange[];
 
     /**
+     * Optional runtime modifications to the agent's available **sub-agents**.
+     *
+     * The sub-agent counterpart of {@link actionChanges}. Lets callers dynamically add or remove
+     * which sub-agents are available to agents at runtime, without modifying database configuration.
+     * Changes are applied per agent in the hierarchy and propagated to sub-agents by the same scope
+     * rules as action changes ('global'/'root'/'all-subagents'/'specific').
+     *
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   subAgentChanges: [
+     *     { scope: 'global', mode: 'add', subAgentIds: ['fraud-specialist-agent-id'] }
+     *   ]
+     * };
+     * ```
+     *
+     * @since 2.132.0
+     */
+    subAgentChanges?: SubAgentChange[];
+
+    /**
      * Optional agent-type-specific execution parameters.
      *
      * Different agent types can define their own parameter interfaces for
@@ -1273,6 +1526,14 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     sessionID?: string;
 
     /**
+     * The persisted MJ: AI Agent Sessions record ID this run belongs to, if the run is part of
+     * a real-time/long-lived session. Distinct from the transport `sessionID` (per-connection
+     * correlation id). Used to group the multiple AIAgentRuns of one session and to stamp
+     * ConversationDetail/AIAgentRun rows.
+     */
+    agentSessionID?: string;
+
+    /**
      * Optional runtime override for client tool timeout (ms).
      * Takes precedence over the agent's DefaultClientToolTimeoutMs config.
      */
@@ -1319,6 +1580,18 @@ export type AgentContextData = {
     actionDetails: string;
     /** Markdown formatted details of available client tools (name, category, description, input schema) */
     clientToolDetails?: string;
+    /** Number of skills available to this agent (per AIAgent.AcceptsSkills — 0 when 'None') */
+    skillCount?: number;
+    /**
+     * Markdown formatted CATALOG of available skills — name + description ONLY (progressive
+     * disclosure). Full `Instructions` are never injected here; they're appended to context only
+     * on activation (see `executeSkillStep` in `@memberjunction/ai-agents`).
+     */
+    skillsCatalog?: string;
+    /** Whether Plan Mode is active for this run (SupportsPlanMode + per-request planMode + root agent) */
+    planModeActive?: boolean;
+    /** Whether Plan Mode's gate has already been satisfied (a prior plan was approved on this run chain) */
+    planApproved?: boolean;
     /** Markdown formatted snapshot of the user's current application context */
     appContext?: string;
 }
@@ -1369,11 +1642,25 @@ export type AgentChatMessageMetadata = {
     /** Whether this message has expired */
     isExpired?: boolean;
     /** Type of message (for lifecycle management and logging) */
-    messageType?: 'action-result' | 'client-tool-result' | 'loop-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
+    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'skill-activation' | 'skill-activation-refused' | 'chat' | 'system' | 'user';
     /** Name of the sub-agent (only for sub-agent-result messages) */
     subAgentName?: string;
     /** ID of the sub-agent (only for sub-agent-result messages) */
     subAgentId?: string;
+    /**
+     * `ConversationDetail.Sequence` of the row this message came from. Stamped by
+     * `ConversationEngine.AssembleContextWindow` (kept assignment-compatible with its
+     * locally-defined `ConversationContextMetadata` — that package cannot import this
+     * type without creating a cycle). The symbolic handle for conversation-history
+     * retrieval tools.
+     */
+    sequence?: number;
+    /** ID of the `ConversationDetail` row this message came from (window-assembled messages only) */
+    conversationDetailId?: string;
+    /** True only on the synthetic first message carrying the persisted cross-turn conversation summary */
+    isConversationSummary?: boolean;
+    /** On the summary message: the boundary row's Sequence — the summary covers all rows below it */
+    summaryBoundarySequence?: number;
 }
 
 /**
@@ -1554,17 +1841,57 @@ export interface ActionChange {
     actionLimits?: Record<string, number>;
 }
 
-// ── Types for action-step output parsing (used by AgentRunner reprocessing) ──
+/**
+ * Represents a runtime modification to an agent's available **sub-agents**.
+ *
+ * The direct counterpart of {@link ActionChange}, for sub-agents instead of actions. Lets callers
+ * dynamically add or remove which sub-agents an agent can delegate to at runtime, without modifying
+ * the agent's database configuration (`AIAgent.ParentID` / `MJ: AI Agent Relationships`). Useful for
+ * multi-tenant scenarios, security restrictions, and testing — mirroring action overrides.
+ *
+ * Scope/propagation semantics are identical to {@link ActionChange}:
+ * - 'global': applies to all agents in the hierarchy (propagated as-is to sub-agents)
+ * - 'root': applies only to the root agent (not propagated)
+ * - 'all-subagents': applies to all sub-agents but not the root (propagated as 'global')
+ * - 'specific': applies only to agents listed in `agentIds`
+ *
+ * @example
+ * ```typescript
+ * // Make an extra specialist sub-agent available to the whole hierarchy for this run
+ * const change: SubAgentChange = {
+ *   scope: 'global',
+ *   mode: 'add',
+ *   subAgentIds: ['fraud-specialist-agent-id']
+ * };
+ *
+ * // Remove a sub-agent from a specific agent only
+ * const restrict: SubAgentChange = {
+ *   scope: 'specific',
+ *   mode: 'remove',
+ *   subAgentIds: ['risky-sub-agent-id'],
+ *   agentIds: ['triage-agent-id']
+ * };
+ * ```
+ *
+ * @since 2.132.0
+ */
+export interface SubAgentChange {
+    /** Scope — which agents this change applies to (see {@link ActionChangeScope}). */
+    scope: ActionChangeScope;
 
-/** Typed shape of the OutputData JSON written by base-agent for action steps */
-export interface ActionStepOutputData {
-    actionResult?: {
-        parameters?: ActionParam[];
-    };
+    /** Mode — 'add' to make sub-agents available, 'remove' to take them away. */
+    mode: ActionChangeMode;
+
+    /**
+     * Array of sub-agent (AIAgent) entity IDs to add or remove from the agent's available set.
+     * These must be valid Agent IDs from the AI Agents table.
+     */
+    subAgentIds: string[];
+
+    /**
+     * Array of Agent IDs that this change applies to.
+     * Required when scope is 'specific', ignored otherwise.
+     */
+    agentIds?: string[];
 }
 
-/** Minimal read-only shape loaded from MJ: AI Agent Run Steps for reprocessing */
-export interface ActionStepSummary {
-    ID: string;
-    OutputData: string | null;
-}

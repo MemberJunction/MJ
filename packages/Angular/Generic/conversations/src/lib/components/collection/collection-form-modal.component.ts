@@ -53,10 +53,7 @@ import { UUIDsEqual } from '@memberjunction/global';
             </div>
           }
           @if (errorMessage) {
-            <div class="form-error">
-              <i class="fas fa-exclamation-circle"></i>
-              {{ errorMessage }}
-            </div>
+            <mj-alert Variant="error">{{ errorMessage }}</mj-alert>
           }
         </div>
         <mj-dialog-actions>
@@ -110,22 +107,6 @@ import { UUIDsEqual } from '@memberjunction/global';
 
     .parent-info i {
       color: var(--mj-brand-primary);
-    }
-
-    .form-error {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px;
-      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
-      border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
-      border-radius: 6px;
-      color: var(--mj-status-error);
-      font-size: 14px;
-    }
-
-    .form-error i {
-      flex-shrink: 0;
     }
   `]
 })
@@ -239,20 +220,17 @@ export class CollectionFormModalComponent extends BaseAngularComponent implement
         // If creating new collection, set up permissions
         if (!this.collection) {
           if (this.parentCollection) {
-            // Child collection - copy all permissions from parent (including owner)
+            // Child collection - copy non-owner permissions from parent.
+            // (The owner gets implicit full access via OwnerID; no self-share row is written.)
             await this.permissionService.copyParentPermissions(
               this.parentCollection.ID,
               collection.ID,
               this.currentUser
             );
-          } else {
-            // Root collection - create owner permission for current user
-            await this.permissionService.createOwnerPermission(
-              collection.ID,
-              this.currentUser.ID,
-              this.currentUser
-            );
           }
+          // Root collection: nothing to do. CollectionPermissionProvider treats OwnerID as
+          // an implicit full-access grant — writing a self-share row was redundant and was
+          // failing server-side auth on freshly-created collections.
         }
 
         this.toastService.success(

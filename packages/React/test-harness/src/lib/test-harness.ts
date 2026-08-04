@@ -30,11 +30,21 @@ export interface TestHarnessOptions extends BrowserContextOptions {
  *   }
  * }));
  * 
- * @example  
+ * @example
  * // ❌ WRONG - Parallel testing on same instance (will cause conflicts)
  * const harness = new ReactTestHarness(options);
  * await harness.initialize();
  * const results = await Promise.all(tests.map(test => harness.testComponent(test)));
+ *
+ * Attaching to an existing browser
+ * --------------------------------
+ * Pass `connect` (or set `MJ_REACT_TEST_HARNESS_CONNECT`) to attach to an
+ * already-running browser instead of launching one — `http(s)://` endpoints use
+ * CDP, `ws(s)://` endpoints use a Playwright server. See {@link TestHarnessOptions}
+ * (inherited from BrowserContextOptions) for `connect`, `connectType`, and
+ * `reuseExistingContext`. NOTE: when `reuseExistingContext` is true, separate
+ * ReactTestHarness instances share one browser context and are therefore NOT
+ * isolated — keep the default (fresh context) for parallel runs.
  */
 export class ReactTestHarness {
   private browserManager: BrowserManager;

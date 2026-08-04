@@ -435,6 +435,80 @@ mj app install https://github.com/BlueCypress/SaaS \
   --dangerously-ignore-dbl-underscore-schema-rule
 ```
 
+### mj baseline
+
+Build, compare, and round-trip **baseline migrations** — a single SQL script that captures the end-state of an entire V-stack (schema + every row of every table) into one deterministic `B`-prefixed file that Flyway/Skyway can apply to a fresh database in place of the long migration chain.
+
+> Niche command — only needed when **collapsing a V-stack into a new baseline** (within-major rebaseline) or **cutting a new major version** (e.g. v5 → v6). Day-to-day MJ development never touches this; use `mj migrate` for routine schema changes.
+
+Three subcommands:
+
+- `mj baseline build` — connect to a live MSSQL database, introspect everything, dump every row of every table, and emit a canonical T-SQL script.
+- `mj baseline compare` — diff two live databases object-by-object **and** row-by-row.
+- `mj baseline roundtrip` — `build` + apply to a fresh DB + `compare` in one shot. Proves the new baseline is byte-equivalent to the V-stack it replaces.
+
+#### Two operating modes
+
+| Mode | Trigger | Version source | Timestamp | Output folder |
+| --- | --- | --- | --- | --- |
+| **AUTO — within-major rebaseline** (default) | `--baseline-version` omitted | `Major.Minor` parsed from the latest V-file in `--source-dir` | latest V-file's timestamp **+ 1 minute** | the **same** `migrations/v{N}/` it scanned |
+| **EXPLICIT — major-boundary baseline** | `--baseline-version M.N` provided | the flag value | `Date.now()` UTC | `migrations/v{N+1}/` (new) |
+
+AUTO mode is the right choice 99% of the time. EXPLICIT is for starting a new major version (e.g. `v6.0`).
+
+Filename format: `B{YYYYMMDDHHMM}__v{Major}.{Minor}.x__Baseline.sql` (literal lowercase `x` matches the V-file patch convention — patches don't carry migrations).
+
+#### mj baseline build
+
+```bash
+# AUTO — within-major rebaseline (writes back into ./migrations/v5/)
+mj baseline build --out ./migrations/v5/
+
+# EXPLICIT — start a new major version (writes into ./migrations/v6/)
+mj baseline build --baseline-version 6.0 --out ./migrations/v6/
+
+# Schema-only, no data inserts
+mj baseline build --no-data --out ./baselines/
+```
+
+Key flags: `--baseline-version`, `--source-dir`, `--database`, `--out`, `--exclude-data <csv>`, `--batch-size`, `--no-data`, `--dry-run`, `--verbose`. Run `mj baseline build --help` for the full list with defaults.
+
+Database host/user/password come from the MJ config (`mj.config.cjs` / `.env`); `--database` overrides only the database name.
+
+#### mj baseline compare
+
+```bash
+# Full row-by-row diff (default)
+mj baseline compare --left MJ_BL_Stack --right MJ_BL_New
+
+# Counts-only (fastest)
+mj baseline compare --left A --right B --row-compare counts
+
+# CI use — fail the build on any diff, write reports
+mj baseline compare --left A --right B --fail-on-diff --out ./diffs/
+```
+
+Row-compare modes: `full` | `hash` | `counts` | `none`. Hash mode supports `--row-hash-algo sha256|md5|checksum_agg`. `--dialect mssql|postgres` (both sides must match).
+
+#### mj baseline roundtrip
+
+```bash
+# AUTO — verify the current v5.x V-stack collapses cleanly
+mj baseline roundtrip --source MJ_BL_Stack --target MJ_BL_New
+
+# EXPLICIT — verify a v6.0 baseline
+mj baseline roundtrip --baseline-version 6.0 --source MJ_BL_Stack --target MJ_BL_New
+```
+
+`--source` is the gold-standard DB with the V-stack already applied; `--target` is an empty DB the new baseline will be applied to and compared against. Add `--keep-target` to inspect the post-apply DB after a failed diff. `--apply-cmd` lets you override the default `sqlcmd` apply step (tokens: `{file}`, `{database}`).
+
+#### Related tooling
+
+- **Slash command** — [`/create-new-baseline-migration`](../../.claude/commands/create-new-baseline-migration.md) drives the workbench end-to-end from a local Claude Code session (spins up the workbench, runs the roundtrip, stages the file in `migrations/` only if byte-equivalent).
+- **Workbench script** — [`docker/workbench/baseline-roundtrip.sh`](../../docker/workbench/baseline-roundtrip.sh) (aliases `mjbaseline`, `mjbaseline-mssql`, `mjbaseline-pg` inside the workbench container) is the 7-phase end-to-end runner the slash command invokes.
+- **Design record** — [`packages/MJCLI/src/commands/baseline/PLAN.md`](src/commands/baseline/PLAN.md) documents the architecture, decisions, and component layout.
+- **PostgreSQL** — the T-SQL baseline is converted via `mj migrate convert` (see `/pg-migrate` skill) before being applied to a PG target.
+
 ## Hooks
 
 | Hook | Timing | Purpose |

@@ -103,7 +103,7 @@ export class YourModule {}
 
 ## Dependencies
 
-- [@memberjunction/core](../../MJCore/README.md) -- Metadata, BaseEntity
+- [@memberjunction/core](../../../MJCore/readme.md) -- Metadata, BaseEntity
 - `@progress/kendo-angular-listbox` -- Dual listbox rendering
 - `@progress/kendo-angular-buttons` -- Toolbar buttons
 

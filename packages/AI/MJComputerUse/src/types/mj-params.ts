@@ -99,6 +99,15 @@ export class MJRunComputerUseParams extends RunComputerUseParams {
      * their AgentRunID field set to this value.
      */
     public AgentRunId?: string;
+
+    /**
+     * Parent agent-run STEP ID under which to nest a child `Prompt` step per controller/judge prompt
+     * this run executes. Requires {@link AgentRunId} to also be set. When both are present, the engine
+     * creates a child `MJ: AI Agent Run Steps` row (ParentID = this) for each prompt — grouping the run's
+     * many prompt runs under the single parent step the caller created for the goal. Absent this, prompt
+     * runs are only linked to the run (via AgentRunId), not nested under a step.
+     */
+    public AgentRunStepID?: string;
 }
 
 // ─── MJ Domain Auth Binding ──────────────────────────────────

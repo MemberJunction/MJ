@@ -27,8 +27,14 @@ vi.mock('@memberjunction/core', () => {
     class MockBaseEngine {
         protected _loaded = false;
         private _contextUser: unknown = null;
+        private _isPermissionConstrained = false;
         get Loaded() { return this._loaded; }
         get ContextUser() { return this._contextUser; }
+        get IsPermissionConstrained() { return this._isPermissionConstrained; }
+        protected GetConfigData<E>(propertyName: string): E[] {
+            // Mirrors real BaseEngine.GetConfigData — returns the backing field array
+            return ((this as Record<string, unknown>)[propertyName] as E[]) ?? [];
+        }
         async Load(
             _params: unknown[],
             _provider?: unknown,
@@ -51,7 +57,17 @@ vi.mock('@memberjunction/core', () => {
         BaseEnginePropertyConfig: class {},
         IMetadataProvider: class {},
         LogError: vi.fn(),
-        Metadata: class { GetEntityObject = vi.fn() },
+        LogStatus: vi.fn(),
+        Metadata: class {
+            GetEntityObject = vi.fn();
+            // The conditional realtime-registry datasets probe Metadata.Provider.EntityByName
+            // before registering (clean-install CodeGen bootstrap guard). Default: the
+            // channels entity exists, so the dataset registers in tests.
+            static Provider = {
+                EntityByName: (name: string) =>
+                    name === 'MJ: AI Agent Channels' || name === 'MJ: AI Agent Co Agents' ? { Name: name } : undefined,
+            };
+        },
         RunView: class { RunView = vi.fn() },
         UserInfo: class { ID = 'u1'; Name = 'T' },
         RegisterForStartup: () => () => {},
@@ -63,7 +79,7 @@ vi.mock('@memberjunction/core-entities', () => {
     const cls = () => class { ID = ''; Name = '' };
     return {
         ArtifactMetadataEngine: {
-            Instance: { ArtifactTypes: [] },
+            Instance: { ArtifactTypes: [], Config: vi.fn().mockResolvedValue(undefined) },
         },
         MJAIActionEntity: cls(), MJAIAgentActionEntity: cls(), MJAIAgentNoteEntity: cls(),
         MJAIAgentNoteTypeEntity: cls(), MJAIModelActionEntity: cls(), MJAIPromptModelEntity: cls(),
@@ -147,10 +163,71 @@ describe('AIEngineBase', () => {
                 'ModelCosts', 'ModelPriceTypes', 'ModelPriceUnitTypes',
                 'Configurations', 'ConfigurationParams', 'CredentialBindings',
                 'Modalities', 'AgentModalities', 'ModelModalities',
+                'AgentCoAgents', 'AgentChannels',
             ];
             for (const p of props) {
                 expect((engine as Record<string, unknown>)[p]).toEqual([]);
             }
+        });
+    });
+
+    // -----------------------------------------------
+    // Config dataset registration
+    // -----------------------------------------------
+    describe('Config dataset registration', () => {
+        it('registers the co-agent and channel registries as locally-cached datasets when their entities exist', async () => {
+            const engine = AIEngineBase.Instance;
+            const loadSpy = vi.spyOn(
+                engine as unknown as { Load: (params: Array<{ EntityName: string; CacheLocal?: boolean }>) => Promise<void> },
+                'Load',
+            );
+            await engine.Config(false);
+            const params = loadSpy.mock.calls[0][0];
+            const coAgentConfig = params.find(p => p.EntityName === 'MJ: AI Agent Co Agents');
+            const channelConfig = params.find(p => p.EntityName === 'MJ: AI Agent Channels');
+            expect(coAgentConfig).toBeDefined();
+            expect(coAgentConfig!.CacheLocal).toBe(true);
+            expect(channelConfig).toBeDefined();
+            expect(channelConfig!.CacheLocal).toBe(true);
+        });
+
+        it('skips a registry dataset whose entity is missing (clean-install CodeGen bootstrap)', async () => {
+            const coreModule = await import('@memberjunction/core');
+            const metadataClass = coreModule.Metadata as unknown as { Provider: { EntityByName: (name: string) => unknown } };
+            const originalProvider = metadataClass.Provider;
+            metadataClass.Provider = { EntityByName: () => undefined };
+            try {
+                const engine = AIEngineBase.Instance;
+                const loadSpy = vi.spyOn(
+                    engine as unknown as { Load: (params: Array<{ EntityName: string; CacheLocal?: boolean }>) => Promise<void> },
+                    'Load',
+                );
+                await engine.Config(false);
+                const params = loadSpy.mock.calls[0][0];
+                expect(params.find(p => p.EntityName === 'MJ: AI Agent Co Agents')).toBeUndefined();
+                expect(params.find(p => p.EntityName === 'MJ: AI Agent Channels')).toBeUndefined();
+                // the unconditional datasets still register
+                expect(params.find(p => p.EntityName === 'MJ: AI Models')).toBeDefined();
+            } finally {
+                metadataClass.Provider = originalProvider;
+            }
+        });
+    });
+
+    // -----------------------------------------------
+    // New realtime metadata getters
+    // -----------------------------------------------
+    describe('AgentCoAgents / AgentChannels', () => {
+        it('AgentCoAgents returns the cached co-agent affinity rows', () => {
+            const rows = [{ ID: 'p1', CoAgentID: 'co-1', TargetAgentID: 't1', Type: 'CoAgent', Status: 'Active', IsDefault: true, Sequence: 0 }];
+            set('_agentCoAgents', rows);
+            expect(AIEngineBase.Instance.AgentCoAgents).toBe(rows);
+        });
+
+        it('AgentChannels returns the cached channel registry rows', () => {
+            const rows = [{ ID: 'c1', Name: 'Whiteboard', IsActive: true }];
+            set('_agentChannels', rows);
+            expect(AIEngineBase.Instance.AgentChannels).toBe(rows);
         });
     });
 
@@ -312,6 +389,152 @@ describe('AIEngineBase', () => {
             set('_agentRelationships', [{ AgentID: 'p', SubAgentID: 'r', Status: 'Inactive' }]);
             // Default relationship status filter is 'Active'
             expect(AIEngineBase.Instance.GetSubAgents('p')).toHaveLength(0);
+        });
+    });
+
+    // -----------------------------------------------
+    // GetSkillsForAgent
+    // -----------------------------------------------
+    describe('GetSkillsForAgent', () => {
+        it("returns [] when the agent's AcceptsSkills is 'None' (default)", () => {
+            set('_skills', [{ ID: 's1', Status: 'Active' }]);
+            set('_agentSkills', []);
+            expect(AIEngineBase.Instance.GetSkillsForAgent({ ID: 'a1', AcceptsSkills: 'None' } as never)).toHaveLength(0);
+        });
+
+        it("returns [] when AcceptsSkills is undefined (never touched the column)", () => {
+            set('_skills', [{ ID: 's1', Status: 'Active' }]);
+            set('_agentSkills', []);
+            expect(AIEngineBase.Instance.GetSkillsForAgent({ ID: 'a1' } as never)).toHaveLength(0);
+        });
+
+        it("'All' returns every Active skill regardless of grants", () => {
+            set('_skills', [
+                { ID: 's1', Status: 'Active' },
+                { ID: 's2', Status: 'Active' },
+                { ID: 's3', Status: 'Deprecated' },
+            ]);
+            set('_agentSkills', []);
+            const result = AIEngineBase.Instance.GetSkillsForAgent({ ID: 'a1', AcceptsSkills: 'All' } as never);
+            expect(result).toHaveLength(2);
+            expect(result.map((s: { ID: string }) => s.ID).sort()).toEqual(['s1', 's2']);
+        });
+
+        it("'Limited' returns only skills with an Active grant for this agent", () => {
+            set('_skills', [
+                { ID: 's1', Status: 'Active' },
+                { ID: 's2', Status: 'Active' },
+            ]);
+            set('_agentSkills', [
+                { AgentID: 'a1', SkillID: 's1', Status: 'Active' },
+                { AgentID: 'a1', SkillID: 's2', Status: 'Revoked' },
+                { AgentID: 'a2', SkillID: 's2', Status: 'Active' }, // different agent's grant
+            ]);
+            const result = AIEngineBase.Instance.GetSkillsForAgent({ ID: 'a1', AcceptsSkills: 'Limited' } as never);
+            expect(result).toHaveLength(1);
+            expect(result[0].ID).toBe('s1');
+        });
+
+        it("'Limited' excludes a granted skill whose catalog Status is not Active", () => {
+            set('_skills', [{ ID: 's1', Status: 'Deprecated' }]);
+            set('_agentSkills', [{ AgentID: 'a1', SkillID: 's1', Status: 'Active' }]);
+            expect(AIEngineBase.Instance.GetSkillsForAgent({ ID: 'a1', AcceptsSkills: 'Limited' } as never)).toHaveLength(0);
+        });
+
+        it('returns [] for a null/undefined agent', () => {
+            set('_skills', [{ ID: 's1', Status: 'Active' }]);
+            expect(AIEngineBase.Instance.GetSkillsForAgent(null as never)).toHaveLength(0);
+        });
+    });
+
+    // -----------------------------------------------
+    // GetAutoActivatableSkillsForAgent — the DOUBLE activation gate (v5.45)
+    // Self-activation requires 'Auto' on BOTH the agent (SkillActivationMode) and
+    // each skill (ActivationMode). Defaults are 'RequestedOnly' on both sides, so
+    // the "super agent" posture is always a deliberate double opt-in.
+    // -----------------------------------------------
+    describe('GetAutoActivatableSkillsForAgent', () => {
+        it("returns [] when the agent's SkillActivationMode is 'RequestedOnly' (default), even for Auto skills", () => {
+            set('_skills', [{ ID: 's1', Status: 'Active', ActivationMode: 'Auto' }]);
+            set('_agentSkills', []);
+            const agent = { ID: 'a1', AcceptsSkills: 'All', SkillActivationMode: 'RequestedOnly' } as never;
+            expect(AIEngineBase.Instance.GetAutoActivatableSkillsForAgent(agent)).toHaveLength(0);
+        });
+
+        it("returns [] when SkillActivationMode is undefined (column never touched) — safe default", () => {
+            set('_skills', [{ ID: 's1', Status: 'Active', ActivationMode: 'Auto' }]);
+            set('_agentSkills', []);
+            expect(AIEngineBase.Instance.GetAutoActivatableSkillsForAgent({ ID: 'a1', AcceptsSkills: 'All' } as never)).toHaveLength(0);
+        });
+
+        it("filters out RequestedOnly skills even when the agent side is 'Auto'", () => {
+            set('_skills', [
+                { ID: 's1', Status: 'Active', ActivationMode: 'Auto' },
+                { ID: 's2', Status: 'Active', ActivationMode: 'RequestedOnly' },
+            ]);
+            set('_agentSkills', []);
+            const agent = { ID: 'a1', AcceptsSkills: 'All', SkillActivationMode: 'Auto' } as never;
+            const result = AIEngineBase.Instance.GetAutoActivatableSkillsForAgent(agent);
+            expect(result).toHaveLength(1);
+            expect(result[0].ID).toBe('s1');
+        });
+
+        it('Auto × Auto passes — but still honors the availability gates (AcceptsSkills + skill Status)', () => {
+            set('_skills', [
+                { ID: 's1', Status: 'Active', ActivationMode: 'Auto' },
+                { ID: 's2', Status: 'Deprecated', ActivationMode: 'Auto' }, // catalog gate still applies
+            ]);
+            set('_agentSkills', []);
+            const auto = { ID: 'a1', AcceptsSkills: 'All', SkillActivationMode: 'Auto' } as never;
+            expect(AIEngineBase.Instance.GetAutoActivatableSkillsForAgent(auto).map((s: { ID: string }) => s.ID)).toEqual(['s1']);
+            // AcceptsSkills='None' still yields nothing no matter the ActivationMode dials
+            const none = { ID: 'a2', AcceptsSkills: 'None', SkillActivationMode: 'Auto' } as never;
+            expect(AIEngineBase.Instance.GetAutoActivatableSkillsForAgent(none)).toHaveLength(0);
+        });
+
+        it("'Limited' agents intersect the auto set with their Active grants", () => {
+            set('_skills', [
+                { ID: 's1', Status: 'Active', ActivationMode: 'Auto' },
+                { ID: 's2', Status: 'Active', ActivationMode: 'Auto' },
+            ]);
+            set('_agentSkills', [{ AgentID: 'a1', SkillID: 's1', Status: 'Active' }]);
+            const agent = { ID: 'a1', AcceptsSkills: 'Limited', SkillActivationMode: 'Auto' } as never;
+            const result = AIEngineBase.Instance.GetAutoActivatableSkillsForAgent(agent);
+            expect(result.map((s: { ID: string }) => s.ID)).toEqual(['s1']);
+        });
+
+        it('returns [] for a null agent', () => {
+            set('_skills', [{ ID: 's1', Status: 'Active', ActivationMode: 'Auto' }]);
+            expect(AIEngineBase.Instance.GetAutoActivatableSkillsForAgent(null as never)).toHaveLength(0);
+        });
+    });
+
+    // -----------------------------------------------
+    // GetSkillActionIDs / GetSkillSubAgentIDs
+    // -----------------------------------------------
+    describe('GetSkillActionIDs', () => {
+        it('returns the ActionIDs bundled into a skill', () => {
+            set('_skillActions', [
+                { SkillID: 's1', ActionID: 'act1' },
+                { SkillID: 's1', ActionID: 'act2' },
+                { SkillID: 's2', ActionID: 'act3' },
+            ]);
+            expect(AIEngineBase.Instance.GetSkillActionIDs('s1').sort()).toEqual(['act1', 'act2']);
+        });
+
+        it('returns [] when the skill bundles no actions', () => {
+            set('_skillActions', []);
+            expect(AIEngineBase.Instance.GetSkillActionIDs('s1')).toEqual([]);
+        });
+    });
+
+    describe('GetSkillSubAgentIDs', () => {
+        it('returns the sub-agent IDs bundled into a skill', () => {
+            set('_skillSubAgents', [
+                { SkillID: 's1', SubAgentID: 'sa1' },
+                { SkillID: 's2', SubAgentID: 'sa2' },
+            ]);
+            expect(AIEngineBase.Instance.GetSkillSubAgentIDs('s1')).toEqual(['sa1']);
         });
     });
 

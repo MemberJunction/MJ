@@ -52,6 +52,19 @@ export function classifyBatch(batch: string): StatementType {
     return 'SKIP_SQLSERVER';
   }
 
+  // IF DATABASE_PRINCIPAL_ID(N'x') IS NULL ... EXEC('CREATE ROLE ...') → the SQL Server
+  // idiom for "create role if absent". Convert role creation to a PG pg_roles DO block;
+  // user/login creation has no PG equivalent and is skipped.
+  if (/^IF\s+DATABASE_PRINCIPAL_ID\s*\(/i.test(upper)) {
+    return /CREATE\s+ROLE\b/i.test(upper) ? 'CONDITIONAL_DDL' : 'SKIP_SQLSERVER';
+  }
+
+  // IF IS_ROLEMEMBER(...) = 0 ALTER ROLE ... ADD MEMBER → SS role-membership grants for
+  // SS logins/users that are not created in PG; no PG equivalent, so skip them.
+  if (/^IF\s+IS_ROLEMEMBER\s*\(/i.test(upper)) {
+    return 'SKIP_SQLSERVER';
+  }
+
   // IF EXISTS (without NOT) — SQL Server pre-flight checks (drop extended property, etc.)
   if (/^IF\s+EXISTS\s*\(/i.test(upper) && !/^IF\s+NOT\s/i.test(upper)) {
     return 'SKIP_SQLSERVER';
@@ -179,6 +192,27 @@ export function classifyBatch(batch: string): StatementType {
   // DROP TABLE with temp objects (#name) — SQL Server temp tables don't exist in PG.
   if (/^DROP\s+(?:VIEW|PROCEDURE|PROC|FUNCTION)\s/i.test(upper)) return 'SKIP_SQLSERVER';
   if (/^DROP\s+TABLE\s/i.test(upper)) return 'SKIP_SQLSERVER';
+
+  // Bare mj-sync CRUD sp calls → EXEC_BLOCK. mj-sync emits record DELETIONS as a
+  // bare `EXEC [schema].[spDeleteX] @ID = '<uuid>'` with no DECLARE block
+  // (creates/updates always carry one), so before this carve-out they fell
+  // through to the bare-EXEC skip below and were dropped without a trace — the
+  // v5.45 Metadata_Sync spDeleteComponentRegistry drop (issue #3253). The
+  // sp-name prefix alone cannot discriminate: CodeGen maintenance procs also
+  // start with spUpdate/spDelete (spUpdateEntityFieldRelatedEntityNameFieldMap,
+  // spDeleteUnneededEntityFields) and must keep skipping — so the match requires
+  // mj-sync's full delete signature: a single `@ID = '<uuid literal>'` argument.
+  //
+  // Anchoring to end-of-batch keeps that signature tight, at the cost of falling back to
+  // a silent skip for near-miss shapes mj-sync does not currently emit (a trailing
+  // comment, a second parameter, a composite key). That is covered rather than ignored:
+  // the delete-parity gate in scripts/check-pg-migration-content.mjs counts SS deletions
+  // with a pattern that is NOT end-anchored, so anything this classifier declines to
+  // convert still fails the build instead of vanishing. Loosening this regex without
+  // checking that gate would trade a caught failure for a silent one.
+  if (/^EXEC\s+\[?\w+\]?\s*\.\s*\[?sp(?:Create|Update|Delete)\w*\]?\s+@ID\s*=\s*N?'[0-9A-F-]{36}'\s*;?\s*$/i.test(upper)) {
+    return 'EXEC_BLOCK';
+  }
 
   // EXEC calls (not sp_addextendedproperty, which is handled above) → skip
   if (/^EXEC\s/i.test(upper)) return 'SKIP_SQLSERVER';

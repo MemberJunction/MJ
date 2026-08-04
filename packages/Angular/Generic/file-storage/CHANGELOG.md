@@ -1,5 +1,478 @@
 # Change Log - @memberjunction/ng-file-storage
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ng-shared@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-container-directives@6.0.0
+  - @memberjunction/ng-shared-generic@6.0.0
+  - @memberjunction/graphql-dataprovider@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ng-ui-components@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ng-shared@5.51.0
+  - @memberjunction/ng-base-types@5.51.0
+  - @memberjunction/ng-container-directives@5.51.0
+  - @memberjunction/ng-shared-generic@5.51.0
+  - @memberjunction/graphql-dataprovider@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ng-ui-components@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- dd04a24: Widen the zod pin from `~3.24.4` to `^3.25.0` so it satisfies `@modelcontextprotocol/sdk`'s peer requirement (`zod ^3.25 || ^4.0`). The old tilde pin has no overlap with the SDK's peer range, which breaks strict package managers (pnpm) and MJCLI's oclif manifest generation under strict installs. zod 3.25.x keeps the classic v3 API at the root import, so this is a version-range correction with no behavior change.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ng-shared@5.50.0
+  - @memberjunction/ng-base-types@5.50.0
+  - @memberjunction/ng-shared-generic@5.50.0
+  - @memberjunction/graphql-dataprovider@5.50.0
+  - @memberjunction/ng-container-directives@5.50.0
+  - @memberjunction/ng-ui-components@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [88d707b]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [85575cf]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/graphql-dataprovider@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ng-shared-generic@5.49.0
+  - @memberjunction/ng-ui-components@5.49.0
+  - @memberjunction/ng-shared@5.49.0
+  - @memberjunction/ng-base-types@5.49.0
+  - @memberjunction/ng-container-directives@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [f613d0d]
+- Updated dependencies [d1e1a15]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ng-shared@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ng-base-types@5.48.0
+  - @memberjunction/ng-container-directives@5.48.0
+  - @memberjunction/ng-shared-generic@5.48.0
+  - @memberjunction/graphql-dataprovider@5.48.0
+  - @memberjunction/ng-ui-components@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ng-shared@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-container-directives@5.47.0
+  - @memberjunction/ng-shared-generic@5.47.0
+  - @memberjunction/graphql-dataprovider@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/ng-ui-components@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ng-shared@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-container-directives@5.46.0
+  - @memberjunction/ng-shared-generic@5.46.0
+  - @memberjunction/graphql-dataprovider@5.46.0
+  - @memberjunction/ng-ui-components@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@5.45.1
+- @memberjunction/graphql-dataprovider@5.45.1
+- @memberjunction/ng-base-types@5.45.1
+- @memberjunction/ng-container-directives@5.45.1
+- @memberjunction/ng-shared-generic@5.45.1
+- @memberjunction/ng-ui-components@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [13716e4]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/graphql-dataprovider@5.45.0
+  - @memberjunction/ng-ui-components@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ng-shared@5.45.0
+  - @memberjunction/ng-base-types@5.45.0
+  - @memberjunction/ng-container-directives@5.45.0
+  - @memberjunction/ng-shared-generic@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- 0476455: Migrate inline empty-state placeholders to the canonical `<mj-empty-state>` component across Explorer and Generic Angular packages (UI-consistency objective O4), wiring the component into the packages that needed it (and adding `@memberjunction/ng-ui-components` as a dependency where missing). Also fixes reset-filter CTA correctness in three picker dialogs (sub-agent selector, add-action, action gallery) where the handler cleared only a subset of the active filter dimensions, and refines the UI adoption measurement script with a transparent three-tier empty-state count (raw widened → non-placeholder false-positives → wrappers-around-migrated → genuine).
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [f8be8a0]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [1e5e449]
+- Updated dependencies [be5ab50]
+- Updated dependencies [45df197]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [0476455]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/graphql-dataprovider@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ng-ui-components@5.44.0
+  - @memberjunction/ng-shared@5.44.0
+  - @memberjunction/ng-base-types@5.44.0
+  - @memberjunction/ng-shared-generic@5.44.0
+  - @memberjunction/ng-container-directives@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [54183aa]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/ng-ui-components@5.43.0
+  - @memberjunction/ng-shared@5.43.0
+  - @memberjunction/ng-base-types@5.43.0
+  - @memberjunction/ng-container-directives@5.43.0
+  - @memberjunction/ng-shared-generic@5.43.0
+  - @memberjunction/graphql-dataprovider@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [313c1c5]
+- Updated dependencies [9b9b484]
+- Updated dependencies [5fde509]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/ng-ui-components@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/graphql-dataprovider@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ng-shared@5.42.0
+  - @memberjunction/ng-base-types@5.42.0
+  - @memberjunction/ng-container-directives@5.42.0
+  - @memberjunction/ng-shared-generic@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [34d17e2]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/graphql-dataprovider@5.41.0
+  - @memberjunction/ng-shared@5.41.0
+  - @memberjunction/ng-base-types@5.41.0
+  - @memberjunction/ng-container-directives@5.41.0
+  - @memberjunction/ng-shared-generic@5.41.0
+  - @memberjunction/ng-ui-components@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ng-shared@5.40.2
+- @memberjunction/ng-base-types@5.40.2
+- @memberjunction/ng-container-directives@5.40.2
+- @memberjunction/ng-shared-generic@5.40.2
+- @memberjunction/ng-ui-components@5.40.2
+- @memberjunction/graphql-dataprovider@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ng-shared@5.40.1
+  - @memberjunction/ng-base-types@5.40.1
+  - @memberjunction/ng-container-directives@5.40.1
+  - @memberjunction/ng-shared-generic@5.40.1
+  - @memberjunction/graphql-dataprovider@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/ng-ui-components@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [7bbfd62]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/graphql-dataprovider@5.40.0
+  - @memberjunction/ng-shared@5.40.0
+  - @memberjunction/ng-base-types@5.40.0
+  - @memberjunction/ng-container-directives@5.40.0
+  - @memberjunction/ng-shared-generic@5.40.0
+  - @memberjunction/ng-ui-components@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [f60e340]
+- Updated dependencies [bd95e83]
+- Updated dependencies [3c53858]
+- Updated dependencies [4bc6fb4]
+- Updated dependencies [3b29882]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/graphql-dataprovider@5.39.0
+  - @memberjunction/ng-ui-components@5.39.0
+  - @memberjunction/ng-shared-generic@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ng-shared@5.39.0
+  - @memberjunction/ng-base-types@5.39.0
+  - @memberjunction/ng-container-directives@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [6a571d3]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [b26d0ee]
+- Updated dependencies [60947be]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/ng-shared@5.38.0
+  - @memberjunction/graphql-dataprovider@5.38.0
+  - @memberjunction/ng-base-types@5.38.0
+  - @memberjunction/ng-container-directives@5.38.0
+  - @memberjunction/ng-shared-generic@5.38.0
+  - @memberjunction/ng-ui-components@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [dadbde9]
+- Updated dependencies [4f15f31]
+  - @memberjunction/graphql-dataprovider@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ng-shared@5.37.0
+  - @memberjunction/ng-base-types@5.37.0
+  - @memberjunction/ng-container-directives@5.37.0
+  - @memberjunction/ng-shared-generic@5.37.0
+  - @memberjunction/ng-ui-components@5.37.0
+  - @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [f29b7c0]
+- Updated dependencies [1c0fce9]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/graphql-dataprovider@5.36.0
+  - @memberjunction/ng-ui-components@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ng-shared@5.36.0
+  - @memberjunction/ng-base-types@5.36.0
+  - @memberjunction/ng-shared-generic@5.36.0
+  - @memberjunction/ng-container-directives@5.36.0
+  - @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- ee380f7: Consolidate MJ Explorer's page header chrome onto a shared component library: ~50 dashboards across 14 sections (AI, Knowledge Hub, Admin, Actions, Scheduling, Testing, MCP, Lists, Communication, Credentials, Version History, File Browser, Integrations, Archive) migrated to `<mj-page-layout>` + `<mj-page-header>` + `<mj-page-body>` with design-token-driven styling, replacing ~200 lines of bespoke per-section CSS (including hardcoded brand gradients). Adds the shared chrome components used throughout the migration: `mj-stat-badge`, `mj-refresh-button`, `mj-page-search`, `mj-filter-popover`, `mj-filter-panel`, `mj-filter-field`, `mj-filter-chip`, `mj-tab-nav`, `mj-view-toggle`. Removes two redundant/unused exports from `@memberjunction/ng-ui-components`: `MJFilterToggleComponent` (zero template usages — replaced by `<mj-filter-popover>`) and `MJResultCountComponent` (merged into `<mj-stat-badge>` — pass the optional `[Total]` input for the "X of Y" rendering). External consumers using either removed export must migrate to the noted replacement. Conventions documented in `plans/explorer-chrome-conventions.md`.
+- Updated dependencies [6fa8e13]
+- Updated dependencies [ee380f7]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [77e4782]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [383784c]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/ng-ui-components@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/graphql-dataprovider@5.35.0
+  - @memberjunction/ng-shared@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/ng-base-types@5.35.0
+  - @memberjunction/ng-container-directives@5.35.0
+  - @memberjunction/ng-shared-generic@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/graphql-dataprovider@5.34.1
+  - @memberjunction/ng-shared@5.34.1
+  - @memberjunction/ng-base-types@5.34.1
+  - @memberjunction/ng-container-directives@5.34.1
+  - @memberjunction/ng-shared-generic@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/ng-ui-components@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ng-shared@5.34.0
+  - @memberjunction/ng-base-types@5.34.0
+  - @memberjunction/ng-container-directives@5.34.0
+  - @memberjunction/ng-shared-generic@5.34.0
+  - @memberjunction/ng-ui-components@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/graphql-dataprovider@5.34.0
+  - @memberjunction/global@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

@@ -231,15 +231,15 @@ The schema, UI, and notification pieces are in place, but nothing currently *cre
 
 ### How the Agent Execution Flow Works Today
 
-1. **Loop Agent's `DetermineNextStep()`** ([loop-agent-type.ts:103-123](packages/AI/Agents/src/agent-types/loop-agent-type.ts#L103-L123)) detects `response.nextStep.type === 'Chat'`
-2. **`BaseAgent.executeChatStep()`** ([base-agent.ts:6794-6816](packages/AI/Agents/src/base-agent.ts#L6794-L6816)) creates a step entity and returns `{ step: 'Chat', terminate: true, message, responseForm, actionableCommands }`
-3. **Main execution loop** ([base-agent.ts:1244-1256](packages/AI/Agents/src/base-agent.ts#L1244-L1256)) sees `terminate: true`, breaks the loop
+1. **Loop Agent's `DetermineNextStep()`** ([loop-agent-type.ts:103-123](../../packages/AI/Agents/src/agent-types/loop-agent-type.ts#L103-L123)) detects `response.nextStep.type === 'Chat'`
+2. **`BaseAgent.executeChatStep()`** ([base-agent.ts:6794-6816](../../packages/AI/Agents/src/base-agent.ts#L6794-L6816)) creates a step entity and returns `{ step: 'Chat', terminate: true, message, responseForm, actionableCommands }`
+3. **Main execution loop** ([base-agent.ts:1244-1256](../../packages/AI/Agents/src/base-agent.ts#L1244-L1256)) sees `terminate: true`, breaks the loop
 4. **`ExecuteAgentResult`** is returned to the caller with `responseForm`, `actionableCommands`, and the payload preserved
 
 The caller today is one of:
-- **`RunAIAgentResolver`** ([RunAIAgentResolver.ts](packages/MJServer/src/resolvers/RunAIAgentResolver.ts)) — conversation-based execution via GraphQL
-- **`AgentService` (CLI)** ([AgentService.ts](packages/AI/AICLI/src/services/AgentService.ts)) — command-line execution
-- **`AgentOperations` (A2A)** ([AgentOperations.ts](packages/AI/A2AServer/src/AgentOperations.ts)) — agent-to-agent protocol
+- **`RunAIAgentResolver`** ([RunAIAgentResolver.ts](../../packages/MJServer/src/resolvers/RunAIAgentResolver.ts)) — conversation-based execution via GraphQL
+- **`AgentService` (CLI)** ([AgentService.ts](../../packages/AI/AICLI/src/services/AgentService.ts)) — command-line execution
+- **`AgentOperations` (A2A)** ([AgentOperations.ts](../../packages/AI/A2AServer/src/AgentOperations.ts)) — agent-to-agent protocol
 - **Scheduler** — background scheduled runs (memory manager, cleanup, etc.)
 
 ### Proposed Design: Two-Layer Request Creation

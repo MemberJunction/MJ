@@ -1,4 +1,4 @@
-import { AggregateExpression, DatabaseProviderBase, UserInfo } from '@memberjunction/core';
+import { AggregateExpression, CompositeKey, DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
@@ -90,12 +90,23 @@ export type RunViewGenericParams = {
   ignoreMaxRows?: boolean;
   maxRows?: number;
   startRow?: number;
+  /**
+   * Keyset (seek) pagination cursor — see {@link RunViewParams.AfterKey}.
+   * When set, the entity must have a single-column PK; throws AfterKeyNotSupportedError otherwise.
+   */
+  afterKey?: CompositeKey;
   excludeDataFromAllPriorViewRuns?: boolean;
   forceAuditLog?: boolean;
   auditLogDescription?: string;
   resultType?: string;
   userPayload?: UserPayload;
   aggregates?: AggregateExpression[];
+  /**
+   * When true, the server-side cache layer is bypassed for this view run —
+   * neither the pre-check cache lookup nor the post-query cache write
+   * happens. Propagated to `RunViewParams.BypassCache`.
+   */
+  bypassCache?: boolean;
 };
 
 

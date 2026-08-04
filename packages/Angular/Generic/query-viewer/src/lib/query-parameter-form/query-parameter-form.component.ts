@@ -11,14 +11,14 @@ import {
     ChangeDetectionStrategy
 } from '@angular/core';
 import { trigger, transition, style, animate } from '@angular/animations';
-import { QueryInfo, QueryParameterInfo } from '@memberjunction/core';
+import { MJQueryEntityExtended, MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { QueryParameterValues } from '../query-data-grid/models/query-grid-types';
 
 /**
  * A single parameter field in the form
  */
 interface ParameterField {
-    info: QueryParameterInfo;
+    info: MJQueryParameterEntity;
     value: string | number | boolean | Date | string[] | null;
     error: string | null;
     touched: boolean;
@@ -27,7 +27,7 @@ interface ParameterField {
 /**
  * A slide-in form for entering query parameters before execution.
  * Features:
- * - Dynamic form generation from QueryParameterInfo metadata
+ * - Dynamic form generation from MJQueryParameterEntity metadata
  * - Type-appropriate input controls (text, number, date, checkbox, multi-select)
  * - Validation with helpful error messages
  * - Sample values as placeholders
@@ -79,7 +79,7 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
     /**
      * The query metadata containing parameter definitions
      */
-    @Input() QueryInfo: QueryInfo | null = null;
+    @Input() QueryInfo: MJQueryEntityExtended | null = null;
 
     /**
      * Initial values to populate the form (e.g., from saved state)
@@ -148,7 +148,7 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
             return;
         }
 
-        const parameters = this.QueryInfo.Parameters || [];
+        const parameters = this.QueryInfo.QueryParameters || [];
 
         this.Fields = parameters.map(param => {
             const initialValue = this.getInitialValue(param);
@@ -166,7 +166,7 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
         this.cdr.markForCheck();
     }
 
-    private getInitialValue(param: QueryParameterInfo): string | number | boolean | Date | string[] | null {
+    private getInitialValue(param: MJQueryParameterEntity): string | number | boolean | Date | string[] | null {
         // Check initial values first
         if (this.InitialValues && this.InitialValues[param.Name] !== undefined) {
             return this.InitialValues[param.Name];
@@ -188,7 +188,7 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
         }
     }
 
-    private parseDefaultValue(param: QueryParameterInfo): string | number | boolean | Date | string[] | null {
+    private parseDefaultValue(param: MJQueryParameterEntity): string | number | boolean | Date | string[] | null {
         const defaultValue = param.DefaultValue;
         if (defaultValue === null || defaultValue === undefined) return null;
 
@@ -350,7 +350,7 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
     // UI Helpers
     // ========================================
 
-    public GetInputType(param: QueryParameterInfo): string {
+    public GetInputType(param: MJQueryParameterEntity): string {
         switch (param.Type) {
             case 'number':
                 return 'number';
@@ -363,7 +363,7 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
         }
     }
 
-    public GetPlaceholder(param: QueryParameterInfo): string {
+    public GetPlaceholder(param: MJQueryParameterEntity): string {
         if (param.SampleValue) {
             return `e.g., ${param.SampleValue}`;
         }

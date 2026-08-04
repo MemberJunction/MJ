@@ -1,0 +1,17 @@
+/* cls-org-ctx wrapper + head chrome now owned by <mj-accordion-panel>.
+   Title label + "Unsaved" pill now use the accordion's own title layout +
+   canonical .mj-accordion-badge--warning --right — bespoke rules deleted. */
+.cls-org-ctx-body {
+    padding: 14px;
+}
+.cls-org-ctx-help {
+    margin: 0 0 10px;
+    font-size: 0.8rem;
+    color: var(--mj-text-muted);
+    line-height: 1.45;
+}
+.cls-org-ctx-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+}

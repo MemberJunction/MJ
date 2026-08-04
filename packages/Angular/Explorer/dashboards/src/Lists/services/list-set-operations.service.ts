@@ -1,12 +1,72 @@
 import { Injectable } from '@angular/core';
-import { RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { MJListEntity, MJListDetailEntity } from '@memberjunction/core-entities';
+import { RunView, Metadata, IMetadataProvider, CompositeKey, EntityInfo } from '@memberjunction/core';
+import { MJListEntity, MJListDetailEntity, MJUserViewEntity } from '@memberjunction/core-entities';
+import { NormalizeUUID } from '@memberjunction/global';
 import { BehaviorSubject, Observable } from 'rxjs';
 
 /**
- * Represents a set (list) in the Venn diagram
+ * Normalize an `MJ: List Details.RecordID`-style string so set operations
+ * compare correctly regardless of where the value originated.
+ *
+ * The wrinkle: SQL Server returns UUIDs uppercased, PostgreSQL returns
+ * them lowercased — and the same DB can host List Details written by
+ * different code paths with different casing. Composite-PK keys are
+ * concatenated strings (`Field1|Value1||Field2|Value2`); normalizing
+ * the whole string is safe — `NormalizeUUID` lowercases anything that
+ * pattern-matches a UUID and is a no-op on other content. The pipe
+ * separators in composite keys are unaffected.
+ */
+function normalizeRecordId(raw: string | null | undefined): string {
+  if (raw == null) return '';
+  return NormalizeUUID(String(raw));
+}
+
+/**
+ * Describes one operand for the Venn / set-op pipeline. The component
+ * passes these in instead of raw `MJListEntity`s now that views are
+ * supported; the service handles cache-keying + record-ID resolution.
+ */
+export interface SetOperand {
+  kind: OperandKind;
+  /** ID of the underlying MJ List or MJ User View. */
+  id: string;
+  /** Display name shown in the Venn legend + selection chips. */
+  name: string;
+  /** Entity ID — used to enforce the same-entity invariant on operations. */
+  entityID: string;
+  /** Entity name — denormalized for display. */
+  entityName: string;
+  /** Hex color from the predefined palette; chosen by the component. */
+  color: string;
+}
+
+/**
+ * Discriminates a Venn set / set-op operand between a saved MJ List and a
+ * User View. The Venn diagram uses this to render views with a dashed
+ * stroke (per mockup 10) so users can tell at a glance which inputs are
+ * static (lists) vs. dynamic-at-resolution (views).
+ */
+export type OperandKind = 'list' | 'view';
+
+/**
+ * Stable key for an operand across cache lookups + state persistence.
+ * `list:<id>` and `view:<id>` deliberately namespace the ID so a view and
+ * a list with the same UUID (extremely unlikely but possible) can't
+ * collide in the cache.
+ */
+export function OperandCacheKey(kind: OperandKind, id: string): string {
+  return `${kind}:${id}`;
+}
+
+/**
+ * Represents a set (list or view) in the Venn diagram
  */
 export interface VennSet {
+  /** Stable cache key. Use `OperandCacheKey()` to construct. */
+  operandKey: string;
+  /** Discriminator — drives the dashed-vs-solid stroke in the Venn diagram. */
+  kind: OperandKind;
+  /** Underlying list / view ID. Same UUID space as the entity it points at. */
   listId: string;
   listName: string;
   color: string;
@@ -74,17 +134,35 @@ export interface SetOperationResult {
   resultCount: number;
 }
 
-// Predefined color palette for Venn sets
-const VENN_COLORS = [
-  '#2196F3', // Blue
-  '#4CAF50', // Green
-  '#FF9800', // Orange
-  '#E91E63', // Pink
-  '#9C27B0', // Purple
-  '#00BCD4', // Cyan
-  '#F44336', // Red
-  '#8BC34A'  // Light Green
+// Default categorical palette for Venn sets. These mirror the platform
+// `--mj-viz-1..8` design tokens; `vennColor()` resolves the live token values so
+// themes re-tint the diagram, and falls back to these when no themed DOM exists.
+const VENN_COLOR_FALLBACKS = [
+  '#2196F3', // Blue        (--mj-viz-1)
+  '#4CAF50', // Green       (--mj-viz-2)
+  '#FF9800', // Orange      (--mj-viz-3)
+  '#E91E63', // Pink        (--mj-viz-4)
+  '#9C27B0', // Purple      (--mj-viz-5)
+  '#00BCD4', // Cyan        (--mj-viz-6)
+  '#F44336', // Red         (--mj-viz-7)
+  '#8BC34A'  // Light Green (--mj-viz-8)
 ];
+
+/**
+ * Resolves the categorical color for a set index from the live `--mj-viz-*`
+ * theme tokens (so the diagram follows the active theme/brand), falling back to
+ * {@link VENN_COLOR_FALLBACKS} when there is no themed DOM (SSR/tests). The Venn
+ * component applies these as SVG `fill` attributes, which require a concrete
+ * color value rather than a `var()` reference — hence runtime resolution.
+ */
+function vennColor(index: number): string {
+  const i = index % VENN_COLOR_FALLBACKS.length;
+  const fallback = VENN_COLOR_FALLBACKS[i];
+  if (typeof document === 'undefined' || typeof getComputedStyle === 'undefined') {
+    return fallback;
+  }
+  return getComputedStyle(document.documentElement).getPropertyValue(`--mj-viz-${i + 1}`).trim() || fallback;
+}
 
 /**
  * Service for performing set operations on lists and preparing data for Venn visualization.
@@ -93,6 +171,25 @@ const VENN_COLORS = [
   providedIn: 'root'
 })
 export class ListSetOperationsService {
+  /**
+   * Defensive cap on membership rows loaded per operand query (P8). Set
+   * operations are in-memory over full member sets; beyond this size the
+   * result would be wrong-by-truncation, so we cap the load and warn —
+   * callers can check {@link WasLastLoadTruncated} to surface it.
+   */
+  public static readonly MAX_OPERAND_RECORDS = 50000;
+
+  /** True when the most recent membership load hit MAX_OPERAND_RECORDS — results may be incomplete. */
+  public WasLastLoadTruncated = false;
+
+  /** Applies the operand cap: flags/warns when a membership query filled the cap. */
+  private trackTruncation(rowsReturned: number, context: string): void {
+    if (rowsReturned >= ListSetOperationsService.MAX_OPERAND_RECORDS) {
+      this.WasLastLoadTruncated = true;
+      console.warn(`[ListSetOperations] ${context} hit the ${ListSetOperationsService.MAX_OPERAND_RECORDS}-row operand cap — set-operation results may be incomplete.`);
+    }
+  }
+
   private _provider: IMetadataProvider | null = null;
   /** Set the metadata provider this service should use. Components should call this after injection. */
   public set Provider(value: IMetadataProvider | null) {
@@ -125,12 +222,15 @@ export class ListSetOperationsService {
       const listIdFilter = listIds.map(id => `'${id}'`).join(',');
 
       const rv = RunView.FromMetadataProvider(this.Provider);
+      this.WasLastLoadTruncated = false;
       const result = await rv.RunView<{ ListID: string; RecordID: string }>({
         EntityName: 'MJ: List Details',
         ExtraFilter: `ListID IN (${listIdFilter})`,
         Fields: ['ListID', 'RecordID'],
-        ResultType: 'simple'
+        ResultType: 'simple',
+        MaxRows: ListSetOperationsService.MAX_OPERAND_RECORDS
       });
+      this.trackTruncation(result.Results?.length ?? 0, 'calculateVennData');
 
       // Build sets per list
       const setsMap = new Map<string, Set<string>>();
@@ -147,16 +247,22 @@ export class ListSetOperationsService {
         }
       }
 
-      // Update cache
+      // Update cache — namespaced under `list:` so view operands can share
+      // the same cache map without collision.
       for (const [listId, records] of setsMap) {
-        this.listDetailsCache.set(listId, records);
+        this.listDetailsCache.set(OperandCacheKey('list', listId), records);
       }
 
-      // Build VennSet objects
+      // Build VennSet objects. We keep the legacy `MJListEntity` overload's
+      // shape but populate the new discriminator fields so the diagram +
+      // downstream operations stay consistent regardless of which entry
+      // point was used.
       const sets: VennSet[] = lists.map((list, index) => ({
+        operandKey: OperandCacheKey('list', list.ID),
+        kind: 'list' as const,
         listId: list.ID,
         listName: list.Name,
-        color: VENN_COLORS[index % VENN_COLORS.length],
+        color: vennColor(index),
         recordIds: setsMap.get(list.ID) || new Set(),
         size: setsMap.get(list.ID)?.size || 0
       }));
@@ -169,6 +275,69 @@ export class ListSetOperationsService {
       const entityName = lists[0]?.Entity;
 
       return { sets, intersections, entityId, entityName };
+    } finally {
+      this.loadingSubject.next(false);
+    }
+  }
+
+  /**
+   * Generalized Venn-data loader supporting both lists and views.
+   *
+   * - Lists resolve via the same `MJ: List Details` query as the legacy
+   *   path (cached by `list:<id>`).
+   * - Views resolve via `RunView({ViewID})` and primary-key serialization;
+   *   cached by `view:<id>` so picking the same view twice doesn't
+   *   re-query.
+   *
+   * The cache deliberately namespaces the kind — a list and a view that
+   * shared the same UUID would still hit distinct entries.
+   */
+  async calculateVennDataForOperands(operands: SetOperand[]): Promise<VennData> {
+    if (operands.length === 0) return { sets: [], intersections: [] };
+    this.loadingSubject.next(true);
+    try {
+      await this.ensureOperandsLoaded(operands);
+
+      const sets: VennSet[] = operands.map((op) => ({
+        operandKey: OperandCacheKey(op.kind, op.id),
+        kind: op.kind,
+        listId: op.id,
+        listName: op.name,
+        color: op.color,
+        recordIds: this.cacheGet(op) ?? new Set<string>(),
+        size: this.cacheGet(op)?.size ?? 0,
+      }));
+
+      const intersections = this.calculateAllIntersections(sets);
+      const entityId = operands[0]?.entityID;
+      const entityName = operands[0]?.entityName;
+      return { sets, intersections, entityId, entityName };
+    } finally {
+      this.loadingSubject.next(false);
+    }
+  }
+
+  /**
+   * Operand-aware sibling of `performOperation`. `operandKeys` are the
+   * `OperandCacheKey()` strings produced by `calculateVennDataForOperands`,
+   * so callers can stay in operand-key space end-to-end.
+   */
+  async performOperationForOperands(
+    operation: SetOperation,
+    operands: SetOperand[],
+    allOperands?: SetOperand[],
+  ): Promise<SetOperationResult> {
+    this.loadingSubject.next(true);
+    try {
+      await this.ensureOperandsLoaded([...operands, ...(allOperands ?? [])]);
+      const sets = operands.map((op) => this.cacheGet(op) ?? new Set<string>());
+      const resultSet = this.computeOperationResult(operation, sets, allOperands);
+      return {
+        operation,
+        inputSetIds: operands.map((op) => OperandCacheKey(op.kind, op.id)),
+        resultRecordIds: Array.from(resultSet),
+        resultCount: resultSet.size,
+      };
     } finally {
       this.loadingSubject.next(false);
     }
@@ -261,7 +430,7 @@ export class ListSetOperationsService {
       // Ensure we have the list details loaded
       await this.ensureListsLoaded(listIds);
 
-      const sets = listIds.map(id => this.listDetailsCache.get(id) || new Set<string>());
+      const sets = listIds.map(id => this.listDetailsCache.get(OperandCacheKey('list', id)) || new Set<string>());
       let resultSet: Set<string>;
 
       switch (operation) {
@@ -294,7 +463,7 @@ export class ListSetOperationsService {
           // Records NOT in any of the selected sets (requires allListIds)
           if (allListIds) {
             await this.ensureListsLoaded(allListIds);
-            const allSets = allListIds.map(id => this.listDetailsCache.get(id) || new Set<string>());
+            const allSets = allListIds.map(id => this.listDetailsCache.get(OperandCacheKey('list', id)) || new Set<string>());
             const allRecords = this.unionAll(allSets);
             const selectedRecords = this.unionAll(sets);
             resultSet = this.difference(allRecords, selectedRecords);
@@ -319,10 +488,156 @@ export class ListSetOperationsService {
   }
 
   /**
-   * Ensure list details are loaded for the given list IDs
+   * Cached lookup keyed by operand kind+id. Lists and views share the
+   * cache map but their entries can't collide thanks to the key namespace.
+   */
+  private cacheGet(operand: SetOperand): Set<string> | undefined {
+    return this.listDetailsCache.get(OperandCacheKey(operand.kind, operand.id));
+  }
+
+  /**
+   * Bulk-load any operands not already cached. Lists batch through a
+   * single `MJ: List Details` query (same shape as before); views resolve
+   * one at a time because each is a separate parameterized RunView. Both
+   * paths populate the same cache map.
+   */
+  private async ensureOperandsLoaded(operands: SetOperand[]): Promise<void> {
+    const missingLists: string[] = [];
+    const missingViews: SetOperand[] = [];
+    for (const op of operands) {
+      if (this.cacheGet(op)) continue;
+      if (op.kind === 'list') missingLists.push(op.id);
+      else missingViews.push(op);
+    }
+    await Promise.all([
+      missingLists.length > 0 ? this.loadMissingLists(missingLists) : Promise.resolve(),
+      missingViews.length > 0 ? this.loadMissingViews(missingViews) : Promise.resolve(),
+    ]);
+  }
+
+  private async loadMissingLists(listIds: string[]): Promise<void> {
+    const listIdFilter = listIds.map((id) => `'${id}'`).join(',');
+    const rv = RunView.FromMetadataProvider(this.Provider);
+    const result = await rv.RunView<{ ListID: string; RecordID: string }>({
+      EntityName: 'MJ: List Details',
+      ExtraFilter: `ListID IN (${listIdFilter})`,
+      Fields: ['ListID', 'RecordID'],
+      ResultType: 'simple',
+      MaxRows: ListSetOperationsService.MAX_OPERAND_RECORDS,
+    });
+    this.trackTruncation(result.Results?.length ?? 0, 'loadMissingLists');
+
+    for (const id of listIds) {
+      this.listDetailsCache.set(OperandCacheKey('list', id), new Set<string>());
+    }
+    if (result.Success && result.Results) {
+      for (const detail of result.Results) {
+        // Normalize on the ListID we look up by AND on the RecordID we
+        // store — mixed casing on either side would otherwise produce
+        // empty intersections between lists that actually share records.
+        const set = this.listDetailsCache.get(OperandCacheKey('list', NormalizeUUID(detail.ListID)))
+          ?? this.listDetailsCache.get(OperandCacheKey('list', detail.ListID));
+        if (set) set.add(normalizeRecordId(detail.RecordID));
+      }
+    }
+  }
+
+  private async loadMissingViews(operands: SetOperand[]): Promise<void> {
+    // Fire view queries in parallel — each one is small and independent.
+    const tasks = operands.map((op) => this.loadSingleView(op));
+    await Promise.all(tasks);
+  }
+
+  /**
+   * Resolve a view to a set of record IDs in the canonical `MJ: List
+   * Details.RecordID` format (single-PK → raw value; composite-PK →
+   * `Field1|Value1||Field2|Value2`, matching `CompositeKey.ToConcatenatedString`).
+   * This keeps view operands cache-compatible with list operands without
+   * any transformation in the set-op logic.
+   */
+  private async loadSingleView(operand: SetOperand): Promise<void> {
+    const md = this.Provider;
+    const entityInfo = md.EntityByName(operand.entityName);
+    if (!entityInfo) {
+      this.listDetailsCache.set(OperandCacheKey('view', operand.id), new Set<string>());
+      return;
+    }
+    const pkFields = entityInfo.PrimaryKeys.map((pk) => pk.Name);
+
+    const rv = RunView.FromMetadataProvider(md);
+    const result = await rv.RunView({
+      ViewID: operand.id,
+      Fields: pkFields,
+      ResultType: 'simple',
+      MaxRows: ListSetOperationsService.MAX_OPERAND_RECORDS,
+    });
+    this.trackTruncation(result.Results?.length ?? 0, `loadSingleView(${operand.id})`);
+
+    const set = new Set<string>();
+    if (result.Success && result.Results) {
+      for (const row of result.Results) {
+        set.add(this.serializeRecordId(entityInfo, row as Record<string, unknown>));
+      }
+    }
+    this.listDetailsCache.set(OperandCacheKey('view', operand.id), set);
+  }
+
+  /**
+   * Mirror of `ListOperations.serializeRecordId` so view operands produce
+   * IDs that round-trip cleanly against MJ List Details.
+   */
+  private serializeRecordId(entityInfo: EntityInfo, row: Record<string, unknown>): string {
+    if (entityInfo.PrimaryKeys.length === 1) {
+      return normalizeRecordId(String(row[entityInfo.PrimaryKeys[0].Name]));
+    }
+    const ck = new CompositeKey();
+    ck.KeyValuePairs = entityInfo.PrimaryKeys.map((pk) => ({
+      FieldName: pk.Name,
+      Value: row[pk.Name] as string | number | Date | null | undefined,
+    }));
+    return normalizeRecordId(ck.ToConcatenatedString());
+  }
+
+  /**
+   * Pure compute step shared by the legacy and operand-aware paths.
+   * Operates on raw `Set<string>` inputs so it stays agnostic to where
+   * those sets came from.
+   */
+  private computeOperationResult(
+    operation: SetOperation,
+    sets: Set<string>[],
+    allOperandsForComplement?: SetOperand[],
+  ): Set<string> {
+    switch (operation) {
+      case 'union':
+        return this.unionAll(sets);
+      case 'intersection':
+        return this.intersectAll(sets);
+      case 'difference': {
+        if (sets.length < 2) return sets[0] ?? new Set<string>();
+        let r = new Set(sets[0]);
+        for (let i = 1; i < sets.length; i++) r = this.difference(r, sets[i]);
+        return r;
+      }
+      case 'symmetric_difference':
+        return this.symmetricDifferenceAll(sets);
+      case 'complement': {
+        if (!allOperandsForComplement) return new Set<string>();
+        const allSets = allOperandsForComplement.map((op) => this.cacheGet(op) ?? new Set<string>());
+        return this.difference(this.unionAll(allSets), this.unionAll(sets));
+      }
+      default:
+        return new Set<string>();
+    }
+  }
+
+  /**
+   * Ensure list details are loaded for the given list IDs. Cache keys use
+   * the `list:<id>` namespace introduced for operand support; the legacy
+   * list-only callers go through here without needing to know the format.
    */
   private async ensureListsLoaded(listIds: string[]): Promise<void> {
-    const missingIds = listIds.filter(id => !this.listDetailsCache.has(id));
+    const missingIds = listIds.filter(id => !this.listDetailsCache.has(OperandCacheKey('list', id)));
 
     if (missingIds.length === 0) return;
 
@@ -333,17 +648,19 @@ export class ListSetOperationsService {
       EntityName: 'MJ: List Details',
       ExtraFilter: `ListID IN (${listIdFilter})`,
       Fields: ['ListID', 'RecordID'],
-      ResultType: 'simple'
+      ResultType: 'simple',
+      MaxRows: ListSetOperationsService.MAX_OPERAND_RECORDS
     });
+    this.trackTruncation(result.Results?.length ?? 0, 'ensureListsLoaded');
 
     // Initialize sets for missing lists
     for (const id of missingIds) {
-      this.listDetailsCache.set(id, new Set());
+      this.listDetailsCache.set(OperandCacheKey('list', id), new Set());
     }
 
     if (result.Success && result.Results) {
       for (const detail of result.Results) {
-        const set = this.listDetailsCache.get(detail.ListID);
+        const set = this.listDetailsCache.get(OperandCacheKey('list', detail.ListID));
         if (set) {
           set.add(detail.RecordID);
         }
@@ -432,7 +749,7 @@ export class ListSetOperationsService {
    * Get the color for a list by its index
    */
   getColorForIndex(index: number): string {
-    return VENN_COLORS[index % VENN_COLORS.length];
+    return vennColor(index);
   }
 
   /**

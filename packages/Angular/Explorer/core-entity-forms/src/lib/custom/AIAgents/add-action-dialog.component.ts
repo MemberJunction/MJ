@@ -298,8 +298,12 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
     }
   }
 
+  // Backs the no-results empty-state "Clear Filters" CTA: resets every dimension
+  // the list narrows on — search AND the category filter — so the CTA actually
+  // returns results instead of appearing to do nothing.
   clearSearch() {
     this.searchControl.reset();
+    this.selectedCategoryId$.next('all');
   }
 
   getActionIcon(action: ActionDisplayItem): string {

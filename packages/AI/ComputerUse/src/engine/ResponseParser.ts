@@ -29,6 +29,7 @@ import {
     GoBackAction,
     GoForwardAction,
     RefreshAction,
+    DragAction,
 } from '../types/browser.js';
 
 /** Shape of the raw JSON we expect from the controller LLM */
@@ -168,6 +169,22 @@ export class ResponseParser {
 
             case 'Refresh':
                 return new RefreshAction();
+
+            case 'Drag': {
+                const action = new DragAction();
+                action.StartX = ResponseParser.toNumber(raw.StartX ?? raw.startX, 0);
+                action.StartY = ResponseParser.toNumber(raw.StartY ?? raw.startY, 0);
+                action.EndX = ResponseParser.toNumber(raw.EndX ?? raw.endX, 0);
+                action.EndY = ResponseParser.toNumber(raw.EndY ?? raw.endY, 0);
+                action.StartBoundingBox = ResponseParser.parseBoundingBox(
+                    raw.StartBoundingBox ?? raw.startBoundingBox
+                );
+                action.EndBoundingBox = ResponseParser.parseBoundingBox(
+                    raw.EndBoundingBox ?? raw.endBoundingBox
+                );
+                action.Steps = ResponseParser.toNumber(raw.Steps ?? raw.steps, 10);
+                return action;
+            }
 
             default:
                 // Unrecognized action type — skip, don't crash

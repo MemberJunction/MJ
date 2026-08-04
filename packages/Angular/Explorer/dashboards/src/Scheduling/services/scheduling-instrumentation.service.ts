@@ -60,6 +60,8 @@ export interface JobStatistics {
   ownerUser: string | null;
   notifyOnSuccess: boolean;
   notifyOnFailure: boolean;
+  /** When true AND lastRunAt is unset, the scheduler runs the job immediately on its next poll instead of waiting for the next cron tick. */
+  runImmediatelyIfNeverRun: boolean;
   startAt?: Date;
   endAt?: Date;
   createdAt: Date;
@@ -374,6 +376,7 @@ export class SchedulingInstrumentationService {
       ownerUser: job.OwnerUser,
       notifyOnSuccess: job.NotifyOnSuccess,
       notifyOnFailure: job.NotifyOnFailure,
+      runImmediatelyIfNeverRun: job.RunImmediatelyIfNeverRun === true,
       startAt: job.StartAt ? new Date(job.StartAt) : undefined,
       endAt: job.EndAt ? new Date(job.EndAt) : undefined,
       createdAt: new Date(job.__mj_CreatedAt)

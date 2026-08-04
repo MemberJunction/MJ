@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Whiteboard Channel · Real-Time Agents</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+<style>
+  /* ====================================================================
+     LIVE WHITEBOARD CHANNEL — page-specific styles
+     Layout: call overlay in "board mode" — slim thread column (left) +
+     tabbed surface panel (right) with the whiteboard expanded.
+     Ownership: user items = slate/amber, NEVER violet · Sage items = violet, ALWAYS.
+     ==================================================================== */
+
+  /* ---------- overall overlay region ---------- */
+  .wb-overlay {
+    position: relative; z-index: 2; display: flex;
+    height: calc(100vh - 56px); min-height: 640px;
+    background: color-mix(in srgb, var(--mj-bg-page) 94%, transparent);
+    border-bottom: 1px solid var(--mj-border-default);
+    overflow: hidden;
+  }
+
+  /* ---------- LEFT: slim call column (thread shrinks so the board can breathe) ---------- */
+  .call-rail {
+    width: 332px; flex-shrink: 0; display: flex; flex-direction: column;
+    border-right: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card);
+    transition: width 240ms ease, opacity 200ms ease; overflow: hidden;
+  }
+  .wb-overlay.mode-focus .call-rail { width: 0; opacity: 0; pointer-events: none; border-right-color: transparent; }
+
+  .rail-banner { display: flex; align-items: center; gap: 11px; padding: 13px 14px; border-bottom: 1px solid var(--mj-border-default); background: linear-gradient(180deg, rgba(38,153,204,0.10), transparent); min-width: 330px; }
+  .rail-banner .nm { font-weight: 700; font-size: 13.5px; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .rail-banner .st { font-size: 11.5px; color: var(--mj-brand-accent); font-weight: 600; display: flex; align-items: center; gap: 7px; margin-top: 1px; }
+  .rail-banner .waveform { height: 14px; }
+  .rail-banner .waveform span { width: 2px; }
+
+  .rail-deleg {
+    display: flex; align-items: center; gap: 8px; margin: 10px 12px 0; padding: 7px 11px; min-width: 306px;
+    border: 1px solid var(--sage-border); background: var(--sage-bg); border-radius: var(--mj-radius-md);
+    font-size: 11.5px; font-weight: 600; color: var(--mj-color-violet-300);
+  }
+  .rail-deleg i.spin { animation: spin 1.1s linear infinite; font-size: 10px; }
+  .rail-deleg .why { color: var(--mj-text-muted); font-weight: 500; margin-left: auto; white-space: nowrap; }
+
+  .rail-thread { flex: 1; overflow-y: auto; padding: 14px; min-width: 330px; scrollbar-width: thin; scrollbar-color: var(--mj-border-strong) transparent; }
+  .rail-thread .bubble { font-size: 12.5px; padding: 8px 11px; max-width: 240px; }
+  .rail-thread .turn-avatar { width: 24px; height: 24px; font-size: 10px; }
+  .rail-thread .turn { gap: 8px; }
+  .rail-thread .turn-meta { font-size: 10px; }
+
+  .rail-captions {
+    display: flex; gap: 8px; align-items: flex-start; margin: 0 12px 10px; padding: 8px 11px; min-width: 306px;
+    border-radius: var(--mj-radius-md); background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default);
+    font-size: 12px; color: var(--mj-text-secondary); font-style: italic; line-height: 1.45;
+  }
+  .rail-captions i { color: var(--mj-brand-accent); font-size: 11px; margin-top: 3px; flex-shrink: 0; }
+
+  .rail-composer { padding: 0 12px 10px; min-width: 330px; }
+  .composer-box {
+    display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 12px;
+    border: 1px solid var(--mj-brand-primary); border-radius: var(--mj-radius-full);
+    background: var(--mj-bg-surface); box-shadow: 0 0 0 3px rgba(38,153,204,0.10);
+  }
+  .composer-box input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--mj-text-primary); font-family: inherit; font-size: 12.5px; }
+  .composer-box input::placeholder { color: var(--mj-text-muted); }
+  .composer-send { width: 30px; height: 30px; border-radius: 50%; background: var(--mj-brand-primary); color: #fff; border: 0; display: grid; place-items: center; cursor: pointer; font-size: 12px; flex-shrink: 0; }
+
+  .rail-controls { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 10px 12px 14px; border-top: 1px solid var(--mj-border-subtle); min-width: 330px; }
+  .rail-controls .ctrl { width: 40px; height: 40px; font-size: 14px; }
+  .rail-controls .ctrl--end { width: 46px; height: 46px; font-size: 15px; }
+  .rail-controls .ctrl-label { font-size: 10px; margin-top: 4px; }
+
+  /* ---------- RIGHT: tabbed surface panel ---------- */
+  .surface-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--mj-bg-surface); }
+
+  .surface-tabs { display: flex; align-items: stretch; background: var(--mj-bg-surface-sunken); border-bottom: 1px solid var(--mj-border-default); flex-shrink: 0; }
+  .s-tab {
+    padding: 10px 18px; border: 0; background: transparent; cursor: pointer; font-family: inherit;
+    font-size: 12.5px; font-weight: 600; color: var(--mj-text-muted); display: inline-flex; align-items: center; gap: 8px;
+    border-bottom: 3px solid transparent; transition: all 150ms ease;
+  }
+  .s-tab:hover { color: var(--mj-text-secondary); }
+  .s-tab.active { color: var(--mj-brand-accent); border-bottom-color: var(--mj-brand-primary); background: var(--mj-bg-surface); }
+  .s-tab .count { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: var(--mj-radius-full); background: var(--mj-bg-surface-elevated); color: var(--mj-text-secondary); }
+  .s-tab .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mj-status-success); box-shadow: 0 0 0 0 rgba(34,197,94,0.5); animation: pulse-ring 1.6s infinite; }
+  .surface-tabs .tabs-end { margin-left: auto; display: flex; align-items: center; gap: 6px; padding: 0 10px; }
+
+  .s-pane { display: none; flex: 1; min-height: 0; flex-direction: column; }
+  .s-pane.active { display: flex; }
+
+  /* ---------- board header row ---------- */
+  .board-head {
+    display: flex; align-items: center; gap: 12px; padding: 9px 16px;
+    border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); flex-shrink: 0; flex-wrap: wrap;
+  }
+  .board-head .bt { font-weight: 700; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+  .board-head .bt i { color: var(--mj-brand-accent); font-size: 13px; }
+  .board-save { font-size: 11px; color: var(--mj-text-muted); display: inline-flex; align-items: center; gap: 5px; }
+  .board-save i { color: var(--mj-status-success); font-size: 10px; }
+  .board-legend { display: inline-flex; align-items: center; gap: 12px; font-size: 11px; color: var(--mj-text-muted); margin-left: 6px; padding: 4px 10px; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-full); background: var(--mj-bg-surface-card); }
+  .board-legend .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; vertical-align: -1px; margin-right: 5px; }
+  .board-legend .sw--you { background: var(--mj-bg-surface-elevated); border: 1px solid var(--mj-border-strong); }
+  .board-legend .sw--sage { background: var(--sage-bg); border: 1px solid var(--sage); }
+  .head-btn {
+    display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; font-size: 11.5px; font-weight: 600;
+    border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-full); cursor: pointer;
+    background: var(--mj-bg-surface-card); color: var(--mj-text-secondary); transition: all 140ms ease; font-family: inherit;
+  }
+  .head-btn:hover { color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+  .head-btn.on { background: rgba(38,153,204,0.14); border-color: var(--mj-brand-primary); color: var(--mj-brand-accent); }
+  .head-btn--sees { position: relative; }
+  .head-btn--sees .eye-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--sage); box-shadow: 0 0 0 0 rgba(167,139,250,0.5); animation: pulse-ring 2s infinite; }
+
+  /* "what the agent sees" popover */
+  .sees-pop {
+    position: absolute; top: calc(100% + 10px); right: 0; z-index: 60; width: 420px; cursor: default;
+    background: var(--mj-bg-surface-card); border: 1px solid var(--sage-border); border-radius: var(--mj-radius-lg);
+    box-shadow: var(--mj-shadow-2xl); padding: 0; display: none; text-align: left; animation: pop-fade 160ms ease;
+  }
+  .sees-pop.open { display: block; }
+  @keyframes pop-fade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  .sees-pop__head { display: flex; align-items: center; gap: 9px; padding: 11px 14px; border-bottom: 1px solid var(--mj-border-default); font-size: 12px; font-weight: 700; color: var(--mj-color-violet-300); }
+  .sees-pop__head .pill { margin-left: auto; }
+  .sees-pop__body { padding: 12px 14px; }
+  .sees-pop__cap { font-size: 11.5px; color: var(--mj-text-secondary); line-height: 1.5; margin: 0 0 10px; font-weight: 400; }
+  .sees-pop .codeblock { font-size: 10.5px; max-height: 190px; }
+  .sees-pop__foot { display: flex; gap: 14px; padding: 9px 14px; border-top: 1px solid var(--mj-border-subtle); font-size: 10.5px; color: var(--mj-text-muted); font-weight: 500; }
+  .sees-pop__foot b { color: var(--mj-text-secondary); }
+
+  /* ---------- the board ---------- */
+  .board-wrap { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+  .board-canvas {
+    position: absolute; inset: 0; overflow: hidden;
+    background-color: var(--mj-bg-surface-sunken);
+    background-image: radial-gradient(rgba(148,163,184,0.15) 1px, transparent 1px);
+    background-size: 22px 22px; cursor: default;
+  }
+
+  /* ink + connector svg layer */
+  .ink-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .ink-user { stroke: #cbd5e1; }
+  .ink-amber { stroke: var(--mj-color-warning-400); }
+  .ink-sage { stroke: var(--sage); }
+  .conn-sage { stroke: var(--sage); filter: drop-shadow(0 0 4px rgba(167,139,250,0.35)); }
+  .draw-in { stroke-dasharray: 420; stroke-dashoffset: 420; animation: conn-draw 1.4s ease-out forwards 0.5s; }
+  @keyframes conn-draw { to { stroke-dashoffset: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .draw-in { animation: none; stroke-dashoffset: 0; }
+  }
+
+  /* ---- board items: shared chrome ---- */
+  .bi { position: absolute; box-shadow: var(--mj-shadow-lg); }
+  .author-chip {
+    position: absolute; top: -9px; left: 8px; z-index: 3;
+    display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px;
+    font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    border-radius: var(--mj-radius-full); line-height: 1.5; white-space: nowrap;
+  }
+  .author-chip i { font-size: 7.5px; }
+  .author-chip--you { background: var(--mj-color-neutral-700); border: 1px solid var(--mj-border-strong); color: var(--mj-color-neutral-300); }
+  .author-chip--sage { background: #2a2150; border: 1px solid var(--sage); color: var(--mj-color-violet-300); }
+
+  /* sticky notes */
+  .sticky { width: 172px; padding: 14px 13px 12px; border-radius: 4px 4px 14px 4px; font-size: 12.5px; line-height: 1.45; font-weight: 500; }
+  .sticky--amber { background: linear-gradient(180deg, #fcd34d, #f5b831); color: #3f2d04; transform: rotate(-1deg); }
+  .sticky--amber2 { background: linear-gradient(180deg, #fde68a, #f8ca4d); color: #3f2d04; transform: rotate(0.8deg); }
+  .sticky--sage { background: linear-gradient(180deg, #38306b, #2c2455); color: var(--mj-color-violet-300); border: 1px solid var(--sage); box-shadow: 0 0 0 3px rgba(167,139,250,0.20), var(--mj-shadow-lg); transform: rotate(1.2deg); }
+
+  /* shape boxes (drawn rectangles) */
+  .shape-box {
+    width: 172px; min-height: 56px; display: grid; place-items: center; text-align: center; padding: 10px 12px;
+    border: 2px solid #94a3b8; border-radius: 10px; background: color-mix(in srgb, var(--mj-color-neutral-800) 88%, transparent);
+    font-size: 12.5px; font-weight: 600; color: var(--mj-text-primary);
+  }
+  .shape-box .sub { display: block; font-size: 10.5px; color: var(--mj-text-muted); font-weight: 500; margin-top: 2px; }
+
+  /* agent text label */
+  .tlabel { font-size: 12px; font-weight: 700; color: var(--mj-color-violet-300); background: transparent; box-shadow: none; letter-spacing: 0.01em; text-shadow: 0 1px 6px rgba(2,6,23,0.8); }
+  .tlabel i { font-size: 9px; margin-right: 4px; opacity: 0.8; }
+
+  /* pasted image placeholder */
+  .img-card { width: 198px; border-radius: 10px; overflow: hidden; border: 1.5px solid var(--mj-border-strong); background: var(--mj-bg-surface-card); transform: rotate(0.6deg); }
+  .img-card__body {
+    height: 104px; display: grid; place-items: center;
+    background:
+      linear-gradient(160deg, rgba(38,153,204,0.30) 0%, rgba(38,153,204,0.10) 38%, transparent 39%),
+      linear-gradient(200deg, rgba(92,192,237,0.22) 0%, rgba(92,192,237,0.08) 60%, transparent 61%),
+      var(--mj-color-neutral-900);
+    color: var(--mj-text-disabled); font-size: 22px;
+  }
+  .img-card__name { display: flex; align-items: center; gap: 7px; padding: 6px 10px; font-size: 10.5px; color: var(--mj-text-muted); font-family: var(--mj-font-mono); border-top: 1px solid var(--mj-border-default); }
+
+  /* agent pop-in (just-added item) */
+  .pop-in { animation: bi-pop 600ms cubic-bezier(.34,1.4,.64,1) both 1.1s, sage-flash 2.4s ease-out 1.1s; }
+  @keyframes bi-pop { 0% { transform: scale(0.55) rotate(1.2deg); opacity: 0; } 70% { transform: scale(1.06) rotate(1.2deg); } 100% { transform: scale(1) rotate(1.2deg); opacity: 1; } }
+  @keyframes sage-flash {
+    0% { box-shadow: 0 0 0 12px rgba(167,139,250,0.45), 0 0 36px rgba(167,139,250,0.5), var(--mj-shadow-lg); }
+    100% { box-shadow: 0 0 0 3px rgba(167,139,250,0.20), var(--mj-shadow-lg); }
+  }
+  @media (prefers-reduced-motion: reduce) { .pop-in { animation: none; } }
+
+  /* selection + drag state */
+  .bi.selected { outline: 1.5px solid var(--mj-brand-primary); outline-offset: 3px; }
+  .bi.dragging { transform: rotate(-1.6deg) scale(1.02); box-shadow: var(--mj-shadow-2xl); cursor: grabbing; z-index: 5; border-color: var(--mj-brand-primary); }
+  .sel-h { position: absolute; width: 8px; height: 8px; border-radius: 2px; background: var(--mj-bg-surface); border: 1.5px solid var(--mj-brand-primary); z-index: 4; }
+  .sel-h.nw { top: -8px; left: -8px; } .sel-h.n { top: -8px; left: calc(50% - 4px); } .sel-h.ne { top: -8px; right: -8px; }
+  .sel-h.e { top: calc(50% - 4px); right: -8px; } .sel-h.se { bottom: -8px; right: -8px; }
+  .sel-h.s { bottom: -8px; left: calc(50% - 4px); } .sel-h.sw { bottom: -8px; left: -8px; } .sel-h.w { top: calc(50% - 4px); left: -8px; }
+  .drag-ghost { position: absolute; border: 1.5px dashed var(--mj-border-strong); border-radius: 10px; opacity: 0.55; }
+  .drag-ghost::after { content: "from here"; position: absolute; bottom: -18px; left: 4px; font-size: 9px; color: var(--mj-text-disabled); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* agent highlight region */
+  .sage-highlight {
+    position: absolute; border: 2px dashed var(--sage); border-radius: 16px; pointer-events: none;
+    background: rgba(167,139,250,0.06); animation: hl-pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes hl-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(167,139,250,0.0); } 50% { box-shadow: 0 0 22px 2px rgba(167,139,250,0.25); } }
+  .sage-highlight .hl-tag {
+    position: absolute; top: -11px; right: 12px; display: inline-flex; align-items: center; gap: 5px;
+    padding: 1px 8px; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+    background: #2a2150; border: 1px solid var(--sage); color: var(--mj-color-violet-300); border-radius: var(--mj-radius-full);
+  }
+
+  /* cursors */
+  .cursor { position: absolute; z-index: 8; pointer-events: none; }
+  .cursor--user i { font-size: 15px; color: var(--mj-color-neutral-200); filter: drop-shadow(0 1px 3px rgba(0,0,0,0.7)); }
+  .cursor--sage { display: flex; align-items: flex-start; gap: 6px; animation: sage-cursor-drift 5s ease-in-out infinite alternate; }
+  .cursor--sage .tip { position: relative; width: 26px; height: 26px; border-radius: 50% 50% 50% 4px; display: grid; place-items: center; background: var(--sage); color: #1b1438; font-size: 11px; box-shadow: 0 0 14px rgba(167,139,250,0.6); }
+  .cursor--sage .tip::after { content: ""; position: absolute; inset: -5px; border-radius: inherit; border: 2px solid rgba(167,139,250,0.45); animation: orb-ring 1.8s ease-out infinite; }
+  .cursor--sage .lbl {
+    margin-top: 14px; padding: 3px 10px; border-radius: var(--mj-radius-full); white-space: nowrap;
+    background: #2a2150; border: 1px solid var(--sage); color: var(--mj-color-violet-300); font-size: 10.5px; font-weight: 700;
+  }
+  .cursor--sage .lbl i { animation: pen-wiggle 0.9s ease-in-out infinite; display: inline-block; margin-right: 3px; font-size: 9px; }
+  @keyframes pen-wiggle { 0%,100% { transform: rotate(0); } 50% { transform: rotate(-14deg); } }
+  @keyframes sage-cursor-drift { from { transform: translate(0, 0); } to { transform: translate(-26px, 20px); } }
+  @media (prefers-reduced-motion: reduce) { .cursor--sage { animation: none; } }
+
+  /* board toast */
+  .board-toast {
+    position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 9;
+    display: flex; align-items: center; gap: 9px; padding: 8px 16px; border-radius: var(--mj-radius-full);
+    background: #2a2150; border: 1px solid var(--sage-border); color: var(--mj-color-violet-300);
+    font-size: 12px; font-weight: 600; box-shadow: var(--mj-shadow-lg); animation: pop-fade 300ms ease both 1.4s;
+  }
+  .board-toast .undo { color: var(--mj-text-muted); font-weight: 600; cursor: pointer; margin-left: 4px; }
+  .board-toast .undo:hover { color: var(--mj-text-primary); }
+
+  /* ---------- floating toolbar (left edge of board) ---------- */
+  .board-toolbar {
+    position: absolute; left: 14px; top: 92px; z-index: 10;
+    display: flex; flex-direction: column; gap: 2px; padding: 6px;
+    background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-lg); box-shadow: var(--mj-shadow-xl);
+  }
+  .tool {
+    position: relative; width: 36px; height: 36px; border-radius: var(--mj-radius-md); border: 0; cursor: pointer;
+    background: transparent; color: var(--mj-text-secondary); font-size: 13.5px; display: grid; place-items: center;
+    transition: all 130ms ease; font-family: inherit;
+  }
+  .tool:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+  .tool.active { background: var(--mj-brand-primary); color: #fff; box-shadow: var(--mj-shadow-brand); }
+  .tool .kbd { position: absolute; bottom: 1px; right: 3px; font-size: 7px; font-weight: 700; color: currentColor; opacity: 0.55; }
+  .tool-sep { height: 1px; background: var(--mj-border-default); margin: 4px 4px; }
+
+  /* pen flyout */
+  .pen-flyout {
+    position: absolute; left: calc(100% + 10px); top: 50%; transform: translateY(-50%);
+    display: flex; align-items: center; gap: 9px; padding: 8px 11px;
+    background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-full); box-shadow: var(--mj-shadow-xl); white-space: nowrap;
+  }
+  .pen-flyout::before { content: ""; position: absolute; left: -5px; top: calc(50% - 5px); width: 9px; height: 9px; transform: rotate(45deg); background: var(--mj-bg-surface-card); border-left: 1px solid var(--mj-border-default); border-bottom: 1px solid var(--mj-border-default); }
+  .pen-c { width: 17px; height: 17px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+  .pen-c.sel { border-color: #fff; box-shadow: 0 0 0 2px var(--mj-brand-primary); }
+  .pen-w { display: flex; align-items: center; gap: 7px; padding-left: 9px; border-left: 1px solid var(--mj-border-default); }
+  .pen-w span { border-radius: 99px; background: var(--mj-text-secondary); cursor: pointer; }
+  .pen-w .w1 { width: 14px; height: 2px; } .pen-w .w2 { width: 14px; height: 4px; } .pen-w .w3 { width: 14px; height: 7px; }
+  .pen-w span.sel { background: var(--mj-brand-accent); outline: 2px solid rgba(38,153,204,0.35); outline-offset: 2px; }
+  .pen-note { font-size: 9.5px; color: var(--mj-text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding-left: 9px; border-left: 1px solid var(--mj-border-default); }
+
+  /* zoom cluster bottom-right */
+  .zoom-cluster {
+    position: absolute; right: 14px; bottom: 14px; z-index: 10; display: flex; align-items: center; gap: 2px;
+    background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-full); box-shadow: var(--mj-shadow-xl); padding: 4px;
+  }
+  .zoom-cluster button { width: 30px; height: 30px; border-radius: 50%; border: 0; background: transparent; color: var(--mj-text-secondary); cursor: pointer; font-size: 12px; display: grid; place-items: center; font-family: inherit; }
+  .zoom-cluster button:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+  .zoom-pct { font-size: 11.5px; font-weight: 700; color: var(--mj-text-secondary); padding: 0 7px; font-family: var(--mj-font-mono); }
+  .zoom-sep { width: 1px; height: 18px; background: var(--mj-border-default); margin: 0 3px; }
+
+  /* board status footer */
+  .board-status {
+    display: flex; align-items: center; gap: 18px; padding: 6px 16px; flex-shrink: 0;
+    border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface);
+    font-size: 10.5px; color: var(--mj-text-muted); font-weight: 500;
+  }
+  .board-status b { color: var(--mj-text-secondary); font-weight: 600; }
+  .board-status .seg-r { margin-left: auto; display: flex; align-items: center; gap: 18px; }
+  .board-status .ctx-live { color: var(--mj-color-violet-300); display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+  .board-status .ctx-live .d { width: 6px; height: 6px; border-radius: 50%; background: var(--sage); animation: pulse-ring 2s infinite; }
+
+  /* ---------- focus-mode floaters (call pill + captions over the board) ---------- */
+  .float-call {
+    position: absolute; left: 64px; top: 12px; z-index: 12; display: none; align-items: center; gap: 10px;
+    padding: 7px 9px 7px 8px; border-radius: var(--mj-radius-full);
+    background: color-mix(in srgb, var(--mj-bg-surface-card) 92%, transparent); backdrop-filter: blur(8px);
+    border: 1px solid var(--mj-border-strong); box-shadow: var(--mj-shadow-xl); animation: pop-fade 220ms ease;
+  }
+  .wb-overlay.mode-focus .float-call { display: flex; }
+  .float-call .fc-name { font-size: 12px; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+  .float-call .fc-state { font-size: 10.5px; color: var(--mj-brand-accent); font-weight: 600; white-space: nowrap; }
+  .float-call .fc-btn { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--mj-border-strong); background: var(--mj-bg-surface); color: var(--mj-text-secondary); cursor: pointer; font-size: 11px; display: grid; place-items: center; font-family: inherit; }
+  .float-call .fc-btn:hover { color: var(--mj-text-primary); }
+  .float-call .fc-btn--end { background: var(--mj-status-error); border-color: var(--mj-status-error); color: #fff; }
+
+  .float-captions {
+    position: absolute; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 12; display: none;
+    max-width: 620px; align-items: flex-start; gap: 9px; padding: 9px 16px; border-radius: var(--mj-radius-lg);
+    background: color-mix(in srgb, var(--mj-bg-surface-sunken) 88%, transparent); backdrop-filter: blur(8px);
+    border: 1px solid var(--mj-border-default); box-shadow: var(--mj-shadow-lg);
+    font-size: 12.5px; color: var(--mj-text-secondary); font-style: italic; animation: pop-fade 220ms ease;
+  }
+  .wb-overlay.mode-focus .float-captions { display: flex; }
+  .float-captions i { color: var(--mj-brand-accent); font-size: 11px; margin-top: 3px; }
+
+  /* ---------- activity + artifact panes ---------- */
+  .pane-pad { padding: 18px 20px; overflow-y: auto; }
+  .act-card { border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-lg); padding: 10px 12px; background: var(--mj-bg-surface-card); max-width: 430px; margin-bottom: 10px; }
+  .act-card--running { border-color: var(--sage-border); background: var(--sage-bg); box-shadow: 0 0 0 1px var(--sage-border); }
+  .act-card__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; font-weight: 700; }
+  .act-status { font-size: 10.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; }
+  .act-status--running { color: var(--mj-color-violet-300); }
+  .act-status--running i { animation: spin 1.1s linear infinite; }
+  .act-status--done { color: var(--mj-status-success); }
+  .act-card__step { font-size: 11.5px; color: var(--mj-text-muted); margin-top: 3px; }
+  .act-card__preview { font-size: 11.5px; color: var(--mj-text-secondary); margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--mj-border-subtle); }
+
+  /* ---------- storyboard strip ---------- */
+  .storyboard { position: relative; z-index: 1; padding: 26px 28px 46px; max-width: 1440px; margin: 0 auto; }
+  .sb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px; }
+  .sb-frame { border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-lg); overflow: hidden; background: var(--mj-bg-surface-card); }
+  .sb-canvas {
+    position: relative; height: 168px; overflow: hidden;
+    background-color: var(--mj-bg-surface-sunken);
+    background-image: radial-gradient(rgba(148,163,184,0.14) 1px, transparent 1px);
+    background-size: 16px 16px; border-bottom: 1px solid var(--mj-border-default);
+  }
+  .sb-step { position: absolute; top: 8px; left: 10px; z-index: 2; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; background: var(--mj-brand-primary); color: #fff; box-shadow: var(--mj-shadow-md); }
+  .sb-note { position: absolute; padding: 6px 8px; border-radius: 3px 3px 8px 3px; font-size: 9px; font-weight: 600; line-height: 1.3; box-shadow: var(--mj-shadow-md); width: 86px; }
+  .sb-note--user { background: linear-gradient(180deg, #fcd34d, #f5b831); color: #3f2d04; }
+  .sb-box { position: absolute; border: 1.5px solid #94a3b8; border-radius: 6px; background: color-mix(in srgb, var(--mj-color-neutral-800) 88%, transparent); display: grid; place-items: center; font-size: 9px; font-weight: 700; color: var(--mj-text-primary); padding: 4px; text-align: center; }
+  .sb-box--sagelbl::after { content: attr(data-lbl); position: absolute; top: -14px; left: 0; font-size: 8px; font-weight: 800; color: var(--mj-color-violet-300); }
+  .sb-ghost { position: absolute; border: 1.5px dashed var(--mj-border-strong); border-radius: 6px; opacity: 0.5; }
+  .sb-hl { position: absolute; border: 1.5px dashed var(--sage); border-radius: 10px; background: rgba(167,139,250,0.08); animation: hl-pulse 2.2s ease-in-out infinite; }
+  .sb-cursor-sage { position: absolute; width: 16px; height: 16px; border-radius: 50% 50% 50% 3px; background: var(--sage); color: #1b1438; display: grid; place-items: center; font-size: 7px; box-shadow: 0 0 10px rgba(167,139,250,0.55); z-index: 2; }
+  .sb-cap { padding: 11px 14px; }
+  .sb-cap .t { font-size: 12.5px; font-weight: 700; display: flex; align-items: center; gap: 7px; }
+  .sb-cap .t .who { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; padding: 1px 7px; border-radius: var(--mj-radius-full); }
+  .sb-cap .t .who--you { background: var(--mj-color-neutral-700); color: var(--mj-color-neutral-300); }
+  .sb-cap .t .who--sage { background: #2a2150; border: 1px solid var(--sage-border); color: var(--mj-color-violet-300); }
+  .sb-cap .d { font-size: 11.5px; color: var(--mj-text-muted); margin-top: 4px; line-height: 1.5; }
+  .sb-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+  @media (max-width: 1100px) {
+    .call-rail { width: 300px; }
+  }
+</style>
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Index</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub" style="margin-left:2px">Conversations · live session</span></div>
+    <div class="topbar-spacer"></div>
+    <span class="topbar-pill"><span class="dot dot--live"></span> Voice + Whiteboard live</span>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <!-- ================= THE LIVE OVERLAY, BOARD MODE ================= -->
+  <div class="wb-overlay" id="overlay">
+
+    <!-- LEFT: slim call column — the thread gives way to the board -->
+    <div class="call-rail">
+      <div class="rail-banner">
+        <div class="agent-orb" data-state="speaking" style="--orb-size:44px"></div>
+        <div style="min-width:0">
+          <div class="nm">Voice for Sage <span class="pill pill--sage"><i class="fa-solid fa-feather"></i> Co-Agent</span></div>
+          <div class="st"><div class="waveform"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div> Sage is speaking…</div>
+        </div>
+      </div>
+
+      <!-- background delegation continues while you sketch -->
+      <div class="rail-deleg">
+        <i class="fa-solid fa-spinner spin"></i> Sage · Pull churn cohort data <span class="why">running · 14s</span>
+      </div>
+
+      <div class="rail-thread">
+        <div class="thread" style="gap:12px">
+          <div class="turn turn--user">
+            <div class="turn-avatar">AM</div>
+            <div><div class="turn-meta"><span class="typed-tag">spoken</span> You</div>
+            <div class="bubble">Let's sketch the Q3 renewal campaign — open the whiteboard.</div></div>
+          </div>
+          <div class="turn turn--agent">
+            <div class="turn-avatar">S</div>
+            <div><div class="turn-meta">Sage <span class="muted">· voice</span></div>
+            <div class="bubble">Board's up. Sketch what you have — I'll follow along and fill in gaps as you talk.</div></div>
+          </div>
+          <div class="turn turn--user">
+            <div class="turn-avatar">AM</div>
+            <div><div class="turn-meta"><span class="typed-tag">spoken</span> You</div>
+            <div class="bubble">Two tracks so far — email sequence and a webinar series.</div></div>
+          </div>
+          <div class="turn turn--agent">
+            <div class="turn-avatar">S</div>
+            <div><div class="turn-meta">Sage <span class="muted">· voice</span></div>
+            <div class="bubble">I see them. I connected email into the webinar track and dropped a segmentation idea next to your stickies.<span class="caption-cursor"></span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- live captions strip -->
+      <div class="rail-captions">
+        <i class="fa-solid fa-closed-captioning"></i>
+        <span>…and if we segment by engagement score, the lapsed 12–24-month group splits into two very different audiences<span class="caption-cursor"></span></span>
+      </div>
+
+      <div class="rail-composer">
+        <div class="composer-box">
+          <input type="text" placeholder="Type into the live session…">
+          <button class="composer-send"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+      </div>
+
+      <div class="rail-controls">
+        <div class="ctrl-group"><button class="ctrl"><i class="fa-solid fa-microphone"></i></button><span class="ctrl-label">Mute</span></div>
+        <div class="ctrl-group"><button class="ctrl ctrl--on"><i class="fa-solid fa-closed-captioning"></i></button><span class="ctrl-label">Captions</span></div>
+        <div class="ctrl-group"><button class="ctrl ctrl--end"><i class="fa-solid fa-phone-slash"></i></button><span class="ctrl-label" style="color:var(--mj-status-error)">End</span></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: tabbed surface panel — Whiteboard expanded -->
+    <div class="surface-panel">
+
+      <!-- tab strip: Activity | Artifact | Whiteboard -->
+      <div class="surface-tabs">
+        <button class="s-tab" data-tab="activity" onclick="showTab('activity')"><i class="fa-solid fa-list-check"></i> Activity <span class="count">3</span></button>
+        <button class="s-tab" data-tab="artifact" onclick="showTab('artifact')"><i class="fa-solid fa-cube"></i> Artifact · Weather Report</button>
+        <button class="s-tab active" data-tab="board" onclick="showTab('board')"><i class="fa-solid fa-chalkboard"></i> Whiteboard <span class="live-dot"></span></button>
+        <div class="tabs-end">
+          <span class="pill pill--ghost" style="font-size:10.5px"><i class="fa-solid fa-plug"></i> Channel · WebSocket</span>
+        </div>
+      </div>
+
+      <!-- ===== WHITEBOARD PANE ===== -->
+      <div class="s-pane active" data-pane="board">
+
+        <!-- board header -->
+        <div class="board-head">
+          <span class="bt"><i class="fa-solid fa-chalkboard"></i> Q3 Renewal Campaign</span>
+          <span class="board-save"><i class="fa-solid fa-circle-check"></i> Saved to session · v14</span>
+          <span class="board-legend">
+            <span><span class="sw sw--you"></span>You</span>
+            <span><span class="sw sw--sage"></span>Sage <i class="fa-solid fa-feather" style="font-size:9px;color:var(--sage)"></i></span>
+          </span>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px;position:relative">
+            <button class="head-btn head-btn--sees" id="seesBtn" onclick="toggleSees(event)">
+              <span class="eye-pulse"></span><i class="fa-regular fa-eye"></i> What Sage sees
+              <!-- perception popover -->
+              <div class="sees-pop" id="seesPop" onclick="event.stopPropagation()">
+                <div class="sees-pop__head">
+                  <i class="fa-solid fa-feather"></i> Live perception feed → Sage's context
+                  <span class="pill pill--sage" style="font-size:9.5px">coalesced delta</span>
+                </div>
+                <div class="sees-pop__body">
+                  <p class="sees-pop__cap">Sage doesn't see pixels — every change you make is serialized into a compact, debounced scene delta and fed into the live agent context. This is the most recent one:</p>
+<pre class="codeblock">{ <span class="ck">"op"</span>: <span class="cs">"scene-delta"</span>, <span class="ck">"seq"</span>: <span class="cn">412</span>,
+  <span class="ck">"moved"</span>: [{ <span class="ck">"id"</span>: <span class="cs">"box-webinar"</span>, <span class="ck">"x"</span>: <span class="cn">430</span>, <span class="ck">"y"</span>: <span class="cn">298</span> }],
+  <span class="ck">"added"</span>: [{ <span class="ck">"id"</span>: <span class="cs">"img-1"</span>, <span class="ck">"type"</span>: <span class="cs">"image"</span>,
+             <span class="ck">"name"</span>: <span class="cs">"funnel-q2.png"</span>, <span class="ck">"author"</span>: <span class="cs">"user"</span> }],
+  <span class="ck">"summary"</span>: <span class="cs">"2 stickies + 2 boxes (email→webinar). User is
+            dragging 'Webinar series' and pasted a funnel chart."</span> }
+<span class="cc">// replace-current-state semantics — not an append-only log</span></pre>
+                </div>
+                <div class="sees-pop__foot">
+                  <span>debounce <b>750 ms</b></span><span>elements <b>14</b></span><span>last delta <b>2 s ago</b></span><span>state of record <b>session artifact</b></span>
+                </div>
+              </div>
+            </button>
+            <button class="head-btn" id="focusBtn" onclick="toggleFocus()"><i class="fa-solid fa-expand"></i> <span id="focusLbl">Focus board</span></button>
+            <button class="head-btn" style="padding:5px 9px"><i class="fa-solid fa-ellipsis"></i></button>
+          </div>
+        </div>
+
+        <!-- the canvas -->
+        <div class="board-wrap">
+          <div class="board-canvas">
+
+            <!-- ink + connectors -->
+            <svg class="ink-layer">
+              <!-- user freehand arrow: sticky A → email box -->
+              <path class="ink-user" d="M 364 126 C 392 114, 402 118, 414 130" fill="none" stroke-width="2.5" stroke-linecap="round"/>
+              <path class="ink-user" d="M 414 130 l -12 -7 M 414 130 l -13 5" fill="none" stroke-width="2.5" stroke-linecap="round"/>
+              <!-- user amber underline squiggle under email box -->
+              <path class="ink-amber" d="M 432 196 q 18 10 42 3 q 24 -8 48 4 q 18 8 38 2" fill="none" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+              <!-- SAGE connector: email box → webinar box (draw-in animation) -->
+              <path class="conn-sage draw-in" d="M 505 192 C 502 240, 512 256, 514 292" fill="none" stroke-width="2.5" stroke-linecap="round"/>
+              <path class="conn-sage" d="M 514 296 l -7 -12 M 514 296 l 8 -11" fill="none" stroke-width="2.5" stroke-linecap="round" opacity="0"
+                    style="animation: pop-fade 200ms ease forwards 1.85s"/>
+            </svg>
+
+            <!-- SAGE highlight region around the user's stickies -->
+            <div class="sage-highlight" style="left:156px; top:62px; width:240px; height:310px">
+              <span class="hl-tag"><i class="fa-solid fa-highlighter"></i> Sage highlighted</span>
+            </div>
+
+            <!-- user stickies -->
+            <div class="bi sticky sticky--amber" style="left:182px; top:92px">
+              <span class="author-chip author-chip--you"><i class="fa-solid fa-user"></i> You</span>
+              Q3 renewal campaign — kickoff <b>July 8</b>
+            </div>
+            <div class="bi sticky sticky--amber2" style="left:178px; top:238px">
+              <span class="author-chip author-chip--you"><i class="fa-solid fa-user"></i> You</span>
+              Target: lapsed members, 12–24 months out
+            </div>
+
+            <!-- user shape boxes -->
+            <div class="bi shape-box" style="left:420px; top:118px">
+              <span class="author-chip author-chip--you"><i class="fa-solid fa-user"></i> You</span>
+              <span>Email sequence<span class="sub">5 touches · drip</span></span>
+            </div>
+
+            <!-- selected + mid-drag box, with ghost of its original spot -->
+            <div class="drag-ghost" style="left:562px; top:368px; width:176px; height:62px"></div>
+            <div class="bi shape-box selected dragging" style="left:430px; top:298px; width:176px">
+              <span class="author-chip author-chip--you"><i class="fa-solid fa-user"></i> You</span>
+              <span>Webinar series<span class="sub">3 sessions · Aug–Sep</span></span>
+              <span class="sel-h nw"></span><span class="sel-h n"></span><span class="sel-h ne"></span><span class="sel-h e"></span>
+              <span class="sel-h se"></span><span class="sel-h s"></span><span class="sel-h sw"></span><span class="sel-h w"></span>
+            </div>
+
+            <!-- SAGE text label annotating the user's flow -->
+            <div class="bi tlabel" style="left:622px; top:128px"><i class="fa-solid fa-feather"></i>= nurture track</div>
+
+            <!-- SAGE sticky, just added — pop-in -->
+            <div class="bi sticky sticky--sage pop-in" style="left:706px; top:84px">
+              <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather"></i> Sage</span>
+              Suggestion: segment by <b>engagement score</b> — the 12–24 mo group splits in two
+            </div>
+
+            <!-- user pasted image -->
+            <div class="bi img-card" style="left:742px; top:330px">
+              <span class="author-chip author-chip--you"><i class="fa-solid fa-paste"></i> You · pasted</span>
+              <div class="img-card__body"><i class="fa-regular fa-image"></i></div>
+              <div class="img-card__name"><i class="fa-solid fa-chart-area" style="color:var(--mj-brand-accent)"></i> funnel-q2.png</div>
+            </div>
+
+            <!-- presence cursors -->
+            <div class="cursor cursor--sage" style="left:868px; top:198px">
+              <span class="tip"><i class="fa-solid fa-feather"></i></span>
+              <span class="lbl"><i class="fa-solid fa-pen"></i>Sage is drawing…</span>
+            </div>
+            <div class="cursor cursor--user" style="left:618px; top:344px"><i class="fa-solid fa-arrow-pointer"></i></div>
+
+            <!-- agent action toast -->
+            <div class="board-toast">
+              <i class="fa-solid fa-feather"></i> Sage added a note &amp; a connector · just now
+              <span class="undo"><i class="fa-solid fa-rotate-left"></i> Undo</span>
+            </div>
+          </div>
+
+          <!-- floating toolbar -->
+          <div class="board-toolbar">
+            <button class="tool" title="Select / move"><i class="fa-solid fa-arrow-pointer"></i><span class="kbd">V</span></button>
+            <button class="tool" title="Pan"><i class="fa-regular fa-hand"></i><span class="kbd">H</span></button>
+            <button class="tool active" title="Pen"><i class="fa-solid fa-pen"></i><span class="kbd">P</span>
+              <span class="pen-flyout">
+                <span class="pen-c sel" style="background:#cbd5e1"></span>
+                <span class="pen-c" style="background:#fbbf24"></span>
+                <span class="pen-c" style="background:#5cc0ed"></span>
+                <span class="pen-c" style="background:#4ade80"></span>
+                <span class="pen-c" style="background:#f87171"></span>
+                <span class="pen-w"><span class="w1"></span><span class="w2 sel"></span><span class="w3"></span></span>
+                <span class="pen-note">violet = Sage's</span>
+              </span>
+            </button>
+            <button class="tool" title="Shapes"><i class="fa-regular fa-square"></i><span class="kbd">R</span></button>
+            <button class="tool" title="Sticky note"><i class="fa-regular fa-note-sticky"></i><span class="kbd">S</span></button>
+            <button class="tool" title="Text"><i class="fa-solid fa-font"></i><span class="kbd">T</span></button>
+            <button class="tool" title="Paste / insert image"><i class="fa-regular fa-image"></i><span class="kbd">I</span></button>
+            <button class="tool" title="Connector"><i class="fa-solid fa-arrow-trend-up"></i><span class="kbd">C</span></button>
+            <button class="tool" title="Eraser"><i class="fa-solid fa-eraser"></i><span class="kbd">E</span></button>
+            <div class="tool-sep"></div>
+            <button class="tool" title="Undo"><i class="fa-solid fa-rotate-left"></i></button>
+            <button class="tool" title="Redo"><i class="fa-solid fa-rotate-right"></i></button>
+          </div>
+
+          <!-- zoom cluster -->
+          <div class="zoom-cluster">
+            <button title="Zoom out"><i class="fa-solid fa-minus"></i></button>
+            <span class="zoom-pct">90%</span>
+            <button title="Zoom in"><i class="fa-solid fa-plus"></i></button>
+            <span class="zoom-sep"></span>
+            <button title="Fit to content"><i class="fa-solid fa-compress"></i></button>
+            <button title="Mini-map"><i class="fa-regular fa-map"></i></button>
+          </div>
+
+          <!-- focus-mode floaters -->
+          <div class="float-call">
+            <div class="agent-orb" data-state="speaking" style="--orb-size:30px"></div>
+            <div>
+              <div class="fc-name">Voice for Sage</div>
+              <div class="fc-state">Sage is speaking…</div>
+            </div>
+            <button class="fc-btn" title="Mute"><i class="fa-solid fa-microphone"></i></button>
+            <button class="fc-btn" title="Show thread" onclick="toggleFocus()"><i class="fa-solid fa-table-columns"></i></button>
+            <button class="fc-btn fc-btn--end" title="End call"><i class="fa-solid fa-phone-slash"></i></button>
+          </div>
+          <div class="float-captions">
+            <i class="fa-solid fa-closed-captioning"></i>
+            <span>…and if we segment by engagement score, the lapsed 12–24-month group splits into two very different audiences<span class="caption-cursor"></span></span>
+          </div>
+        </div>
+
+        <!-- board status footer -->
+        <div class="board-status">
+          <span><b>14</b> elements</span>
+          <span>you <b>9</b> · Sage <b>5</b></span>
+          <span>synced <b>2 s ago</b> · seq <b>412</b></span>
+          <span class="seg-r">
+            <span class="ctx-live"><span class="d"></span> Sage's live context: current</span>
+            <span>persists as <b>session artifact</b> when the call ends</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- ===== ACTIVITY PANE ===== -->
+      <div class="s-pane" data-pane="activity">
+        <div class="pane-pad">
+          <p class="section-label"><i class="fa-solid fa-list-check"></i> Tool &amp; agent calls this session · newest first</p>
+          <div class="act-card act-card--running">
+            <div class="act-card__top"><span>Sage · Pull churn cohort data</span><span class="act-status act-status--running"><i class="fa-solid fa-spinner"></i> Running</span></div>
+            <div class="act-card__step">Querying membership entities · step 2 of 4</div>
+          </div>
+          <div class="act-card">
+            <div class="act-card__top"><span>Whiteboard · AddNote + DrawConnector</span><span class="act-status act-status--done"><i class="fa-solid fa-check"></i> Done</span></div>
+            <div class="act-card__step">Channel tool · applied on the board · 1.2 s</div>
+            <div class="act-card__preview">Added "Suggestion: segment by engagement score" and connected Email sequence → Webinar series.</div>
+          </div>
+          <div class="act-card">
+            <div class="act-card__top"><span>Sage · Weather report</span><span class="act-status act-status--done"><i class="fa-solid fa-check"></i> Done</span></div>
+            <div class="act-card__step">Delegated agent run · 6.4 s · artifact created</div>
+            <div class="act-card__preview">LA 78° sunny · SF 64° partly cloudy · NYC 71° showers — saved as "Weather Report".</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== ARTIFACT PANE ===== -->
+      <div class="s-pane" data-pane="artifact">
+        <div class="pane-pad">
+          <p class="section-label"><i class="fa-solid fa-cube"></i> Artifact · created this session</p>
+          <div class="result-card">
+            <div class="result-card__head"><i class="fa-solid fa-feather" style="color:var(--sage)"></i> Weather Report <span class="pill pill--sage" style="margin-left:auto;font-size:9.5px">via Sage</span></div>
+            <div class="weather-row">
+              <div class="weather-city"><div class="wc-icon"><i class="fa-solid fa-sun"></i></div><div><div class="weather-name">Los Angeles</div><div class="weather-cond">Sunny</div></div></div>
+              <div class="weather-temp">78°</div>
+            </div>
+            <div class="weather-row">
+              <div class="weather-city"><div class="wc-icon"><i class="fa-solid fa-cloud-sun"></i></div><div><div class="weather-name">San Francisco</div><div class="weather-cond">Partly cloudy</div></div></div>
+              <div class="weather-temp">64°</div>
+            </div>
+            <div class="weather-row">
+              <div class="weather-city"><div class="wc-icon" style="color:var(--mj-brand-accent)"><i class="fa-solid fa-cloud-showers-heavy"></i></div><div><div class="weather-name">New York</div><div class="weather-cond">Showers</div></div></div>
+              <div class="weather-temp">71°</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= STORYBOARD STRIP ================= -->
+  <div class="storyboard">
+    <div class="hub-group-title" style="margin-top:0"><i class="fa-solid fa-film"></i> Storyboard — a sketch conversation, beat by beat</div>
+    <div class="sb-grid">
+
+      <!-- 1: user sketches -->
+      <div class="sb-frame">
+        <div class="sb-canvas">
+          <span class="sb-step">1</span>
+          <div class="sb-note sb-note--user" style="left:24px; top:38px; transform:rotate(-1.5deg)">Q3 renewal kickoff</div>
+          <div class="sb-box" style="left:150px; top:36px; width:92px; height:36px">Email</div>
+          <div class="sb-box" style="left:150px; top:106px; width:92px; height:36px">Webinars</div>
+          <div class="cursor cursor--user" style="left:236px; top:128px"><i class="fa-solid fa-arrow-pointer" style="font-size:12px"></i></div>
+        </div>
+        <div class="sb-cap">
+          <div class="t"><span class="who who--you">You</span> Sketch while talking</div>
+          <div class="d">You drop stickies and boxes mid-sentence. Each edit streams to Sage as a debounced scene delta.</div>
+        </div>
+      </div>
+
+      <!-- 2: agent labels + connects -->
+      <div class="sb-frame">
+        <div class="sb-canvas">
+          <span class="sb-step">2</span>
+          <div class="sb-note sb-note--user" style="left:24px; top:38px; transform:rotate(-1.5deg)">Q3 renewal kickoff</div>
+          <div class="sb-box sb-box--sagelbl" data-lbl="✎ nurture track" style="left:150px; top:36px; width:92px; height:36px">Email</div>
+          <div class="sb-box" style="left:150px; top:106px; width:92px; height:36px">Webinars</div>
+          <svg class="sb-svg"><path class="conn-sage draw-in" d="M 196 74 C 192 88, 198 94, 196 104" fill="none" stroke-width="2" stroke-linecap="round" style="animation-delay:0.2s"/></svg>
+          <div class="sb-cursor-sage" style="left:204px; top:84px"><i class="fa-solid fa-feather"></i></div>
+        </div>
+        <div class="sb-cap">
+          <div class="t"><span class="who who--sage"><i class="fa-solid fa-feather"></i> Sage</span> Labels &amp; connects</div>
+          <div class="d">Sage calls <code style="font-size:10px">Whiteboard.AddNote</code> / <code style="font-size:10px">DrawConnector</code> — violet items pop in while it narrates over voice.</div>
+        </div>
+      </div>
+
+      <!-- 3: user rearranges -->
+      <div class="sb-frame">
+        <div class="sb-canvas">
+          <span class="sb-step">3</span>
+          <div class="sb-note sb-note--user" style="left:24px; top:38px; transform:rotate(-1.5deg)">Q3 renewal kickoff</div>
+          <div class="sb-ghost" style="left:150px; top:106px; width:92px; height:36px"></div>
+          <div class="sb-box" style="left:150px; top:36px; width:92px; height:36px">Email</div>
+          <div class="sb-box" style="left:118px; top:124px; width:92px; height:36px; outline:1.5px solid var(--mj-brand-primary); outline-offset:2px; transform:rotate(-2deg); box-shadow:var(--mj-shadow-lg)">Webinars</div>
+          <svg class="sb-svg"><path d="M 226 124 C 240 130, 236 140, 218 142" fill="none" stroke="var(--mj-text-disabled)" stroke-width="1.5" stroke-dasharray="3 3"/></svg>
+          <div class="cursor cursor--user" style="left:196px; top:136px"><i class="fa-solid fa-arrow-pointer" style="font-size:12px"></i></div>
+        </div>
+        <div class="sb-cap">
+          <div class="t"><span class="who who--you">You</span> Rearrange freely</div>
+          <div class="d">Drag anything — yours or Sage's. The move coalesces into the next delta, so Sage's mental model follows your layout.</div>
+        </div>
+      </div>
+
+      <!-- 4: agent highlights while narrating -->
+      <div class="sb-frame">
+        <div class="sb-canvas">
+          <span class="sb-step">4</span>
+          <div class="sb-note sb-note--user" style="left:24px; top:38px; transform:rotate(-1.5deg)">Q3 renewal kickoff</div>
+          <div class="sb-box" style="left:150px; top:36px; width:92px; height:36px">Email</div>
+          <div class="sb-box" style="left:118px; top:88px; width:92px; height:36px">Webinars</div>
+          <div class="sb-hl" style="left:140px; top:26px; width:112px; height:56px"></div>
+          <div class="sb-cursor-sage" style="left:240px; top:46px"><i class="fa-solid fa-feather"></i></div>
+          <div style="position:absolute; left:18px; bottom:10px; right:12px; font-size:9.5px; font-style:italic; color:var(--mj-text-secondary); background:rgba(2,6,23,0.6); border-radius:8px; padding:4px 8px"><i class="fa-solid fa-closed-captioning" style="color:var(--mj-brand-accent); font-size:8px"></i> "this is the track I'd start with…"</div>
+        </div>
+        <div class="sb-cap">
+          <div class="t"><span class="who who--sage"><i class="fa-solid fa-feather"></i> Sage</span> Highlights as it speaks</div>
+          <div class="d"><code style="font-size:10px">Whiteboard.Highlight</code> pulses a region in sync with the narration — pointing without touching your work.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <p class="muted" style="font-size:12px; margin-top:18px; max-width:880px">
+      Ownership is legible everywhere: <b style="color:var(--mj-text-secondary)">your items</b> use slate &amp; amber tones with a neutral "You" chip;
+      <b style="color:var(--mj-color-violet-300)">Sage's items</b> are always violet — ring, tint, feather chip, cursor, toast — and arrive with a brief
+      pop-in flash. The violet hue is reserved: no user pen color can be violet. The board is the channel's state of record and persists as a
+      session artifact on <span class="mono" style="font-size:11px">AIAgentSessionChannel</span> when the call ends.
+    </p>
+  </div>
+</div>
+
+<script>
+  // tab switching
+  function showTab(name) {
+    document.querySelectorAll('.s-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    document.querySelectorAll('.s-pane').forEach(p => p.classList.toggle('active', p.dataset.pane === name));
+  }
+  // "what Sage sees" popover
+  function toggleSees(ev) {
+    ev.stopPropagation();
+    document.getElementById('seesPop').classList.toggle('open');
+  }
+  document.addEventListener('click', () => document.getElementById('seesPop').classList.remove('open'));
+  // focus-board layout toggle (thread column collapses; call pill + captions float over the board)
+  function toggleFocus() {
+    const ov = document.getElementById('overlay');
+    ov.classList.toggle('mode-focus');
+    const on = ov.classList.contains('mode-focus');
+    document.getElementById('focusLbl').textContent = on ? 'Show thread' : 'Focus board';
+    document.querySelector('#focusBtn i').className = on ? 'fa-solid fa-compress' : 'fa-solid fa-expand';
+    document.getElementById('focusBtn').classList.toggle('on', on);
+  }
+</script>
+</body>
+</html>

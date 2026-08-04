@@ -227,7 +227,7 @@ export class ConversationUtility {
   /**
    * Create a mention token string
    *
-   * @param type - Type of mention (agent or user)
+   * @param type - Type of mention (agent, user, entity, or query)
    * @param id - ID of the mentioned entity
    * @param name - Name of the mentioned entity
    * @param configurationId - Optional agent configuration ID
@@ -235,7 +235,7 @@ export class ConversationUtility {
    * @returns Formatted @{...} string for the mention
    */
   public static CreateMention(
-    type: 'agent' | 'user',
+    type: 'agent' | 'user' | 'entity' | 'query',
     id: string,
     name: string,
     configurationId?: string,
@@ -599,7 +599,9 @@ export class ConversationUtility {
       if (user) name = user.Name;
     }
 
-    return `@${name}`;
+    // Entity and query mentions use a distinct '#' prefix; agents/users use '@'
+    const prefix = content.type === 'entity' || content.type === 'query' ? '#' : '@';
+    return `${prefix}${name}`;
   }
 
   /**
@@ -616,6 +618,10 @@ export class ConversationUtility {
     } else if (content.type === 'user' && users) {
       const user = users.find(u => UUIDsEqual(u.ID, content.id));
       if (user) name = user.Name;
+    } else if (content.type === 'query') {
+      // Mark runnable-query mentions so downstream agent logic can act on them.
+      // No dedicated resolver yet — name + ID gives a follow-up enough to run the query.
+      return `query "${name}" (ID: ${content.id})`;
     }
 
     return name;
@@ -674,13 +680,13 @@ export interface SpecialContentToken {
 export type SpecialContent = MentionContent | FormResponseContent | AttachmentContent;
 
 /**
- * Mention content (@agent or @user)
+ * Mention content (@agent, @user, #entity, or #query)
  */
 export interface MentionContent {
   /** Mode identifier (optional for backward compatibility) */
   _mode?: 'mention';
   /** Type of mention */
-  type: 'agent' | 'user';
+  type: 'agent' | 'user' | 'entity' | 'query';
   /** ID of the mentioned entity */
   id: string;
   /** Name of the mentioned entity */

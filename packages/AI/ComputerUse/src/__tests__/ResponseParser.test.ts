@@ -263,6 +263,38 @@ That should work.`;
             expect(actions[2].Type).toBe('Refresh');
         });
 
+        it('should parse Drag action with bounding boxes and coordinates', () => {
+            const actions = parseActions([
+                {
+                    Type: 'Drag',
+                    StartBoundingBox: { XMin: 100, YMin: 200, XMax: 120, YMax: 240 },
+                    EndBoundingBox: { XMin: 300, YMin: 200, XMax: 320, YMax: 240 },
+                    Steps: 15,
+                },
+                { Type: 'Drag', StartX: 50, StartY: 100, EndX: 250, EndY: 100 },
+                { Type: 'Drag' }, // all defaults
+            ]);
+
+            expect(actions).toHaveLength(3);
+
+            const withBoxes = actions[0] as Extract<typeof actions[0], { Type: 'Drag' }>;
+            expect(withBoxes.Type).toBe('Drag');
+            expect(withBoxes.StartBoundingBox?.XMin).toBe(100);
+            expect(withBoxes.EndBoundingBox?.XMax).toBe(320);
+            expect(withBoxes.Steps).toBe(15);
+
+            const withCoords = actions[1] as Extract<typeof actions[1], { Type: 'Drag' }>;
+            expect(withCoords.StartX).toBe(50);
+            expect(withCoords.EndX).toBe(250);
+            expect(withCoords.StartBoundingBox).toBeUndefined();
+            expect(withCoords.Steps).toBe(10); // default
+
+            const defaults = actions[2] as Extract<typeof actions[2], { Type: 'Drag' }>;
+            expect(defaults.StartX).toBe(0);
+            expect(defaults.EndX).toBe(0);
+            expect(defaults.Steps).toBe(10);
+        });
+
         it('should skip unrecognized action types', () => {
             const actions = parseActions([
                 { Type: 'Click', X: 10, Y: 20 },

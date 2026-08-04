@@ -2,6 +2,7 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 import { ArchiveStatusBadgeComponent } from './archive-status/archive-status-badge.component';
 import { ArchiveRestoreDialogComponent } from './archive-restore/archive-restore-dialog.component';
@@ -19,6 +20,7 @@ import { ArchiveRunViewerComponent } from './archive-run-viewer/archive-run-view
     CommonModule,
     FormsModule,
     SharedGenericModule,
+    MJEmptyStateComponent,
   ],
   exports: [
     ArchiveStatusBadgeComponent,

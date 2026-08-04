@@ -1,4 +1,4 @@
-import { MJEventType, MJGlobal, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
@@ -14,7 +14,13 @@ import { z } from 'zod';
 /**
  * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
  * used properties from the entity field metadata.
+ *
+ * Marked `@OptionalKeyedSpecialization()`: hydration probes the ClassFactory with a
+ * `'<Entity>.<Field>'` key for EVERY field so that a per-field subclass CAN be registered, but
+ * none ever has been in practice — falling back to `EntityField` itself is the designed common
+ * case, not a resolution failure, so the factory must not warn about it.
  */
+@OptionalKeyedSpecialization()
 export class EntityField {
     /**
      * Static object containing the value ranges for various SQL number types. 
@@ -32,12 +38,6 @@ export class EntityField {
         "money": { min: -922337203685477.5808, max: 922337203685477.5807 },
     }
 
-    /**
-     * Indicates whether the active status of the field should be asserted when accessing or setting the value.
-     * Starts off as false and turns to true after contructor is done doing all its setup work. Internally, this can be
-     * temporarily turned off to allow for legacy fields to be created without asserting the active status.
-     */
-    private _assertActiveStatusRequired: boolean = false; 
     private _entityFieldInfo: EntityFieldInfo;
     private _OldValue: any;
     private _Value: any;
@@ -76,13 +76,14 @@ export class EntityField {
 
     /**
      * Returns the current value of the field.
+     *
+     * NOTE: This is a framework-internal accessor. It deliberately does NOT assert the field's
+     * active status (deprecated/disabled) — that assertion lives one layer up, at
+     * BaseEntity.Get/Set/SetMany, which are the entry points genuine code (and the generated
+     * strongly-typed accessors) flow through. Internal machinery (Dirty checks, validation,
+     * serialization, hydration, SQL build) reads this directly and must stay assertion-free.
      */
     get Value(): any {
-        // Asserting status here for deprecated or disabled fields, not in constructor because
-        // we legacy fields will exist
-        if (this._assertActiveStatusRequired) {
-            EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
-        }
         return this._Value;
     }
 
@@ -112,17 +113,23 @@ export class EntityField {
      * Sets the value of the field. If the field is read only, nothing happens. If the field is not read only, the value is set and the internal representation of the dirty flag is flipped if the value is different from the old value.
      */
     set Value(value: any) {
-        if (this._assertActiveStatusRequired && value !== this._Value) {
-            // asserting status here becuase the flag is on AND the values
-            // are different - this avoid assertions during sysops like SetMany that often aren't changing
-            // the value of the field
-            EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
-        }
+        // No active-status assertion here — see the Value getter note. Deprecation/disabled checks
+        // are enforced at BaseEntity.Get/Set/SetMany, not at this low-level accessor.
         if (
               !this.ReadOnly ||
               this._NeverSet  /* Allow one time set of any field because BaseEntity Object passes in ReadOnly fields when we load,
                                  after that load for a given INSTANCE of an EntityField object we never set a ReadOnly Field*/
             ) {
+            // Strip trailing space-padding on fixed-width string columns
+            // (`nchar`/`char`/`bpchar`). SQL Server / PG right-pad these
+            // up to the declared length on storage and return that padding
+            // in result sets, which would otherwise surface through Get()
+            // and falsely dirty-flag every record where the application
+            // value is the logical (un-padded) form. See
+            // `EntityFieldInfo.FixedWidthColumn` for the source of truth.
+            if (typeof value === 'string' && this._entityFieldInfo.FixedWidthColumn) {
+                value = value.replace(/ +$/, '');
+            }
             this._Value = value;
 
             // in the below, we set the OldValue, but only if (a) we have never set the value before, or (b) the value or the old value is not null - which means that we are in a record setup scenario
@@ -288,6 +295,10 @@ export class EntityField {
         const ef = this._entityFieldInfo;
         const result = new ValidationResult();
         result.Success = true; // assume success
+        // NOTE: Validation reads this.Value to apply metadata rules — a framework-internal read, not
+        // user use of the field. EntityField.Value no longer asserts active status (that moved to
+        // BaseEntity.Get/Set/SetMany), so validating a record containing a deprecated/disabled field
+        // no longer false-warns or throws here.
         if (!ef.ReadOnly && !ef.SkipValidation) {
             // only do validation on updatable fields and skip the special case fields defined inside the SkipValidation property (like ID/CreatedAt/UpdatedAt)
             if (!ef.AllowsNull && (this.Value === null || this.Value === undefined)) {
@@ -332,12 +343,10 @@ export class EntityField {
 
 
     constructor(fieldInfo: EntityFieldInfo, Value?: any) {
-        // NOTE: Do not assert EntityFieldInfo status here, because we are 
-        // creating a new EntityField object and it is possible that the field 
-        // is disabled or is deprecated, but we still need to create the object 
-        // since it is physically part of the entity. We DO assert for the status
-        // if the Value is later accessed or set.
-        
+        // NOTE: constructing an EntityField for a deprecated/disabled field is always allowed — the
+        // column is physically part of the entity and the instance must exist. Active-status is
+        // asserted only when code accesses the field by name via BaseEntity.Get/Set/SetMany, never
+        // here and never in the EntityField.Value accessor.
         this._entityFieldInfo = fieldInfo;
         if (Value) {
             this.Value = Value;
@@ -359,8 +368,9 @@ export class EntityField {
                     this.Value = null;
                 }
             }
-            else if (fieldInfo.Type.trim().toLowerCase() === "uniqueidentifier") {
-                // special handling for GUIDs, we don't want to populate anything here because the server always sets the value, leave blank
+            else if (fieldInfo.IsUniqueIdentifier) {
+                // special handling for GUIDs (SQL Server `uniqueidentifier` / PostgreSQL `uuid`),
+                // we don't want to populate anything here because the server always sets the value, leave blank
                 this.Value = null;
             }
             else if (fieldInfo.TSType === EntityFieldTSType.Date) {
@@ -430,29 +440,28 @@ export class EntityField {
             this.Value = null; // we need to set the value to null instead of being undefined as the value is defined, it is NULL
             this._NeverSet = true; // set this back to true because we are setting the value to null;
         }
-
-        this._assertActiveStatusRequired = true; // turn on assertion for active status now that we're done with constructor.
     }
 
     /**
      * This method will set the internal Old Value which is used to track dirty state, to the current value of the field. This effectively resets the dirty state of the field to false. Use this method sparingly.
      */
     public ResetOldValue() {
-        this._assertActiveStatusRequired = false; // temporarily turn off assertion for active status so we can set the old value without asserting
         this._OldValue = this.Value;
-        this._assertActiveStatusRequired = true; // turn it back on after we're done
     }
 
     /**
-     * This property temporarily will set the active status assertions for this particular instance of EntityField.
-     * It is temporary because other behaviors in the class instance could reset this value for example calling
-     * ResetOldValue() or another caller setting this property to another value.
+     * @deprecated No-op as of the active-status relocation. Active-status (deprecated/disabled)
+     * assertions are now enforced at BaseEntity.Get/Set/SetMany — the entry points genuine code uses —
+     * rather than on this low-level EntityField.Value accessor. There is therefore nothing to toggle
+     * at the field level. The getter always returns `false` and the setter is ignored; both remain
+     * only so existing callers that wrapped value reads in a save/disable/restore pattern (e.g. the
+     * provider SQL-build paths) continue to compile and behave correctly.
      */
     public get ActiveStatusAssertions(): boolean {
-        return this._assertActiveStatusRequired;
+        return false;
     }
-    public set ActiveStatusAssertions(value: boolean) {
-        this._assertActiveStatusRequired = value;
+    public set ActiveStatusAssertions(_value: boolean) {
+        // intentionally a no-op — see deprecation note above
     }
 
     /**
@@ -1701,12 +1710,35 @@ export abstract class BaseEntity<T = unknown> {
     public Set(FieldName: string, Value: any) {
         // IS-A routing: if this field belongs to a parent entity, route to parent
         if (this._parentEntity && this._parentEntityFieldNames?.has(FieldName)) {
-            this._parentEntity.Set(FieldName, Value); // recursive for N-level chains
+            this._parentEntity.Set(FieldName, Value); // recursive for N-level chains (parent asserts its own field)
             // Also mirror the value on our own virtual EntityField for UI compatibility
             this.SetLocal(FieldName, Value);
         }
         else {
+            // Active-status enforcement choke point for own-field writes. Fast-path gated on the
+            // memoized EntityInfo.HasInactiveFields so all-Active entities (the overwhelming majority)
+            // pay only a single cached boolean check.
+            if (this.EntityInfo?.HasInactiveFields) {
+                this.AssertFieldActiveStatus(FieldName, 'BaseEntity.Set');
+            }
             this.SetLocal(FieldName, Value);
+        }
+    }
+
+    /**
+     * Single choke point for field active-status (deprecated/disabled) enforcement. Called by
+     * Get()/Set()/SetMany() — the entry points genuine code and the generated strongly-typed
+     * accessors flow through. Emits a batched deprecation warning for `Deprecated` fields and throws
+     * for `Disabled` fields. Framework-internal value machinery (Dirty, Validate, GetAll, hydration,
+     * SQL build) reads EntityField.Value directly and is therefore exempt by construction.
+     *
+     * Callers should gate this behind `EntityInfo.HasInactiveFields` so the common all-Active entity
+     * skips the field lookup entirely.
+     */
+    private AssertFieldActiveStatus(fieldName: string, caller: string): void {
+        const fi = this.EntityInfo?.FieldByName(fieldName);
+        if (fi) {
+            EntityFieldInfo.AssertEntityFieldActiveStatus(fi, caller);
         }
     }
 
@@ -1761,7 +1793,14 @@ export abstract class BaseEntity<T = unknown> {
     public Get(FieldName: string): any {
         // IS-A routing: return the authoritative value from the parent entity
         if (this._parentEntity && this._parentEntityFieldNames?.has(FieldName)) {
-            return this._parentEntity.Get(FieldName); // recursive for N-level chains
+            return this._parentEntity.Get(FieldName); // recursive for N-level chains (parent asserts its own field)
+        }
+
+        // Active-status enforcement choke point for own-field reads. Fast-path gated on the memoized
+        // EntityInfo.HasInactiveFields so all-Active entities pay only a single cached boolean check
+        // before the hot read paths below.
+        if (this.EntityInfo?.HasInactiveFields) {
+            this.AssertFieldActiveStatus(FieldName, 'BaseEntity.Get');
         }
 
         // Raw mode fast path: read directly from the cached data without building EntityField
@@ -1770,15 +1809,22 @@ export abstract class BaseEntity<T = unknown> {
         // only iterates and reads (`engine.Models.find(m => m.ID === x).Name`) never triggers
         // hydration. Cache data uses exact SQL column names so no case-insensitive scan needed.
         if (!this._fieldsHydrated && this._raw) {
-            const value = this._raw[FieldName];
+            let value = this._raw[FieldName];
             if (value === undefined) return null;
             // Date conversion mirrors the hydrated path. Mutating _raw to cache the converted
             // Date avoids reparsing on every read.
-            const fi = this._EntityInfo?.Fields.find(f => f.Name === FieldName);
+            const fi = this._EntityInfo?.FieldByName(FieldName);
             if (fi?.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
                 const d = new Date(value);
                 this._raw[FieldName] = d;
                 return d;
+            }
+            // Mirror the EntityField.Value setter: rtrim padding for fixed-
+            // width string columns. Memoize back into _raw so we don't
+            // re-trim on every read.
+            if (typeof value === 'string' && fi?.FixedWidthColumn) {
+                value = value.replace(/ +$/, '');
+                this._raw[FieldName] = value;
             }
             return value;
         }
@@ -1814,21 +1860,23 @@ export abstract class BaseEntity<T = unknown> {
         if (!object)
             throw new Error('calling BaseEntity.SetMany(), object cannot be null or undefined');
 
+        // Whether to enforce active-status (deprecated warning / disabled throw) per field. Skipped
+        // when the caller opts out (`ignoreActiveStatusAssertions=true`) — the load/hydration paths
+        // pass this because populating from the DB is NOT user use of the field — and fast-path gated
+        // on the memoized EntityInfo.HasInactiveFields so all-Active entities do zero extra work.
+        const checkStatus = !ignoreActiveStatusAssertions && (this.EntityInfo?.HasInactiveFields ?? false);
+
         for (let key in object) {
             const field = this.GetFieldByName(key);
             if (field) {
                 // check to see if key matches a field name, if so, set it
-                const priorActiveStatusAssertions = field.ActiveStatusAssertions; // save the current active status assertions
-                if (ignoreActiveStatusAssertions) {
-                    field.ActiveStatusAssertions = false; // disable active status assertions for this field
+                if (checkStatus) {
+                    EntityFieldInfo.AssertEntityFieldActiveStatus(field.EntityFieldInfo, 'BaseEntity.SetMany');
                 }
                 // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
                 this.SetLocal(key, object[key]);
                 if (replaceOldValues) {
                     field.ResetOldValue();
-                }
-                if (ignoreActiveStatusAssertions) {
-                    field.ActiveStatusAssertions = priorActiveStatusAssertions; // restore the active status assertions
                 }
             }
             else {
@@ -1836,17 +1884,13 @@ export abstract class BaseEntity<T = unknown> {
                 // because some objects passed in will use the code name
                 const field = this.GetFieldByCodeName(key);
                 if (field) {
-                    const priorActiveStatusAssertions = field.ActiveStatusAssertions; // save the current active status assertions
-                    if (ignoreActiveStatusAssertions) {
-                        field.ActiveStatusAssertions = false; // disable active status assertions for this field
+                    if (checkStatus) {
+                        EntityFieldInfo.AssertEntityFieldActiveStatus(field.EntityFieldInfo, 'BaseEntity.SetMany');
                     }
                     // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
                     this.SetLocal(field.Name, object[key]);
                     if (replaceOldValues) {
                         field.ResetOldValue();
-                    }
-                    if (ignoreActiveStatusAssertions) {
-                        field.ActiveStatusAssertions = priorActiveStatusAssertions; // restore the active status assertions
                     }
                 }
                 else {
@@ -1925,15 +1969,13 @@ export abstract class BaseEntity<T = unknown> {
         let obj = {};
         for (let field of this.Fields) {
             if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
-                const tempStatus = field.ActiveStatusAssertions; // save the current active status assertions
-                field.ActiveStatusAssertions = false; // disable active status assertions for this field
-
+                // Reads field.Value directly — serialization is framework-internal, so it does not
+                // (and must not) assert active status. No suppression toggle needed: the assertion no
+                // longer lives on EntityField.Value (it moved to BaseEntity.Get/Set/SetMany).
                 obj[field.Name] = oldValues ? field.OldValue : field.Value;
                 if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && obj[field.Name] && !(obj[field.Name] instanceof Date)) {
                     obj[field.Name] = new Date(obj[field.Name]); // a timestamp, convert to JS Date Object
                 }
-
-                field.ActiveStatusAssertions = tempStatus; // restore the prior status for assertions
             }
         }
 
@@ -2108,6 +2150,10 @@ export abstract class BaseEntity<T = unknown> {
             for (const field of this._Fields) {
                 const value = this._raw[field.Name];
                 if (value !== undefined) {
+                    // Populating fields from the loaded row writes EntityField.Value directly, which does
+                    // not assert active status — so a deprecated column still present in the table emits
+                    // no warning on load (hydration is not user use of the field). No suppression toggle
+                    // is needed now that the assertion lives at BaseEntity.Get/Set/SetMany.
                     // Date conversion mirrors what SetLocal / Get does for raw string/number dates.
                     if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
                         field.Value = new Date(value);
@@ -2179,11 +2225,40 @@ export abstract class BaseEntity<T = unknown> {
         this._childEntity = null;
         this._childEntities = null;
         this._childEntityDiscoveryDone = false;
-        // Generate UUID for non-auto-increment uniqueidentifier primary keys
-        if (this.EntityInfo.PrimaryKeys.length === 1) {
+        // Primary-key assignment for a new record.
+        //
+        // Warning, get recurses up the tree adding O(N^2) complexity.
+        // If an entity tree exceeds 3 entities deep, we may want to
+        // consider a more efficient approach. However, the efficient
+        // option currently uses name reference to reach into the parent's
+        // field and pull the key value, passing it down the chain.
+        // That approach is more fragile and less idiomatic to the
+        // rest of the entities codebase. So we settle for some
+        // efficiency with SetLocal, but use get which gets the root's value
+        // when setting keys.
+        if (this._parentEntity) {
+            this._parentEntity.NewRecord();
+            for (const pk of this.EntityInfo.PrimaryKeys) {
+                const parentValue = this._parentEntity.Get(pk.Name);
+                if (parentValue != null) {
+                    this.SetLocal(pk.Name, parentValue);
+                    // The shared PK is ReadOnly, so SetLocal above consumed its
+                    // one-time write (_NeverSet -> false). Restore _NeverSet so the
+                    // child's OWN mirror can be re-written if the shared key is set
+                    // again this lifecycle — e.g. an explicit PK in newValues below,
+                    // or a later Set('ID', ...). Without this, the routed Set would
+                    // update the parent while the child's ReadOnly mirror stays
+                    // locked at the adopted value, re-diverging the shared key.
+                    this.GetFieldByName(pk.Name)?.ResetNeverSetFlag();
+                }
+            }
+        } else if (this.EntityInfo.PrimaryKeys.length === 1) {
+            // Root of an IS-A chain, or a standalone (non-IS-A) entity: generate
+            // a single GUID/UUID PK here (SQL Server `uniqueidentifier` /
+            // PostgreSQL `uuid`).
             const pk = this.EntityInfo.PrimaryKeys[0];
             if (!pk.AutoIncrement &&
-                pk.Type.toLowerCase().trim() === 'uniqueidentifier' &&
+                pk.IsUniqueIdentifier &&
                 !this.Get(pk.Name)) {
                 // Generate and set UUID for this primary key
                 const uuid = uuidv4();
@@ -2196,23 +2271,13 @@ export abstract class BaseEntity<T = unknown> {
             }
         }
 
+        // Apply caller-supplied values LAST so an explicit PK (or any routed
+        // parent field) wins over the generated/adopted value instead of being
+        // clobbered by the parent's NewRecord().
         if (newValues) {
             newValues.KeyValuePairs.filter(kv => kv.Value !== null && kv.Value !== undefined).forEach(kv => {
                 this.Set(kv.FieldName, kv.Value);
             });
-        }
-
-        // IS-A composition: propagate PK value to parent entity chain
-        // Parent needs NewRecord() called first, then share the same PK value
-        if (this._parentEntity) {
-            this._parentEntity.NewRecord();
-            // Propagate PK — child and parent must share the same UUID
-            for (const pk of this.EntityInfo.PrimaryKeys) {
-                const pkValue = this.Get(pk.Name);
-                if (pkValue != null) {
-                    this._parentEntity.Set(pk.Name, pkValue);
-                }
-            }
         }
 
         this.RaiseEvent('new_record', null);
@@ -2295,10 +2360,40 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Saves the current state of the object to the database. Uses the active provider to handle the actual saving of the record.
      * If the record is new, it will be created, if it already exists, it will be updated.
-     * 
+     *
      * Debounces multiple calls so that if Save() is called again while a save is in progress,
      * the second call will simply receive the same result as the first.
-     * 
+     *
+     * ## IS-A entities: one Save() writes the whole chain
+     *
+     * For a Table-Per-Type child, this saves EVERY level — root first, then down to this entity —
+     * inside one transaction, with a single primary key shared across all of them. Set fields
+     * belonging to any ancestor directly on this object; {@link Set} routes each one to the entity
+     * that owns it. There is no depth limit.
+     *
+     * ```typescript
+     * // Webinar IS-A Meeting IS-A Product
+     * const webinar = await md.GetEntityObject<WebinarEntity>('Webinars', contextUser);
+     * webinar.NewRecord();
+     * webinar.RecordingURL = '...';   // Webinar's own
+     * webinar.StartTime    = start;   // Meeting's
+     * webinar.Name         = 'Q1';    // Product's — set on the SAME object
+     * await webinar.Save();           // writes Product, Meeting, Webinar
+     * ```
+     *
+     * Do NOT create the parent separately and then try to attach a child to it — `NewRecord()`
+     * starts a new chain rather than adopting an existing parent row, so that produces a second
+     * parent and a primary-key conflict.
+     *
+     * If a PARENT level fails validation, this returns false and the failure is reported on THIS
+     * entity's result as `Failed to save parent entity '<Name>': <detail>`. The commonest cause is a
+     * NOT NULL column on an ancestor table that was never set — the child looks complete and the
+     * save still fails. (Before v5.50.0 that result was recorded only on the parent object, so the
+     * caller saw `false` with a null `LatestResult` and an empty `ResultHistory`.)
+     *
+     * @see {@link ISAParent} to inspect the parent instance directly
+     * @see packages/MJCore/docs/isa-relationships.md — "Creating a Child Record"
+     *
      * @param options
      * @returns Promise<boolean>
      */
@@ -2384,6 +2479,35 @@ export abstract class BaseEntity<T = unknown> {
                 if (!parentResult) {
                     // Parent save failed — rollback if we started the transaction
                     await this.RollbackISATransaction(isISAInitiator);
+
+                    // RECORD the failure on THIS entity's ResultHistory before returning. Without
+                    // this the caller gets `false` with LatestResult === null and an empty
+                    // ResultHistory, because every result was written to the PARENT object — which
+                    // callers have no reference to (`_parentEntity` is private). The diagnosis is
+                    // then invisible: e.g. saving an IS-A child whose parent has NOT NULL columns
+                    // the child never set fails with literally no message anywhere the caller can
+                    // reach. Mirrors the transaction-group-failure and catch-block paths below.
+                    if (currentResultCount === this.ResultHistory.length) {
+                        const parentLatest = this._parentEntity.LatestResult;
+                        const parentErrors = parentLatest?.Errors ?? [];
+                        // A failed parent commonly reports its detail ONLY in Errors (validation
+                        // failures leave Message empty), so fall back to the error text rather than
+                        // handing the caller a message that says nothing.
+                        const detail =
+                            parentLatest?.Message ||
+                            parentErrors.map(e => e?.Message ?? String(e)).filter(Boolean).join('; ') ||
+                            'no error detail was reported by the parent';
+                        newResult.Success = false;
+                        newResult.Type = this.IsSaved ? 'update' : 'create';
+                        newResult.Message =
+                            `Failed to save parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
+                        // Surface the parent's field-level errors so the caller can act on them.
+                        newResult.Errors = parentErrors;
+                        newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                        newResult.EndedAt = new Date();
+                        this.RegisterResultHistoryEntry(newResult);
+                    }
+
                     return false;
                 }
             }
@@ -2445,6 +2569,22 @@ export abstract class BaseEntity<T = unknown> {
                         // Run registered PreSave hooks (e.g., tenant validation)
                         await this.RunPreSaveHooks();
 
+                        // Optimistic-UI hook: every pre-flight check (Validate, ValidateAsync,
+                        // PreSave hooks) has passed and the DB write is imminent. Fire the optional
+                        // OnValidated callback so a UI can render the now-known-valid change before
+                        // the persistence round-trip. A callback bug must never abort the save.
+                        // Excluded on ReplayOnly: replay bypasses validation (valResult is forced
+                        // Success above without running Validate/ValidateAsync), so the "known-valid"
+                        // guarantee the hook relies on does not hold for a replay.
+                        if (_options.OnValidated && !_options.ReplayOnly) {
+                            try {
+                                _options.OnValidated(this);
+                            }
+                            catch (cbErr: any) {
+                                LogError(`EntitySaveOptions.OnValidated callback threw (ignored): ${cbErr?.message ?? String(cbErr)}`);
+                            }
+                        }
+
                         const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here
@@ -2461,18 +2601,30 @@ export abstract class BaseEntity<T = unknown> {
                         else {
                             // we are part of a transaction group, so we return true and subscribe to the transaction groups' events and do the finalization work then
                             this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
-                                if (success && results) {
-                                    const transItem = results.find(r => r.Transaction.BaseEntity === this);
-                                    if (transItem) {
-                                        this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
-                                    }
-                                    else {
-                                        // should never get here, but if we do, we need to throw an error
-                                        throw new Error('Transaction group did not return a result for the entity object');
-                                    }
+                                const transItem = success && results ? results.find(r => r.Transaction.BaseEntity === this) : undefined;
+                                if (transItem) {
+                                    this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
                                 }
                                 else {
-                                    throw error; // push this to the catch block below and that will add to the result history
+                                    // The transaction group failed / rolled back, OR (should never happen) reported success
+                                    // without a result for this entity. Either way, RECORD the failure on ResultHistory rather
+                                    // than throwing. This handler runs ASYNCHRONOUSLY — after Save() has already returned true and
+                                    // its enclosing try/catch has unwound — so a throw here has no catch to reach: rxjs routes a
+                                    // throwing next-handler to reportUnhandledError, which re-throws it on a fresh tick, producing
+                                    // an uncaughtException that exits the whole host process (MJServer only guards
+                                    // unhandledRejection). The transaction has already rolled back and Submit() returns false; the
+                                    // caller's error handling still runs. Mirrors the Delete() transaction-group-failure path below.
+                                    const err = error ?? (success ? new Error('Transaction group did not return a result for the entity object') : undefined);
+                                    if (currentResultCount === this.ResultHistory.length) {
+                                        // no new result was recorded elsewhere, so add one here (mirrors Save()'s own catch block)
+                                        newResult.Success = false;
+                                        newResult.Type = saveSubType ?? (this.IsSaved ? 'update' : 'create');
+                                        newResult.Message = err?.message ?? (err != null ? String(err) : 'Transaction group failed');
+                                        newResult.Errors = err?.Errors || [];
+                                        newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                        newResult.EndedAt = new Date();
+                                        this.RegisterResultHistoryEntry(newResult);
+                                    }
                                 }
                             });
                             return true;
@@ -3172,6 +3324,34 @@ export abstract class BaseEntity<T = unknown> {
                             if (!parentResult) {
                                 // Parent delete failed — rollback if we started the transaction
                                 await this.RollbackISATransaction(isISAInitiator);
+
+                                // RECORD the failure on THIS entity's ResultHistory before returning —
+                                // symmetric with the parent-SAVE-failure path in _InnerSave. Without this
+                                // the caller gets `false` with LatestResult === null and an empty
+                                // ResultHistory, because every result was written to the PARENT object,
+                                // which callers have no reference to (`_parentEntity` is private). Note
+                                // THIS entity's own row was already deleted successfully above; it is the
+                                // parent-chain delete that failed and rolled the transaction back.
+                                if (currentResultCount === this.ResultHistory.length) {
+                                    const parentLatest = this._parentEntity.LatestResult;
+                                    const parentErrors = parentLatest?.Errors ?? [];
+                                    // A failed parent commonly reports its detail ONLY in Errors, so fall
+                                    // back to the error text rather than a message that says nothing.
+                                    const detail =
+                                        parentLatest?.Message ||
+                                        parentErrors.map(e => e?.Message ?? String(e)).filter(Boolean).join('; ') ||
+                                        'no error detail was reported by the parent';
+                                    newResult.Success = false;
+                                    newResult.Type = 'delete';
+                                    newResult.Message =
+                                        `Failed to delete parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
+                                    // Surface the parent's field-level errors so the caller can act on them.
+                                    newResult.Errors = parentErrors;
+                                    newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                    newResult.EndedAt = new Date();
+                                    this.RegisterResultHistoryEntry(newResult);
+                                }
+
                                 return false;
                             }
                         }
@@ -3203,14 +3383,24 @@ export abstract class BaseEntity<T = unknown> {
                                 this.NewRecord(); // will trigger a new record event here too
                             }
                             else {
-                                // transaction failed, so we need to add a new result to the history here
-                                newResult.Success = false;
-                                newResult.Type = 'delete'
-                                newResult.Message = error && error.message? error.message : error;
-                                newResult.Errors = error.Errors || [];
-                                newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
-                                newResult.EndedAt = new Date();
-                                this.RegisterResultHistoryEntry(newResult);
+                                // Transaction group failed / rolled back. RECORD the failure instead of
+                                // letting this async handler throw — exactly like the Save() subscriber above.
+                                // `error` may be UNDEFINED: the GraphQL-client transaction group signals
+                                // failure by RETURNING failed result items (no thrown error), so the old
+                                // `error.Errors` was a TypeError, which rxjs re-throws on a fresh tick as an
+                                // uncaughtException that exits the host process. Treat `error` as
+                                // possibly-absent, and guard on currentResultCount so a provider that already
+                                // recorded the failure (real providers do, before the notification fires)
+                                // isn't double-recorded.
+                                if (currentResultCount === this.ResultHistory.length) {
+                                    newResult.Success = false;
+                                    newResult.Type = 'delete';
+                                    newResult.Message = error?.message ?? (error != null ? String(error) : 'Transaction group failed');
+                                    newResult.Errors = error?.Errors || [];
+                                    newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                    newResult.EndedAt = new Date();
+                                    this.RegisterResultHistoryEntry(newResult);
+                                }
                             }
                         });
                     }

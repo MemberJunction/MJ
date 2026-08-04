@@ -1,0 +1,246 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Algorithm Advisor</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  /* ---- Option 3: decision-support split (scenario list  |  ranked advisor) ---- */
+  .advisor { display:grid; grid-template-columns:300px 1fr; gap:18px; align-items:start; }
+  @media (max-width:980px){ .advisor { grid-template-columns:1fr; } }
+
+  /* left: scenario list */
+  .scen-list { display:flex; flex-direction:column; }
+  .scen-item { display:flex; align-items:flex-start; gap:11px; padding:13px 14px; border-bottom:1px solid var(--mj-border-subtle); cursor:pointer; transition:background .12s ease; position:relative; }
+  .scen-item:last-child { border-bottom:none; }
+  .scen-item:hover { background:var(--mj-bg-surface-hover); }
+  .scen-item.on { background:var(--mj-brand-soft); box-shadow:inset 3px 0 0 var(--mj-brand-primary); }
+  .scen-item .sic { width:34px; height:34px; border-radius:9px; display:grid; place-items:center; font-size:14px; background:var(--mj-bg-surface-sunken); color:var(--mj-text-secondary); flex:0 0 auto; }
+  .scen-item.on .sic { background:var(--mj-brand-primary); color:#fff; }
+  .scen-item .snm { font-weight:650; font-size:13.5px; line-height:1.2; }
+  .scen-item .ssub { font-size:11.5px; color:var(--mj-text-muted); margin-top:2px; }
+  .scen-item.on .snm { color:var(--mj-brand-primary-active); }
+  .scen-item .chk { margin-left:auto; color:var(--mj-brand-primary); font-size:13px; opacity:0; }
+  .scen-item.on .chk { opacity:1; }
+
+  /* right: advisor header */
+  .adv-head { display:flex; align-items:flex-start; gap:14px; padding:18px 18px 16px; border-bottom:1px solid var(--mj-border-subtle); }
+  .adv-head .bic { width:48px; height:48px; border-radius:12px; display:grid; place-items:center; font-size:21px; background:linear-gradient(135deg,#3a6df0,#7b3ff0); color:#fff; flex:0 0 auto; }
+  .adv-head h2 { font-size:18px; }
+  .adv-head .sub { color:var(--mj-text-secondary); font-size:13px; margin-top:3px; max-width:560px; line-height:1.45; }
+
+  /* ranked rows */
+  .ranked { padding:6px 0; }
+  .rrow { display:grid; grid-template-columns:40px 250px 130px 1fr; align-items:center; gap:14px; padding:15px 18px; border-bottom:1px solid var(--mj-border-subtle); transition:background .12s ease; }
+  .rrow:last-child { border-bottom:none; }
+  .rrow:hover { background:var(--mj-bg-surface-hover); }
+  .rrow.top { background:linear-gradient(90deg,var(--mj-success-bg),transparent 60%); }
+  .rrow .pos { width:30px; height:30px; border-radius:8px; background:var(--mj-bg-surface-sunken); display:grid; place-items:center; font-weight:750; font-size:13px; color:var(--mj-text-secondary); }
+  .rrow.top .pos { background:#fdf0d0; color:#9a6b07; }
+  .rrow .algo { display:flex; align-items:center; gap:11px; }
+  .rrow .algo .ic { width:38px; height:38px; border-radius:10px; display:grid; place-items:center; font-size:16px; background:var(--mj-brand-soft); color:var(--mj-brand-primary); flex:0 0 auto; }
+  .rrow .algo .nm { font-weight:700; font-size:14px; line-height:1.15; }
+  .rrow .algo .key { font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11px; color:var(--mj-text-muted); margin-top:2px; }
+  .rrow .why { font-size:12.5px; color:var(--mj-text-secondary); line-height:1.4; }
+  .rrow .why .pts { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; }
+  .rrow.muted-row { opacity:.6; }
+  .lvlbox { display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
+  .lvlbox .ll { font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--mj-text-muted); font-weight:700; }
+
+  .summary { display:flex; align-items:center; gap:12px; padding:13px 18px; background:var(--mj-bg-surface-card); border-top:1px solid var(--mj-border-subtle); }
+  .summary .pill { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; color:var(--mj-text-secondary); }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; }
+  .legend .li { display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:var(--mj-text-secondary); }
+  .legend .sw { width:12px; height:12px; border-radius:4px; }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav"><div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a>
+  <a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a>
+  <a class="active"><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div>
+  <a><i class="fa-solid fa-flask"></i> Experiments</a><a><i class="fa-solid fa-cubes"></i> Model Registry</a><a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div><a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main">
+ <div class="ps-topbar">
+   <div><div class="crumb">Build / Algorithm Catalog</div><h1>Algorithm Advisor</h1></div>
+   <div class="spacer"></div>
+   <button class="btn ghost"><i class="fa-solid fa-circle-question"></i> How this works</button>
+   <button class="btn"><i class="fa-solid fa-table-cells"></i> Matrix view</button>
+   <button class="btn primary"><i class="fa-solid fa-diagram-project"></i> New Pipeline</button>
+ </div>
+ <div class="ps-content">
+
+  <div class="advisor">
+   <!-- LEFT: scenario picker -->
+   <div class="card">
+    <div class="card-head"><i class="fa-solid fa-list-check" style="color:var(--mj-brand-primary)"></i><h3>Your scenario</h3></div>
+    <div class="scen-list" id="scenList"></div>
+    <div class="card-body" style="border-top:1px solid var(--mj-border-subtle);background:var(--mj-bg-surface-card);">
+     <div class="muted small" style="line-height:1.45;"><i class="fa-solid fa-circle-info" style="margin-right:6px;"></i>Pick the scenario that best describes your problem. The advisor re-ranks all six algorithms for that goal.</div>
+    </div>
+   </div>
+
+   <!-- RIGHT: ranked advisor -->
+   <div class="card">
+    <div class="adv-head">
+     <div class="bic" id="advIc"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+     <div>
+      <h2 id="advTitle">Interpretability required</h2>
+      <div class="sub" id="advSub">When stakeholders need to defend every prediction, favor models whose reasoning reads as plain signed coefficients over black-box accuracy.</div>
+     </div>
+    </div>
+    <div class="ranked" id="ranked"></div>
+    <div class="summary">
+     <div class="legend">
+      <div class="li"><span class="sw" style="background:#1f9d57"></span>Primary</div>
+      <div class="li"><span class="sw" style="background:#3f86c4"></span>Strong</div>
+      <div class="li"><span class="sw" style="background:#d98213"></span>Viable</div>
+      <div class="li"><span class="sw" style="background:#98a4b6"></span>Weak</div>
+      <div class="li"><span class="sw" style="background:#e4e8ee;border:1px solid var(--mj-border-default)"></span>Not recommended</div>
+     </div>
+     <div class="spacer" style="flex:1;"></div>
+     <span class="pill"><i class="fa-solid fa-ranking-star"></i> Ranked best-fit first</span>
+    </div>
+   </div>
+  </div>
+
+ </div>
+</main>
+</div>
+
+<script>
+ const RANK = { Primary:4, Strong:3, Viable:2, Weak:1, NotRecommended:0 };
+ const LABEL = { Primary:'Primary fit', Strong:'Strong fit', Viable:'Viable', Weak:'Weak fit', NotRecommended:'Not recommended' };
+
+ const ALG = {
+  xgb:    {name:'XGBoost', key:'xgboost', ic:'fa-bolt', pt:['Classification','Regression']},
+  lgbm:   {name:'LightGBM', key:'lightgbm', ic:'fa-feather', pt:['Classification','Regression']},
+  logreg: {name:'Logistic Regression', key:'logistic_regression', ic:'fa-wave-square', pt:['Classification']},
+  rf:     {name:'Random Forest', key:'random_forest', ic:'fa-tree', pt:['Classification','Regression']},
+  ridge:  {name:'Ridge Regression', key:'ridge', ic:'fa-ruler', pt:['Regression']},
+  mlp:    {name:'Multilayer Perceptron', key:'mlp', ic:'fa-network-wired', pt:['Classification','Regression']},
+ };
+
+ // scenario -> level + per-algo rationale
+ const SCEN = {
+  binary: { label:'Binary classification', sub:'Predict a clean yes / no outcome — churn, conversion, fraud flags.', ic:'fa-circle-half-stroke',
+    rows:{
+      xgb:   ['Primary','Best-in-class accuracy on tabular yes/no problems out of the box.'],
+      lgbm:  ['Strong','Matches XGBoost on accuracy and trains noticeably faster.'],
+      rf:    ['Strong','A robust, low-tuning baseline that classifies reliably.'],
+      logreg:['Viable','Works and stays interpretable, but trees usually win on raw accuracy.'],
+      mlp:   ['Viable','Capable, but overkill unless features are dense embeddings.'],
+      ridge: ['NotRecommended','Regression-only — it cannot model a yes/no target.'],
+  }},
+  regression: { label:'Regression', sub:'Predict a continuous number — revenue, lifetime value, days-to-event.', ic:'fa-arrow-trend-up',
+    rows:{
+      xgb:   ['Primary','Top accuracy for predicting a numeric target on tabular data.'],
+      lgbm:  ['Strong','Fast, accurate boosting for large numeric-target datasets.'],
+      rf:    ['Strong','Dependable numeric predictions with very little tuning.'],
+      ridge: ['Strong','Transparent linear baseline — readable and stable for numbers.'],
+      mlp:   ['Viable','Fits non-linear targets, but needs more data and care.'],
+      logreg:['NotRecommended','Classification-only — use Ridge for a numeric target.'],
+  }},
+  interp: { label:'Interpretability required', sub:'When stakeholders need to defend every prediction, favor models whose reasoning reads as plain signed coefficients over black-box accuracy.', ic:'fa-magnifying-glass-chart',
+    rows:{
+      logreg:['Primary','Simple signed coefficients give a defensible reason for every prediction.'],
+      ridge: ['Primary','Signed weights map directly to each driver\'s effect on the number.'],
+      rf:    ['Viable','Feature importances explain the model overall, not each prediction.'],
+      xgb:   ['Weak','Importances only — prefer Logistic / Ridge when you need the why.'],
+      lgbm:  ['Weak','Same as XGBoost: importances, not per-prediction coefficients.'],
+      mlp:   ['NotRecommended','A black-box network with no readable explanation.'],
+  }},
+  minimal: { label:'Minimal tuning', sub:'For business users who want a strong model without sweeping hyperparameters — pick what works well out of the box.', ic:'fa-sliders',
+    rows:{
+      rf:    ['Primary','Excellent defaults — almost no settings to choose, hard to misuse.'],
+      logreg:['Strong','A handful of knobs and sensible defaults; quick to a good result.'],
+      ridge: ['Strong','One regularization dial and you\'re done — very forgiving.'],
+      xgb:   ['Viable','Great when tuned; defaults are decent but leave accuracy on the table.'],
+      lgbm:  ['Viable','Similar to XGBoost — rewards tuning more than it forgives skipping it.'],
+      mlp:   ['Weak','Sensitive to architecture and learning rate — needs an expert touch.'],
+  }},
+  large: { label:'Large / wide dataset', sub:'Many rows and many columns where training and scoring speed matter as much as accuracy.', ic:'fa-gauge-high',
+    rows:{
+      lgbm:  ['Primary','Histogram-based splits — trains fastest on big, wide data.'],
+      xgb:   ['Strong','Scales well and stays accurate, just a step behind LightGBM on speed.'],
+      logreg:['Strong','Extremely fast linear fit even on millions of rows.'],
+      ridge: ['Strong','Closed-form / iterative solvers handle wide data efficiently.'],
+      rf:    ['Viable','Accurate but memory-hungry and slower as forests grow large.'],
+      mlp:   ['Viable','Trains on big data but needs careful batching and time.'],
+  }},
+  embed: { label:'Embedding / LLM-feature-heavy', sub:'Inputs are dense numeric vectors from embeddings or LLM-derived features rather than sparse tabular columns.', ic:'fa-vector-square',
+    rows:{
+      mlp:   ['Primary','Neural nets thrive on dense embeddings from LLM features.'],
+      xgb:   ['Strong','Still strong on dense vectors, though it favors tabular structure.'],
+      lgbm:  ['Strong','Handles high-dimensional dense input quickly and accurately.'],
+      logreg:['Viable','A solid linear probe on embeddings when you want simplicity.'],
+      rf:    ['Viable','Works on dense vectors but rarely the best fit for them.'],
+      ridge: ['Viable','Linear baseline on embedding regression targets.'],
+  }},
+  small: { label:'Small dataset', sub:'Only a few hundred rows — the risk is overfitting, so favor simple, regularized models.', ic:'fa-compress',
+    rows:{
+      logreg:['Primary','Few parameters — resists overfitting on limited data.'],
+      ridge: ['Primary','Regularization keeps it stable when rows are scarce.'],
+      rf:    ['Strong','Bagging averages out noise on small samples surprisingly well.'],
+      xgb:   ['Viable','Can work, but boosting risks overfitting tiny datasets.'],
+      lgbm:  ['Viable','Same overfitting risk on small data — tune conservatively.'],
+      mlp:   ['Weak','Far too data-hungry to generalize from a few hundred rows.'],
+  }},
+ };
+
+ const ORDER = ['interp','binary','regression','minimal','large','embed','small'];
+
+ function buildScenList(){
+   const el = document.getElementById('scenList');
+   el.innerHTML = ORDER.map(id=>{
+     const s = SCEN[id];
+     return `<div class="scen-item" data-s="${id}" onclick="select('${id}')">
+       <div class="sic"><i class="fa-solid ${s.ic}"></i></div>
+       <div><div class="snm">${s.label}</div><div class="ssub">${shortSub(id)}</div></div>
+       <i class="fa-solid fa-circle-check chk"></i>
+     </div>`;
+   }).join('');
+ }
+ function shortSub(id){
+   return ({binary:'Predict yes / no', regression:'Predict a number', interp:'Explain every prediction',
+     minimal:'Business-user friendly', large:'Speed matters', embed:'Dense numeric vectors', small:'Few hundred rows'})[id];
+ }
+
+ function select(id){
+   document.querySelectorAll('.scen-item').forEach(it=>it.classList.toggle('on', it.dataset.s===id));
+   const s = SCEN[id];
+   document.getElementById('advTitle').textContent = s.label;
+   document.getElementById('advSub').textContent = s.sub;
+   document.getElementById('advIc').innerHTML = `<i class="fa-solid ${s.ic}"></i>`;
+
+   // rank algorithms by level desc, keeping authored tie order
+   const entries = Object.entries(s.rows).map(([alg,[lvl,why]],i)=>({alg,lvl,why,i}))
+     .sort((a,b)=> (RANK[b.lvl]-RANK[a.lvl]) || (a.i-b.i));
+
+   document.getElementById('ranked').innerHTML = entries.map((e,idx)=>{
+     const a = ALG[e.alg];
+     const top = idx===0 ? 'top' : '';
+     const muted = RANK[e.lvl] <= 1 ? 'muted-row' : '';
+     const pts = a.pt.map(p=>`<span class="tag">${p}</span>`).join('');
+     const lvlTxt = e.lvl==='NotRecommended' ? 'N/A' : e.lvl;
+     return `<div class="rrow ${top} ${muted}">
+       <div class="pos">${idx+1}</div>
+       <div class="algo">
+         <div class="ic"><i class="fa-solid ${a.ic}"></i></div>
+         <div><div class="nm">${a.name}</div><div class="key">${a.key}</div></div>
+       </div>
+       <div class="lvlbox">
+         <span class="ll">${idx===0?'Top pick':'Fit'}</span>
+         <span class="lvl lvl-${e.lvl}" title="${LABEL[e.lvl]}">${lvlTxt}</span>
+       </div>
+       <div class="why">${e.why}<div class="pts">${pts}</div></div>
+     </div>`;
+   }).join('');
+ }
+
+ buildScenList();
+ select('interp');
+</script>
+</body></html>

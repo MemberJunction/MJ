@@ -1,0 +1,43 @@
+<div class="session-card" role="group" [attr.aria-label]="Title" (click)="Open($event)">
+  <div class="session-card__icon" aria-hidden="true">
+    <i class="fa-solid fa-tower-broadcast"></i>
+  </div>
+
+  <div class="session-card__body">
+    <div class="session-card__head">
+      <span class="session-card__title">{{ Title }}</span>
+      @if (StatusChip) {
+        <span class="session-card__chip"
+              [class.session-card__chip--error]="IsErrorChip"
+              [class.session-card__chip--live]="IsLiveChip">{{ StatusChip }}</span>
+      }
+    </div>
+
+    <div class="session-card__meta">
+      @if (Group.StartedAt) {
+        <span class="session-card__range">
+          {{ Group.StartedAt | date:'MMM d, h:mm a' }}
+          @if (Group.EndedAt && Group.EndedAt !== Group.StartedAt) {
+            <i class="fa-solid fa-arrow-right-long session-card__range-arrow" aria-hidden="true"></i>
+            {{ Group.EndedAt | date:(SameDayRange ? 'h:mm a' : 'MMM d, h:mm a') }}
+          }
+        </span>
+        <span class="session-card__dot" aria-hidden="true">·</span>
+      }
+      <span class="session-card__turns">{{ Group.TurnCount }} {{ Group.TurnCount === 1 ? 'turn' : 'turns' }}</span>
+    </div>
+
+    @if (Group.LastTurnPreview) {
+      <div class="session-card__preview">
+        <span class="session-card__preview-role">{{ Group.LastTurnRole === 'User' ? UserName : 'Agent' }}:</span>
+        {{ Group.LastTurnPreview }}
+      </div>
+    }
+  </div>
+
+  <button type="button" class="session-card__open" (click)="Open($event)"
+          title="Open this realtime session in review mode">
+    <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
+    <span>Open</span>
+  </button>
+</div>

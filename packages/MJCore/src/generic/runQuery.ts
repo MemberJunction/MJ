@@ -2,6 +2,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { IRunQueryProvider, RunQueryResult } from './interfaces';
 import { UserInfo } from './securityInfo';
 import { QueryExecutionSpec } from './queryExecutionSpec';
+import { RunQueryEnrichment } from './queryResultEnricher';
 
 /**
  * Parameters for running a query, must provide either QueryID or QueryName. If both are provided QueryName is ignored.
@@ -91,6 +92,23 @@ export type RunQueryParams = {
      * Has no effect on saved queries (they use QueryInfo.CacheConfig instead).
      */
     AdhocCacheTTLMinutes?: number
+
+    /**
+     * Optional, additive post-query enrichment directive. When set, RunQuery resolves
+     * the enricher registered under `Enrichment.EnricherKey` (via the MJGlobal
+     * ClassFactory) and awaits it on the result rows just before returning, appending
+     * whatever derived column(s) the enricher produces (e.g. an ML model prediction).
+     *
+     * This is a runtime-only directive — there is no persisted per-query column for it
+     * (a saved annotation is a deliberate follow-up), so it requires no schema change.
+     * It is fully decoupled and resilient: when no enricher is registered under the key
+     * (the providing package isn't loaded) RunQuery no-ops, and any enrichment failure
+     * is logged and falls back to the un-enriched rows — a scoring problem never breaks
+     * the query.
+     *
+     * @see RunQueryEnrichment
+     */
+    Enrichment?: RunQueryEnrichment
 }
 
 /**

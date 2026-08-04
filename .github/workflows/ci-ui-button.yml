@@ -1,0 +1,29 @@
+name: UI buttons — .mj-btn override prevention
+
+on:
+  pull_request:
+    branches:
+      - next
+    paths:
+      - 'packages/Angular/**/*.css'
+      - 'packages/Angular/**/*.scss'
+      - '.github/scripts/check-mj-btn-override.sh'
+      - '.github/workflows/ci-ui-button.yml'
+
+jobs:
+  check-mj-btn-override:
+    name: Check for component-scoped .mj-btn overrides
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine merge base
+        run: |
+          echo "BASE_REF=origin/${{ github.base_ref }}" >> "$GITHUB_ENV"
+
+      - name: Check changed CSS/SCSS for .mj-btn overrides
+        run: |
+          ./.github/scripts/check-mj-btn-override.sh --base "$BASE_REF"

@@ -8,9 +8,12 @@ import { UserInfo } from '@memberjunction/core';
 import { SuiteFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
 import { SpinnerManager } from '../utils/spinner-manager';
-import { loadCLIConfig } from '../utils/config-loader';
+import { loadMJConfig, loadCLIConfig } from '../utils/config-loader';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
 import { parseVariableFlags } from '../utils/variable-parser';
+import { loadOraclesModule } from '../utils/oracle-module-loader';
+import { loadCheckModules } from '../utils/check-module-loader';
+import { installInstrumentedCacheFirst } from '@memberjunction/testing-integration';
 
 /**
  * Suite command - Execute a test suite
@@ -27,6 +30,45 @@ export class SuiteCommand {
      */
     async execute(suiteId: string | undefined, flags: SuiteFlags, contextUser?: UserInfo): Promise<void> {
         try {
+            // Integration tests must install the instrumented cache as the FIRST caller
+            // (before any provider setup) or its counters are a silent no-op. Opt-in via
+            // MJ_INTEGRATION_TEST=1 so every other suite run is byte-for-byte unchanged.
+            // A null return means the cache was ALREADY initialized elsewhere — fail fast with an
+            // actionable message rather than proceeding uninstrumented and failing later with a
+            // confusing "cache not installed first" error (S10).
+            if (process.env.MJ_INTEGRATION_TEST === '1') {
+                const installed = await installInstrumentedCacheFirst();
+                if (installed === null) {
+                    console.error(OutputFormatter.formatError(
+                        'MJ_INTEGRATION_TEST=1 but the local cache was already initialized by another component, ' +
+                        'so the instrumented cache could not be installed first. Run integration tests in a dedicated ' +
+                        'process (they cannot run inside a live MJAPI).'
+                    ));
+                    process.exit(2);
+                }
+            }
+
+            // Preload integration-check modules — the seam that lets this PUBLISHED CLI run
+            // check bundles living in packages it must not depend on (MJ's own suite is the
+            // private @memberjunction/integration-test-suite). Durable form: mj.config.cjs
+            // `testing.checkModules`; ad-hoc form: --checks-module. Runs AFTER the
+            // instrumented-cache install (first-caller invariant) and BEFORE the provider +
+            // engine so bundles are registered by the time the driver resolves them.
+            const mjConfig = await loadMJConfig();
+            const checkModuleSpecifiers = [
+                ...(mjConfig?.testing?.checkModules ?? []),
+                ...(flags.checksModule ? [flags.checksModule] : []),
+            ];
+            if (checkModuleSpecifiers.length > 0) {
+                const checkSummary = await loadCheckModules(checkModuleSpecifiers);
+                if (checkSummary.loaded.length > 0) {
+                    console.log(`Loaded check modules: ${checkSummary.loaded.join(', ')} (bundles added: ${checkSummary.newBundles.length})`);
+                }
+                for (const f of checkSummary.failed) {
+                    console.warn(`Check module '${f.specifier}' failed to load: ${f.error}`);
+                }
+            }
+
             // Initialize MJ provider (database connection and metadata)
             console.log('Initializing MJ provider...');
             await initializeMJProvider();
@@ -49,12 +91,32 @@ export class SuiteCommand {
             console.log(`Test Suites loaded: ${engine.TestSuites?.length || 0}`);
             console.log(`Tests loaded: ${engine.Tests?.length || 0}`);
 
+            // Plug in user-supplied oracles before resolving the suite. They
+            // register at the engine level via `engine.RegisterOracle()` and
+            // become available to every test in the suite that references the
+            // matching oracle `type`.
+            if (flags.oraclesModule) {
+                const summary = await loadOraclesModule(flags.oraclesModule, engine);
+                console.log(
+                    `Loaded oracle module ${summary.modulePath} ` +
+                        `(registered: ${summary.registered.join(', ') || 'none'}` +
+                        (summary.skipped.length ? `; skipped: ${summary.skipped.length}` : '') +
+                        ')',
+                );
+            }
+
             let suite;
 
             if (suiteId) {
                 // Run specific suite by ID
                 console.log(`Looking for suite by ID: ${suiteId}`);
                 suite = engine.GetTestSuiteByID(suiteId);
+                if (!suite) {
+                    // DX fallback: the positional arg is documented as accepting a suite NAME
+                    // too (`mj test suite "Integration Tests — Deterministic"`). A name is never
+                    // a valid ID, so trying the name lookup on ID-miss is unambiguous.
+                    suite = engine.GetTestSuiteByName(suiteId);
+                }
                 if (!suite) {
                     console.error(OutputFormatter.formatError(`Test suite not found: ${suiteId}`));
                     console.error(`Available suites: ${engine.TestSuites?.map(s => s.Name).join(', ') || 'none'}`);
@@ -79,23 +141,44 @@ export class SuiteCommand {
             const variables = parseVariableFlags(flags.var);
 
             // Execute suite
-            this.spinner.start(`Running test suite: ${suite.Name}...`);
+            const flakyMsg = flags.flakyCheck && flags.flakyCheck > 1
+                ? ` (flaky-check: each test ×${flags.flakyCheck})`
+                : '';
+            this.spinner.start(`Running test suite: ${suite.Name}${flakyMsg}...`);
 
-            // Note: parallel and failFast are handled by RunSuite internally
-            // We only pass the standard TestRunOptions
+            // Integration tests share process-global singletons (LocalCacheManager, its
+            // instrumented counters, UserCache, Metadata.Provider). Two bundles running
+            // concurrently in one process would corrupt each other's counters and cache slots,
+            // so integration suites MUST run strictly serially (CANONICAL D). Force serial
+            // execution under MJ_INTEGRATION_TEST=1 regardless of any --parallel flag.
+            const integrationSerial = process.env.MJ_INTEGRATION_TEST === '1';
             const result = await engine.RunSuite(suite.ID, {
                 verbose: flags.verbose,
-                variables
+                variables,
+                delayBetweenTests: flags.delay,
+                parallel: integrationSerial ? false : flags.parallel,
+                maxParallel: integrationSerial ? 1 : flags.maxParallel,
+                repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
             }, contextUser);
 
             this.spinner.stop();
 
+            // If --flaky-check was used, compute per-test variance and report flaky tests.
+            // The engine returns multiple results per test (one per iteration); we group by
+            // testId and compute score variance to identify inconsistent tests.
+            let flakyReport = '';
+            if (flags.flakyCheck && flags.flakyCheck > 1) {
+                flakyReport = this.buildFlakyReport(result.testResults, flags.flakyCheck);
+            }
+
             // Format and display result
             const output = OutputFormatter.formatSuiteResult(result, format);
             console.log(output);
+            if (flakyReport) console.log(flakyReport);
 
-            // Write to file if requested
-            OutputFormatter.writeToFile(output, flags.output);
+            // Write to file if requested (include flaky report in markdown/console output)
+            const fileOutput = flakyReport && format !== 'json' ? output + '\n' + flakyReport : output;
+            OutputFormatter.writeToFile(fileOutput, flags.output);
 
             // Clean up resources
             await closeMJProvider();
@@ -116,5 +199,76 @@ export class SuiteCommand {
 
             process.exit(1);
         }
+    }
+
+    /**
+     * Build a flaky-test summary by grouping iteration results by testId and
+     * computing score variance. A test is "flaky" if its scores vary by more
+     * than VARIANCE_THRESHOLD across iterations OR if its statuses are mixed
+     * (some Passed, some Failed).
+     *
+     * Variance threshold of 0.3 is the plan-recommended cutoff — small enough
+     * to catch real instability, large enough to ignore minor LLM judge noise.
+     */
+    private buildFlakyReport(testResults: Array<{ testId: string; testName: string; score: number; status: string }>, iterations: number): string {
+        const VARIANCE_THRESHOLD = 0.3;
+
+        // Group by testId — when --flaky-check N is used, each test produces N entries
+        const byTest = new Map<string, { name: string; scores: number[]; statuses: string[] }>();
+        for (const r of testResults) {
+            const entry = byTest.get(r.testId) ?? { name: r.testName, scores: [], statuses: [] };
+            entry.scores.push(r.score);
+            entry.statuses.push(r.status);
+            byTest.set(r.testId, entry);
+        }
+
+        // Compute variance + status mixing per test
+        type FlakyRow = { name: string; scores: number[]; statuses: string[]; variance: number; mixedStatus: boolean; flaky: boolean };
+        const rows: FlakyRow[] = [];
+        for (const [, entry] of byTest) {
+            // Skip tests that didn't actually run multiple times (e.g. if an iteration errored)
+            if (entry.scores.length < 2) continue;
+
+            const max = Math.max(...entry.scores);
+            const min = Math.min(...entry.scores);
+            const variance = max - min;
+            const uniqueStatuses = new Set(entry.statuses);
+            const mixedStatus = uniqueStatuses.size > 1;
+            const flaky = variance > VARIANCE_THRESHOLD || mixedStatus;
+            rows.push({ ...entry, variance, mixedStatus, flaky });
+        }
+
+        const flakyRows = rows.filter(r => r.flaky).sort((a, b) => b.variance - a.variance);
+
+        const lines: string[] = [];
+        lines.push('');
+        lines.push('  Flaky Test Detection');
+        lines.push('  ─────────────────────────────────────────');
+        lines.push(`  Each test ran ${iterations}× (variance threshold: ${VARIANCE_THRESHOLD})`);
+        lines.push('');
+
+        if (flakyRows.length === 0) {
+            lines.push('  ✓ No flaky tests detected — all tests produced consistent results.');
+            lines.push('');
+            return lines.join('\n');
+        }
+
+        lines.push(`  ⚠ ${flakyRows.length} flaky test(s) detected:`);
+        lines.push('');
+        for (const r of flakyRows) {
+            const reasons: string[] = [];
+            if (r.variance > VARIANCE_THRESHOLD) {
+                reasons.push(`variance ${(r.variance * 100).toFixed(0)}%`);
+            }
+            if (r.mixedStatus) {
+                reasons.push(`mixed: ${r.statuses.join('/')}`);
+            }
+            const scoresStr = r.scores.map(s => (s * 100).toFixed(0) + '%').join(', ');
+            lines.push(`  [FLAKY] ${r.name}`);
+            lines.push(`          scores: ${scoresStr}  (${reasons.join(', ')})`);
+        }
+        lines.push('');
+
+        return lines.join('\n');
     }
 }

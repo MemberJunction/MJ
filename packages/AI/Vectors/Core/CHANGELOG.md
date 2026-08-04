@@ -1,5 +1,469 @@
 # Change Log - @memberjunction/ai-vectors
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/ai-vectordb@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/ai-vectordb@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- 9efcfe6: Add `@memberjunction/ai-segmentation` — pluggable content segmentation for RAG ingestion, and fix two latent bugs in `TextChunker`.
+
+  **New package `@memberjunction/ai-segmentation`** turns chunking into a registered, swappable strategy resolved through the MJ class factory, the same way `BaseEmbeddings` and `VectorDBBase` providers already work. `BaseSegmenter` is a template-method base: a new strategy implements one method (`SegmentCore`) and the base handles validation, the token ceiling (splitting oversized segments while preserving titles and rebasing offsets), undersized merging, sequence numbering, `ParentIndex` → `ParentSequence` remapping after splits, cycle-safe depth, and provenance stamping. Ships four segmenters:
+  - `StructuralText` — markdown/HTML heading structure → sections with real parent/child hierarchy; the recommended text default.
+  - `SemanticText` — LLM topic boundaries via `AIPromptRunner` (a tracked `MJ: AI Prompt Run`), skipping the call for short documents and degrading to `StructuralText` on any failure.
+  - `Transcript` — timed cues → audio/video **chapters** with `StartMs`/`EndMs`, optional per-speaker sub-chapters, each carrying a media reference _and_ the transcript text.
+  - `FixedWindow` — universal fallback: token windows for text, duration windows for untranscribed media.
+
+  The package sits above `@memberjunction/ai-prompts` so the LLM segmenter can use real, versioned prompt metadata with cost attribution; `ai-vectors` cannot depend on `ai-prompts` (`ai-prompts → templates → ai-provider-bundle → ai-vectors-pinecone → ai-vectors` is circular).
+
+  **`@memberjunction/ai-vectors` — `TextChunker` fixes** (no API change):
+  - **Chunk offsets were wrong for repeated text.** `buildChunkFromUnits` resolved each chunk's start with `indexOf` from position 0, so any recurring sentence (boilerplate, a repeated header) made later chunks report the _first_ occurrence — a chunk truly spanning offsets 61–86 reported 0–86. Offsets are chunk provenance, so this silently corrupted the link from a search hit back to its source passage. Now resolved with a single forward-cursor pass, which is also O(n) instead of O(n²).
+  - **`chunkByFixed` could never terminate** when `OverlapTokens >= MaxChunkTokens`, because the start cursor moved backwards each iteration. Overlap is now capped at half the window and the loop guarantees forward progress.
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/ai-vectordb@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/ai-vectordb@5.49.0
+  - @memberjunction/aiengine@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/ai-vectordb@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/ai-vectordb@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/ai-vectordb@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/aiengine@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/ai-vectordb@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-vectordb@5.45.0
+  - @memberjunction/ai@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/aiengine@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/ai-vectordb@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/ai@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/aiengine@5.43.0
+  - @memberjunction/ai-vectordb@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [256ab06]
+- Updated dependencies [9b9b484]
+- Updated dependencies [e7c2437]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/aiengine@5.42.0
+  - @memberjunction/ai-vectordb@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ai@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- 1e81848: Thread the request-scoped IMetadataProvider through the duplicate-detection stack instead of falling back to the process-global provider. VectorBase now accepts a provider in its constructor and its Provider setter rebinds the internal RunView; the Metadata getter returns the provider-aware IMetadataProvider. EntityVectorSyncer forwards the provider through its constructor, DuplicateRecordDetector passes its provider to the syncer it spawns, and MJDuplicateRunEntityServer passes this.ProviderToUse into the detector and its RunView. The run-dupe-detection CLI harness uses the provider returned by setupSQLServerClient directly. Note: VectorBase.Metadata's declared type changed from the concrete Metadata wrapper to IMetadataProvider.
+- Updated dependencies [8fd6f59]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [1568bae]
+- Updated dependencies [4b3fb9d]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/aiengine@5.41.0
+  - @memberjunction/ai-core-plus@5.41.0
+  - @memberjunction/ai-vectordb@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.2
+- @memberjunction/ai-core-plus@5.40.2
+- @memberjunction/aiengine@5.40.2
+- @memberjunction/ai-vectordb@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/aiengine@5.40.1
+  - @memberjunction/ai-vectordb@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/ai@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/ai-core-plus@5.40.0
+  - @memberjunction/aiengine@5.40.0
+  - @memberjunction/ai-vectordb@5.40.0
+  - @memberjunction/ai@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [3c53858]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-vectordb@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/aiengine@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [6b6c321]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [8bd97f3]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/aiengine@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/ai-vectordb@5.38.0
+  - @memberjunction/ai@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [22b775f]
+- Updated dependencies [4f15f31]
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/ai-vectordb@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/aiengine@5.36.0
+  - @memberjunction/ai-vectordb@5.36.0
+  - @memberjunction/ai@5.36.0
+  - @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- 9580189: Fix keyset (AfterKey) pagination infinite loop in vector sync. `GenerateRunViewFingerprint` omitted `AfterKey`, so sequential keyset pages produced identical fingerprints and the dedup/linger layer returned page N's result for page N+1, freezing the seek cursor (observed on multi-page entities like a 2k-row Members table). The fingerprint now includes `AfterKey` (appended only when present, so non-keyset fingerprints are unchanged), fixing all keyset callers. The vectorizer's page reads now also set `BypassCache` since full-table sweeps read each page once, and `EntityVectorSyncer` halts with a clear error if the cursor ever fails to advance.
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/aiengine@5.35.0
+  - @memberjunction/ai-vectordb@5.35.0
+  - @memberjunction/ai@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/ai-vectordb@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Minor Changes
+
+- cfffb6d: Add keyset (seek) pagination to `RunView` via the new `RunViewParams.AfterKey: CompositeKey` field. Iterating large entities (background jobs, scheduled actions, bulk processing) now stays O(log N) per page regardless of depth — `StartRow`-based OFFSET pagination is unchanged and remains the right choice for UI grids.
+
+  **Framework changes**
+  - New `RunViewParams.AfterKey: CompositeKey` accepted by all RunView entry points (TS, GraphQL, REST flows that go through RunView).
+  - New exported error class `AfterKeyNotSupportedError` (with `Reason` codes `CompositePK | UnsupportedPKType | IncompatibleOrderBy | StartRowConflict | AfterKeyShape`).
+  - New exported helper `IsKeysetPaginationOrderableType(sqlType)` and constant `KEYSET_PAGINATION_ORDERABLE_PK_TYPES`.
+  - Keyset queries bypass server cache (read + write) automatically — they're inherently single-use so caching is pure overhead.
+  - v1 constraint: single-column PK only. Composite-PK entities throw `AfterKeyNotSupportedError` with `Reason: 'CompositePK'`.
+
+  **Migrated callers (now use keyset by default when entity has a single-column PK)**
+  - `ScheduledGeocodingAction` (`processMissingForEntity`) — falls back to OFFSET on composite-PK entities.
+  - `VectorBase.PageRecordsByEntityID` + `EntityVectorSyncer.startDataPaging` — auto-promotes to keyset when possible. New helper `VectorBase.CanUseKeysetPagination()`. New optional `PageRecordsParams.AfterKey`.
+
+  **Metadata**
+  - `Geocoding Maintenance` scheduled job cron updated to weekly (Saturdays 2 AM UTC); description reworded to not hard-code a cadence. Administrators can adjust the `CronExpression` as needed.
+
+  **Documentation**
+  - New guide: `guides/KEYSET_PAGINATION_GUIDE.md`.
+  - `CLAUDE.md` performance section updated.
+
+  **Out of scope for v1**
+  - `ExternalChangeDetection.ChangeDetector` uses `RunQuery` (saved queries with arbitrary SQL), which the framework can't safely rewrite. Stays on OFFSET; tracked as a follow-up.
+
+  **Backwards compatibility**
+  - Fully additive. Existing callers that don't pass `AfterKey` are unaffected.
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/aiengine@5.34.0
+  - @memberjunction/ai-vectordb@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/global@5.34.0
+  - @memberjunction/ai@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

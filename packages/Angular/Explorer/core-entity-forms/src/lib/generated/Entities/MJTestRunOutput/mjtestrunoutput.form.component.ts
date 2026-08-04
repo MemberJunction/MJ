@@ -17,7 +17,7 @@ export class MJTestRunOutputFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'testContext', sectionName: 'Test Context', isExpanded: true },
             { sectionKey: 'outputInformation', sectionName: 'Output Information', isExpanded: true },
-            { sectionKey: 'dataAndMedia', sectionName: 'Data and Media', isExpanded: false },
+            { sectionKey: 'dataAndMedia', sectionName: 'Data and Media', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

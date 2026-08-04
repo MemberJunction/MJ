@@ -1,0 +1,76 @@
+<!doctype html><html><head><meta charset="utf-8"><title>21 — Communications Audience</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item"><i class="fa-solid fa-house"></i> Home</div><div class="nav-item"><i class="fa-solid fa-list-check"></i> Lists</div><div class="nav-item active"><i class="fa-solid fa-message"></i> Communications</div></aside>
+<main class="main">
+  <div class="app-header"><h1><i class="fa-solid fa-message"></i> New Communication</h1><div class="spacer"></div><button class="mj-btn"><i class="fa-solid fa-floppy-disk"></i> Save Draft</button><button class="mj-btn mj-btn-primary"><i class="fa-solid fa-paper-plane"></i> Send</button></div>
+
+  <div style="display:grid; grid-template-columns: 1fr 360px; gap: 16px;">
+    <div class="mj-panel">
+      <div class="mj-panel-header"><h3><i class="fa-solid fa-envelope"></i>Message</h3></div>
+      <div class="mj-panel-body">
+        <div class="label">Channel</div>
+        <select class="mj-input mj-select mt-8" style="max-width:200px;"><option>Email · SendGrid</option><option>SMS · Twilio</option></select>
+        <div class="label mt-12">From</div>
+        <input class="mj-input mt-8" value="campaigns@bluecypress.io" style="max-width:300px;">
+        <div class="label mt-12">Subject</div>
+        <input class="mj-input mt-8" value="A note from our team — Q4 outreach">
+        <div class="label mt-12">Body</div>
+        <div style="border:1px solid var(--mj-border-default); border-radius:8px; padding:12px; min-height:200px; background:var(--mj-bg-surface); font-size:13px; margin-top:8px; line-height:1.6;">
+          <div>Hi {{FirstName}},</div>
+          <div style="margin-top:10px;">Thank you for your continued support. As one of our most valued contacts, we wanted to reach out personally about our fall outreach…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col gap-12">
+      <div class="mj-panel">
+        <div class="mj-panel-header"><h3><i class="fa-solid fa-bullseye"></i>Audience</h3></div>
+        <div class="mj-panel-body">
+          <div class="row gap-8" style="border-bottom:1px solid var(--mj-border-default); padding-bottom:8px; margin-bottom:12px;">
+            <button class="mj-btn mj-btn-sm" style="background:var(--mj-brand-primary); color:#fff; border-color:var(--mj-brand-primary); flex:1;"><i class="fa-solid fa-list"></i> List</button>
+            <button class="mj-btn mj-btn-sm" style="flex:1;"><i class="fa-solid fa-eye"></i> View</button>
+            <button class="mj-btn mj-btn-sm" style="flex:1;"><i class="fa-solid fa-filter"></i> Filter</button>
+          </div>
+          <div style="padding:12px; background:color-mix(in srgb, var(--mj-brand-primary) 8%, transparent); border:1px solid var(--mj-brand-primary); border-radius:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <i class="fa-solid fa-list" style="color:var(--mj-brand-primary)"></i>
+              <strong style="font-size:13.5px;">VIP Donors Q4 2026</strong>
+              <button class="mj-btn mj-btn-icon mj-btn-ghost" title="Change"><i class="fa-solid fa-pen"></i></button>
+            </div>
+            <div class="muted" style="font-size:11.5px; margin-top:4px;">List · Contacts · 348 members</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="label">Recipient field (To)</div>
+          <select class="mj-input mj-select mt-8">
+            <option>EmailPrimary</option>
+            <option>EmailSecondary</option>
+            <option>Email</option>
+          </select>
+          <div class="muted mt-8" style="font-size:11.5px;"><i class="fa-solid fa-circle-info"></i> Maps the Contact's <code>EmailPrimary</code> field as the message To address. <strong>12 records</strong> are missing this field and will be skipped.</div>
+
+          <div class="divider"></div>
+
+          <div class="label">Audience Summary</div>
+          <div class="mt-8" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:12px;">
+            <div style="padding:8px; background:var(--mj-bg-surface-sunken); border-radius:6px;"><div style="font-size:18px; font-weight:600;">348</div><div class="muted">Total in audience</div></div>
+            <div style="padding:8px; background:var(--mj-bg-surface-sunken); border-radius:6px;"><div style="font-size:18px; font-weight:600;">336</div><div class="muted">Will receive</div></div>
+            <div style="padding:8px; background:var(--mj-status-warning-bg); border-radius:6px;"><div style="font-size:18px; font-weight:600;">12</div><div class="muted">Missing email</div></div>
+            <div style="padding:8px; background:var(--mj-status-error-bg); border-radius:6px;"><div style="font-size:18px; font-weight:600;">0</div><div class="muted">Unsubscribed</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="mj-panel">
+        <div class="mj-panel-header"><h3><i class="fa-solid fa-clock"></i>Schedule</h3></div>
+        <div class="mj-panel-body">
+          <label class="row gap-8"><input type="radio" checked> Send now</label>
+          <label class="row gap-8 mt-8"><input type="radio"> Schedule for later</label>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</div></body></html>

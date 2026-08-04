@@ -12,7 +12,7 @@ When multiple agents run concurrently (e.g., Research Agent and Analysis Agent),
 
 ## Changes Made
 
-### File: [message-input.component.ts:600-677](packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts#L600-L677)
+### File: [message-input.component.ts:600-677](../../packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts#L600-L677)
 
 #### Added Agent Run ID Filtering
 
@@ -160,12 +160,12 @@ Check browser console for:
 
 ## Related Documentation
 
-- [concurrent-agent-progress-bug.md](docs/concurrent-agent-progress-bug.md) - Detailed root cause analysis
-- [concurrent-agent-progress-fix-implementation.md](docs/concurrent-agent-progress-fix-implementation.md) - This document
+- [concurrent-agent-progress-bug.md](concurrent-agent-progress-bug.md) - Detailed root cause analysis
+- [concurrent-agent-progress-fix-implementation.md](concurrent-agent-progress-fix-implementation.md) - This document
 
 ## Files Modified
 
-1. [message-input.component.ts:600-677](packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts#L600-L677)
+1. [message-input.component.ts:600-677](../../packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts#L600-L677)
    - Added closure variable `capturedAgentRunId`
    - Added capture logic (lines 612-616)
    - Added filter logic (lines 618-623)

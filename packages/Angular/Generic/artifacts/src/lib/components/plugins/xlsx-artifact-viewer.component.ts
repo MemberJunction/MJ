@@ -24,7 +24,7 @@ interface SheetData {
   template: `
     <div class="xlsx-viewer">
       <mj-file-artifact-toolbar
-        [fileName]="artifactVersion?.FileName || 'workbook.xlsx'"
+        [fileName]="artifactVersion.FileName || 'workbook.xlsx'"
         [isDownloading]="isDownloading"
         [showPrint]="false"
         (download)="onDownload()"

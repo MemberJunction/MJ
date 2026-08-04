@@ -1,9 +1,10 @@
-import { IMetadataProvider, IRunViewProvider, LogError, RunMaybeSerial, UserInfo } from "@memberjunction/core";
+import { IMetadataProvider, IRunViewProvider, LogError, RunMaybeSerial, UserInfo, DatabasePlatform } from "@memberjunction/core";
 import {
     MJQueryParameterEntity,
     MJQueryFieldEntity,
     MJQueryEntityEntity,
     MJQueryDependencyEntity,
+    QueryEngine,
 } from "@memberjunction/core-entities";
 import { UUIDsEqual } from "@memberjunction/global";
 import type {
@@ -60,9 +61,22 @@ function normalizeParamType(
 }
 
 /**
- * Maps a generic field type to a SQL base/full type pair.
+ * Maps a generic field type to a SQL base/full type pair appropriate for the given platform.
  */
-function defaultSQLTypesForField(fieldType: string): { baseType: string; fullType: string } {
+function defaultSQLTypesForField(fieldType: string, platform: DatabasePlatform = 'sqlserver'): { baseType: string; fullType: string } {
+    if (platform === 'postgresql') {
+        switch (fieldType) {
+            case 'number':
+                return { baseType: 'numeric', fullType: 'numeric(18,2)' };
+            case 'date':
+                return { baseType: 'timestamptz', fullType: 'timestamptz' };
+            case 'boolean':
+                return { baseType: 'boolean', fullType: 'boolean' };
+            default:
+                return { baseType: 'varchar', fullType: 'text' };
+        }
+    }
+    // SQL Server defaults
     switch (fieldType) {
         case 'number':
             return { baseType: 'decimal', fullType: 'decimal(18,2)' };
@@ -225,7 +239,8 @@ export async function SyncFields(
     contextUser: UserInfo,
     metadataProvider: IMetadataProvider,
     runViewProvider: IRunViewProvider,
-    isSaved: boolean
+    isSaved: boolean,
+    platform: DatabasePlatform = 'sqlserver'
 ): Promise<void> {
     try {
         const existingFields = await loadExistingRecords<MJQueryFieldEntity>(
@@ -252,7 +267,7 @@ export async function SyncFields(
             const newField = await metadataProvider.GetEntityObject<MJQueryFieldEntity>(
                 'MJ: Query Fields', contextUser
             );
-            applyFieldValues(newField, queryID, field, i + 1, metadataProvider);
+            applyFieldValues(newField, queryID, field, i + 1, metadataProvider, platform);
             factories.push(() => newField.Save());
         }
 
@@ -289,7 +304,8 @@ function applyFieldValues(
     queryID: string,
     field: ExtractedField,
     sequence: number,
-    md: IMetadataProvider
+    md: IMetadataProvider,
+    platform: DatabasePlatform = 'sqlserver'
 ): void {
     entity.QueryID = queryID;
     entity.Name = field.name;
@@ -301,7 +317,7 @@ function applyFieldValues(
         entity.SQLBaseType = field.sqlBaseType;
         entity.SQLFullType = field.sqlFullType;
     } else {
-        const { baseType, fullType } = defaultSQLTypesForField(field.type);
+        const { baseType, fullType } = defaultSQLTypesForField(field.type, platform);
         entity.SQLBaseType = baseType;
         entity.SQLFullType = fullType;
     }
@@ -333,6 +349,14 @@ function updateFieldIfChanged(
     md: IMetadataProvider
 ): boolean {
     let hasChanges = false;
+
+    // Update name if casing changed (e.g. PascalCase → lowercase for PG).
+    // QueryField names must match the SQL output exactly because result row
+    // property access is case-sensitive — row["JoinYear"] vs row["joinyear"].
+    if (existing.Name !== extracted.name) {
+        existing.Name = extracted.name;
+        hasChanges = true;
+    }
 
     if (existing.Description !== extracted.description) {
         existing.Description = extracted.description;
@@ -623,7 +647,20 @@ export async function RemoveAllRecords(
  * Loads all existing records of a given entity type for a query.
  * Returns an empty array if the query has not been saved yet.
  */
-async function loadExistingRecords<T>(
+/**
+ * Loads existing child records for a query.
+ *
+ * Prefers QueryEngine's in-memory cache when it is loaded (long-running MJAPI
+ * server): the engine already holds every query child and auto-refreshes via
+ * BaseEntity events, so we avoid a redundant RunView per save. When the cache
+ * is NOT loaded — typically a short-lived CLI process such as `mj sync push`
+ * or `mj codegen`, where QueryEngine was never `Config()`'d — we must read the
+ * authoritative state from the database. Trusting the empty cache there
+ * misclassifies already-persisted children as new and re-INSERTs them, hitting
+ * `UQ_QueryParameter_QueryID_Name` (and the sibling unique constraints), which
+ * on PostgreSQL aborts the entire push transaction and rolls back the run.
+ */
+async function loadExistingRecords<T extends { QueryID: string }>(
     entityName: string,
     queryID: string,
     runViewProvider: IRunViewProvider,
@@ -632,15 +669,31 @@ async function loadExistingRecords<T>(
 ): Promise<T[]> {
     if (!isSaved) return [];
 
-    const result = await runViewProvider.RunView<T>({
+    const qe = QueryEngine.Instance;
+    if (qe.Loaded) {
+        switch (entityName) {
+            case 'MJ: Query Parameters':
+                return qe.GetQueryParameters(queryID) as unknown as T[];
+            case 'MJ: Query Fields':
+                return qe.GetQueryFields(queryID) as unknown as T[];
+            case 'MJ: Query Entities':
+                return qe.QueryEntities.filter(e => UUIDsEqual(e.QueryID, queryID)) as unknown as T[];
+            case 'MJ: Query Dependencies':
+                return qe.Dependencies.filter(d => UUIDsEqual(d.QueryID, queryID)) as unknown as T[];
+            default:
+                return [];
+        }
+    }
+
+    // Cache cold — read straight from the DB so the add/update/remove delta is
+    // computed against real persisted state, not an empty cache.
+    const result = await runViewProvider.RunView({
         EntityName: entityName,
         ExtraFilter: `QueryID='${queryID}'`,
         ResultType: 'entity_object'
     }, contextUser);
-
     if (!result.Success) {
-        throw new Error(`Failed to load existing ${entityName}: ${result.ErrorMessage}`);
+        throw new Error(`Failed to load existing ${entityName} for query ${queryID}: ${result.ErrorMessage}`);
     }
-
-    return result.Results || [];
+    return (result.Results || []) as unknown as T[];
 }

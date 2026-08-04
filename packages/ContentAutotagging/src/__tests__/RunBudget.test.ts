@@ -76,4 +76,64 @@ describe('RunBudget', () => {
         expect(snap.tokens).toBe(0);
         expect(snap.cost).toBe(0);
     });
+
+    describe('MaxItemsPerRun', () => {
+        it('returns ok when MaxItemsPerRun unset, regardless of items processed', () => {
+            const b = new RunBudget({});
+            b.recordItemsProcessed(10_000);
+            expect(b.checkBudgets().ok).toBe(true);
+        });
+
+        it('flags MaxItemsPerRunExceeded once item count reaches the cap', () => {
+            const b = new RunBudget({ MaxItemsPerRun: 5 });
+            b.recordItemsProcessed(3);
+            expect(b.checkBudgets().ok).toBe(true);
+            b.recordItemsProcessed(2);
+            const verdict = b.checkBudgets();
+            expect(verdict.ok).toBe(false);
+            expect(verdict.reason).toBe('MaxItemsPerRunExceeded');
+            expect(verdict.details).toContain('5/5');
+        });
+
+        it('accumulates across multiple recordItemsProcessed calls', () => {
+            const b = new RunBudget({ MaxItemsPerRun: 10 });
+            for (let i = 0; i < 4; i++) b.recordItemsProcessed(2);
+            expect(b.checkBudgets().ok).toBe(true);
+            expect(b.snapshot().items).toBe(8);
+            b.recordItemsProcessed(3);
+            expect(b.checkBudgets().ok).toBe(false);
+            expect(b.snapshot().items).toBe(11);
+        });
+
+        it('items takes priority over other reasons when multiple breached', () => {
+            // Priority order is items → tags → tokens → cost — the items knob is
+            // most user-facing so it wins reporting when several caps trip together.
+            const b = new RunBudget({
+                MaxItemsPerRun: 1,
+                MaxNewTagsPerRun: 1,
+                MaxTokensPerRun: 1,
+                MaxCostPerRun: 1,
+            });
+            b.recordItemsProcessed(1);
+            b.recordTagCreated();
+            b.recordTokens(1);
+            b.recordCost(1);
+            expect(b.checkBudgets().reason).toBe('MaxItemsPerRunExceeded');
+        });
+
+        it('ignores non-positive recordItemsProcessed', () => {
+            const b = new RunBudget({ MaxItemsPerRun: 5 });
+            b.recordItemsProcessed(-3);
+            b.recordItemsProcessed(NaN);
+            b.recordItemsProcessed(0);
+            expect(b.snapshot().items).toBe(0);
+            expect(b.checkBudgets().ok).toBe(true);
+        });
+
+        it('snapshot reports items counter', () => {
+            const b = new RunBudget({});
+            b.recordItemsProcessed(7);
+            expect(b.snapshot().items).toBe(7);
+        });
+    });
 });

@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Realtime Voice Widget — UX Redesign · 3 Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style>
+  /* ============================================================= MJ design tokens (subset) + redesign palette */
+  :root{
+    --mj-brand:#0076b6; --mj-brand-2:#23a7e6; --mj-brand-deep:#004c78;
+    --mj-skip:#5cc0ed; --teal:#34d1bf; --violet:#8b7cf6; --amber:#f5b14c;
+    --ok:#34c759; --warn:#ff9f0a; --err:#ff5a5f;
+    --ink:#0b1220; --ink-2:#131c2e;
+    --txt:#eaf1fb; --txt-2:#a9b6cc; --txt-3:#76849c;
+    --glass:rgba(255,255,255,.06); --glass-2:rgba(255,255,255,.10);
+    --hair:rgba(255,255,255,.10); --hair-2:rgba(255,255,255,.16);
+    --radius:22px; --radius-sm:14px;
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --shadow:0 30px 80px -30px rgba(0,0,0,.7);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:var(--font);background:#0a0e17;color:var(--txt);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+
+  /* ============================================================= page chrome */
+  .topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+    padding:14px 22px;background:rgba(10,14,23,.82);backdrop-filter:blur(18px);border-bottom:1px solid var(--hair)}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:800;letter-spacing:-.02em}
+  .brand .dot{width:30px;height:30px;border-radius:9px;background:conic-gradient(from 200deg,var(--mj-brand),var(--mj-skip),var(--teal),var(--mj-brand));
+    box-shadow:0 0 22px -2px var(--mj-brand)}
+  .brand small{display:block;font-weight:500;font-size:11px;color:var(--txt-3);letter-spacing:.02em}
+  .seg{display:flex;gap:4px;padding:4px;background:var(--glass);border:1px solid var(--hair);border-radius:13px}
+  .seg button{appearance:none;border:0;background:transparent;color:var(--txt-2);font-family:inherit;font-weight:600;font-size:12.5px;
+    padding:8px 13px;border-radius:9px;cursor:pointer;transition:.18s;white-space:nowrap;display:flex;align-items:center;gap:7px}
+  .seg button:hover{color:var(--txt)}
+  .seg button.on{background:linear-gradient(180deg,var(--glass-2),transparent);color:#fff;box-shadow:inset 0 0 0 1px var(--hair-2)}
+  .seg.brandsel button.on{background:linear-gradient(180deg,var(--mj-brand),var(--mj-brand-deep));color:#fff;box-shadow:0 8px 22px -8px var(--mj-brand)}
+  .seg .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--txt-3);align-self:center;padding-left:6px;font-weight:700}
+  .spacer{flex:1}
+  .hint{font-size:11.5px;color:var(--txt-3)}
+  .hint kbd{background:var(--glass-2);border:1px solid var(--hair);border-radius:6px;padding:1px 6px;font-family:var(--font);font-size:10.5px;color:var(--txt-2)}
+
+  /* ============================================================= stage */
+  .stage{position:relative;min-height:calc(100vh - 64px);display:grid;grid-template-columns:1fr 360px;gap:0}
+  @media(max-width:1100px){.stage{grid-template-columns:1fr}.notes{display:none}}
+  .canvas{position:relative;overflow:hidden;display:grid;place-items:stretch;padding:42px;min-height:calc(100vh - 64px);
+    background:
+      radial-gradient(1200px 700px at 18% -10%, rgba(35,167,230,.16), transparent 60%),
+      radial-gradient(1000px 800px at 110% 120%, rgba(139,124,246,.14), transparent 55%),
+      linear-gradient(160deg,#0b101b,#080b13 60%)}
+  /* faux app behind the overlay */
+  .appbg{position:absolute;inset:0;opacity:.5;filter:saturate(.7)}
+  .appbg .row{position:absolute;height:14px;border-radius:7px;background:linear-gradient(90deg,var(--glass-2),transparent)}
+  .appbg .card{position:absolute;border-radius:18px;background:var(--glass);border:1px solid var(--hair)}
+  .scrim{position:absolute;inset:0;background:radial-gradient(900px 600px at 78% 78%, rgba(0,0,0,.55), rgba(4,6,11,.78))}
+
+  /* shared building blocks --------------------------------------------------- */
+  .orb{position:relative;border-radius:50%;display:grid;place-items:center;
+    background:radial-gradient(circle at 35% 30%, #bfe6ff 0%, var(--mj-brand-2) 30%, var(--mj-brand) 60%, var(--mj-brand-deep) 100%);
+    box-shadow:0 0 0 1px rgba(255,255,255,.25) inset, 0 20px 60px -10px var(--mj-brand), 0 0 90px -10px var(--mj-brand-2)}
+  .orb::before,.orb::after{content:"";position:absolute;inset:-14%;border-radius:50%;border:1.5px solid rgba(91,192,237,.5);
+    animation:ring 3.4s ease-out infinite}
+  .orb::after{animation-delay:1.7s}
+  @keyframes ring{0%{transform:scale(.8);opacity:.7}100%{transform:scale(1.7);opacity:0}}
+  [data-state="speaking"] .orb{animation:breathe 1.1s ease-in-out infinite}
+  [data-state="listening"] .orb{animation:breathe 3.2s ease-in-out infinite}
+  @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+  [data-state="connecting"] .orb{filter:saturate(.6) brightness(.8)}
+  [data-state="connecting"] .orb::before,[data-state="connecting"] .orb::after{animation:none;opacity:0}
+
+  .eq{display:flex;align-items:flex-end;gap:3px;height:26px}
+  .eq i{width:3px;border-radius:3px;background:linear-gradient(180deg,var(--mj-skip),var(--mj-brand));animation:eq 1s ease-in-out infinite}
+  .eq i:nth-child(1){animation-delay:-.9s}.eq i:nth-child(2){animation-delay:-.2s}.eq i:nth-child(3){animation-delay:-.5s}
+  .eq i:nth-child(4){animation-delay:-.7s}.eq i:nth-child(5){animation-delay:-.1s}.eq i:nth-child(6){animation-delay:-.6s}
+  .eq i:nth-child(7){animation-delay:-.3s}.eq i:nth-child(8){animation-delay:-.8s}.eq i:nth-child(9){animation-delay:-.4s}
+  @keyframes eq{0%,100%{height:5px}50%{height:26px}}
+  [data-state="listening"] .eq i{background:linear-gradient(180deg,var(--teal),var(--mj-brand));animation-duration:1.6s}
+  [data-state="connecting"] .eq{opacity:.25}[data-state="connecting"] .eq i{animation:none;height:6px}
+
+  .statechip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--txt-2);
+    padding:5px 11px;border-radius:999px;background:var(--glass);border:1px solid var(--hair)}
+  .statechip .pulse{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal)}
+  [data-state="speaking"] .statechip .pulse{background:var(--mj-skip);box-shadow:0 0 10px var(--mj-skip);animation:blink .9s infinite}
+  [data-state="connecting"] .statechip .pulse{background:var(--amber);box-shadow:0 0 10px var(--amber);animation:blink .7s infinite}
+  @keyframes blink{50%{opacity:.3}}
+
+  .cap{font-size:14.5px;line-height:1.5;color:var(--txt);text-align:center}
+  .cap .muted{color:var(--txt-3)}
+
+  /* control buttons */
+  .ctl{appearance:none;border:0;cursor:pointer;font-family:inherit;color:var(--txt);display:grid;place-items:center;
+    background:var(--glass);border:1px solid var(--hair-2);border-radius:50%;transition:.16s;backdrop-filter:blur(8px)}
+  .ctl:hover{background:var(--glass-2);transform:translateY(-1px)}
+  .ctl.lg{width:62px;height:62px;font-size:20px}
+  .ctl.md{width:48px;height:48px;font-size:16px}
+  .ctl.sm{width:38px;height:38px;font-size:14px}
+  .ctl.end{background:linear-gradient(180deg,#ff6b70,var(--err));border-color:transparent;box-shadow:0 12px 30px -10px var(--err)}
+  .ctl.end:hover{filter:brightness(1.07)}
+  .ctl.prim{background:linear-gradient(180deg,var(--mj-brand-2),var(--mj-brand));border-color:transparent}
+  .ctl.active{background:linear-gradient(180deg,var(--mj-brand),var(--mj-brand-deep));border-color:transparent;color:#fff}
+  .ctl small{position:absolute}
+  .pill-btn{appearance:none;border:1px solid var(--hair-2);background:var(--glass);color:var(--txt);font-family:inherit;font-weight:600;
+    font-size:12.5px;padding:9px 15px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:.16s}
+  .pill-btn:hover{background:var(--glass-2)}
+  .pill-btn.end{background:linear-gradient(180deg,#ff6b70,var(--err));border-color:transparent;color:#fff;box-shadow:0 10px 24px -10px var(--err)}
+
+  /* transcript bubbles */
+  .thread{display:flex;flex-direction:column;gap:11px}
+  .msg{max-width:84%;font-size:13.5px;line-height:1.5;padding:11px 14px;border-radius:16px}
+  .msg.ai{align-self:flex-start;background:var(--glass);border:1px solid var(--hair);border-bottom-left-radius:5px;color:var(--txt)}
+  .msg.me{align-self:flex-end;background:linear-gradient(180deg,var(--mj-brand),var(--mj-brand-deep));border-bottom-right-radius:5px;color:#fff}
+  .msg .who{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--txt-3);margin-bottom:3px;font-weight:700}
+  .msg.me .who{color:rgba(255,255,255,.7)}
+
+  /* avatar */
+  .ava{border-radius:50%;background:radial-gradient(circle at 35% 30%,#bfe6ff,var(--mj-brand) 60%,var(--mj-brand-deep));
+    display:grid;place-items:center;color:#fff;font-weight:800;box-shadow:0 6px 18px -6px var(--mj-brand)}
+
+  /* connecting shimmer skeleton */
+  .skel{background:linear-gradient(90deg,var(--glass) 25%,var(--glass-2) 50%,var(--glass) 75%);background-size:200% 100%;
+    animation:shimmer 1.4s infinite;border-radius:8px}
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+  /* ============================================================= the "device" frames */
+  .frames{position:relative;width:100%;min-height:calc(100vh - 148px);display:flex;align-items:center;justify-content:center}
+  .frame{display:none;width:100%}
+  .frame.show{display:flex;align-items:center;justify-content:center;animation:pop .4s cubic-bezier(.2,.9,.3,1.1)}
+  @keyframes pop{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+
+  /* overlay device — narrow floating panel bottom-right */
+  .overlay-dev{width:390px;height:620px;border-radius:26px;overflow:hidden;position:relative;
+    border:1px solid var(--hair-2);box-shadow:var(--shadow);background:linear-gradient(165deg,var(--ink-2),var(--ink))}
+  .overlay-dev .titlebar{display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid var(--hair);
+    background:rgba(255,255,255,.03)}
+  .overlay-dev .titlebar .nm{font-weight:700;font-size:13.5px}
+  .overlay-dev .titlebar .tbtns{margin-left:auto;display:flex;gap:6px}
+
+  /* fullscreen device — big */
+  .fs-dev{width:min(1040px,92%);height:min(640px,82vh);border-radius:24px;overflow:hidden;position:relative;
+    border:1px solid var(--hair-2);box-shadow:var(--shadow)}
+
+  /* ============================================================= APPROACH A — CALM ORB */
+  .A{position:absolute;inset:0;display:flex;flex-direction:column;
+    background:radial-gradient(120% 90% at 50% 0%,#10243a,#0a1422 55%,#070b13)}
+  .A .a-top{display:flex;align-items:center;gap:10px;padding:16px 18px}
+  .A .a-top .mini{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--txt-2);font-weight:600}
+  .A .a-top .mini .ava{width:24px;height:24px;font-size:11px}
+  .A .a-top .right{margin-left:auto;display:flex;gap:8px;opacity:.0;transition:.3s} /* auto-hide */
+  .A:hover .a-top .right{opacity:1}
+  .A .a-stage{flex:1;display:grid;place-items:center;align-content:center;gap:22px;padding:10px 26px}
+  .A .a-stage .orb{width:128px;height:128px}
+  .A .fs-orb .orb{width:180px;height:180px}
+  .A .a-name{font-size:20px;font-weight:700;letter-spacing:-.02em;text-align:center}
+  .A .a-cap{max-width:440px;min-height:44px}
+  .A .a-dock{display:flex;align-items:center;justify-content:center;gap:14px;padding:18px;
+    background:linear-gradient(180deg,transparent,rgba(0,0,0,.35))}
+  .A .a-more{position:relative}
+  .A .a-sheet{position:absolute;bottom:74px;left:50%;transform:translateX(-50%) translateY(8px);opacity:0;pointer-events:none;
+    display:flex;gap:10px;padding:10px;border-radius:18px;background:rgba(12,20,34,.92);border:1px solid var(--hair-2);
+    box-shadow:var(--shadow);transition:.22s}
+  .A .a-more.open .a-sheet{opacity:1;pointer-events:auto;transform:translateX(-50%)}
+  .A .a-sheet .ctl small{position:static;font-size:9px;color:var(--txt-3);margin-top:3px}
+  .A .conn{display:grid;place-items:center;gap:18px}
+  .A .conn .dots{display:flex;gap:8px}
+  .A .conn .dots i{width:9px;height:9px;border-radius:50%;background:var(--mj-skip);animation:rise 1s infinite}
+  .A .conn .dots i:nth-child(2){animation-delay:.15s}.A .conn .dots i:nth-child(3){animation-delay:.3s}
+  @keyframes rise{0%,100%{transform:translateY(0);opacity:.4}50%{transform:translateY(-8px);opacity:1}}
+
+  /* fullscreen A: cinematic, optional right rail */
+  .A.fs .a-stage{grid-template-columns:1fr;position:relative}
+  .A .a-rail{position:absolute;top:0;right:0;width:330px;height:100%;background:rgba(7,11,19,.6);border-left:1px solid var(--hair);
+    backdrop-filter:blur(12px);padding:20px;overflow:auto;transform:translateX(100%);transition:.3s}
+  .A.fs.rail .a-rail{transform:none}
+  .A .a-railbtn{position:absolute;top:18px;right:18px}
+
+  /* ============================================================= APPROACH B — COMMAND CONSOLE */
+  .B{position:absolute;inset:0;display:flex;flex-direction:column;background:linear-gradient(180deg,#0e1626,#0a111d)}
+  .B .b-head{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--hair)}
+  .B .b-head .ava{width:38px;height:38px;font-size:14px;position:relative}
+  .B .b-head .ava .live{position:absolute;right:-2px;bottom:-2px;width:12px;height:12px;border-radius:50%;background:var(--teal);
+    border:2px solid #0e1626;box-shadow:0 0 8px var(--teal)}
+  .B .b-head .id .n{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}
+  .B .b-head .id .badge{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mj-skip);
+    background:rgba(92,192,237,.14);padding:2px 7px;border-radius:6px}
+  .B .b-head .id .sub{font-size:11.5px;color:var(--txt-3)}
+  .B .b-head .hbtns{margin-left:auto;display:flex;gap:6px}
+  .B .b-body{flex:1;overflow:auto;padding:18px 16px}
+  .B .b-cap{margin:6px 2px 14px;padding:10px 13px;border-radius:12px;background:rgba(92,192,237,.08);border:1px solid rgba(92,192,237,.18);
+    font-size:13px;color:var(--txt);display:flex;gap:9px;align-items:flex-start}
+  .B .b-cap i{color:var(--mj-skip);margin-top:2px}
+  .B .b-dock{padding:13px 14px;border-top:1px solid var(--hair);background:rgba(255,255,255,.02);display:flex;align-items:center;gap:11px}
+  .B .b-cluster{display:flex;gap:3px;padding:4px;background:var(--glass);border:1px solid var(--hair);border-radius:14px}
+  .B .b-cluster .ctl{border:0;background:transparent;border-radius:10px}
+  .B .b-cluster .ctl.active{background:linear-gradient(180deg,var(--mj-brand),var(--mj-brand-deep))}
+  .B .b-input{flex:1;display:flex;align-items:center;gap:8px;padding:0 14px;height:46px;background:var(--glass);border:1px solid var(--hair);border-radius:14px;color:var(--txt-3);font-size:13px}
+  .B .b-expand{margin-left:auto}
+  .B .b-conn{flex:1;display:grid;place-items:center;align-content:center;gap:16px}
+  .B .b-conn .bar{width:200px;height:5px;border-radius:3px;background:var(--glass);overflow:hidden}
+  .B .b-conn .bar i{display:block;height:100%;width:40%;border-radius:3px;background:linear-gradient(90deg,var(--mj-brand),var(--mj-skip));animation:load 1.3s ease-in-out infinite}
+  @keyframes load{0%{transform:translateX(-120%)}100%{transform:translateX(320%)}}
+
+  /* fullscreen B: two-pane console */
+  .B.fs{flex-direction:row}
+  .B.fs .b-left{flex:1;display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--hair)}
+  .B.fs .b-right{width:46%;display:flex;flex-direction:column;background:linear-gradient(180deg,#0b1320,#091019)}
+  .B .b-tabs{display:flex;gap:4px;padding:12px 14px;border-bottom:1px solid var(--hair)}
+  .B .b-tab{font-size:12px;font-weight:600;color:var(--txt-2);padding:8px 13px;border-radius:10px;cursor:pointer;display:flex;gap:8px;align-items:center}
+  .B .b-tab.on{background:var(--glass-2);color:#fff;box-shadow:inset 0 0 0 1px var(--hair-2)}
+  .B .b-canvas{flex:1;margin:14px;border-radius:16px;border:1px dashed var(--hair-2);display:grid;place-items:center;color:var(--txt-3);
+    background:repeating-linear-gradient(45deg,rgba(255,255,255,.015) 0 12px,transparent 12px 24px)}
+  .B .b-drawer{position:absolute;top:0;right:0;height:100%;width:300px;background:rgba(8,12,20,.96);border-left:1px solid var(--hair-2);
+    box-shadow:var(--shadow);padding:18px;transform:translateX(100%);transition:.28s;z-index:5}
+  .B.drawer .b-drawer{transform:none}
+  .drawer-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--hair);font-size:13px}
+  .switch{width:38px;height:22px;border-radius:999px;background:var(--glass-2);border:1px solid var(--hair);position:relative;cursor:pointer}
+  .switch.on{background:var(--mj-brand)}
+  .switch i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.18s}
+  .switch.on i{left:18px}
+
+  /* ============================================================= APPROACH C — FLOATING GLASS */
+  .C{position:absolute;inset:0;overflow:hidden;
+    background:
+      radial-gradient(700px 500px at 20% 15%,rgba(52,209,191,.18),transparent 60%),
+      radial-gradient(700px 600px at 85% 90%,rgba(139,124,246,.20),transparent 60%),
+      linear-gradient(160deg,#0c1424,#0a0f1b)}
+  .C .c-surface{position:absolute;inset:0;opacity:.5;
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,.03) 0 1px,transparent 1px 26px),
+              repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0 1px,transparent 1px 26px)}
+  .glass{background:rgba(20,28,46,.55);backdrop-filter:blur(20px) saturate(1.2);border:1px solid var(--hair-2);
+    box-shadow:0 18px 50px -22px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.08)}
+  .C .c-orbwrap{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);display:grid;place-items:center;gap:14px}
+  .C .c-orbwrap .orb{width:108px;height:108px}
+  .C.fs .c-orbwrap{top:42%}.C.fs .c-orbwrap .orb{width:150px;height:150px}
+  .C .c-name{font-weight:700;font-size:16px}
+  .C .c-float-cap{position:absolute;left:50%;bottom:128px;transform:translateX(-50%);max-width:80%;padding:11px 16px;border-radius:16px;font-size:13.5px;text-align:center}
+  .C .c-bar{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;
+    padding:10px;border-radius:999px}
+  .C .c-bar .ctl{background:rgba(255,255,255,.07)}
+  .C .c-chips{position:absolute;left:50%;bottom:84px;transform:translateX(-50%) translateY(8px);display:flex;gap:9px;opacity:0;pointer-events:none;transition:.22s}
+  .C .c-bar.exp + .c-chips,.C .c-chips.open{opacity:1;pointer-events:auto;transform:translateX(-50%)}
+  .C .c-thread{position:absolute;left:18px;right:18px;bottom:96px;max-height:40%;overflow:auto;display:flex;flex-direction:column;gap:9px;
+    -webkit-mask-image:linear-gradient(180deg,transparent,#000 18%)}
+  .C.fs .c-thread{left:auto;right:26px;width:340px;top:26px;bottom:auto;max-height:46%;mask-image:none;-webkit-mask-image:none;
+    padding:16px;border-radius:18px}
+  .C .c-activity{position:absolute;left:26px;top:26px;width:280px;padding:16px;border-radius:18px;display:none}
+  .C.fs .c-activity{display:block}
+  .C .c-activity h6{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--txt-3);margin-bottom:10px}
+  .C .c-act-item{display:flex;gap:10px;align-items:center;font-size:12.5px;padding:7px 0}
+  .C .c-act-item .ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:11px;flex-shrink:0}
+  .C .c-conn{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;gap:16px;text-align:center}
+  .C .c-conn .ring{width:90px;height:90px;border-radius:50%;border:3px solid var(--hair);border-top-color:var(--mj-skip);animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ============================================================= notes panel */
+  .notes{padding:26px 24px;border-left:1px solid var(--hair);background:#0a0e17;overflow:auto;height:calc(100vh - 64px);position:sticky;top:64px}
+  .notes h2{font-size:18px;letter-spacing:-.02em;margin-bottom:4px;display:flex;align-items:center;gap:10px}
+  .notes h2 .tag{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;padding:3px 8px;border-radius:7px;color:#fff}
+  .notes .sub{color:var(--txt-3);font-size:12.5px;margin-bottom:18px}
+  .notes section{display:none}.notes section.show{display:block}
+  .notes h4{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--txt-3);margin:20px 0 9px;font-weight:700}
+  .notes p{font-size:13px;line-height:1.6;color:var(--txt-2);margin-bottom:10px}
+  .notes ul{list-style:none;display:flex;flex-direction:column;gap:8px}
+  .notes li{font-size:12.5px;line-height:1.45;color:var(--txt-2);padding-left:20px;position:relative}
+  .notes li::before{content:"";position:absolute;left:4px;top:7px;width:6px;height:6px;border-radius:50%;background:var(--mj-brand-2)}
+  .notes li b{color:var(--txt)}
+  .codeprop{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;background:var(--glass);border:1px solid var(--hair);
+    border-radius:8px;padding:10px 12px;color:var(--mj-skip);line-height:1.7;white-space:pre-wrap;margin-top:8px}
+  .codeprop .c{color:var(--txt-3)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
+  .legend span{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--txt-2)}
+  .legend .k{width:11px;height:11px;border-radius:3px}
+
+  .tagA{background:linear-gradient(90deg,#10243a,#1c4e7a)} .tagB{background:linear-gradient(90deg,#1b2a44,#2b6cab)} .tagC{background:linear-gradient(90deg,#1c3a48,#6a5bd6)}
+</style>
+</head>
+<body data-approach="A" data-mode="overlay" data-state="listening">
+
+  <!-- ============================================================ TOP BAR -->
+  <div class="topbar">
+    <div class="brand"><div class="dot"></div><div>Realtime Voice Widget<small>UX redesign · 3 divergent directions · MemberJunction</small></div></div>
+    <div class="spacer"></div>
+
+    <div class="seg brandsel" id="segApproach">
+      <span class="lbl">Direction</span>
+      <button data-approach="A" class="on"><i class="fa-solid fa-circle-dot"></i> Calm Orb</button>
+      <button data-approach="B"><i class="fa-solid fa-table-columns"></i> Command Console</button>
+      <button data-approach="C"><i class="fa-solid fa-layer-group"></i> Floating Glass</button>
+    </div>
+
+    <div class="seg" id="segMode">
+      <span class="lbl">Mode</span>
+      <button data-mode="overlay" class="on"><i class="fa-regular fa-window-restore"></i> Overlay</button>
+      <button data-mode="full"><i class="fa-solid fa-expand"></i> Full screen</button>
+    </div>
+
+    <div class="seg" id="segState">
+      <span class="lbl">State</span>
+      <button data-state="connecting"><i class="fa-solid fa-spinner"></i> Connecting</button>
+      <button data-state="listening" class="on"><i class="fa-solid fa-ear-listen"></i> Listening</button>
+      <button data-state="speaking"><i class="fa-solid fa-waveform-lines"></i> Speaking</button>
+    </div>
+  </div>
+
+  <!-- ============================================================ STAGE -->
+  <div class="stage">
+    <div class="canvas">
+      <!-- faux app backdrop -->
+      <div class="appbg">
+        <div class="card" style="left:5%;top:9%;width:24%;height:62%"></div>
+        <div class="card" style="left:32%;top:9%;width:60%;height:30%"></div>
+        <div class="card" style="left:32%;top:43%;width:60%;height:48%"></div>
+        <div class="row" style="left:35%;top:14%;width:30%"></div>
+        <div class="row" style="left:35%;top:20%;width:18%"></div>
+      </div>
+      <div class="scrim"></div>
+
+      <div class="frames">
+
+        <!-- ====================== A · OVERLAY ====================== -->
+        <div class="frame fr" data-fapproach="A" data-fmode="overlay">
+          <div class="overlay-dev">
+            <div class="A">
+              <div class="a-top">
+                <div class="mini"><span class="ava">S</span> Sage <span class="statechip"><span class="pulse"></span><span class="lbl-state">Listening</span></span></div>
+                <div class="right"><button class="ctl sm" title="Captions"><i class="fa-solid fa-closed-captioning"></i></button>
+                  <button class="ctl sm" title="Minimize"><i class="fa-solid fa-minus"></i></button></div>
+              </div>
+              <!-- live -->
+              <div class="a-stage live-only">
+                <div class="orb"></div>
+                <div class="a-name">Sage</div>
+                <div class="eq"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                <div class="cap a-cap"><span class="cap-text">“Sure — I can pull the renewal numbers for you. Want them by region or by plan?”</span></div>
+              </div>
+              <!-- connecting -->
+              <div class="a-stage conn-only" style="display:none">
+                <div class="conn"><div class="orb"></div><div class="cap muted">Connecting to Sage…</div><div class="dots"><i></i><i></i><i></i></div></div>
+              </div>
+              <div class="a-dock">
+                <div class="a-more" id="aMore">
+                  <div class="a-sheet">
+                    <button class="ctl md"><i class="fa-solid fa-closed-captioning"></i><small>Captions</small></button>
+                    <button class="ctl md"><i class="fa-solid fa-keyboard"></i><small>Type</small></button>
+                    <button class="ctl md"><i class="fa-solid fa-table-columns"></i><small>Surface</small></button>
+                  </div>
+                  <button class="ctl md" onclick="document.getElementById('aMore').classList.toggle('open')"><i class="fa-solid fa-ellipsis"></i></button>
+                </div>
+                <button class="ctl lg" title="Mute"><i class="fa-solid fa-microphone"></i></button>
+                <button class="ctl lg end" title="End"><i class="fa-solid fa-phone-slash"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ====================== A · FULL ====================== -->
+        <div class="frame fr" data-fapproach="A" data-fmode="full">
+          <div class="fs-dev">
+            <div class="A fs rail-host">
+              <div class="a-top">
+                <div class="mini"><span class="ava">S</span> Voice for Sage <span class="statechip"><span class="pulse"></span><span class="lbl-state">Listening</span></span>
+                  <span style="color:var(--txt-3);font-size:11px">· GPT Realtime</span></div>
+                <div class="right" style="opacity:1"><button class="ctl sm"><i class="fa-solid fa-closed-captioning"></i></button>
+                  <button class="ctl sm" id="aRailBtn"><i class="fa-solid fa-list-timeline"></i></button>
+                  <button class="ctl sm"><i class="fa-solid fa-gear"></i></button>
+                  <button class="ctl sm"><i class="fa-solid fa-minus"></i></button></div>
+              </div>
+              <div class="a-stage fs-orb live-only">
+                <div class="orb"></div>
+                <div class="a-name" style="font-size:26px">Sage</div>
+                <div class="eq" style="height:34px"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                <div class="cap a-cap" style="font-size:18px;max-width:600px"><span class="cap-text">“Sure — I can pull the renewal numbers for you. Want them by region or by plan?”</span></div>
+              </div>
+              <div class="a-stage conn-only" style="display:none"><div class="conn"><div class="orb" style="width:170px;height:170px"></div><div class="cap muted" style="font-size:16px">Connecting to Sage…</div><div class="dots"><i></i><i></i><i></i></div></div></div>
+              <div class="a-dock" style="gap:18px">
+                <button class="ctl lg"><i class="fa-solid fa-closed-captioning"></i></button>
+                <button class="ctl lg"><i class="fa-solid fa-microphone"></i></button>
+                <button class="ctl lg end"><i class="fa-solid fa-phone-slash"></i></button>
+                <button class="ctl lg"><i class="fa-solid fa-keyboard"></i></button>
+                <button class="ctl lg"><i class="fa-solid fa-table-columns"></i></button>
+              </div>
+              <!-- slide-in rail -->
+              <div class="a-rail">
+                <h4 style="text-transform:uppercase;font-size:11px;letter-spacing:.12em;color:var(--txt-3);margin-bottom:14px">Conversation</h4>
+                <div class="thread">
+                  <div class="msg me"><div class="who">You</div>How are renewals trending this quarter?</div>
+                  <div class="msg ai"><div class="who">Sage</div>Renewals are up 8% QoQ. The lift is mostly in the Enterprise plan.</div>
+                  <div class="msg me"><div class="who">You</div>Pull the renewal numbers.</div>
+                  <div class="msg ai"><div class="who">Sage</div>Sure — by region or by plan?</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ====================== B · OVERLAY ====================== -->
+        <div class="frame fr" data-fapproach="B" data-fmode="overlay">
+          <div class="overlay-dev">
+            <div class="B">
+              <div class="b-head">
+                <div class="ava">S<span class="live"></span></div>
+                <div class="id"><div class="n">Sage <span class="badge">Co-agent</span></div><div class="sub state-sub">Listening · GPT Realtime</div></div>
+                <div class="hbtns"><button class="ctl sm"><i class="fa-solid fa-closed-captioning"></i></button><button class="ctl sm"><i class="fa-solid fa-minus"></i></button></div>
+              </div>
+              <div class="b-body live-only">
+                <div class="b-cap"><i class="fa-solid fa-closed-captioning"></i><span class="cap-text">“Sure — I can pull the renewal numbers for you. Want them by region or by plan?”</span></div>
+                <div class="thread">
+                  <div class="msg me"><div class="who">You</div>Pull the renewal numbers.</div>
+                  <div class="msg ai"><div class="who">Sage</div>On it — by region or by plan?</div>
+                </div>
+              </div>
+              <div class="b-conn conn-only" style="display:none">
+                <div class="ava" style="width:54px;height:54px;font-size:20px">S</div>
+                <div class="cap muted">Starting live session…</div>
+                <div class="bar"><i></i></div>
+              </div>
+              <div class="b-dock">
+                <div class="b-cluster">
+                  <button class="ctl md" title="Mute"><i class="fa-solid fa-microphone"></i></button>
+                  <button class="ctl md active" title="Captions"><i class="fa-solid fa-closed-captioning"></i></button>
+                  <button class="ctl md" title="Type"><i class="fa-solid fa-keyboard"></i></button>
+                </div>
+                <div style="flex:1"></div>
+                <button class="pill-btn"><i class="fa-solid fa-expand"></i> Expand</button>
+                <button class="ctl md end"><i class="fa-solid fa-phone-slash"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ====================== B · FULL ====================== -->
+        <div class="frame fr" data-fapproach="B" data-fmode="full">
+          <div class="fs-dev">
+            <div class="B fs drawer-host">
+              <div class="b-left">
+                <div class="b-head">
+                  <div class="ava">S<span class="live"></span></div>
+                  <div class="id"><div class="n">Sage <span class="badge">Co-agent</span></div><div class="sub state-sub">Listening · GPT Realtime 2</div></div>
+                  <div class="hbtns"><button class="ctl sm" id="bDrawerBtn"><i class="fa-solid fa-gear"></i></button><button class="ctl sm"><i class="fa-solid fa-compress"></i></button></div>
+                </div>
+                <div class="b-body live-only">
+                  <div class="b-cap"><i class="fa-solid fa-closed-captioning"></i><span class="cap-text">“Sure — I can pull the renewal numbers for you. Want them by region or by plan?”</span></div>
+                  <div class="thread">
+                    <div class="msg me"><div class="who">You</div>How are renewals trending this quarter?</div>
+                    <div class="msg ai"><div class="who">Sage</div>Up 8% QoQ — mostly Enterprise. Want the breakdown?</div>
+                    <div class="msg me"><div class="who">You</div>Pull the renewal numbers.</div>
+                    <div class="msg ai"><div class="who">Sage</div>On it — by region or by plan?</div>
+                  </div>
+                </div>
+                <div class="b-conn conn-only" style="display:none"><div class="ava" style="width:54px;height:54px;font-size:20px">S</div><div class="cap muted">Starting live session…</div><div class="bar"><i></i></div></div>
+                <div class="b-dock">
+                  <div class="b-cluster">
+                    <button class="ctl md"><i class="fa-solid fa-microphone"></i></button>
+                    <button class="ctl md active"><i class="fa-solid fa-closed-captioning"></i></button>
+                  </div>
+                  <div class="b-input"><i class="fa-solid fa-keyboard" style="color:var(--txt-3)"></i> Type to Sage…</div>
+                  <button class="ctl md end"><i class="fa-solid fa-phone-slash"></i></button>
+                </div>
+              </div>
+              <div class="b-right">
+                <div class="b-tabs">
+                  <div class="b-tab on"><i class="fa-solid fa-chalkboard"></i> Whiteboard</div>
+                  <div class="b-tab"><i class="fa-solid fa-globe"></i> Browser</div>
+                  <div class="b-tab"><i class="fa-solid fa-list-timeline"></i> Activity <span style="background:var(--mj-brand);color:#fff;border-radius:6px;padding:0 5px;font-size:9px;margin-left:2px">2</span></div>
+                </div>
+                <div class="b-canvas"><div style="text-align:center"><i class="fa-solid fa-chalkboard" style="font-size:30px;opacity:.4"></i><div style="margin-top:10px;font-size:12.5px">Live whiteboard surface</div></div></div>
+              </div>
+              <!-- settings/dev drawer -->
+              <div class="b-drawer">
+                <h4 style="font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--txt-3);margin-bottom:6px">Session settings</h4>
+                <div class="drawer-row">Captions <span class="switch on"><i></i></span></div>
+                <div class="drawer-row">Surface panel <span class="switch on"><i></i></span></div>
+                <div class="drawer-row">Activity rail <span class="switch on"><i></i></span></div>
+                <div class="drawer-row">Density <span style="color:var(--txt-3);font-size:12px">Pro ▾</span></div>
+                <div class="drawer-row" style="border:0">Developer links <span class="switch"><i></i></span></div>
+                <div style="margin-top:14px;font-size:11px;color:var(--txt-3);line-height:1.6">Everything advanced lives here — the call surface stays clean. The overlay host simply ships this drawer collapsed and most toggles off.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ====================== C · OVERLAY ====================== -->
+        <div class="frame fr" data-fapproach="C" data-fmode="overlay">
+          <div class="overlay-dev">
+            <div class="C">
+              <div class="c-surface"></div>
+              <div class="c-orbwrap live-only"><div class="orb"></div><div class="c-name">Sage</div>
+                <div class="statechip"><span class="pulse"></span><span class="lbl-state">Listening</span></div></div>
+              <div class="c-conn conn-only" style="display:none"><div class="ring"></div><div class="cap muted">Waking Sage…</div></div>
+              <div class="c-thread glass live-only" style="border-radius:16px;padding:12px">
+                <div class="msg me"><div class="who">You</div>Pull the renewal numbers.</div>
+                <div class="msg ai"><div class="who">Sage</div>On it — by region or by plan?</div>
+              </div>
+              <div class="c-float-cap glass live-only"><span class="cap-text">“Want them by region or by plan?”</span></div>
+              <div class="c-chips" id="cChips">
+                <button class="ctl md glass"><i class="fa-solid fa-keyboard"></i></button>
+                <button class="ctl md glass"><i class="fa-solid fa-table-columns"></i></button>
+                <button class="ctl md glass"><i class="fa-solid fa-closed-captioning"></i></button>
+              </div>
+              <div class="c-bar glass">
+                <button class="ctl md" onclick="document.getElementById('cChips').classList.toggle('open')"><i class="fa-solid fa-ellipsis"></i></button>
+                <button class="ctl lg" title="Mute"><i class="fa-solid fa-microphone"></i></button>
+                <button class="ctl lg end"><i class="fa-solid fa-phone-slash"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ====================== C · FULL ====================== -->
+        <div class="frame fr" data-fapproach="C" data-fmode="full">
+          <div class="fs-dev">
+            <div class="C fs">
+              <div class="c-surface"></div>
+              <!-- activity floating card -->
+              <div class="c-activity glass">
+                <h6>Activity</h6>
+                <div class="c-act-item"><span class="ic" style="background:rgba(52,209,191,.2);color:var(--teal)"><i class="fa-solid fa-database"></i></span> Queried <b style="color:var(--txt)">Renewals</b> · 1,204 rows</div>
+                <div class="c-act-item"><span class="ic" style="background:rgba(139,124,246,.2);color:var(--violet)"><i class="fa-solid fa-user-group"></i></span> Delegated to <b style="color:var(--txt)">Research Agent</b></div>
+                <div class="c-act-item"><span class="ic" style="background:rgba(245,177,76,.2);color:var(--amber)"><i class="fa-solid fa-chart-line"></i></span> Built renewal chart</div>
+              </div>
+              <!-- transcript floating card -->
+              <div class="c-thread glass live-only">
+                <div class="msg me"><div class="who">You</div>How are renewals trending?</div>
+                <div class="msg ai"><div class="who">Sage</div>Up 8% QoQ — mostly Enterprise.</div>
+                <div class="msg me"><div class="who">You</div>Pull the renewal numbers.</div>
+                <div class="msg ai"><div class="who">Sage</div>By region or by plan?</div>
+              </div>
+              <div class="c-orbwrap live-only"><div class="orb"></div><div class="c-name" style="font-size:22px">Sage</div>
+                <div class="statechip"><span class="pulse"></span><span class="lbl-state">Listening</span></div></div>
+              <div class="c-conn conn-only" style="display:none"><div class="ring" style="width:120px;height:120px"></div><div class="cap muted" style="font-size:16px">Waking Sage…</div></div>
+              <div class="c-float-cap glass live-only" style="bottom:108px;font-size:16px"><span class="cap-text">“Want them by region or by plan?”</span></div>
+              <div class="c-chips open" style="bottom:96px">
+                <button class="ctl md glass"><i class="fa-solid fa-keyboard"></i></button>
+                <button class="ctl md glass"><i class="fa-solid fa-chalkboard"></i></button>
+                <button class="ctl md glass"><i class="fa-solid fa-closed-captioning"></i></button>
+                <button class="ctl md glass"><i class="fa-solid fa-gear"></i></button>
+              </div>
+              <div class="c-bar glass">
+                <button class="ctl lg" title="Mute"><i class="fa-solid fa-microphone"></i></button>
+                <button class="pill-btn end" style="height:48px"><i class="fa-solid fa-phone-slash"></i> End call</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /frames -->
+    </div><!-- /canvas -->
+
+    <!-- ============================================================ NOTES -->
+    <aside class="notes">
+      <!-- A -->
+      <section data-napproach="A">
+        <h2>Calm Orb <span class="tag tagA">Ambient</span></h2>
+        <div class="sub">Radical minimalism. The call is a beautiful, breathing presence — not a control panel. One thing at a time; everything secondary is one tap away.</div>
+        <h4>The idea</h4>
+        <p>The orb <i>is</i> the UI. By default you see the orb, the name, a single live caption, and exactly two controls (<b>Mute</b>, <b>End</b>). Captions / Type / Surface hide behind a single <b>•••</b> that blooms a small sheet. In full screen, controls auto-fade after a few idle seconds — pure cinema.</p>
+        <h4>Solves your pain points</h4>
+        <ul>
+          <li><b>Connecting never clips</b> — the orb is the loader; it simply dims + three rising dots, identical footprint in any width.</li>
+          <li><b>Density</b> — 2 visible controls instead of 9. The rest live in the bloom sheet.</li>
+          <li><b>Narrow/mobile</b> — vertical, centered, thumb-reach dock; nothing competes for horizontal space.</li>
+        </ul>
+        <h4>Overlay vs full screen</h4>
+        <p>Overlay = the whole story in 390px. Full screen = the same orb, larger, with an optional <b>Conversation rail</b> that slides in (timeline icon) and a fuller dock. No two-pane console — staying ambient is the point.</p>
+        <h4>What becomes a widget @Input</h4>
+        <div class="codeprop">&lt;mj-realtime-overlay
+  <span class="c">// host hides everything advanced:</span>
+  [Density]="'simple'"
+  [ShowSurfacePanel]="false"
+  [ShowActivityRail]="false"
+  [ShowDevLinks]="false"
+  [AutoHideControls]="true"
+  [Compact]="isNarrow"&gt;</div>
+      </section>
+      <!-- B -->
+      <section data-napproach="B">
+        <h2>Command Console <span class="tag tagB">Structured</span></h2>
+        <div class="sub">A premium, organized call surface. Clear zones, grouped controls, and a real two-pane console when you go full screen. Think Superhuman-meets-FaceTime for agents.</div>
+        <h4>The idea</h4>
+        <p>Tidy header (avatar + live dot + name + co-agent badge + state), a clean caption banner + transcript, and a fixed <b>dock</b> where controls are <b>grouped into a segmented cluster</b> (mic · captions · type) with End separated out. Advanced/dev settings live in a <b>slide-in drawer</b> — never on the call surface.</p>
+        <h4>Solves your pain points</h4>
+        <ul>
+          <li><b>Connecting</b> — a composed card: avatar + “Starting live session…” + a sleek progress bar. Same in any size.</li>
+          <li><b>Density</b> — controls grouped (3-up cluster) instead of scattered; everything else in the gear drawer.</li>
+          <li><b>Surface panel only in full screen</b> — the overlay shows a single “Expand” affordance; the whiteboard/browser/activity tabs appear only when there’s room.</li>
+        </ul>
+        <h4>Overlay vs full screen</h4>
+        <p>Overlay = single conversation column + dock (no panel). Full screen = <b>two panes</b>: conversation+dock on the left, a gorgeous tabbed surface (Whiteboard / Browser / Activity) on the right, with the settings drawer on the gear.</p>
+        <h4>What becomes a widget @Input</h4>
+        <div class="codeprop">&lt;mj-realtime-overlay
+  [ControlLayout]="'cluster'"
+  [ShowSurfacePanel]="isFullScreen"
+  [ShowSettingsDrawer]="isFullScreen"
+  [ShowDevLinks]="devMode"
+  [Density]="isFullScreen ? 'pro' : 'standard'"&gt;</div>
+      </section>
+      <!-- C -->
+      <section data-napproach="C">
+        <h2>Floating Glass <span class="tag tagC">Spatial</span></h2>
+        <div class="sub">Immersive + tactile. Frosted-glass islands float over the live surface; the agent presence hovers in space. Modern, playful-premium, and made for touch.</div>
+        <h4>The idea</h4>
+        <p>The surface (whiteboard / data / gradient) is the <b>backdrop</b>. Everything else — orb, transcript, captions, controls, activity — are <b>floating glass cards</b> with depth + blur. The control bar is one rounded glass pill; a <b>•••</b> blooms extra chips. Full screen lets the islands breathe (and, conceptually, be repositioned).</p>
+        <h4>Solves your pain points</h4>
+        <ul>
+          <li><b>Connecting</b> — a single glass card + spinner ring centered; never clipped because it’s absolutely centered, size-independent.</li>
+          <li><b>Density</b> — only 2 controls on the glass pill; the rest bloom as chips on demand.</li>
+          <li><b>Immersion</b> — full screen shows the live surface behind, with captions floating near the orb and an Activity card top-left.</li>
+        </ul>
+        <h4>Overlay vs full screen</h4>
+        <p>Overlay = orb up top, transcript flows beneath like glass messages, one floating control pill. Full screen = the surface fills the space; orb + captions + transcript + activity float as repositionable glass islands.</p>
+        <h4>What becomes a widget @Input</h4>
+        <div class="codeprop">&lt;mj-realtime-overlay
+  [Chrome]="'glass'"
+  [SurfaceAsBackdrop]="isFullScreen"
+  [ShowActivityRail]="isFullScreen"
+  [FloatingControls]="true"
+  [ShowCaptions]="true"
+  [Compact]="isNarrow"&gt;</div>
+      </section>
+
+      <h4 style="margin-top:26px">Shared: the new widget API</h4>
+      <p style="font-size:12.5px">Across all three, the fix you asked for is the same — turn today’s hard-coded controls into <b>declarative inputs</b> so the overlay host can hide what doesn’t fit. The overlay sets a lean set; the full-screen / dedicated route opts into the rich set.</p>
+      <div class="legend">
+        <span><span class="k" style="background:var(--ok)"></span> shown in overlay</span>
+        <span><span class="k" style="background:var(--mj-brand)"></span> full-screen only</span>
+        <span><span class="k" style="background:var(--err)"></span> dev-only</span>
+      </div>
+    </aside>
+  </div>
+
+<script>
+  const body=document.body;
+  function wire(id,attr){
+    const seg=document.getElementById(id);
+    seg.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+      seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+      body.setAttribute(attr,b.dataset[attr.replace('data-','')]||b.getAttribute('data-'+attr.split('-')[1]));
+      render();});
+  }
+  // simpler explicit wiring
+  function bind(id,key){
+    const seg=document.getElementById(id);
+    seg.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+      seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+      body.setAttribute('data-'+key,b.getAttribute('data-'+key));render();});
+  }
+  bind('segApproach','approach');bind('segMode','mode');bind('segState','state');
+
+  function render(){
+    const ap=body.getAttribute('data-approach'), md=body.getAttribute('data-mode'), st=body.getAttribute('data-state');
+    // show the right frame
+    document.querySelectorAll('.fr').forEach(f=>{
+      const on=f.getAttribute('data-fapproach')===ap && f.getAttribute('data-fmode')===(md==='full'?'full':'overlay');
+      f.classList.toggle('show',on);
+      // propagate state for orb/eq/captions
+      f.querySelectorAll('[data-state]').forEach(()=>{});
+      f.querySelector('.A,.B,.C')&&f.querySelectorAll('.A,.B,.C').forEach(x=>x.setAttribute('data-state',st));
+    });
+    // set data-state on the device wrappers so CSS [data-state] hooks fire
+    document.querySelectorAll('.frame .A,.frame .B,.frame .C').forEach(x=>x.setAttribute('data-state',st));
+    // connecting vs live blocks
+    const conn = st==='connecting';
+    document.querySelectorAll('.live-only').forEach(x=>x.style.display=conn?'none':'');
+    document.querySelectorAll('.conn-only').forEach(x=>x.style.display=conn?'':'none');
+    // labels
+    const lbl = st==='connecting'?'Connecting':(st==='speaking'?'Speaking':'Listening');
+    document.querySelectorAll('.lbl-state').forEach(x=>x.textContent=lbl);
+    document.querySelectorAll('.state-sub').forEach(x=>x.textContent=lbl+(x.textContent.includes('2')?' · GPT Realtime 2':' · GPT Realtime'));
+    // speaking caption tweak
+    const speak = st==='speaking';
+    document.querySelectorAll('.cap-text').forEach(x=>{x.style.opacity=speak?'1':'.78'});
+    // notes
+    document.querySelectorAll('.notes section').forEach(s=>s.classList.toggle('show',s.getAttribute('data-napproach')===ap));
+  }
+  render();
+</script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+{
+  "fields": {
+    "Name": "BYO Regression Suite",
+    "Description": "Regression suite targeting the bring-your-own-app demo (Angular + Express with two intentional bugs). Both tests are EXPECTED TO FAIL against the buggy demo app — that's the point: this exercises the runner's ability to catch real regressions in non-MJ applications.",
+    "Status": "Active",
+    "Configuration": {
+      "applicationContext": "## BYO Demo App\n\nA tiny Angular + Express SPA. Two routes, no authentication, no shared session state.\n\n### Routes\n- `/counter` — a counter UI with a single `+1` button. Clicking the button increments a displayed number starting at 0.\n- `/contact` — a contact form (Name, Email, Message fields) with a Submit button. After successful submission, a green confirmation banner appears inline below the form.\n\n### Navigation landmarks\n- A horizontal top nav at the page top has two links — `Counter` and `Contact` — that route between the two pages. No login, no app switcher.\n- The page body is centered in a max-width container; there is no sidebar.\n\n### Conventions\n- All UI is rendered immediately on page load; there is no spinner. A blank page is an error state, not a loading state.\n- Form inputs are labeled above the field (Name / Email / Message)."
+    }
+  },
+  "relatedEntities": {
+    "MJ: Test Suite Tests": [
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=BYO T01 - Counter Increments On Click",
+          "Sequence": 1,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "7B9ADBD3-49F4-40CE-9ECA-82FA2F3B708C"
+        },
+        "sync": {
+          "lastModified": "2026-05-27T00:01:43.716Z",
+          "checksum": "60393c8ae768aca333cae0cdd26d108f587b1d7afd07b7413f820d6005d70a6c"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=BYO T02 - Contact Form Shows Confirmation",
+          "Sequence": 2,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "591ED672-02FD-437D-94A2-7B5F2BDBDD41"
+        },
+        "sync": {
+          "lastModified": "2026-05-27T00:01:43.727Z",
+          "checksum": "c0ee680734d7d5104d24ebf6b4cd801b6054cd3872390a53077e10cb606a55d3"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "2C65B8C5-CD3E-4EAD-8017-3EB0866E392C"
+  },
+  "sync": {
+    "lastModified": "2026-05-27T00:01:43.686Z",
+    "checksum": "1331e83ca3cb279c0463d84ed3972b902f35ab23f136abd6e2767192e92b0d84"
+  }
+}

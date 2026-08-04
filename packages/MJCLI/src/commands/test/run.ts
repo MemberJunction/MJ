@@ -46,6 +46,18 @@ export default class TestRun extends Command {
       description: 'Show detailed execution information',
       default: false,
     }),
+    'checks-module': Flags.string({
+      description:
+        'Module specifier (package name or path) side-effect-imported before the run so its ' +
+        'integration check bundles register on the IntegrationCheckRegistry. Durable form: ' +
+        "mj.config.cjs `testing.checkModules` (this repo loads '@memberjunction/integration-test-suite' that way).",
+    }),
+    'oracles-module': Flags.string({
+      description:
+        'Path to a JS/TS module that exports custom IOracle classes or instances. ' +
+        'Each export is registered on the engine before the test runs — used by non-MJ ' +
+        'adopters to plug app-specific oracle types without modifying TestingFramework.',
+    }),
   };
 
   async run(): Promise<void> {
@@ -64,6 +76,8 @@ export default class TestRun extends Command {
         output: flags.output,
         dryRun: flags['dry-run'],
         verbose: flags.verbose,
+        oraclesModule: flags['oracles-module'],
+        checksModule: flags['checks-module'],
       });
 
     } catch (error) {

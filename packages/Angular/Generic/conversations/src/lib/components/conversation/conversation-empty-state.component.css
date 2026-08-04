@@ -16,41 +16,6 @@
   position: relative;
 }
 
-/* Sidebar toggle button - positioned in top-left */
-.sidebar-toggle-btn {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  z-index: 10;
-}
-
-.sidebar-toggle-btn:hover {
-  background: color-mix(in srgb, var(--mj-text-primary) 8%, transparent);
-}
-
-.sidebar-toggle-btn:active {
-  background: color-mix(in srgb, var(--mj-text-primary) 12%, transparent);
-}
-
-.sidebar-toggle-btn i {
-  color: var(--mj-text-secondary);
-  font-size: 18px;
-  transition: color 0.15s ease;
-}
-
-.sidebar-toggle-btn:hover i {
-  color: var(--mj-text-primary);
-}
 @media (max-width: 768px) {
   .conversation-empty-state {
     align-items: flex-start;
@@ -99,7 +64,7 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.25rem;
   animation: fadeIn 0.3s ease-in;
   transition: opacity 0.2s ease;
 }
@@ -121,12 +86,12 @@
 /* Greeting Section */
 .greeting-section {
   text-align: center;
-  padding: 2rem 0;
+  padding: 0.5rem 0;
 }
 
 .greeting-icon {
   color: var(--mj-brand-primary);
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   opacity: 0.8;
 }
 
@@ -146,7 +111,7 @@
 
 /* Suggested Prompts */
 .suggested-prompts {
-  margin: 1rem 0;
+  margin: 0;
 }
 
 .prompt-grid {
@@ -215,7 +180,7 @@
 
 /* Message Input Wrapper */
 .message-input-wrapper {
-  margin: 1.5rem 0;
+  margin: 0;
   width: 100%;
 }
 
@@ -224,7 +189,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  padding: 1rem 0;
+  padding: 0.75rem 0 0;
   border-top: 1px solid var(--mj-border-default);
 }
 
@@ -274,6 +239,32 @@
 
 .overlay-mode .message-input-wrapper {
   margin: 0.5rem 0;
+}
+
+/* Short-viewport fallback — keep the welcome screen scroll-free when the
+   available height is reduced (browser chrome, app header, smaller laptops). */
+@media (max-height: 820px) {
+  .conversation-empty-state {
+    padding: 1rem;
+  }
+  .empty-state-container {
+    gap: 0.75rem;
+  }
+  .greeting-section {
+    padding: 0;
+  }
+  .greeting-icon {
+    margin-bottom: 0.25rem;
+  }
+  .greeting-icon .fa-3x {
+    font-size: 2em;
+  }
+  .greeting-title {
+    font-size: 1.5rem;
+  }
+  .tips-section {
+    padding: 0.5rem 0 0;
+  }
 }
 
 /* Responsive Design */

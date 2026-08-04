@@ -3,7 +3,6 @@ import { spawn, ChildProcess } from 'child_process';
 import { logError, logStatus } from './status_logging';
 import path from 'path';
 import treeKill from 'tree-kill';
-import { RegisterClass } from '@memberjunction/global';
 
 export type CommandExecutionResult = {
   output: string;
@@ -26,8 +25,13 @@ export class RunCommandsBase {
           results.push(await this.runCommand(command));
         }
         catch (e) {
-          // LOG but do not throw because we want to continue running the other commands
-          logError(e as string);
+          // A failed command (non-zero exit / spawn error) rejects. Record it as a
+          // failed result instead of dropping it — so callers can detect and report
+          // the failure, and `results` stays index-aligned with `commands`. We still
+          // don't rethrow, so the remaining commands continue to run.
+          const message = e instanceof Error ? e.message : String(e);
+          logError(message);
+          results.push({ output: '', error: message, success: false, elapsedTime: 0 });
         }
       }
 
@@ -51,8 +55,15 @@ export class RunCommandsBase {
 
       logStatus(`STARTING COMMAND: "${command.command}" in location "${absPath}" with args "${command.args.join(' ')}"`);
 
+      // When shell:true, Node deprecates passing a separate args array (DEP0190) because
+      // the shell concatenates them anyway. Build the full command line ourselves and pass
+      // it as a single string so the spawn behavior is identical without the warning.
+      const fullCommand = command.args.length > 0
+        ? `${commandName} ${command.args.join(' ')}`
+        : commandName;
+
       const commandExecution = new Promise<CommandExecutionResult>((resolve, reject) => {
-        cp = spawn(commandName, command.args, {
+        cp = spawn(fullCommand, {
           cwd: absPath,
           stdio: 'pipe',
           shell: true,
@@ -97,7 +108,7 @@ export class RunCommandsBase {
 
       if (command.timeout && command.timeout > 0) {
         const { timeout } = command;
-        const timeoutPromise = new Promise<CommandExecutionResult>((resolve, reject) => {
+        const timeoutPromise = new Promise<CommandExecutionResult>((resolve) => {
           setTimeout(() => {
             const elapsedTime = new Date().getTime() - startTime.getTime();
             if (!cp.killed) {

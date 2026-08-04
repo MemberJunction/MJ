@@ -42,9 +42,17 @@ export interface DeduplicationResult {
   totalCollisions: number;
   /** Details of every fix applied */
   fixes: SequenceFix[];
+  /**
+   * Both sides of every detected collision. Lets callers distinguish benign
+   * cross-file collisions in CodeGen's +100000 staging zone (sequences are
+   * renumbered by spUpdateExistingEntityFieldsFromSchema between migrations,
+   * so the same staged value recurring in a LATER migration never collides at
+   * runtime) from real same-file or real-sequence collisions.
+   */
+  collisions: Array<{ first: SequenceEntry; duplicate: SequenceEntry }>;
 }
 
-interface SequenceEntry {
+export interface SequenceEntry {
   entityId: string;
   sequence: number;
   file: string;
@@ -102,6 +110,7 @@ export function deduplicateEntityFieldSequences(
       totalInserts: allEntries.length,
       totalCollisions: 0,
       fixes: [],
+      collisions: [],
     };
   }
 
@@ -167,6 +176,7 @@ export function deduplicateEntityFieldSequences(
     totalInserts: allEntries.length,
     totalCollisions: collisions.length,
     fixes,
+    collisions,
   };
 }
 

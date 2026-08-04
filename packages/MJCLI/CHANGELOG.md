@@ -1,5 +1,754 @@
 # Change Log - @memberjunction/cli
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-cli@6.0.0
+  - @memberjunction/codegen-lib@6.0.0
+  - @memberjunction/db-auto-doc@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/metadata-sync@6.0.0
+  - @memberjunction/open-app-engine@6.0.0
+  - @memberjunction/query-gen@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/server-bootstrap-lite@6.0.0
+  - @memberjunction/testing-cli@6.0.0
+  - @memberjunction/cli-core@6.0.0
+  - @memberjunction/config@6.0.0
+  - @memberjunction/installer@6.0.0
+  - @memberjunction/sql-converter@6.0.0
+  - @memberjunction/sqlglot-ts@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [1e048ef]
+- Updated dependencies [a8fc549]
+  - @memberjunction/codegen-lib@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-cli@5.51.0
+  - @memberjunction/server-bootstrap-lite@5.51.0
+  - @memberjunction/db-auto-doc@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/metadata-sync@5.51.0
+  - @memberjunction/open-app-engine@5.51.0
+  - @memberjunction/query-gen@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/testing-cli@5.51.0
+  - @memberjunction/cli-core@5.51.0
+  - @memberjunction/config@5.51.0
+  - @memberjunction/installer@5.51.0
+  - @memberjunction/sql-converter@5.51.0
+  - @memberjunction/sqlglot-ts@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- ae992d2: fix(migrate-convert): stop `mj migrate convert` silently dropping statements and emitting empty PG migrations while reporting success (#3252)
+
+  The split-and-regenerate converter could emit empty or broken `.pg.sql` migrations while printing `unhandled stmts: 0` and exiting 0. Three independent root causes are fixed at the dialect, classifier, and bake-path layers:
+  - **RC1 — block-less `IF NOT EXISTS(...) CREATE INDEX ...;`** (the v5.49 FK-index shape) fell through to sqlglot, parsed as `exp.IfBlock`, and emitted a bare `;` with no gap reported. The `IF-EXISTS` envelope now captures a block-less guard's single governed statement (so `sys.indexes`/`columns`/`tables` guards translate to the same `DO $$ … pg_indexes … END IF $$` as the `BEGIN…END` form), an `exp.If`/`exp.IfBlock` guard plus an EMPTY-EMISSION postcondition report any node that renders to nothing instead of dropping it, and an inline named `DEFAULT` constraint (`CONSTRAINT [DF_x] DEFAULT (75)` — invalid PG) has its name stripped.
+  - **RC2 — a hand-written trigger classified as a CodeGen object and silently dropped** (the file reported a clean `converted` with empty T-SQL). The bare `trg` alternative was removed from the CodeGen-name convention (ledger-verified safe), and an unbannered file now requires a `vw*`/`sp*`/`fn*` object before flipping into statement-mode, so a lone trigger/index can't route a hand-authored file into the drop path.
+  - **RC3 — the `--bake-codegen` path applied gappy SQL to the working DB and crashed with zero artifacts.** Forward-mode baking now gates on conversion gaps before touching the working DB, the CLI halts at the first bake-mode gap with a guaranteed non-zero exit, forces a `.needs-hand` artifact for any gap, writes an artifact (never a bare error) on any failure, and rejects `--allow-gaps` together with `--bake-codegen`.
+
+  Adds a soft statement-accounting reconciliation: the dialect self-checks `parsed == emitted + unhandled + dropped` (surfacing an `ACCOUNTING-LEAK` gap, never raising), and each conversion carries a coarse source→output reconciliation that flags substantive T-SQL producing empty output. Validated by a full-ledger sweep over all 201 v5 migrations: zero crashes, zero accounting leaks, zero bare-`;` bodies, zero reconciliation false-positives.
+
+- a7dfaf5: fix(open-app): detect the workspace layout and write config to every file a consumer loads (#3270, #3271)
+
+  `mj app install` could complete — or report success — while leaving an app that never actually loads. Two causes, both in the install's `[Packages]` / `[Config]` steps.
+
+  **#3270 — workspace layout.** The installer defaulted to the monorepo paths (`packages/MJAPI`, `packages/MJExplorer`), but `mj install` scaffolds a distribution under `apps/`. Installing onto a host created by MJ's own installer failed with `Could not read package.json at <root>/packages/MJAPI/package.json: ENOENT`, and it failed _after_ schema creation and migrations had committed, leaving the app recorded with `Status='Error'`. Both paths are now probed (`packages/…`, then `apps/…`) via a shared `workspace-paths` module, so a plain `mj app install` works on either layout with no configuration; an explicit `openApps.serverPackagePath` / `clientPackagePath` still wins.
+
+  **#3271 — config write target.** Config edits went to a single file: the server workspace's `mj.config.cjs` when present, else the repo root. But the `dynamicPackages.client` array is consumed by `mj codegen manifest --open-app-client-bootstrap`, which resolves config from the _client_ workspace and so never sees a server-workspace config; and a container / App Service deployment that ships only the root config never sees the `server` entry. Either way the miss is silent: the client bootstrap reports `0 client packages wired` so the app's `@RegisterClass` decorators never fire, and a deployed API loads no server package at all — its GraphQL schema lacks every one of the app's types while `__mj.OpenApp` still reports the app `Active`. All config writes (`dynamicPackages`, `entityPackageName`, `excludeSchemas`) now target **every** `mj.config.cjs` a consumer may load. Entry insertion is idempotent, so a config that already has the entry is unchanged.
+
+  A file that genuinely cannot be edited — most commonly the distribution's `module.exports = require('../../mj.config.cjs')` re-export, which has no object literal to insert into — is now reported as a warning instead of failing the install, since it re-exports the root config that _did_ get written. The install fails only when no config could be updated. `ConfigOperationResult` gains an optional `Warnings` field and the orchestrator surfaces them via `OnWarn`.
+
+- 284de20: Fix TS4111 in the Open App client manifest so MJExplorer can build when Open Apps are present
+
+  `mj codegen manifest --open-app-client-bootstrap` emitted its `globalThis` anchor using dot
+  access on a property that comes from an index signature (`globalThis` is cast to
+  `Record<string, unknown>`). Consumers compile that generated file under their own tsconfig, and
+  MJExplorer sets `noPropertyAccessFromIndexSignature: true` — so the generated manifest failed to
+  type-check and the Explorer build exited 1 having emitted zero JS. `ng serve` printed
+  "Watch mode enabled" after the error and then served nothing, which made it easy to misread as a
+  working dev server.
+
+  The anchor now uses bracket access. Runtime behavior is unchanged — JavaScript draws no
+  distinction between dot- and bracket-written properties — and bracket access is valid under every
+  strictness configuration, so no consumer is made worse.
+
+  This affected any installation with at least one Open App in `dynamicPackages.client`, whether
+  installed via `mj app install` or dev-linked. MJ core has none, which is why its CI never
+  generated the line and never type-checked it.
+
+  The regression escaped because the generator's test asserted the emitted _string_ — it passed
+  precisely because the text matched, while that text did not compile in the consumer. The test
+  now type-checks the generated output under `noPropertyAccessFromIndexSignature` instead, so a
+  type error in generated code fails here rather than in a downstream build.
+
+- d5904e3: `mj migrate` now prints the batch context Skyway already collects when a migration fails: the batch number and its line range in the script, how many batches applied before it, and either the lines matched to identifiers named in the error or a preview of the failing batch SQL. Previously only `Error.message` was shown, so a failure in a large generated migration gave a line range with no way to see what was in it.
+- df50da3: Fix Open App client packages being tree-shaken out of production MJExplorer builds. `mj codegen manifest --open-app-client-bootstrap` emitted bare side-effect imports (`import '<pkg>';`), which bundlers legally drop when the imported package declares `"sideEffects": false` — the default for any Angular library built with ng-packagr. The package's module-scope `@RegisterClass(...)` calls then never ran, so its resource/view components were silently absent from the build with no error. The block now emits referenced namespace imports collected into an exported `OPEN_APP_CLIENT_MODULES` array, anchored by a `globalThis` assignment so the reference survives dead-code elimination regardless of how the host app consumes the manifest. Disabled entries, idempotency, and stale-block replacement are unchanged.
+- dd04a24: Widen the zod pin from `~3.24.4` to `^3.25.0` so it satisfies `@modelcontextprotocol/sdk`'s peer requirement (`zod ^3.25 || ^4.0`). The old tilde pin has no overlap with the SDK's peer range, which breaks strict package managers (pnpm) and MJCLI's oclif manifest generation under strict installs. zod 3.25.x keeps the classic v3 API at the root import, so this is a version-range correction with no behavior change.
+- Updated dependencies [623dfc5]
+- Updated dependencies [54a037f]
+- Updated dependencies [ce6374c]
+- Updated dependencies [a3bd648]
+- Updated dependencies [ae992d2]
+- Updated dependencies [f749574]
+- Updated dependencies [a7dfaf5]
+- Updated dependencies [d79dd11]
+- Updated dependencies [deb02b4]
+- Updated dependencies [918563e]
+- Updated dependencies [45d762d]
+- Updated dependencies [aa491dc]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [76c0ffb]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core@5.50.0
+  - @memberjunction/server-bootstrap-lite@5.50.0
+  - @memberjunction/codegen-lib@5.50.0
+  - @memberjunction/sqlglot-ts@5.50.0
+  - @memberjunction/sql-converter@5.50.0
+  - @memberjunction/open-app-engine@5.50.0
+  - @memberjunction/config@5.50.0
+  - @memberjunction/db-auto-doc@5.50.0
+  - @memberjunction/metadata-sync@5.50.0
+  - @memberjunction/ai-cli@5.50.0
+  - @memberjunction/generic-database-provider@5.50.0
+  - @memberjunction/query-gen@5.50.0
+  - @memberjunction/sqlserver-dataprovider@5.50.0
+  - @memberjunction/testing-cli@5.50.0
+  - @memberjunction/cli-core@5.50.0
+  - @memberjunction/installer@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- 70c658c: Add configurable startup mode ('full' | 'task') for fast CLI/script boot. StartupManager.Startup() accepts startup options; 'task' mode skips all @RegisterForStartup engine pre-warm (engines lazy-load on first touch) while 'full' preserves existing behavior. Mode resolves via a shared four-level precedence chain (MJ_STARTUP_MODE env var > programmatic option > mj.config.cjs startup.mode > entry-point default). MJAPI defaults to 'full'; MJCLI, mj-sync, and CodeGen default to 'task'. Measured 14x CPU reduction on mj sync validate.
+- Updated dependencies [486b276]
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [a7733a9]
+- Updated dependencies [3b23275]
+- Updated dependencies [505c8b5]
+- Updated dependencies [ebe5b88]
+- Updated dependencies [6c910ef]
+- Updated dependencies [70113b1]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [38c69a6]
+- Updated dependencies [7d6e8fb]
+- Updated dependencies [b64efd1]
+- Updated dependencies [d23aa89]
+- Updated dependencies [85575cf]
+- Updated dependencies [04cdd67]
+- Updated dependencies [38c220c]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [fc1c693]
+- Updated dependencies [70c658c]
+  - @memberjunction/codegen-lib@5.49.0
+  - @memberjunction/core@5.49.0
+  - @memberjunction/server-bootstrap-lite@5.49.0
+  - @memberjunction/sql-converter@5.49.0
+  - @memberjunction/generic-database-provider@5.49.0
+  - @memberjunction/testing-cli@5.49.0
+  - @memberjunction/metadata-sync@5.49.0
+  - @memberjunction/sqlserver-dataprovider@5.49.0
+  - @memberjunction/ai-cli@5.49.0
+  - @memberjunction/db-auto-doc@5.49.0
+  - @memberjunction/open-app-engine@5.49.0
+  - @memberjunction/query-gen@5.49.0
+  - @memberjunction/cli-core@5.49.0
+  - @memberjunction/config@5.49.0
+  - @memberjunction/installer@5.49.0
+  - @memberjunction/sqlglot-ts@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- c798b90: Declare `@memberjunction/cli` as a devDependency of the MJExplorer and MJAPI apps so their `prebuild` invocation of `mj codegen manifest` always runs against a built CLI. Without the edge, turbo's affected-package PR filtering (`--filter=...[origin/next]`) never selected or ordered the CLI build, leaving the workspace `mj` bin an empty oclif shell — `Error: command codegen:manifest not found` — and MJExplorer's build then failed hard (TS2307) because its generated class-registrations manifest is gitignored and has no committed fallback. The apps themselves are unpublished (`mj_*` is changeset-ignored); this entry records the CLI-consumption contract fix in the release notes.
+- Updated dependencies [09e1b4b]
+- Updated dependencies [a94bd16]
+  - @memberjunction/generic-database-provider@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/open-app-engine@5.48.0
+  - @memberjunction/codegen-lib@5.48.0
+  - @memberjunction/metadata-sync@5.48.0
+  - @memberjunction/sqlserver-dataprovider@5.48.0
+  - @memberjunction/ai-cli@5.48.0
+  - @memberjunction/db-auto-doc@5.48.0
+  - @memberjunction/query-gen@5.48.0
+  - @memberjunction/server-bootstrap-lite@5.48.0
+  - @memberjunction/testing-cli@5.48.0
+  - @memberjunction/cli-core@5.48.0
+  - @memberjunction/config@5.48.0
+  - @memberjunction/installer@5.48.0
+  - @memberjunction/sql-converter@5.48.0
+  - @memberjunction/sqlglot-ts@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- 073842c: Fix `spawn E2BIG` in PostgreSQL migration conversion. The cross-file BIT-column
+- Updated dependencies [073842c]
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+- Updated dependencies [92ecbf8]
+- Updated dependencies [f4dce92]
+- Updated dependencies [f9f60d7]
+- Updated dependencies [936a286]
+- Updated dependencies [bfd0de1]
+  - @memberjunction/sqlglot-ts@5.47.0
+  - @memberjunction/core@5.47.0
+  - @memberjunction/open-app-engine@5.47.0
+  - @memberjunction/codegen-lib@5.47.0
+  - @memberjunction/sqlserver-dataprovider@5.47.0
+  - @memberjunction/sql-converter@5.47.0
+  - @memberjunction/ai-cli@5.47.0
+  - @memberjunction/db-auto-doc@5.47.0
+  - @memberjunction/generic-database-provider@5.47.0
+  - @memberjunction/metadata-sync@5.47.0
+  - @memberjunction/query-gen@5.47.0
+  - @memberjunction/server-bootstrap-lite@5.47.0
+  - @memberjunction/testing-cli@5.47.0
+  - @memberjunction/cli-core@5.47.0
+  - @memberjunction/config@5.47.0
+  - @memberjunction/installer@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/open-app-engine@5.46.0
+  - @memberjunction/ai-cli@5.46.0
+  - @memberjunction/codegen-lib@5.46.0
+  - @memberjunction/db-auto-doc@5.46.0
+  - @memberjunction/generic-database-provider@5.46.0
+  - @memberjunction/metadata-sync@5.46.0
+  - @memberjunction/query-gen@5.46.0
+  - @memberjunction/sqlserver-dataprovider@5.46.0
+  - @memberjunction/server-bootstrap-lite@5.46.0
+  - @memberjunction/testing-cli@5.46.0
+  - @memberjunction/cli-core@5.46.0
+  - @memberjunction/config@5.46.0
+  - @memberjunction/installer@5.46.0
+  - @memberjunction/sql-converter@5.46.0
+  - @memberjunction/sqlglot-ts@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ai-cli@5.45.1
+- @memberjunction/codegen-lib@5.45.1
+- @memberjunction/query-gen@5.45.1
+- @memberjunction/server-bootstrap-lite@5.45.1
+- @memberjunction/generic-database-provider@5.45.1
+- @memberjunction/sqlserver-dataprovider@5.45.1
+- @memberjunction/metadata-sync@5.45.1
+- @memberjunction/db-auto-doc@5.45.1
+- @memberjunction/testing-cli@5.45.1
+- @memberjunction/cli-core@5.45.1
+- @memberjunction/config@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/installer@5.45.1
+- @memberjunction/open-app-engine@5.45.1
+- @memberjunction/sql-converter@5.45.1
+- @memberjunction/sqlglot-ts@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- 21e33fe: Move Skip to a client-side Open App and remove server-embedded agent; scope-gate query/view/search resolvers with API-key scope authorization; add credential-store fallback for component registry keys; support Open App in-process lifecycle hooks with interactive prompts.
+- 037f3af: Fix: honor the configured request timeout on the MetadataSync/OpenApp provider pool. `mj app remove` (and other `mj app …` / `mj sync` commands sharing this provider) built the SQL Server connection without `requestTimeout`, so it silently fell back to mssql's 15s default — dropping a large app schema could time out regardless of `dbRequestTimeout` config. The configured value now flows through `toMJConfig` → `MJConfig.dbRequestTimeout` → the mssql pool's `requestTimeout` (and the PostgreSQL client's `statement_timeout` for parity). When unset, each driver's own default still applies.
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [e370816]
+- Updated dependencies [037f3af]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [b18fcd0]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/server-bootstrap-lite@5.45.0
+  - @memberjunction/metadata-sync@5.45.0
+  - @memberjunction/open-app-engine@5.45.0
+  - @memberjunction/codegen-lib@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/ai-cli@5.45.0
+  - @memberjunction/db-auto-doc@5.45.0
+  - @memberjunction/query-gen@5.45.0
+  - @memberjunction/sqlserver-dataprovider@5.45.0
+  - @memberjunction/testing-cli@5.45.0
+  - @memberjunction/cli-core@5.45.0
+  - @memberjunction/config@5.45.0
+  - @memberjunction/installer@5.45.0
+  - @memberjunction/sql-converter@5.45.0
+  - @memberjunction/sqlglot-ts@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- 7119e17: Defer the DB-provider import in the MJCLI `postrun` hook so light commands no longer eagerly load the sqlserver-dataprovider/metadata-sync/core stack (~2.7s warm, far more cold). The import is now gated on `app:*` commands (the only ones that open a connection pool), fixing the deterministic `claude-pack` subprocess test spawn-timeout that was failing the unit-test CI gate on every PR.
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6cf6c43]
+- Updated dependencies [e315b2f]
+- Updated dependencies [6f74b17]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core@5.44.0
+  - @memberjunction/server-bootstrap-lite@5.44.0
+  - @memberjunction/codegen-lib@5.44.0
+  - @memberjunction/open-app-engine@5.44.0
+  - @memberjunction/ai-cli@5.44.0
+  - @memberjunction/query-gen@5.44.0
+  - @memberjunction/generic-database-provider@5.44.0
+  - @memberjunction/sqlserver-dataprovider@5.44.0
+  - @memberjunction/metadata-sync@5.44.0
+  - @memberjunction/testing-cli@5.44.0
+  - @memberjunction/db-auto-doc@5.44.0
+  - @memberjunction/cli-core@5.44.0
+  - @memberjunction/config@5.44.0
+  - @memberjunction/installer@5.44.0
+  - @memberjunction/sql-converter@5.44.0
+  - @memberjunction/sqlglot-ts@5.44.0
+
+## 5.43.0
+
+### Minor Changes
+
+- 9200b13: feat(open-app): connector-extraction modality — multi-app repos, in-repo subpath, teardown, and `OpenApp.Subpath`
+
+  Adds the Open-App capabilities needed to ship vendor connectors as installable apps from a single multi-app repo (e.g. `MemberJunction/Integrations`):
+  - **Multi-app repos via in-repo subpath** — `mj app install <repo>/<subpath>` resolves a per-app manifest under a subdirectory; scoped-tag version resolution (`<subpath>@<version>`) per app.
+  - **`OpenApp.Subpath` column** (migration + CodeGen) persists which in-repo directory an app installed from, so upgrade/remove re-fetch the right manifest.
+  - **Remove-time teardown** (`migrations.teardownDirectory`) — retires the rows an app's seed migrations wrote into the shared core schema (`__mj` Integration/IO/IOF/Action), which dropping the app's own schema cannot reach. Platform-aware (`-pg` on Postgres) + subpath-aware.
+  - **Array-form `dependencies`** accepted in the manifest (normalized to a record), so apps that ship `dependencies` as an array of `{ name, repository, versionRange }` validate and install.
+
+### Patch Changes
+
+- a95ef89: fix(open-app): `mj app` runtime-load + lifecycle correctness, plus installer/Explorer fixes
+
+  The next-applicable subset of the OpenApp lifecycle audit — runtime-load and install/upgrade/remove correctness — across four packages:
+  - **`@memberjunction/open-app-engine`.** Makes an installed Open App actually take effect and the lifecycle reversible/repeatable: installed server packages load at boot from `dynamicPackages.server[]` (and their generated GraphQL resolvers enter the live schema), and installed client packages are recorded in `dynamicPackages.client[]`; install status + reinstall correctness (npm-install failure leaves the app `Disabled` not falsely `Active`; an `Error`-state app is reinstallable; rollback drops only a schema we created; migrations baseline so a `V1` migration is never skipped); atomic upgrade dependency rewrite; and remove data-safety (DB-first ordering, co-tenant shared-schema guard, and metadata cleanup committed in one transaction on PostgreSQL). Also removes an app's **own `Application` row on uninstall** — an app's metadata-sync migration registers an `Application` (fixed UUID) grouping its entities; removal previously left it orphaned, so a reinstall's migration re-`INSERT`ed the same UUID and failed on `PK_Application_ID`. Removal now deletes an Application **wholly owned** by the removed schema (best-effort, after the atomic metadata commit; an Application that also groups other apps' entities, or one with user-added dependents, is left intact and reused). +unit tests.
+  - **`@memberjunction/cli`.** The Open App client load mechanism now lives in distributed packages instead of bespoke MJExplorer files. `mj codegen manifest` gains `--open-app-client-bootstrap`: after generating the class-registrations manifest, it appends a managed, idempotent block of side-effect imports — one per installed Open App client package recorded in `dynamicPackages.client[]` — so the apps' `@RegisterClass` decorators run when the client bundle loads. The block is rebuilt on every run, so it tracks install/remove/enable/disable (each of which edits `dynamicPackages.client`). This lets MJExplorer drop its hand-written `ensure-open-app-bootstrap.mjs` script, the separate generated bootstrap file, and the extra `app.module.ts` import — keeping the app paper-thin (changes there don't auto-distribute like npm packages). +unit tests for the pure block transform.
+  - **`@memberjunction/installer`.** The configure phase wrote a real `.env` (DB credentials, API keys) but emitted no `.gitignore`, so a freshly scaffolded project could commit secrets via `git init && git add .`. It now guarantees a `.gitignore` ignoring `.env`/`.env.*` (keeping `.env.example`); idempotent — appends only missing entries, never rewriting user lines.
+  - **`@memberjunction/ng-explorer-app`.** Fixes an MJExplorer login crash where `MJNotificationService.Instance` was read before DI constructed the singleton (surfaced by magic-link's instant, no-redirect login) — the service is now injected into `MJExplorerAppComponent` so it's constructed before `handleLogin` runs.
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [d94275b]
+- Updated dependencies [fe89e68]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [a95ef89]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [4e05350]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/codegen-lib@5.43.0
+  - @memberjunction/open-app-engine@5.43.0
+  - @memberjunction/installer@5.43.0
+  - @memberjunction/sqlserver-dataprovider@5.43.0
+  - @memberjunction/ai-cli@5.43.0
+  - @memberjunction/db-auto-doc@5.43.0
+  - @memberjunction/generic-database-provider@5.43.0
+  - @memberjunction/metadata-sync@5.43.0
+  - @memberjunction/query-gen@5.43.0
+  - @memberjunction/server-bootstrap-lite@5.43.0
+  - @memberjunction/testing-cli@5.43.0
+  - @memberjunction/cli-core@5.43.0
+  - @memberjunction/sql-converter@5.43.0
+  - @memberjunction/config@5.43.0
+  - @memberjunction/sqlglot-ts@5.43.0
+
+## 5.42.0
+
+### Minor Changes
+
+- d4c12e5: Add MJ Claude Pack: a curated bundle of `CLAUDE.md` guidance, slash commands, and skills that ships with every MemberJunction install for users of Claude Code.
+
+  New CLI commands:
+  - `mj install:claude` — installs the pack into the current directory, preserving any user content above and below the managed CLAUDE.md markers. Supports `--from <path>` for offline installs and `--dry-run` to preview.
+  - `mj update:claude` — refreshes the pack to the latest version published with the MJ major you're on. Supports `--check`, `--refresh-commands`, and `--refresh-skills` for selective updates.
+
+  `mj doctor` gains a `claude-pack` check group (5 checks: managed-block presence, VERSION file, MANIFEST integrity, managed-file hash drift, SessionStart hook wired). "No pack installed" surfaces as info, not warn — the pack is optional.
+
+  New public API:
+  - `@memberjunction/installer` exports `FileSystemAdapter.ReadBytes()` for binary file reads (used by the pack doctor's hash checks).
+
+  The pack is shipped via three paths: (1) auto-included in `mj install` and `mj bundle` via the `DistributionAssembler` sparse-checkout (replaces the legacy bootstrap-ZIP injection retired by PR #2725; opt out with `--no-claude-pack`), (2) installed onto an existing project via `mj install:claude` against a remote fetch from `raw.githubusercontent.com`, (3) refreshed via the SessionStart hook helper that nags when a newer version is available.
+
+  **Two post-M10 follow-ups from end-to-end testing against a real distribution install:**
+  - `mj install:claude` / `mj update:claude` now detect the MJ major (and full semver) by walking `apps/*/package.json` and `packages/*/package.json` when the root `package.json` is a workspace shell with no direct `@memberjunction/*` deps. Distribution-style installs put @mj deps under `apps/MJAPI` and `apps/MJExplorer`, so the previous root-only detection required every distribution-install user to pass `--major <N>` manually. Source-style monorepo checkouts and simple consumer projects are unaffected (they hit the root-level path first, exactly as before).
+  - The `InstallResult` (and `--json` output, §7.5) now has a `notes: string[]` field alongside `warnings`. "Pack is up to date" and "Update available: v… → v…" report as `notes` (informational); `warnings` is reserved for states the caller may want to act on (no local pack, customized file would be overwritten, malformed managed block). Both arrays are always present, so downstream JSON consumers can iterate without optional-chaining.
+
+### Patch Changes
+
+- 8f7260b: Add inline CodeGen baking for PostgreSQL migrations (`mj migrate convert --bake-codegen` and `mj migrate rebake`) plus a one-time PG CodeGen cutover migration and a repeatable `EntityField.AllowsNull` self-heal, enabling codegen-free PostgreSQL deploys (`mj migrate` + `mj sync push`, no `mj codegen`).
+- eea5b15: Split-and-regenerate PostgreSQL migration pipeline: regenerate the machine-generated bulk of each migration and transpile only hand-authored DDL via AST-based SQLGlot dialect transforms, replacing the brittle regex-based pg-migrate path. Adds statement-level classification for unbannered baselines and end-to-end AST transforms covering the remaining DDL edge cases.
+- 34152e1: Pluggable mj CLI with AI agent and automation friendly output: new cli-core package (BaseCLIPlugin + runtime host), json formatting for machine readable output and two tier progressive disclosure. with per-command runtime/timeout hints, and a fix for sync/push/pull hanging on DB-pool teardown after emitting results
+- Updated dependencies [9b9b484]
+- Updated dependencies [a72af01]
+- Updated dependencies [d4c12e5]
+- Updated dependencies [5ada858]
+- Updated dependencies [ded7a20]
+- Updated dependencies [6ac8ca4]
+- Updated dependencies [63d7610]
+- Updated dependencies [2f225e4]
+- Updated dependencies [b7092ca]
+- Updated dependencies [8f7260b]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [eea5b15]
+- Updated dependencies [34152e1]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/generic-database-provider@5.42.0
+  - @memberjunction/server-bootstrap-lite@5.42.0
+  - @memberjunction/metadata-sync@5.42.0
+  - @memberjunction/installer@5.42.0
+  - @memberjunction/sqlserver-dataprovider@5.42.0
+  - @memberjunction/codegen-lib@5.42.0
+  - @memberjunction/open-app-engine@5.42.0
+  - @memberjunction/db-auto-doc@5.42.0
+  - @memberjunction/sql-converter@5.42.0
+  - @memberjunction/sqlglot-ts@5.42.0
+  - @memberjunction/cli-core@5.42.0
+  - @memberjunction/ai-cli@5.42.0
+  - @memberjunction/query-gen@5.42.0
+  - @memberjunction/testing-cli@5.42.0
+  - @memberjunction/config@5.42.0
+
+## 5.41.0
+
+### Minor Changes
+
+- a5f5472: Remote Browser channel + new realtime voice providers + computer-use enrichment.
+  - **Remote Browser channel** (`@memberjunction/remote-browser-*`): an in-house realtime channel where an agent drives a live, CDP-connected browser while it talks (sales demos, support walkthroughs, trainer agents). New `AIRemoteBrowserProvider` registry (migration V202606161000) with JSONType capability gating; a universal `remote-browser-base` (driver family + `RemoteBrowserEngineBase`), a shared `remote-browser-cdp` kit (one lossless action mapper + `CdpRemoteBrowserSession`), a `remote-browser-server` engine + `RemoteBrowserChannel` (control arbiter, control modes AgentOnly/ViewOnly/Collaborative vs strategies ComputerUse/NativeAI), and five thin backends (Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).
+  - **computer-use** enriched additively into a complete browser-I/O + perception engine: CSS-selector-aware actions, CDP screencast, MouseMove, accessibility-snapshot/QueryElement/GetVisibleText/GetTitle/WaitForLoadState — every consumer benefits, existing vision/coordinate path unchanged.
+  - **New realtime model providers**: xAI Grok Voice (`@memberjunction/ai-xai`, OpenAI-Realtime-compatible) and Inworld (`@memberjunction/ai-inworld`), with vendor/model seeds.
+  - **Console logging improvements** across `@memberjunction/ai-core-plus`, `ai-engine-base`, `ai-prompts`, `aiengine`, `cli`, `generic-database-provider`, `metadata-sync`, and the bootstrap/forms packages.
+
+### Patch Changes
+
+- a69b0fa: Fix CodeGen SP generation for PK-only entities, fix mj sync push exit code on failure, and use GetSystemUser for API Key scope checks
+- efb5381: chore(cli): bump Skyway dependencies (skyway-core, skyway-postgres, skyway-sqlserver) to ^0.6.2
+- Updated dependencies [8fd6f59]
+- Updated dependencies [a69b0fa]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/codegen-lib@5.41.0
+  - @memberjunction/metadata-sync@5.41.0
+  - @memberjunction/server-bootstrap-lite@5.41.0
+  - @memberjunction/generic-database-provider@5.41.0
+  - @memberjunction/ai-cli@5.41.0
+  - @memberjunction/db-auto-doc@5.41.0
+  - @memberjunction/open-app-engine@5.41.0
+  - @memberjunction/query-gen@5.41.0
+  - @memberjunction/sqlserver-dataprovider@5.41.0
+  - @memberjunction/testing-cli@5.41.0
+  - @memberjunction/config@5.41.0
+  - @memberjunction/installer@5.41.0
+  - @memberjunction/sql-converter@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- 3da89ef: Add configurable CORS origins and opt-in rate limiting to MJ Server, add client-side permission evaluation for component artifacts, and fix CI publish failures in light-command and db-auto-doc bootstrap
+- Updated dependencies [3da89ef]
+  - @memberjunction/db-auto-doc@5.40.2
+  - @memberjunction/sqlserver-dataprovider@5.40.2
+  - @memberjunction/ai-cli@5.40.2
+  - @memberjunction/codegen-lib@5.40.2
+  - @memberjunction/metadata-sync@5.40.2
+  - @memberjunction/server-bootstrap-lite@5.40.2
+  - @memberjunction/query-gen@5.40.2
+  - @memberjunction/testing-cli@5.40.2
+  - @memberjunction/config@5.40.2
+  - @memberjunction/generic-database-provider@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/installer@5.40.2
+  - @memberjunction/open-app-engine@5.40.2
+  - @memberjunction/sql-converter@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-cli@5.40.1
+  - @memberjunction/codegen-lib@5.40.1
+  - @memberjunction/db-auto-doc@5.40.1
+  - @memberjunction/generic-database-provider@5.40.1
+  - @memberjunction/metadata-sync@5.40.1
+  - @memberjunction/open-app-engine@5.40.1
+  - @memberjunction/query-gen@5.40.1
+  - @memberjunction/sqlserver-dataprovider@5.40.1
+  - @memberjunction/server-bootstrap-lite@5.40.1
+  - @memberjunction/testing-cli@5.40.1
+  - @memberjunction/config@5.40.1
+  - @memberjunction/installer@5.40.1
+  - @memberjunction/sql-converter@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- 9233802: Convert and validate the consolidated baseline in the PostgreSQL migration pipeline. GrantRule now skips `GRANT CONNECT` (no PG equivalent) and ProcedureToFunctionRule skips CRUD sprocs whose `RETURNS SETOF` view is a deprecated/orphaned entity view — both emit `-- SKIPPED (INTENTIONAL)` markers instead of apply-failing SQL. Fix the MJCLI baseline roundtrip's PG conversion (it called nonexistent `--input/--output` flags) and correct the migrate-convert baseline JSDoc.
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+- Updated dependencies [9233802]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/codegen-lib@5.40.0
+  - @memberjunction/generic-database-provider@5.40.0
+  - @memberjunction/sqlserver-dataprovider@5.40.0
+  - @memberjunction/server-bootstrap-lite@5.40.0
+  - @memberjunction/sql-converter@5.40.0
+  - @memberjunction/ai-cli@5.40.0
+  - @memberjunction/db-auto-doc@5.40.0
+  - @memberjunction/metadata-sync@5.40.0
+  - @memberjunction/open-app-engine@5.40.0
+  - @memberjunction/query-gen@5.40.0
+  - @memberjunction/testing-cli@5.40.0
+  - @memberjunction/config@5.40.0
+  - @memberjunction/installer@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- 361eb4c: Azure-safe principal creation in baseline emitter, plus a freshly-generated v5.38.x baseline (`B202605291452__v5.38.x__Baseline.sql`).
+  - `emitPrincipals` now wraps cross-database `master.*` lookups inside `sp_executesql N'...'` string literals so Azure SQL's submission-time parser can't reject the batch. The `SERVERPROPERTY('EngineEdition') = 5` check sets `@associate = 1` on Azure, so the `master.dbo.syslogins` path never executes there — but only the dynamic-SQL wrapper prevents the parser from rejecting the batch before the IF can short-circuit it.
+  - New emitter test (`keeps cross-DB references inside string literals (Azure-safe)`) strips quoted literals from the emitted SQL and asserts zero `master.*` references survive outside string literals — regressions surface immediately.
+  - New v5.38.x baseline ships with the fix: 0 `master.*` refs outside string literals, 4 `sp_executesql` wrappers (one per SQL user), byte-equivalent to a V-stack-built source DB (0 object/row diffs across 46,432 rows). Previously published v5.34.x and v5.37.x baselines are intentionally untouched — Skyway auto-picks the latest baseline for fresh installs.
+
+- cd4f6e7: Remote distribution fetch for `mj install`, plus a new `mj bundle` command.
+  - `mj install` (distribution mode) now blobless-sparse-checks-out the source at the resolved tag and assembles the distribution layout on demand, replacing the committed bootstrap zip.
+  - New `mj bundle` builds a self-contained distribution zip for offline/air-gapped installs. `--with-migrations` ships both the SQL Server (`migrations/`) and PostgreSQL (`migrations-pg/`) trees by default; `--db-platform sqlserver|postgresql` narrows to one.
+  - `mj migrate` fetches only the migration slice it needs. It first reads the database's current version from the Skyway history table and chooses accordingly: a **fresh** database gets `baseline + tail`, while an **existing** database is upgraded with the versioned migrations _after_ its current version (no baseline) — fixing a gap where upgrading a database that sits below a newer baseline silently skipped the intermediate migrations. The detected version is shown in the CLI output.
+  - `mj migrate` also runs a TLS-aware connection preflight (also available standalone via `--check-connection`) that surfaces an actionable hint — e.g. set `DB_TRUST_SERVER_CERTIFICATE=1` for a self-signed cert — instead of a cryptic mid-migration error.
+  - The installer-generated MJExplorer environment files are emitted `as const` so union fields keep their literal types.
+
+- Updated dependencies [26761b8]
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [eaee99f]
+- Updated dependencies [2d1b4e1]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [9bc2916]
+- Updated dependencies [cd4f6e7]
+- Updated dependencies [a101a34]
+  - @memberjunction/metadata-sync@5.39.0
+  - @memberjunction/core@5.39.0
+  - @memberjunction/sqlserver-dataprovider@5.39.0
+  - @memberjunction/server-bootstrap-lite@5.39.0
+  - @memberjunction/generic-database-provider@5.39.0
+  - @memberjunction/codegen-lib@5.39.0
+  - @memberjunction/installer@5.39.0
+  - @memberjunction/ai-cli@5.39.0
+  - @memberjunction/db-auto-doc@5.39.0
+  - @memberjunction/open-app-engine@5.39.0
+  - @memberjunction/query-gen@5.39.0
+  - @memberjunction/testing-cli@5.39.0
+  - @memberjunction/config@5.39.0
+  - @memberjunction/sql-converter@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- 67d6562: Add full-stack MJ Explorer regression test suite — Docker-based runner with Computer Use engine, parallel workers via HeadlessBrowserEngine, bacpac mode, standalone compose for external use, and `mj test regression init` templates (remote-mj, generic-web, bring-your-own-app, static-file-server). Includes ephemeral workspace guard for cross-test isolation and stabilizes the suite at 25/25.
+- 748b2e7: Add deterministic baseline migration toolchain (`mj baseline build` / `compare` / `roundtrip`): introspects + emits the full MSSQL schema (tables, views, procedures, functions, triggers, UDTs, extended properties, database principals, role memberships, and object/schema/type/database permissions) with proven byte-equivalence via the row-by-row comparator. AUTO within-major rebaseline mode derives `Major.Minor` and a `latestV+1m` timestamp from the source migrations directory. Ships with workbench end-to-end script and a `/create-new-baseline-migration` slash-command driver.
+- 48dc77a: Add full-stack regression test suite for MJ Explorer driven by the Computer Use engine. New `Drag` browser action with smooth multi-step mouse motion, parallel browser worker contexts shared across tests with auto-rotation after 20 uses, JSON-on-disk run comparison via `mj test compare --from-json`, and `--dry-run` / `--parallel` / `--flaky-check` flags on the testing CLI.
+- ebb0e3d: Eliminate provider.Refresh() from query save/delete paths, introduce MJQueryEntityExtended with child-relationship getters and business logic, migrate all QueryInfo consumers outside MJCore to use QueryEngine and entity types, remove dead QueryCacheManager, and replace 12 redundant RunView calls with QueryEngine cache reads. Fixes major performance bottleneck on large-entity deployments where every query save reloaded the entire metadata graph.
+- Updated dependencies [67d6562]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [21d967f]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [48dc77a]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/metadata-sync@5.38.0
+  - @memberjunction/testing-cli@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/db-auto-doc@5.38.0
+  - @memberjunction/codegen-lib@5.38.0
+  - @memberjunction/generic-database-provider@5.38.0
+  - @memberjunction/open-app-engine@5.38.0
+  - @memberjunction/sqlserver-dataprovider@5.38.0
+  - @memberjunction/query-gen@5.38.0
+  - @memberjunction/server-bootstrap-lite@5.38.0
+  - @memberjunction/ai-cli@5.38.0
+  - @memberjunction/sql-converter@5.38.0
+  - @memberjunction/config@5.38.0
+  - @memberjunction/installer@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [464f30c]
+- Updated dependencies [baf3032]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/server-bootstrap-lite@5.37.0
+  - @memberjunction/codegen-lib@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/generic-database-provider@5.37.0
+  - @memberjunction/ai-cli@5.37.0
+  - @memberjunction/db-auto-doc@5.37.0
+  - @memberjunction/metadata-sync@5.37.0
+  - @memberjunction/query-gen@5.37.0
+  - @memberjunction/sqlserver-dataprovider@5.37.0
+  - @memberjunction/open-app-engine@5.37.0
+  - @memberjunction/testing-cli@5.37.0
+  - @memberjunction/config@5.37.0
+  - @memberjunction/installer@5.37.0
+  - @memberjunction/sql-converter@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [1c0fce9]
+- Updated dependencies [e215af2]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/server-bootstrap-lite@5.36.0
+  - @memberjunction/codegen-lib@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/metadata-sync@5.36.0
+  - @memberjunction/db-auto-doc@5.36.0
+  - @memberjunction/ai-cli@5.36.0
+  - @memberjunction/generic-database-provider@5.36.0
+  - @memberjunction/query-gen@5.36.0
+  - @memberjunction/sqlserver-dataprovider@5.36.0
+  - @memberjunction/testing-cli@5.36.0
+  - @memberjunction/open-app-engine@5.36.0
+  - @memberjunction/config@5.36.0
+  - @memberjunction/installer@5.36.0
+  - @memberjunction/sql-converter@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- 32c4a02: Unify artifact and attachment delivery paths for AI agents. Seperate artifact storage from rendering. Every attachement now creates paired Artifact + ArtifactVersion and routing functions exist to replace hardcoded MIME allowlist. Unregistered file types are rejected at upload time unless the agent opts into AcceptUnregisteredFiles. Adds wildecard MIME resolver. `mj artifacts reclassify` for legacy rows
+- Updated dependencies [6fa8e13]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [6f083dd]
+- Updated dependencies [39710b1]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/server-bootstrap-lite@5.35.0
+  - @memberjunction/generic-database-provider@5.35.0
+  - @memberjunction/open-app-engine@5.35.0
+  - @memberjunction/codegen-lib@5.35.0
+  - @memberjunction/sqlserver-dataprovider@5.35.0
+  - @memberjunction/ai-cli@5.35.0
+  - @memberjunction/db-auto-doc@5.35.0
+  - @memberjunction/metadata-sync@5.35.0
+  - @memberjunction/query-gen@5.35.0
+  - @memberjunction/testing-cli@5.35.0
+  - @memberjunction/config@5.35.0
+  - @memberjunction/installer@5.35.0
+  - @memberjunction/sql-converter@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [16e799c]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/generic-database-provider@5.34.1
+  - @memberjunction/codegen-lib@5.34.1
+  - @memberjunction/ai-cli@5.34.1
+  - @memberjunction/db-auto-doc@5.34.1
+  - @memberjunction/metadata-sync@5.34.1
+  - @memberjunction/open-app-engine@5.34.1
+  - @memberjunction/query-gen@5.34.1
+  - @memberjunction/sqlserver-dataprovider@5.34.1
+  - @memberjunction/server-bootstrap-lite@5.34.1
+  - @memberjunction/testing-cli@5.34.1
+  - @memberjunction/config@5.34.1
+  - @memberjunction/installer@5.34.1
+  - @memberjunction/sql-converter@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [5d6110f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [1b258e6]
+- Updated dependencies [e999e0d]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ai-cli@5.34.0
+  - @memberjunction/codegen-lib@5.34.0
+  - @memberjunction/config@5.34.0
+  - @memberjunction/db-auto-doc@5.34.0
+  - @memberjunction/generic-database-provider@5.34.0
+  - @memberjunction/installer@5.34.0
+  - @memberjunction/metadata-sync@5.34.0
+  - @memberjunction/open-app-engine@5.34.0
+  - @memberjunction/query-gen@5.34.0
+  - @memberjunction/sql-converter@5.34.0
+  - @memberjunction/sqlserver-dataprovider@5.34.0
+  - @memberjunction/server-bootstrap-lite@5.34.0
+  - @memberjunction/testing-cli@5.34.0
+  - @memberjunction/core@5.34.0
+
 ## 5.33.0
 
 ### Minor Changes

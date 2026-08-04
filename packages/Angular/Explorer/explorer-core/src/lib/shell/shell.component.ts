@@ -13,9 +13,9 @@ import {
   AppAccessResult,
   NavItem
 } from '@memberjunction/ng-base-application';
-import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -25,17 +25,20 @@ import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { UserSharingCenterDialogService } from './services/user-sharing-center-dialog.service';
 import { AboutDialogService } from './services/about-dialog.service';
 import { ProfileDialogService } from './services/profile-dialog.service';
+import { IsOmnibarAvailable, IsOmnibarEnabledForUser, OMNIBAR_PROMO_DISMISSED_KEY, OMNIBAR_USER_SETTING_KEY } from '../omnibar/omnibar-user-setting';
+import { GetOmnibarShortcutLabel } from '../omnibar/omnibar-shortcut';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
-import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entities';
+import { MJUserEntity, InstanceConfigEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
 import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { AppSwitcherStyle } from './components/header/app-switcher.component';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -44,6 +47,21 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
  * - Golden Layout-based tab container
  * - Unified workspace state management
  */
+/**
+ * Instance-config-backed shell chrome flags, resolved once from InstanceConfigEngine
+ * and cached for the component's lifetime. Angular change detection evaluates the
+ * getters that expose these constantly, so a per-read engine lookup would run
+ * thousands of times; resolving the whole set once keeps every read a field access.
+ */
+interface ShellChromeFlags {
+  searchBar: boolean;
+  searchPreview: boolean;
+  notifications: boolean;
+  appSwitcher: boolean;
+  appSwitcherStyle: AppSwitcherStyle;
+  appNav: boolean;
+}
+
 @Component({
   standalone: false,
   selector: 'mj-shell',
@@ -63,6 +81,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
   unreadNotificationCount = 0; // Notification badge count
+
+  // Global Activity indicator (P3)
+  activityItems: ActivityItem[] = [];
+  activityRunningCount = 0;
+  activityOpen = false;
   isViewingSystemTab = false; // True when viewing a resource tab (not associated with a registered app)
   loadingAppId: string | null = null; // ID of app currently being loaded (for app switcher loading indicator)
 
@@ -116,19 +139,150 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   selectedEntity: EntityInfo | null = null;
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
-  // Universal search bar
+  // Legacy universal search overlay (omnibar-off MOBILE path) — opened by the
+  // mobile search icon or Ctrl/Cmd+K when the inline composite isn't visible.
+  // Desktop omnibar-off uses the inline header composite instead.
+  LegacySearchOpen = false;
+
+  // Instance configuration feature flags — all resolved through the single
+  // memoized `chromeFlags` accessor below (see ShellChromeFlags) so Angular's
+  // change detection reads a cached field instead of hitting the engine per pass.
+  private _chromeFlags: ShellChromeFlags | null = null;
+
+  /**
+   * Resolve the instance-config chrome flags once and cache them. Computed live
+   * from the fail-open defaults until InstanceConfigEngine has loaded, then frozen
+   * on the first post-load read — so the pre-load defaults are never cached over
+   * the real values, and every steady-state read is a plain field access.
+   */
+  private get chromeFlags(): ShellChromeFlags {
+      if (this._chromeFlags) {
+          return this._chromeFlags;
+      }
+      const engine = InstanceConfigEngine.Instance;
+      const rawStyle = engine.Get('Shell.AppSwitcher.Style');
+      const flags: ShellChromeFlags = {
+          searchBar: engine.GetBoolean('Shell.SearchBar.Enabled', true),
+          searchPreview: engine.GetBoolean('Shell.SearchBar.EnablePreview', true),
+          notifications: engine.GetBoolean('Shell.Notifications.Enabled', true),
+          appSwitcher: engine.GetBoolean('Shell.AppSwitcher.Enabled', true),
+          // 'launcher' | 'compact' | 'auto' — invalid/absent values fall back
+          // to 'auto' (compact under a handful of apps, launcher otherwise)
+          appSwitcherStyle: rawStyle === 'launcher' || rawStyle === 'compact' ? rawStyle : 'auto',
+          appNav: engine.GetBoolean('Shell.AppNav.Enabled', true),
+      };
+      if (engine.Loaded) {
+          this._chromeFlags = flags;
+      }
+      return flags;
+  }
+
+  get ShowSearchBar(): boolean {
+      return this.chromeFlags.searchBar;
+  }
+  /** Instance Config gate for the notification bell + unread badge (desktop and mobile). */
+  get ShowNotifications(): boolean {
+      return this.chromeFlags.notifications;
+  }
+  /** Instance Config gate for the app switcher (also the add/configure-apps entry point). */
+  get ShowAppSwitcher(): boolean {
+      return this.chromeFlags.appSwitcher;
+  }
+  /** Instance Config presentation style for the app switcher (launcher/compact/auto). */
+  get AppSwitcherStyle(): AppSwitcherStyle {
+      return this.chromeFlags.appSwitcherStyle;
+  }
+  /** Instance Config gate for the app navigation strip (desktop and the mobile drawer). */
+  get ShowAppNav(): boolean {
+      return this.chromeFlags.appNav;
+  }
+  get ShowSearchPreview(): boolean {
+      return this.chromeFlags.searchPreview;
+  }
+  /**
+   * Two-layer gate for the unified Ctrl+K command palette (omnibar):
+   * the 'Shell.Omnibar.Enabled' Instance Config row is the master AVAILABILITY
+   * switch (default TRUE; false = legacy trio for everyone), and each user
+   * opts in personally via My Profile → Command Palette (a UserInfoEngine
+   * setting, so the choice follows them across devices). ON = the header shows
+   * the palette affordance and Ctrl+K / Ctrl+/ open the palette; OFF = the
+   * legacy trio (search composite + app command palette + search popup) behaves
+   * exactly as before. Both reads are synchronous cache hits.
+   */
+  get UseOmnibar(): boolean {
+      return IsOmnibarEnabledForUser();
+  }
+
+  /** Platform-correct summon-shortcut label ('⌘K' on Mac, 'Ctrl+K' elsewhere). */
+  get OmnibarShortcutLabel(): string {
+      return GetOmnibarShortcutLabel();
+  }
+
+  /**
+   * Whether the legacy search surfaces advertise the omnibar: the instance makes
+   * it available, the user hasn't opted in yet, and they haven't dismissed the
+   * promo. Fail-closed (never advertise during boot / permission constraints).
+   */
+  get ShowOmnibarPromo(): boolean {
+      try {
+          return IsOmnibarAvailable()
+              && !IsOmnibarEnabledForUser()
+              && UserInfoEngine.Instance.GetSetting(OMNIBAR_PROMO_DISMISSED_KEY) !== 'true';
+      } catch {
+          return false;
+      }
+  }
+
+  /** Promo copy shown in the legacy search surfaces. */
+  readonly OmnibarPromoText = 'Try the new command palette — search, jump to records, switch apps, and message agents from one box.';
+
+  /**
+   * Promo accepted: opt the user in (same UserInfoEngine setting as the My
+   * Profile toggle, so it follows them across devices), then open the palette
+   * pre-seeded with whatever they were just searching — same query, new
+   * surface, immediate demonstration.
+   */
+  OnOmnibarPromoAccepted(query: string): void {
+      // Demonstration first, persistence second: close the legacy surface and open
+      // the palette with the carried query IMMEDIATELY (the palette element renders
+      // unconditionally, so it doesn't need the setting to have landed). Awaiting
+      // the server write first read as a dead click on slow links.
+      this.LegacySearchOpen = false;
+      this.cdr.detectChanges();
+      this.OpenOmnibar(query?.trim() ?? '');
+      void UserInfoEngine.Instance.SetSetting(OMNIBAR_USER_SETTING_KEY, 'true').then((saved) => {
+          if (!saved) {
+              LogError('Omnibar promo opt-in failed to persist — palette will open for this session only');
+          }
+      });
+  }
+
+  /** Promo dismissed: persist server-side so it never shows again, on any device. */
+  OnOmnibarPromoDismissed(): void {
+      UserInfoEngine.Instance.SetSettingDebounced(OMNIBAR_PROMO_DISMISSED_KEY, 'true');
+  }
+
+  /** Palette footer gear → My Profile (where the Command Palette section lives). */
+  OnPaletteSettingsRequested(): void {
+      this.profileDialogService.open(this.viewContainerRef, {
+          avatarUrl: this.userImageURL || null,
+          avatarIconClass: this.userIconClass || null
+      });
+  }
+
+  @ViewChild('omnibarPalette') omnibarPalette?: { Open(initialQuery?: string): void };
+
+  /** Legacy inline search composite (omnibar-off desktop). Structural typing keeps
+      the shell decoupled from the ng-search component class. */
   @ViewChild('shellSearchComposite') shellSearchComposite: {
     Focus?(): void;
     MinRelevancePercent?: number;
     SelectedScopeIDs?: string[];
   } | undefined;
 
-  // Instance configuration feature flags
-  get ShowSearchBar(): boolean {
-      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.Enabled', true);
-  }
-  get ShowSearchPreview(): boolean {
-      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.EnablePreview', true);
+  /** Header affordance click → open the palette. */
+  OpenOmnibar(initialQuery = ''): void {
+      this.omnibarPalette?.Open(initialQuery);
   }
 
   // Tab container reference for thumbnail capture
@@ -139,20 +293,31 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private pendingAppPath: string | null = null; // Store the app path we tried to access
 
   /**
-   * Get Nav Bar apps positioned to the left of the app switcher
-   * Filters out apps that have HideNavBarIconWhenActive=true and are currently active
+   * Nav Bar apps positioned to the left of the app switcher.
+   * Backing field recomputed only when the active app or nav-app list changes
+   * (see {@link recomputeNavBarApps}) — NOT on every change-detection cycle, since
+   * this is bound directly in the shell nav template's @for/@if. Filters out apps
+   * that have HideNavBarIconWhenActive=true and are currently active.
    */
-  get leftOfSwitcherApps(): BaseApplication[] {
-    return this.appManager.GetNavBarApps('Left of App Switcher')
-      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
-  }
+  public leftOfSwitcherApps: BaseApplication[] = [];
 
   /**
-   * Get Nav Bar apps positioned to the left of the user menu
-   * Filters out apps that have HideNavBarIconWhenActive=true and are currently active
+   * Nav Bar apps positioned to the left of the user menu.
+   * Backing field recomputed only when the active app or nav-app list changes
+   * (see {@link recomputeNavBarApps}). Filters out apps that have
+   * HideNavBarIconWhenActive=true and are currently active.
    */
-  get leftOfUserMenuApps(): BaseApplication[] {
-    return this.appManager.GetNavBarApps('Left of User Menu')
+  public leftOfUserMenuApps: BaseApplication[] = [];
+
+  /**
+   * Recompute the precomputed nav-bar app arrays. Called only when the active app
+   * changes or the underlying nav-app list (re)loads — keeping the filtered arrays
+   * (and their per-app UUIDsEqual checks) out of the per-CD-cycle hot path.
+   */
+  private recomputeNavBarApps(): void {
+    this.leftOfSwitcherApps = this.appManager.GetNavBarApps('Left of App Switcher')
+      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
+    this.leftOfUserMenuApps = this.appManager.GetNavBarApps('Left of User Menu')
       .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
   }
 
@@ -179,7 +344,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     private homePinService: HomeAppPinService,
     private fileOpenService: FileOpenService,
     private feedbackDialogService: FeedbackDialogService,
-    private feedbackService: FeedbackService
+    private feedbackService: FeedbackService,
+    private activityService: ActivityService
   ) {
     super();
 
@@ -283,6 +449,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       })
     );
 
+    // Subscribe to the global Activity tracker (Run Pipeline, Sync, Cluster, …)
+    this.subscriptions.push(
+      this.activityService.Activities$.subscribe(items => {
+        this.activityItems = items;
+        this.activityRunningCount = items.filter(i => i.Status === 'running').length;
+        if (items.length === 0) this.activityOpen = false;
+        this.cdr.detectChanges();
+      })
+    );
+
     // Subscribe to unread notification count changes
     this.subscriptions.push(
       MJNotificationService.UnreadCount$.subscribe(count => {
@@ -295,6 +471,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.subscriptions.push(
       this.appManager.ActiveApp.subscribe(async app => {
         this.activeApp = app;
+        this.recomputeNavBarApps();
         this.cdr.detectChanges();
 
         // Create default tab when app is activated ONLY if:
@@ -330,10 +507,34 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           return;
         }
 
+        // Nav-app list is now populated/changed — refresh the precomputed arrays
+        // bound in the header template.
+        this.recomputeNavBarApps();
+
         // Handle the case where user has no apps at all (only after loading is complete)
         if (apps.length === 0) {
           await this.handleNoAppsAvailable();
           return;
+        }
+
+        // App-locked session (e.g. magic-link): ignore whatever app the URL names
+        // (including a pasted /app/home) and keep the user on their scoped app.
+        const lockedId = this.authBase.GetSessionScope()?.restrictedToApplicationId;
+        if (lockedId) {
+          const scopedApp = this.appManager.GetAppById(lockedId);
+          if (scopedApp) {
+            // Resolve the app the URL currently names and compare by ID — never
+            // string-match a hand-rolled name slug, which diverges from a custom
+            // Path and would loop the redirect. (navigateToApp uses app.Path.)
+            const path = (this.router.url || '').split('#')[0].split('?')[0];
+            const urlAppPath = path.match(/\/app\/([^\/?#]+)/)?.[1];
+            const currentApp = urlAppPath ? this.appManager.GetAppByPath(decodeURIComponent(urlAppPath)) : undefined;
+            if (!currentApp || !UUIDsEqual(currentApp.ID, lockedId)) {
+              await this.navigateToApp(scopedApp);
+              return;
+            }
+            // already on the scoped app — fall through to normal handling below
+          }
         }
 
         // Check if URL specifies an app by parsing the browser URL
@@ -443,6 +644,29 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           const userEntity = await md.GetEntityObject<any>('MJ: Users');
           await userEntity.Load(currentUserInfo.ID);
           this.applyUserAvatar(userEntity);
+        }
+      })
+    );
+
+    // Listen for tenant context changes (e.g., BCSaaS org switching).
+    // Two phases:
+    //   'start' (eventCode TenantChanging) — show loading screen immediately
+    //   'complete' (eventCode TenantChanged) — reload tabs and hide loading screen
+    this.subscriptions.push(
+      MJGlobal.Instance.GetEventListener(false).subscribe(async event => {
+        if (event.event === MJEventType.TenantChanged) {
+          if (event.eventCode === 'TenantChanging') {
+            this.currentLoadingText = 'Switching organization...';
+            this.loading = true;
+            this.cdr.detectChanges();
+          } else if (event.eventCode === 'TenantChanged' && this.tabContainerRef) {
+            try {
+              await this.tabContainerRef.ReloadAllTabs();
+            } finally {
+              this.loading = false;
+              this.cdr.detectChanges();
+            }
+          }
         }
       })
     );
@@ -1256,7 +1480,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         case 'records':
           // /app/:appName/record/:entityName/:recordId
           if (entityName && recordId) {
-            return appendQP(`/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${recordId}`);
+            // recordId is a CompositeKey URL segment ("ID|<value>") — the '|' MUST be encoded.
+            // Angular's UrlSerializer percent-encodes '|' to %7C in router.url, so if we embed it raw
+            // here, `syncUrlWithWorkspace`'s `currentUrl !== newUrl` check is permanently true and can
+            // drive a re-navigation loop (with onSameUrlNavigation:'reload'). The read side already
+            // decodeURIComponent()s this segment, so encoding here keeps both sides consistent.
+            return appendQP(`/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${encodeURIComponent(recordId)}`);
           }
           break;
 
@@ -1333,7 +1562,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     switch (resourceType) {
       case 'records':
         if (entityName && recordId) {
-          return appendQP(`/resource/record/${encodeURIComponent(entityName)}/${recordId}`);
+          // Encode the CompositeKey segment ('|' → %7C) to match Angular's serialized router.url and
+          // the decodeURIComponent() on the read side — see the app-scoped 'records' case above.
+          return appendQP(`/resource/record/${encodeURIComponent(entityName)}/${encodeURIComponent(recordId)}`);
         }
         break;
 
@@ -1385,6 +1616,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * a race condition in components we DO NOT control, so while the naming
    * is intended to imply the goal it doesn't "hurt" to have this work this way
    */
+  /**
+   * True when the auth session is locked to a single application (e.g. a
+   * magic-link session). The header hides app-switching chrome so the external
+   * user stays within their scoped app. Data access is still enforced
+   * server-side by the user's role; this is the UI-confinement layer.
+   */
+  public get appSwitchingLocked(): boolean {
+    return !!this.authBase.GetSessionScope()?.restrictedToApplicationId;
+  }
+
   onFirstResourceLoadComplete(): void {
     this.waitingForFirstResource = false;
     this.loading = false;
@@ -1475,19 +1716,30 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   }
 
   /**
-   * Nuclear recovery: clear all browser-side cached data and reload the page.
-   * This clears localStorage, sessionStorage, and IndexedDB to recover
-   * from stuck loading states caused by corrupted or stale cached data.
+   * Nuclear recovery: reset server-side workspace, clear all browser-side
+   * cached data, and reload the page. This recovers from stuck loading states
+   * caused by corrupted, stale, or incompatible workspace/tab data (e.g., after
+   * a version upgrade that changes the workspace configuration schema).
    */
-  ResetApplication(): void {
+  async ResetApplication(): Promise<void> {
     try {
-      // 1. Clear localStorage
+      // 1. Reset server-side workspace to a clean default configuration.
+      //    This is the most common cause of stuck loading: stale tab configs
+      //    from a previous version reference resources/driver classes that
+      //    no longer exist or have changed format.
+      await this.workspaceManager.ResetConfiguration();
+    } catch (e) {
+      console.warn('Error resetting workspace configuration:', e);
+    }
+
+    try {
+      // 2. Clear localStorage
       localStorage.clear();
 
-      // 2. Clear sessionStorage
+      // 3. Clear sessionStorage
       sessionStorage.clear();
 
-      // 3. Delete all IndexedDB databases
+      // 4. Delete all IndexedDB databases
       if (window.indexedDB?.databases) {
         window.indexedDB.databases().then(databases => {
           for (const db of databases) {
@@ -2052,8 +2304,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.showPinProgress('Pinning...');
       // Let the UI render the overlay before starting the work
       await new Promise<void>(resolve => setTimeout(resolve, 0));
-      await this.handlePinToHome();
-      this.hidePinProgress();
+      try {
+        await this.handlePinToHome();
+      } catch (err) {
+        LogError(err);
+      } finally {
+        // Always clear the overlay — otherwise a failure (or a slow thumbnail
+        // capture) would leave the "Pinning..." spinner stuck on screen.
+        this.hidePinProgress();
+      }
       return;
     }
 
@@ -2184,8 +2443,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     });
 
     if (added) {
-      this.showPinProgress(`Capturing preview for "${displayName}"...`);
-      await this.captureAndAttachThumbnail(activeTab, resourceType);
+      // Capture the preview in the BACKGROUND — do not block pin completion (and the
+      // "Pinning..." overlay) on it. The thumbnail is purely decorative, and capture can
+      // be expensive for heavy resources (e.g. the Data Explorer's large grid/map DOM,
+      // where html-to-image clones the whole tree synchronously). The pin already exists
+      // the moment AddPin() returns, so let the overlay clear immediately.
+      void this.captureAndAttachThumbnail(activeTab, resourceType);
     } else {
       MJNotificationService.Instance.CreateSimpleNotification(
         `"${activeTab.title}" is already pinned to Home`, 'info', 3000
@@ -2351,9 +2614,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   @HostListener('document:keydown', ['$event'])
   handleGlobalKeyboardShortcuts(event: KeyboardEvent): void {
-    // Skip if user is typing in an input/textarea
+    // Skip if user is typing in an input/textarea — EXCEPT when the omnibar is on:
+    // a modal palette is summonable from anywhere (incl. the chat composer), like
+    // Slack/Linear. The legacy path keeps the guard (its binding steals focus).
     const target = event.target as HTMLElement;
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+    const inEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+    if (inEditable && !this.UseOmnibar) {
       return;
     }
 
@@ -2361,11 +2627,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
 
-    // Cmd+/ or Ctrl+/ opens command palette
+    // Cmd+/ or Ctrl+/ opens the palette (omnibar '/' mode when enabled, legacy otherwise)
     if (isCtrlOrCmd && event.key === '/') {
       event.preventDefault();
       event.stopPropagation();
-      this.commandPaletteService.Open();
+      if (this.UseOmnibar) {
+        this.OpenOmnibar('/');
+      } else {
+        this.commandPaletteService.Open();
+      }
     }
   }
 
@@ -2483,6 +2753,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * Toggle search popup visibility
    */
   toggleSearch(): void {
+    if (this.UseOmnibar) {
+      this.OpenOmnibar();
+      return;
+    }
     this.isSearchOpen = !this.isSearchOpen;
 
     // Focus on search input when opened
@@ -2540,16 +2814,40 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   @HostListener('document:keydown', ['$event'])
   OnGlobalKeydown(event: KeyboardEvent): void {
+      // Ctrl/Cmd+K summons search. Omnibar: the modal palette opens from anywhere,
+      // even while typing (explicit chord, Slack/Linear semantics). Legacy: the
+      // chord FOCUSES the inline header composite on desktop (results attach
+      // beneath it), so keep the don't-steal-focus-mid-typing guard; on mobile
+      // (no composite rendered) it opens the Spotlight overlay instead.
       const target = event.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      const inEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      if (inEditable && !this.UseOmnibar) {
+          return;
+      }
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
       if (isCtrlOrCmd && event.key === 'k') {
           event.preventDefault();
           event.stopPropagation();
-          if (this.shellSearchComposite?.Focus) {
-              this.shellSearchComposite.Focus();
-          }
+          this.OnHeaderSearchClick();
+      }
+  }
+
+  /** Header search affordance / Ctrl+K: route to whichever search surface applies.
+      The mobile check matters: below the breakpoint the composite is CSS-hidden
+      (.desktop-only) but its ViewChild still exists — focusing an invisible input
+      would silently eat the interaction. */
+  OnHeaderSearchClick(): void {
+      const isMobile = window.matchMedia('(max-width: 768px)').matches;
+      if (this.UseOmnibar) {
+          this.OpenOmnibar();
+      } else if (!isMobile && this.shellSearchComposite?.Focus) {
+          // Omnibar-off desktop: the inline composite is on screen — focus it and
+          // let its attached suggest dropdown do the work.
+          this.shellSearchComposite.Focus();
+      } else {
+          // Omnibar-off mobile: no visible inline composite — open the Spotlight overlay.
+          this.LegacySearchOpen = true;
       }
   }
 
@@ -2568,6 +2866,21 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.navigationService.OpenEntityRecord(result.EntityName, pkey);
   }
 
+  /** Legacy search overlay selection → same navigation path as the old composite. */
+  OnOverlayResultSelected(event: { Result: { EntityName: string; RecordID: string; ResultType?: string; RawMetadata?: string } }): void {
+      this.LegacySearchOpen = false;
+      this.OnSearchResultSelected(event.Result);
+  }
+
+  /** Legacy search overlay "See all results" → the full Search Results workspace
+      (same destination as the omnibar's see-all row). */
+  OnOverlaySeeAll(query: string): void {
+      this.LegacySearchOpen = false;
+      this.navigationService.OpenSearch(query);
+  }
+
+  /** Inline composite submit (Enter) → full Search Results workspace, carrying the
+      composite's relevance/scope selections. */
   OnSearchSubmitted(query: string): void {
       if (query && query.trim().length >= 2) {
           const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
@@ -2579,6 +2892,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }
   }
 
+  /** Inline composite's suggest-dropdown "See all N results" footer. */
   OnSeeAllSearch(query: string): void {
       this.OnSearchSubmitted(query);
   }
@@ -2590,6 +2904,27 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /**
    * Show notifications page as a tab
    */
+  /** Toggle the global Activity drawer. */
+  toggleActivity(event: MouseEvent): void {
+    event.stopPropagation();
+    this.activityOpen = !this.activityOpen;
+    this.cdr.detectChanges();
+  }
+
+  /** Clear finished activities from the tracker. */
+  clearFinishedActivity(): void {
+    this.activityService.ClearFinished();
+  }
+
+  /** Close the Activity drawer when clicking anywhere outside it. */
+  @HostListener('document:click')
+  onDocumentClickCloseActivity(): void {
+    if (this.activityOpen) {
+      this.activityOpen = false;
+      this.cdr.detectChanges();
+    }
+  }
+
   showNotifications(): void {
     MJGlobal.Instance.RaiseEvent({
       event: MJEventType.ComponentEvent,
@@ -2914,8 +3249,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
 
     // Update URL to reflect the new app
-    const appPath = app.Path || app.Name;
-    this.router.navigateByUrl(`/app/${encodeURIComponent(appPath)}`);
+    this.router.navigateByUrl(this.appManager.GetAppUrl(app));
   }
 
   /**

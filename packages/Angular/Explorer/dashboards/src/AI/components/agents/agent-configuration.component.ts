@@ -11,6 +11,7 @@ import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { TreeBranchConfig, TreeLeafConfig, AfterNodeClickEventArgs, AfterNodeDoubleClickEventArgs } from '@memberjunction/ng-trees';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 
 interface AgentFilter {
   searchTerm: string;
@@ -76,6 +77,134 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     exposeAsAction: 'all',
     categoryId: 'all'
   };
+
+  /** Static option arrays for the shared mj-filter-panel. */
+  public readonly statusOptions = [
+    { text: 'All Statuses', value: 'all' },
+    { text: 'Active',       value: 'active' },
+    { text: 'Inactive',     value: 'inactive' },
+  ];
+  public readonly executionModeOptions = [
+    { text: 'All Execution Modes', value: 'all' },
+    { text: 'Sequential',          value: 'Sequential' },
+    { text: 'Parallel',            value: 'Parallel' },
+  ];
+  public readonly exposeAsActionOptions = [
+    { text: 'All Agents',       value: 'all' },
+    { text: 'Exposed as Action', value: 'true' },
+    { text: 'Not Exposed',       value: 'false' },
+  ];
+
+  /** Dynamic agent-type options built from AIEngineBase metadata. */
+  public get agentTypeOptions(): { text: string; value: string }[] {
+    const aiEngine = AIEngineBase.Instance;
+    const types = aiEngine?.AgentTypes ?? [];
+    return [
+      { text: 'All Types', value: 'all' },
+      ...types.map(t => ({ text: t.Name, value: t.ID })),
+    ];
+  }
+
+  /** Dynamic parent-agent options built from the loaded agents (top-level only). */
+  public get parentAgentOptions(): { text: string; value: string }[] {
+    return [
+      { text: 'All Agents', value: 'all' },
+      { text: 'No Parent',  value: 'none' },
+      ...this.agents
+        .filter(a => !a.ParentID)
+        .map(a => ({ text: a.Name || 'Unnamed Agent', value: a.ID })),
+    ];
+  }
+
+  /** View-mode options for the shared <mj-view-toggle>. */
+  public readonly agentViewOptions = [
+    { key: 'grid', icon: 'fa-solid fa-grip',        title: 'Grid View' },
+    { key: 'list', icon: 'fa-solid fa-list',        title: 'List View' },
+    { key: 'tree', icon: 'fa-solid fa-folder-tree', title: 'Category Tree View' },
+  ];
+
+  /** Field config consumed by the centralized <mj-filter-panel>. */
+  public get agentFilterFields(): FilterFieldConfig[] {
+    return [
+      { key: 'agentType',      type: 'dropdown', label: 'Type',            icon: 'fa-solid fa-robot',     options: this.agentTypeOptions },
+      { key: 'parentAgent',    type: 'dropdown', label: 'Parent',          icon: 'fa-solid fa-sitemap',   options: this.parentAgentOptions, filterable: this.parentAgentOptions.length > 10 },
+      { key: 'status',         type: 'dropdown', label: 'Status',          icon: 'fa-solid fa-toggle-on', options: this.statusOptions },
+      { key: 'executionMode',  type: 'dropdown', label: 'Execution Mode',  icon: 'fa-solid fa-list-ol',   options: this.executionModeOptions },
+      { key: 'exposeAsAction', type: 'dropdown', label: 'Action Exposure', icon: 'fa-solid fa-share',     options: this.exposeAsActionOptions },
+    ];
+  }
+
+  /** Current category selection for the tree dropdown (Category is projected into mj-filter-panel as a custom widget). */
+  public SelectedCategoryKey: CompositeKey | null = null;
+
+  /**
+   * Timestamp of last real (non-null) category set. Used to swallow spurious
+   * null re-emits from <mj-tree-dropdown> that arrive milliseconds after a
+   * real selection — without the guard, the spurious null resets categoryId
+   * to 'all' before the user sees the filtered list, making the Category
+   * filter appear broken. See onCategoryChange below.
+   */
+  private _lastCategorySetAt = 0;
+
+  /** Handler for the projected mj-tree-dropdown — extracts the entity ID from the CompositeKey. */
+  public onCategoryChange(value: CompositeKey | CompositeKey[] | null): void {
+    // Duck-typed extraction — works whether tree-dropdown emits a real
+    // CompositeKey instance or a plain object (it's currently the latter
+    // when projected inside <mj-filter-panel>). Single-PK entities: take
+    // the first KVP's Value; FieldName varies by entity so positional is
+    // safer than name-matching.
+    const single = !value || Array.isArray(value) ? null : value;
+
+    // Swallow the spurious null re-emit that <mj-tree-dropdown> fires within
+    // a few milliseconds of a real selection (confirmed empirically — the
+    // null arrives ~2ms after the real CompositeKey). Without this guard, the
+    // null resets categoryId to 'all' and the filter never narrows. A 100ms
+    // window is short enough to never interfere with a deliberate user clear.
+    const now = Date.now();
+    if (single == null && (now - this._lastCategorySetAt) < 100) {
+      return;
+    }
+
+    const idValue = single?.KeyValuePairs?.[0]?.Value;
+    this.currentFilters = {
+      ...this.currentFilters,
+      categoryId: (idValue != null && idValue !== '') ? String(idValue) : 'all'
+    };
+    if (single != null) {
+      this._lastCategorySetAt = now;
+    }
+    this.SelectedCategoryKey = single;
+    this.applyFilters();
+    this.saveUserPreferencesDebounced();
+  }
+
+  /** Receive the updated values record from <mj-filter-panel> and apply it. */
+  public onFilterValuesChange(values: Record<string, unknown>): void {
+    // Preserve fields the panel doesn't own (searchTerm comes from toolbar, categoryId from tree-dropdown handler)
+    this.currentFilters = {
+      ...this.currentFilters,
+      agentType:      (values['agentType']      as string) ?? 'all',
+      parentAgent:    (values['parentAgent']    as string) ?? 'all',
+      status:         (values['status']         as string) ?? 'all',
+      executionMode:  (values['executionMode']  as string) ?? 'all',
+      exposeAsAction: (values['exposeAsAction'] as string) ?? 'all',
+    };
+    this.applyFilters();
+    this.saveUserPreferencesDebounced();
+  }
+
+  /** Number of currently-applied filter criteria inside the popover (excludes searchTerm — surfaced separately in the header). */
+  public get ActiveFilterCount(): number {
+    const f = this.currentFilters;
+    let n = 0;
+    if (f.agentType && f.agentType !== 'all') n++;
+    if (f.parentAgent && f.parentAgent !== 'all') n++;
+    if (f.status && f.status !== 'all') n++;
+    if (f.executionMode && f.executionMode !== 'all') n++;
+    if (f.exposeAsAction && f.exposeAsAction !== 'all') n++;
+    if (f.categoryId && f.categoryId !== 'all') n++;
+    return n;
+  }
 
   public selectedAgentForTest: MJAIAgentEntityExtended | null = null;
 
@@ -364,6 +493,13 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     this.applyFilters();
   }
 
+  /** Handler for the inline mj-page-search input in the page-header toolbar. */
+  public onSearchTermChange(value: string): void {
+    this.currentFilters = { ...this.currentFilters, searchTerm: value ?? '' };
+    this.applyFilters();
+    this.saveUserPreferencesDebounced();
+  }
+
   public onResetFilters(): void {
     this.currentFilters = {
       searchTerm: '',
@@ -374,6 +510,11 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       exposeAsAction: 'all',
       categoryId: 'all'
     };
+    // Clear the tree-dropdown's bound value too — otherwise the dropdown
+    // visually still shows the previous category after Reset (the value
+    // input drives its internal display state).
+    this.SelectedCategoryKey = null;
+    this._lastCategorySetAt = 0;
     this.applyFilters();
     this.saveUserPreferencesDebounced();
   }

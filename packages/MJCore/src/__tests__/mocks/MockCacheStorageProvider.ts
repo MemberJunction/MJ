@@ -42,6 +42,16 @@ export class MockCacheStorageProvider implements ILocalStorageProvider {
         return categoryStorage?.get(key) ?? null;
     }
 
+    async GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>> {
+        // Batched read mirroring GetItem semantics (one entry per unique key) —
+        // required by LocalCacheManager.GetRunViewResults (smart-cache flow).
+        const out = new Map<string, T | null>();
+        for (const key of new Set(keys)) {
+            out.set(key, (await this.GetItem(key, category)) as unknown as T | null);
+        }
+        return out;
+    }
+
     async SetItem(key: string, value: string, category?: string): Promise<void> {
         this._setCallCount++;
 

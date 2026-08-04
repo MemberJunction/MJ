@@ -3,7 +3,7 @@ import { RegisterClass, SQLExpressionValidator } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal } from "@memberjunction/global";
 import { BaseEntity, LogError } from "@memberjunction/core";
-import { QueryCompositionEngine } from "@memberjunction/generic-database-provider";
+import { QueryCompositionEngine, QueryPagingEngine } from "@memberjunction/generic-database-provider";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
@@ -245,23 +245,34 @@ export class RunAdhocQueryAction extends BaseAction {
     }
 
     /**
-     * Ensures query has a row limit to prevent overwhelming results
+     * Ensures query has a row limit to prevent overwhelming results.
+     *
+     * The prior regex `query.replace(/^(\s*SELECT\s+)/i, \`$1TOP ${maxRows} \`)`
+     * produced INVALID T-SQL for `SELECT DISTINCT …` inputs — it injected
+     * `TOP N` between `SELECT` and `DISTINCT`, but T-SQL requires
+     * `SELECT DISTINCT TOP N …` (DISTINCT first). The agent's "Run Ad-hoc
+     * Query" tool routinely emits DISTINCT and was getting stuck in retry
+     * loops because every SQL it tried got mangled. The same regex also
+     * silently dropped the cap on WITH/CTE inputs and only capped the first
+     * branch of UNION/INTERSECT/EXCEPT queries.
+     *
+     * Delegating to QueryPagingEngine.WrapWithMaxRows uses the AST-based
+     * row-cap path with full DISTINCT / set-op / CTE / TOP-PERCENT / WITH-TIES
+     * handling. Same function used by RenderPipeline for saved queries.
      */
     private ensureRowLimit(query: string, maxRows: number): string {
-        // Check if query already has TOP clause
-        const hasTop = /SELECT\s+TOP\s+\d+/i.test(query);
-        if (hasTop) {
-            return query;
+        try {
+            const provider = BaseEntity.Provider as SQLServerDataProvider;
+            const platform = (provider?.PlatformKey ?? 'sqlserver') as 'sqlserver' | 'postgresql';
+            return QueryPagingEngine.WrapWithMaxRows(query, maxRows, platform);
+        } catch {
+            // Ultimate safety net: if WrapWithMaxRows throws, fall back to a
+            // DISTINCT-aware regex (still better than the original).
+            const hasTop = /SELECT\s+TOP\s+\d+/i.test(query);
+            const hasOffsetFetch = /OFFSET\s+\d+\s+ROWS\s+FETCH/i.test(query);
+            if (hasTop || hasOffsetFetch) return query;
+            return query.replace(/^(\s*SELECT\s+(?:DISTINCT\s+|ALL\s+)?)/i, `$1TOP ${maxRows} `);
         }
-
-        // Check if query has OFFSET-FETCH (SQL Server 2012+)
-        const hasOffsetFetch = /OFFSET\s+\d+\s+ROWS\s+FETCH/i.test(query);
-        if (hasOffsetFetch) {
-            return query;
-        }
-
-        // Add TOP clause
-        return query.replace(/^(\s*SELECT\s+)/i, `$1TOP ${maxRows} `);
     }
 
     /**

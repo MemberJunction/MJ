@@ -2,6 +2,13 @@
     display: block;
     width: 100%;
     height: 100%;
+    /* Contain the map's internal stacking context. Leaflet's panes/controls and
+       the toolbar use z-index values up to ~1000; without isolation those leak
+       into the shared context and paint over app overlays that open above the
+       map (e.g. the Data Explorer view-selector dropdown). `isolation: isolate`
+       flattens all of them into this host's single stacking context so external
+       overlays layer correctly. */
+    isolation: isolate;
 }
 
 .mj-map-view-wrapper {

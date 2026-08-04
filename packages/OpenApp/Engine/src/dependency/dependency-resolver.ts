@@ -3,14 +3,23 @@
  *
  * Performs topological sorting of app dependencies to determine correct
  * install order, and detects circular dependency chains.
+ *
+ * @deprecated Superseded by `ResolveDependencyGraph` in
+ * `./dependency-graph-builder.ts`, which resolves the FULL transitive graph
+ * (fetching every reachable dependency's manifest) before installing. The
+ * resolver here only walks a single, pre-supplied level of declared
+ * dependencies and is no longer used by the install path. Retained as public
+ * API for now; slated for removal at the next major version bump. New callers
+ * should use `ResolveDependencyGraph`.
  */
 import type { ResolvedDependency } from '../types/open-app-types.js';
 import { CheckDependencyVersionCompatibility } from './version-checker.js';
 
 /**
- * Dependency value: either a plain semver range string or an object with version and repository.
+ * Dependency value: either a plain semver range string or an object with version,
+ * repository, and (for a dependency that lives in a multi-app repo) an optional in-repo subpath.
  */
-export type DependencyValue = string | { version: string; repository: string };
+export type DependencyValue = string | { version: string; repository: string; subpath?: string };
 
 /**
  * A node in the dependency graph, representing one app and its requirements.
@@ -56,6 +65,12 @@ export interface InstalledAppMap {
  * @param rootNode - The app being installed and its dependency declarations
  * @param installedApps - Map of apps already installed in the MJ instance
  * @returns Ordered install plan or error details
+ *
+ * @deprecated Use `ResolveDependencyGraph` (dependency-graph-builder.ts)
+ * instead. That function resolves the complete transitive graph across repos
+ * with real cross-repo cycle detection; this one only sorts a single
+ * pre-supplied level of declarations. Nothing in the install path calls this
+ * anymore. Slated for removal at the next major version bump.
  */
 export function ResolveDependencies(
     rootNode: DependencyNode,

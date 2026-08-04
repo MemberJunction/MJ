@@ -1,0 +1,36 @@
+{
+  "name": "@memberjunction/ai-segmentation",
+  "type": "module",
+  "version": "6.0.0",
+  "description": "MemberJunction: Content Segmentation — pluggable chunking strategies for RAG ingestion",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/ai-core-plus": "6.0.0",
+    "@memberjunction/ai-prompts": "6.0.0",
+    "@memberjunction/ai-vectors": "6.0.0",
+    "@memberjunction/aiengine": "6.0.0",
+    "@memberjunction/core": "6.0.0",
+    "@memberjunction/core-entities": "6.0.0",
+    "@memberjunction/global": "6.0.0",
+    "cheerio": "^1.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

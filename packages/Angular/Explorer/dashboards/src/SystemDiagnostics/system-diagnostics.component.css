@@ -1,102 +1,37 @@
-.system-diagnostics {
-    padding: 0;
-    background: var(--mj-bg-surface-sunken);
-    height: 100%;
+/*
+  SystemDiagnostics renders inside Admin's "Monitoring" left-nav shell.
+  Host is a flex column so <mj-page-header-interior> sits pinned at the top
+  and .scrollable-content fills the rest. See plans/explorer-chrome-conventions.md Section 10.
+*/
+:host {
     display: flex;
     flex-direction: column;
+    height: 100%;
     overflow: hidden;
-}
-
-/* Header */
-.diagnostics-header {
     background: var(--mj-bg-page);
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--mj-border-default);
+}
+
+.system-diagnostics {
+    background: var(--mj-bg-surface-sunken);
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
+}
+
+/* Inline auto-refresh toggle in the [actions] slot. */
+.auto-refresh-toggle {
+    display: inline-flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 16px;
-    flex-shrink: 0;
-}
-
-.header-title {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.header-title i {
-    font-size: 24px;
-    color: var(--mj-status-success);
-}
-
-.header-title h2 {
-    margin: 0;
-    font-size: 22px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-}
-
-.header-controls {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-}
-
-.auto-refresh-control {
-    display: flex;
-    align-items: center;
-    gap: 12px;
+    gap: 6px;
+    cursor: pointer;
     font-size: 13px;
     color: var(--mj-text-secondary);
+    white-space: nowrap;
 }
 
-.auto-refresh-control label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+.auto-refresh-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
     cursor: pointer;
-}
-
-.auto-refresh-control input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-}
-
-.refresh-indicator {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--mj-status-success);
-    font-size: 12px;
-}
-
-.refresh-btn {
-    background: var(--mj-status-success);
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    transition: all 0.2s ease;
-}
-
-.refresh-btn:hover:not(:disabled) {
-    background: var(--mj-color-success-800);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-status-success) 30%, transparent);
-}
-
-.refresh-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
 }
 
 .spinning {
@@ -108,263 +43,19 @@
     100% { transform: rotate(360deg); }
 }
 
-/* Overview Cards Container (Collapsible) */
-.overview-cards-container {
-    position: relative;
-    background: var(--mj-bg-page);
-    border-bottom: 1px solid var(--mj-border-default);
-    flex-shrink: 0;
-    transition: all 0.3s ease;
-}
-
-.overview-cards-container.collapsed {
-    padding: 0;
-}
-
-.kpi-toggle-btn {
-    position: absolute;
-    right: 24px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 28px;
-    height: 28px;
-    border-radius: var(--mj-radius-full);
-    border: 1px solid var(--mj-border-default);
-    background: var(--mj-bg-page);
-    color: var(--mj-text-secondary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    transition: all 0.2s ease;
-    z-index: 10;
-}
-
-.kpi-toggle-btn:hover {
-    background: var(--mj-bg-surface-sunken);
-    border-color: var(--mj-border-default);
-    color: var(--mj-text-primary);
-}
-
-.overview-cards-container.collapsed .kpi-toggle-btn {
-    top: 50%;
-}
-
-/* Overview Cards */
-.overview-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-    padding: 20px 24px;
-    padding-right: 60px;
-    background: var(--mj-bg-page);
-    flex-shrink: 0;
-}
-
-/* Mini KPI Bar (Collapsed State) */
-.overview-cards-mini {
-    display: flex;
-    align-items: center;
-    gap: 24px;
-    padding: 10px 60px 10px 24px;
-    background: var(--mj-bg-page);
-}
-
-.mini-kpi {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--mj-text-secondary);
-}
-
-.mini-kpi i {
-    font-size: 14px;
-    color: var(--mj-color-indigo-500);
-}
-
-.mini-kpi.warning i {
-    color: var(--mj-color-warning-500);
-}
-
-.mini-value {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-}
-
-.mini-label {
-    font-size: 12px;
-    color: var(--mj-text-muted);
-}
-
-.mini-divider {
-    width: 1px;
-    height: 20px;
-    background: var(--mj-border-default);
-}
-
-.overview-card {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1rem;
-    background: var(--mj-bg-surface-card);
-    border-radius: var(--mj-radius-lg);
-    border: 1px solid var(--mj-border-default);
-    box-shadow: var(--mj-shadow-md);
-}
-
-.card-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: var(--mj-radius-lg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-    flex-shrink: 0;
-}
-
-.card-icon--engines {
-    background: var(--mj-color-accent-300);
-    color: var(--mj-brand-primary);
-}
-
-.card-icon--memory {
-    background: var(--mj-color-warning-50);
-    color: var(--mj-color-warning-700);
-}
-
-.card-icon--warning {
-    background: var(--mj-color-error-100);
-    color: var(--mj-status-error);
-}
-
-.card-icon--success {
-    background: var(--mj-color-success-100);
-    color: var(--mj-status-success);
-}
-
-.card-content {
-    flex: 1;
-    min-width: 0;
-}
-
-.card-value {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: var(--mj-text-primary);
-    line-height: 1;
-    letter-spacing: -0.02em;
-}
-
-.card-label {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--mj-text-secondary);
-    margin-top: 0.25rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.card-subtitle {
-    font-size: 0.6875rem;
-    color: var(--mj-text-muted);
-    margin-top: 0.125rem;
-}
+/*
+  Overview KPIs (engines / memory / redundant) now live as <mj-stat-badge>
+  instances in the chrome's [meta] slot — see the header-interior block above.
+  The legacy .overview-cards-container / .overview-card / .kpi-toggle-btn /
+  .mini-kpi rules were retired with that migration.
+*/
 
 /* Main Content */
-.main-content {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-}
-
-/* Left Navigation */
-.left-nav {
-    width: 240px;
-    background: var(--mj-bg-page);
-    border-right: 1px solid var(--mj-border-default);
-    padding: 16px 0;
-    flex-shrink: 0;
-}
-
-.nav-section {
-    padding: 0 12px;
-}
-
-.nav-section-title {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--mj-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 8px 12px;
-    margin-bottom: 4px;
-}
-
-.nav-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    border-radius: var(--mj-radius-md);
-    cursor: pointer;
-    color: var(--mj-text-secondary);
-    font-size: 14px;
-    transition: all 0.2s ease;
-    margin-bottom: 4px;
-}
-
-.nav-item:hover {
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-primary);
-}
-
-.nav-item.active {
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    color: var(--mj-brand-primary);
-    font-weight: 500;
-}
-
-.nav-item i {
-    width: 18px;
-    text-align: center;
-    font-size: 15px;
-}
-
-.nav-item span:first-of-type {
-    flex: 1;
-}
-
-.nav-badge {
-    background: var(--mj-border-default);
-    color: var(--mj-text-secondary);
-    font-size: 11px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: var(--mj-radius-lg);
-    min-width: 24px;
-    text-align: center;
-}
-
-.nav-item.active .nav-badge {
-    background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-    color: var(--mj-brand-primary);
-}
-
-.nav-badge--warning {
-    background: var(--mj-color-warning-500) !important;
-    color: white !important;
-}
-
-.nav-badge--success {
-    background: var(--mj-status-success) !important;
-    color: white !important;
-}
-
-/* Content Area */
+/*
+  Content Area — L2 nav was previously a bespoke left rail (.left-nav). It now
+  lives in the interior chrome above as <mj-tab-nav>. Section panels render
+  directly inside .content-area, which fills the remaining body width.
+*/
 .content-area {
     flex: 1;
     padding: 24px;
@@ -467,36 +158,6 @@
     color: var(--mj-status-success);
 }
 
-.error-banner {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
-    background: var(--mj-color-error-100);
-    border: 1px solid var(--mj-color-error-100);
-    border-radius: var(--mj-radius-md);
-    color: var(--mj-status-error);
-    font-size: 13px;
-    margin-bottom: 16px;
-}
-
-.error-banner i {
-    color: var(--mj-status-error);
-}
-
-.error-banner .dismiss-btn {
-    margin-left: auto;
-    background: transparent;
-    border: none;
-    color: var(--mj-text-muted);
-    cursor: pointer;
-    padding: 4px;
-}
-
-.error-banner .dismiss-btn:hover {
-    color: var(--mj-status-error);
-}
-
 .action-btn {
     background: var(--mj-bg-surface);
     border: none;
@@ -547,37 +208,6 @@
     font-size: 11px;
     opacity: 0.7;
     margin-left: 4px;
-}
-
-/* Empty State */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    color: var(--mj-text-muted);
-}
-
-.empty-state i {
-    font-size: 48px;
-    margin-bottom: 16px;
-    color: var(--mj-border-default);
-}
-
-.empty-state.success-state i {
-    color: var(--mj-status-success);
-}
-
-.empty-state p {
-    margin: 0;
-    font-size: 16px;
-    color: var(--mj-text-secondary);
-}
-
-.empty-hint {
-    font-size: 13px;
-    margin-top: 8px;
 }
 
 /* Engine Grid */
@@ -705,40 +335,6 @@
     color: var(--mj-text-primary);
 }
 
-/* Info Banner */
-.info-banner {
-    display: flex;
-    gap: 12px;
-    padding: 16px 20px;
-    background: var(--mj-color-accent-300);
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    color: var(--mj-brand-primary);
-    margin-bottom: 20px;
-}
-
-.info-banner i {
-    margin-top: 2px;
-    flex-shrink: 0;
-}
-
-/* Recommendation Banner */
-.recommendation-banner {
-    display: flex;
-    gap: 12px;
-    padding: 16px 20px;
-    background: var(--mj-color-warning-50);
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    color: var(--mj-color-warning-800);
-    margin-top: 20px;
-}
-
-.recommendation-banner i {
-    margin-top: 2px;
-    flex-shrink: 0;
-    color: var(--mj-color-warning-500);
-}
 
 /* Redundant Loads Table */
 .redundant-loads-table-wrapper {
@@ -833,14 +429,6 @@
 }
 
 /* Performance Section Styles */
-.warning-banner {
-    background: var(--mj-color-warning-50) !important;
-    color: var(--mj-color-warning-800) !important;
-}
-
-.warning-banner i {
-    color: var(--mj-color-warning-500);
-}
 
 .telemetry-summary {
     display: grid;
@@ -938,41 +526,26 @@
     gap: 12px;
 }
 
-.insight-card {
-    padding: 16px;
-    border-radius: var(--mj-radius-md);
-    border-left: 4px solid var(--mj-border-default);
-}
+/* .insight-card wrapper + .insight-header chrome now owned by <mj-accordion-panel>. */
 
-.insight-card.severity-info {
-    background: var(--mj-color-accent-300);
-    border-left-color: var(--mj-brand-primary);
-}
-
-.insight-card.severity-warning {
-    background: var(--mj-color-warning-50);
-    border-left-color: var(--mj-color-warning-500);
-}
-
-.insight-card.severity-optimization {
-    background: var(--mj-color-success-100);
-    border-left-color: var(--mj-status-success);
-}
-
-.insight-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
-}
-
-.insight-header i {
+.insight-icon {
     font-size: 16px;
 }
 
-.severity-info .insight-header i { color: var(--mj-brand-primary); }
-.severity-warning .insight-header i { color: var(--mj-color-warning-500); }
-.severity-optimization .insight-header i { color: var(--mj-status-success); }
+.severity-info .insight-icon { color: var(--mj-brand-primary); }
+.severity-warning .insight-icon { color: var(--mj-status-warning); }
+.severity-optimization .insight-icon { color: var(--mj-status-success); }
+
+/* Per-severity tint restored onto the accordion (card background + header tint +
+   left-accent stripe). The accordion owns its chrome, so reach the inner panel /
+   header row via ::ng-deep — same pattern the selected-run tint uses. Semantic,
+   dark-mode-safe tokens replace the old primitive tints. */
+mj-accordion-panel.severity-info ::ng-deep .mj-accordion-panel { border-left: 4px solid var(--mj-status-info); background: var(--mj-status-info-bg); }
+mj-accordion-panel.severity-info ::ng-deep .mj-accordion-header-row { background: var(--mj-status-info-bg); }
+mj-accordion-panel.severity-warning ::ng-deep .mj-accordion-panel { border-left: 4px solid var(--mj-status-warning); background: var(--mj-status-warning-bg); }
+mj-accordion-panel.severity-warning ::ng-deep .mj-accordion-header-row { background: var(--mj-status-warning-bg); }
+mj-accordion-panel.severity-optimization ::ng-deep .mj-accordion-panel { border-left: 4px solid var(--mj-status-success); background: var(--mj-status-success-bg); }
+mj-accordion-panel.severity-optimization ::ng-deep .mj-accordion-header-row { background: var(--mj-status-success-bg); }
 
 .insight-title {
     font-weight: 600;
@@ -1215,24 +788,7 @@
 }
 
 /* Expandable Insight Cards */
-.insight-card.expandable {
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.insight-card.expandable:hover {
-    box-shadow: var(--mj-shadow-md);
-}
-
-.insight-card .expand-icon {
-    color: var(--mj-text-muted);
-    font-size: 12px;
-    margin-left: auto;
-}
-
-.insight-card.expanded {
-    border-width: 2px;
-}
+/* .insight-card expandable/expanded/expand-icon chrome now owned by <mj-accordion-panel>. */
 
 .insight-details {
     margin-top: 16px;
@@ -1715,20 +1271,6 @@
     padding: 2px 6px;
 }
 
-/* Small empty state */
-.empty-state.small {
-    padding: 30px 20px;
-}
-
-.empty-state.small i {
-    font-size: 32px;
-    margin-bottom: 12px;
-}
-
-.empty-state.small p {
-    font-size: 14px;
-}
-
 /* Performance Sub-Tabs */
 .perf-tabs {
     display: flex;
@@ -1798,22 +1340,9 @@
     padding: 20px 24px;
 }
 
-/* Success Banner */
-.success-banner {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 16px 20px;
-    background: var(--mj-color-success-100);
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    color: var(--mj-color-success-800);
+/* Telemetry "no slow ops" alert — positioning only; box chrome owned by <mj-alert> */
+.telemetry-success-alert {
     margin-top: 16px;
-}
-
-.success-banner i {
-    font-size: 18px;
-    color: var(--mj-status-success);
 }
 
 /* Compact Filter Bar */
@@ -2339,20 +1868,6 @@
 }
 
 @media (max-width: 768px) {
-    .diagnostics-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .header-controls {
-        width: 100%;
-        flex-wrap: wrap;
-    }
-
-    .overview-cards {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
     .engine-grid {
         grid-template-columns: 1fr;
     }
@@ -2637,22 +2152,10 @@
     margin-top: 4px;
 }
 
-.pattern-warning {
-    margin-top: 12px;
-    padding: 12px;
-    background: var(--mj-color-warning-50);
-    border-radius: var(--mj-radius-md);
-    font-size: 12px;
-    color: var(--mj-color-warning-800);
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-}
 
-.pattern-warning i {
-    color: var(--mj-color-warning-500);
-    margin-top: 2px;
-}
+/* Position the migrated mj-alerts (component is margin-less apart from its bottom) */
+.recommendation-spacing { margin-top: 20px; }
+.pattern-hint-spacing { margin-top: 12px; }
 
 /* Detail Actions */
 .detail-actions {
@@ -2874,31 +2377,7 @@
     gap: 12px;
 }
 
-.config-item {
-    background: var(--mj-bg-surface-sunken);
-    border-radius: var(--mj-radius-md);
-    border: 1px solid var(--mj-border-default);
-    overflow: hidden;
-    transition: all 0.2s ease;
-}
-
-.config-item.expanded {
-    border-color: var(--mj-status-success);
-    box-shadow: var(--mj-shadow-md);
-}
-
-.config-item-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    cursor: pointer;
-    transition: background 0.2s ease;
-}
-
-.config-item-header:hover {
-    background: rgba(0, 0, 0, 0.02);
-}
+/* .config-item wrapper + .config-item-header chrome now owned by <mj-accordion-panel>. */
 
 .config-item-info {
     display: flex;
@@ -2948,14 +2427,7 @@
     color: var(--mj-text-secondary);
 }
 
-.expand-icon {
-    color: var(--mj-text-muted);
-    transition: transform 0.2s ease;
-}
-
-.config-item.expanded .expand-icon {
-    color: var(--mj-status-success);
-}
+/* .expand-icon chevron now owned by <mj-accordion-panel>. */
 
 .config-item-details {
     padding: 0 16px 16px;
@@ -2989,6 +2461,29 @@
     padding: 2px 6px;
     border-radius: 4px;
     word-break: break-all;
+}
+
+/* Health status indicators for config items */
+.config-health-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+}
+.config-health-icon.health-success {
+    color: var(--mj-status-success);
+}
+.config-health-icon.health-failure {
+    color: var(--mj-status-error);
+}
+.config-detail-row--error {
+    background: color-mix(in srgb, var(--mj-status-error) 6%, transparent);
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+.detail-value--error {
+    color: var(--mj-status-error-text) !important;
+    background: none !important;
+    font-family: inherit !important;
+    word-break: break-word;
 }
 
 /* Sample Data Section */
@@ -3119,19 +2614,6 @@
 
 .sample-data-table tbody tr:hover {
     background: var(--mj-bg-surface-sunken);
-}
-
-/* Small empty state */
-.empty-state.small {
-    padding: 30px 20px;
-}
-
-.empty-state.small i {
-    font-size: 32px;
-}
-
-.empty-state.small p {
-    font-size: 14px;
 }
 
 /* Spinning animation for refresh icon */

@@ -4,24 +4,8 @@
   position: relative;
 }
 
-.new-agent-dialog .parent-info {
-  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
-  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-bg-surface));
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
+.new-agent-dialog .new-agent-alert-pos {
   margin-bottom: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.new-agent-dialog .parent-info i {
-  color: var(--mj-brand-primary);
-  font-size: 1.1rem;
-}
-
-.new-agent-dialog .parent-info strong {
-  color: var(--mj-brand-primary);
 }
 
 .new-agent-dialog .loading-overlay {

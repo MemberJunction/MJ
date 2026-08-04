@@ -12,25 +12,30 @@ import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.serv
   template: `
     @if ((taskCount$ | async)! > 0) {
       <div class="active-tasks-panel">
-        <div class="panel-header" (click)="toggleExpanded()">
-          <i class="fas fa-tasks"></i>
-          <span>Active Tasks ({{ taskCount$ | async }})</span>
-          <i class="fas" [ngClass]="isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-        </div>
-        @if (isExpanded) {
-          <div class="panel-content">
-            @for (task of (tasks$ | async); track task) {
-              <div class="task-item">
-                <div class="task-header">
-                  <i class="fas fa-circle-notch fa-spin"></i>
-                  <span class="task-agent">{{ task.agentName }}</span>
-                  <span class="task-elapsed">{{ getElapsedTime(task) }}</span>
+        <!-- Migrated from a bespoke header/chevron + @if(isExpanded) disclosure to
+             mj-accordion-panel. The floating fixed-position wrapper is preserved; only
+             the header→task-list disclosure became the accordion (content disclosure,
+             not a whole-panel collapse). -->
+        <mj-accordion-panel Size="sm" [FlushBody]="true" [(Expanded)]="isExpanded">
+          <ng-template mjAccordionTitle>
+            <i class="fas fa-tasks active-tasks-title-icon"></i>
+            <span>Active Tasks ({{ taskCount$ | async }})</span>
+          </ng-template>
+          <ng-template mjAccordionBody>
+            <div class="panel-content">
+              @for (task of (tasks$ | async); track task) {
+                <div class="task-item">
+                  <div class="task-header">
+                    <i class="fas fa-circle-notch fa-spin"></i>
+                    <span class="task-agent">{{ task.agentName }}</span>
+                    <span class="task-elapsed">{{ getElapsedTime(task) }}</span>
+                  </div>
+                  <div class="task-status">{{ getTrimmedStatus(task.status) }}</div>
                 </div>
-                <div class="task-status">{{ getTrimmedStatus(task.status) }}</div>
-              </div>
-            }
-          </div>
-        }
+              }
+            </div>
+          </ng-template>
+        </mj-accordion-panel>
       </div>
     }
     `,
@@ -47,36 +52,11 @@ import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.serv
       z-index: 1000;
     }
 
-    .panel-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 16px;
-      background: var(--mj-bg-surface-sunken);
-      border-bottom: 1px solid var(--mj-border-default);
-      border-radius: 8px 8px 0 0;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 14px;
-      color: var(--mj-text-primary);
-      transition: background 150ms ease;
-    }
-
-    .panel-header:hover {
-      background: var(--mj-bg-surface-sunken);
-    }
-
-    .panel-header i:first-child {
+    /* Removed bespoke .panel-header chrome (header bar, hover, chevron, flex span) —
+       the disclosure header is now owned by mj-accordion-panel. Only the title icon's
+       brand color is preserved below. */
+    .active-tasks-title-icon {
       color: var(--mj-brand-primary);
-    }
-
-    .panel-header span {
-      flex: 1;
-    }
-
-    .panel-header i:last-child {
-      color: var(--mj-text-muted);
-      font-size: 12px;
     }
 
     .panel-content {
@@ -133,10 +113,6 @@ export class ActiveTasksPanelComponent {
   constructor(private activeTasksService: ActiveTasksService) {
     this.tasks$ = this.activeTasksService.tasks$;
     this.taskCount$ = this.activeTasksService.taskCount$;
-  }
-
-  toggleExpanded(): void {
-    this.isExpanded = !this.isExpanded;
   }
 
   getElapsedTime(task: ActiveTask): string {

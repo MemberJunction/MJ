@@ -9,7 +9,8 @@ import {
   OnInit,
   OnChanges,
   SimpleChanges,
-  DoCheck
+  DoCheck,
+  TemplateRef
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
@@ -18,9 +19,15 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
+import { PlanModePreference } from '../../utils/plan-mode-preference';
+import { MarkdownService } from '@memberjunction/ng-markdown';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
-import { SuggestedResponse } from '../../models/conversation-state.model';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
+import { ConversationAgentService } from '../../services/conversation-agent.service';
+import {
+  BeforeResponseFormSubmittedEventArgs,
+  AfterResponseFormSubmittedEventArgs,
+} from '../../events/chat-events';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
 
@@ -48,6 +55,17 @@ export interface MessageAttachment {
 }
 
 /**
+ * A fully-loaded artifact + its version to render as a card under a message.
+ * A single message can carry more than one DISTINCT artifact (e.g. a research
+ * report plus a standalone generated infographic), so the message renders an
+ * array of these — one card each.
+ */
+export interface MessageArtifactRef {
+  artifact: MJArtifactEntity;
+  version: MJArtifactVersionEntity;
+}
+
+/**
  * Component for displaying a single message in a conversation
  * Follows the dynamic rendering pattern from skip-chat for optimal performance
  * This component is created dynamically via ViewContainerRef.createComponent()
@@ -69,11 +87,67 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public isProcessing: boolean = false;
   @Input() public artifact?: MJArtifactEntity;
   @Input() public artifactVersion?: MJArtifactVersionEntity;
+  /**
+   * All distinct artifacts attached to this message, each at its latest version.
+   * Preferred over the single `artifact`/`artifactVersion` inputs above (which are
+   * retained for backward compatibility and kept pointed at the first entry).
+   */
+  @Input() public artifacts: MessageArtifactRef[] = [];
   @Input() public agentRun: MJAIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
   @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation
   @Input() public attachments: MessageAttachment[] = []; // Attachments for this message
+
+  /**
+   * Optional additive per-message slot template (forwarded from chat-area's
+   * `mjChatSlot="messageExtra"`). Rendered inside the bubble after the message
+   * content, before attachments. Receives the message as `$implicit` + a named
+   * `message` context binding. Null when no consumer template is projected.
+   */
+  @Input() public messageExtraTemplate: TemplateRef<unknown> | null = null;
+
+  // --- Host-level feature gates (forwarded from mj-conversation-chat-area) ---
+  // All default true so existing consumers are unaffected; set false to remove
+  // the affordance entirely (the control is not rendered, not merely disabled).
+  /** Show the per-message agent run-detail grid (run ID, step/token counts, $ cost). */
+  @Input() public showAgentRunDetails: boolean = true;
+  /** Show the per-message reaction buttons (like / comment). */
+  @Input() public showReactions: boolean = true;
+  /** Show the per-message thumbs rating control on completed AI messages. */
+  @Input() public showMessageRating: boolean = true;
+  /** Allow pinning messages (the per-message pin button). */
+  @Input() public allowPinning: boolean = true;
+  /** Allow editing the user's own messages (the per-message edit button). */
+  @Input() public allowMessageEdit: boolean = true;
+  /** Allow deleting the user's own messages (the per-message delete button). */
+  @Input() public allowMessageDelete: boolean = true;
+  /** Host override for the AI message display name (white-label persona). Null = the agent record's name. */
+  @Input() public assistantDisplayName: string | null = null;
+  /** Host image URL for the AI message avatar. Null = the agent's Font Awesome icon. */
+  @Input()
+  public set assistantAvatarUrl(value: string | null) {
+    if (value !== this._assistantAvatarUrl) {
+      this._assistantAvatarUrl = value;
+      // A new URL gets a fresh chance even if the previous one 404'd.
+      this.assistantAvatarFailed = false;
+    }
+  }
+  public get assistantAvatarUrl(): string | null {
+    return this._assistantAvatarUrl;
+  }
+  private _assistantAvatarUrl: string | null = null;
+
+  /** The last assistantAvatarUrl failed to load — fall back to the icon branch. */
+  public assistantAvatarFailed = false;
+
+  /** The avatar image URL actually rendered: trimmed, and null after a load error
+   *  so a broken/whitespace URL degrades to the agent icon instead of a broken-image glyph. */
+  public get effectiveAssistantAvatarUrl(): string | null {
+    if (this.assistantAvatarFailed) return null;
+    const url = this._assistantAvatarUrl?.trim();
+    return url ? url : null;
+  }
 
   @Output() public editClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public deleteClicked = new EventEmitter<MJConversationDetailEntity>();
@@ -87,6 +161,23 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
   @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId on Shift+Click
   @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * Cancelable — fired BEFORE the response form's values are sent back as a new
+   * conversation message. Listeners may set `event.Cancel = true` to halt the
+   * submission (e.g., a validation pass that finds required fields unfilled).
+   * When canceled, the corresponding {@link afterResponseFormSubmitted} event is
+   * NOT fired and `suggestedResponseSelected` is NOT emitted.
+   * Follows MJ's established Before/After cancelable event pattern.
+   */
+  @Output() public beforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+
+  /**
+   * Fired AFTER the response form's values have been submitted. Carries the form id
+   * (using the message ID as a stable per-message identifier) and the submitted
+   * values map. Not fired when {@link beforeResponseFormSubmitted} was canceled.
+   */
+  @Output() public afterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -119,11 +210,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private _cachedDisplayMessage: string = '';
   private _cachedMessageText: string = '';
 
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocomplete = MentionAutocompleteService.Instance;
+
   constructor(
     private cdRef: ChangeDetectorRef,
     private mentionParser: MentionParserService,
-    private mentionAutocomplete: MentionAutocompleteService,
-    private uiCommandHandler: UICommandHandlerService
+    private uiCommandHandler: UICommandHandlerService,
+    private agentService: ConversationAgentService,
+    private markdownService: MarkdownService
   ) {
     super();
   }
@@ -134,6 +229,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // change detection asks for it. Fire-and-forget — the getter falls back
     // to defaults until it's loaded.
     AIEngineBase.Instance.EnsureLoaded();
+
+    // Warm the conversation-manager-agent cache (DefaultAgentResolver chain)
+    // so the synchronous isConversationManager getter returns the right answer
+    // on first render. Fire-and-forget — the getter returns false until cached,
+    // matching the pre-PR-2 behavior of the previous hardcoded check.
+    void this.agentService.getConversationManagerAgent();
 
     // Execute automatic commands if present
     await this.executeAutomaticCommands();
@@ -294,11 +395,28 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.message.Role?.trim().toLowerCase() === 'ai';
   }
 
+  /**
+   * The agent identity as shown in the UI: the ENGINE-resolved identity (see
+   * {@link engineAgentInfo}) with the host's `assistantDisplayName` override
+   * applied to the name when set. Internal logic that must compare against the
+   * real agent name (e.g. {@link isConversationManager}) uses `engineAgentInfo`
+   * directly, so a display override can never change routing/behavior decisions.
+   */
   public get aiAgentInfo(): { name: string; iconClass: string; role: string } | null {
+    const info = this.engineAgentInfo;
+    if (!info) return null;
+    const override = this.assistantDisplayName?.trim();
+    return override ? { ...info, name: override } : info;
+  }
+
+  /** The engine-resolved agent identity — no host display overrides applied.
+   *  Protected (not private) so the template's run-details header — which labels
+   *  the REAL agent's diagnostics and record link — can read it directly. */
+  protected get engineAgentInfo(): { name: string; iconClass: string; role: string } | null {
     if (!this.isAIMessage) return null;
 
     // Get agent ID from denormalized field (populated when message is created)
-    const agentID = (this.message as any).AgentID;
+    const agentID = this.message.AgentID;
 
     // Look up agent from AIEngineBase cache
     if (agentID && AIEngineBase.Instance?.Agents) {
@@ -371,7 +489,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public get isConversationManager(): boolean {
-    return this.aiAgentInfo?.name === 'Sage';
+    // Resolved at runtime via the conversation manager agent registered through
+    // ConversationsRuntime's DefaultAgentResolver chain — explicit input wins,
+    // then app-scoped Application Setting, then global Application Setting, then
+    // the code-const Sage fallback. Replaces the previous hardcoded 'Sage'
+    // name check. Returns false until the agent service has cached the
+    // resolved agent (warmed by message-input's first routing call).
+    // Compares the ENGINE-resolved name deliberately: a host assistantDisplayName
+    // override renames what the user SEES, never what the component decides.
+    const cmName = this.agentService.ConversationManagerAgentName;
+    if (!cmName) return false;
+    return this.engineAgentInfo?.name === cmName;
   }
 
   public get displayMessage(): string {
@@ -453,6 +581,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     let iconClass = '';
     let logoURL = '';
     let configPresetName = '';
+    let inlineStyle = '';
 
     // Look up actual name and icon if ID provided
     if (content.type === 'agent' && agents) {
@@ -479,10 +608,28 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     } else if (content.type === 'user' && users) {
       const user = users.find(u => UUIDsEqual(u.ID, content.id));
       if (user) name = user.Name;
+    } else if (content.type === 'entity') {
+      const entity = this.mentionAutocomplete.getAvailableEntities().find(e => UUIDsEqual(e.ID, content.id));
+      name = entity ? entity.DisplayNameOrName : name;
+      iconClass = this.normalizeIconClass(entity?.Icon || 'fa-solid fa-table');
+    } else if (content.type === 'query') {
+      const query = this.mentionAutocomplete.getAvailableQueries().find(q => UUIDsEqual(q.ID, content.id));
+      if (query) name = query.Name;
+      iconClass = this.normalizeIconClass(this.mentionAutocomplete.getQueriesEntityIcon());
+    } else if (content.type === 'skill') {
+      const skill = AIEngineBase.Instance?.Skills?.find(s => UUIDsEqual(s.ID, content.id));
+      if (skill) name = skill.Name;
+      iconClass = this.normalizeIconClass(skill?.IconClass || 'fa-solid fa-wand-magic-sparkles');
+      // Per-skill accent color (AISkill.Color) overrides the standard skill green — same
+      // logic as the composer chip (mention-editor's createMentionChip). Keep in sync.
+      if (skill?.Color) {
+        inlineStyle = ` style="background: ${this.escapeHtml(skill.Color)}; border-color: rgba(255, 255, 255, 0.35);"`;
+      }
     }
 
     const escapedName = this.escapeHtml(name);
-    const typeClass = content.type === 'agent' ? 'agent' : 'user';
+    const typeClass =
+      content.type === 'agent' || content.type === 'entity' || content.type === 'query' || content.type === 'skill' ? content.type : 'user';
 
     // Build preset indicator HTML if present
     const presetIndicator = configPresetName
@@ -491,12 +638,24 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Generate HTML based on whether we have an icon
     if (logoURL) {
-      return `<span class="mention-badge ${typeClass}"><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
     } else if (iconClass) {
-      return `<span class="mention-badge ${typeClass}"><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
     } else {
-      return `<span class="mention-badge ${typeClass}">${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}>${escapedName}${presetIndicator}</span>`;
     }
+  }
+
+  /**
+   * Normalize a Font Awesome icon class to include a style family (defaults to fa-solid)
+   * so stored values that omit one (e.g. 'fa-table') still render.
+   */
+  private normalizeIconClass(iconClass: string): string {
+    if (!iconClass) return 'fa-solid fa-table';
+    if (iconClass.includes('fa-') && !/\b(fa-solid|fa-regular|fa-light|fa-thin|fa-duotone|fa-brands|fa-sharp)\b/.test(iconClass)) {
+      return `fa-solid ${iconClass}`;
+    }
+    return iconClass;
   }
 
   private renderFormHTML(content: { title?: string; fields?: Array<{ name?: string; value: unknown; label?: string; type?: string; displayValue?: string }> }): string {
@@ -552,6 +711,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const choiceTypes = ['buttongroup', 'radio', 'dropdown', 'checkbox'];
     if (field.type && choiceTypes.includes(field.type) && field.displayValue) {
       return FormResponseUtils.EscapeHtml(field.displayValue);
+    }
+
+    // Textarea values render as formatted Markdown — agent-authored long-form content
+    // (e.g. the approved Plan in the plan-approval response) is Markdown by convention,
+    // and the submitted-form pill should look as good as the live form's preview did.
+    // Script safety: the whole message passes through mj-markdown's stripJavaScript.
+    if (field.type === 'textarea' && typeof field.value === 'string' && field.value.trim().length > 0) {
+      try {
+        return `<div class="field-answer-markdown">${this.markdownService.parse(field.value)}</div>`;
+      } catch {
+        // fall through to the escaped-plaintext path below
+      }
     }
 
     // Delegate type-aware formatting to shared utility (no schema question available here)
@@ -666,8 +837,23 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.shouldShowRating();
   }
 
+  /**
+   * The artifacts to render under this message, one card each. Prefers the
+   * `artifacts` array; falls back to the legacy single `artifact`/`artifactVersion`
+   * inputs so older callers that set only those keep working.
+   */
+  public get displayArtifacts(): MessageArtifactRef[] {
+    if (this.artifacts && this.artifacts.length > 0) {
+      return this.artifacts;
+    }
+    if (this.artifact && this.artifactVersion) {
+      return [{ artifact: this.artifact, version: this.artifactVersion }];
+    }
+    return [];
+  }
+
   public get hasArtifact(): boolean {
-    return !!this.artifactVersion;
+    return this.displayArtifacts.length > 0;
   }
 
   /**
@@ -712,8 +898,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return this.agentRunDuration;
     }
 
-    // No agent run — fall back to message entity timestamps
-    return this.formattedGenerationTime;
+    // No agent run — fall back to message entity timestamps.
+    const fromMessage = this.formattedGenerationTime;
+    if (fromMessage) {
+      return fromMessage;
+    }
+
+    // Last resort: the live elapsed-time string is frozen at the value it had
+    // when status flipped to Complete (the interval is cleared in ngDoCheck). If
+    // the same component instance handled the in-progress phase, this is the
+    // accurate duration the user just watched tick. If the message arrived already
+    // complete (no in-progress phase observed), `_elapsedTimeFormatted` is still
+    // its initial '0:00' — return null in that case so the time pill doesn't render
+    // a misleading zero.
+    return this._elapsedTimeFormatted !== '0:00' ? this._elapsedTimeFormatted : null;
   }
 
   public get formattedGenerationTime(): string | null {
@@ -979,6 +1177,43 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
+   * Whether the agent-run gear's expanded panel would actually render anything —
+   * used to gate the gear button itself so it doesn't appear as a dead control
+   * that opens an empty popup. The panel hosts, in order: the run-details section
+   * (only when `showAgentRunDetails`), associated tasks, and (non-last messages
+   * only) the delete / rating / pin overflow. With `showAgentRunDetails=false` and
+   * none of those enabled — a white-labeled end-user surface — the gear vanishes
+   * entirely instead of opening onto nothing.
+   *
+   * Each arm below mirrors the corresponding template condition EXACTLY; keep them
+   * in lockstep with `message-item.component.html`'s `.agent-details-panel` block.
+   *
+   * Defaults leave it unchanged: with `showAgentRunDetails=true` (the default) this
+   * is unconditionally true, so the gear renders exactly as before — including the
+   * pre-existing window where `agentRun` hasn't loaded yet and the panel is briefly
+   * empty. That window is deliberately preserved (byte-identical defaults) rather
+   * than fixed here.
+   */
+  public get hasAgentDetailsPanelContent(): boolean {
+    // Run-details enabled → gear shows for any agent-run message (the button
+    // already AND-gates hasAgentRun), exactly as before the gate existed — even
+    // before the agentRun object finishes loading. This keeps the default
+    // (showAgentRunDetails=true) byte-identical.
+    if (this.showAgentRunDetails) return true;
+    if (this.detailTasks.length > 0) return true;
+    if (!this.isLastMessage) {
+      if (this.allowMessageDelete && this.isConversationOwner) return true;
+      if (this.allowPinning) return true;
+      // The rating only renders inside the template's `messageStatus === 'Complete'`
+      // branch, so an incomplete/errored message must NOT count it as content —
+      // otherwise the gear reappears over an empty panel, which is the whole bug
+      // this getter exists to prevent.
+      if (this.showMessageRating && this.messageStatus === 'Complete') return true;
+    }
+    return false;
+  }
+
+  /**
    * Toggle the agent details panel expansion
    */
   public async toggleAgentDetails(): Promise<void> {
@@ -1120,25 +1355,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
-   * Parse and return suggested responses from message data
-   * Uses strongly-typed SuggestedResponses property from MJConversationDetailEntity
-   */
-  public get suggestedResponses(): SuggestedResponse[] {
-    try {
-      const rawData = this.message.SuggestedResponses;
-      if (!rawData) return [];
-
-      // Parse JSON string to array of SuggestedResponse objects
-      const responses = JSON.parse(rawData);
-
-      return Array.isArray(responses) ? responses : [];
-    } catch (error) {
-      console.error('Failed to parse suggested responses:', error);
-      return [];
-    }
-  }
-
-  /**
    * Check if current user is the conversation owner
    */
   public get isConversationOwner(): boolean {
@@ -1146,49 +1362,57 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
-   * Handle suggested response selection
-   */
-  public onSuggestedResponseSelected(event: {text: string; customInput?: string}): void {
-    this.suggestedResponseSelected.emit(event);
-  }
-
-  /**
    * Get agent response form from message
    * Uses ResponseForm property from MJConversationDetailEntity
+   *
+   * Cached against the raw JSON string so the getter returns a stable object reference
+   * for the same input. Without caching, `JSON.parse` produces a new object every call,
+   * which makes Angular's `@if (responseForm)` template index churn between CD passes —
+   * the classic NG0100 "ExpressionChangedAfterItHasBeenCheckedError" we used to hit here.
    */
+  private _responseFormRaw: string | null | undefined = undefined;
+  private _responseFormCache: AgentResponseForm | null = null;
   public get responseForm(): AgentResponseForm | null {
-    try {
-      const rawData = this.message.ResponseForm;
-      if (!rawData) {
-        return null;
-      }
-
-      // Parse JSON string to AgentResponseForm object
-      const form = JSON.parse(rawData);
-
-      return form || null;
-    } catch (error) {
-      console.error('Failed to parse response form:', error, 'Raw data:', this.message.ResponseForm);
+    const rawData = this.message.ResponseForm ?? null;
+    if (rawData === this._responseFormRaw) return this._responseFormCache;
+    this._responseFormRaw = rawData;
+    if (!rawData) {
+      this._responseFormCache = null;
       return null;
     }
+    try {
+      this._responseFormCache = (JSON.parse(rawData) as AgentResponseForm) || null;
+    } catch (error) {
+      console.error('Failed to parse response form:', error, 'Raw data:', rawData);
+      this._responseFormCache = null;
+    }
+    return this._responseFormCache;
   }
 
   /**
    * Get actionable commands from message
    * Uses ActionableCommands property from MJConversationDetailEntity
+   *
+   * Cached against the raw JSON string (see {@link responseForm} for rationale).
    */
+  private _actionableCommandsRaw: string | null | undefined = undefined;
+  private _actionableCommandsCache: ActionableCommand[] = [];
   public get actionableCommands(): ActionableCommand[] {
+    const rawData = this.message.ActionableCommands ?? null;
+    if (rawData === this._actionableCommandsRaw) return this._actionableCommandsCache;
+    this._actionableCommandsRaw = rawData;
+    if (!rawData) {
+      this._actionableCommandsCache = [];
+      return this._actionableCommandsCache;
+    }
     try {
-      const rawData = this.message.ActionableCommands;
-      if (!rawData) return [];
-
-      // Parse JSON string to array of ActionableCommand objects
       const commands = JSON.parse(rawData);
-      return Array.isArray(commands) ? commands : [];
+      this._actionableCommandsCache = Array.isArray(commands) ? commands : [];
     } catch (error) {
       console.error('Failed to parse actionable commands:', error);
-      return [];
+      this._actionableCommandsCache = [];
     }
+    return this._actionableCommandsCache;
   }
 
   /**
@@ -1219,6 +1443,25 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       };
     });
 
+    // ── PR 2c follow-up: Before/After cancelable event wiring ──
+    // Emit beforeResponseFormSubmitted so consumers can veto (e.g., a validation
+    // pass that finds required fields unfilled). Cancel propagates synchronously
+    // through the message-list + chat-area re-emit bindings, so by the time .emit()
+    // returns, event.Cancel reflects every subscriber's final answer. We use the
+    // message ID as the form id — each AgentResponseForm is attached to exactly
+    // one message, giving a stable per-message identifier.
+    const beforeEvent = new BeforeResponseFormSubmittedEventArgs(this.message.ID, formData);
+    this.beforeResponseFormSubmitted.emit(beforeEvent);
+    if (beforeEvent.Cancel) {
+      return;
+    }
+
+    // Plan-approval semantics: approving a plan is a HIGHER-ORDER signal, not just a form
+    // reply — it ends the plan phase, so the conversation switches out of Plan Mode and the
+    // follow-up run executes the approved plan instead of planning again. Rejection leaves
+    // Plan Mode on so the agent re-plans (the optional feedback field steers it).
+    this.applyPlanDecision(formData);
+
     // Create formatted message using ConversationUtility
     const formMessage = ConversationUtility.CreateFormResponse(
       'formSubmit', // Generic action name
@@ -1231,6 +1474,29 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       text: formMessage,
       customInput: undefined // No longer needed with new format
     });
+
+    this.afterResponseFormSubmitted.emit(
+      new AfterResponseFormSubmittedEventArgs(this.message.ID, formData)
+    );
+  }
+
+  /**
+   * Detects a plan-approval form submission (the Plan Mode HITL card — identified by its
+   * 'plan' + 'decision' questions, see BaseAgent.buildPlanApprovalForm) and applies the
+   * decision's conversation-level effect: APPROVE switches this conversation out of Plan
+   * Mode (plan phase complete — execute); REJECT intentionally leaves it on (re-plan).
+   */
+  private applyPlanDecision(formData: Record<string, unknown>): void {
+    const form = this.responseForm;
+    const isPlanForm =
+      !!form?.questions.some(q => q.id === 'plan') &&
+      !!form?.questions.some(q => q.id === 'decision');
+    if (!isPlanForm) {
+      return;
+    }
+    if (formData['decision'] === 'approve' && this.message.ConversationID) {
+      PlanModePreference.Set(this.message.ConversationID, false);
+    }
   }
 
   /**
@@ -1238,7 +1504,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   public async onCommandExecuted(command: ActionableCommand): Promise<void> {
     try {
-      await this.uiCommandHandler.executeActionableCommand(command);
+      await this.uiCommandHandler.executeActionableCommand(command, {
+        conversationId: this.message.ConversationID,
+        conversationDetailId: this.message.ID
+      });
     } catch (error) {
       console.error('Failed to execute command:', command, error);
     }

@@ -1,0 +1,50 @@
+@if (record) {
+@if (previewMode) {
+    <!-- Preview mode — no toolbar wrap. Just the form body for clean
+         "what the form looks like" previews (Form Builder cockpit). -->
+    @if (loadError) {
+        <mj-alert Variant="error">{{ loadError }}</mj-alert>
+    } @else if (componentSpec && formHostProps) {
+        <mj-react-component
+            #reactComponent
+            [component]="componentSpec"
+            [componentProps]="formHostProps"
+            (componentEvent)="OnReactComponentEvent($event)"
+            (openEntityRecord)="OnOpenEntityRecord($event)">
+        </mj-react-component>
+    } @else {
+        <div class="mj-loading-state">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span>Loading form…</span>
+        </div>
+    }
+} @else {
+<mj-record-form-container
+    [Record]="record"
+    [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+    @if (loadError) {
+        <mj-alert Variant="error">{{ loadError }}</mj-alert>
+    } @else if (componentSpec && formHostProps) {
+        <mj-react-component
+            #reactComponent
+            [component]="componentSpec"
+            [componentProps]="formHostProps"
+            (componentEvent)="OnReactComponentEvent($event)"
+            (openEntityRecord)="OnOpenEntityRecord($event)">
+        </mj-react-component>
+    } @else {
+        <div class="mj-loading-state">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span>Loading form…</span>
+        </div>
+    }
+
+</mj-record-form-container>
+}
+}

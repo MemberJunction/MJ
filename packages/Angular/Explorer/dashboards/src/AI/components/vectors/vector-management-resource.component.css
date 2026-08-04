@@ -3,6 +3,7 @@
    All colors use MJ design tokens from _tokens.scss
    ================================================================ */
 
+
 /* --- Loading state --- */
 .vector-loading {
     display: flex;
@@ -137,27 +138,6 @@
     background: var(--mj-bg-surface-hover);
     color: var(--mj-text-primary);
     border-color: var(--mj-border-strong);
-}
-
-/* --- Empty state --- */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 48px 24px;
-    color: var(--mj-text-muted);
-}
-
-.empty-state i {
-    font-size: 36px;
-    margin-bottom: 12px;
-    opacity: 0.5;
-}
-
-.empty-state p {
-    margin: 0;
-    font-size: 14px;
 }
 
 /* --- Table --- */
@@ -458,6 +438,14 @@
     font-size: 12px;
     color: var(--mj-text-muted);
     padding-left: 18px;
+}
+
+.health-reason {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--mj-text-muted);
+    padding-left: 18px;
+    margin-top: 4px;
 }
 
 /* --- Model Info --- */
@@ -874,22 +862,6 @@
     background: var(--mj-brand-primary-hover);
 }
 
-.suggestion-error {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
-    border-radius: 6px;
-    background: var(--mj-status-error-bg);
-    color: var(--mj-status-error-text);
-    border: 1px solid var(--mj-status-error-border);
-    font-size: 13px;
-    line-height: 1.4;
-}
-
-.suggestion-error i {
-    flex-shrink: 0;
-}
 
 .suggest-submit-btn:disabled {
     opacity: 0.5;

@@ -1,0 +1,17 @@
+[
+  {
+    "fields": {
+      "Name": "eSignature",
+      "Description": "Electronic signature actions — send documents for signature, track status, download executed documents, and void requests, backed by the MemberJunction eSignature primitive.",
+      "ParentID": "@lookup:MJ: Action Categories.Name=System&ParentID=null",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "82C26431-6C73-44BC-81DD-31C1306753F0"
+    },
+    "sync": {
+      "lastModified": "2026-06-09T06:32:20.199Z",
+      "checksum": "c60ba7763c9b177bd5d2fe142e7229a190c548a9958fd8c963622b122b127221"
+    }
+  }
+]

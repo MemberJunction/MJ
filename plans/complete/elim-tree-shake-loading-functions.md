@@ -370,7 +370,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
 ] as const;
 ```
 
-See full examples: [MJAPI manifest](../packages/CodeGenLib/EXAMPLE_MANIFEST_MJAPI.md) | [MJExplorer manifest](../packages/CodeGenLib/EXAMPLE_MANIFEST_MJEXPLORER.md)
+See full examples: [MJAPI manifest](codegen/EXAMPLE_MANIFEST_MJAPI.md) | [MJExplorer manifest](codegen/EXAMPLE_MANIFEST_MJEXPLORER.md)
 
 ### Build Integration
 

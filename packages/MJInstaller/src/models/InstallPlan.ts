@@ -74,6 +74,13 @@ export interface CreatePlanInput {
    * steps by quick-checking manifests before rebuilding (`--fast`).
    */
   Fast?: boolean;
+  /**
+   * Exclude the Claude Code pack from the install (`--no-claude-pack`).
+   * By default the pack ships alongside the distribution so end users get the
+   * full Claude-Code-aware MJ experience after `mj install` finishes — honoring
+   * Goal #1 of `plans/claude-install-pack.md`. Pass `true` to opt out.
+   */
+  NoClaudePack?: boolean;
 }
 
 /**
@@ -222,17 +229,31 @@ export class InstallPlan {
   CreatedAt: Date;
 
   /**
+   * Whether to skip the Claude Code pack during scaffolding. Defaults to `false`
+   * — the pack ships alongside the distribution. `--no-claude-pack` flips this on.
+   */
+  NoClaudePack: boolean;
+
+  /**
    * Create a new install plan.
    *
    * @param tag - Git tag to install (e.g., `"v5.1.0"` or `"latest"`).
    * @param dir - Target install directory.
    * @param config - Merged configuration values.
    * @param skipPhases - Set of phase IDs to skip during execution.
+   * @param noClaudePack - When `true`, the Claude pack is excluded from the scaffold.
    */
-  constructor(tag: string, dir: string, config: PartialInstallConfig, skipPhases: Set<PhaseId> = new Set()) {
+  constructor(
+    tag: string,
+    dir: string,
+    config: PartialInstallConfig,
+    skipPhases: Set<PhaseId> = new Set(),
+    noClaudePack = false,
+  ) {
     this.Tag = tag;
     this.Dir = dir;
     this.Config = config;
+    this.NoClaudePack = noClaudePack;
     this.CreatedAt = new Date();
 
     const allPhases: PhaseId[] = [

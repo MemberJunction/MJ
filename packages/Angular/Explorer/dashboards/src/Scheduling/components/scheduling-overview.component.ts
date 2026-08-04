@@ -18,6 +18,8 @@ import {
 })
 export class SchedulingOverviewComponent implements OnInit, OnDestroy {
   @Input() initialState: Record<string, unknown> = {};
+  /** When true, the inner toolbar is hidden — the parent shell is rendering it in `<mj-page-header>` instead. */
+  @Input() HideToolbar = false;
   @Output() stateChange = new EventEmitter<Record<string, unknown>>();
 
   public Kpis: SchedulingKPIs | null = null;
@@ -115,10 +117,6 @@ export class SchedulingOverviewComponent implements OnInit, OnDestroy {
       case 'Timeout': return 'status-warning';
       default: return '';
     }
-  }
-
-  public GetAlertIcon(severity: string): string {
-    return severity === 'error' ? 'fa-solid fa-circle-xmark' : 'fa-solid fa-triangle-exclamation';
   }
 
   public FormatDuration(ms: number | undefined): string {

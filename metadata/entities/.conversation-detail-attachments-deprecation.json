@@ -1,0 +1,15 @@
+[
+  {
+    "fields": {
+      "Name": "MJ: Conversation Detail Attachments",
+      "Status": "Deprecated"
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Conversation Detail Attachments"
+    },
+    "sync": {
+      "lastModified": "2026-06-02T19:37:04.740Z",
+      "checksum": "a8efbd05640f470f66513347f451ce704a893a9d4b9ad5ad4049c18726fa6d1e"
+    }
+  }
+]

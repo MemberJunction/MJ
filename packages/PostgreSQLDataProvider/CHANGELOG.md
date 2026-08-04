@@ -1,5 +1,463 @@
 # @memberjunction/postgresql-dataprovider
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-vectordb@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/query-processor@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-vectordb@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/query-processor@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [623dfc5]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core@5.50.0
+  - @memberjunction/generic-database-provider@5.50.0
+  - @memberjunction/query-processor@5.50.0
+  - @memberjunction/ai-vectordb@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/sql-dialect@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- 70113b1: Align the integrations framework — resolution overlay, EM/EFM lifecycle, sync locking, watermark backfill, and the U1–U5/U7/U10/U11 upstream defects.
+
+  **Engine (`integration-engine`)**
+  - U1: `IntrospectSchema`/creation-pipeline mappings propagate `undefined` PK/FK flags instead of coercing to `false` — a sample's silence can no longer wipe a declared primary key (`SourceFieldInfo.IsPrimaryKey/IsForeignKey` widened to optional).
+  - Semantic overlay (`decideSemanticOverlay`): Description / DisplayName / IncrementalWatermarkField are external-wins-when-present, curated-fallback-when-silent (per-attribute overlay precedence).
+  - Content-hash basis: the content-hash match/write covers MAPPED fields only — a newly-appearing custom key no longer forces a row rewrite. Custom-key candidates + sizing statistics are aggregated in-memory per sync (`SyncResult.CustomKeyStats`, `foldCustomKeyStats`, `inferColumnTypeFromStats`) and flow to the promotion callback regardless of row skips. **Operational note (one-time):** because the content-hash basis becomes mapped-only, the first sync after this deploys re-hashes and re-writes every overflow-carrying row exactly once — a bounded one-time load spike plus Record-Changes churn — after which stored hashes converge and steady-state (skip-unchanged) writes resume.
+  - Maintenance lock (`AcquireMaintenanceLock`/`ReleaseMaintenanceLock`/`GetMaintenanceLock`): syncs refuse while a metadata refresh / schema evolution / RSU pipeline runs for the connection.
+  - U3: live sync progress is monotonic under concurrency (`RatchetProgressSnapshot`).
+  - U11: `IntrospectSchemaOptions.OnProgress` — determinate discovery progress (scanned/total).
+
+  **Server (`server`)**
+  - `IntegrationSchemaEvolution` is now the full re-resolution refresh: re-resolution → diff → removed objects' entity/field maps disabled (data kept) → changed objects' field maps reconciled + Pull watermarks reset (U10, backfills new columns) → new objects' tables created with entity maps born DISABLED (`autoEnableNewObjects` opts in) → RSU. Extended output: NewObjects/RemovedObjects/ChangedObjects/WatermarksReset.
+  - `IntegrationApplyAll`/`ApplyAllBatch`: `UnselectedAction` ('disable' default) — objects absent from the selection get their entity + field maps disabled; re-selection re-enables both. First-ever apply defaults to a FULL sync.
+  - U7: schedule creation is unique per (connection, job kind) — update-in-place instead of duplicates.
+  - U5: boot-time assert when RSU's additionalSchemaInfo write path diverges from CodeGen's read path.
+  - DAG exposure: `IntegrationListSourceObjects` items carry `DependsOn` parent names.
+  - U11: RSU status/progress expose CurrentStepName/StepIndex/StepTotal; pipeline steps carry StepIndex/StepTotal.
+
+  **SchemaEngine / schema-builder**
+  - additionalSchemaInfo per-table REPLACE semantics for soft FKs (`ClearForeignKeysForTables`) — a refresh's resolution replaces the prior run's FK entries for its tables.
+  - `RSUPendingWork`: `UnselectedAction` + `CreateDisabled` for the post-restart consumer; U11 step-index fields.
+
+  **CodeGenLib / PostgreSQLDataProvider**
+  - U2: `spUpdateExistingEntityFieldsFromSchema` honors `IsSoftPrimaryKey` on BOTH dialects (PG emitter + SQL Server migration) — schema sync no longer wipes resolved soft PKs.
+  - U4: a keyless entity now throws a named "has no primary key" error instead of emitting malformed record-change SQL.
+
+- 38c220c: Parse PostgreSQL NUMERIC/DECIMAL and BIGINT values to JS numbers. node-postgres returns both types as strings by default, so on Postgres-backed installs every decimal/bigint column surfaced as a string through RunView/GraphQL — Explorer UI code that assumes numbers threw `TypeError: cost.toFixed is not a function` on every change-detection cycle (AI Agent Run → Analytics tab console flood) and token totals string-concatenated instead of summing (e.g. 16,972 + 437 rendered as 16,972,437). New pool-scoped `MJPostgresTypes` parser config (exported for external pool creators): NUMERIC → parseFloat (matching the SQL Server provider's tedious semantics), BIGINT → Number with string passthrough beyond the safe-integer range. Applied to the provider's own pool and MetadataSync's shared pool; binary-format values and all other OIDs keep pg defaults.
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [85575cf]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/generic-database-provider@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai-vectordb@5.49.0
+  - @memberjunction/query-processor@5.49.0
+  - @memberjunction/sql-dialect@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- 09e1b4b: Fix Apply to my Form (resolve spec code, handle Pending overrides, improve # typeahead), auto-add app schemas to excludeSchemas on OpenApp install/upgrade, surface RenderedSQL through RunQueryResult and TestQuerySQL, strip ORDER BY before outer-wrapping unparseable SQL in MaxRows, fix lazy-config loader variable name collisions in codegen manifest, and add read-only provider support and missing SQL function keywords in PostgreSQL provider
+- Updated dependencies [09e1b4b]
+  - @memberjunction/generic-database-provider@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai-vectordb@5.48.0
+  - @memberjunction/query-processor@5.48.0
+  - @memberjunction/global@5.48.0
+  - @memberjunction/sql-dialect@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- f4dce92: Fix PostgreSQL CRUD save/update/delete/cascade failing on entities whose primary key has a multi-word (camelCase/PascalCase) name.
+
+  The PG CodeGen provider declared CRUD function parameters with the canonical flat builder (`ParameterRef` → `p_<lower>`, e.g. `p_recordkey`) but _referenced_ the primary key in several body clauses via `toSnakeCase` (`p_record_key`). Because `toLowerCase()` and `toSnakeCase()` produce the _same_ string for single-word/`ID` keys, this was invisible on every `ID`-keyed entity — but a table keyed on a multi-word soft-PK (e.g. a connector's `recordKey`) generated a function that declared `p_recordkey` and referenced `p_record_key`, so every save/update/delete failed on PostgreSQL with `column "p_record_key" does not exist`.
+
+  All parameter names now route through the single `ParameterRef` builder in both `PostgreSQLCodeGenProvider` (create/update/delete/cascade bodies) and `PostgreSQLDataProvider` (the save-call binding). This is a no-op for `ID`/single-word keys and fixes multi-word keys. Regenerate CRUD functions (`mj codegen`) after upgrading to apply the fix — no data migration required.
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+  - @memberjunction/ai-vectordb@5.47.0
+  - @memberjunction/generic-database-provider@5.47.0
+  - @memberjunction/query-processor@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/ai-vectordb@5.46.0
+  - @memberjunction/generic-database-provider@5.46.0
+  - @memberjunction/query-processor@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/generic-database-provider@5.45.1
+- @memberjunction/ai-vectordb@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/global@5.45.1
+- @memberjunction/query-processor@5.45.1
+- @memberjunction/sql-dialect@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-vectordb@5.45.0
+  - @memberjunction/query-processor@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [5396d90]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai-vectordb@5.44.0
+  - @memberjunction/generic-database-provider@5.44.0
+  - @memberjunction/query-processor@5.44.0
+  - @memberjunction/sql-dialect@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- fe89e68: Post-merge follow-up to PR #2854 (`refactor(codegen-lib): multi-provider SetupDataSource + PostgreSQL pool symmetry`), addressing review feedback. Bug-fix scope only — no migration, no schema changes — so this is patch under the same convention PR #2854 followed.
+
+  **Behavior fixes (silent regressions introduced by PR #2854):**
+  - **PG\_\* env-var precedence regressed when `dbPlatform` was set only in `mj.config.cjs`.** `_resolveConnEnv()` keyed its PG\** check on `_IS_PG_DEFAULT`, which derives from `process.env.DB_PLATFORM` alone. A user who set `dbPlatform: 'postgresql'` in their `mj.config.cjs` (no `DB_PLATFORM` env var) and supplied the host via `PG_HOST` would silently connect to `localhost`. New helper `applyPlatformDependentEnvVars()` runs *after\* `mergeConfigs(DEFAULT_CODEGEN_CONFIG, userConfig)` to re-apply PG\*\* precedence to any field the user didn't explicitly set in `mj.config.cjs`, restoring the pre-refactor behavior (`process.env.PG_HOST ?? configInfo.dbHost`). Wired into both the module-load merge and `initializeConfig()`.
+  - **SSL silently flipped on in `NODE_ENV=production`.** PR #2854's `buildPgConfig()` didn't set `SSL`, so `PGConnectionManager.Initialize()`'s `ssl: config.SSL ?? (process.env.NODE_ENV === 'production')` default kicked in — flipping codegen against non-SSL/locally-bridged PostgreSQL from off (the pre-refactor inline `pg.Pool` behavior) to on under any production shell. `buildPgConfig()` now passes `SSL: false` by default and exposes a new optional `codegenPool.ssl` knob (boolean or pg-ssl object) for callers that genuinely need SSL.
+  - **`statement_timeout` GUC missed the verify-SELECT-1 connection.** The runtime `connect` listener was attached _after_ `PGConnectionManager.Initialize()` had already opened, used, and released the first physical connection for its `SELECT 1` health check. That first warm client gets reused later without the GUC. The fix carries the timeout via the libpq `-c statement_timeout=<ms>` startup option (new optional `PGConnectionConfig.Options` field, threaded into the `pg.Pool` config), so every backend honors it from query #1 — including the verify connection. The runtime listener is removed entirely; the connect-string path is both correct and simpler.
+
+  **Warning hygiene:**
+  - The PG*\*/DB*\* precedence `console.warn` is now de-duplicated across the
+    module-load merge, the post-merge `applyPlatformDependentEnvVars` pass,
+    and any subsequent `initializeConfig()` calls. Without de-dup, a single
+    env-var divergence would emit 2–3 identical warnings; now it emits once
+    per `<pgEnv>:<ssEnv>` pair per process. A module-level set tracks which
+    pairs have already warned.
+
+  **Doc / API clarity:**
+  - `codegenPool` JSDoc + CLAUDE.md now spell out per-provider applicability: `statementTimeoutMs` is cross-platform; `max` / `min` / `idleTimeoutMillis` / `connectionTimeoutMillis` / `ssl` are PG-only today. Previously the docs claimed cross-platform application of pool-sizing knobs, but only `statementTimeoutMs` is wired into `buildSqlConfig()` — so a user setting `codegenPool.max: 50` for SQL Server was silently ignored.
+  - Added a `KEEP IN SYNC` comment near `DEFAULT_CODEGEN_CONFIG` pointing to `applyPlatformDependentEnvVars`'s `overrides` table — the two share the same set of PG*\*/DB*\* env-var pairs and must be updated together.
+  - Fixed JSDoc typo `@memberjunction/postgresql-data-provider` → `@memberjunction/postgresql-dataprovider`.
+
+  **Test quality:**
+  - `setupDataSource.test.ts` now exercises the actual `resolveCodeGenDatabaseProvider()` function the orchestrator delegates to, instead of re-implementing the factory call inline. The orchestrator's "not registered → throw with descriptive message" branch is now genuinely covered — previously the assertions would have kept passing even if the real method had drifted. The dispatch logic was extracted from `RunCodeGenBase.setupDataSource()` into a free function on `codeGenDatabaseProvider.ts` to make this possible without forcing the test to import the heavy `runCodeGen.ts` module.
+  - New `db-connection.test.ts` covers the SQL Server `codegenPool.statementTimeoutMs` → `dbRequestTimeout` → 120000 precedence chain — previously only validated E2E. `buildSqlConfig` is exported for the test (sole production caller remains `MSSQLConnection()`).
+  - New `applyPlatformDependentEnvVars.test.ts` covers the helper added by this PR: short-circuit on non-PG `dbPlatform`, PG\_\* override semantics, user-explicit precedence, non-numeric PG_PORT handling, and warning de-dup (single warning across multiple `initializeConfig()` calls). The function is exported solely for testing — production code only calls it internally.
+
+  **`@memberjunction/postgresql-dataprovider`:** additive — `PGConnectionConfig` gains an optional `Options` field threaded into `pg.PoolConfig.options`. Existing consumers that don't set it see identical behavior.
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/ai-vectordb@5.43.0
+  - @memberjunction/generic-database-provider@5.43.0
+  - @memberjunction/query-processor@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- b7092ca: PostgreSQL runtime correctness, found during fresh-DB PG end-to-end testing:
+  - **codegen-lib**: clean MJAPI engine load on PostgreSQL — `AutoUpdatePath` written as a
+    dialect-correct boolean literal, plus a PG-only migration removing orphan related-entity-name
+    virtual EntityField rows whose column the generated PG base view never emits (these crashed
+    EntityActionEngine / AI Credential Bindings / Scheduling with `column "..." does not exist`).
+  - **open-app-engine**: app uninstall now deletes all FK-dependent metadata (Entity Field Values,
+    Entity Settings) in dependency order and reports a real failure instead of swallowing errors
+    into a false "success".
+  - **postgresql-dataprovider**: dialect-correct per-field entity-search predicate (no `N'...'`
+    literal prefix, no `ESCAPE` clause) — fixes `syntax error at or near "ESCAPE"` on live search.
+
+- 6d970cd: Runtime SQL dialect correctness on PostgreSQL:
+  - **scheduling-engine**: PostgreSQL-correct heartbeat lease extension — affected-rowcount handling +
+    mixed-case column quoting in `spExtendScheduledJobLease`, with a PG-only migration. _(migration → minor)_
+  - **postgresql-dataprovider** + call-sites (archiving-engine, core-entities, ng-dashboards,
+    ng-entity-communications): translate T-SQL date functions (`GETDATE()`, `DATEADD`, etc.) in
+    runtime SQL clauses to PostgreSQL equivalents. _(code → patch)_
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [2f225e4]
+- Updated dependencies [0fa3cbc]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/generic-database-provider@5.42.0
+  - @memberjunction/ai-vectordb@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/query-processor@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/generic-database-provider@5.41.0
+  - @memberjunction/ai-vectordb@5.41.0
+  - @memberjunction/query-processor@5.41.0
+  - @memberjunction/global@5.41.0
+  - @memberjunction/sql-dialect@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai-vectordb@5.40.2
+- @memberjunction/generic-database-provider@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/query-processor@5.40.2
+- @memberjunction/sql-dialect@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-vectordb@5.40.1
+  - @memberjunction/generic-database-provider@5.40.1
+  - @memberjunction/query-processor@5.40.1
+  - @memberjunction/global@5.40.1
+  - @memberjunction/sql-dialect@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/generic-database-provider@5.40.0
+  - @memberjunction/ai-vectordb@5.40.0
+  - @memberjunction/query-processor@5.40.0
+  - @memberjunction/global@5.40.0
+  - @memberjunction/sql-dialect@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- 7dfacc7: Add support for storing and querying embeddings inside the application's own database instead of a separate vector service. `VectorDBBase` gains an `IColocatedVectorHost` adapter (implemented by the PostgreSQL and SQL Server data providers) and a `ColocatedQuery` API; the new `PgVectorColocated` provider does vector + keyword (RRF) search in one statement, and the new `@memberjunction/ai-vectors-sqlserver` package adds a SQL Server 2025 native `VECTOR` provider with sibling-table and entity-column storage modes. `VectorSearchProvider` and `EntityVectorSyncer` route these indexes through the borrowed connection.
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [eaee99f]
+- Updated dependencies [2d1b4e1]
+- Updated dependencies [3c53858]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [9bc2916]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ai-vectordb@5.39.0
+  - @memberjunction/generic-database-provider@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/query-processor@5.39.0
+  - @memberjunction/sql-dialect@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/core@5.38.0
+  - @memberjunction/global@5.38.0
+  - @memberjunction/generic-database-provider@5.38.0
+  - @memberjunction/sql-dialect@5.38.0
+  - @memberjunction/query-processor@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/core@5.37.0
+  - @memberjunction/generic-database-provider@5.37.0
+  - @memberjunction/query-processor@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/sql-dialect@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core@5.36.0
+  - @memberjunction/generic-database-provider@5.36.0
+  - @memberjunction/query-processor@5.36.0
+  - @memberjunction/global@5.36.0
+  - @memberjunction/sql-dialect@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- aedd4dc: Bubble save SQL composition up to GenericDatabaseProvider as a single orchestrator; SQL Server and Postgres providers now contribute four dialect hooks instead of duplicating the generator. Fixes a PG UPDATE bug where PK wasn't tail appended
+- Updated dependencies [6fa8e13]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [6f083dd]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/generic-database-provider@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/query-processor@5.35.0
+  - @memberjunction/sql-dialect@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/generic-database-provider@5.34.1
+  - @memberjunction/query-processor@5.34.1
+  - @memberjunction/global@5.34.1
+  - @memberjunction/sql-dialect@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- cfffb6d: Add keyset (seek) pagination to `RunView` via the new `RunViewParams.AfterKey: CompositeKey` field. Iterating large entities (background jobs, scheduled actions, bulk processing) now stays O(log N) per page regardless of depth — `StartRow`-based OFFSET pagination is unchanged and remains the right choice for UI grids.
+
+  **Framework changes**
+  - New `RunViewParams.AfterKey: CompositeKey` accepted by all RunView entry points (TS, GraphQL, REST flows that go through RunView).
+  - New exported error class `AfterKeyNotSupportedError` (with `Reason` codes `CompositePK | UnsupportedPKType | IncompatibleOrderBy | StartRowConflict | AfterKeyShape`).
+  - New exported helper `IsKeysetPaginationOrderableType(sqlType)` and constant `KEYSET_PAGINATION_ORDERABLE_PK_TYPES`.
+  - Keyset queries bypass server cache (read + write) automatically — they're inherently single-use so caching is pure overhead.
+  - v1 constraint: single-column PK only. Composite-PK entities throw `AfterKeyNotSupportedError` with `Reason: 'CompositePK'`.
+
+  **Migrated callers (now use keyset by default when entity has a single-column PK)**
+  - `ScheduledGeocodingAction` (`processMissingForEntity`) — falls back to OFFSET on composite-PK entities.
+  - `VectorBase.PageRecordsByEntityID` + `EntityVectorSyncer.startDataPaging` — auto-promotes to keyset when possible. New helper `VectorBase.CanUseKeysetPagination()`. New optional `PageRecordsParams.AfterKey`.
+
+  **Metadata**
+  - `Geocoding Maintenance` scheduled job cron updated to weekly (Saturdays 2 AM UTC); description reworded to not hard-code a cadence. Administrators can adjust the `CronExpression` as needed.
+
+  **Documentation**
+  - New guide: `guides/KEYSET_PAGINATION_GUIDE.md`.
+  - `CLAUDE.md` performance section updated.
+
+  **Out of scope for v1**
+  - `ExternalChangeDetection.ChangeDetector` uses `RunQuery` (saved queries with arbitrary SQL), which the framework can't safely rewrite. Stays on OFFSET; tracked as a follow-up.
+
+  **Backwards compatibility**
+  - Fully additive. Existing callers that don't pass `AfterKey` are unaffected.
+
+- 6d8ee1a: no migration
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/generic-database-provider@5.34.0
+  - @memberjunction/query-processor@5.34.0
+  - @memberjunction/sql-dialect@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/global@5.34.0
+
 ## 5.33.0
 
 ### Minor Changes

@@ -1,0 +1,20 @@
+[
+  {
+    "entity": "MJ: Scheduled Job Types",
+    "fields": {
+      "Name": "Agent Run Sweep",
+      "Description": "Force-fails AI agent runs left in 'Running' after their owning process died or its terminal-state write failed. This is an optional, operator-driven layer over the always-on in-process watchdog sweep: create a Scheduled Job of this type with a cron expression to also record each sweep as a Scheduled Job Run (with the orphan count) and raise notifications. Optional Configuration: { \"StaleThresholdMinutes\": <number> }.",
+      "DriverClass": "AgentRunSweepScheduledJobDriver",
+      "DomainRunEntity": "MJ: AI Agent Runs",
+      "DomainRunEntityFKey": null,
+      "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "D137A105-AFE6-4E7F-942A-8EA40D70F531"
+    },
+    "sync": {
+      "lastModified": "2026-06-05T02:25:21.839Z",
+      "checksum": "033843e4e7f24cd4bfa34bf3b20f72b42038fcf005bd0c23da463b274059c05a"
+    }
+  }
+]

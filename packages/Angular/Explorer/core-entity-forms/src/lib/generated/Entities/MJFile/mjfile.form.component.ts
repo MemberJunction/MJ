@@ -18,13 +18,16 @@ export class MJFileFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'fileBasics', sectionName: 'File Basics', isExpanded: true },
             { sectionKey: 'classificationStatus', sectionName: 'Classification & Status', isExpanded: true },
-            { sectionKey: 'storageDetails', sectionName: 'Storage Details', isExpanded: false },
+            { sectionKey: 'storageDetails', sectionName: 'Storage Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJFileEntityRecordLinks', sectionName: 'File Entity Record Links', isExpanded: false },
             { sectionKey: 'mJAIPromptRunMedias', sectionName: 'AI Prompt Run Medias', isExpanded: false },
             { sectionKey: 'mJConversationDetailAttachments', sectionName: 'Conversation Detail Attachments', isExpanded: false },
             { sectionKey: 'mJAIAgentRunMedias', sectionName: 'AI Agent Run Medias', isExpanded: false },
-            { sectionKey: 'mJArtifactVersions', sectionName: 'Artifact Versions', isExpanded: false }
+            { sectionKey: 'mJArtifactVersions', sectionName: 'Artifact Versions', isExpanded: false },
+            { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
+            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
+            { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false }
         ]);
     }
 }

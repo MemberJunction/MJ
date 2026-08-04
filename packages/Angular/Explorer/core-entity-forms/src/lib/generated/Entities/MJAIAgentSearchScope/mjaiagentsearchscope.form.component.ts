@@ -15,10 +15,10 @@ export class MJAIAgentSearchScopeFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'entityRelationships', sectionName: 'Entity Relationships', isExpanded: true },
+            { sectionKey: 'assignmentDetails', sectionName: 'Assignment Details', isExpanded: true },
             { sectionKey: 'executionControl', sectionName: 'Execution Control', isExpanded: true },
-            { sectionKey: 'scheduling', sectionName: 'Scheduling', isExpanded: false },
-            { sectionKey: 'searchConfiguration', sectionName: 'Search Configuration', isExpanded: false },
+            { sectionKey: 'timeline', sectionName: 'Timeline', isExpanded: true },
+            { sectionKey: 'searchConfiguration', sectionName: 'Search Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

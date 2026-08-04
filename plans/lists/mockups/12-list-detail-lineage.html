@@ -1,0 +1,76 @@
+<!doctype html><html><head><meta charset="utf-8"><title>12 — List Detail (Lineage Aware)</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div></aside>
+<main class="main">
+  <div class="app-header">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <button class="mj-btn mj-btn-ghost"><i class="fa-solid fa-arrow-left"></i></button>
+      <div class="entity-icon" style="width:44px; height:44px;"><i class="fa-solid fa-list"></i></div>
+      <div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <h1 style="font-size:20px; margin:0;">Q4 Donors — Snapshot 2026-05-15</h1>
+          <span class="lineage-badge"><i class="fa-solid fa-link"></i> Lineage: <strong>Q4 Donor View</strong></span>
+        </div>
+        <div class="muted" style="font-size:12.5px;">Contacts · 476 items · Last refreshed 5 days ago · Mode: <strong>Additive</strong></div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-rotate-right"></i> Refresh from Source</button>
+    <button class="mj-btn"><i class="fa-solid fa-share-nodes"></i> Share</button>
+    <button class="mj-btn"><i class="fa-solid fa-ellipsis"></i></button>
+  </div>
+
+  <div style="display:grid; grid-template-columns: 1fr 320px; gap: 16px;">
+    <div class="mj-panel">
+      <div class="mj-panel-header">
+        <h3><i class="fa-solid fa-users"></i>Members</h3>
+        <div style="margin-left:auto; display:flex; gap:8px;">
+          <button class="mj-btn mj-btn-sm"><i class="fa-solid fa-plus"></i> Add Records</button>
+          <button class="mj-btn mj-btn-sm"><i class="fa-solid fa-file-excel"></i> Export</button>
+        </div>
+      </div>
+      <div class="mj-panel-body" style="padding:0;">
+        <table class="mj-table" style="border:none; border-radius:0;">
+          <thead><tr><th style="width:36px;"><input type="checkbox"></th><th>Name</th><th>Email</th><th>Status</th><th>Added From</th><th>Added</th></tr></thead>
+          <tbody>
+            <tr><td><input type="checkbox"></td><td>Aaron Holt</td><td>aaron.holt@example.org</td><td><span class="badge badge-success">Active</span></td><td><span class="badge badge-info"><i class="fa-solid fa-eye"></i> View refresh</span></td><td>2026-05-10</td></tr>
+            <tr><td><input type="checkbox"></td><td>Beth Williams</td><td>beth.w@example.org</td><td><span class="badge badge-success">Active</span></td><td><span class="badge badge-info"><i class="fa-solid fa-eye"></i> View refresh</span></td><td>2026-05-10</td></tr>
+            <tr><td><input type="checkbox"></td><td>Carlos Mendez</td><td>cmendez@example.org</td><td><span class="badge badge-success">Active</span></td><td><span class="badge badge-muted"><i class="fa-solid fa-hand-pointer"></i> Manual</span></td><td>2026-05-12</td></tr>
+            <tr><td><input type="checkbox"></td><td>Dianne Park</td><td>dianne@example.org</td><td><span class="badge badge-success">Active</span></td><td><span class="badge badge-info"><i class="fa-solid fa-eye"></i> View refresh</span></td><td>2026-05-10</td></tr>
+            <tr><td><input type="checkbox"></td><td>Emir Khalil</td><td>emir.k@example.org</td><td><span class="badge badge-success">Active</span></td><td><span class="badge badge-info"><i class="fa-solid fa-eye"></i> View refresh</span></td><td>2026-05-10</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="col gap-12">
+      <div class="mj-panel">
+        <div class="mj-panel-header"><h3><i class="fa-solid fa-link"></i>Source Lineage</h3></div>
+        <div class="mj-panel-body">
+          <div class="label">Source View</div>
+          <div class="mt-8 row"><i class="fa-solid fa-eye" style="color:var(--mj-brand-primary)"></i><a href="#">Q4 Donor View</a></div>
+          <div class="divider"></div>
+          <div class="label">Refresh Mode</div>
+          <select class="mj-input mj-select mt-8">
+            <option>Additive (recommended)</option>
+            <option>Sync (remove drops)</option>
+          </select>
+          <div class="divider"></div>
+          <div class="label">Last Refreshed</div>
+          <div class="mt-8" style="font-size:13px;">2026-05-10 by Amith</div>
+          <div class="label mt-12">Filter Snapshot</div>
+          <div class="mt-8" style="font-size:11.5px; font-family:monospace; background:var(--mj-bg-surface-sunken); padding:6px 8px; border-radius:6px;">Donation_Total &gt;= 5000 AND LastGiftDate &gt;= '2026-01-01'</div>
+          <div class="row gap-8 mt-12">
+            <input type="checkbox" id="snap" checked><label for="snap" style="font-size:12px;">Use snapshot (vs live view filter)</label>
+          </div>
+          <div class="divider"></div>
+          <button class="mj-btn mj-btn-primary" style="width:100%;"><i class="fa-solid fa-rotate-right"></i> Refresh from Source</button>
+          <button class="mj-btn mt-8" style="width:100%;"><i class="fa-solid fa-link-slash"></i> Detach Source</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</div></body></html>

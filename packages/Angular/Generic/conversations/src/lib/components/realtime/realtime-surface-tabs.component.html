@@ -1,0 +1,111 @@
+<!-- SIZING IS EXTERNAL: the overlay hosts this panel inside a fixed-width flex item and
+     owns its width (drag, persistence, default tiers) — the panel just fills it. -->
+<aside class="surface"
+       [class.surface--collapsed]="Collapsed"
+       [class.surface--fill]="Fill && !Collapsed"
+       aria-label="Session surfaces">
+
+  @if (Collapsed) {
+    <!-- Slim strip: the panel's collapse target -->
+    <div class="surface__strip">
+      <button type="button"
+              class="surface__toggle"
+              (click)="ToggleCollapsed()"
+              title="Show session panel"
+              aria-expanded="false">
+        <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+      </button>
+      <i class="fa-solid fa-wave-square surface__strip-icon" aria-hidden="true" title="Session activity"></i>
+    </div>
+  } @else {
+    <!-- Tab strip: channel tabs (left cluster) … | spacer | Activity (right-aligned) -->
+    <div class="surface-tabs" role="tablist">
+      @for (tab of Model.Tabs; track TrackTab($index, tab)) {
+        @if (tab.Kind === 'activity') {
+          <!-- Flex spacer pushes the Activity tab to the far right -->
+          <span class="tabs-spacer" aria-hidden="true"></span>
+        }
+        <button type="button"
+                class="s-tab"
+                role="tab"
+                [class.s-tab--activity]="tab.Kind === 'activity'"
+                [class.s-tab--channel]="tab.Kind === 'channel'"
+                [class.s-tab--active]="tab.Key === Model.ActiveKey"
+                [class.s-tab--flash]="tab.Key === Model.FlashKey"
+                [style.--tab-accent]="tab.Color || null"
+                [attr.aria-selected]="tab.Key === Model.ActiveKey"
+                [title]="tab.Title"
+                (click)="Model.Focus(tab.Key)">
+          @if (tab.Kind === 'channel') {
+            <span class="s-tab__dot" aria-hidden="true"></span>
+          }
+          <i [class]="tab.Icon" aria-hidden="true"></i>
+          <span class="s-tab__title">{{ tab.Title }}</span>
+          @if (tab.Kind === 'activity' && State.Cards.length > 0) {
+            <span class="s-tab__badge" aria-hidden="true">{{ State.Cards.length }}</span>
+          }
+        </button>
+      }
+      <div class="tabs-end">
+        <button type="button"
+                class="surface__toggle"
+                (click)="ToggleCollapsed()"
+                title="Hide session panel"
+                aria-expanded="true">
+          <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Panes: ALL kept alive; only the active one is displayed -->
+    @for (tab of Model.Tabs; track TrackTab($index, tab)) {
+      <div class="s-pane" [class.s-pane--active]="tab.Key === Model.ActiveKey" role="tabpanel">
+        @switch (tab.Kind) {
+          @case ('activity') {
+            <mj-realtime-activity-rail
+              [State]="State"
+              [DevMode]="DevMode"
+              [Embedded]="true"
+              [CurrentUser]="CurrentUser"
+              [EnvironmentID]="EnvironmentID"
+              [ExtraArtifacts]="ExtraArtifacts"
+              (OpenRunRequested)="OpenRunRequested.emit($event)">
+            </mj-realtime-activity-rail>
+          }
+          @case ('channel') {
+            @if (tab.Data?.Plugin; as plugin) {
+              <!-- Registry-resolved channel: the pane host creates the plugin's surface
+                   component dynamically and hands the instance back for binding -->
+              <mj-realtime-channel-pane [Plugin]="plugin"></mj-realtime-channel-pane>
+              <!-- First-run intro: overlaid over the active channel pane the first time this user
+                   opens it; the pane host renders display:none + a sibling surface, so the overlay
+                   sits here (inside the positioned .s-pane) rather than inside the pane host. -->
+              @if (tab.Key === Model.ActiveKey && OnboardingContent) {
+                <mj-channel-onboarding-panel
+                  [Content]="OnboardingContent"
+                  (Dismissed)="DismissOnboarding()">
+                </mj-channel-onboarding-panel>
+              }
+            } @else if (tab.Data?.Content; as content) {
+              <ng-container [ngTemplateOutlet]="content"></ng-container>
+            } @else {
+              <!-- Placeholder until the channel registration supplies a plugin / template -->
+              <div class="channel-placeholder" role="status">
+                <i class="fa-solid fa-chalkboard" aria-hidden="true"></i>
+                <span>{{ tab.Title }} coming online…</span>
+              </div>
+            }
+          }
+        }
+      </div>
+    }
+
+    @if (Model.Tabs.length === 0) {
+      <!-- Nothing in play yet (idle voice-first session): a gentle hint, not an empty grid -->
+      <div class="surface__empty" role="status">
+        <i class="fa-solid fa-wave-square" aria-hidden="true"></i>
+        <span>Surfaces appear here as the call gets going.</span>
+      </div>
+    }
+  }
+</aside>

@@ -1,10 +1,11 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, Type, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
 import { ArtifactIconService } from '../services/artifact-icon.service';
+import { ArtifactPreviewResolverService } from '../services/artifact-preview-resolver.service';
+import { IArtifactPreviewComponent } from '../interfaces/artifact-viewer-plugin.interface';
 
 /**
  * Artifact message card component - displays a simple info bar for artifacts in conversation messages.
@@ -26,23 +27,42 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
           <span>Failed to load artifact</span>
         </div>
       } @else if (artifact) {
-        <div class="artifact-info-bar" (click)="openFullView()">
-          <div class="artifact-icon">
-            <i class="fa-solid" [ngClass]="getArtifactIcon()"></i>
-          </div>
-          <div class="artifact-info">
-            <span class="artifact-name">{{ displayName }}</span>
-            <div class="artifact-meta">
+        @if (previewComponentType && currentVersion) {
+          <!-- Inline preview: a clickable wrapper still opens the full right-side viewer.
+               Media controls inside the preview (video/audio) stop their own click propagation. -->
+          <div class="artifact-preview-wrapper" (click)="openFullView()" [title]="displayName">
+            <ng-container
+              *ngComponentOutlet="previewComponentType; inputs: previewInputs"
+            ></ng-container>
+            <div class="artifact-preview-caption">
+              <i class="fa-solid" [ngClass]="getArtifactIcon()"></i>
+              <span class="artifact-name">{{ displayName }}</span>
               <span class="artifact-type-badge" [style.background]="getTypeBadgeColor()">
                 {{ artifact.Type }}
               </span>
-              <span class="artifact-version">v{{ currentVersion?.VersionNumber || 1 }}</span>
+              <span class="artifact-version">v{{ currentVersion.VersionNumber || 1 }}</span>
+              <span class="open-icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
             </div>
           </div>
-          <div class="open-icon">
-            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        } @else {
+          <div class="artifact-info-bar" (click)="openFullView()">
+            <div class="artifact-icon">
+              <i class="fa-solid" [ngClass]="getArtifactIcon()"></i>
+            </div>
+            <div class="artifact-info">
+              <span class="artifact-name">{{ displayName }}</span>
+              <div class="artifact-meta">
+                <span class="artifact-type-badge" [style.background]="getTypeBadgeColor()">
+                  {{ artifact.Type }}
+                </span>
+                <span class="artifact-version">v{{ currentVersion?.VersionNumber || 1 }}</span>
+              </div>
+            </div>
+            <div class="open-icon">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            </div>
           </div>
-        </div>
+        }
       }
     </div>
   `,
@@ -178,6 +198,51 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
     .artifact-info-bar:hover .open-icon {
       color: var(--mj-brand-primary);
     }
+
+    .artifact-preview-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 200ms ease;
+    }
+
+    .artifact-preview-wrapper:hover {
+      border-color: var(--mj-brand-primary);
+      box-shadow: var(--mj-shadow-sm);
+    }
+
+    .artifact-preview-caption {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      color: var(--mj-text-muted);
+      font-size: 12px;
+    }
+
+    .artifact-preview-caption .artifact-name {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--mj-text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .artifact-preview-caption .open-icon {
+      color: var(--mj-text-disabled);
+      transition: color 200ms ease;
+    }
+
+    .artifact-preview-wrapper:hover .artifact-preview-caption .open-icon {
+      color: var(--mj-brand-primary);
+    }
   `]
 })
 export class ArtifactMessageCardComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
@@ -193,7 +258,18 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
   public loading = true;
   public error = false;
 
+  /**
+   * Resolved inline-preview component for this artifact's type/contentType, or null when no plugin
+   * exposes a matching preview (the card then falls back to its existing info-bar box). Resolved
+   * SYNCHRONOUSLY up front (before the box renders) to avoid a flash / ExpressionChanged error.
+   */
+  public previewComponentType: Type<IArtifactPreviewComponent> | null = null;
+
+  /** Inputs forwarded to the dynamically rendered preview component via *ngComponentOutlet. */
+  public previewInputs: Record<string, unknown> = {};
+
   private destroy$ = new Subject<void>();
+  private readonly previewResolver = inject(ArtifactPreviewResolverService);
 
   constructor(private artifactIconService: ArtifactIconService) {
   super();}
@@ -207,6 +283,28 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
     } else {
       // Otherwise load from database
       await this.loadArtifact();
+    }
+    // Resolve the inline preview once artifact + version are known. Synchronous so the correct
+    // branch (preview vs. box) is decided before the template renders this state.
+    this.resolvePreview();
+  }
+
+  /**
+   * Pick the inline-preview component for this artifact, INDEPENDENTLY of the full viewer.
+   * Type name comes from `artifact.Type`; content type from `artifactVersion.MimeType`.
+   * No match → previewComponentType stays null → existing info-bar box renders unchanged.
+   */
+  private resolvePreview(): void {
+    if (!this._artifact || !this._currentVersion) {
+      this.previewComponentType = null;
+      return;
+    }
+    this.previewComponentType = this.previewResolver.resolvePreviewComponent(
+      this._artifact.Type,
+      this._currentVersion.MimeType,
+    );
+    if (this.previewComponentType) {
+      this.previewInputs = { artifactVersion: this._currentVersion };
     }
   }
 

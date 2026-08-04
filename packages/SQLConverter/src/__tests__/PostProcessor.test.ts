@@ -29,6 +29,19 @@ describe('postProcess', () => {
       expect(result).toContain('p_Parts[1]');
       expect(result).toContain('"TableName"');
     });
+
+    it('should not let an apostrophe inside a -- comment corrupt a following ARRAY[...]', () => {
+      // The bracket-replacement segmenter must skip `--` comments. An apostrophe in
+      // a comment ("sproc's") would otherwise be read as a string opener, desyncing
+      // quote tracking so the ARRAY['x','y'] literal gets mangled into ARRAY"'x','y'".
+      const input = [
+        "  -- defer to the sproc's column DEFAULT here",
+        "  FOREACH v IN ARRAY ARRAY['AgentID', 'ParentRunID', 'Status']",
+      ].join('\n');
+      const result = postProcess(input);
+      expect(result).toContain("ARRAY['AgentID', 'ParentRunID', 'Status']");
+      expect(result).not.toContain('ARRAY"');
+    });
   });
 
   // ============================================================
@@ -440,12 +453,24 @@ describe('postProcess', () => {
   // 22. flyway_schema_history removal
   // ============================================================
   describe('flyway_schema_history removal', () => {
-    it('should remove lines containing flyway_schema_history', () => {
+    it('should remove structural (bare-identifier) references to flyway_schema_history', () => {
       const input = 'SELECT 1;\nINSERT INTO flyway_schema_history VALUES (1);\nSELECT 2;';
       const result = postProcess(input);
       expect(result).not.toContain('flyway_schema_history');
       expect(result).toContain('SELECT 1;');
       expect(result).toContain('SELECT 2;');
+    });
+
+    it('should preserve a data row where flyway_schema_history appears inside a string literal', () => {
+      // The Query seed row stores a saved SQL string that mentions the table.
+      // It must NOT be stripped — doing so dropped the Query and orphaned its
+      // QueryField FKs in the baseline.
+      const input =
+        "INSERT INTO __mj.\"Query\" (\"ID\", \"Name\", \"SQL\") VALUES ('23f8423e', 'Server Installed Version History', 'SELECT * FROM __mj.flyway_schema_history ORDER BY installed_on DESC');";
+      const result = postProcess(input);
+      expect(result).toContain("'23f8423e'");
+      expect(result).toContain('Server Installed Version History');
+      expect(result).toContain('flyway_schema_history'); // kept inside the string literal
     });
   });
 
@@ -599,6 +624,41 @@ describe('postProcess', () => {
       expect(result).toContain('"Name"');
       expect(result).toContain('UUID');
       expect(result).toContain('=TRUE');
+    });
+  });
+
+  // ============================================================
+  // schema.PascalCase quoting must NOT reach into string literals
+  // (regression: TypeScript stored in GeneratedCode.Code / Action.Code
+  //  INSERT VALUES had `this.GranteeType` rewritten to `this."GranteeType"`,
+  //  producing invalid TS that broke the build on a fresh PostgreSQL DB)
+  // ============================================================
+  describe('schema.PascalCase quoting skips string literals', () => {
+    it('still quotes a real schema.Table reference in code', () => {
+      expect(postProcess('SELECT * FROM __mj.OpenApp')).toContain('__mj."OpenApp"');
+    });
+
+    it('still quotes a quoted-schema.PascalCase reference in code', () => {
+      expect(postProcess('SELECT * FROM "app".MyTable')).toContain('"app"."MyTable"');
+    });
+
+    it('does NOT quote TypeScript member access inside a single-quoted string literal', () => {
+      const input = `INSERT INTO __mj.GeneratedCode ("Code") VALUES ('if (!allowedValues.includes(this.GranteeType)) { result.Errors.push(ValidationErrorType.Failure); }');`;
+      const result = postProcess(input);
+      expect(result).toContain('this.GranteeType');
+      expect(result).toContain('result.Errors');
+      expect(result).toContain('ValidationErrorType.Failure');
+      expect(result).not.toContain('this."GranteeType"');
+      expect(result).not.toContain('result."Errors"');
+    });
+
+    it('does NOT quote arbitrary accessors (params., p.) inside a string literal', () => {
+      const input = `INSERT INTO __mj.Action ("Code") VALUES ('const name = params.Params.find(p => p.Name === ''x'')?.Value;');`;
+      const result = postProcess(input);
+      expect(result).toContain('params.Params');
+      expect(result).toContain('p.Name');
+      expect(result).not.toContain('params."Params"');
+      expect(result).not.toContain('p."Name"');
     });
   });
 });

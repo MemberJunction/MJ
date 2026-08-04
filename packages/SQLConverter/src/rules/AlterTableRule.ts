@@ -1,5 +1,5 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, convertCommonFunctions, transformCodeOnly, removeNPrefix } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, convertCommonFunctions, transformCodeOnly, removeNPrefix, convertBooleanLiteralComparisons, collectBooleanColumnNames } from './ExpressionHelpers.js';
 
 export class AlterTableRule implements IConversionRule {
   Name = 'AlterTableRule';
@@ -10,15 +10,12 @@ export class AlterTableRule implements IConversionRule {
   BypassSqlglot = true;
   BypassJustification = 'sqlglot does not handle T-SQL ALTER TABLE patterns: multi-column ADD with inline CONSTRAINT clauses, ADD CONSTRAINT name DEFAULT val FOR col syntax (T-SQL named defaults), inline FOREIGN KEY in ADD COLUMN, ALTER COLUMN type NOT NULL (must become SET NOT NULL in PG), or DEFERRABLE INITIALLY DEFERRED FK behavior we add. Custom rule produces idiomatic PG output and applies PG case-sensitive identifier quoting.';
 
-  PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
+  PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     let result = convertIdentifiers(sql);
     result = removeCollate(result);
 
     // Convert SQL Server types to PG types (for ALTER TABLE ADD COLUMN)
     result = this.convertTypes(result);
-
-    // Convert default functions (for ALTER TABLE ADD COLUMN)
-    result = this.convertDefaults(result);
 
     // Remove CLUSTERED/NONCLUSTERED
     result = result.replace(/\bCLUSTERED\b/gi, '');
@@ -45,6 +42,18 @@ export class AlterTableRule implements IConversionRule {
     // Convert DEFAULT (val) FOR col → ALTER COLUMN col SET DEFAULT val
     result = this.convertDefaultFor(result);
 
+    // Convert default functions (GETUTCDATE/NEWID/USER_NAME/...) — runs AFTER
+    // convertDefaultFor so it also covers the `SET DEFAULT <fn>()` forms that
+    // step produces, not just inline ADD COLUMN defaults.
+    result = this.convertDefaults(result);
+
+    // SS BIT literals → PG boolean for known boolean columns. Runs AFTER the
+    // SET DEFAULT form is produced above. Handles both `"col" = 0/1` (CHECK
+    // constraints) and `ALTER COLUMN "col" SET DEFAULT 0/1` — neither is caught
+    // by the type-adjacent rules in convertDefaults (no BOOLEAN keyword present).
+    result = convertBooleanLiteralComparisons(result, context.TableColumns);
+    result = this.convertBooleanColumnDefaults(result, context.TableColumns);
+
     // Convert multi-column ADD to PG ADD COLUMN syntax (must run BEFORE removeInlineForeignKey
     // so synthesized ADD COLUMN entries on trailing columns are also subject to FK removal —
     // SQL Server allows trailing columns in a multi-column ALTER TABLE to omit the leading ADD).
@@ -57,9 +66,11 @@ export class AlterTableRule implements IConversionRule {
     if (/FOREIGN\s+KEY/i.test(result)) {
       // Remove WITH NOCHECK (PG doesn't support it)
       result = result.replace(/\bWITH\s+NOCHECK\b/gi, '');
-      // Add DEFERRABLE INITIALLY DEFERRED before the semicolon
-      result = result.trimEnd().replace(/;?\s*$/, '');
-      result += ' DEFERRABLE INITIALLY DEFERRED';
+      // Attach DEFERRABLE INITIALLY DEFERRED to each FK clause's REFERENCES target.
+      // It must NOT go at the end of the whole statement: a multi-clause
+      // ALTER TABLE ... ADD (cols, FK, CHECK, ...) ends on a CHECK constraint, and
+      // PG rejects DEFERRABLE on CHECK constraints.
+      result = this.makeForeignKeysDeferrable(result);
     }
 
     // CHECK constraints: add NOT VALID to skip validation of existing rows.
@@ -231,13 +242,46 @@ export class AlterTableRule implements IConversionRule {
     sql = sql.replace(/\bGETUTCDATE\s*\(\s*\)/gi, 'NOW()');
     sql = sql.replace(/\bGETDATE\s*\(\s*\)/gi, 'NOW()');
     sql = sql.replace(/\bSYSDATETIMEOFFSET\s*\(\s*\)/gi, 'NOW()');
+    sql = sql.replace(/\bSYSUTCDATETIME\s*\(\s*\)/gi, 'NOW()');
     sql = sql.replace(/\bNEWSEQUENTIALID\s*\(\s*\)/gi, 'gen_random_uuid()');
     sql = sql.replace(/\bNEWID\s*\(\s*\)/gi, 'gen_random_uuid()');
+    // SQL Server auth/user functions used as column defaults → PG current_user.
+    // (No-arg form only; PG has no user_name(id) equivalent.)
+    sql = sql.replace(/\bSUSER_SNAME\s*\(\s*\)/gi, 'current_user');
+    sql = sql.replace(/\bSUSER_NAME\s*\(\s*\)/gi, 'current_user');
+    sql = sql.replace(/\bUSER_NAME\s*\(\s*\)/gi, 'current_user');
     // After BIT → BOOLEAN type conversion, DEFAULT 0/1 must become DEFAULT FALSE/TRUE.
-    // PG's BOOLEAN type does not accept integer literals as defaults.
-    sql = sql.replace(/\bBOOLEAN\b(.*?)\bDEFAULT\s+0\b/gi, 'BOOLEAN$1DEFAULT FALSE');
-    sql = sql.replace(/\bBOOLEAN\b(.*?)\bDEFAULT\s+1\b/gi, 'BOOLEAN$1DEFAULT TRUE');
+    // PG's BOOLEAN type does not accept integer literals as defaults. The DEFAULT may
+    // be separated from BOOLEAN by a NULL / NOT NULL clause and/or a named
+    // `CONSTRAINT <name>` clause, possibly spanning newlines (CodeGen and hand-written
+    // migrations emit inline named defaults on their own line, e.g.
+    // `AllowMemoryWrite BIT NOT NULL\n  CONSTRAINT DF_... DEFAULT 1`). Bound the gap to
+    // exactly those clauses (and optional wrapping parens on the value) so the match
+    // can never cross a comma into a different (e.g. integer) column's DEFAULT.
+    sql = sql.replace(
+      /\bBOOLEAN\b(\s+(?:(?:NOT\s+)?NULL\s+)?(?:CONSTRAINT\s+"?\w+"?\s+)?DEFAULT\s+\(*\s*)([01])(\s*\)*)/gi,
+      (_m, pre: string, val: string, post: string) => `BOOLEAN${pre}${val === '1' ? 'TRUE' : 'FALSE'}${post}`,
+    );
     return sql;
+  }
+
+  /**
+   * Convert `ALTER COLUMN "col" SET DEFAULT 0/1` to a PG boolean literal when
+   * `col` is a known BOOLEAN column. This form carries no type keyword (the
+   * column type lives in the CREATE TABLE, captured in context.TableColumns), so
+   * the BOOLEAN-adjacent rules in convertDefaults can't catch it. PG rejects an
+   * integer default on a boolean column at ALTER time.
+   */
+  private convertBooleanColumnDefaults(sql: string, tableColumns: Map<string, Map<string, string>>): string {
+    const boolCols = collectBooleanColumnNames(tableColumns);
+    if (boolCols.size === 0) return sql;
+    return sql.replace(
+      /ALTER\s+COLUMN\s+"(\w+)"\s+SET\s+DEFAULT\s+\(*\s*([01])\s*\)*/gi,
+      (match, col: string, val: string) =>
+        boolCols.has(col.toLowerCase())
+          ? `ALTER COLUMN "${col}" SET DEFAULT ${val === '1' ? 'TRUE' : 'FALSE'}`
+          : match,
+    );
   }
 
   /**
@@ -385,6 +429,19 @@ export class AlterTableRule implements IConversionRule {
       /(CONSTRAINT\s+"?\w+"?\s+)FOREIGN\s+KEY\s+(REFERENCES\b)/gi,
       '$1$2'
     );
+  }
+
+  /**
+   * Append `DEFERRABLE INITIALLY DEFERRED` to each foreign-key clause by matching
+   * its `REFERENCES <table>(<cols>)` target (plus any ON DELETE / ON UPDATE
+   * actions). This places the clause on the FK itself, so it works whether the FK
+   * is the last clause or sits before trailing CHECK constraints in a multi-clause
+   * `ALTER TABLE ... ADD (...)`. Idempotent: skips a target already followed by
+   * DEFERRABLE.
+   */
+  private makeForeignKeysDeferrable(sql: string): string {
+    const re = /(REFERENCES\s+[\w".]+\s*\([^)]*\)(?:\s+ON\s+(?:DELETE|UPDATE)\s+(?:NO\s+ACTION|CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT))*)(?!\s+DEFERRABLE)/gi;
+    return sql.replace(re, '$1 DEFERRABLE INITIALLY DEFERRED');
   }
 
   /**

@@ -12,10 +12,11 @@ describe('TextToolLibrary', () => {
 
     // Slice 1: GetToolList returns 2 tools
     describe('GetToolList', () => {
-        it('should return 2 tool definitions', () => {
+        it('should return 2 subclass tools plus inherited get_full (3 total)', () => {
             const tools = lib.GetToolList();
-            expect(tools).toHaveLength(2);
+            expect(tools).toHaveLength(3);
             const names = tools.map(t => t.name);
+            expect(names).toContain('get_full');
             expect(names).toContain('grep');
             expect(names).toContain('get_lines');
         });

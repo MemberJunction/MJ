@@ -67,11 +67,15 @@ describe('DDLGenerator', () => {
       expect(sql).toContain('[__mj_integration_LastSyncedAt]');
     });
 
-    it('generates UNIQUE constraint for SoftPrimaryKeys', () => {
+    it('generates a NON-UNIQUE index for SoftPrimaryKeys, not a hard UNIQUE constraint', () => {
       const table = makeTable({ SoftPrimaryKeys: ['ExternalId'] });
       const sql = gen.GenerateCreateTable(table, 'sqlserver');
-      expect(sql).toContain('UNIQUE');
+      // Soft PK = inferred key → indexed for lookup speed, but NOT uniqueness-enforced (a bad
+      // inference must never block a write). So: a CREATE INDEX, no UNIQUE constraint.
+      expect(sql).toContain('CREATE INDEX');
+      expect(sql).toContain('[IX_custom_TestTable_PK]');
       expect(sql).toContain('[ExternalId]');
+      expect(sql).not.toContain('UNIQUE');
     });
 
     it('generates hard FK constraint for IsSoft=false foreign keys', () => {
@@ -140,6 +144,37 @@ describe('DDLGenerator', () => {
       });
       const sql = gen.GenerateCreateTable(table, 'sqlserver');
       expect(sql).toContain('[Payload] NVARCHAR(MAX)');
+    });
+
+    // ─── Idempotency (IfNotExists option) ──────────────────────────
+    // The integration Create-Tables path opts in so re-running against an
+    // already-created table (no MJ entity yet) does not collide.
+
+    it('default (no options) emits a BARE CREATE TABLE — unchanged for the AI designer path', () => {
+      const sql = gen.GenerateCreateTable(makeTable(), 'sqlserver');
+      expect(sql).toContain('CREATE TABLE [custom].[TestTable]');
+      expect(sql).not.toContain('IF OBJECT_ID');
+    });
+
+    it('IfNotExists wraps SQL Server CREATE in a single-statement IF OBJECT_ID guard (chunk-safe, no BEGIN/END)', () => {
+      const sql = gen.GenerateCreateTable(makeTable(), 'sqlserver', { IfNotExists: true });
+      expect(sql).toContain("IF OBJECT_ID(N'[custom].[TestTable]', N'U') IS NULL");
+      expect(sql.indexOf('IF OBJECT_ID')).toBeLessThan(sql.indexOf('CREATE TABLE'));
+      expect(sql).not.toContain('BEGIN'); // single-statement guard — safe for ';'-boundary chunking
+    });
+
+    it('IfNotExists guards extended properties so re-running does not re-add descriptions (SQL Server)', () => {
+      const sql = gen.GenerateCreateTable(makeTable({ Description: 'A test table' }), 'sqlserver', { IfNotExists: true });
+      // Table-level guard (NULL, NULL for the column-level args).
+      expect(sql).toContain("sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'custom', N'TABLE', N'TestTable', NULL, NULL)");
+      // Column-level guard for a described column.
+      expect(sql).toContain("sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'custom', N'TABLE', N'TestTable', N'COLUMN', N'ExternalId')");
+    });
+
+    it('IfNotExists uses native CREATE TABLE IF NOT EXISTS on PostgreSQL (never the SQL Server guard)', () => {
+      const sql = gen.GenerateCreateTable(makeTable(), 'postgresql', { IfNotExists: true });
+      expect(sql).toContain('CREATE TABLE IF NOT EXISTS "custom"."TestTable"');
+      expect(sql).not.toContain('OBJECT_ID');
     });
   });
 

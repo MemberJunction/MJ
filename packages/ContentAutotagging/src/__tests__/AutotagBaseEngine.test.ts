@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock all external dependencies, preserving BaseEngine and related classes
 // Shared mock function so tests can reconfigure RunView behavior
@@ -72,6 +72,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
         // Provide a per-test object store so AutotagBaseEngine instances resolve correctly.
         GetGlobalObjectStore: vi.fn(() => ({})),
         ClassFactory: {
+          // Segmenters resolve via TryCreateInstance; returning an unresolved result makes
+          // ResolveSegmenter fall through to its built-in FixedWindow instance, so tests
+          // exercise the real segmentation logic without the class registry.
+          TryCreateInstance: vi.fn(() => ({ Resolved: false, Instance: null })),
           CreateInstance: vi.fn().mockReturnValue({
             ChatCompletion: vi.fn().mockResolvedValue({
               data: {
@@ -223,7 +227,11 @@ vi.mock('@memberjunction/aiengine', () => ({
   },
 }));
 
-vi.mock('@memberjunction/core-entities', () => {
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+  // Spread the real module so transitively-imported exports (e.g.
+  // MJAICredentialBindingEntity, pulled in via BaseAIEngine) always exist —
+  // otherwise adding any new core-entities export breaks this mock's load.
+  const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
   const mockVectorIndexes = [
     { ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1' },
   ];
@@ -233,11 +241,23 @@ vi.mock('@memberjunction/core-entities', () => {
     ContentSourceTypes: [],
     ContentFileTypes: [],
     VectorIndexes: mockVectorIndexes,
-    GetVectorIndexById: vi.fn().mockImplementation((id: string) =>
+    GetVectorIndexByID: vi.fn().mockImplementation((id: string) =>
       mockVectorIndexes.find(v => v.ID === id)
+    ),
+    // Mirror the real KnowledgeHubMetadataEngine O(1) by-id helpers (which the engine now calls
+    // instead of `.find` at the call sites). Read the live arrays so tests that push after setup work.
+    GetContentSourceByID: vi.fn().mockImplementation((id: string) =>
+      mockKHInstance.ContentSources.find((s: { ID: string }) => s.ID === id)
+    ),
+    GetContentTypeByID: vi.fn().mockImplementation((id: string) =>
+      mockKHInstance.ContentTypes.find((t: { ID: string }) => t.ID === id)
+    ),
+    GetContentSourceTypeByID: vi.fn().mockImplementation((id: string) =>
+      mockKHInstance.ContentSourceTypes.find((t: { ID: string }) => t.ID === id)
     ),
   };
   return {
+    ...actual,
     MJContentSourceEntity: vi.fn(),
     MJContentItemEntity: vi.fn(),
     MJContentFileTypeEntity: vi.fn(),
@@ -308,6 +328,22 @@ vi.mock('date-fns-tz', () => ({
 
 import { AutotagBaseEngine } from '../Engine/generic/AutotagBaseEngine';
 
+// Mock EntityInfo for 'MJ: Content Items', used by the strategy-driven metadata field resolution.
+// Field set covers each eligibility branch: PK+uuid (ID), plain strings (Name/Description/URL),
+// a uuid FK (ContentSourceID), a numeric (Priority), and a system field (__mj_UpdatedAt).
+const MOCK_CONTENT_ITEM_ENTITY = {
+  Icon: 'fa-file',
+  Fields: [
+    { Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, MaxLength: 16 },
+    { Name: 'Name', Type: 'nvarchar', IsPrimaryKey: false, MaxLength: 500 },
+    { Name: 'Description', Type: 'nvarchar', IsPrimaryKey: false, MaxLength: -1 },
+    { Name: 'URL', Type: 'nvarchar', IsPrimaryKey: false, MaxLength: 2000 },
+    { Name: 'ContentSourceID', Type: 'uniqueidentifier', IsPrimaryKey: false, MaxLength: 16 },
+    { Name: 'Priority', Type: 'int', IsPrimaryKey: false, MaxLength: 4 },
+    { Name: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, MaxLength: 10 },
+  ],
+};
+
 describe('AutotagBaseEngine', () => {
   let engine: AutotagBaseEngine;
 
@@ -323,6 +359,8 @@ describe('AutotagBaseEngine', () => {
       get() {
         return {
           GetEntityObject: vi.fn().mockResolvedValue(buildMockEntityRecord()),
+          // buildVectorRecords resolves the ContentItem entity for strategy-driven metadata fields.
+          EntityByName: () => MOCK_CONTENT_ITEM_ENTITY,
         };
       },
       configurable: true,
@@ -330,61 +368,61 @@ describe('AutotagBaseEngine', () => {
   });
 
   describe('chunkExtractedText', () => {
-    it('should return single chunk for short text', () => {
+    it('should return single chunk for short text', async () => {
       const text = 'Short text';
       const tokenLimit = 1000;
 
-      const result = engine.chunkExtractedText(text, tokenLimit);
+      const result = await engine.chunkExtractedText(text, tokenLimit);
 
       expect(result).toHaveLength(1);
       expect(result[0]).toBe('Short text');
     });
 
-    it('should chunk text exceeding token limit', () => {
+    it('should chunk text exceeding token limit', async () => {
       // tokenLimit / 1.5 = 666 char limit * 4 chars/token = 2664 char threshold
       // With TextChunker, sentence-based chunking may produce different chunk counts
       const text = 'This is a sentence. '.repeat(200); // ~4000 chars, well above threshold
       const tokenLimit = 1000;
 
-      const result = engine.chunkExtractedText(text, tokenLimit);
+      const result = await engine.chunkExtractedText(text, tokenLimit);
       expect(result.length).toBeGreaterThan(1);
     });
 
-    it('should calculate text limit as tokenLimit / 1.5', () => {
+    it('should calculate text limit as tokenLimit / 1.5', async () => {
       const tokenLimit = 1500;
       const textLimit = Math.ceil(tokenLimit / 1.5); // 1000
 
       // Text below the threshold (textLimit * 4 chars) should not be chunked
       const shortText = 'Short text.';
-      const result = engine.chunkExtractedText(shortText, tokenLimit);
+      const result = await engine.chunkExtractedText(shortText, tokenLimit);
       expect(result).toHaveLength(1);
 
       // Text well above the threshold should be chunked
       const longText = 'This is a test sentence. '.repeat(500); // ~12500 chars
-      const result2 = engine.chunkExtractedText(longText, tokenLimit);
+      const result2 = await engine.chunkExtractedText(longText, tokenLimit);
       expect(result2.length).toBeGreaterThan(1);
     });
 
-    it('should handle empty text', () => {
-      const result = engine.chunkExtractedText('', 1000);
+    it('should handle empty text', async () => {
+      const result = await engine.chunkExtractedText('', 1000);
       expect(result).toHaveLength(1);
       expect(result[0]).toBe('');
     });
 
-    it('should handle very small token limit', () => {
+    it('should handle very small token limit', async () => {
       // With sentence-based chunking, a single sentence stays as one chunk
       const text = 'Hello World. This is another sentence. And a third.';
-      const result = engine.chunkExtractedText(text, 3);
+      const result = await engine.chunkExtractedText(text, 3);
       // Even with a tiny limit, the text is short enough or chunking produces at least the text
       expect(result.length).toBeGreaterThanOrEqual(1);
       expect(result.join('')).toContain('Hello World');
     });
 
-    it('should preserve all text across chunks', () => {
+    it('should preserve all text across chunks', async () => {
       const text = 'The quick brown fox jumps over the lazy dog. '.repeat(100);
       const tokenLimit = 100;
 
-      const result = engine.chunkExtractedText(text, tokenLimit);
+      const result = await engine.chunkExtractedText(text, tokenLimit);
       // With sentence-based chunking, each chunk's text should be part of the original
       for (const chunk of result) {
         expect(text).toContain(chunk.trim());
@@ -602,6 +640,90 @@ describe('AutotagBaseEngine', () => {
     });
   });
 
+  describe('saveContentItemTags — lineage + reasoning (Phase 4)', () => {
+    type CapturedTag = {
+      ItemID?: string;
+      Tag?: string;
+      Weight?: number;
+      AIPromptRunID?: string | null;
+      Reasoning?: string | null;
+    };
+
+    // Install a provider whose GetEntityObject returns inspectable tag records.
+    function installCapturingProvider(): CapturedTag[] {
+      const captured: CapturedTag[] = [];
+      Object.defineProperty(engine, 'ProviderToUse', {
+        get() {
+          return {
+            GetEntityObject: vi.fn().mockImplementation(async () => {
+              const rec: CapturedTag & { NewRecord: () => void; Save: () => Promise<boolean> } = {
+                NewRecord: vi.fn(),
+                Save: vi.fn().mockResolvedValue(true),
+              } as never;
+              captured.push(rec);
+              return rec;
+            }),
+          };
+        },
+        configurable: true,
+      });
+      return captured;
+    }
+
+    it('stamps AIPromptRunID from LLMResults onto every tag', async () => {
+      const captured = installCapturingProvider();
+      const mockUser = { ID: 'user-1' } as never;
+      const results = {
+        __aiPromptRunID: 'run-123',
+        keywords: [
+          { tag: 'alpha', weight: 0.9 },
+          { tag: 'beta', weight: 0.4 },
+        ],
+      };
+
+      await engine.saveContentItemTags('item-1', results, mockUser);
+
+      expect(captured).toHaveLength(2);
+      expect(captured.every(c => c.AIPromptRunID === 'run-123')).toBe(true);
+      expect(captured.map(c => c.Tag)).toEqual(['alpha', 'beta']);
+      expect(captured.map(c => c.Weight)).toEqual([0.9, 0.4]);
+    });
+
+    it('captures per-tag reasoning when present (reasoning or rationale)', async () => {
+      const captured = installCapturingProvider();
+      const mockUser = { ID: 'user-1' } as never;
+      const results = {
+        __aiPromptRunID: 'run-xyz',
+        keywords: [
+          { tag: 'alpha', weight: 0.9, reasoning: 'central topic' },
+          { tag: 'beta', weight: 0.4, rationale: 'mentioned once' },
+          { tag: 'gamma', weight: 0.2 },
+        ],
+      };
+
+      await engine.saveContentItemTags('item-1', results, mockUser);
+
+      const byTag = new Map(captured.map(c => [c.Tag, c]));
+      expect(byTag.get('alpha')?.Reasoning).toBe('central topic');
+      expect(byTag.get('beta')?.Reasoning).toBe('mentioned once');
+      // No reasoning supplied → property left unset (nullable-safe).
+      expect(byTag.get('gamma')?.Reasoning).toBeUndefined();
+    });
+
+    it('leaves AIPromptRunID unset when no prompt run id is present', async () => {
+      const captured = installCapturingProvider();
+      const mockUser = { ID: 'user-1' } as never;
+      const results = {
+        keywords: [{ tag: 'alpha', weight: 0.5 }],
+      };
+
+      await engine.saveContentItemTags('item-1', results, mockUser);
+
+      expect(captured).toHaveLength(1);
+      expect(captured[0].AIPromptRunID).toBeUndefined();
+    });
+  });
+
   describe('convertLastRunDateToTimezone', () => {
     it('should convert date to local timezone', async () => {
       const inputDate = new Date('2024-01-15T10:00:00Z');
@@ -619,9 +741,49 @@ describe('AutotagBaseEngine', () => {
   describe('VectorizeContentItems', () => {
     const mockUser = { ID: 'user-1' } as never;
 
-    // Helper to create mock content items
+    // Push a mock ContentSource carrying a typed ConfigurationObject so
+    // resolveItemVectorStorageConfig sees per-source vector-storage config for 'source-1'
+    // (the ContentSourceID every createMockItem/createVectorItem uses). Passing null clears it,
+    // restoring the engine defaults (ChunkTextStorage 'alwaysChunk' + VectorIDStrategy 'recordId').
+    async function configureSource1(cfg: {
+      VectorIDStrategy?: 'hash' | 'recordId';
+      ChunkTextStorage?: 'mixed' | 'alwaysChunk';
+      VectorMetadata?: {
+        FieldStrategy?: 'all' | 'include' | 'exclude' | 'explicit';
+        Fields?: Record<string, { Included?: boolean; TruncationLimit?: number; StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds' }>;
+        DefaultTruncationLimit?: number;
+        IncludeEntityIcon?: boolean;
+        IncludeUpdatedAt?: boolean;
+        IncludeTags?: boolean;
+        IncludeText?: boolean;
+      };
+    } | null) {
+      const { KnowledgeHubMetadataEngine } = await import('@memberjunction/core-entities');
+      const kh = KnowledgeHubMetadataEngine.Instance;
+      kh.ContentSources.length = 0;
+      if (cfg) {
+        kh.ContentSources.push({
+          ID: 'source-1',
+          ContentSourceTypeID: 'type-1',
+          ConfigurationObject: cfg,
+          // loadContentSourceAndTypeMaps calls GetAll() to build the infra map. Return null
+          // infra ids so the item falls back to the default (global) vector infrastructure that
+          // setupVectorMocks provides.
+          GetAll: () => ({ EmbeddingModelID: null, VectorIndexID: null }),
+        } as never);
+      }
+    }
+
+    // Ensure per-source config from a config test never leaks into the default-behavior tests.
+    afterEach(async () => {
+      const { KnowledgeHubMetadataEngine } = await import('@memberjunction/core-entities');
+      KnowledgeHubMetadataEngine.Instance.ContentSources.length = 0;
+    });
+
+    // Helper to create mock content items. Exposes GetAll() (a field snapshot) because the
+    // 'explicit' metadata strategy and provider-directive routing read fields via GetAll.
     function createMockItem(id: string, text: string, name?: string, description?: string, url?: string): Record<string, unknown> {
-      return {
+      const fields = {
         ID: id,
         Text: text,
         Name: name ?? `Item ${id}`,
@@ -631,7 +793,10 @@ describe('AutotagBaseEngine', () => {
         ContentSourceTypeID: 'type-1',
         ContentFileTypeID: 'file-type-1',
         ContentTypeID: 'content-type-1',
+        Priority: 5,
+        __mj_UpdatedAt: '2026-01-15T10:00:00.000Z',
       };
+      return { ...fields, GetAll: () => ({ ...fields }) };
     }
 
     /**
@@ -688,14 +853,17 @@ describe('AutotagBaseEngine', () => {
       const mockCreateRecords = vi.fn().mockResolvedValue({
         success: true, message: 'OK',
       });
+      const mockDeleteRecords = vi.fn().mockResolvedValue({
+        success: true, message: 'OK',
+      });
       vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockImplementation((_base, driverClass) => {
         if (typeof driverClass === 'string' && driverClass.includes('Embed')) {
           return { EmbedTexts: mockEmbedTexts } as never;
         }
-        return { CreateRecords: mockCreateRecords } as never;
+        return { CreateRecords: mockCreateRecords, DeleteRecords: mockDeleteRecords } as never;
       });
 
-      return { mockEmbedTexts, mockCreateRecords };
+      return { mockEmbedTexts, mockCreateRecords, mockDeleteRecords };
     }
 
     it('should return zero vectorized and correct skipped count for empty items array', async () => {
@@ -716,9 +884,12 @@ describe('AutotagBaseEngine', () => {
       expect(result.promptRunIDs).toEqual([]);
     });
 
-    it('should call crypto.createHash with sha1 for vector ID generation', async () => {
+    it('should call crypto.createHash with sha1 for vector ID generation under the hash strategy', async () => {
       const cryptoModule = await import('crypto');
       await setupVectorMocks();
+      // The default 'recordId' strategy uses a uuid per chunk (no hashing). sha1 is only used by
+      // the opt-in 'hash' strategy, so configure the source for it before asserting.
+      await configureSource1({ VectorIDStrategy: 'hash' });
 
       const items = [createMockItem('item-abc', 'Hello world content')] as never[];
       await engine.VectorizeContentItems(items, mockUser);
@@ -727,7 +898,7 @@ describe('AutotagBaseEngine', () => {
       expect(cryptoModule.default.createHash).toHaveBeenCalledWith('sha1');
     });
 
-    it('should build metadata with tags when available', async () => {
+    it('should build chunk-identity metadata with tags under the default alwaysChunk strategy', async () => {
       const { mockCreateRecords } = await setupVectorMocks([
         { ItemID: 'item-1', Tag: 'ai' },
         { ItemID: 'item-1', Tag: 'podcast' },
@@ -739,9 +910,233 @@ describe('AutotagBaseEngine', () => {
       expect(mockCreateRecords).toHaveBeenCalled();
       const records = mockCreateRecords.mock.calls[0][0];
       expect(records).toHaveLength(1);
-      // Verify metadata includes entity and record ID
-      expect(records[0].metadata.RecordID).toBe('item-1');
+      // Default 'alwaysChunk' → the vector carries CHUNK identity: Entity is the chunk entity,
+      // RecordID is the chunk's own id (a minted uuid, the chunk row PK), and the parent item id
+      // rides in ContentItemID so an external hydrator can fetch both.
+      expect(records[0].metadata.Entity).toBe('MJ: Content Item Chunks');
+      expect(records[0].metadata.ContentItemID).toBe('item-1');
+      expect(typeof records[0].metadata.RecordID).toBe('string');
+      expect(records[0].metadata.RecordID).not.toBe('item-1');
+      expect(records[0].metadata.Sequence).toBe(0);
+      expect(records[0].metadata.Tags).toEqual(['ai', 'podcast']);
+    });
+
+    it('should build item-identity metadata under the mixed strategy (single-chunk item)', async () => {
+      const { mockCreateRecords } = await setupVectorMocks([
+        { ItemID: 'item-1', Tag: 'ai' },
+      ]);
+      await configureSource1({ ChunkTextStorage: 'mixed' });
+
+      const items = [createMockItem('item-1', 'Content about AI')] as never[];
+      await engine.VectorizeContentItems(items, mockUser);
+
+      const records = mockCreateRecords.mock.calls[0][0];
+      expect(records).toHaveLength(1);
+      // 'mixed' single-chunk keeps ITEM identity: Entity is the content-item entity and RecordID
+      // is the item's id (no ContentItemID key needed — RecordID already is the item).
       expect(records[0].metadata.Entity).toBe('MJ: Content Items');
+      expect(records[0].metadata.RecordID).toBe('item-1');
+      expect(records[0].metadata.ContentItemID).toBeUndefined();
+      expect(records[0].metadata.Tags).toEqual(['ai']);
+    });
+
+    it('threads the vector index Dimensions through to the embedding call', async () => {
+      await setupVectorMocks();
+      const { KnowledgeHubMetadataEngine } = await import('@memberjunction/core-entities');
+      const index = KnowledgeHubMetadataEngine.Instance.VectorIndexes[0] as { Dimensions?: number | null };
+      const original = index.Dimensions;
+      index.Dimensions = 1024; // reduced-dimension index (e.g. text-embedding-3-large capped at 1024)
+      try {
+        await engine.VectorizeContentItems([createMockItem('item-dim', 'Some content')] as never[], mockUser);
+        // The resolved infrastructure carries VectorIndex.Dimensions, and it is forwarded to
+        // RunEmbedding so the provider produces reduced-dimension vectors.
+        expect(mockRunEmbeddingFn).toHaveBeenCalled();
+        const embedArgs = mockRunEmbeddingFn.mock.calls[0][0];
+        expect(embedArgs.Dimensions).toBe(1024);
+      } finally {
+        index.Dimensions = original;
+      }
+    });
+
+    it('leaves Dimensions undefined when the index does not set it', async () => {
+      await setupVectorMocks();
+      await engine.VectorizeContentItems([createMockItem('item-nodim', 'Some content')] as never[], mockUser);
+      const embedArgs = mockRunEmbeddingFn.mock.calls[0][0];
+      expect(embedArgs.Dimensions).toBeUndefined();
+    });
+
+    it('applies provider namespace routing when the index has a ProviderConfig', async () => {
+      const { mockCreateRecords } = await setupVectorMocks();
+      const { KnowledgeHubMetadataEngine } = await import('@memberjunction/core-entities');
+      const index = KnowledgeHubMetadataEngine.Instance.VectorIndexes[0] as { ProviderConfig?: string | null };
+      const originalPC = index.ProviderConfig;
+      index.ProviderConfig = JSON.stringify({ namespaceField: 'OrganizationID' });
+
+      // Re-mock the vector DB driver with a BuildProviderDirectives mimicking Pinecone's namespace
+      // derivation (read the configured field off the source row).
+      const { MJGlobal } = await import('@memberjunction/global');
+      const buildDirectives = vi.fn().mockImplementation((row: Record<string, unknown>, cfg: Record<string, unknown>) => {
+        const field = cfg['namespaceField'] as string | undefined;
+        return field && row[field] != null ? { namespace: String(row[field]) } : {};
+      });
+      vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockImplementation((_base, driverClass) => {
+        if (typeof driverClass === 'string' && driverClass.includes('Embed')) {
+          return { EmbedTexts: vi.fn() } as never;
+        }
+        return { CreateRecords: mockCreateRecords, DeleteRecords: vi.fn(), BuildProviderDirectives: buildDirectives } as never;
+      });
+
+      // Item exposes GetAll() (buildProviderDirectives hands the full field set to the driver) and
+      // an OrganizationID whose value should become the namespace.
+      const item = {
+        ...createMockItem('item-ns', 'namespaced content'),
+        OrganizationID: 'org-42',
+        GetAll() { return { ID: 'item-ns', ContentSourceID: 'source-1', ContentSourceTypeID: 'type-1', OrganizationID: 'org-42' }; },
+      };
+
+      try {
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+        expect(buildDirectives).toHaveBeenCalled();
+        const records = mockCreateRecords.mock.calls[0][0];
+        // Per-record directive carries the derived namespace...
+        expect(records[0].providerTemporaryDirectives).toEqual({ namespace: 'org-42' });
+        // ...and the parsed ProviderConfig is passed to CreateRecords as its 3rd argument.
+        expect(mockCreateRecords.mock.calls[0][2]).toEqual({ namespaceField: 'OrganizationID' });
+      } finally {
+        index.ProviderConfig = originalPC;
+      }
+    });
+
+    it('sets no provider directives and passes no providerConfig when the index has none', async () => {
+      const { mockCreateRecords } = await setupVectorMocks();
+      await engine.VectorizeContentItems([createMockItem('item-plain', 'content')] as never[], mockUser);
+      const records = mockCreateRecords.mock.calls[0][0];
+      expect(records[0].providerTemporaryDirectives).toBeUndefined();
+      expect(mockCreateRecords.mock.calls[0][2]).toBeUndefined();
+    });
+
+    // Read the single upserted vector's metadata from the CreateRecords mock.
+    async function metaFromRun(mockCreateRecords: ReturnType<typeof vi.fn>): Promise<Record<string, unknown>> {
+      return mockCreateRecords.mock.calls[0][0][0].metadata;
+    }
+
+    it('keeps the curated default metadata set when no FieldStrategy is set', async () => {
+      const { mockCreateRecords } = await setupVectorMocks([{ ItemID: 'item-d', Tag: 'ai' }]);
+      await engine.VectorizeContentItems([createMockItem('item-d', 'content')] as never[], mockUser);
+
+      const meta = await metaFromRun(mockCreateRecords);
+      // Curated default = identity + source ids + Title/Description/URL + Tags (historical behavior).
+      expect(meta.Entity).toBe('MJ: Content Item Chunks');
+      expect(typeof meta.RecordID).toBe('string');
+      expect(meta.ContentSourceID).toBe('source-1');
+      expect(meta.ContentSourceTypeID).toBe('type-1');
+      expect(meta.Title).toBeDefined();
+      expect(meta.Tags).toEqual(['ai']);
+      // Strategy-only keys and Text are absent under the curated default.
+      expect(meta.Priority).toBeUndefined();
+      expect(meta.__mj_UpdatedAt).toBeUndefined();
+      expect(meta.Text).toBeUndefined();
+    });
+
+    it("'all' strategy emits every eligible ContentItem field (no PK/uuid/system) + toggles", async () => {
+      const { mockCreateRecords } = await setupVectorMocks();
+      await configureSource1({ VectorMetadata: { FieldStrategy: 'all' } });
+
+      await engine.VectorizeContentItems([createMockItem('item-all', 'content', 'My Title')] as never[], mockUser);
+
+      const meta = await metaFromRun(mockCreateRecords);
+      // Eligible fields present...
+      expect(meta.Name).toBe('My Title');
+      expect(meta.Description).toBeDefined();
+      expect(meta.URL).toBeDefined();
+      expect(meta.Priority).toBe(5);            // int → stored as a number automatically
+      // ...ineligible fields excluded: PK+uuid (ID), uuid FK (ContentSourceID), system (__mj_UpdatedAt raw field)
+      expect(meta.ID).toBeUndefined();
+      expect(meta.ContentSourceID).toBeUndefined();
+      // Toggle-driven keys default ON under a set strategy.
+      expect(meta.EntityIcon).toBe('fa-file');
+      expect(meta.__mj_UpdatedAt).toBeDefined();
+    });
+
+    it("'include' strategy emits only the fields marked Included", async () => {
+      const { mockCreateRecords } = await setupVectorMocks();
+      await configureSource1({ VectorMetadata: { FieldStrategy: 'include', Fields: { URL: { Included: true } } } });
+
+      await engine.VectorizeContentItems([createMockItem('item-inc', 'content')] as never[], mockUser);
+
+      const meta = await metaFromRun(mockCreateRecords);
+      expect(meta.URL).toBeDefined();
+      expect(meta.Name).toBeUndefined();
+      expect(meta.Description).toBeUndefined();
+      expect(meta.Priority).toBeUndefined();
+    });
+
+    it("'exclude' strategy emits all eligible fields except those excluded", async () => {
+      const { mockCreateRecords } = await setupVectorMocks();
+      await configureSource1({ VectorMetadata: { FieldStrategy: 'exclude', Fields: { Description: { Included: false } } } });
+
+      await engine.VectorizeContentItems([createMockItem('item-exc', 'content')] as never[], mockUser);
+
+      const meta = await metaFromRun(mockCreateRecords);
+      expect(meta.Name).toBeDefined();
+      expect(meta.URL).toBeDefined();
+      expect(meta.Priority).toBe(5);
+      expect(meta.Description).toBeUndefined(); // excluded
+    });
+
+    it("'explicit' strategy keeps only Entity + configured fields — no other system keys", async () => {
+      const { mockCreateRecords } = await setupVectorMocks([{ ItemID: 'item-x', Tag: 'ai' }]);
+      await configureSource1({ VectorMetadata: { FieldStrategy: 'explicit', Fields: { Name: { Included: true } } } });
+
+      await engine.VectorizeContentItems([createMockItem('item-x', 'content', 'My Title')] as never[], mockUser);
+
+      const meta = await metaFromRun(mockCreateRecords);
+      // Entity is always kept so the result stays labeled...
+      expect(meta.Entity).toBe('MJ: Content Item Chunks');
+      // ...the configured field is included...
+      expect(meta.Name).toBe('My Title');
+      // ...but under explicit every other system key is dropped (record id recovers from the vector id),
+      // and the toggles are opt-in (off).
+      expect(meta.RecordID).toBeUndefined();
+      expect(meta.ContentItemID).toBeUndefined();
+      expect(meta.Sequence).toBeUndefined();
+      expect(meta.ContentSourceID).toBeUndefined();
+      expect(meta.Tags).toBeUndefined();
+      expect(meta.EntityIcon).toBeUndefined();
+      expect(meta.__mj_UpdatedAt).toBeUndefined();
+    });
+
+    it('coerces a field to epoch seconds via StoreAs', async () => {
+      const { mockCreateRecords } = await setupVectorMocks();
+      await configureSource1({ VectorMetadata: { FieldStrategy: 'include', Fields: { __mj_UpdatedAt: { Included: true, StoreAs: 'epochSeconds' } } } });
+
+      await engine.VectorizeContentItems([createMockItem('item-epoch', 'content')] as never[], mockUser);
+
+      const meta = await metaFromRun(mockCreateRecords);
+      // 2026-01-15T10:00:00Z → epoch seconds (integer).
+      expect(meta.__mj_UpdatedAt).toBe(Math.floor(new Date('2026-01-15T10:00:00.000Z').getTime() / 1000));
+    });
+
+    it('truncates a string field to its per-field TruncationLimit', async () => {
+      const { mockCreateRecords } = await setupVectorMocks();
+      await configureSource1({ VectorMetadata: { FieldStrategy: 'include', Fields: { Name: { Included: true, TruncationLimit: 4 } } } });
+
+      await engine.VectorizeContentItems([createMockItem('item-trunc', 'content', 'ABCDEFGH')] as never[], mockUser);
+
+      const meta = await metaFromRun(mockCreateRecords);
+      expect(meta.Name).toBe('ABCD');
+    });
+
+    it('honors IncludeTags=false and IncludeText=true toggles', async () => {
+      const { mockCreateRecords } = await setupVectorMocks([{ ItemID: 'item-tog', Tag: 'ai' }]);
+      await configureSource1({ VectorMetadata: { FieldStrategy: 'include', Fields: { URL: { Included: true } }, IncludeTags: false, IncludeText: true } });
+
+      await engine.VectorizeContentItems([createMockItem('item-tog', 'the embedded text')] as never[], mockUser);
+
+      const meta = await metaFromRun(mockCreateRecords);
+      expect(meta.Tags).toBeUndefined();       // IncludeTags=false
+      expect(typeof meta.Text).toBe('string'); // IncludeText=true
+      expect(meta.Text).toContain('the embedded text');
     });
 
     it('should call progress callback with correct counts', async () => {
@@ -766,6 +1161,467 @@ describe('AutotagBaseEngine', () => {
       await engine.VectorizeContentItems(items, mockUser, progressFn);
 
       expect(progressFn).toHaveBeenCalledWith(2, 2);
+    });
+
+    describe('EmbeddingStatus transitions', () => {
+      // Mirror of createMockItem with a Save spy and the embedding-status fields
+      // initialized so we can assert how vectorizeGroup mutates them.
+      function createMockItemWithSave(id: string, text: string) {
+        return {
+          ID: id,
+          Text: text,
+          Name: `Item ${id}`,
+          Description: `Description for ${id}`,
+          URL: `https://example.com/${id}`,
+          ContentSourceID: 'source-1',
+          ContentSourceTypeID: 'type-1',
+          ContentFileTypeID: 'file-type-1',
+          ContentTypeID: 'content-type-1',
+          EmbeddingStatus: 'Pending' as 'Pending' | 'Processing' | 'Complete' | 'Failed',
+          LastEmbeddedAt: null as Date | null,
+          EmbeddingModelID: null as string | null,
+          Save: vi.fn().mockResolvedValue(true),
+        };
+      }
+
+      it('should transition items through Processing then Complete on a successful batch', async () => {
+        await setupVectorMocks();
+        const item = createMockItemWithSave('item-success', 'Hello world content');
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        // Two saves: Processing (group-level) + Complete (per-batch)
+        expect(item.Save).toHaveBeenCalledTimes(2);
+        expect(item.EmbeddingStatus).toBe('Complete');
+        expect(item.EmbeddingModelID).toBe('embed-model-1');
+        expect(item.LastEmbeddedAt).toBeInstanceOf(Date);
+      });
+
+      it('should transition items to Failed when the embedding API returns no vectors', async () => {
+        await setupVectorMocks();
+        // Force the embedding call to fail with mismatched vector count.
+        // vectorizeGroup treats this as a batch-level failure.
+        mockRunEmbeddingFn.mockResolvedValueOnce({
+          Success: false,
+          Vectors: [],
+          PromptRunID: null,
+          TokensUsed: 0,
+          Cost: 0,
+          ErrorMessage: 'simulated rate limit',
+          ExecutionTimeMs: 1,
+        });
+        const item = createMockItemWithSave('item-embed-fail', 'Some content');
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        // Two saves: Processing then Failed. No Complete metadata set.
+        expect(item.Save).toHaveBeenCalledTimes(2);
+        expect(item.EmbeddingStatus).toBe('Failed');
+        expect(item.LastEmbeddedAt).toBeNull();
+        expect(item.EmbeddingModelID).toBeNull();
+      });
+
+      it('should transition items to Failed when the vector DB upsert fails', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        // Make Pinecone reject the upsert
+        mockCreateRecords.mockResolvedValueOnce({
+          success: false,
+          message: 'upsert refused — dimension mismatch',
+        });
+        const item = createMockItemWithSave('item-upsert-fail', 'Content for upsert');
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        // Two saves: Processing then Failed. Complete metadata must NOT be set.
+        expect(item.Save).toHaveBeenCalledTimes(2);
+        expect(item.EmbeddingStatus).toBe('Failed');
+        expect(item.LastEmbeddedAt).toBeNull();
+        expect(item.EmbeddingModelID).toBeNull();
+      });
+
+      it('should LogError and keep going when Save returns false (logical failure)', async () => {
+        await setupVectorMocks();
+        const { LogError } = await import('@memberjunction/core');
+        const loggedErrorFn = vi.mocked(LogError);
+
+        // Logical-failure shape: Save returns false, surface error via LatestResult.CompleteMessage
+        const item = createMockItemWithSave('item-save-false', 'Content with failing save');
+        item.Save = vi.fn().mockResolvedValue(false);
+        (item as Record<string, unknown>).LatestResult = { CompleteMessage: 'simulated validation failure' };
+
+        // Pipeline must complete cleanly even though every Save returns false
+        await expect(
+          engine.VectorizeContentItems([item] as never[], mockUser)
+        ).resolves.not.toThrow();
+
+        // Save was still attempted twice (Processing + Complete)
+        expect(item.Save).toHaveBeenCalledTimes(2);
+
+        // LogError fired with the offending item ID and the CompleteMessage
+        const errorMessages = loggedErrorFn.mock.calls.map(call => String(call[0]));
+        expect(errorMessages.some(m => m.includes('item-save-false') && m.includes('simulated validation failure'))).toBe(true);
+      });
+
+      it('should LogError and keep going when Save throws (infrastructure failure)', async () => {
+        await setupVectorMocks();
+        const { LogError } = await import('@memberjunction/core');
+        const loggedErrorFn = vi.mocked(LogError);
+
+        // Infrastructure-failure shape: Save throws (e.g. network/connection error)
+        const item = createMockItemWithSave('item-save-throw', 'Content with throwing save');
+        item.Save = vi.fn().mockRejectedValue(new Error('connection reset by peer'));
+
+        // Pipeline must NOT abort on a single status-save infrastructure error
+        await expect(
+          engine.VectorizeContentItems([item] as never[], mockUser)
+        ).resolves.not.toThrow();
+
+        // LogError fired with the offending item ID and the thrown error message
+        const errorMessages = loggedErrorFn.mock.calls.map(call => String(call[0]));
+        expect(errorMessages.some(m => m.includes('item-save-throw') && m.includes('connection reset by peer'))).toBe(true);
+      });
+    });
+
+    describe('vector reference persistence — ContentItem.VectorRecordID + ContentItemChunk', () => {
+      // Item factory with a Save spy plus the fields the persistence path reads/writes.
+      function createVectorItem(id: string, text: string): Record<string, unknown> {
+        return {
+          ID: id,
+          Text: text,
+          Name: `Item ${id}`,
+          Description: `Description for ${id}`,
+          URL: `https://example.com/${id}`,
+          ContentSourceID: 'source-1',
+          ContentSourceTypeID: 'type-1',
+          ContentFileTypeID: 'file-type-1',
+          ContentTypeID: 'content-type-1',
+          EmbeddingStatus: 'Pending' as 'Pending' | 'Processing' | 'Complete' | 'Failed',
+          LastEmbeddedAt: null as Date | null,
+          EmbeddingModelID: null as string | null,
+          VectorRecordID: null as string | null,
+          Save: vi.fn().mockResolvedValue(true),
+        };
+      }
+
+      // Comfortably exceeds MAX_EMBEDDING_TOKENS * 4 (~30,000 chars) so buildEmbeddingChunks
+      // routes through the (mocked) TextChunker and yields more than one chunk.
+      const LONG_TEXT = 'This is a sentence about content. '.repeat(1200);
+
+      // Return one vector per embedded text so the vector count always matches the chunk
+      // count, regardless of exactly how many chunks the splitter produces.
+      function embedOnePerText() {
+        mockRunEmbeddingFn.mockImplementationOnce(async (params: { Texts: string[] }) => ({
+          Success: true,
+          Vectors: params.Texts.map(() => [0.1, 0.2, 0.3]),
+          PromptRunID: 'mock-multi-run',
+          TokensUsed: 100,
+          Cost: 0.001,
+          ErrorMessage: null,
+          ExecutionTimeMs: 10,
+        }));
+      }
+
+      // Install a stub request-scoped provider (`this.ProviderToUse`) exposing everything the
+      // persistence path now uses: GetEntityObject (records each ContentItemChunk row for
+      // inspection), RunView (returns the item's existing chunk rows — NOT a global `new RunView()`),
+      // and the server-side transaction methods. `opts.failInsertAt` forces the Nth inserted chunk's
+      // Save to return false, to exercise the rollback path. Returns handles for assertions.
+      function installProvider(
+        existingRows: Array<Record<string, unknown>> = [],
+        opts: { failInsertAt?: number } = {}
+      ) {
+        const created: Array<Record<string, unknown>> = [];
+        let insertIndex = 0;
+        const provider = {
+          GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+            const row: Record<string, unknown> = {
+              NewRecord: vi.fn(),
+              ContentItemID: '',
+              Sequence: 0,
+              Text: '',
+              VectorRecordID: '',
+              EmbeddingStatus: 'Pending' as string,
+              LastEmbeddedAt: null as Date | null,
+              LatestResult: { CompleteMessage: 'simulated chunk save failure' },
+            };
+            if (entityName === 'MJ: Content Item Chunks') {
+              const idx = insertIndex++;
+              row.Save = vi.fn().mockResolvedValue(opts.failInsertAt !== idx);
+              created.push(row);
+            } else {
+              row.Save = vi.fn().mockResolvedValue(true);
+            }
+            return row;
+          }),
+          RunView: vi.fn().mockResolvedValue({ Success: true, Results: existingRows }),
+          BeginTransaction: vi.fn().mockResolvedValue(undefined),
+          CommitTransaction: vi.fn().mockResolvedValue(undefined),
+          RollbackTransaction: vi.fn().mockResolvedValue(undefined),
+          EntityByName: () => MOCK_CONTENT_ITEM_ENTITY,
+        };
+        Object.defineProperty(engine, 'ProviderToUse', {
+          get() { return provider; },
+          configurable: true,
+        });
+        return { created, provider };
+      }
+
+      it('creates a ContentItemChunk row for a single-chunk item under the default alwaysChunk strategy', async () => {
+        await setupVectorMocks();
+        const { created, provider } = installProvider();
+        const item = createVectorItem('item-single', 'Short single-chunk content');
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        // Default 'alwaysChunk': even a single-chunk item is stored in ContentItemChunk, and the
+        // item-level VectorRecordID is left null (the chunk table is the source of truth).
+        expect(item.VectorRecordID).toBeNull();
+        expect(item.EmbeddingStatus).toBe('Complete');
+        expect(created).toHaveLength(1);
+        expect(created[0].ContentItemID).toBe('item-single');
+        expect(created[0].Sequence).toBe(0);
+        // recordId strategy (default) → a unique (uuid) vector id, not the item hash.
+        expect(typeof created[0].VectorRecordID).toBe('string');
+        expect((created[0].VectorRecordID as string).length).toBeGreaterThan(0);
+        // Chunk-Identity Contract: the row PK is pinned to the minted chunk id, and under the
+        // default recordId strategy that is also the vector id — so a scoped-search hit's RecordID
+        // (= this chunk id) resolves straight to this row for the external hydrator.
+        expect(typeof created[0].ID).toBe('string');
+        expect(created[0].ID).toBe(created[0].VectorRecordID);
+        expect(provider.BeginTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.CommitTransaction).toHaveBeenCalledTimes(1);
+      });
+
+      it('stores the vector id on ContentItem.VectorRecordID for a single-chunk item under mixed storage', async () => {
+        await setupVectorMocks();
+        // 'mixed' keeps a single-chunk item's vector on the item; 'hash' makes that id the sha1
+        // digest (crypto is mocked to the fixed digest) so we can assert the exact value.
+        await configureSource1({ ChunkTextStorage: 'mixed', VectorIDStrategy: 'hash' });
+        const { created, provider } = installProvider();
+        const item = createVectorItem('item-single-mixed', 'Short single-chunk content');
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        expect(item.VectorRecordID).toBe('abc123hash');
+        expect(item.EmbeddingStatus).toBe('Complete');
+        // The item-level path must NOT create ContentItemChunk rows or open a transaction.
+        expect(created).toHaveLength(0);
+        expect(provider.BeginTransaction).not.toHaveBeenCalled();
+      });
+
+      it('writes ordered ContentItemChunk rows in one committed transaction (multi-chunk item)', async () => {
+        await setupVectorMocks();
+        embedOnePerText();
+        const { created, provider } = installProvider();
+        const item = createVectorItem('item-multi', LONG_TEXT);
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        // Multi-chunk: provenance lives in ContentItemChunk, not on the item.
+        expect(item.VectorRecordID).toBeNull();
+        expect(item.EmbeddingStatus).toBe('Complete');
+        expect(created.length).toBeGreaterThan(1);
+        // Rows are ordered by sequence, carry the parent id, are stamped as embedded, and saved.
+        created.forEach((row, i) => {
+          expect(row.ContentItemID).toBe('item-multi');
+          expect(row.Sequence).toBe(i);
+          expect(row.EmbeddingStatus).toBe('Complete');
+          expect(row.LastEmbeddedAt).toBeInstanceOf(Date);
+          expect(row.Save).toHaveBeenCalledTimes(1);
+        });
+        // Each chunk carries a unique, persistent vector id (minted per chunk) — distinct per
+        // chunk, so a re-chunk's new rows never reuse a superseded chunk's vector id.
+        created.forEach(row => {
+          expect(typeof row.VectorRecordID).toBe('string');
+          expect((row.VectorRecordID as string).length).toBeGreaterThan(0);
+          // Chunk-Identity Contract: PK pinned to the minted id; under recordId it is the vector id.
+          expect(row.ID).toBe(row.VectorRecordID);
+        });
+        expect(created[0].VectorRecordID).not.toBe(created[1].VectorRecordID);
+        // Distinct chunk PKs so each chunk hydrates independently.
+        expect(created[0].ID).not.toBe(created[1].ID);
+        // Persisted atomically: one transaction, committed, never rolled back.
+        expect(provider.BeginTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.CommitTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.RollbackTransaction).not.toHaveBeenCalled();
+      });
+
+      it('SOFT-deletes existing live chunks (marks DeleteStatus=Pending) and appends new ones — no hard delete', async () => {
+        await setupVectorMocks();
+        embedOnePerText();
+
+        // Existing LIVE chunk rows returned by the provider's RunView (request-scoped, not global).
+        const existingRows = [0, 1].map(i => ({
+          ID: `old-chunk-${i}`,
+          DeleteStatus: null as string | null,
+          Save: vi.fn().mockResolvedValue(true),
+          Delete: vi.fn().mockResolvedValue(true),   // present so we can prove it is NOT called
+          LatestResult: { CompleteMessage: '' },
+        }));
+        const { provider } = installProvider(existingRows);
+        const item = createVectorItem('item-rerun', LONG_TEXT);
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        expect(provider.RunView).toHaveBeenCalled();
+        // Superseded rows are soft-deleted (marked Pending + saved), NOT hard-deleted — the row is
+        // kept so a later PurgeDeletedChunks can remove its vector from the 3rd-party store.
+        existingRows.forEach(row => {
+          expect(row.DeleteStatus).toBe('Pending');
+          expect(row.Save).toHaveBeenCalledTimes(1);
+          expect(row.Delete).not.toHaveBeenCalled();
+        });
+        expect(provider.CommitTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.RollbackTransaction).not.toHaveBeenCalled();
+      });
+
+      it('rolls back the transaction and keeps the batch alive when a chunk insert fails', async () => {
+        await setupVectorMocks();
+        embedOnePerText();
+        const { provider } = installProvider([], { failInsertAt: 1 });
+        const item = createVectorItem('item-rollback', LONG_TEXT);
+
+        // Per-item persistence failure is best-effort: the run itself does not throw.
+        await expect(engine.VectorizeContentItems([item] as never[], mockUser)).resolves.not.toThrow();
+
+        // The failed replacement rolled back and was NOT committed.
+        expect(provider.RollbackTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.CommitTransaction).not.toHaveBeenCalled();
+      });
+
+      it('stays contained (no unhandled throw) even when the rollback itself fails', async () => {
+        await setupVectorMocks();
+        embedOnePerText();
+        const { provider } = installProvider([], { failInsertAt: 0 });
+        // Simulate a rollback that also fails (e.g. connection dropped). Must not mask the run or leak.
+        provider.RollbackTransaction = vi.fn().mockRejectedValue(new Error('connection reset during rollback'));
+        const item = createVectorItem('item-rollback-throws', LONG_TEXT);
+
+        await expect(engine.VectorizeContentItems([item] as never[], mockUser)).resolves.not.toThrow();
+        expect(provider.RollbackTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.CommitTransaction).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('EmbedPendingChunks', () => {
+      // A ProviderToUse whose RunView dispatches by entity: pending chunks, then their parent
+      // content items. Chunk rows carry Save spies so the Complete transition can be asserted.
+      function installChunkProvider(
+        chunkRows: Array<Record<string, unknown>>,
+        itemRows: Array<Record<string, unknown>>
+      ) {
+        const provider = {
+          RunView: vi.fn().mockImplementation(async (p: Record<string, unknown>) => {
+            if (p['EntityName'] === 'MJ: Content Item Chunks') return { Success: true, Results: chunkRows };
+            if (p['EntityName'] === 'MJ: Content Items') return { Success: true, Results: itemRows };
+            return { Success: true, Results: [] };
+          }),
+          EntityByName: () => MOCK_CONTENT_ITEM_ENTITY,
+        };
+        Object.defineProperty(engine, 'ProviderToUse', { get() { return provider; }, configurable: true });
+        return provider;
+      }
+      function makePendingChunk(id: string, itemId: string, text: string) {
+        return {
+          ID: id,
+          ContentItemID: itemId,
+          Sequence: 0,
+          Text: text,
+          VectorRecordID: null as string | null,
+          EmbeddingStatus: 'Pending' as string,
+          LastEmbeddedAt: null as Date | null,
+          Save: vi.fn().mockResolvedValue(true),
+          LatestResult: { CompleteMessage: '' },
+        };
+      }
+      function makeParentItem(id: string) {
+        return { ID: id, ContentSourceID: 'source-1', ContentSourceTypeID: 'type-1', ContentTypeID: 'content-type-1' };
+      }
+
+      it('returns zero when no chunks are pending embedding', async () => {
+        await setupVectorMocks();
+        installChunkProvider([], []);
+        const result = await engine.EmbedPendingChunks(mockUser);
+        expect(result).toEqual({ embedded: 0, failed: 0, skipped: 0 });
+      });
+
+      it('embeds a pending chunk, upserts under chunk identity, and marks it Complete', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        const chunk = makePendingChunk('chunk-1', 'item-1', 'Chunk text to embed');
+        installChunkProvider([chunk], [makeParentItem('item-1')]);
+
+        const result = await engine.EmbedPendingChunks(mockUser);
+
+        expect(result.embedded).toBe(1);
+        expect(result.failed).toBe(0);
+        expect(result.skipped).toBe(0);
+        // Row stamped Complete with a vector id + timestamp, saved once.
+        expect(chunk.EmbeddingStatus).toBe('Complete');
+        expect(chunk.LastEmbeddedAt).toBeInstanceOf(Date);
+        expect(chunk.Save).toHaveBeenCalledTimes(1);
+        // Upserted under CHUNK identity, and (recordId default) the vector id IS the chunk id — so
+        // the row's VectorRecordID and metadata RecordID both resolve straight back to this row.
+        const records = mockCreateRecords.mock.calls[0][0];
+        expect(records[0].metadata.Entity).toBe('MJ: Content Item Chunks');
+        expect(records[0].metadata.RecordID).toBe('chunk-1');
+        expect(records[0].metadata.ContentItemID).toBe('item-1');
+        expect(records[0].id).toBe('chunk-1');
+        expect(chunk.VectorRecordID).toBe('chunk-1');
+      });
+
+      it('skips a pending chunk with empty text (no embed, no status change)', async () => {
+        await setupVectorMocks();
+        const chunk = makePendingChunk('chunk-empty', 'item-1', '   ');
+        installChunkProvider([chunk], [makeParentItem('item-1')]);
+
+        const result = await engine.EmbedPendingChunks(mockUser);
+
+        expect(result.skipped).toBe(1);
+        expect(result.embedded).toBe(0);
+        expect(chunk.EmbeddingStatus).toBe('Pending');
+        expect(chunk.Save).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('PurgeDeletedChunks', () => {
+    const mockUser = { ID: 'user-1' } as never;
+
+    it('returns zero when no chunks are pending deletion', async () => {
+      Object.defineProperty(engine, 'ProviderToUse', {
+        get() { return { RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }) }; },
+        configurable: true,
+      });
+      const result = await engine.PurgeDeletedChunks(mockUser);
+      expect(result).toEqual({ purged: 0, failed: 0, skipped: 0 });
+    });
+
+    it('marks Pending chunks that have no VectorRecordID as Deleted without any remote delete', async () => {
+      // No VectorRecordID → nothing to remove from a 3rd-party store → mark Deleted directly.
+      const chunks = [0, 1].map(i => ({
+        ID: `chunk-${i}`,
+        ContentItemID: 'item-x',
+        VectorRecordID: null as string | null,
+        DeleteStatus: 'Pending' as string,
+        LastDeletedAt: null as Date | null,
+        Save: vi.fn().mockResolvedValue(true),
+        LatestResult: { CompleteMessage: '' },
+      }));
+      Object.defineProperty(engine, 'ProviderToUse', {
+        get() { return { RunView: vi.fn().mockResolvedValue({ Success: true, Results: chunks }) }; },
+        configurable: true,
+      });
+
+      const result = await engine.PurgeDeletedChunks(mockUser);
+
+      expect(result.skipped).toBe(2);
+      expect(result.purged).toBe(0);
+      expect(result.failed).toBe(0);
+      chunks.forEach(c => {
+        expect(c.DeleteStatus).toBe('Deleted');
+        expect(c.LastDeletedAt).toBeInstanceOf(Date);
+        expect(c.Save).toHaveBeenCalledTimes(1);
+      });
     });
   });
 
@@ -853,6 +1709,49 @@ describe('AutotagBaseEngine', () => {
 
       // Verify GetEntityObject was called (for status update)
       expect(mdInstance.GetEntityObject).toHaveBeenCalled();
+    });
+
+    // Helper: install a provider whose GetEntityObject returns a captured mock item, then invoke
+    // the private updateContentItemTaggingStatus so we can assert what it wrote.
+    async function runTaggingStatus(item: Record<string, unknown>, status: string) {
+      Object.defineProperty(engine, 'ProviderToUse', {
+        get() { return { GetEntityObject: vi.fn().mockResolvedValue(item) }; },
+        configurable: true,
+      });
+      await (engine as unknown as {
+        updateContentItemTaggingStatus: (id: string, s: string, u: unknown) => Promise<void>;
+      }).updateContentItemTaggingStatus('item-1', status, mockUser);
+    }
+
+    it("resets EmbeddingStatus to 'Pending' when tagging transitions to Processing (re-embed changed content)", async () => {
+      const item: Record<string, unknown> = {
+        Load: vi.fn().mockResolvedValue(true),
+        Save: vi.fn().mockResolvedValue(true),
+        TaggingStatus: 'Complete',
+        EmbeddingStatus: 'Complete',
+        LastTaggedAt: null,
+      };
+      await runTaggingStatus(item, 'Processing');
+
+      expect(item.TaggingStatus).toBe('Processing');
+      // The item is being (re)tagged because its content changed → its prior embedding is stale.
+      expect(item.EmbeddingStatus).toBe('Pending');
+      expect(item.Save).toHaveBeenCalled();
+    });
+
+    it("does NOT touch EmbeddingStatus on the Complete transition", async () => {
+      const item: Record<string, unknown> = {
+        Load: vi.fn().mockResolvedValue(true),
+        Save: vi.fn().mockResolvedValue(true),
+        TaggingStatus: 'Processing',
+        EmbeddingStatus: 'Complete',
+        LastTaggedAt: null,
+      };
+      await runTaggingStatus(item, 'Complete');
+
+      expect(item.TaggingStatus).toBe('Complete');
+      expect(item.EmbeddingStatus).toBe('Complete'); // untouched — only the Processing transition resets it
+      expect(item.LastTaggedAt).toBeInstanceOf(Date);
     });
 
     it('should not crash when LLM fails (status transitions are best-effort)', async () => {
@@ -956,6 +1855,84 @@ describe('AutotagBaseEngine', () => {
       // EmbeddingRateLimiter.Acquire should have been called before the embedding call
       expect(acquireSpy).toHaveBeenCalled();
 
+      acquireSpy.mockRestore();
+    });
+  });
+
+  describe('Streaming pipeline (AsyncIterable input)', () => {
+    const mockUser = { ID: 'user-1' } as never;
+
+    function makeItem(id: string, sourceID = 'src-1'): Record<string, unknown> {
+      return {
+        ID: id, Name: `Item ${id}`, Text: `text ${id}`,
+        ContentSourceID: sourceID, ContentSourceTypeID: 'st1',
+        ContentFileTypeID: 'ft1', ContentTypeID: 'ct1',
+        TaggingStatus: 'Pending', EmbeddingStatus: 'Pending',
+      };
+    }
+
+    async function* yieldItems(items: Record<string, unknown>[]): AsyncIterable<never> {
+      for (const item of items) yield item as never;
+    }
+
+    it('accepts an AsyncIterable and batches items by Pipeline.BatchSize', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const items = Array.from({ length: 5 }, (_, i) => makeItem(`s-${i}`));
+      const config = { Pipeline: { BatchSize: 2, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      await engine.ExtractTextAndProcessWithLLM(yieldItems(items), mockUser, undefined, config);
+
+      // 5 items, batch size 2 → batches of [2, 2, 1] → 3 rate-limiter acquires.
+      // Critical invariant: the partial final batch still flushes (we don't
+      // drop items because the stream closed mid-batch).
+      expect(acquireSpy.mock.calls.length).toBe(3);
+      acquireSpy.mockRestore();
+    });
+
+    it('produces zero batches when the stream is empty', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const config = { Pipeline: { BatchSize: 10, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      await engine.ExtractTextAndProcessWithLLM(yieldItems([]), mockUser, undefined, config);
+
+      expect(acquireSpy).not.toHaveBeenCalled();
+      acquireSpy.mockRestore();
+    });
+
+    it('handles a stream smaller than batchSize as one partial batch', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const items = [makeItem('only-one')];
+      const config = { Pipeline: { BatchSize: 50, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      await engine.ExtractTextAndProcessWithLLM(yieldItems(items), mockUser, undefined, config);
+
+      // 1 item < 50 batchSize → one batch, one acquire.
+      expect(acquireSpy.mock.calls.length).toBe(1);
+      acquireSpy.mockRestore();
+    });
+
+    it('produces N batches when stream has N*batchSize items exactly', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const items = Array.from({ length: 6 }, (_, i) => makeItem(`s-${i}`));
+      const config = { Pipeline: { BatchSize: 3, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      await engine.ExtractTextAndProcessWithLLM(yieldItems(items), mockUser, undefined, config);
+
+      // 6 items, batch size 3 → exactly 2 full batches, no straggler flush.
+      expect(acquireSpy.mock.calls.length).toBe(2);
+      acquireSpy.mockRestore();
+    });
+
+    it('preserves array-form behavior (backwards compatibility)', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const items = Array.from({ length: 5 }, (_, i) => makeItem(`s-${i}`)) as never[];
+      const config = { Pipeline: { BatchSize: 2, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      // Same shape as the streaming case (5 items, batchSize 2 → 3 batches),
+      // exercised through the array path that pre-existing callers use.
+      await engine.ExtractTextAndProcessWithLLM(items, mockUser, undefined, config);
+
+      expect(acquireSpy.mock.calls.length).toBe(3);
       acquireSpy.mockRestore();
     });
   });

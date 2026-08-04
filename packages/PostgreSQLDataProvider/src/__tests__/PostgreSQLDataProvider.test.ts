@@ -617,18 +617,41 @@ describe('PostgreSQLDataProvider', () => {
     });
 
     describe('JSON-arg CRUD payload (wide entities)', () => {
-        // Reach into the private helper directly — avoids needing a mocked
-        // BaseEntity for these unit tests. The integration with `buildCRUDParams`
-        // and `UseJsonArgShape` dispatch is covered separately by codegen tests
-        // and end-to-end DB tests.
-        type WithJsonArg = {
-            buildJsonArgCRUDParams(
-                fieldValueMap: Map<unknown, unknown>
-            ): { paramValues: unknown[]; paramPlaceholders: string };
+        // After the rev 4 refactor, the JSON-arg branch lives in
+        // `RenderSaveCallBinding`. We exercise it by forcing `UseJsonArgShape`
+        // to true via a spy and calling the protected hook directly. The
+        // dispatch through `UseJsonArgShape` thresholds is covered by codegen
+        // tests + the existing crudSprocFieldRules unit tests.
+        type WithSaveHook = {
+            RenderSaveCallBinding(
+                entity: { EntityInfo: { Name: string; Fields: unknown[] } },
+                fieldValueMap: Map<unknown, unknown>,
+                isUpdate: boolean,
+                spName: string,
+            ): { kind: string; callArgsSQL: string; values: unknown[] };
+            UseJsonArgShape(entityInfo: unknown, sprocType: string): boolean;
         };
 
-        function field(name: string, type = 'nvarchar'): { Name: string; Type: string } {
-            return { Name: name, Type: type };
+        function field(name: string, type = 'nvarchar'): { Name: string; CodeName: string; Type: string; NeedsClearCompanion: boolean } {
+            return { Name: name, CodeName: name, Type: type, NeedsClearCompanion: false };
+        }
+
+        function mockEntity(): { EntityInfo: { Name: string; Fields: unknown[]; SchemaName: string } } {
+            return { EntityInfo: { Name: 'WideEntity', SchemaName: '__mj', Fields: [] } };
+        }
+
+        function callRenderJsonArg(provider: PostgreSQLDataProvider, map: Map<unknown, unknown>): { values: [string] } {
+            const hook = provider as unknown as WithSaveHook;
+            const originalUseJsonArg = hook.UseJsonArgShape.bind(provider);
+            hook.UseJsonArgShape = () => true;
+            try {
+                const binding = hook.RenderSaveCallBinding(mockEntity(), map, false, 'spCreateWideEntity');
+                expect(binding.kind).toBe('pg-json-arg');
+                expect(binding.callArgsSQL).toBe('p_data => $1::jsonb');
+                return binding as unknown as { values: [string] };
+            } finally {
+                hook.UseJsonArgShape = originalUseJsonArg;
+            }
         }
 
         it('serializes a payload with all field values into a single JSONB placeholder', () => {
@@ -638,10 +661,9 @@ describe('PostgreSQLDataProvider', () => {
                 [field('LockToken'), null],
                 [field('RetryCount', 'int'), 3],
             ]);
-            const result = (provider as unknown as WithJsonArg).buildJsonArgCRUDParams(map);
-            expect(result.paramPlaceholders).toBe('p_data => $1::jsonb');
-            expect(result.paramValues).toHaveLength(1);
-            const parsed = JSON.parse(result.paramValues[0] as string) as Record<string, unknown>;
+            const result = callRenderJsonArg(provider, map);
+            expect(result.values).toHaveLength(1);
+            const parsed = JSON.parse(result.values[0]) as Record<string, unknown>;
             expect(parsed).toEqual({
                 ID: 'abc-123',
                 Name: 'Test',
@@ -655,8 +677,8 @@ describe('PostgreSQLDataProvider', () => {
                 [field('ID'), 'abc'],
                 [field('LockToken'), null],
             ]);
-            const result = (provider as unknown as WithJsonArg).buildJsonArgCRUDParams(map);
-            const parsed = JSON.parse(result.paramValues[0] as string) as Record<string, unknown>;
+            const result = callRenderJsonArg(provider, map);
+            const parsed = JSON.parse(result.values[0]) as Record<string, unknown>;
             expect(parsed).toHaveProperty('LockToken');
             expect(parsed.LockToken).toBeNull();
         });
@@ -667,8 +689,8 @@ describe('PostgreSQLDataProvider', () => {
                 [field('ID'), 'abc'],
                 [field('Blob', 'varbinary(max)'), buf],
             ]);
-            const result = (provider as unknown as WithJsonArg).buildJsonArgCRUDParams(map);
-            const parsed = JSON.parse(result.paramValues[0] as string) as Record<string, unknown>;
+            const result = callRenderJsonArg(provider, map);
+            const parsed = JSON.parse(result.values[0]) as Record<string, unknown>;
             expect(parsed.Blob).toBe(buf.toString('base64'));
         });
 
@@ -677,9 +699,69 @@ describe('PostgreSQLDataProvider', () => {
                 [field('ID'), 'abc'],
                 [field('Blob', 'varbinary'), null],
             ]);
-            const result = (provider as unknown as WithJsonArg).buildJsonArgCRUDParams(map);
-            const parsed = JSON.parse(result.paramValues[0] as string) as Record<string, unknown>;
+            const result = callRenderJsonArg(provider, map);
+            const parsed = JSON.parse(result.values[0]) as Record<string, unknown>;
             expect(parsed.Blob).toBeNull();
+        });
+
+        // Regression: the orchestrator (GenericDatabaseProvider.GenerateSaveSQL)
+        // skips PK fields on UPDATE and expects the binding renderer to
+        // tail-append them. Without this, JSON-arg sproc bodies raise
+        // `RAISE EXCEPTION 'sp*: p_data must include "ID"'` against every
+        // update on a wide entity. SQL Server's renderer already does this.
+        it('tail-appends primary keys to the JSON payload on UPDATE', () => {
+            const map = new Map<unknown, unknown>([
+                [field('Status'), 'Failed'],
+                [field('ErrorMessage'), 'boom'],
+            ]);
+            const hook = provider as unknown as WithSaveHook;
+            const originalUseJsonArg = hook.UseJsonArgShape.bind(provider);
+            hook.UseJsonArgShape = () => true;
+            try {
+                const entityWithPK = {
+                    EntityInfo: { Name: 'WideEntity', SchemaName: '__mj', Fields: [] },
+                    PrimaryKey: {
+                        KeyValuePairs: [{ FieldName: 'ID', Value: 'pk-uuid-here' }],
+                    },
+                };
+                const binding = hook.RenderSaveCallBinding(entityWithPK, map, true, 'spUpdateWideEntity');
+                expect(binding.kind).toBe('pg-json-arg');
+                const parsed = JSON.parse((binding.values as [string])[0]) as Record<string, unknown>;
+                expect(parsed).toMatchObject({
+                    Status: 'Failed',
+                    ErrorMessage: 'boom',
+                    ID: 'pk-uuid-here',
+                });
+            } finally {
+                hook.UseJsonArgShape = originalUseJsonArg;
+            }
+        });
+
+        // Same regression on the positional path. PG sprocs use named-arg
+        // syntax (`p_id => $N`) — without tail-appending the PK arg, the
+        // SP's `WHERE "ID" = p_id` matches nothing on update (or errors on
+        // missing required arg, depending on default-clause shape).
+        it('tail-appends primary keys to positional named args on UPDATE', () => {
+            const map = new Map<unknown, unknown>([
+                [field('Status'), 'Failed'],
+            ]);
+            const hook = provider as unknown as WithSaveHook;
+            const originalUseJsonArg = hook.UseJsonArgShape.bind(provider);
+            hook.UseJsonArgShape = () => false;
+            try {
+                const entityWithPK = {
+                    EntityInfo: { Name: 'NarrowEntity', SchemaName: '__mj', Fields: [] },
+                    PrimaryKey: {
+                        KeyValuePairs: [{ FieldName: 'ID', Value: 'pk-uuid-here' }],
+                    },
+                };
+                const binding = hook.RenderSaveCallBinding(entityWithPK, map, true, 'spUpdateNarrowEntity');
+                expect(binding.kind).toBe('pg-positional');
+                expect(binding.callArgsSQL).toContain('p_id => $');
+                expect(binding.values).toContain('pk-uuid-here');
+            } finally {
+                hook.UseJsonArgShape = originalUseJsonArg;
+            }
         });
     });
 });

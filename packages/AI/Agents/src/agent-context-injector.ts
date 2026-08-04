@@ -1,6 +1,6 @@
-import { LogError, LogStatus, RunView, UserInfo } from "@memberjunction/core";
+import { LogError, LogStatus, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
-import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity } from "@memberjunction/core-entities";
+import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity, InjectableNoteStatusSQLList } from "@memberjunction/core-entities";
 import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata } from "@memberjunction/aiengine";
 import { SecondaryScopeConfig, SecondaryDimension, SecondaryScopeValue } from "@memberjunction/ai-core-plus";
 import { RerankerConfiguration, RerankerService } from "@memberjunction/ai-reranker";
@@ -235,26 +235,42 @@ export class AgentContextInjector {
      * Implements 8-level scoping hierarchy from most specific to least specific.
      */
     private async queryNotesWithScoping(params: GetNotesParams): Promise<MJAIAgentNoteEntity[]> {
-        const filter = this.buildNotesScopingFilter(params);
-        const orderBy = '__mj_CreatedAt DESC';
-
-        const rv = new RunView();
-        const result = await rv.RunView<MJAIAgentNoteEntity>({
-            EntityName: 'MJ: AI Agent Notes',
-            ExtraFilter: filter,
-            OrderBy: orderBy,
-            IgnoreMaxRows: params.strategy !== 'Recent',
-            MaxRows: params.strategy === 'Recent' ? params.maxNotes : undefined,
-            ResultType: 'entity_object'
-        }, params.contextUser);
-
-        const notes = result.Success ? (result.Results || []) : [];
-        if (notes.length === 0) {
+        // Serve from the AIEngine cache (AgentNotes is loaded unfiltered as entity objects by AIEngineBase)
+        // and filter in-memory — mirrors queryExamplesWithScoping. The context injector runs on EVERY agent
+        // invocation, so a per-call RunView here is a redundant DB round-trip for an entity an engine already
+        // holds (flagged by the redundancy telemetry).
+        const filtered = this.filterNotesByScoping(AIEngine.Instance.AgentNotes, params);
+        if (filtered.length === 0) {
             return [];
         }
-
-        const sorted = this.sortNotes(notes, params.strategy, AIEngine.Instance.AgentNoteTypes);
+        const sorted = this.sortNotes(filtered, params.strategy, AIEngine.Instance.AgentNoteTypes);
         return sorted.slice(0, params.maxNotes);
+    }
+
+    /**
+     * In-memory equivalent of the (removed) SQL `buildNotesScopingFilter`: filters the cached AgentNotes to
+     * those matching this request's scope. Mirrors {@link filterExamplesByScoping}. Each MJ-internal
+     * dimension (Agent/User/Company) matches the param value OR null when the param is provided, and MUST be
+     * null when the param is absent — exactly the union of the 8 priority levels the old SQL filter built.
+     * Multi-tenant secondary scoping reuses {@link matchesSecondaryScope} (the same matcher the examples path
+     * already uses), so notes and examples share one in-memory scoping definition.
+     */
+    private filterNotesByScoping(notes: MJAIAgentNoteEntity[], params: GetNotesParams): MJAIAgentNoteEntity[] {
+        return notes.filter(note => {
+            if (note.Status !== 'Active') {
+                return false;
+            }
+            const agentOk = params.agentId ? (note.AgentID == null || UUIDsEqual(note.AgentID, params.agentId)) : note.AgentID == null;
+            const userOk = params.userId ? (note.UserID == null || UUIDsEqual(note.UserID, params.userId)) : note.UserID == null;
+            const companyOk = params.companyId ? (note.CompanyID == null || UUIDsEqual(note.CompanyID, params.companyId)) : note.CompanyID == null;
+            if (!(agentOk && userOk && companyOk)) {
+                return false;
+            }
+            if (params.primaryScopeRecordId || params.secondaryScopes) {
+                return this.matchesSecondaryScope(note, params.primaryScopeEntityId, params.primaryScopeRecordId, params.secondaryScopes, params.secondaryScopeConfig);
+            }
+            return true;
+        });
     }
 
     /**
@@ -280,7 +296,7 @@ export class AgentContextInjector {
      * multi-tenant scoping (PrimaryScopeEntityID, PrimaryScopeRecordID, SecondaryScopes).
      */
     private buildNotesScopingFilter(params: GetNotesParams): string {
-        const filters: string[] = ['Status = \'Active\''];
+        const filters: string[] = [`Status IN (${InjectableNoteStatusSQLList()})`];
 
         // Build MJ-internal scoping filter using OR conditions with priority
         const scopeConditions: string[] = [];
@@ -716,6 +732,13 @@ export class AgentContextInjector {
      * Format notes for injection into agent prompt.
      * Includes memory policy explaining scope precedence for conflict resolution.
      *
+     * Provisional notes (written in-flight by an agent, awaiting Memory Manager
+     * hardening) render in their own block FIRST and carry higher precedence
+     * under recency-wins semantics: a freshly stated preference must beat a
+     * months-old vetted one. The trust tradeoff is deliberate (PR #2761) and
+     * contained upstream by the write-path guards (descriptive types only,
+     * scope clamp, per-run cap, TTL).
+     *
      * @param notes - Array of notes to format
      * @param includeMemoryPolicy - Whether to include the memory policy preamble (default: true)
      */
@@ -728,38 +751,73 @@ export class AgentContextInjector {
         if (includeMemoryPolicy) {
             lines.push('<memory_policy>');
             lines.push('Precedence (highest to lowest):');
-            lines.push('1) Current user message overrides all stored memory');
-            lines.push('2) User-specific notes override company-level');
-            lines.push('3) Company notes override global defaults');
-            lines.push('4) When same scope, prefer most recent by date');
+            lines.push('1) The current user message overrides all stored memory');
+            lines.push('2) Provisional notes (marked "(provisional)") are the newest signal — when a');
+            lines.push('   provisional note and an established note conflict on the same topic, follow');
+            lines.push('   the provisional one (recency wins)');
+            lines.push('3) User-specific notes override company-level');
+            lines.push('4) Company notes override global defaults');
+            lines.push('5) Within the same scope and status, prefer the most recent by recorded date (shown on each note)');
             lines.push('');
             lines.push('Conflict resolution:');
-            lines.push('- If two notes contradict, prefer the more specific scope');
+            lines.push('- Same level and neither provisional: prefer the more specific scope, then the more recent');
             lines.push('- Ask clarifying question only if conflict materially affects response');
             lines.push('</memory_policy>');
             lines.push('');
         }
 
-        lines.push(`📝 AGENT NOTES (${notes.length})`);
-        lines.push('');
+        const provisional = notes.filter(n => n.Status === 'Provisional');
+        const established = notes.filter(n => n.Status !== 'Provisional');
 
-        for (const note of notes) {
-            lines.push(`[${note.Type}] ${note.Note}`);
-
-            const scope = this.determineNoteScope(note);
-            const secondaryScope = this.determineSecondaryScope(note);
-
-            if (secondaryScope) {
-                lines.push(`  Scope: ${secondaryScope}`);
-            } else if (scope) {
-                lines.push(`  Scope: ${scope}`);
-            }
-
+        if (provisional.length > 0) {
+            lines.push(`📝 RECENT NOTES (${provisional.length} provisional — newest signal)`);
             lines.push('');
+            for (const note of provisional) {
+                this.appendNoteLines(lines, note, true);
+            }
+        }
+
+        if (established.length > 0) {
+            lines.push(`📝 AGENT NOTES (${established.length})`);
+            lines.push('');
+            for (const note of established) {
+                this.appendNoteLines(lines, note, false);
+            }
         }
 
         lines.push('---');
         return lines.join('\n');
+    }
+
+    /** Render one note (and its scope line) into the injection output. */
+    private appendNoteLines(lines: string[], note: MJAIAgentNoteEntity, provisional: boolean): void {
+        const date = this.formatNoteDate(note);
+        lines.push(`[${note.Type}${date ? `, ${date}` : ''}]${provisional ? ' (provisional)' : ''} ${note.Note}`);
+
+        const scope = this.determineNoteScope(note);
+        const secondaryScope = this.determineSecondaryScope(note);
+
+        if (secondaryScope) {
+            lines.push(`  Scope: ${secondaryScope}`);
+        } else if (scope) {
+            lines.push(`  Scope: ${scope}`);
+        }
+
+        lines.push('');
+    }
+
+    /**
+     * Compact recorded date for a note line ('YYYY-MM-DD', '' when missing) so
+     * the memory policy's "prefer the most recent" tiebreaker is actually
+     * resolvable by the model — contradictory notes can coexist between the
+     * hardening pass and the (less frequent) contradiction-resolution phase.
+     * Absolute dates (not "2 days ago") keep the rendered message byte-stable
+     * between note-set changes; the prompt's Current Date/Time block gives the
+     * model what it needs for recency arithmetic. Kept private to this single
+     * consumer — promote to @memberjunction/global if a second consumer appears.
+     */
+    private formatNoteDate(note: MJAIAgentNoteEntity): string {
+        return note.__mj_CreatedAt ? new Date(note.__mj_CreatedAt).toISOString().slice(0, 10) : '';
     }
 
     /**

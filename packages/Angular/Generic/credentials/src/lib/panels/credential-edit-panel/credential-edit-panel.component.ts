@@ -3,6 +3,7 @@ import { MJCredentialEntity, MJCredentialTypeEntity, MJCredentialCategoryEntity 
 import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 interface FieldSchemaProperty {
@@ -64,9 +65,12 @@ export class CredentialEditPanelComponent extends BaseAngularComponent implement
     public schemaFields: FieldSchemaProperty[] = [];
     public showSecretFields: Set<string> = new Set();
 
+    // Friendly inline error shown beneath the Name field (e.g. duplicate-name conflict)
+    public nameError: string | null = null;
+
     private get _metadata() { return this.ProviderToUse; }
 
-    constructor(private cdr: ChangeDetectorRef) { super(); }
+    constructor(private cdr: ChangeDetectorRef, private confirmService: MJConfirmService) { super(); }
 
     ngOnInit(): void {
         this.loadCategories();
@@ -136,6 +140,7 @@ export class CredentialEditPanelComponent extends BaseAngularComponent implement
         this.credentialValues = {};
         this.schemaFields = [];
         this.showSecretFields.clear();
+        this.nameError = null;
     }
 
     private populateFromCredential(credential: MJCredentialEntity): void {
@@ -188,6 +193,10 @@ export class CredentialEditPanelComponent extends BaseAngularComponent implement
     }
 
     public onTypeChange(): void {
+        // Uniqueness is scoped to (CredentialTypeID, Name); changing the type can
+        // resolve or introduce a conflict, so any prior inline name error is now stale.
+        this.nameError = null;
+
         const type = this.selectedType;
         if (!type || !type.FieldSchema) {
             this.schemaFields = [];
@@ -297,6 +306,17 @@ export class CredentialEditPanelComponent extends BaseAngularComponent implement
             return;
         }
 
+        // Pre-save uniqueness check: the DB enforces UNIQUE (CredentialTypeID, Name).
+        // Catch the conflict here so the user sees a friendly inline message instead
+        // of a raw unique-constraint error from the database.
+        const nameTaken = await this.isNameAlreadyTaken();
+        if (nameTaken) {
+            this.nameError = `A credential named "${this.name.trim()}" already exists for this type. Choose a different name.`;
+            MJNotificationService.Instance.CreateSimpleNotification(this.nameError, 'warning', 5000);
+            this.cdr.markForCheck();
+            return;
+        }
+
         this.isSaving = true;
         this.cdr.markForCheck();
 
@@ -337,13 +357,22 @@ export class CredentialEditPanelComponent extends BaseAngularComponent implement
                 this.closePanel();
             } else {
                 // Use CompleteMessage for full error details, fall back to Message
-                const errorMessage = entity.LatestResult?.CompleteMessage || entity.LatestResult?.Message || 'Unknown error';
-                console.error('Credential save failed:', errorMessage, entity.LatestResult);
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    `Failed to save credential: ${errorMessage}`,
-                    'error',
-                    8000
-                );
+                const rawError = entity.LatestResult?.CompleteMessage || entity.LatestResult?.Message || 'Unknown error';
+                console.error('Credential save failed:', rawError, entity.LatestResult);
+
+                // Defense-in-depth: a concurrent save can still trip the DB UNIQUE (CredentialTypeID, Name)
+                // constraint after our pre-save check. Translate that into the same friendly message
+                // rather than showing the raw constraint text.
+                if (this.isDuplicateNameError(rawError)) {
+                    this.nameError = `A credential named "${this.name.trim()}" already exists for this type. Choose a different name.`;
+                    MJNotificationService.Instance.CreateSimpleNotification(this.nameError, 'warning', 5000);
+                } else {
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        `Failed to save credential: ${rawError}`,
+                        'error',
+                        8000
+                    );
+                }
             }
         } catch (error) {
             console.error('Error saving credential:', error);
@@ -361,7 +390,7 @@ export class CredentialEditPanelComponent extends BaseAngularComponent implement
     public async deleteCredential(): Promise<void> {
         if (this.isNew || !this.credential) return;
 
-        const confirmed = confirm(`Are you sure you want to delete "${this.credential.Name}"? This action cannot be undone.`);
+        const confirmed = await this.confirmService.ConfirmDelete({ title: 'Delete Credential', message: `Delete "${this.credential.Name}"?`, detail: 'This action cannot be undone.' });
         if (!confirmed) return;
 
         this.isSaving = true;
@@ -470,6 +499,17 @@ export class CredentialEditPanelComponent extends BaseAngularComponent implement
         this.cdr.markForCheck();
     }
 
+    /**
+     * Clears the inline duplicate-name error as soon as the user edits the Name field,
+     * so a stale conflict message doesn't linger after they've started fixing it.
+     */
+    public onNameChange(): void {
+        if (this.nameError) {
+            this.nameError = null;
+            this.cdr.markForCheck();
+        }
+    }
+
     public formatDateForInput(date: Date | null): string {
         if (!date) return '';
         const d = new Date(date);
@@ -514,6 +554,64 @@ export class CredentialEditPanelComponent extends BaseAngularComponent implement
             default:
                 return null;
         }
+    }
+
+    /**
+     * Checks whether another credential with the same Name already exists for the
+     * selected credential type. Mirrors the DB constraint UNIQUE (CredentialTypeID, Name).
+     * The current record is excluded so re-saving an unchanged credential never reports a conflict.
+     * Fails open (returns false) on query errors, so a transient lookup failure surfaces the
+     * underlying save error rather than incorrectly blocking the user.
+     */
+    private async isNameAlreadyTaken(): Promise<boolean> {
+        const trimmedName = this.name.trim();
+        if (!trimmedName || !this.selectedTypeId) {
+            return false;
+        }
+
+        const escapedName = trimmedName.replace(/'/g, "''");
+        let filter = `CredentialTypeID='${this.selectedTypeId}' AND Name='${escapedName}'`;
+
+        // In edit mode, exclude the record being edited from the conflict check.
+        const currentId = this.credential?.ID;
+        if (!this.isNew && currentId) {
+            filter += ` AND ID<>'${currentId}'`;
+        }
+
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<MJCredentialEntity>({
+            EntityName: 'MJ: Credentials',
+            ExtraFilter: filter,
+            Fields: ['ID'],
+            MaxRows: 1,
+            ResultType: 'simple'
+        });
+
+        if (!result.Success) {
+            console.error('Credential name uniqueness check failed:', result.ErrorMessage);
+            return false;
+        }
+
+        return result.Results.length > 0;
+    }
+
+    /**
+     * Heuristic detection of a unique-constraint violation on the credential Name from a raw
+     * save error. Covers SQL Server (UQ_Credential_TypeName / "duplicate key" / 2627 / 2601)
+     * and PostgreSQL ("duplicate key value violates unique constraint" / 23505) wording.
+     */
+    private isDuplicateNameError(rawError: string): boolean {
+        const message = rawError.toLowerCase();
+        const mentionsUniqueViolation =
+            message.includes('uq_credential_typename') ||
+            message.includes('duplicate key') ||
+            message.includes('unique constraint') ||
+            message.includes('unique index') ||
+            message.includes('violation of unique') ||
+            message.includes('2627') ||
+            message.includes('2601') ||
+            message.includes('23505');
+        return mentionsUniqueViolation;
     }
 
     /**

@@ -1,7 +1,9 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
+import { TabConfig } from '@memberjunction/ng-ui-components';
 import { DevToolsPrefs } from './dev-tools-prefs';
+import { buildAppStateInspectorAgentContext } from './dev-tools-agent-context';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { DeveloperModeService } from '@memberjunction/ng-shared';
@@ -26,7 +28,7 @@ interface InspectorSection {
     templateUrl: './app-state-inspector.component.html',
     styleUrls: ['./inspector-shared.css']
 })
-export class AppStateInspectorComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class AppStateInspectorComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
 
     public Sections: InspectorSection[] = [
         { id: 'user',     label: 'Current User',         icon: 'fa-solid fa-user',           enabled: true, description: 'Identity, roles, email' },
@@ -60,6 +62,12 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
         this.NotifyLoadComplete();
     }
 
+    public ngAfterViewInit(): void {
+        // Publish initial agent context. Re-emit happens in refresh() (section change).
+        // 🔒 METADATA-ONLY surface — NO client tools are registered (see SAFETY note below).
+        this.publishAgentContext();
+    }
+
     public override ngOnDestroy(): void {
         DevToolsPrefs.Save('appStateInspector', { activeSection: this.ActiveSection });
         super.ngOnDestroy();
@@ -67,6 +75,23 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
 
     public override async GetResourceDisplayName(): Promise<string> { return 'App State Inspector'; }
     public override async GetResourceIconClass(): Promise<string> { return 'fa-solid fa-magnifying-glass-chart'; }
+
+    /** Sections rendered as horizontal tabs in the chrome's [toolbar] slot. */
+    public get tabsConfig(): TabConfig[] {
+        return this.Sections.map(s => ({
+            key: s.id,
+            label: s.label,
+            icon: s.icon
+        }));
+    }
+
+    /** Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output. */
+    public onTabChange(key: string): void {
+        const section = this.Sections.find(s => s.id === key);
+        if (section) {
+            this.OnSectionClick(section);
+        }
+    }
 
     public OnSectionClick(section: InspectorSection): void {
         if (this.ActiveSection === section.id) return;
@@ -79,6 +104,7 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
         this.StateJson = JSON.stringify(this.computeSectionData(this.ActiveSection), this.jsonReplacer, 2);
         this.LastRefreshed = new Date();
         this.cdr.markForCheck();
+        this.publishAgentContext();
     }
 
     public async OnCopy(): Promise<void> {
@@ -222,4 +248,49 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
         return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
     }
 
+    // ========================================
+    // AI AGENT CONTEXT (METADATA-ONLY)
+    //
+    // 🔒 SAFETY BOUNDARY — CLASSIFICATION: METADATA-ONLY.
+    // The App State Inspector renders the Explorer's runtime state — which can
+    // include auth/session details, provider URLs, and user PII. We therefore
+    // expose to the AI agent ONLY metadata ABOUT the state (its serialized size,
+    // the number of top-level keys in the active section, and the section label)
+    // — NEVER the state VALUES themselves. For the same reason, NO client tools
+    // are registered here: there is no value-returning operation the agent may
+    // invoke against this surface.
+    // ========================================
+
+    /**
+     * Publish METADATA-ONLY context for the App State Inspector. Reports the
+     * size of the active section's serialized JSON, its top-level key count, the
+     * section label/ids, and the top-level KEY NAMES (structural identifiers like
+     * "Email"/"Roles" — never their values). See SAFETY BOUNDARY above.
+     */
+    private publishAgentContext(): void {
+        const context = buildAppStateInspectorAgentContext({
+            StateSize: this.StateJson.length,
+            KeyCount: this.activeSectionKeys().length,
+            ActiveSection: this.ActiveSection,
+            ActiveSectionLabel: this.SectionLabel,
+            SectionIds: this.Sections.map(s => s.id),
+            // 🔒 KEY NAMES only — never values.
+            TopLevelKeys: this.activeSectionKeys(),
+        });
+        this.navigationService.SetAgentContext(this, context);
+    }
+
+    /**
+     * Top-level KEY NAMES of the active section's data — METADATA ONLY, never
+     * any value. For an array, returns the numeric indices as strings.
+     */
+    private activeSectionKeys(): string[] {
+        const data = this.computeSectionData(this.ActiveSection);
+        if (data && typeof data === 'object') {
+            return Array.isArray(data)
+                ? data.map((_, i) => String(i))
+                : Object.keys(data as Record<string, unknown>);
+        }
+        return [];
+    }
 }

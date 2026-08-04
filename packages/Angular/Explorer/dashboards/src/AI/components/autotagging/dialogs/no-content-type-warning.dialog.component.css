@@ -1,0 +1,7 @@
+/*
+ * No-Content-Types warning dialog styles.
+ *
+ * The host (AutotaggingPipelineResourceComponent) uses ViewEncapsulation.None,
+ * so its `.at-*` rules are global and already style this dialog's markup while
+ * it renders inside the host shell. No dialog-specific rules are needed today.
+ */

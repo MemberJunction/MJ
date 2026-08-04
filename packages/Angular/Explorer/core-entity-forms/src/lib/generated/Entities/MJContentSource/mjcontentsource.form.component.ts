@@ -18,8 +18,8 @@ export class MJContentSourceFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'connectionDetails', sectionName: 'Connection Details', isExpanded: true },
             { sectionKey: 'contentClassification', sectionName: 'Content Classification', isExpanded: true },
-            { sectionKey: 'aIIndexing', sectionName: 'AI & Indexing', isExpanded: false },
-            { sectionKey: 'processingAutomation', sectionName: 'Processing & Automation', isExpanded: false },
+            { sectionKey: 'aIIndexing', sectionName: 'AI & Indexing', isExpanded: true },
+            { sectionKey: 'processingAutomation', sectionName: 'Processing & Automation', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentItems', sectionName: 'Content Items', isExpanded: false },
             { sectionKey: 'mJContentProcessRuns', sectionName: 'Content Process Runs', isExpanded: false },

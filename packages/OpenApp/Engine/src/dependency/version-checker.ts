@@ -4,8 +4,41 @@
  * Validates that the host MemberJunction version satisfies an app's
  * declared mjVersionRange, and that installed app versions satisfy
  * dependency requirements.
+ *
+ * Host-side checks coerce prerelease host versions (e.g. '6.2.0-edge.3')
+ * to their base release tuple before evaluating the range — see
+ * {@link CoerceToBaseVersion} for why.
  */
 import semver from 'semver';
+
+/**
+ * Coerces a semver version to its base release tuple (`major.minor.patch`),
+ * stripping any prerelease/build identifiers: `6.2.0-edge.3` → `6.2.0`.
+ *
+ * Used for the HOST MJ version before checking it against an app's
+ * `mjVersionRange`. Plain `semver.satisfies` excludes prerelease versions
+ * from ranges unless the range itself is tuple-anchored, so an `-edge.N`
+ * dev host would reject every app install the moment MJ's Edge prerelease
+ * grammar activates — even when the app's range is era-correct.
+ *
+ * Why base-tuple coercion and NOT `semver.satisfies(v, range, { includePrerelease: true })`:
+ * semver orders a prerelease BELOW its release (`7.0.0-edge.0 < 7.0.0`), so with
+ * `includePrerelease` a 7-era Edge host would wrongly PASS a `<7.0.0` cap —
+ * `satisfies('7.0.0-edge.0', '>=6.1.0 <7.0.0', { includePrerelease: true }) === true`.
+ * Coercing to the base tuple gives the era-correct answer: `7.0.0` fails `<7.0.0`.
+ * The host gate cares about which release ERA the host is in, not prerelease
+ * ordering — an `-edge.N` build of 6.2.0 is a 6.2-era host.
+ *
+ * @param version - A semver version string, possibly with prerelease/build suffix
+ * @returns The `major.minor.patch` base version, or null if the input is not valid semver
+ */
+export function CoerceToBaseVersion(version: string): string | null {
+    const parsed = semver.parse(version);
+    if (!parsed) {
+        return null;
+    }
+    return `${parsed.major}.${parsed.minor}.${parsed.patch}`;
+}
 
 /**
  * Result of a version compatibility check.
@@ -13,6 +46,8 @@ import semver from 'semver';
 export interface VersionCheckResult {
     /** Whether the version is compatible */
     Compatible: boolean;
+    /** True when target version equals the installed version — no work needed */
+    AlreadyAtTarget?: boolean;
     /** Human-readable explanation if incompatible */
     Message?: string;
 }
@@ -20,7 +55,11 @@ export interface VersionCheckResult {
 /**
  * Checks whether the running MJ version satisfies an app's required range.
  *
- * @param mjVersion - The current MJ version (e.g., '4.3.1')
+ * Prerelease host versions (e.g. '6.2.0-edge.3') are evaluated as their base
+ * release tuple ('6.2.0') so era-correct ranges accept prerelease dev hosts —
+ * see {@link CoerceToBaseVersion} for the rationale.
+ *
+ * @param mjVersion - The current MJ version (e.g., '4.3.1' or '6.2.0-edge.3')
  * @param requiredRange - The semver range from the manifest (e.g., '>=4.0.0 <5.0.0')
  * @returns Compatibility result with explanation if incompatible
  */
@@ -39,13 +78,24 @@ export function CheckMJVersionCompatibility(mjVersion: string, requiredRange: st
         };
     }
 
-    if (semver.satisfies(mjVersion, requiredRange)) {
+    const baseVersion = CoerceToBaseVersion(mjVersion);
+    if (baseVersion === null) {
+        // Unreachable after the semver.valid guard above — surfaced explicitly
+        // rather than silently falling through, per the no-swallowed-errors rule.
+        return {
+            Compatible: false,
+            Message: `Invalid MJ version: '${mjVersion}' could not be parsed as semver`
+        };
+    }
+
+    if (semver.satisfies(baseVersion, requiredRange)) {
         return { Compatible: true };
     }
 
+    const evaluatedAs = baseVersion === mjVersion ? '' : ` (evaluated as ${baseVersion})`;
     return {
         Compatible: false,
-        Message: `MJ version ${mjVersion} does not satisfy the required range '${requiredRange}'`
+        Message: `MJ version ${mjVersion}${evaluatedAs} does not satisfy the required range '${requiredRange}'`
     };
 }
 
@@ -106,8 +156,9 @@ export function IsValidUpgrade(currentVersion: string, targetVersion: string): V
 
     if (semver.eq(targetVersion, currentVersion)) {
         return {
-            Compatible: false,
-            Message: `Target version ${targetVersion} is the same as the installed version`
+            Compatible: true,
+            AlreadyAtTarget: true,
+            Message: `Already at version ${targetVersion} — nothing to upgrade`
         };
     }
 

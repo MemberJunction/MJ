@@ -11,7 +11,7 @@
       <i class="fa-solid fa-users"></i>
     </div>
     <span class="header-title">Shared View</span>
-    <button class="close-btn" (click)="OnCancel()" title="Close">
+    <button class="close-btn" (click)="OnCancel()" title="Close" aria-label="Close dialog">
       <i class="fa-solid fa-times"></i>
     </button>
   </div>
@@ -22,10 +22,7 @@
       <strong>"{{ ViewName }}"</strong> is shared with other users.
       Changes you save will affect everyone who uses this view.
     </p>
-    <div class="warning-box">
-      <i class="fa-solid fa-triangle-exclamation"></i>
-      <span>Other users may be relying on this view's current configuration.</span>
-    </div>
+    <mj-alert Variant="warning" Size="sm" class="shared-view-alert-pos">Other users may be relying on this view's current configuration.</mj-alert>
   </div>
 
   <!-- Footer -->

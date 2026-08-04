@@ -1,0 +1,103 @@
+<!-- ══════ DRY-RUN / DISPOSITION PREVIEW SLIDE-IN ══════ -->
+@if (Show) {
+    <div class="at-slide-overlay" (click)="close()"></div>
+    <div class="at-slide-panel dry-run-panel">
+        <div class="at-slide-header">
+            <h3><i class="fa-solid fa-flask"></i> Dry-run preview</h3>
+            <button class="at-slide-close" aria-label="Close dry-run preview" (click)="close()"><i class="fa-solid fa-times"></i></button>
+        </div>
+
+        <div class="at-slide-body">
+            <!-- Source + intent line -->
+            @if (SourceCard) {
+                <div class="dry-source-line">
+                    <i [class]="SourceCard.Icon"></i>
+                    <span class="dry-source-name">{{ SourceCard.Name }}</span>
+                </div>
+            }
+
+            <!-- "nothing persisted" banner -->
+            <div class="dry-banner">
+                <i class="fa-solid fa-circle-info"></i>
+                <span>
+                    Preview of how this source's sampled tags resolve under the current
+                    <b>mode &amp; thresholds</b> — <b>no LLM call, nothing persisted</b>.
+                </span>
+            </div>
+
+            <!-- Effective config -->
+            <div class="dry-effective">
+                <span class="pill purple"><i class="fa-solid fa-flask"></i> PREVIEW</span>
+                <span class="dry-eff-item">Mode <b>{{ ModeLabel(EffectiveMode) }}</b></span>
+                <span class="dry-eff-item">Match <b>{{ FormatScore(EffectiveMatchThreshold) }}</b></span>
+                <span class="dry-eff-item">Suggest <b>{{ FormatScore(EffectiveSuggestThreshold) }}</b></span>
+            </div>
+
+            @if (Loading) {
+                <mj-loading text="Sampling existing tags…"></mj-loading>
+            } @else if (NoTagsSampled) {
+                <mj-empty-state class="dry-empty" Icon="fa-solid fa-tags"
+                    Title="No extracted tags yet"
+                    Message="Run the pipeline first, then preview how its tags would be dispositioned." />
+            } @else {
+                <!-- Estimate line (illustrative) -->
+                <div class="dry-estimate">
+                    <i class="fa-solid fa-calculator"></i>
+                    <span>
+                        {{ Estimate.ItemsSampled }} sampled tag{{ Estimate.ItemsSampled === 1 ? '' : 's' }} ·
+                        est. {{ FormatTokens(Estimate.EstimatedTokens) }} tokens ·
+                        ~{{ FormatCost(Estimate.EstimatedCost) }}
+                        <span class="dry-est-note">(rough estimate)</span>
+                    </span>
+                </div>
+
+                <!-- Summary counts -->
+                <div class="dry-summary">
+                    <span class="disp disp-apply">{{ Counts.AutoApply }} auto-apply</span>
+                    <span class="disp disp-inbox">{{ Counts.RouteToInbox }} → inbox</span>
+                    <span class="disp disp-create">{{ Counts.CreateNew }} create</span>
+                    @if (Counts.Reject > 0) {
+                        <span class="disp disp-reject">{{ Counts.Reject }} reject</span>
+                    }
+                </div>
+
+                <!-- Disposition table -->
+                <table class="dry-table">
+                    <thead>
+                        <tr>
+                            <th>Tag</th>
+                            <th>Matched</th>
+                            <th class="dry-col-score">Score</th>
+                            <th>What would happen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (row of Rows; track $index) {
+                            <tr>
+                                <td class="dry-cell-tag">{{ row.tag }}</td>
+                                <td class="dry-cell-matched">{{ row.matchedTag ?? '—' }}</td>
+                                <td class="dry-col-score dry-mono">{{ FormatScore(row.score) }}</td>
+                                <td>
+                                    <span [class]="DispositionClass(row.disposition)" [title]="row.reason">
+                                        {{ DispositionLabel(row.disposition) }}
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <div class="dry-disclaimer">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    A real run also uses a semantic / embedding match tier not reproducible here,
+                    so borderline rows may resolve differently.
+                </div>
+            }
+
+            <!-- Footer -->
+            <div class="dry-footer">
+                <button mjButton variant="primary" size="sm" (click)="close()">Close</button>
+            </div>
+        </div>
+    </div>
+}

@@ -622,7 +622,8 @@ describe('InstallerEngine', () => {
       await engine.Doctor('/test/dir');
 
       // 2 known-issue checks + 1 auth validation check (env.ts not found in test dir)
-      expect(mockDiagnostics.AddCheck).toHaveBeenCalledTimes(3);
+      // + 1 claude-pack info check (no pack in /test/dir)
+      expect(mockDiagnostics.AddCheck).toHaveBeenCalledTimes(4);
       // First call: needs_patch → warn
       expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
         expect.objectContaining({ Status: 'warn', Name: 'Known issue: issue-1' })
@@ -634,6 +635,10 @@ describe('InstallerEngine', () => {
       // Third call: auth validation warns that environment.ts is not found
       expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
         expect.objectContaining({ Status: 'warn', Name: 'Explorer environment.ts' })
+      );
+      // Fourth call: claude-pack info (no pack installed in /test/dir)
+      expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ Status: 'info', Name: expect.stringContaining('Claude pack') })
       );
     });
   });

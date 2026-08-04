@@ -17,7 +17,7 @@ export class MJVersionInstallationFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'versionDetails', sectionName: 'Version Details', isExpanded: true },
             { sectionKey: 'installationExecution', sectionName: 'Installation Execution', isExpanded: true },
-            { sectionKey: 'installationDocumentation', sectionName: 'Installation Documentation', isExpanded: false },
+            { sectionKey: 'installationDocumentation', sectionName: 'Installation Documentation', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

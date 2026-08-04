@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, Input, Output, EventEmitter, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild } from '@angular/core';
 import { EntityInfo, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { TreeBranchConfig, TreeLeafConfig, TreeNode, TreeComponent } from '@memberjunction/ng-trees';
@@ -27,7 +27,11 @@ export interface SelectRecordEvent {
   templateUrl: './navigation-panel.component.html',
   styleUrls: ['./navigation-panel.component.css']
 })
-export class NavigationPanelComponent extends BaseAngularComponent implements OnChanges {
+export class NavigationPanelComponent extends BaseAngularComponent implements OnChanges, OnInit, OnDestroy {
+  constructor(private cdr: ChangeDetectorRef) {
+    super();
+  }
+
   @Input() entities: EntityInfo[] = [];
   @Input() selectedEntityName: string | null = null;
   @Input() favorites: FavoriteItem[] = [];
@@ -99,6 +103,24 @@ export class NavigationPanelComponent extends BaseAngularComponent implements On
     }
     if (changes['applicationIdFilter']) {
       this.updateTreeBranchFilter();
+    }
+    if (changes['recentItems']) {
+      this.timestampLabelCache.clear();
+    }
+  }
+
+  ngOnInit(): void {
+    this.timestampRefreshHandle = setInterval(() => {
+      if (this.timestampLabelCache.size === 0) return;
+      this.timestampLabelCache.clear();
+      this.cdr.markForCheck();
+    }, 30000);
+  }
+
+  ngOnDestroy(): void {
+    if (this.timestampRefreshHandle !== undefined) {
+      clearInterval(this.timestampRefreshHandle);
+      this.timestampRefreshHandle = undefined;
     }
   }
 
@@ -300,12 +322,32 @@ export class NavigationPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Format recent item timestamp
+   * Cache of formatted relative-time labels keyed by timestamp epoch ms.
+   * Stable within a change-detection cycle (avoids NG0100 from `now`-dependent
+   * values shifting between dirty-check and verify passes). Cleared on a coarse
+   * interval so the displayed label still updates over time.
+   */
+  private timestampLabelCache = new Map<number, string>();
+  private timestampRefreshHandle?: ReturnType<typeof setInterval>;
+
+  /**
+   * Format recent item timestamp. Cached per-timestamp so the same value is
+   * returned across change-detection passes within a single tick — recomputed
+   * on a 30-second interval (see `ngOnInit`).
    */
   formatTimestamp(timestamp: Date): string {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
+    const epoch = new Date(timestamp).getTime();
+    const cached = this.timestampLabelCache.get(epoch);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const label = this.computeRelativeLabel(epoch);
+    this.timestampLabelCache.set(epoch, label);
+    return label;
+  }
+
+  private computeRelativeLabel(epoch: number): string {
+    const diffMs = Date.now() - epoch;
     const diffMins = Math.floor(diffMs / 60000);
 
     if (diffMins < 1) return 'Just now';
@@ -317,7 +359,7 @@ export class NavigationPanelComponent extends BaseAngularComponent implements On
     const diffDays = Math.floor(diffHours / 24);
     if (diffDays < 7) return `${diffDays}d ago`;
 
-    return date.toLocaleDateString();
+    return new Date(epoch).toLocaleDateString();
   }
 
   /**

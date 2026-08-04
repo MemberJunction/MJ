@@ -44,6 +44,11 @@ export class EntityListComponent implements OnInit, OnDestroy {
     /** Full unfiltered list from the engine. */
     private _allEntities: AccessibleEntity[] = [];
 
+    /** Public accessor for the chrome's X-of-Y badge. */
+    public get TotalEntityCount(): number {
+        return this._allEntities.length;
+    }
+
     /** Cached sorted unique schema names — recomputed only when _allEntities changes. */
     private _availableFilterSchemas: string[] = [];
 

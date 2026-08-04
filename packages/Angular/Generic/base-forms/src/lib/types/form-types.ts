@@ -84,6 +84,30 @@ export interface FormContext {
   validationErrors?: ValidationErrorInfo[];
   /** Whether drag-and-drop section reordering is allowed. Read by panels to show/hide drag handles. */
   allowSectionReorder?: boolean;
+  /**
+   * Whether section headers may collapse/expand. When false, panels render
+   * always-expanded with no toggle chevron. Read by collapsible panels.
+   * Undefined / true means collapsible (the default).
+   */
+  collapsibleSections?: boolean;
+  /**
+   * Whether in-form record (FK) links are interactive. When false, FK values
+   * render as plain text instead of clickable links — used by dialog/slide-in
+   * surfaces so a modal context doesn't navigate the user away. Undefined /
+   * true means links are live (the default).
+   */
+  enableRecordLinks?: boolean;
+  /**
+   * Section-visibility rules, propagated from {@link EntityFormConfig}. Read by
+   * every collapsible panel — including slot-injected `BaseFormPanel`s — so
+   * per-instance show/hide applies uniformly across generated, custom, and
+   * injected sections. `showRelatedEntities === false` hides related-entity
+   * panels; `hiddenSectionKeys` / `visibleSectionKeys` (allow-list) target
+   * specific section keys.
+   */
+  showRelatedEntities?: boolean;
+  hiddenSectionKeys?: string[];
+  visibleSectionKeys?: string[];
 }
 
 /**

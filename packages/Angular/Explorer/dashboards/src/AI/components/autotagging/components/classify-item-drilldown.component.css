@@ -1,0 +1,233 @@
+.cid-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.cid-section {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-sm);
+    padding: 12px 14px;
+}
+
+.cid-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.cid-title {
+    margin: 0 0 8px 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cid-title i {
+    color: var(--mj-brand-primary);
+}
+
+.cid-section-head .cid-title {
+    margin-bottom: 0;
+}
+
+.cid-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cid-field {
+    display: flex;
+    gap: 10px;
+    font-size: 0.82rem;
+}
+
+.cid-field-label {
+    color: var(--mj-text-muted);
+    min-width: 60px;
+}
+
+.cid-field-value {
+    color: var(--mj-text-primary);
+}
+
+.cid-field-link {
+    color: var(--mj-text-link);
+    text-decoration: none;
+    word-break: break-all;
+}
+
+.cid-field-link:hover {
+    text-decoration: underline;
+}
+
+.cid-text-preview {
+    margin-top: 10px;
+    padding: 10px;
+    background: var(--mj-bg-surface-sunken);
+    border-radius: var(--mj-radius-sm);
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--mj-text-secondary);
+    white-space: pre-wrap;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.cid-muted {
+    color: var(--mj-text-muted);
+    font-size: 0.8rem;
+    margin: 0;
+}
+
+/* Tags */
+.cid-tag-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cid-tag-card {
+    border: 1px solid var(--mj-border-subtle);
+    border-radius: var(--mj-radius-sm);
+    padding: 8px 10px;
+    background: var(--mj-bg-surface-card);
+}
+
+.cid-tag-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.cid-tag-name {
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.cid-tag-weight {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    border-radius: var(--mj-radius-full, 999px);
+    padding: 1px 8px;
+}
+
+.cid-provenance-link {
+    margin-left: auto;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-link);
+    border-radius: var(--mj-radius-sm);
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.cid-provenance-link:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.cid-tag-reasoning {
+    margin-top: 6px;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: var(--mj-text-secondary);
+}
+
+.cid-tag-reasoning i {
+    color: var(--mj-text-disabled);
+    margin-right: 4px;
+}
+
+/* Provenance */
+.cid-provenance-list,
+.cid-audit-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cid-provenance-row,
+.cid-audit-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.82rem;
+}
+
+.cid-provenance-icon,
+.cid-audit-icon {
+    color: var(--mj-text-muted);
+    width: 16px;
+    text-align: center;
+}
+
+.cid-provenance-label,
+.cid-audit-label {
+    color: var(--mj-text-secondary);
+    min-width: 150px;
+}
+
+.cid-provenance-value {
+    color: var(--mj-text-primary);
+    word-break: break-all;
+}
+
+.cid-provenance-clickable {
+    border: none;
+    background: none;
+    color: var(--mj-text-link);
+    cursor: pointer;
+    padding: 0;
+    font: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.cid-provenance-clickable:hover {
+    text-decoration: underline;
+}
+
+.cid-audit-time {
+    margin-left: auto;
+    color: var(--mj-text-muted);
+    font-size: 0.78rem;
+}
+
+/* Empty state */
+.cid-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 40px 16px;
+    color: var(--mj-text-muted);
+    text-align: center;
+}
+
+.cid-empty i {
+    font-size: 1.6rem;
+    color: var(--mj-text-disabled);
+}
+
+.cid-empty p {
+    margin: 0;
+    font-size: 0.85rem;
+}

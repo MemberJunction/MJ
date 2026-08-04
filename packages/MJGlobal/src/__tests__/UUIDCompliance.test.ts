@@ -54,9 +54,12 @@ const EXCLUDE_PATTERNS = [
  *  Keys MUST use forward slashes; the test normalizes scanned paths to forward slashes before lookup so
  *  the same exception list works on Windows and Unix. */
 const KNOWN_EXCEPTIONS: Record<string, string[]> = {
+    'TestingFramework/integration-test-suite/src/checks/entity-writes.checks.ts': ['EW6 deliberately compares UUID CASE (flips it, then asserts the flip differs) to prove the case-insensitive FK round-trip — using UUIDsEqual there would defeat the check'],
     // Add file paths (relative to packages/) and the reason they're excepted
     // Example: 'SomePackage/src/file.ts': ['Uses numeric IDs, not UUIDs'],
     'Angular/Explorer/dashboards/src/Integration/components/mapping-workspace/mapping-workspace.component.ts': ['LocalID is a local string identifier (e.g. "pending-1"), not a UUID'],
+    'Angular/Explorer/explorer-core/src/lib/resource-wrappers/livekit-room-resource.component.ts': ['Voice .ID is a provider-native voice slug (e.g. "echo"), not a UUID — RealtimeVoiceOption.ID'],
+    'Angular/Generic/mj-livekit-room/src/lib/mj-livekit-room.component.ts': ['Voice .ID is a provider-native voice slug (e.g. "echo"), not a UUID — RealtimeVoiceOption.ID'],
 };
 
 /** Normalize a path to forward slashes so EXCLUDE_PATTERNS and KNOWN_EXCEPTIONS lookups

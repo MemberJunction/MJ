@@ -1,12 +1,48 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IRunViewProvider, LogStatus, RunView, UserInfo } from "@memberjunction/core";
 import {
     MJArtifactTypeEntity,
     MJArtifactEntity,
     MJArtifactVersionEntity
 } from "../generated/entity_subclasses";
+import {
+    ResolveArtifactTypeByMime,
+    FindArtifactTypeConflicts,
+    type ArtifactTypeMatcher,
+} from "./artifact-mime-resolver";
 
 /**
  * Caching of metadata for artifacts, artifact versions, and artifact types.
+ *
+ * ## Boot payload is bounded by design
+ *
+ * Only **artifact types** are eagerly loaded at `Config()` time — a small,
+ * fixed registry. Artifacts and artifact versions are NOT bulk-loaded: a
+ * version's `Content` column holds arbitrarily large payloads (base64 blobs,
+ * snapshots, etc.), so eager-loading every version made cold boot download the
+ * entire artifact corpus and — because the result dwarfed the local cache
+ * budget — wiped the whole client cache on each login. Instead, artifacts and
+ * versions are fetched **on demand** for a specific artifact via
+ * {@link LoadVersionsForArtifact} / {@link GetVersionContent}, keeping startup
+ * cost independent of how much artifact content a deployment has accumulated.
+ *
+ * The on-demand results are memoized in per-ID maps so the synchronous
+ * accessors ({@link FindCachedArtifactByID}, {@link FindCachedArtifactVersionByID},
+ * {@link GetCachedVersionsForArtifact}) serve anything already fetched this
+ * session. A cache miss is not an error — callers fall back to a direct entity
+ * load.
+ *
+ * ## Naming: `Cached*` accessors are session-scoped, NOT the full corpus
+ *
+ * The synchronous artifact/version accessors are deliberately prefixed
+ * `Cached` (`CachedArtifacts`, `CachedArtifactVersions`, `FindCachedArtifactByID`,
+ * `FindCachedArtifactVersionByID`, `GetCachedVersionsForArtifact`) to make it
+ * unmistakable that they return only what has been fetched on demand this
+ * session — never the entire system's artifacts. They replace the former
+ * unprefixed accessors (`Artifacts`, `ArtifactVersions`, `FindArtifactByID`,
+ * `FindArtifactVersionByID`, `GetVersionsForArtifact`) whose names implied a
+ * full boot-time load that no longer happens. The rename is intentional: it
+ * turns any consumer that assumed full-corpus semantics into a hard compile
+ * error rather than a silent empty-result regression.
  */
 export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
     /**
@@ -17,8 +53,13 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
     }
 
     private _artifactTypes: MJArtifactTypeEntity[] = [];
-    private _artifacts: MJArtifactEntity[] = [];
-    private _artifactVersions: MJArtifactVersionEntity[] = [];
+
+    // On-demand caches — populated lazily by the loaders below, NOT at boot.
+    // Keyed by lowercased ID for case-insensitive lookup across SQL Server
+    // (uppercase UUIDs) and PostgreSQL (lowercase UUIDs).
+    private _artifactCache = new Map<string, MJArtifactEntity>();
+    private _versionCache = new Map<string, MJArtifactVersionEntity>();
+    private _versionsByArtifact = new Map<string, MJArtifactVersionEntity[]>();
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
@@ -27,35 +68,30 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
                 EntityName: 'MJ: Artifact Types',
                 PropertyName: "_artifactTypes",
                 CacheLocal: true
-            },
-            {
-                Type: 'entity',
-                EntityName: 'MJ: Artifacts',
-                PropertyName: "_artifacts",
-                CacheLocal: true
-            },
-            {
-                Type: 'entity',
-                EntityName: 'MJ: Artifact Versions',
-                PropertyName: "_artifactVersions",
-                CacheLocal: true
             }
         ]
         await this.Load(c, provider, forceRefresh, contextUser);
     }
 
     public get ArtifactTypes(): MJArtifactTypeEntity[] {
-        return this._artifactTypes;
+        return this.GetConfigData<MJArtifactTypeEntity>('_artifactTypes');
     }
 
-    /** All artifacts in the system */
-    public get Artifacts(): MJArtifactEntity[] {
-        return this._artifacts;
+    /**
+     * Artifacts fetched on demand this session (via {@link LoadVersionsForArtifact}).
+     * NOT the full system corpus — artifacts are no longer bulk-loaded at boot.
+     */
+    public get CachedArtifacts(): MJArtifactEntity[] {
+        return Array.from(this._artifactCache.values());
     }
 
-    /** All artifact versions in the system */
-    public get ArtifactVersions(): MJArtifactVersionEntity[] {
-        return this._artifactVersions;
+    /**
+     * Artifact versions fetched on demand this session (via
+     * {@link LoadVersionsForArtifact} / {@link GetVersionContent}). NOT the full
+     * system corpus — versions are no longer bulk-loaded at boot.
+     */
+    public get CachedArtifactVersions(): MJArtifactVersionEntity[] {
+        return Array.from(this._versionCache.values());
     }
 
     /**
@@ -68,27 +104,115 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
         return this._artifactTypes.find(c => c.Name.trim().toLowerCase() === name.trim().toLowerCase());
     }
 
-    /** Find an artifact by its ID */
-    public FindArtifactByID(id: string): MJArtifactEntity | undefined {
+    /**
+     * Find an artifact by its ID among those fetched on demand this session.
+     * Returns undefined on a cache miss — call {@link LoadVersionsForArtifact}
+     * first, or fall back to a direct entity load.
+     */
+    public FindCachedArtifactByID(id: string): MJArtifactEntity | undefined {
         if (!id) return undefined;
-        const lower = id.trim().toLowerCase();
-        return this._artifacts.find(a => a.ID.trim().toLowerCase() === lower);
+        return this._artifactCache.get(id.trim().toLowerCase());
     }
 
-    /** Find an artifact version by its ID */
-    public FindArtifactVersionByID(id: string): MJArtifactVersionEntity | undefined {
+    /**
+     * Find an artifact version by its ID among those fetched on demand this
+     * session. Returns undefined on a cache miss — call {@link GetVersionContent}
+     * or {@link LoadVersionsForArtifact} first, or fall back to a direct load.
+     */
+    public FindCachedArtifactVersionByID(id: string): MJArtifactVersionEntity | undefined {
         if (!id) return undefined;
-        const lower = id.trim().toLowerCase();
-        return this._artifactVersions.find(v => v.ID.trim().toLowerCase() === lower);
+        return this._versionCache.get(id.trim().toLowerCase());
     }
 
-    /** Get all versions for a given artifact, sorted by VersionNumber descending */
-    public GetVersionsForArtifact(artifactId: string): MJArtifactVersionEntity[] {
+    /**
+     * Get all versions for a given artifact that were fetched on demand this
+     * session, sorted by VersionNumber descending. Returns [] if
+     * {@link LoadVersionsForArtifact} has not been called for this artifact —
+     * this is a synchronous cache read, not a loader.
+     */
+    public GetCachedVersionsForArtifact(artifactId: string): MJArtifactVersionEntity[] {
         if (!artifactId) return [];
-        const lower = artifactId.trim().toLowerCase();
-        return this._artifactVersions
-            .filter(v => v.ArtifactID.trim().toLowerCase() === lower)
-            .sort((a, b) => (b.VersionNumber || 0) - (a.VersionNumber || 0));
+        const cached = this._versionsByArtifact.get(artifactId.trim().toLowerCase());
+        return cached ? [...cached] : [];
+    }
+
+    /**
+     * Loads all versions (including the `Content` column) for a single artifact
+     * from the database and memoizes them. This is the on-demand replacement
+     * for the former boot-time bulk load: the payload is bounded to one
+     * artifact's versions rather than the entire corpus.
+     *
+     * @param artifactId - the artifact whose versions to load
+     * @param contextUser - required server-side for correct user scoping
+     * @param provider - optional non-default provider (multi-provider clients)
+     * @param forceRefresh - re-query even if already cached this session
+     * @returns the artifact's versions, sorted by VersionNumber descending
+     */
+    public async LoadVersionsForArtifact(
+        artifactId: string,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+        forceRefresh?: boolean
+    ): Promise<MJArtifactVersionEntity[]> {
+        if (!artifactId) return [];
+        const key = artifactId.trim().toLowerCase();
+        if (!forceRefresh && this._versionsByArtifact.has(key)) {
+            return this.GetCachedVersionsForArtifact(artifactId);
+        }
+
+        const rvProvider = (provider as unknown as IRunViewProvider) ?? this.RunViewProviderToUse;
+        const rv = new RunView(rvProvider);
+        const result = await rv.RunView<MJArtifactVersionEntity>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ArtifactID='${artifactId.replace(/'/g, "''")}'`,
+            OrderBy: 'VersionNumber DESC',
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (!result.Success) {
+            LogStatus(`WARN ArtifactMetadataEngine.LoadVersionsForArtifact: failed to load versions for artifact ${artifactId}: ${result.ErrorMessage}`);
+            return this.GetCachedVersionsForArtifact(artifactId);
+        }
+
+        const versions = result.Results || [];
+        this._versionsByArtifact.set(key, versions);
+        for (const v of versions) {
+            this._versionCache.set(v.ID.trim().toLowerCase(), v);
+        }
+        return [...versions];
+    }
+
+    /**
+     * Loads a single artifact version (including `Content`) by ID on demand and
+     * memoizes it. Returns undefined if the version can't be loaded.
+     *
+     * @param versionId - the artifact version to load
+     * @param contextUser - required server-side for correct user scoping
+     * @param provider - optional non-default provider (multi-provider clients)
+     * @param forceRefresh - re-load even if already cached this session
+     */
+    public async GetVersionContent(
+        versionId: string,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+        forceRefresh?: boolean
+    ): Promise<MJArtifactVersionEntity | undefined> {
+        if (!versionId) return undefined;
+        const key = versionId.trim().toLowerCase();
+        if (!forceRefresh) {
+            const existing = this._versionCache.get(key);
+            if (existing) return existing;
+        }
+
+        const p = provider ?? this.ProviderToUse;
+        const version = await p.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', contextUser);
+        const loaded = await version.Load(versionId);
+        if (!loaded) {
+            LogStatus(`WARN ArtifactMetadataEngine.GetVersionContent: failed to load version ${versionId}`);
+            return undefined;
+        }
+        this._versionCache.set(key, version);
+        return version;
     }
 
     /** Find an artifact type by its ID */
@@ -107,13 +231,41 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
     }
 
     /**
-     * Finds the artifact type whose ContentType (MIME type) matches the given
-     * mimeType string (case-insensitive). Used by AgentRunner to resolve the
-     * correct ArtifactType for file outputs such as PDFs and spreadsheets.
+     * Resolves an upload's MIME type (and optional file extension) to the
+     * highest-priority registered Artifact Type. Supports exact matches and
+     * subtype wildcards (e.g. `text/*`, `image/*`), with deterministic
+     * tiebreaking via Priority → SystemSupplied → ID. See
+     * `artifact-mime-resolver.ts` for the full algorithm.
      */
-    public GetArtifactTypeByMimeType(mimeType: string): MJArtifactTypeEntity | undefined {
-        if (!mimeType) return undefined;
-        const lower = mimeType.trim().toLowerCase();
-        return this._artifactTypes.find(t => t.ContentType.trim().toLowerCase() === lower);
+    public GetArtifactTypeByMimeType(mimeType: string, fileExtension?: string): MJArtifactTypeEntity | undefined {
+        const matchers = this._artifactTypes.map(t => this.toMatcher(t));
+        const found = ResolveArtifactTypeByMime(matchers, mimeType, fileExtension);
+        return found ? this.FindArtifactTypeByID(found.id) : undefined;
+    }
+
+    /**
+     * Logs WARN for any pair of registered Artifact Types that share an
+     * identical (ContentType, Priority, SystemSupplied) triple — almost always
+     * a configuration mistake, and the ID-tiebreaker would otherwise hide it.
+     * Call after Config() to surface registry ambiguity at boot.
+     */
+    public LogArtifactTypeRegistryConflicts(): void {
+        const matchers = this._artifactTypes.map(t => this.toMatcher(t));
+        const conflicts = FindArtifactTypeConflicts(matchers);
+        for (const c of conflicts) {
+            LogStatus(
+                `WARN ArtifactMetadataEngine: ${c.matcherNames.length} Artifact Types share (ContentType=${c.contentType}, Priority=${c.priority}, SystemSupplied=${c.systemSupplied}): ${c.matcherNames.join(', ')}. Resolution will use lowest-ID tiebreaker — set Priority explicitly to disambiguate.`
+            );
+        }
+    }
+
+    private toMatcher(t: MJArtifactTypeEntity): ArtifactTypeMatcher {
+        return {
+            id: t.ID,
+            name: t.Name,
+            contentType: t.ContentType,
+            priority: t.Priority,
+            systemSupplied: t.SystemSupplied,
+        };
     }
 }

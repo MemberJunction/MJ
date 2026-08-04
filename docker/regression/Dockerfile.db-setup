@@ -1,0 +1,71 @@
+# MemberJunction Database Setup — One-Shot Init Container
+# Creates the database, runs Flyway migrations, installs AssociationDB demo data,
+# and runs CodeGen. Exits 0 on success.
+#
+# This is a one-shot container: it runs to completion and then stops.
+# MJAPI depends on it via service_completed_successfully in docker-compose.
+
+FROM node:24-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential python3 curl gnupg ca-certificates unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install sqlcmd (Microsoft ODBC + mssql-tools18)
+RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/24.04/prod noble main" \
+    > /etc/apt/sources.list.d/mssql-release.list \
+    && apt-get update \
+    && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 mssql-tools18 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install SqlPackage (used by the optional bacpac-import path — scripts/import-bacpac.cjs).
+# Only the x64 standalone build is fetched; the bacpac compose overlay pins db-setup to
+# linux/amd64 so this always runs under amd64. Skipped on other arches (where the bacpac
+# path never executes), keeping normal native builds lean.
+RUN ARCH="$(dpkg --print-architecture)"; \
+    if [ "$ARCH" = "amd64" ]; then \
+      curl -fsSL -o /tmp/sqlpackage.zip https://aka.ms/sqlpackage-linux \
+      && mkdir -p /opt/sqlpackage \
+      && unzip -q /tmp/sqlpackage.zip -d /opt/sqlpackage \
+      && chmod +x /opt/sqlpackage/sqlpackage \
+      && ln -s /opt/sqlpackage/sqlpackage /usr/local/bin/sqlpackage \
+      && rm /tmp/sqlpackage.zip; \
+    else \
+      echo "sqlpackage skipped on $ARCH (bacpac import runs under the amd64 overlay)"; \
+    fi
+
+ENV PATH="/opt/mssql-tools18/bin:$PATH"
+
+WORKDIR /app
+
+# Copy package manifests and source
+COPY package.json package-lock.json turbo.json tsconfig.angular.json tsconfig.server.json ./
+COPY packages/ ./packages/
+COPY metadata/ ./metadata/
+COPY migrations/ ./migrations/
+COPY Demos/AssociationDB/ ./Demos/AssociationDB/
+
+RUN npm install
+
+RUN npm run build:api
+
+# Copy MJ config (same one MJAPI uses)
+COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
+
+# Patch autoCreateNewUsers for test environment
+RUN sed -i 's/autoCreateNewUsers: process.env.AUTO_CREATE_NEW_USERS ? process.env.AUTO_CREATE_NEW_USERS === 1 : false/autoCreateNewUsers: true/' mj.config.cjs
+
+# Generate the combined AssociationDB SQL (skip docs for speed in test env)
+RUN cd Demos/AssociationDB && bash prepare_build.sh --skip-docs
+
+# The entrypoint script runs all setup steps in sequence.
+# It invokes Node helpers from /app/docker/regression/scripts (for DB ops,
+# metadata patches, etc.) so we bake those in here as well. The same image
+# is reused by the form-generator service, which calls bootstrap-db.cjs
+# from form-gen-entrypoint.sh.
+COPY docker/regression/db-setup-entrypoint.sh /app/db-setup-entrypoint.sh
+COPY docker/regression/scripts/ /app/docker/regression/scripts/
+RUN chmod +x /app/db-setup-entrypoint.sh
+
+CMD ["/bin/bash", "/app/db-setup-entrypoint.sh"]

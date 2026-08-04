@@ -56,6 +56,7 @@ function unionLowercase(getter: (d: SQLDialect) => readonly string[]): ReadonlyS
 
 const BOOLEAN_TYPE_SET   = unionLowercase(d => d.BooleanTypeNames);
 const STRING_TYPE_SET    = unionLowercase(d => d.StringTypeNames);
+const FIXED_WIDTH_STRING_TYPE_SET = unionLowercase(d => d.FixedWidthStringTypeNames);
 const DATE_TYPE_SET      = unionLowercase(d => d.DateTypeNames);
 const INTEGER_TYPE_SET   = unionLowercase(d => d.IntegerTypeNames);
 const FLOAT_TYPE_SET     = unionLowercase(d => d.FloatTypeNames);
@@ -78,6 +79,19 @@ export function IsBooleanSQLType(typeName: string | null | undefined): boolean {
 /** True if `typeName` is a variable / fixed-length character / text type. Excludes `uuid`. */
 export function IsStringSQLType(typeName: string | null | undefined): boolean {
     return STRING_TYPE_SET.has(normalize(typeName));
+}
+
+/**
+ * True if `typeName` is a **fixed-width** / space-padded character type
+ * (SQL Server `char`/`nchar`, PostgreSQL `char`/`character`/`bpchar`).
+ *
+ * Use to decide whether to rtrim values returned by the DB: fixed-width
+ * types right-pad with spaces up to the declared length and return that
+ * padding in result sets, which causes spurious dirty-flagging if the
+ * application-side value is the logical (un-padded) form.
+ */
+export function IsFixedWidthStringSQLType(typeName: string | null | undefined): boolean {
+    return FIXED_WIDTH_STRING_TYPE_SET.has(normalize(typeName));
 }
 
 /** True if `typeName` is a date / time / timestamp type. */
