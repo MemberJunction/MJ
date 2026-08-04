@@ -11,7 +11,7 @@ There are four distinct operations. Know which one you're doing before you start
 
 | Operation | Frequency | Who | Automation today |
 |---|---|---|---|
-| 1. Routine Edge release | ~weekly / on demand | Release engineer | Semi-automatic (publish is; versioning isn't) |
+| 1. Routine Edge release | ~weekly / on demand | Release engineer | Number-picking and publishing are automatic; a human still runs `changeset version` and merges the release PR (see the automation proposal below) |
 | 2. LTS candidate cut | per cycle (~bimonthly) | Cert owner | Scripted-manual |
 | 3. LTS line patch release | as fixes land on a line | Cert owner | Manual (workflow planned) |
 | 4. Certification flip | once per certification | Cert owner | Scripted-manual |
@@ -40,12 +40,21 @@ changes only during era opens and candidate cuts (operation 2).
 
 ### Proposed: scheduled + on-demand automation (not yet built)
 
-Target state: Edge releases stop being a person's chore. A workflow that (a) runs on a weekly
-schedule, and (b) can be dispatched on demand, doing: if pending changesets exist →
-`changeset version` + lockfile refresh on `next` → open (or auto-merge) the `next → main`
-release PR. Nothing else changes — publish stays exactly as it is. Options to decide:
-weekly-plus-ad-hoc vs. nightly; auto-merge vs. human-merges-the-PR. Status: **proposal**,
-needs an owner and a decision. Until then, the manual steps above are the procedure.
+Target state: Edge releases stop being a person's chore. Changesets already picks every
+version number; the remaining human work is running the ceremony (version → lockfile →
+release PR). Two candidate shapes:
+
+- **The official [changesets GitHub Action](https://github.com/changesets/action)** — maintains
+  a standing "Version Packages" PR that stays current as changesets accumulate; merging that
+  one PR is the release. No cadence decision needed, on-demand is built in, and the human act
+  shrinks to a single merge click. The likely winner.
+- **A scheduled workflow** — weekly (or nightly) + `workflow_dispatch`: if pending changesets
+  exist, run `changeset version` + lockfile refresh and open (or auto-merge) the
+  `next → main` release PR.
+
+Either way publish stays exactly as it is. Status: **proposal**, needs an owner and a
+decision (chiefly: does a human still click merge, or does green CI auto-release?). Until
+then, the manual steps above are the procedure.
 
 ---
 
