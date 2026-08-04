@@ -55,6 +55,7 @@ import {
     IMetadataProvider,
     UserInfo,
     LocalCacheManager,
+    CachedRunViewResult,
     LogError,
     LogStatus,
     LogStatusEx,
@@ -2163,7 +2164,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Phase 1: Check server's LocalCacheManager first (zero DB hits)
             const currentResults: RunViewWithCacheCheckResult<T>[] = [];
-            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] } }> = [];
+            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: CachedRunViewResult }> = [];
             const serverCacheMissItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
 
             for (const { index, item, entityInfo } of itemsNeedingValidation) {
@@ -2229,7 +2230,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // Phase 3: For items without cacheStatus (client has nothing), check server cache before hitting DB
-            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] } }> = [];
+            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: CachedRunViewResult }> = [];
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
@@ -2600,7 +2601,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         index: number,
         entityLabel: string,
         contextUser?: UserInfo,
-    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } } | null> {
+    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: CachedRunViewResult } | null> {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
 
         const rlsWhereClause = this.ComputeRunViewRLSWhereClause(item.params, contextUser);
@@ -2624,16 +2625,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     private async serveFromServerCache<T = unknown>(
         viewIndex: number,
-        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] },
+        serverCached: CachedRunViewResult,
         callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
         // The server cache stores the full-width superset — project down to the
         // caller's requested fields (∪ PK) before returning, exactly like the
         // ProviderBase hit path. Serving unprojected rows here previously leaked
         // whatever shape happened to be cached to every subsequent caller.
+        //
+        // Transport boundary: `serverCached.results` is readonly (shared, deep-frozen cache
+        // rows); the outbound `results` field is a mutable T[]. Cast here — the runtime
+        // freeze is what actually protects the cache. See ProviderBase's hit path.
         const results = callerFields
             ? ProjectRowsToFields(serverCached.results as Record<string, unknown>[], callerFields)
-            : serverCached.results;
+            : (serverCached.results as unknown[]);
         return {
             viewIndex,
             status: 'stale',
@@ -2642,8 +2647,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             rowCount: serverCached.totalRowCount ?? serverCached.rowCount,
             // Carry aggregates through (B40-family, 4th drop). The server slot stores them and
             // GetRunViewResult returns them, but this serve-leg's inline serverCached type omitted
-            // the field, so TypeScript could not flag the drop. Both callers (noCacheStatus + stale)
-            // now widen their type to match, so the field flows.
+            // the field, so TypeScript could not flag the drop. Both legs now share the canonical
+            // CachedRunViewResult type, so a future field can no longer be silently dropped here.
             aggregateResults: serverCached.aggregateResults,
         };
     }
@@ -4144,7 +4149,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     ? this.extractMaxUpdatedAtFromRows(itemData, dateFieldToCheck)
                     : new Date(0).toISOString();
                 const syntheticParams = { EntityName: entityName } as RunViewParams;
-                await cache.SetRunViewResult(uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt, undefined, undefined, this);
+                // ProviderInternalScaffolding: these dataset-item rows are consumed only by this
+                // provider's own assembly steps — most importantly GetAllMetadata(), whose
+                // PostProcessEntityMetadata hydrates a graph by sorting the row array in place and
+                // attaching child collections onto each entity/field row. They are never handed to
+                // arbitrary callers, so they are exempt from the consumer-corruption freeze; with
+                // the freeze applied, metadata bootstrap throws and the process starts blind.
+                await cache.SetRunViewResult(
+                    uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt,
+                    undefined, undefined, this, undefined, { ProviderInternalScaffolding: true }
+                );
             }
 
             sqlResults.push({
@@ -4429,13 +4443,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Computes the latest update date for a dataset item from its result rows and dataset metadata.
      * Used by both the cache-hit and cache-miss paths in GetDatasetByName.
-     * @param rows - The result rows (from cache or SQL)
+     * @param rows - The result rows (from cache or SQL). `readonly` because cache-hit callers
+     *               pass the cache's shared, frozen rows; this method only scans them.
      * @param dateFieldToCheck - The field name to scan for latest date
      * @param item - The dataset item metadata row (contains DatasetItemUpdatedAt, DatasetUpdatedAt)
      * @returns The latest date across all rows and dataset metadata
      */
     protected computeLatestUpdateDate(
-        rows: unknown[],
+        rows: readonly unknown[],
         dateFieldToCheck: string,
         item: Record<string, unknown>
     ): Date {

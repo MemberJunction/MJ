@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { ServerCacheChecks } from '../checks/server-cache.checks';
+import { CacheImmutabilityChecks } from '../checks/cache-immutability.checks';
 import { ClientCacheChecks } from '../checks/client-cache.checks';
 import { RunQueryCacheChecks } from '../checks/runquery-cache.checks';
 import { RlsIsolationChecks, RlsIsolationClientChecks } from '../checks/rls-isolation.checks';
@@ -88,6 +89,7 @@ describe('IntegrationCheckRegistry', () => {
 describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
         ['server-cache', ServerCacheChecks, 32],
+        ['cache-immutability', CacheImmutabilityChecks, 12], // F1-F12 freeze-on-write runtime contract (IT69)
         ['client-cache', ClientCacheChecks, 13],
         ['runquery-cache', RunQueryCacheChecks, 12], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20
         ['rls-isolation', RlsIsolationChecks, 9],

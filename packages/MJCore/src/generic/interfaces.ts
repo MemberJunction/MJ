@@ -429,6 +429,32 @@ export class EntityRecordNameResult  {
  */
 export interface ILocalStorageProvider {
     /**
+     * Whether this provider stores and returns **live object references** rather than
+     * serialized copies.
+     *
+     * - `true` — no serialization boundary. `SetItem(k, v)` retains `v` itself and
+     *   `GetItem(k)` hands the very same object back, so the store and every caller
+     *   share memory (e.g. the `Map`-based in-memory providers).
+     * - `false` — a serialization / structured-clone boundary isolates stored data from
+     *   live objects in both directions (IndexedDB, localStorage, Redis, MMKV).
+     *
+     * **Why callers care**: {@link ILocalStorageProvider} implementations are
+     * interchangeable, but this one property changes the *ownership* semantics of
+     * everything stored. `LocalCacheManager` reads it to decide whether it must
+     * deep-freeze row data at write time — without a freeze, a reference-sharing
+     * provider lets any consumer that mutates a returned row silently corrupt the
+     * process-wide cache. (That is a bug that actually shipped: a GraphQL resolver
+     * renamed `__mj_CreatedAt` to its transport alias in place, rewriting the live
+     * cache for every later reader.) Serializing providers were never exposed to this,
+     * so they opt out and keep handing back freely-mutable copies.
+     *
+     * Required — and deliberately not optional — so that every implementation must
+     * state its isolation semantics explicitly rather than inheriting a default that
+     * may be wrong for it.
+     */
+    readonly SharesReferences: boolean;
+
+    /**
      * Retrieves a value from storage. The implementation is responsible for any
      * deserialization required by the underlying medium:
      *  - **IndexedDB**: returns the value directly via structured clone (Date/Map/Set/typed arrays preserved, no parse needed)

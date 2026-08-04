@@ -819,12 +819,27 @@ export class ResolverBase {
         LogStatus(`[ResolverBase] RunView result aggregate info: entityName=${viewInfo.Entity}, hasAggregateResults=${!!result?.AggregateResults}, aggregateResultCount=${result?.AggregateResults?.length || 0}, aggregateExecutionTime=${result?.AggregateExecutionTime}, aggregateResults=${JSON.stringify(result?.AggregateResults)}`);
       }
 
-      // Process results for GraphQL transport
+      // Process results for GraphQL transport.
+      //
+      // Map onto COPIES, never in place. `FieldMapper.MapFields` renames keys by
+      // mutating (`obj[mapped] = obj[k]; delete obj[k]`), and these rows are the
+      // provider's own result objects — which the server cache holds BY REFERENCE
+      // under a reference-sharing storage provider. Mapping them in place rewrote
+      // `__mj_CreatedAt` to the transport alias `_mj__CreatedAt` inside the live
+      // cache, and because that cache is process-wide, one GraphQL response made
+      // every later read hand back transport-shaped rows that `BaseEntity.SetMany`
+      // rejects. `ArrayFilterEncryptedFieldsForAPI` mutates too, so it must also
+      // see the copies. (FileResolver already maps a spread copy.)
+      //
+      // These copies are LOAD-BEARING, not merely defensive: LocalCacheManager now
+      // deep-freezes cached rows (see ILocalStorageProvider.SharesReferences), so
+      // mapping in place would throw rather than silently corrupt. `{ ...r }` is a
+      // SHALLOW copy, which is sufficient here because the only post-map mutators
+      // rename top-level keys and redact scalar fields — and the cache's freeze is
+      // deep, so a nested value can no longer be reached through the copy either.
       const mapper = new FieldMapper();
       if (result?.Success && result.Results?.length) {
-        for (const r of result.Results) {
-          mapper.MapFields(r);
-        }
+        result.Results = result.Results.map(r => mapper.MapFields({ ...r }));
         // Filter encrypted fields before sending to API client
         await this.ArrayFilterEncryptedFieldsForAPI(
           viewInfo.Entity,
@@ -941,9 +956,9 @@ export class ResolverBase {
       for (let i = 0; i < runViewResults.length; i++) {
         const runViewResult = runViewResults[i];
         if (runViewResult?.Success && runViewResult.Results?.length) {
-          for (const result of runViewResult.Results) {
-            mapper.MapFields(result);
-          }
+          // Copy-then-map, same reason as the single-view path above: these rows
+          // are cache-held references and MapFields renames keys in place.
+          runViewResult.Results = runViewResult.Results.map(r => mapper.MapFields({ ...r }));
           // Filter encrypted fields before sending to API client
           // Use the corresponding param's entity name
           const entityName = params[i]?.viewInfo?.Entity;

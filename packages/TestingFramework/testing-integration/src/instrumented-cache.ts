@@ -14,6 +14,14 @@ import type { ILocalStorageProvider } from '@memberjunction/core';
  * (e.g. a dedup/linger hit) as no counter movement at all.
  */
 export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
+    /**
+     * Delegated — this wrapper only counts calls; the isolation semantics are entirely
+     * the inner provider's. See {@link ILocalStorageProvider.SharesReferences}.
+     */
+    public get SharesReferences(): boolean {
+        return this.inner.SharesReferences;
+    }
+
     public GetItemCount = 0;
     public GetItemsCount = 0;
     public SetItemCount = 0;

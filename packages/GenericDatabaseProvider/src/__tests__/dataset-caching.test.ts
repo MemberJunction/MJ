@@ -202,9 +202,9 @@ describe('Dataset Caching in GetDatasetByName', () => {
         // 2 SQL calls: metadata + batch
         expect(provider.executeSQLCalls).toHaveLength(2);
         // Write-through to cache. Match the full SetRunViewResult signature —
-        // GenericDatabaseProvider invokes it with all 7 args (fingerprint,
+        // GenericDatabaseProvider invokes it with all 9 args (fingerprint,
         // params, results, maxUpdatedAt, aggregateResults?, totalRowCount?,
-        // provider?), and toHaveBeenCalledWith is arity-strict.
+        // provider?, ttlMs?, options?), and toHaveBeenCalledWith is arity-strict.
         expect(cacheSetSpy).toHaveBeenCalledTimes(1);
         expect(cacheSetSpy).toHaveBeenCalledWith(
             expect.any(String),         // fingerprint
@@ -213,7 +213,13 @@ describe('Dataset Caching in GetDatasetByName', () => {
             '2026-03-01T00:00:00.000Z', // maxUpdatedAt
             undefined,                  // aggregateResults
             undefined,                  // totalRowCount
-            expect.anything()           // provider (multi-provider migration: GenericDatabaseProvider passes `this`)
+            expect.anything(),          // provider (multi-provider migration: GenericDatabaseProvider passes `this`)
+            undefined,                  // ttlMs
+            // Dataset items are provider-internal scaffolding: GetAllMetadata's
+            // PostProcessEntityMetadata hydrates these very rows in place (sorts the array,
+            // attaches child collections), so they must stay exempt from the cache's
+            // defensive deep-freeze or metadata bootstrap throws.
+            { ProviderInternalScaffolding: true }
         );
     });
 

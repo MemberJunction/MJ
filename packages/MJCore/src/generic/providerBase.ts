@@ -2292,8 +2292,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
-                // Filter cached results to only the caller's requested fields (if specified)
-                let results = cached.results;
+                // Transport boundary: `cached.results` is typed `readonly` because these rows are
+                // the cache's shared, deep-frozen objects, but `RunViewResult.Results` is a
+                // mutable `T[]` for every ordinary caller. Cast once here — the runtime freeze,
+                // not the type, is what stops a consumer from corrupting the cache. Anything
+                // that needs to transform these rows must map onto copies.
+                let results = cached.results as unknown[];
                 if (callerRequestedFields && params.ResultType !== 'entity_object') {
                     results = ProjectRowsToFields(results, callerRequestedFields);
                 }
@@ -2437,8 +2441,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 fingerprintMap.set(i, fingerprint);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
-                    // Filter cached results to caller's requested fields (if specified and not entity_object)
-                    let results = cached.results;
+                    // Same transport-boundary cast as the single-view hit path above — see the
+                    // comment there for why the readonly type is dropped here.
+                    let results = cached.results as unknown[];
                     if (callerFields && param.ResultType !== 'entity_object') {
                         results = ProjectRowsToFields(results, callerFields);
                     }
