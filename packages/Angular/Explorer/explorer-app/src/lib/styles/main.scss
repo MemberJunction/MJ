@@ -11,9 +11,11 @@
 // Import dhtmlx-gantt CSS for Gantt chart components
 @import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
 
-// Import Golden Layout CSS for tab management
+// Import Golden Layout CSS for tab management. ONLY the structural base —
+// the stock light theme (hardcoded grays, PNG glyphs, Arial) is replaced by
+// our token theme so GL follows light/dark and org theming.
 @import 'golden-layout/dist/css/goldenlayout-base.css';
-@import 'golden-layout/dist/css/themes/goldenlayout-light-theme.css';
+@import './golden-layout-theme';
 
 // Shared UI patterns (selector lists for consistent styling)
 @import './shared-patterns';

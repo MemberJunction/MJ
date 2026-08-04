@@ -1,4 +1,10 @@
 import { Component } from '@angular/core';
+// This component is an Explorer surface (layer 3), which is why the package declares
+// "mjUILayer": "surface" rather than "widgets" — a package holding a BaseResourceComponent
+// subclass cannot be widgets by the gate's own table, and ng-shared is legal at L3.
+// Splitting the surface out from the widgets in this package is still worth doing (MJ#3404);
+// it is registered in three CodeGen-generated manifests, so it needs a CodeGen run, not a
+// hand edit.
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';

@@ -189,6 +189,19 @@ vi.mock('@memberjunction/actions-base', () => {
         EntityActionEngineBase: MockEntityActionEngineBase,
         EntityActionInvocationParams: class {},
         EntityActionResult: class {},
+        ActionInvocationProvenance: class {
+            EntityActionID?: string;
+            EntityActionInvocationTypeID?: string;
+            TargetEntityID?: string;
+            TargetRecordID?: string;
+            LoggingMode?: string;
+            EntityActionParams?: Array<Record<string, unknown>>;
+        },
+        // Stand-in for the real redactor: these tests are about the engine's log lifecycle, not about
+        // redaction rules (those are covered exhaustively in actions-base/ParamRedaction.test.ts). The
+        // engine's own use of the redactor — snapshot-at-call-time, Params vs ResultParams, provenance,
+        // LoggingMode — is covered in ActionEngine.logging.test.ts.
+        RedactParamsToJSON: (params: unknown[] | null | undefined) => JSON.stringify(params ?? []),
     };
 });
 
@@ -305,7 +318,9 @@ describe('ActionEngineServer', () => {
 
             const result = await engine.RunAction(params as unknown as Record<string, Function>);
 
-            expect(internalSpy).toHaveBeenCalledWith(params);
+            // The second argument is the input-parameter snapshot RunAction takes before the action can
+            // mutate its params — here an empty param set, so the redacted JSON is "[]".
+            expect(internalSpy).toHaveBeenCalledWith(params, '[]');
             expect(result.Success).toBe(true);
         });
     });
@@ -811,7 +826,8 @@ describe('ActionEngineServer', () => {
 
             const logEntry = await (engine as unknown as Record<string, Function>)['StartAndEndActionLog'](params as never, result as unknown as Record<string, Function>);
 
-            expect(startSpy).toHaveBeenCalledWith(params, false);
+            // Called without a pre-taken snapshot here, so StartActionLog takes its own.
+            expect(startSpy).toHaveBeenCalledWith(params, false, undefined);
             expect(endSpy).toHaveBeenCalledWith(mockLogEntity, params, result);
             expect(logEntry).toBe(mockLogEntity);
         });
