@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { DeleteItemComponent } from './delete-item.component';
+import type { DashboardItem } from '../../single-dashboard.component';
 
 /**
  * DOM coverage for <app-delete-item-dialog> — a small confirm-delete dialog. No services/data/async:
@@ -10,9 +11,11 @@ import { DeleteItemComponent } from './delete-item.component';
  * (no need to pull the heavy single-dashboard module in).
  */
 
-const ITEM = { title: 'Sales Widget' } as never;
+// The dialog only reads `title` off the item; keep that field type-checked against the real
+// DashboardItem class and seam-cast once at the binding site.
+const ITEM = { title: 'Sales Widget' } satisfies Pick<DashboardItem, 'title'> as unknown as DashboardItem;
 
-const render = (dashboardItem: unknown = ITEM) =>
+const render = (dashboardItem: DashboardItem | null = ITEM) =>
   renderComponentFixture(DeleteItemComponent, {
     imports: [MJDialogComponent, MJDialogActionsComponent, MJButtonDirective],
     declarations: [DeleteItemComponent],

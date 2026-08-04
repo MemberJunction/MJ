@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
     "build": "ngc",
     "test:watch": "vitest"
   },
@@ -38,6 +39,7 @@
     "@memberjunction/core-entities": "6.0.0",
     "@memberjunction/global": "6.0.0",
     "@memberjunction/ng-ai-test-harness": "6.0.0",
+    "@memberjunction/ng-base-types": "6.0.0",
     "@memberjunction/ng-container-directives": "6.0.0",
     "@memberjunction/ng-shared-generic": "6.0.0",
     "@memberjunction/ng-ui-components": "6.0.0",

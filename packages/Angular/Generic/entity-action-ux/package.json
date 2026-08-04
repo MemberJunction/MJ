@@ -11,6 +11,7 @@
     "build": "npm run clean && ngc",
     "clean": "rimraf dist",
     "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
     "test:watch": "vitest"
   },
   "keywords": [
@@ -39,6 +40,7 @@
     "@memberjunction/core-entities": "6.0.0",
     "@memberjunction/global": "6.0.0",
     "@memberjunction/graphql-dataprovider": "6.0.0",
+    "@memberjunction/ng-base-types": "6.0.0",
     "@memberjunction/ng-ui-components": "6.0.0",
     "@memberjunction/record-set-processor-base": "6.0.0",
     "tslib": "^2.8.1"

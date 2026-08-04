@@ -643,6 +643,56 @@ describe('GenericDatabaseProvider', () => {
             }).CheckRecordRLS(entity, mockUser, 'Read');
             expect(result).toBe(true);
         });
+
+        it('escapes embedded single quotes in the primary key value instead of splicing them into the WHERE clause', async () => {
+            const entityInfo = {
+                SchemaName: 'dbo',
+                BaseView: 'vwTestEntities',
+                UserExemptFromRowLevelSecurity: () => false,
+                GetUserRowLevelSecurityWhereClause: () => "OwnerID = '42'",
+                FieldByName: () => ({ NeedsQuotes: true }) as unknown as ReturnType<EntityInfo['FieldByName']>,
+            } as unknown as EntityInfo;
+            const entity = {
+                EntityInfo: entityInfo,
+                PrimaryKeys: [{ Name: 'ID', Value: "abc' OR '1'='1", NeedsQuotes: true }],
+            } as unknown as BaseEntity;
+
+            provider.executeSQLResults = [[{ cnt: 0 }]];
+
+            await (provider as unknown as {
+                CheckRecordRLS: (e: BaseEntity, u: UserInfo, t: string) => Promise<boolean>;
+            }).CheckRecordRLS(entity, mockUser, 'Read');
+
+            const sql = provider.executeSQLCalls[0].sql;
+            // The apostrophe must be doubled (SQL-escaped), not left to close the string early —
+            // structure check: the OR clause must NOT be a bare, un-quoted SQL predicate.
+            expect(sql).toContain("'abc'' OR ''1''=''1'");
+            expect(sql).not.toContain("='abc' OR '1'='1'");
+        });
+
+        it('does not alter query structure for PK values containing --, quotes, or OR 1=1', async () => {
+            const entityInfo = {
+                SchemaName: 'dbo',
+                BaseView: 'vwTestEntities',
+                UserExemptFromRowLevelSecurity: () => false,
+                GetUserRowLevelSecurityWhereClause: () => "OwnerID = '42'",
+                FieldByName: () => ({ NeedsQuotes: true }) as unknown as ReturnType<EntityInfo['FieldByName']>,
+            } as unknown as EntityInfo;
+            const entity = {
+                EntityInfo: entityInfo,
+                PrimaryKeys: [{ Name: 'ID', Value: "x'; --", NeedsQuotes: true }],
+            } as unknown as BaseEntity;
+
+            provider.executeSQLResults = [[{ cnt: 1 }]];
+
+            await (provider as unknown as {
+                CheckRecordRLS: (e: BaseEntity, u: UserInfo, t: string) => Promise<boolean>;
+            }).CheckRecordRLS(entity, mockUser, 'Read');
+
+            const sql = provider.executeSQLCalls[0].sql;
+            // Single WHERE ... AND (...) structure must be preserved — no comment-truncated clause.
+            expect(sql).toMatch(/WHERE "ID"='x''; --' AND \(OwnerID = '42'\)$/);
+        });
     });
 
     describe('AdjustDatetimeFields (default no-op)', () => {
