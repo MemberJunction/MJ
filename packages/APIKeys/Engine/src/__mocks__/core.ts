@@ -175,7 +175,7 @@ export class Metadata {
     static get Provider(): { RowLevelSecurityFilters: RowLevelSecurityFilterInfo[]; EntityByName(name: string): EntityInfo | undefined } {
         return {
             RowLevelSecurityFilters: mockRLSFilters,
-            EntityByName: (name: string) => new Metadata().EntityByName(name)
+            EntityByName: (name: string) => new Metadata().EntityByName(name) // global-provider-ok: this IS the mock provider — a self-contained test double with no real multi-provider concern
         };
     }
 }

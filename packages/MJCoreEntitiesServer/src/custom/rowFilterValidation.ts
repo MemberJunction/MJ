@@ -20,7 +20,7 @@ import {
     ValidationErrorInfo,
     ValidationErrorType
 } from '@memberjunction/core';
-import { SQLExpressionValidator } from '@memberjunction/global';
+import { SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Registered token vocabulary for row-filter FilterText (plan §5.2). `{{User*}}`
@@ -216,7 +216,7 @@ export async function CollectRowFilterReferrers(
         label: string
     ): void => {
         for (const row of rows) {
-            if (exclude && exclude.entityName === entityName && exclude.rowId.toLowerCase() === row.ID.toLowerCase()) {
+            if (exclude && exclude.entityName === entityName && UUIDsEqual(exclude.rowId, row.ID)) {
                 continue;
             }
             const entity = IsExactResourceName(row.ResourcePattern) ? (md.EntityByName(row.ResourcePattern) ?? null) : null;
@@ -249,7 +249,7 @@ export function BuildSameEntityErrors(referrers: RowFilterReferrer[], targetEnti
                 `${referrer.Description} references the same row filter but does not resolve to an entity — ` +
                 `cannot prove the same-entity invariant; rejecting (fail closed).`
             );
-        } else if (referrer.Entity.ID.toLowerCase() !== targetEntity.ID.toLowerCase()) {
+        } else if (!UUIDsEqual(referrer.Entity.ID, targetEntity.ID)) {
             errors.push(
                 `${referrer.Description} binds the same row filter to entity '${referrer.Entity.Name}', but this rule ` +
                 `binds it to '${targetEntity.Name}'. Every referrer of a filter must resolve to the same entity — ` +
