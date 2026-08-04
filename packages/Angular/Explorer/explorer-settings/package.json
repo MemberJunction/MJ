@@ -19,7 +19,8 @@
   ],
   "scripts": {
     "test": "vitest run",
-    "build": "ngc"
+    "build": "ngc",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json"
   },
   "keywords": [],
   "author": "",

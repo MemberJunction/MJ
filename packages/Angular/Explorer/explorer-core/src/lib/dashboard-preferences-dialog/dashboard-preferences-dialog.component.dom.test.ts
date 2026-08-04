@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { ComponentFixture } from '@angular/core/testing';
 import { IMetadataProvider } from '@memberjunction/core';
-import { renderComponentFixture, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { DashboardPreferencesDialogComponent, DashboardPreferencesResult } from './dashboard-preferences-dialog.component';
 
 /**
@@ -35,19 +35,6 @@ class StubDialog {
 }
 @Component({ selector: 'mj-dialog-actions', standalone: true, template: '<ng-content></ng-content>' })
 class StubDialogActions {}
-@Component({ selector: 'mj-empty-state', standalone: true, template: '<span class="stub-empty-title">{{ Title }}</span>' })
-class StubEmptyState {
-  @Input() Variant = '';
-  @Input() Size = '';
-  @Input() Icon = '';
-  @Input() Title = '';
-}
-@Component({ selector: 'mj-loading', standalone: true, template: '' })
-class StubLoading {
-  @Input() text = '';
-  @Input() size = '';
-  @Input() showText = true;
-}
 
 interface DashRow {
   ID: string;
@@ -105,7 +92,7 @@ async function settle(fixture: ComponentFixture<DashboardPreferencesDialogCompon
   fixture.detectChanges(false);
 }
 
-const IMPORTS = [CommonModule, FormsModule, DragDropModule, StubDialog, StubDialogActions, StubEmptyState, StubLoading];
+const IMPORTS = [CommonModule, FormsModule, DragDropModule, StubDialog, StubDialogActions, StubEmptyStateComponent, StubLoadingComponent];
 
 const renderLoaded = async (provider: IMetadataProvider) => {
   const fixture = renderComponentFixture(DashboardPreferencesDialogComponent, {
