@@ -20,11 +20,13 @@
 export type SearchPredicate = 'BeginsWith' | 'Contains' | 'EndsWith' | 'Exact';
 
 /**
- * Cap on searchable fields per entity. The plan calls out 0–2 as typical and
- * >3 as exceptional. This cap kicks in after eligibility filtering — fields
- * blocked by other guardrails don't count against the cap.
+ * Hard cap on searchable fields per entity. The plan calls out 0–2 as typical
+ * and >3 as exceptional (`plans/codegen-search-tightening.md` §Phase 2: "Per-entity
+ * cap of 3" / "slice to at most 3 fields"), so 3 is the absolute backstop. This
+ * cap kicks in after eligibility filtering — fields blocked by other guardrails
+ * don't count against the cap.
  */
-export const MAX_SEARCHABLE_FIELDS_PER_ENTITY = 5;
+export const MAX_SEARCHABLE_FIELDS_PER_ENTITY = 3;
 
 /**
  * Match narrative field names that should never participate in plain
