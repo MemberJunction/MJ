@@ -18,6 +18,13 @@ narrow one instead of silently leaving both; and view alias references are quote
 when the alias's own definition is case-preserved (`AS <alias>`), leaving implicit
 `FROM x alias` definitions — the form MJ's baseline views use — folded on both sides.
 
+A guarded `CREATE SCHEMA` whose name is a migration placeholder (`${mjSchema}_Foo`) is
+emitted unquoted, lowercasing only the literal text outside the placeholder span, so it
+matches the unquoted references the identifier converter emits for the same schema. It
+was previously quoted, which created the schema case-preserved while every reference
+folded to lowercase — the same mismatch, in exactly the case the placeholder exists to
+serve.
+
 Verified end to end against PostgreSQL 17: an open-app migration that produced five
 hard errors before now applies cleanly with the expected rows, widened CHECK, and
 boolean values; and the real `__mj.vwEntityRelationships` / `__mj.vwEntities`
