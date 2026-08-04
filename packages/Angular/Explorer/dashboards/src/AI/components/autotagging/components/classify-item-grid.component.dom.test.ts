@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { renderComponentFixture, query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, capture, createFakeProvider, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import type { RunViewParams } from '@memberjunction/core';
+import type { RowClickedEvent } from 'ag-grid-community';
 import { ClassifyItemGridComponent } from './classify-item-grid.component';
+import type { ClassifyItemGridRow } from '../shared/classify.types';
 
 /**
  * DOM coverage for <classify-item-grid> — the read-only content-item AG Grid. Module-declared
@@ -12,16 +14,6 @@ import { ClassifyItemGridComponent } from './classify-item-grid.component';
  * up via `(ItemSelected)`. Async load uses the non-strict re-render + microtask dance.
  */
 
-@Component({ selector: 'mj-empty-state', standalone: true, template: '' })
-class StubEmptyState {
-  @Input() Icon = '';
-  @Input() Title = '';
-}
-@Component({ selector: 'mj-loading', standalone: true, template: '' })
-class StubLoading {
-  @Input() text = '';
-  @Input() size = '';
-}
 @Component({ selector: 'ag-grid-angular', standalone: true, template: '' })
 class StubAgGrid {
   @Input() theme: unknown;
@@ -50,14 +42,14 @@ const provider = () =>
 const renderEmpty = () =>
   renderComponentFixture(ClassifyItemGridComponent, {
     declarations: [ClassifyItemGridComponent],
-    imports: [StubEmptyState, StubLoading, StubAgGrid],
+    imports: [StubEmptyStateComponent, StubLoadingComponent, StubAgGrid],
     inputs: { Provider: provider() },
   });
 
 const renderLoaded = async () => {
   const fixture = renderComponentFixture(ClassifyItemGridComponent, {
     declarations: [ClassifyItemGridComponent],
-    imports: [StubEmptyState, StubLoading, StubAgGrid],
+    imports: [StubEmptyStateComponent, StubLoadingComponent, StubAgGrid],
     inputs: { Provider: provider() },
   });
   fixture.componentRef.setInput('RunID', 'run-1'); // triggers loadItems()
@@ -100,7 +92,11 @@ describe('ClassifyItemGridComponent (DOM)', () => {
   it('emits ItemSelected with the row ID when a row is clicked', async () => {
     const fixture = await renderLoaded();
     const selected = capture(fixture.componentInstance.ItemSelected);
-    fixture.componentInstance.OnRowClicked({ data: { ID: 'i2' } } as never);
+    // OnRowClicked only reads `event.data.ID`; type the double against the loaded row and the
+    // real ag-grid event's `data` slot, then seam-cast once at the call site.
+    const row = fixture.componentInstance.Rows.find((r) => r.ID === 'i2');
+    const click = { data: row } satisfies Pick<RowClickedEvent<ClassifyItemGridRow>, 'data'>;
+    fixture.componentInstance.OnRowClicked(click as unknown as RowClickedEvent<ClassifyItemGridRow>);
     expect(selected).toEqual(['i2']);
   });
 });
