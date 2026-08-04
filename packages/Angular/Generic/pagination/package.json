@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-pagination",
-  "version": "5.51.0",
+  "version": "6.0.0",
   "description": "MemberJunction: Reusable pagination component for server-side paged data with first/prev/next/last navigation",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
     "build": "ngc",
     "test:watch": "vitest"
   },
@@ -36,5 +37,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
-  }
+  },
+  "mjUILayer": "widgets"
 }

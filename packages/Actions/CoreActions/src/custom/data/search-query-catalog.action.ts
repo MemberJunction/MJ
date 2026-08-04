@@ -1,17 +1,21 @@
 import { ActionResultSimple, AIDirective, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, NormalizeUUID } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { AIEngine } from "@memberjunction/aiengine";
-import { QueryEngineServer, QueryEmbeddingMetadata } from "@memberjunction/core-entities-server";
+import { QueryEngineServer } from "@memberjunction/core-entities-server";
+import { MJQueryEntity } from "@memberjunction/core-entities";
 import { LogError } from "@memberjunction/core";
+import { runSemanticEntitySearch } from "../ai/semantic-entity-search.helper";
 
 /**
- * Action that searches the saved query catalog using vector-based semantic search.
+ * Action that searches the saved query catalog using semantic search.
  * Takes a natural language description of what data is needed and returns ranked
  * matching queries with similarity scores.
  *
- * This replaces the previous approach of loading the full query catalog into agent
- * context (Option A) with a scalable vector search (Option B).
+ * Ranking is delegated to the unified `Provider.SearchEntity` pipeline (semantic
+ * mode, backed by the daily-synced "Queries Search" EntityDocument) instead of
+ * the bespoke `QueryEngineServer.FindSimilarQueries` vector index. Matched query
+ * metadata is hydrated from QueryEngine's cache to preserve the existing ranked
+ * output + AI directive guidance.
  *
  * @example
  * ```typescript
@@ -56,53 +60,57 @@ export class SearchQueryCatalogAction extends BaseAction {
                 };
             }
 
-            // Ensure AIEngine is loaded for embedding generation
-            await AIEngine.Instance.Config(false, params.ContextUser);
+            // Rank via the unified SearchEntity pipeline (over-fetch to allow status/reusable filtering)
+            const search = await runSemanticEntitySearch(
+                params,
+                'MJ: Queries',
+                searchText,
+                Math.max(topK * 3, 30),
+                minSimilarity
+            );
+            if (!search.ok) {
+                return { Success: false, ResultCode: search.resultCode ?? 'SEARCH_FAILED', Message: search.message ?? 'Semantic search failed' };
+            }
 
             // Ensure QueryEngineServer is loaded (uses cached queries, no DB call if already loaded)
             await QueryEngineServer.Instance.Config(false, params.ContextUser);
+            const queriesById = new Map<string, MJQueryEntity>();
+            for (const q of QueryEngineServer.Instance.Queries) {
+                queriesById.set(NormalizeUUID(q.ID), q);
+            }
 
-            // Build metadata filter from action params
-            const metadataFilter = (meta: QueryEmbeddingMetadata): boolean => {
-                if (approvedOnly && meta.status !== 'Approved') return false;
-                if (reusableOnly && !meta.reusable) return false;
-                return true;
-            };
+            // Hydrate + filter, preserving the search rank order
+            const results: Record<string, unknown>[] = [];
+            for (const r of search.results) {
+                const q = queriesById.get(NormalizeUUID(r.recordId));
+                if (!q) continue;
+                if (approvedOnly && q.Status !== 'Approved') continue;
+                if (reusableOnly && !q.Reusable) continue;
 
-            // Search using the persistent vector index
-            const matches = await QueryEngineServer.Instance.FindSimilarQueries(
-                searchText,
-                (text: string) => AIEngine.Instance.EmbedTextLocal(text),
-                topK,
-                minSimilarity,
-                metadataFilter
-            );
+                const result: Record<string, unknown> = {
+                    QueryID: q.ID,
+                    Name: q.Name,
+                    Description: q.Description,
+                    Category: q.Category,
+                    Similarity: Math.round(r.score * 100) / 100,
+                    Status: q.Status,
+                    Reusable: q.Reusable,
+                    UserQuestion: q.UserQuestion
+                };
+                if (includeSQL) {
+                    result.SQL = q.SQL;
+                }
+                results.push(result);
+                if (results.length >= topK) break;
+            }
 
-            if (matches.length === 0) {
+            if (results.length === 0) {
                 return {
                     Success: true,
                     ResultCode: 'NO_MATCHES',
                     Message: `No matching queries found in the catalog for: "${searchText}". Proceed with schema exploration and fresh SQL.`
                 };
             }
-
-            // Format results, optionally excluding SQL
-            const results = matches.map(m => {
-                const result: Record<string, unknown> = {
-                    QueryID: m.queryId,
-                    Name: m.queryName,
-                    Description: m.description,
-                    Category: m.category,
-                    Similarity: Math.round(m.similarityScore * 100) / 100,
-                    Status: m.status,
-                    Reusable: m.reusable,
-                    UserQuestion: m.userQuestion
-                };
-                if (includeSQL) {
-                    result.SQL = m.sql;
-                }
-                return result;
-            });
 
             // Set output parameters
             params.Params.push({

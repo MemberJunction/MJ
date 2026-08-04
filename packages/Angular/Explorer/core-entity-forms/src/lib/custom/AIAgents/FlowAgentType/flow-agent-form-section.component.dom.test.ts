@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { BaseEntity } from '@memberjunction/core';
-import { renderComponentFixture, query, attr } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, attr, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { FlowAgentFormSectionComponent } from './flow-agent-form-section.component';
 
 /**
@@ -29,19 +29,13 @@ class StubFlowEditor {
   @Output() FlowSaved = new EventEmitter<void>();
   @Output() FullScreenToggled = new EventEmitter<boolean>();
 }
-@Component({ selector: 'mj-empty-state', standalone: true, template: '<span class="stub-empty-title">{{ Title }}</span>' })
-class StubEmptyState {
-  @Input() Variant = '';
-  @Input() Icon = '';
-  @Input() Title = '';
-}
 
 /** Minimal record fake — the getter only reads `'ID' in record` + record.ID. */
 const recordWithId = (id: string) => ({ ID: id }) as unknown as BaseEntity;
 
 const render = (setup: (i: FlowAgentFormSectionComponent) => void) =>
   renderComponentFixture(FlowAgentFormSectionComponent, {
-    imports: [CommonModule, StubFlowEditor, StubEmptyState],
+    imports: [CommonModule, StubFlowEditor, StubEmptyStateComponent],
     declarations: [FlowAgentFormSectionComponent],
     setup,
   });
