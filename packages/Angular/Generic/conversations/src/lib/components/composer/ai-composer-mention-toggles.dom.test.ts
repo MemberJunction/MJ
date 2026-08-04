@@ -13,7 +13,7 @@ import { SkillCommandProvider } from '../../composer-plugins/skill-command.provi
  * project can't load.
  */
 describe('AiComposerComponent — per-type trigger toggles', () => {
-  const has = (c: AiComposerComponent, t: unknown) => c.ActiveTriggerProviders.some((p) => p instanceof (t as never));
+  const has = (c: AiComposerComponent, t: new (...args: never[]) => object) => c.ActiveTriggerProviders.some((p) => p instanceof t);
 
   it('defaults to all three triggers active', () => {
     const c = new AiComposerComponent();
