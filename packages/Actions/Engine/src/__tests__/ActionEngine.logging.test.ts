@@ -185,9 +185,17 @@ function paramDefinition(name: string, logValue: boolean): MJActionParamEntity {
     return { ID: PARAM_DEF_ID, ActionID: ACTION_ID, Name: name, LogValue: logValue } as MJActionParamEntity;
 }
 
+/**
+ * How many times an action BODY actually executed. `LoggingMode` decides whether a row is written;
+ * it must never decide whether the action runs. Asserting "nothing was logged" alone cannot tell a
+ * correct suppression apart from a regression that skipped execution entirely — both leave zero rows.
+ */
+let bodyRunCount = 0;
+
 /** An action that appends an output param — the real-world reason Params must be snapshotted early. */
 class OutputWritingAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<{ Success: boolean; ResultCode: string; Message: string }> {
+        bodyRunCount++;
         params.Params.push({ Name: 'Result Payload', Value: { rows: 3 }, Type: 'Output' } as ActionParam);
         return { Success: true, ResultCode: 'SUCCESS', Message: 'ok' };
     }
@@ -195,12 +203,14 @@ class OutputWritingAction extends BaseAction {
 
 class FailingAction extends BaseAction {
     protected async InternalRunAction(): Promise<{ Success: boolean; ResultCode: string; Message: string }> {
+        bodyRunCount++;
         return { Success: false, ResultCode: 'FAILED', Message: 'nope' };
     }
 }
 
 beforeEach(() => {
     logRows.length = 0;
+    bodyRunCount = 0;
     mockClassFactory.CreateInstance.mockReset();
     mockClassFactory.CreateInstance.mockImplementation(() => new OutputWritingAction());
 });
@@ -326,6 +336,36 @@ describe('LoggingMode', () => {
         expect(result.Success).toBe(false);
         expect(logRows).toHaveLength(0);
         expect(result.LogEntry).toBeFalsy();
+        // Zero rows is also what a regression that never ran the action looks like — pin execution.
+        expect(bodyRunCount).toBe(1);
+    });
+
+    it.each(['All', 'FailuresOnly', 'None'] as const)(
+        "'%s' gates logging but NEVER execution — the action body still runs and its result is returned",
+        async (mode) => {
+            const e = engine();
+            const result = await e.RunAction(
+                runParams({
+                    Params: [{ Name: 'Mode', Value: 'fast', Type: 'Input' }] as ActionParam[],
+                    Provenance: { LoggingMode: mode }
+                } as Partial<RunActionParams>)
+            );
+
+            expect(bodyRunCount).toBe(1);
+            expect(result.Success).toBe(true);
+            expect(result.Result?.ResultCode ?? result.Message).toBeTruthy();
+            // The action's side effect on the caller's array is unaffected by the logging decision.
+            expect(result.Params.map(p => p.Name)).toEqual(['Mode', 'Result Payload']);
+        }
+    );
+
+    it("'SkipActionLog' suppresses the row without suppressing the run", async () => {
+        const e = engine();
+        const result = await e.RunAction(runParams({ SkipActionLog: true } as Partial<RunActionParams>));
+
+        expect(logRows).toHaveLength(0);
+        expect(bodyRunCount).toBe(1);
+        expect(result.Success).toBe(true);
     });
 
     it("'FailuresOnly' writes nothing on success and returns no LogEntry", async () => {
