@@ -74,7 +74,7 @@ const FORBIDDEN_PATTERNS: Record<UILayer, Array<[RegExp, string, string]>> = {
         [/\bnew\s+RunViews?\s*\(\s*\)/, 'new RunView()', 'binds the global provider — use RunView.FromMetadataProvider(this.ProviderToUse)'],
         [/\bnew\s+RunQuery\s*\(\s*\)/, 'new RunQuery()', 'binds the global provider — use this.RunQueryToUse'],
         [/\bnew\s+RunReport\s*\(\s*\)/, 'new RunReport()', 'binds the global provider — use this.RunReportToUse'],
-        [/\bnew\s+Metadata\s*\(\s*\)/, 'new Metadata()', 'binds the global provider — use this.ProviderToUse'],
+        [/\bnew\s+Metadata\s*\(\s*\)/, 'new Metadata()', 'binds the global provider — use this.ProviderToUse'], // global-provider-ok: pattern literal for this checker, not a call site
     ],
     surface: [],
     shell: [],
@@ -236,9 +236,15 @@ function checkPackage(packageDir: string, layer: UILayer, repoRoot: string, pack
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
         dependencies?: Record<string, string>;
         peerDependencies?: Record<string, string>;
+        mjUILayerAllowedDeps?: string[];
     };
     const declared = { ...(manifest.dependencies ?? {}), ...(manifest.peerDependencies ?? {}) };
+    // A package.json cannot carry a `// mj-ui-layers-allow` comment, so acknowledged debt is
+    // declared as a field instead. Without this, allow-marking the import still leaves the
+    // manifest half of the same rule failing, with no way to express the exception.
+    const allowedDeps = new Set(manifest.mjUILayerAllowedDeps ?? []);
     for (const dep of Object.keys(declared)) {
+        if (allowedDeps.has(dep)) continue;
         for (const pattern of FORBIDDEN_DEPS[layer]) {
             if (pattern.test(dep)) add(manifestPath, 0, `declares "${dep}" — a "${layer}" package must not depend on it`);
         }
