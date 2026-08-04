@@ -14,6 +14,7 @@ import {
   attachTenantContext,
 } from '../multiTenancy/index.js';
 import type { MultiTenancyConfig } from '../config.js';
+import { Metadata } from '@memberjunction/core';
 import type { RunViewParams, UserInfo, TenantContext } from '@memberjunction/core';
 
 // Mock @memberjunction/core Metadata for entity schema lookup.
@@ -44,6 +45,13 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
         ],
       };
     }
+
+    // QuoteFilterIdentifier reads the STATIC Metadata.Provider, matching a real
+    // server (Metadata.Provider is a DatabaseProviderBase instance). Tests that need
+    // to exercise the no-provider-available fail-closed path override this locally.
+    static Provider: { QuoteIdentifier: (name: string) => string } | undefined = {
+      QuoteIdentifier: (name: string) => `[${name}]`,
+    };
   }
 
   return {
@@ -222,6 +230,24 @@ describe('Multi-Tenancy Security Edge Cases', () => {
       const user = makeUser('tenant-1');
 
       expect(() => hook(params, user)).toThrow(/does not resolve to a stored field/);
+    });
+
+    it('throws (fails closed) rather than falling back to hardcoded bracket quoting when no provider is available', () => {
+      const savedProvider = Metadata.Provider;
+      // @ts-expect-error — simulating the no-provider-available case
+      Metadata.Provider = undefined;
+      try {
+        const hook = createTenantPreRunViewHook(makeConfig());
+        const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
+        const user = makeUser('tenant-1');
+
+        // A silent bracket-quoting fallback would produce invalid SQL on PostgreSQL
+        // without ever surfacing an error — refusing to build the query at all is the
+        // correct fail-closed behavior for a security-relevant identifier quote.
+        expect(() => hook(params, user)).toThrow(/no database provider available to quote/);
+      } finally {
+        Metadata.Provider = savedProvider;
+      }
     });
   });
 
@@ -443,6 +469,52 @@ describe('Multi-Tenancy Security Edge Cases', () => {
       middleware(req, res, next);
 
       expect(userRecord['TenantContext']).toBeUndefined();
+    });
+
+    it('should reject a repeated header (array value) with 400 rather than guessing which value applies', () => {
+      const middleware = createTenantMiddleware(makeConfig());
+      const userRecord = { ID: 'u1' } as Record<string, unknown>;
+      const userPayload = { userRecord, email: 'test@test.com', sessionId: 's1' };
+      const req = {
+        // Express delivers a repeated header as string[]
+        headers: { 'x-tenant-id': ['tenant-A', 'tenant-B'] },
+        userPayload,
+      } as unknown as Parameters<typeof middleware>[0];
+      const json = vi.fn();
+      const status = vi.fn().mockReturnValue({ json });
+      const res = { status } as unknown as Parameters<typeof middleware>[1];
+      const next = vi.fn();
+
+      middleware(req, res, next);
+
+      expect(status).toHaveBeenCalledWith(400);
+      expect(next).not.toHaveBeenCalled();
+      expect(userPayload.userRecord).toBe(userRecord);
+      expect(userRecord['TenantContext']).toBeUndefined();
+    });
+
+    it('two concurrent requests for the same shared user with different headers do not cross-contaminate', () => {
+      const middleware = createTenantMiddleware(makeConfig());
+      const sharedUserRecord = { ID: 'u1', UserRoles: [] } as unknown as Record<string, unknown>;
+
+      const reqA = {
+        headers: { 'x-tenant-id': 'tenant-A' },
+        userPayload: { userRecord: sharedUserRecord, email: 'a@test.com', sessionId: 'sA' },
+      } as unknown as Parameters<typeof middleware>[0];
+      const reqB = {
+        headers: { 'x-tenant-id': 'tenant-B' },
+        userPayload: { userRecord: sharedUserRecord, email: 'b@test.com', sessionId: 'sB' },
+      } as unknown as Parameters<typeof middleware>[0];
+      const res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Parameters<typeof middleware>[1];
+
+      middleware(reqA, res, vi.fn());
+      middleware(reqB, res, vi.fn());
+
+      const userA = (reqA as unknown as { userPayload: { userRecord: UserInfo } }).userPayload.userRecord;
+      const userB = (reqB as unknown as { userPayload: { userRecord: UserInfo } }).userPayload.userRecord;
+      expect(userA.TenantContext?.TenantID).toBe('tenant-A');
+      expect(userB.TenantContext?.TenantID).toBe('tenant-B');
+      expect((sharedUserRecord as unknown as UserInfo).TenantContext).toBeUndefined();
     });
   });
 

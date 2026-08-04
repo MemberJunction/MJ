@@ -58,7 +58,15 @@ export function createTenantMiddleware(config: MultiTenancyConfig): RequestHandl
     }
 
     if (config.contextSource === 'header') {
-      const tenantId = req.headers[config.tenantHeader.toLowerCase()] as string | undefined;
+      const rawHeader = req.headers[config.tenantHeader.toLowerCase()];
+      // A repeated header arrives as string[] — ambiguous which value is authoritative, so
+      // reject rather than silently pick one (Array.prototype's coercion to a comma-joined
+      // string would otherwise sail past IsValidTenantId's regex unnoticed for some inputs).
+      if (Array.isArray(rawHeader)) {
+        res.status(400).json({ error: `Malformed ${config.tenantHeader} header: expected a single value.` });
+        return;
+      }
+      const tenantId = rawHeader;
       if (tenantId) {
         if (!IsValidTenantId(tenantId)) {
           // Reject the REQUEST, never degrade to an unscoped session: a malformed
@@ -194,17 +202,22 @@ export function createTenantPreRunViewHook(config: MultiTenancyConfig): PreRunVi
 }
 
 /**
- * Quotes an identifier for use in a tenant predicate. Uses the active provider's
- * QuoteIdentifier when it exposes one (DatabaseProviderBase always does server-side,
- * yielding [x] on SQL Server and "x" on PostgreSQL); falls back to bracket quoting
- * with `]]` escaping only when no provider helper is available. Exported for tests.
+ * Quotes an identifier for use in a tenant predicate via the active provider's
+ * QuoteIdentifier (DatabaseProviderBase always exposes one server-side, yielding [x]
+ * on SQL Server and "x" on PostgreSQL). Throws — never falls back to hardcoded T-SQL
+ * bracket quoting — when no provider is available: a silent fallback would emit
+ * invalid SQL on PostgreSQL, and "fails to build a query" is a worse failure mode to
+ * debug than "refused to build one." A tenant filter must fail closed, loudly, at the
+ * point where it can no longer guarantee platform-correct SQL. Exported for tests.
  */
 export function QuoteFilterIdentifier(name: string): string {
   const provider = Metadata.Provider as unknown as { QuoteIdentifier?: (id: string) => string }; // global-provider-ok: hook-level code, single server provider
-  if (provider && typeof provider.QuoteIdentifier === 'function') {
-    return provider.QuoteIdentifier(name);
+  if (!provider || typeof provider.QuoteIdentifier !== 'function') {
+    throw new Error(
+      `[MultiTenancy] Cannot quote identifier '${name}': no database provider available to quote it — refusing to fall back to hardcoded bracket syntax, which is invalid on PostgreSQL.`
+    );
   }
-  return `[${name.replace(/]/g, ']]')}]`;
+  return provider.QuoteIdentifier(name);
 }
 
 /**

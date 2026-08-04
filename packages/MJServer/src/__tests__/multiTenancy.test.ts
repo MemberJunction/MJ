@@ -31,6 +31,12 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
         ],
       };
     }
+
+    // QuoteFilterIdentifier reads the STATIC Metadata.Provider, matching a real
+    // server (Metadata.Provider is a DatabaseProviderBase instance).
+    static Provider = {
+      QuoteIdentifier: (name: string) => `[${name}]`,
+    };
   }
 
   return {
