@@ -67,7 +67,7 @@ export function createTenantMiddleware(config: MultiTenancyConfig): RequestHandl
         return;
       }
       if (rawHeader) {
-        const sessionUser = cloneUserInfoForSession(userPayload.userRecord as UserInfo, Metadata.Provider);
+        const sessionUser = cloneUserInfoForSession(userPayload.userRecord as UserInfo, Metadata.Provider); // global-provider-ok: same rationale as isEntityScoped above — hooks/middleware don't carry a per-request provider
         try {
           attachTenantContext(sessionUser, rawHeader, 'header');
         } catch (err) {
