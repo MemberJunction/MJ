@@ -3,6 +3,7 @@ import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { LogError } from '@memberjunction/core';
 import { VirtualLayout } from 'golden-layout';
 import { WorkspaceConfiguration, LayoutConfig as WorkspaceLayoutConfig, LayoutNode } from './interfaces/workspace-configuration.interface';
+import { SanitizeLayoutNodeForLoad } from './layout-transforms';
 
 // Golden Layout interfaces - defined here to avoid compile-time dependency
 // These match the Golden Layout 2.6.0 API
@@ -875,8 +876,10 @@ export class GoldenLayoutManager {
    * Convert workspace layout config to Golden Layout config
    */
   private convertToGoldenLayoutConfig(config: WorkspaceLayoutConfig): GLLayoutConfig {
-    // Sanitize the root node to ensure size values are valid
-    const sanitizedRoot = this.sanitizeLayoutNode(config.root);
+    // Normalize GL-serialized fields AND deep-clone componentState so GL's
+    // runtime never holds references into the persisted workspace config —
+    // see SanitizeLayoutNodeForLoad (unit-tested in layout-transforms)
+    const sanitizedRoot = SanitizeLayoutNodeForLoad(config.root);
 
     return {
       root: sanitizedRoot as GLLayoutNode,
@@ -909,53 +912,6 @@ export class GoldenLayoutManager {
       maximise: false,
       close: 'tab'
     };
-  }
-
-  /**
-   * Sanitize a layout node to ensure all values are Golden Layout compatible
-   */
-  private sanitizeLayoutNode(node: LayoutNode): LayoutNode {
-    const sanitized: LayoutNode = {
-      ...node
-    };
-
-    // Cast to any to work with dynamic properties
-    const sanitizedAny = sanitized as any;
-
-    // Convert size from number + sizeUnit to Golden Layout format
-    // Golden Layout expects strings like "100%" or "1fr", not separate fields
-    if (sanitizedAny.size !== undefined && sanitizedAny.sizeUnit !== undefined) {
-      if (typeof sanitizedAny.size === 'number') {
-        // Combine size and sizeUnit into a single string
-        sanitizedAny.size = `${sanitizedAny.size}${sanitizedAny.sizeUnit}`;
-        // Remove sizeUnit as it's now part of size
-        delete sanitizedAny.sizeUnit;
-      }
-    }
-
-    // Remove width/height if they exist and are not valid
-    // Golden Layout expects strings like "50%" or numbers (pixels)
-    // But JSON parsing might give us non-string objects
-    if (sanitized.width !== undefined) {
-      if (typeof sanitized.width !== 'number' && typeof sanitized.width !== 'string') {
-        delete sanitized.width;
-      }
-    }
-    if (sanitized.height !== undefined) {
-      if (typeof sanitized.height !== 'number' && typeof sanitized.height !== 'string') {
-        delete sanitized.height;
-      }
-    }
-
-    // Remove other Golden Layout internal fields that shouldn't be in saved config
-    delete sanitizedAny.minSizeUnit;
-
-    // Recursively sanitize child nodes
-    if (sanitized.content) {
-      sanitized.content = sanitized.content.map(child => this.sanitizeLayoutNode(child));
-    }
-
-    return sanitized;
   }
 
   /**

@@ -209,7 +209,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   private resolveRecordOpenStyle(): void {
       const raw = InstanceConfigEngine.Instance.Get('Shell.RecordOpen.Style');
-      this.resolvedRecordOpenStyle = raw === 'classic' ? 'classic' : 'records';
+      // Case/whitespace-insensitive: this compare is the ONLY opt-out for a
+      // default-behavior flip — an admin typing 'Classic' or 'classic ' must
+      // not silently get records anyway (GetBoolean parses insensitively;
+      // this value deserves the same tolerance).
+      this.resolvedRecordOpenStyle = raw?.trim().toLowerCase() === 'classic' ? 'classic' : 'records';
       SetRecordOpenStyle(this.resolvedRecordOpenStyle);
       // Region membership, not record identity: a record DOCKED to the
       // workspace ("Move to Workspace") is a main-layout tab.

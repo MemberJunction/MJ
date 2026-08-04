@@ -7,7 +7,7 @@
  * - split geometry (sizes) is dropped
  */
 import { describe, it, expect } from 'vitest';
-import { FlattenLayoutToSingleStack } from '../layout-transforms';
+import { FlattenLayoutToSingleStack, SanitizeLayoutNodeForLoad } from '../layout-transforms';
 import { LayoutConfig, LayoutNode } from '../interfaces/workspace-configuration.interface';
 
 function component(tabId: string, extra?: Partial<LayoutNode>): LayoutNode {
@@ -133,5 +133,73 @@ describe('FlattenLayoutToSingleStack', () => {
     const flat = FlattenLayoutToSingleStack(config)!;
     expect(flat.root.content).toHaveLength(1);
     expect(flat.root.content![0].componentState).toBeUndefined();
+  });
+});
+
+describe('SanitizeLayoutNodeForLoad', () => {
+  it('deep-clones componentState — GL runtime mutations must never reach the persisted config', () => {
+    // The DESKTOP restore path (main layout AND records region): golden-layout
+    // Object.assigns into container state at runtime (UpdateTabStyle); a
+    // shared reference would corrupt the persisted workspace configuration.
+    const persisted: LayoutNode = {
+      type: 'stack',
+      content: [component('a')]
+    };
+    const sanitized = SanitizeLayoutNodeForLoad(persisted);
+
+    const sanitizedChild = sanitized.content![0];
+    const persistedChild = persisted.content![0];
+    expect(sanitizedChild).not.toBe(persistedChild);
+    expect(sanitizedChild.componentState).toEqual(persistedChild.componentState);
+    expect(sanitizedChild.componentState).not.toBe(persistedChild.componentState);
+
+    // Simulate GL's runtime mutation on what it was handed
+    Object.assign(sanitizedChild.componentState!, { isPinned: true, title: 'runtime-renamed' });
+    (sanitizedChild.componentState!['nested'] as { keep: boolean }).keep = false;
+
+    // The persisted tree is untouched
+    expect(persistedChild.componentState!['isPinned']).toBeUndefined();
+    expect(persistedChild.componentState!['title']).toBeUndefined();
+    expect((persistedChild.componentState!['nested'] as { keep: boolean }).keep).toBe(true);
+  });
+
+  it('combines numeric size + sizeUnit into GL string form and strips sizeUnit/minSizeUnit', () => {
+    const node = {
+      type: 'row',
+      size: 50,
+      sizeUnit: '%',
+      minSizeUnit: 'px',
+      content: [component('a')]
+    } as unknown as LayoutNode;
+    const sanitized = SanitizeLayoutNodeForLoad(node) as unknown as Record<string, unknown>;
+    expect(sanitized['size']).toBe('50%');
+    expect('sizeUnit' in sanitized).toBe(false);
+    expect('minSizeUnit' in sanitized).toBe(false);
+  });
+
+  it('drops invalid width/height, keeps valid number/string forms', () => {
+    const node = {
+      type: 'row',
+      width: { bogus: true },
+      height: 30,
+      content: [{ type: 'stack', width: '50%', content: [component('a')] }]
+    } as unknown as LayoutNode;
+    const sanitized = SanitizeLayoutNodeForLoad(node);
+    expect('width' in (sanitized as unknown as Record<string, unknown>)).toBe(false);
+    expect(sanitized.height).toBe(30);
+    expect(sanitized.content![0].width).toBe('50%');
+  });
+
+  it('sanitizes recursively without mutating the input tree', () => {
+    const persisted = {
+      type: 'row',
+      content: [
+        { type: 'stack', size: 60, sizeUnit: '%', content: [component('a')] },
+        { type: 'stack', size: 40, sizeUnit: '%', content: [component('b')] }
+      ]
+    } as unknown as LayoutNode;
+    const snapshot = JSON.parse(JSON.stringify(persisted));
+    SanitizeLayoutNodeForLoad(persisted);
+    expect(persisted).toEqual(snapshot); // input untouched — pure function
   });
 });

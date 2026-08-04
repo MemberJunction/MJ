@@ -146,6 +146,77 @@ describe('MJBottomSheetComponent (DOM)', () => {
     trigger.remove();
   });
 
+  it('is aria-modal with role=dialog', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('Visible', true);
+    fixture.detectChanges();
+    const sheet = query(fixture, '.mj-bottom-sheet') as HTMLElement;
+    expect(sheet.getAttribute('role')).toBe('dialog');
+    expect(sheet.getAttribute('aria-modal')).toBe('true');
+  });
+
+  it('locks body scroll while open and restores the prior value on close', () => {
+    document.body.style.overflow = 'scroll'; // host page's own inline value
+    const fixture = render();
+    fixture.componentRef.setInput('Visible', true);
+    fixture.detectChanges();
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fixture.componentRef.setInput('Visible', false);
+    vi.advanceTimersByTime(350);
+    fixture.detectChanges();
+    expect(document.body.style.overflow).toBe('scroll');
+    document.body.style.overflow = '';
+  });
+
+  it('unlocks body scroll if destroyed while open', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('Visible', true);
+    fixture.detectChanges();
+    expect(document.body.style.overflow).toBe('hidden');
+    fixture.destroy();
+    expect(document.body.style.overflow).toBe('');
+  });
+
+  it('traps Tab within the sheet (cycles first↔last, never escapes)', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('Visible', true);
+    fixture.detectChanges();
+    flushRafs();
+    fixture.detectChanges();
+
+    // Project two focusable buttons into the content area
+    const content = query(fixture, '.mj-bottom-sheet-content') as HTMLElement;
+    const first = document.createElement('button');
+    const last = document.createElement('button');
+    content.appendChild(first);
+    content.appendChild(last);
+
+    // Tab from the last focusable wraps to the first
+    last.focus();
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
+    fixture.componentInstance.OnSheetKeydown(tab);
+    expect(tab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(first);
+
+    // Shift+Tab from the first wraps to the last
+    const shiftTab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true });
+    fixture.componentInstance.OnSheetKeydown(shiftTab);
+    expect(shiftTab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(last);
+  });
+
+  it('keeps focus on the sheet when it has no focusable content', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('Visible', true);
+    fixture.detectChanges();
+    flushRafs();
+    fixture.detectChanges();
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
+    fixture.componentInstance.OnSheetKeydown(tab);
+    expect(tab.defaultPrevented).toBe(true);
+  });
+
   it('rapid open→close within the open rAF window stays closed (no resurrected open class)', () => {
     const fixture = render();
     fixture.componentRef.setInput('Visible', true);

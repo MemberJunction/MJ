@@ -10,8 +10,10 @@
     [class.mj-bottom-sheet--open]="IsOpen"
     [class.mj-bottom-sheet--settled]="IsSettled"
     role="dialog"
+    aria-modal="true"
     [attr.aria-label]="AriaLabel || Title || null"
     tabindex="-1"
+    (keydown)="OnSheetKeydown($event)"
     (transitionend)="OnTransitionEnd($event)">
     <div class="mj-bottom-sheet-grab" aria-hidden="true"></div>
     @if (Title) {

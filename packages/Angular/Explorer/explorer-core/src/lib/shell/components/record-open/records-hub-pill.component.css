@@ -25,6 +25,14 @@
   display: none;
 }
 
+/* The pipe separates the pill from nav items in the DESKTOP header row.
+   In the mobile drawer (.mobile-nav-records wrapper) the pill sits alone in
+   its own section — the pipe has nothing to divide and renders as a stray
+   left rail. */
+:host-context(.mobile-nav-records)::before {
+  display: none;
+}
+
 .records-pill {
   display: flex;
   align-items: center;

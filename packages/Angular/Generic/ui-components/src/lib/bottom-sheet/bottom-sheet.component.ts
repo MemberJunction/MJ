@@ -12,6 +12,12 @@ import {
  * projected; the sheet owns the scrim, enter/exit transitions, Escape,
  * focus capture/restore, and the open/close lifecycle.
  *
+ * Modality contract (this is a shared primitive — the a11y baseline is the
+ * full one, not the historic house minimum): `role="dialog"` +
+ * `aria-modal="true"`, focus moves INTO the sheet on open and is trapped
+ * there (Tab/Shift+Tab cycle within), body scroll is locked while open, and
+ * focus returns to the opener on close.
+ *
  * Mechanics notes (learned from the earlier hand-rolled sheets):
  * - Enter AND exit are class-driven `transition`s (the filter-popover sheet's
  *   mount-only `animation` cannot animate dismissal).
@@ -76,6 +82,8 @@ export class MJBottomSheetComponent implements OnDestroy {
 
   /** Focus restore target captured at open */
   private previousFocus: HTMLElement | null = null;
+  /** body overflow value before the scroll lock; null = not locked by us */
+  private previousBodyOverflow: string | null = null;
   private closeFallbackTimer: ReturnType<typeof setTimeout> | null = null;
   /** Pending open rAFs — canceled on close so a rapid open→close can't
    *  resurrect the open class after the close started */
@@ -98,6 +106,36 @@ export class MJBottomSheetComponent implements OnDestroy {
     }
   }
 
+  /**
+   * Focus trap: aria-modal promises assistive tech the background is inert —
+   * Tab must cycle within the sheet, never walk out behind the scrim.
+   */
+  public OnSheetKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Tab' || !this.sheetEl) {
+      return;
+    }
+    const sheet = this.sheetEl.nativeElement;
+    const focusables = Array.from(sheet.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    ));
+    if (focusables.length === 0) {
+      event.preventDefault(); // nothing to move to — keep focus on the sheet
+      return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey) {
+      if (active === first || active === sheet) {
+        event.preventDefault();
+        last.focus();
+      }
+    } else if (active === last || active === sheet) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   public OnTransitionEnd(event: TransitionEvent): void {
     if (event.target !== this.sheetEl?.nativeElement || event.propertyName !== 'transform') {
       return;
@@ -114,6 +152,7 @@ export class MJBottomSheetComponent implements OnDestroy {
   private open(): void {
     this.clearCloseFallback();
     this.previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    this.lockBodyScroll();
     this.IsRendered = true;
     this.cdr.markForCheck();
     // Two frames: one for the @if to render at translateY(100%), one so the
@@ -167,10 +206,30 @@ export class MJBottomSheetComponent implements OnDestroy {
       return;
     }
     this.IsRendered = false;
+    this.unlockBodyScroll();
     this.cdr.markForCheck();
     this.Closed.emit();
     this.previousFocus?.focus();
     this.previousFocus = null;
+  }
+
+  /**
+   * Body scroll lock while open: aria-modal content must not let the page
+   * scroll behind the scrim. Restores the EXACT prior inline value (which is
+   * usually '') so a host page's own overflow styling survives.
+   */
+  private lockBodyScroll(): void {
+    if (this.previousBodyOverflow === null) {
+      this.previousBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  private unlockBodyScroll(): void {
+    if (this.previousBodyOverflow !== null) {
+      document.body.style.overflow = this.previousBodyOverflow;
+      this.previousBodyOverflow = null;
+    }
   }
 
   private clearCloseFallback(): void {
@@ -196,5 +255,8 @@ export class MJBottomSheetComponent implements OnDestroy {
     this.clearCloseFallback();
     this.clearSettleFallback();
     this.cancelOpenRafs();
+    // Destroyed while open (route change, parent teardown): never leave the
+    // page unscrollable
+    this.unlockBodyScroll();
   }
 }
