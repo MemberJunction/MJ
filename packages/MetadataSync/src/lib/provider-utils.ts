@@ -10,6 +10,7 @@
 import sql from 'mssql';
 import { SQLServerProviderConfigData, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import type { MJConfig } from '../config';
+import type { DynamicServerPackageConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DatabaseProviderBase, Metadata, ResolveStartupMode, SetProvider, StartupManager, UserInfo } from '@memberjunction/core';
@@ -59,11 +60,56 @@ export async function initializeProvider(config: MJConfig): Promise<DatabaseProv
 
   const platform = (config.dbPlatform ?? 'sqlserver').toLowerCase();
 
-  initializationPromise = platform === 'postgresql'
+  initializationPromise = (platform === 'postgresql'
     ? initializePostgresProvider(config)
-    : initializeSqlServerProvider(config);
+    : initializeSqlServerProvider(config)
+  ).then(async (provider) => {
+    // Register dynamic (Open App) entity subclasses AFTER provider init so app
+    // registrations land last and win ClassFactory priority — same ordering as
+    // ServerBootstrap. Must happen before any sync operation instantiates entity
+    // objects, or non-MJ-namespace entities fall back to bare BaseEntity (#3415).
+    await loadDynamicServerPackages(config.dynamicPackages?.server);
+    return provider;
+  });
 
   return initializationPromise;
+}
+
+/**
+ * Dynamically import each enabled `dynamicPackages.server` entry from mj.config.cjs so
+ * its `@RegisterClass` entity subclasses are registered, and invoke its StartupExport
+ * when declared. Mirrors ServerBootstrap's `loadDynamicAppPackages` robustness contract
+ * (minus GraphQL resolver-path collection, which has no meaning in a CLI process):
+ * no-op when the section is absent, per-package try/catch, tolerate
+ * `ERR_MODULE_NOT_FOUND`, warn on anything else, never crash the CLI.
+ *
+ * Exported for tests.
+ */
+export async function loadDynamicServerPackages(serverPackages: DynamicServerPackageConfig[] | undefined): Promise<void> {
+  if (!serverPackages || serverPackages.length === 0) {
+    return;
+  }
+  for (const entry of serverPackages) {
+    const pkgName = entry?.PackageName;
+    if (!pkgName || entry.Enabled === false) {
+      continue;
+    }
+    try {
+      const mod = (await import(pkgName)) as Record<string, unknown>;
+      const startup = entry.StartupExport ? mod[entry.StartupExport] : undefined;
+      if (typeof startup === 'function') {
+        await Promise.resolve((startup as () => unknown)());
+      }
+      console.log(`Loaded dynamic server package: ${pkgName}${entry.StartupExport ? ` (ran ${entry.StartupExport})` : ''}`);
+    } catch (error: unknown) {
+      const errObj = error as { code?: string };
+      if (errObj.code === 'ERR_MODULE_NOT_FOUND') {
+        console.log(`Dynamic server package not found (run 'npm install'?): ${pkgName}`);
+      } else {
+        console.warn(`Error loading dynamic server package ${pkgName}:`, error);
+      }
+    }
+  }
 }
 
 async function initializeSqlServerProvider(config: MJConfig): Promise<DatabaseProviderBase> {
