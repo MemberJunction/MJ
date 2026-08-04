@@ -2360,10 +2360,40 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Saves the current state of the object to the database. Uses the active provider to handle the actual saving of the record.
      * If the record is new, it will be created, if it already exists, it will be updated.
-     * 
+     *
      * Debounces multiple calls so that if Save() is called again while a save is in progress,
      * the second call will simply receive the same result as the first.
-     * 
+     *
+     * ## IS-A entities: one Save() writes the whole chain
+     *
+     * For a Table-Per-Type child, this saves EVERY level — root first, then down to this entity —
+     * inside one transaction, with a single primary key shared across all of them. Set fields
+     * belonging to any ancestor directly on this object; {@link Set} routes each one to the entity
+     * that owns it. There is no depth limit.
+     *
+     * ```typescript
+     * // Webinar IS-A Meeting IS-A Product
+     * const webinar = await md.GetEntityObject<WebinarEntity>('Webinars', contextUser);
+     * webinar.NewRecord();
+     * webinar.RecordingURL = '...';   // Webinar's own
+     * webinar.StartTime    = start;   // Meeting's
+     * webinar.Name         = 'Q1';    // Product's — set on the SAME object
+     * await webinar.Save();           // writes Product, Meeting, Webinar
+     * ```
+     *
+     * Do NOT create the parent separately and then try to attach a child to it — `NewRecord()`
+     * starts a new chain rather than adopting an existing parent row, so that produces a second
+     * parent and a primary-key conflict.
+     *
+     * If a PARENT level fails validation, this returns false and the failure is reported on THIS
+     * entity's result as `Failed to save parent entity '<Name>': <detail>`. The commonest cause is a
+     * NOT NULL column on an ancestor table that was never set — the child looks complete and the
+     * save still fails. (Before v5.50.0 that result was recorded only on the parent object, so the
+     * caller saw `false` with a null `LatestResult` and an empty `ResultHistory`.)
+     *
+     * @see {@link ISAParent} to inspect the parent instance directly
+     * @see packages/MJCore/docs/isa-relationships.md — "Creating a Child Record"
+     *
      * @param options
      * @returns Promise<boolean>
      */

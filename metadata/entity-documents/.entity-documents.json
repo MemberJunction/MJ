@@ -103,5 +103,26 @@
       "lastModified": "2026-06-22T03:38:24.608Z",
       "checksum": "80a6d308a4c3dbb9cc9381b2ccd095bd044dd679047bbe58c42dde6f1c8648af"
     }
+  },
+  {
+    "fields": {
+      "Name": "Queries Search",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Queries",
+      "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
+      "Status": "Active",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
+      "AIModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "TemplateText": "@file:templates/mj-queries-search.njk",
+      "PotentialMatchThreshold": 0.7,
+      "AbsoluteMatchThreshold": 0.95
+    },
+    "primaryKey": {
+      "ID": "DA20180E-1396-4077-B557-A0320968D16F"
+    },
+    "sync": {
+      "lastModified": "2026-06-22T19:04:15.804Z",
+      "checksum": "6e12c399b0ff5f26e65bd773d7b5d014c3fc0ede85a34e906d4dea90650316c4"
+    }
   }
 ]
