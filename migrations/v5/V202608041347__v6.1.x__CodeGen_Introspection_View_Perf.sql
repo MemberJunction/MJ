@@ -2,9 +2,17 @@
 --
 -- vwSQLColumnsAndEntityFields drives CodeGen's per-field metadata sync. It scanned
 -- sys.all_columns / sys.all_objects, which include every system and internal-table column
--- (~10x the rows). CodeGen only ever consumes real user columns (the joins to user tables
--- and __mj.EntityField discard the rest), so switching to sys.columns / sys.objects returns
--- identical results while reading roughly a tenth of the catalog.
+-- (~10x the rows). CodeGen only ever consumes real user columns (the INNER JOIN to
+-- vwSQLTablesAndEntities and the join to __mj.EntityField discard the rest), so switching to
+-- sys.columns / sys.objects reads roughly a tenth of the catalog.
+--
+-- On the rows that matter this is behaviorally identical: for every user-schema / entity-bearing
+-- row (anything with an EntityID) the output is unchanged. The ONLY rows that disappear are
+-- sys-internal objects (e.g. sys.trace_xe_action_map / sys.trace_xe_event_map) that are visible
+-- only through the sys.all_* variants, carry no EntityID, and were already thrown away
+-- downstream. So this is NOT a blanket "identical results" in every column; it is identical for everything
+-- CodeGen consumes. Anyone reusing this view for general catalog introspection outside CodeGen
+-- should note it no longer surfaces sys-internal objects.
 --
 -- Measured on a 500-table synthetic schema: a full cold CodeGen run dropped 190.7s -> 105.9s
 -- (-44.5%), almost entirely from the "update existing fields" phase (~53s -> ~5s). Generated
