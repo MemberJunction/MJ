@@ -32,7 +32,14 @@ Also fixed:
   so concurrent tab restores dedupe). Uncached, drivers that can't be built outside a view
   threw NG0201 on every tab add and reload — 50k console errors in one suite run.
 - **omnibar palette** no longer lets keyboard selection target recent rows that aren't on
-  screen, and a failed provider fetch no longer leaves the palette stuck loading.
+  screen: with a query typed and no matches, Enter used to activate an off-screen recent
+  (reproducible in `/`, `#`, and `@` modes — the default mode always renders a See-All row).
+  A mode change now clears the result rows outright rather than presenting the previous
+  provider's answers as the new one's, and every mode reports a loading state, so "No matches"
+  is never asserted before the fetch has settled. The empty state's "press ↵ to search
+  everything" now works in trigger modes as well, and is offered only when Enter will
+  actually take it. A rejected provider fetch settles its generation instead of escaping as
+  an unhandled rejection.
 - **`FeaturePipelinesResourceComponent`** is exported from `ng-dashboards`' public API, so the
   eager class-registration manifest picks it up and its tab resolves.
 - **AIPromptRunner** only logs a failover banner once a previous candidate has actually
