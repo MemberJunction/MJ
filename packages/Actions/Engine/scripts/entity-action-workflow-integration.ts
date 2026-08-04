@@ -30,7 +30,7 @@ import '@memberjunction/server-bootstrap/mj-class-registrations';
 import sql from 'mssql';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata, UserInfo, LogStatus, BaseEntity } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import type {
     MJActionEntity,
     MJActionParamEntity,
@@ -218,7 +218,9 @@ async function main(): Promise<void> {
 
     const pool = await bootstrapProvider();
     try {
-        const md = new Metadata();
+        // bootstrapProvider() just registered the one provider this process has, and a standalone
+        // CLI harness has no per-request provider to inherit.
+        const md = new Metadata(); // global-provider-ok: standalone CLI harness, single provider
         const user = resolveContextUser();
         LogStatus(`   context user: ${user.Name} <${user.Email}>`);
 
@@ -353,8 +355,8 @@ async function main(): Promise<void> {
         check('EntityAction.LoggingMode round-trips', scenarioFailuresOnly.Binding.LoggingMode === 'FailuresOnly');
         check('EntityAction.Sequence round-trips', scenarioAll.Binding.Sequence === 20);
         check('EntityAction.ScopeEntityID / ScopeRecordID round-trip',
-            scenarioInScope.Binding.ScopeEntityID === categoriesEntity.ID
-            && scenarioInScope.Binding.ScopeRecordID === categoryInScope.ID);
+            UUIDsEqual(scenarioInScope.Binding.ScopeEntityID, categoriesEntity.ID)
+            && UUIDsEqual(scenarioInScope.Binding.ScopeRecordID, categoryInScope.ID));
 
         // ── Engines ──────────────────────────────────────────────────────────────────────────────
         section('Engine configuration');
@@ -458,11 +460,11 @@ async function main(): Promise<void> {
                 && (byName(loggedParams, 'Record')?.['KeyCount'] as number) > 5);
 
             // 6. Provenance.
-            check('EntityActionID stamped', logRow.EntityActionID?.toLowerCase() === scenarioAll.Binding.ID.toLowerCase(),
+            check('EntityActionID stamped', UUIDsEqual(logRow.EntityActionID, scenarioAll.Binding.ID),
                 String(logRow.EntityActionID));
             check('EntityActionInvocationTypeID stamped',
-                logRow.EntityActionInvocationTypeID?.toLowerCase() === readInvocationType.ID.toLowerCase());
-            check('TargetEntityID stamped', logRow.TargetEntityID?.toLowerCase() === actionsEntity.ID.toLowerCase());
+                UUIDsEqual(logRow.EntityActionInvocationTypeID, readInvocationType.ID));
+            check('TargetEntityID stamped', UUIDsEqual(logRow.TargetEntityID, actionsEntity.ID));
             check('TargetRecordID stamped in the canonical composite-key form',
                 logRow.TargetRecordID?.toLowerCase() === `ID|${scenarioAll.Action.ID}`.toLowerCase(),
                 `stamped=${logRow.TargetRecordID} expected=ID|${scenarioAll.Action.ID}`);
