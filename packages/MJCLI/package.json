@@ -73,6 +73,7 @@
     "@memberjunction/sql-converter": "6.0.0",
     "@memberjunction/sqlglot-ts": "6.0.0",
     "@memberjunction/sqlserver-dataprovider": "6.0.0",
+    "@memberjunction/standards": "6.0.0",
     "@memberjunction/testing-cli": "6.0.0",
     "@oclif/core": "^3.27.0",
     "@oclif/plugin-help": "^6.2.37",

@@ -1,0 +1,78 @@
+name: Release Edge
+
+# The one-button Edge release (guides/RELEASE_ENGINEERING_RUNBOOK.md, operation 1).
+# Dispatching this merges next into main; the push to main triggers publish.yml,
+# which does everything else: changeset version (pre-mode -> X.Y.0-edge.N), the
+# version-grammar guard, build, publish to the `edge` dist-tag, release commit +
+# tag, GitHub prerelease (never latest), and the merge of main back into next.
+# This workflow ONLY performs guarded merge-and-push - all release logic stays
+# in publish.yml so the button and a manual next->main merge behave identically.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-edge
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Merge next into main (guarded)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout next
+        uses: actions/checkout@v4
+        with:
+          ref: next
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Guard - repo must be in Edge prerelease mode
+        run: |
+          if [ ! -f .changeset/pre.json ] || [ "$(jq -r .mode .changeset/pre.json)" != "pre" ]; then
+            echo "::error::next is not in Edge prerelease mode (.changeset/pre.json missing or mode != pre). If a candidate cut is in progress, finish it before releasing Edge."
+            exit 1
+          fi
+
+      - name: Guard - there must be unapplied changesets
+        run: |
+          applied=$(jq -r '.changesets[]' .changeset/pre.json)
+          pending=""
+          for f in .changeset/*.md; do
+            id=$(basename "$f" .md)
+            [ "$id" = "README" ] && continue
+            echo "$applied" | grep -qx "$id" || pending="$pending $id"
+          done
+          if [ -z "$pending" ]; then
+            echo "::error::No unapplied changesets on next - nothing to release."
+            exit 1
+          fi
+          echo "::notice::Pending changesets:$pending"
+
+      - name: Guard - latest unit-test run on next must be green
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RESULT=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow test.yml --branch next --limit 1 \
+            --json status,conclusion --jq '.[0] | if .status != "completed" then "still-running" else .conclusion end')
+          if [ "$RESULT" != "success" ]; then
+            echo "::error::Latest Unit Tests run on next is '$RESULT'. Wait for a green run (or investigate) before releasing."
+            exit 1
+          fi
+
+      - name: Merge next into main and push (this triggers publish.yml)
+        env:
+          REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "GitHub Actions"
+          git remote set-url origin "https://$REPO_PAT@github.com/${GITHUB_REPOSITORY}"
+          git fetch origin main
+          git checkout main
+          git merge --no-ff origin/next -m "Release edge (dispatched by @${{ github.actor }}): merge next into main"
+          git push origin main
+          echo "::notice::Pushed to main - publish.yml takes it from here."
