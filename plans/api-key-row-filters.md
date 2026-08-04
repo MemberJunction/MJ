@@ -1,7 +1,7 @@
 # API-Key-Scoped Row Filters
 
 **Branch:** `claude/api-key-row-filters-98ev39`
-**Status:** Plan approved (v2.2) — migration written, all blocking decisions resolved, implementation not started
+**Status:** v3.0 — IMPLEMENTED on this branch for the 6.1 release (WS1 + WS2 + WS3 keys-only, migration + CodeGen artifacts in `migrations/v6`, unit + integration test suites). This document is now the design record; §8's sequencing is historical.
 **Proposed implementation owner:** @jordanfanapour (cc @MarceloT-BC)
 **Date:** 2026-08-02
 **Supersedes:** the original "Row-Level Filter Rules for MJ API Key Scopes" proposal (written against the public
@@ -20,7 +20,20 @@
 > Migration written (§8 Phase 2). §9.2 (`full_access` semantics) also resolved: the combination is **invalid and rejected**,
 > not silently resolved either way — see §5.6.1. **No decisions remain blocking implementation.**
 >
-> **v2.4 changelog — owner decisions (PR #3409, jordanfanapour, 2026-08-04).** §9.3 resolved: ceiling filters deferred to
+> **v3.0 changelog — IMPLEMENTATION (2026-08-04, per owner direction: ship with 6.1).** The migration moved from staging to
+> `migrations/v6/V202608041553__v6.1.x__APIKey_Scope_RowFilterID.sql` (+ PG counterpart via the SQLConverter pipeline); the
+> PG parity/content tooling and workflow were generalized from hardcoded `v5` to version-folder pairs. CodeGen ran in CI via
+> a temporary branch-scoped workflow (this sandbox has no route to a SQL Server — mcr.microsoft.com/docker.io/
+> packages.microsoft.com all proxy-denied) and its output is folded into the migration behind the separator convention.
+> Implemented exactly as specified: WS1 (post-image update check after before-save hooks, fail-closed skip decomposer,
+> M1/M5 escaping, typed-NULL projections), WS2 (boundary validation + escaping + provider-quoted identifiers +
+> clone-before-stamp), WS3 core (UserInfo carriers, hardened `MarkupFilterText` incl. `{{Acting*}}`/list token/`(1=0)`,
+> `GetEffectiveRowFilterWhereClause` outside the exemption, nine call sites migrated, legacy method deprecated with a repo
+> guard), WS3 engine (no-shadowing evaluator, §5.6.1 + §5.10 denials with named cause + remedy, token validation naming the
+> token, startup invariant, save-time validation subclasses incl. the same-entity invariant and filter-save revalidation,
+> per-request binding stamping on a cloned session user, acting-context resolver extension point, effective-filter audit
+> logging). One deliberate deviation from §8: WS1/WS2 ship in THIS PR rather than a separate one — the owner directed a
+> single end-to-end PR for 6.1, superseding the earlier split decision. §9.3 resolved: ceiling filters deferred to
 > v2, keys-only enforcement in v1 (column ships unused). §9.5 resolved: WS1 proceeds as a pure bugfix; changeset
 > documentation requirement stands. §9.7 resolved: exemption looseness deferred to its own ticket, with the sharpened
 > role-stacking analysis recorded (the second role need not even grant the permission) and the note that WS3 is
