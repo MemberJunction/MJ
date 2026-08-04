@@ -156,7 +156,7 @@ export class MentionAutocompleteService extends BaseSingleton<MentionAutocomplet
    */
   private loadReadableEntities(user: UserInfo, provider?: IMetadataProvider): EntityInfo[] {
     try {
-      const md = provider ?? new Metadata();
+      const md = provider ?? Metadata.Provider;
       return (md.Entities || []).filter(entity => {
         try {
           return entity.GetUserPermisions(user).CanRead;
@@ -177,7 +177,7 @@ export class MentionAutocompleteService extends BaseSingleton<MentionAutocomplet
    */
   private loadRunnableQueries(user: UserInfo, provider?: IMetadataProvider): QueryInfo[] {
     try {
-      const md = provider ?? new Metadata();
+      const md = provider ?? Metadata.Provider;
       return (md.Queries || []).filter(query => {
         try {
           return query.UserCanRun(user);
@@ -197,7 +197,7 @@ export class MentionAutocompleteService extends BaseSingleton<MentionAutocomplet
    */
   private resolveQueriesEntityIcon(provider?: IMetadataProvider): string {
     try {
-      const md = provider ?? new Metadata();
+      const md = provider ?? Metadata.Provider;
       return md.EntityByName('MJ: Queries')?.Icon || 'fa-solid fa-database';
     } catch {
       return 'fa-solid fa-database';

@@ -108,7 +108,9 @@ export class EntityDocumentAvailabilityEngine extends BaseEngine<EntityDocumentA
       return entityIDsWithVectors;
     }
 
-    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    // `Metadata.Provider` is the global default, named explicitly. `new RunView()` reaches the
+    // same place but hides that it is a fallback, which is what makes it easy to leave in by accident.
+    const rv = RunView.FromMetadataProvider(provider ?? Metadata.Provider);
     const results = await rv.RunViews(
       docs.map((d) => ({
         EntityName: 'MJ: Entity Record Documents',
