@@ -3839,7 +3839,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private async findMostRecentComponentArtifactId(): Promise<string | null> {
     if (!this.conversationId || !this.currentUser) return null;
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       // Get all conversation detail IDs for this conversation, newest first.
       const detailsResult = await rv.RunView<MJConversationDetailEntity>(
         {

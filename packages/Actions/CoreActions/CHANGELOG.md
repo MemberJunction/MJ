@@ -1,5 +1,153 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agent-manager@6.0.0
+  - @memberjunction/ai-agents@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/clustering-engine@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/ai-mcp-client@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/ai-vector-sync@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/code-execution@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/communication-types@6.0.0
+  - @memberjunction/communication-engine@6.0.0
+  - @memberjunction/content-autotagging@6.0.0
+  - @memberjunction/external-change-detection@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/integration-engine@6.0.0
+  - @memberjunction/interactive-component-types@6.0.0
+  - @memberjunction/lists@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/core-entities-server@6.0.0
+  - @memberjunction/storage@6.0.0
+  - @memberjunction/react-linter@6.0.0
+  - @memberjunction/record-set-processor-base@6.0.0
+  - @memberjunction/record-set-processor@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/search-engine@6.0.0
+  - @memberjunction/esignature@6.0.0
+  - @memberjunction/geo-core@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/ai-betty-bot@6.0.0
+  - @memberjunction/lists-base@6.0.0
+  - @memberjunction/export-engine@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [c382605]
+- Updated dependencies [a8fc549]
+  - @memberjunction/ai-agents@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-agent-manager@5.51.0
+  - @memberjunction/record-set-processor@5.51.0
+  - @memberjunction/ai-engine-base@5.51.0
+  - @memberjunction/clustering-engine@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/ai-mcp-client@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/ai-vector-sync@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/code-execution@5.51.0
+  - @memberjunction/actions@5.51.0
+  - @memberjunction/communication-types@5.51.0
+  - @memberjunction/communication-engine@5.51.0
+  - @memberjunction/content-autotagging@5.51.0
+  - @memberjunction/external-change-detection@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/integration-engine@5.51.0
+  - @memberjunction/interactive-component-types@5.51.0
+  - @memberjunction/lists@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/core-entities-server@5.51.0
+  - @memberjunction/storage@5.51.0
+  - @memberjunction/react-linter@5.51.0
+  - @memberjunction/record-set-processor-base@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/search-engine@5.51.0
+  - @memberjunction/esignature@5.51.0
+  - @memberjunction/geo-core@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/ai-betty-bot@5.51.0
+  - @memberjunction/lists-base@5.51.0
+  - @memberjunction/export-engine@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- dd04a24: Widen the zod pin from `~3.24.4` to `^3.25.0` so it satisfies `@modelcontextprotocol/sdk`'s peer requirement (`zod ^3.25 || ^4.0`). The old tilde pin has no overlap with the SDK's peer range, which breaks strict package managers (pnpm) and MJCLI's oclif manifest generation under strict installs. zod 3.25.x keeps the classic v3 API at the root import, so this is a version-range correction with no behavior change.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [86832fa]
+- Updated dependencies [deb02b4]
+- Updated dependencies [8b4c6b2]
+- Updated dependencies [0686d52]
+- Updated dependencies [c7b6710]
+- Updated dependencies [764d6f6]
+- Updated dependencies [408e4bf]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [1e0008f]
+- Updated dependencies [03fc891]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-agents@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai-prompts@5.50.0
+  - @memberjunction/content-autotagging@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/communication-types@5.50.0
+  - @memberjunction/search-engine@5.50.0
+  - @memberjunction/core-entities-server@5.50.0
+  - @memberjunction/integration-engine@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/ai-mcp-client@5.50.0
+  - @memberjunction/storage@5.50.0
+  - @memberjunction/ai-agent-manager@5.50.0
+  - @memberjunction/ai-engine-base@5.50.0
+  - @memberjunction/clustering-engine@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/ai-vector-sync@5.50.0
+  - @memberjunction/actions@5.50.0
+  - @memberjunction/communication-engine@5.50.0
+  - @memberjunction/external-change-detection@5.50.0
+  - @memberjunction/generic-database-provider@5.50.0
+  - @memberjunction/lists@5.50.0
+  - @memberjunction/react-linter@5.50.0
+  - @memberjunction/record-set-processor@5.50.0
+  - @memberjunction/sqlserver-dataprovider@5.50.0
+  - @memberjunction/esignature@5.50.0
+  - @memberjunction/geo-core@5.50.0
+  - @memberjunction/code-execution@5.50.0
+  - @memberjunction/interactive-component-types@5.50.0
+  - @memberjunction/record-set-processor-base@5.50.0
+  - @memberjunction/ai-betty-bot@5.50.0
+  - @memberjunction/lists-base@5.50.0
+  - @memberjunction/export-engine@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/sql-dialect@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes

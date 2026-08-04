@@ -1,5 +1,131 @@
 # Change Log - @memberjunction/cli
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-cli@6.0.0
+  - @memberjunction/codegen-lib@6.0.0
+  - @memberjunction/db-auto-doc@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/metadata-sync@6.0.0
+  - @memberjunction/open-app-engine@6.0.0
+  - @memberjunction/query-gen@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/server-bootstrap-lite@6.0.0
+  - @memberjunction/testing-cli@6.0.0
+  - @memberjunction/cli-core@6.0.0
+  - @memberjunction/config@6.0.0
+  - @memberjunction/installer@6.0.0
+  - @memberjunction/sql-converter@6.0.0
+  - @memberjunction/sqlglot-ts@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [1e048ef]
+- Updated dependencies [a8fc549]
+  - @memberjunction/codegen-lib@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-cli@5.51.0
+  - @memberjunction/server-bootstrap-lite@5.51.0
+  - @memberjunction/db-auto-doc@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/metadata-sync@5.51.0
+  - @memberjunction/open-app-engine@5.51.0
+  - @memberjunction/query-gen@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/testing-cli@5.51.0
+  - @memberjunction/cli-core@5.51.0
+  - @memberjunction/config@5.51.0
+  - @memberjunction/installer@5.51.0
+  - @memberjunction/sql-converter@5.51.0
+  - @memberjunction/sqlglot-ts@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- ae992d2: fix(migrate-convert): stop `mj migrate convert` silently dropping statements and emitting empty PG migrations while reporting success (#3252)
+
+  The split-and-regenerate converter could emit empty or broken `.pg.sql` migrations while printing `unhandled stmts: 0` and exiting 0. Three independent root causes are fixed at the dialect, classifier, and bake-path layers:
+  - **RC1 — block-less `IF NOT EXISTS(...) CREATE INDEX ...;`** (the v5.49 FK-index shape) fell through to sqlglot, parsed as `exp.IfBlock`, and emitted a bare `;` with no gap reported. The `IF-EXISTS` envelope now captures a block-less guard's single governed statement (so `sys.indexes`/`columns`/`tables` guards translate to the same `DO $$ … pg_indexes … END IF $$` as the `BEGIN…END` form), an `exp.If`/`exp.IfBlock` guard plus an EMPTY-EMISSION postcondition report any node that renders to nothing instead of dropping it, and an inline named `DEFAULT` constraint (`CONSTRAINT [DF_x] DEFAULT (75)` — invalid PG) has its name stripped.
+  - **RC2 — a hand-written trigger classified as a CodeGen object and silently dropped** (the file reported a clean `converted` with empty T-SQL). The bare `trg` alternative was removed from the CodeGen-name convention (ledger-verified safe), and an unbannered file now requires a `vw*`/`sp*`/`fn*` object before flipping into statement-mode, so a lone trigger/index can't route a hand-authored file into the drop path.
+  - **RC3 — the `--bake-codegen` path applied gappy SQL to the working DB and crashed with zero artifacts.** Forward-mode baking now gates on conversion gaps before touching the working DB, the CLI halts at the first bake-mode gap with a guaranteed non-zero exit, forces a `.needs-hand` artifact for any gap, writes an artifact (never a bare error) on any failure, and rejects `--allow-gaps` together with `--bake-codegen`.
+
+  Adds a soft statement-accounting reconciliation: the dialect self-checks `parsed == emitted + unhandled + dropped` (surfacing an `ACCOUNTING-LEAK` gap, never raising), and each conversion carries a coarse source→output reconciliation that flags substantive T-SQL producing empty output. Validated by a full-ledger sweep over all 201 v5 migrations: zero crashes, zero accounting leaks, zero bare-`;` bodies, zero reconciliation false-positives.
+
+- a7dfaf5: fix(open-app): detect the workspace layout and write config to every file a consumer loads (#3270, #3271)
+
+  `mj app install` could complete — or report success — while leaving an app that never actually loads. Two causes, both in the install's `[Packages]` / `[Config]` steps.
+
+  **#3270 — workspace layout.** The installer defaulted to the monorepo paths (`packages/MJAPI`, `packages/MJExplorer`), but `mj install` scaffolds a distribution under `apps/`. Installing onto a host created by MJ's own installer failed with `Could not read package.json at <root>/packages/MJAPI/package.json: ENOENT`, and it failed _after_ schema creation and migrations had committed, leaving the app recorded with `Status='Error'`. Both paths are now probed (`packages/…`, then `apps/…`) via a shared `workspace-paths` module, so a plain `mj app install` works on either layout with no configuration; an explicit `openApps.serverPackagePath` / `clientPackagePath` still wins.
+
+  **#3271 — config write target.** Config edits went to a single file: the server workspace's `mj.config.cjs` when present, else the repo root. But the `dynamicPackages.client` array is consumed by `mj codegen manifest --open-app-client-bootstrap`, which resolves config from the _client_ workspace and so never sees a server-workspace config; and a container / App Service deployment that ships only the root config never sees the `server` entry. Either way the miss is silent: the client bootstrap reports `0 client packages wired` so the app's `@RegisterClass` decorators never fire, and a deployed API loads no server package at all — its GraphQL schema lacks every one of the app's types while `__mj.OpenApp` still reports the app `Active`. All config writes (`dynamicPackages`, `entityPackageName`, `excludeSchemas`) now target **every** `mj.config.cjs` a consumer may load. Entry insertion is idempotent, so a config that already has the entry is unchanged.
+
+  A file that genuinely cannot be edited — most commonly the distribution's `module.exports = require('../../mj.config.cjs')` re-export, which has no object literal to insert into — is now reported as a warning instead of failing the install, since it re-exports the root config that _did_ get written. The install fails only when no config could be updated. `ConfigOperationResult` gains an optional `Warnings` field and the orchestrator surfaces them via `OnWarn`.
+
+- 284de20: Fix TS4111 in the Open App client manifest so MJExplorer can build when Open Apps are present
+
+  `mj codegen manifest --open-app-client-bootstrap` emitted its `globalThis` anchor using dot
+  access on a property that comes from an index signature (`globalThis` is cast to
+  `Record<string, unknown>`). Consumers compile that generated file under their own tsconfig, and
+  MJExplorer sets `noPropertyAccessFromIndexSignature: true` — so the generated manifest failed to
+  type-check and the Explorer build exited 1 having emitted zero JS. `ng serve` printed
+  "Watch mode enabled" after the error and then served nothing, which made it easy to misread as a
+  working dev server.
+
+  The anchor now uses bracket access. Runtime behavior is unchanged — JavaScript draws no
+  distinction between dot- and bracket-written properties — and bracket access is valid under every
+  strictness configuration, so no consumer is made worse.
+
+  This affected any installation with at least one Open App in `dynamicPackages.client`, whether
+  installed via `mj app install` or dev-linked. MJ core has none, which is why its CI never
+  generated the line and never type-checked it.
+
+  The regression escaped because the generator's test asserted the emitted _string_ — it passed
+  precisely because the text matched, while that text did not compile in the consumer. The test
+  now type-checks the generated output under `noPropertyAccessFromIndexSignature` instead, so a
+  type error in generated code fails here rather than in a downstream build.
+
+- d5904e3: `mj migrate` now prints the batch context Skyway already collects when a migration fails: the batch number and its line range in the script, how many batches applied before it, and either the lines matched to identifiers named in the error or a preview of the failing batch SQL. Previously only `Error.message` was shown, so a failure in a large generated migration gave a line range with no way to see what was in it.
+- df50da3: Fix Open App client packages being tree-shaken out of production MJExplorer builds. `mj codegen manifest --open-app-client-bootstrap` emitted bare side-effect imports (`import '<pkg>';`), which bundlers legally drop when the imported package declares `"sideEffects": false` — the default for any Angular library built with ng-packagr. The package's module-scope `@RegisterClass(...)` calls then never ran, so its resource/view components were silently absent from the build with no error. The block now emits referenced namespace imports collected into an exported `OPEN_APP_CLIENT_MODULES` array, anchored by a `globalThis` assignment so the reference survives dead-code elimination regardless of how the host app consumes the manifest. Disabled entries, idempotency, and stale-block replacement are unchanged.
+- dd04a24: Widen the zod pin from `~3.24.4` to `^3.25.0` so it satisfies `@modelcontextprotocol/sdk`'s peer requirement (`zod ^3.25 || ^4.0`). The old tilde pin has no overlap with the SDK's peer range, which breaks strict package managers (pnpm) and MJCLI's oclif manifest generation under strict installs. zod 3.25.x keeps the classic v3 API at the root import, so this is a version-range correction with no behavior change.
+- Updated dependencies [623dfc5]
+- Updated dependencies [54a037f]
+- Updated dependencies [ce6374c]
+- Updated dependencies [a3bd648]
+- Updated dependencies [ae992d2]
+- Updated dependencies [f749574]
+- Updated dependencies [a7dfaf5]
+- Updated dependencies [d79dd11]
+- Updated dependencies [deb02b4]
+- Updated dependencies [918563e]
+- Updated dependencies [45d762d]
+- Updated dependencies [aa491dc]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [76c0ffb]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core@5.50.0
+  - @memberjunction/server-bootstrap-lite@5.50.0
+  - @memberjunction/codegen-lib@5.50.0
+  - @memberjunction/sqlglot-ts@5.50.0
+  - @memberjunction/sql-converter@5.50.0
+  - @memberjunction/open-app-engine@5.50.0
+  - @memberjunction/config@5.50.0
+  - @memberjunction/db-auto-doc@5.50.0
+  - @memberjunction/metadata-sync@5.50.0
+  - @memberjunction/ai-cli@5.50.0
+  - @memberjunction/generic-database-provider@5.50.0
+  - @memberjunction/query-gen@5.50.0
+  - @memberjunction/sqlserver-dataprovider@5.50.0
+  - @memberjunction/testing-cli@5.50.0
+  - @memberjunction/cli-core@5.50.0
+  - @memberjunction/installer@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes

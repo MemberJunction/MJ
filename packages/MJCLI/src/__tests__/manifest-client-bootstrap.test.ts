@@ -9,9 +9,56 @@
  * declares "sideEffects": false.
  */
 import { describe, it, expect } from 'vitest';
+import ts from 'typescript';
 import { applyOpenAppClientBootstrapBlock } from '../commands/codegen/manifest.js';
 
 const BASE = `// generated manifest\nexport const CLASS_REGISTRATIONS = [];\n`;
+
+/** TS4111 — "Property ... comes from an index signature, so it must be accessed with [...]". */
+const TS_PROPERTY_FROM_INDEX_SIGNATURE = 4111;
+
+/**
+ * Type-check generated manifest text the way a CONSUMER compiles it.
+ *
+ * This generator's output is compiled by a *different* package under a *different*
+ * tsconfig — MJExplorer sets `noPropertyAccessFromIndexSignature: true`. A string
+ * assertion over generated code cannot catch a type error in that code, so the only
+ * sound check is to actually compile it under the consumer's strictness.
+ *
+ * The manifest imports Open App packages that do not exist in this test, so module
+ * resolution is disabled and callers assert on specific diagnostic codes rather than
+ * on an empty diagnostic list.
+ */
+function typeCheckAsConsumer(source: string): ts.Diagnostic[] {
+    const fileName = '/generated-manifest.ts';
+    const options: ts.CompilerOptions = {
+        strict: true,
+        noPropertyAccessFromIndexSignature: true,
+        noResolve: true,
+        skipLibCheck: true,
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.ESNext,
+    };
+    const libFileName = ts.getDefaultLibFilePath(options);
+    const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.ES2022, true);
+    const host: ts.CompilerHost = {
+        getSourceFile: (name) => {
+            if (name === fileName) return sourceFile;
+            const text = ts.sys.readFile(name);
+            return text === undefined ? undefined : ts.createSourceFile(name, text, ts.ScriptTarget.ES2022, true);
+        },
+        writeFile: () => undefined,
+        getDefaultLibFileName: () => libFileName,
+        useCaseSensitiveFileNames: () => true,
+        getCanonicalFileName: (n) => n,
+        getCurrentDirectory: () => '/',
+        getNewLine: () => '\n',
+        fileExists: (name) => name === fileName || ts.sys.fileExists(name),
+        readFile: (name) => (name === fileName ? source : ts.sys.readFile(name)),
+    };
+    const program = ts.createProgram([fileName], options, host);
+    return [...program.getSyntacticDiagnostics(sourceFile), ...program.getSemanticDiagnostics(sourceFile)];
+}
 
 describe('applyOpenAppClientBootstrapBlock', () => {
     it('appends a referenced namespace import per enabled client package in a delimited block', () => {
@@ -26,6 +73,9 @@ describe('applyOpenAppClientBootstrapBlock', () => {
         // The anchor: exported array references every namespace + observable global assignment.
         expect(out).toContain('export const OPEN_APP_CLIENT_MODULES: unknown[] = [__openAppClient0, __openAppClient1];');
         expect(out).toContain("(globalThis as Record<string, unknown>)['__mjOpenAppClientModules'] = OPEN_APP_CLIENT_MODULES;");
+        // Regression guard: dot access on this index-signature property is TS4111 in any consumer
+        // compiling with `noPropertyAccessFromIndexSignature` — MJExplorer does.
+        expect(out).not.toContain(').__mjOpenAppClientModules');
         // No `any` and therefore no eslint escape hatch in generated output.
         expect(out).not.toContain('any');
         expect(out).not.toContain('eslint-disable');
@@ -35,16 +85,15 @@ describe('applyOpenAppClientBootstrapBlock', () => {
         expect(out).toContain('export const CLASS_REGISTRATIONS = [];');
     });
 
-    it('writes the globalThis anchor with bracket access — dot access is TS4111 in the host build', () => {
-        // MJExplorer's tsconfig sets `noPropertyAccessFromIndexSignature: true`, so
-        // `(globalThis as Record<string, unknown>).__mjOpenAppClientModules = …` is a hard
-        // compile error in its production `ng build` — the host-app build break this whole
-        // block's tests otherwise cannot see, since the block is emitted only when an Open
-        // App client package is installed. Verified live: with one installed client package,
-        // `ng build` failed with TS4111 on this exact line and went green on the bracket form.
+    it('emits output that type-checks under a consumer using noPropertyAccessFromIndexSignature', () => {
+        // MJExplorer compiles this generated file with `noPropertyAccessFromIndexSignature: true`
+        // (packages/MJExplorer/tsconfig.json). Dot access on the `Record<string, unknown>` cast is
+        // TS4111 there, which fails the Explorer build and emits zero JS whenever an Open App exists.
         const out = applyOpenAppClientBootstrapBlock(BASE, [{ PackageName: '@acme/a-ng', Enabled: true }]);
-        expect(out).toContain("(globalThis as Record<string, unknown>)['__mjOpenAppClientModules']");
-        expect(out).not.toContain(').__mjOpenAppClientModules');
+        const violations = typeCheckAsConsumer(out)
+            .filter((d) => d.code === TS_PROPERTY_FROM_INDEX_SIGNATURE)
+            .map((d) => ts.flattenDiagnosticMessageText(d.messageText, ' '));
+        expect(violations).toEqual([]);
     });
 
     it('emits a disabled package as a comment, not an import', () => {
