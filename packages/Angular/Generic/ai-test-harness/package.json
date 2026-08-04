@@ -35,7 +35,6 @@
   },
   "dependencies": {
     "@angular/platform-browser": "21.1.3",
-    "@angular/router": "21.1.3",
     "@memberjunction/ai": "6.0.0",
     "@memberjunction/ai-core-plus": "6.0.0",
     "@memberjunction/ai-engine-base": "6.0.0",
@@ -46,7 +45,6 @@
     "@memberjunction/ng-code-editor": "6.0.0",
     "@memberjunction/ng-container-directives": "6.0.0",
     "@memberjunction/ng-notifications": "6.0.0",
-    "@memberjunction/ng-shared": "6.0.0",
     "@memberjunction/ng-shared-generic": "6.0.0",
     "@memberjunction/ng-ui-components": "6.0.0",
     "angular-split": "^20.0.0",
