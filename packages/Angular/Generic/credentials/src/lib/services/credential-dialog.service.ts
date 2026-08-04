@@ -8,7 +8,7 @@
 
 import { Injectable, ComponentRef, ViewContainerRef, Type } from '@angular/core';
 import { MJCredentialEntity, MJCredentialTypeEntity } from '@memberjunction/core-entities';
-import { RunView } from '@memberjunction/core';
+import { Metadata, RunView, type IMetadataProvider } from '@memberjunction/core';
 import { Subject, Observable, firstValueFrom } from 'rxjs';
 import { CredentialDialogComponent, CredentialDialogOptions, CredentialDialogResult } from '../dialogs/credential-dialog.component';
 
@@ -47,6 +47,20 @@ import { CredentialDialogComponent, CredentialDialogOptions, CredentialDialogRes
     providedIn: 'root'
 })
 export class CredentialDialogService {
+    /**
+     * The provider every read goes through.
+     *
+     * A `providedIn: 'root'` service that constructs its own `RunView` silently binds the global
+     * default and ignores whichever provider its host was handed. Null means "use the global
+     * default", so single-provider apps see no behaviour change.
+     */
+    public Provider: IMetadataProvider | null = null;
+
+    /** The provider to actually use — the injected one, or the global default. */
+    public get ProviderToUse(): IMetadataProvider {
+        return this.Provider ?? Metadata.Provider;
+    }
+
     private _credentialTypes: MJCredentialTypeEntity[] | null = null;
     private _credentialTypesLoading = false;
     private _credentialTypesLoadPromise: Promise<MJCredentialTypeEntity[]> | null = null;
@@ -166,7 +180,7 @@ export class CredentialDialogService {
 
     private async doLoadCredentialTypes(): Promise<MJCredentialTypeEntity[]> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJCredentialTypeEntity>({
                 EntityName: 'MJ: Credential Types',
                 OrderBy: 'Category, Name',
