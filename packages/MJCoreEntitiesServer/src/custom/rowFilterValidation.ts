@@ -20,6 +20,7 @@ import {
     ValidationErrorInfo,
     ValidationErrorType
 } from '@memberjunction/core';
+import { SQLExpressionValidator } from '@memberjunction/global';
 
 /**
  * Registered token vocabulary for row-filter FilterText (plan §5.2). `{{User*}}`
@@ -60,13 +61,27 @@ export interface RowFilterTextValidationResult {
 /**
  * Validates a filter's FilterText against a specific entity (plan §5.3 checks
  * 3 + 4, STRICT):
+ * - dangerous SQL patterns (DDL/DML/EXEC, statement-terminating `;`, comment
+ *   markers, UNION, etc.) are rejected via the shared `SQLExpressionValidator`
+ *   in `where_clause` context — the same injection-hardening every other
+ *   user-provided SQL fragment in MJ goes through, not a parallel definition;
  * - every `{{Token}}` must be a member of the registered vocabulary;
  * - every bare column identifier must resolve to a real, NON-VIRTUAL,
  *   non-computed field on the entity (unknown identifiers reject — no lenient
- *   "maybe it's a computed column" pass).
+ *   "maybe it's a computed column" pass). `entityFields` is deliberately not
+ *   passed to the shared validator's own (lenient, warn-only) field check —
+ *   this function's own strict pass below is what enforces column identity;
+ *   the shared validator here contributes dangerous-pattern blocking only.
  */
 export function ValidateRowFilterTextAgainstEntity(filterText: string, entity: EntityInfo): RowFilterTextValidationResult {
     const errors: string[] = [];
+
+    // 0. Dangerous-pattern check (DDL/DML/EXEC/UNION/comments/semicolons) via
+    //    the shared validator, before any of this function's own tokenizing.
+    const dangerCheck = SQLExpressionValidator.Instance.validate(filterText, { context: 'where_clause' });
+    if (!dangerCheck.valid) {
+        errors.push(dangerCheck.error ?? 'FilterText failed SQL expression validation.');
+    }
 
     // 1. Token vocabulary check, then strip tokens so their contents don't hit
     //    the identifier scan.

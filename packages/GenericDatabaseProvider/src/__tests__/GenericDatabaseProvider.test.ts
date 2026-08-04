@@ -41,6 +41,7 @@ import {
 } from '@memberjunction/core';
 import type { QueryExecutionSpec } from '@memberjunction/core';
 import type { ExecuteSQLBatchOptions } from '../GenericDatabaseProvider';
+import type { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '../saveTypes.js';
 
 /**
  * Concrete test subclass that provides minimal implementations of all abstract methods.
@@ -153,6 +154,24 @@ class TestGenericProvider extends GenericDatabaseProvider {
         this.executeSQLCalls = [];
         this.executeSQLResults = [];
         this.executeSQLCallIndex = 0;
+    }
+
+    // These four are the dialect-specific save-call composition hooks
+    // `GenerateSaveSQL` normally delegates to — but this test double's own
+    // `GenerateSaveSQL` override above short-circuits with `{ fullSQL: '' }`
+    // and never reaches them. Never exercised; stubbed only to satisfy
+    // TypeScript's abstract-completeness check.
+    protected CoerceSaveFieldValue(): SaveCoercedValue {
+        throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
+    }
+    protected RenderSaveCallBinding(): SaveCallBinding {
+        throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
+    }
+    protected WrapSaveCallForResult(): SaveSQLFragment {
+        throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
+    }
+    protected WrapSaveCallWithRecordChange(): SaveSQLFragment {
+        throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
     }
 }
 
@@ -650,7 +669,7 @@ describe('GenericDatabaseProvider', () => {
                 SchemaName: 'dbo',
                 BaseView: 'vwTestEntities',
                 UserExemptFromRowLevelSecurity: () => false,
-                GetUserRowLevelSecurityWhereClause: () => "OwnerID = '42'",
+                GetEffectiveRowFilterWhereClause: () => "OwnerID = '42'",
                 FieldByName: () => ({ NeedsQuotes: true }) as unknown as ReturnType<EntityInfo['FieldByName']>,
             } as unknown as EntityInfo;
             const entity = {
@@ -676,7 +695,7 @@ describe('GenericDatabaseProvider', () => {
                 SchemaName: 'dbo',
                 BaseView: 'vwTestEntities',
                 UserExemptFromRowLevelSecurity: () => false,
-                GetUserRowLevelSecurityWhereClause: () => "OwnerID = '42'",
+                GetEffectiveRowFilterWhereClause: () => "OwnerID = '42'",
                 FieldByName: () => ({ NeedsQuotes: true }) as unknown as ReturnType<EntityInfo['FieldByName']>,
             } as unknown as EntityInfo;
             const entity = {
@@ -960,6 +979,103 @@ describe('GenericDatabaseProvider', () => {
                 const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
 
                 expect(projections).toBe('\'abc\' AS "OrganizationID"');
+            });
+        });
+
+        describe('end-to-end via Save() — a before-save hook mutation is seen by the post-hook RLS gate', () => {
+            /**
+             * `OnBeforeSaveExecute` is the real hook seam (entity actions, AI actions) that sits
+             * between the pre-hook and post-hook RLS checks in `DatabaseProviderBase.Save()`.
+             * This subclass mutates a filter-referenced field there, exactly like a real entity
+             * action would — proving (through the REAL, non-mocked `Save()` orchestration and the
+             * REAL `CheckCreateRLS`/`BuildRLSSyntheticRowProjections`) that the second, post-hook
+             * call observes the post-hook value, not the value that was current when the first
+             * call ran. This is the create-path analog of the update-path post-image check, and
+             * it is the scenario the additive second `CheckCreateRLS` call exists to close.
+             */
+            class MutatingHookProvider extends TestGenericProvider {
+                protected override async OnBeforeSaveExecute(entity: BaseEntity): Promise<void> {
+                    entity.Set('OrganizationID', 'org-B-not-mine');
+                }
+            }
+            class NonMutatingHookProvider extends TestGenericProvider {
+                protected override async OnBeforeSaveExecute(): Promise<void> {
+                    // no-op — simulates a hook that only touches unrelated fields
+                }
+            }
+
+            function makeCreateEntity() {
+                const entityInfoFields = [
+                    { Name: 'ID', IsVirtual: false, NeedsQuotes: true, SQLFullType: 'uniqueidentifier' },
+                    { Name: 'OrganizationID', IsVirtual: false, NeedsQuotes: true, SQLFullType: 'uniqueidentifier' },
+                ] as unknown as EntityFieldInfo[];
+
+                const entityInfo = {
+                    Name: 'TestEntity',
+                    SchemaName: 'dbo',
+                    BaseView: 'vwTestEntities',
+                    AllowCreateAPI: true,
+                    TrackRecordChanges: false,
+                    Fields: entityInfoFields,
+                    FieldByName: (name: string) => entityInfoFields.find(f => f.Name === name),
+                    GetEffectiveRowFilterWhereClause: () => "OrganizationID = 'org-A'",
+                } as unknown as EntityInfo;
+
+                // Stateful — Get()/Set() share this bag, so the hook's mutation is actually
+                // observable on a later Get(), the same as a real EntityField would behave.
+                const state: Record<string, unknown> = { ID: 'rec-1', OrganizationID: 'org-A' };
+
+                const entity = {
+                    EntityInfo: entityInfo,
+                    IsSaved: false,
+                    Dirty: true,
+                    Fields: entityInfoFields.map(f => ({ Name: f.Name, Dirty: false })),
+                    ResultHistory: [],
+                    RegisterResultHistoryEntry: vi.fn(),
+                    PrimaryKeys: [{ Name: 'ID', Value: 'rec-1' }],
+                    TransactionGroup: null,
+                    RegisterTransactionPreprocessing: vi.fn(),
+                    RaiseReadyForTransaction: vi.fn(),
+                    GetAll: () => ({ ...state }),
+                    Get: (name: string) => state[name] ?? null,
+                    Set: (name: string, value: unknown) => { state[name] = value; },
+                } as unknown as BaseEntity;
+
+                return entity;
+            }
+
+            it('rejects the save when the hook moves a new record out of the Create RLS filter', async () => {
+                const hookProvider = new MutatingHookProvider();
+                const entity = makeCreateEntity();
+                // Call 1: pre-hook CheckCreateRLS — the pre-hook synthetic row (org-A) passes.
+                // Call 2: post-hook CheckCreateRLS — the (now-mutated) synthetic row is rejected.
+                hookProvider.executeSQLResults = [[{ pass: 1 }], [{ pass: 0 }]];
+
+                await expect(
+                    hookProvider.Save(entity, mockUser, new EntitySaveOptions())
+                ).rejects.toThrow('a before-save hook produced field values that no longer pass row-level security');
+
+                expect(hookProvider.executeSQLCalls.length).toBe(2);
+                // The post-hook synthetic row reflects the HOOK'S value, not the original — this
+                // is the assertion that matters: the mutation was actually seen by the SECOND call.
+                expect(hookProvider.executeSQLCalls[1].sql).toContain("'org-B-not-mine' AS \"OrganizationID\"");
+                expect(hookProvider.executeSQLCalls[1].sql).not.toContain("'org-A' AS \"OrganizationID\"");
+            });
+
+            it('allows the save when the hook leaves a new record inside the Create RLS filter', async () => {
+                const hookProvider = new NonMutatingHookProvider();
+                const entity = makeCreateEntity();
+                hookProvider.executeSQLResults = [[{ pass: 1 }], [{ pass: 1 }]];
+
+                // No RLS rejection — Save() proceeds past both RLS gates to the actual (stubbed,
+                // empty-SQL) insert attempt and fails there instead — a 3rd SQL call, proving
+                // both RLS gates passed rather than short-circuiting.
+                await expect(
+                    hookProvider.Save(entity, mockUser, new EntitySaveOptions())
+                ).rejects.toThrow();
+
+                expect(hookProvider.executeSQLCalls.length).toBe(3);
+                expect(hookProvider.executeSQLCalls[1].sql).toContain("'org-A' AS \"OrganizationID\"");
             });
         });
     });

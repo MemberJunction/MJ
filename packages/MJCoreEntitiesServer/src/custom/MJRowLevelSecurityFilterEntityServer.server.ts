@@ -1,19 +1,25 @@
 import { BaseEntity, IMetadataProvider, ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJRowLevelSecurityFilterEntity } from '@memberjunction/core-entities';
-import { CollectRowFilterReferrers, ToValidationErrors, ValidateRowFilterTextAgainstEntity } from './rowFilterValidation';
+import { BuildSameEntityErrors, CollectRowFilterReferrers, ToValidationErrors, ValidateRowFilterTextAgainstEntity } from './rowFilterValidation';
 
 /**
  * Server-side `MJ: Row Level Security Filters` entity — the SECOND enforcement
  * point of the row-filter validation (plan §5.3). The scope-rule subclasses
- * validate `FilterText` against the rule's entity when the RULE is saved;
- * without an equivalent check when the FILTER is saved, all of that is
- * trivially bypassable: attach a valid filter, then edit its text to reference
- * anything. On a `FilterText` change this subclass re-runs the token/column
- * validation against EVERY current referrer (EntityPermission rows via their
- * four `*RLSFilterID` columns, plus both API scope tables via `RowFilterID`)
- * and rejects if any fails — including referrers whose entity cannot be
- * resolved (fail closed).
+ * validate `FilterText` (check 4) and the same-entity invariant (check 6)
+ * against the rule's entity when the RULE is saved; without an equivalent
+ * check when the FILTER is saved, both are trivially bypassable: attach a
+ * valid filter, then edit its text (or acquire a new, different-entity
+ * referrer) to reference anything. On a `FilterText` change — or whenever
+ * more than one referrer now exists — this subclass re-runs BOTH checks
+ * against EVERY current referrer (EntityPermission rows via their four
+ * `*RLSFilterID` columns, plus both API scope tables via `RowFilterID`) and
+ * rejects if any fails — including referrers whose entity cannot be resolved
+ * (fail closed). Check 6 has no single rule to anchor on here (a filter
+ * record itself carries no entity binding — see plan §5.1), so it anchors on
+ * the first referrer that DOES resolve to an entity and requires every other
+ * referrer to agree with it; zero or one resolvable referrer trivially
+ * satisfies the invariant.
  *
  * Note this makes the filter edit path stricter than it historically was for
  * pure-EntityPermission filters, which had no such validation. That is a
@@ -43,6 +49,8 @@ export class MJRowLevelSecurityFilterEntityServer extends MJRowLevelSecurityFilt
 
         try {
             const referrers = await CollectRowFilterReferrers(this.ID, md, this.ContextCurrentUser);
+
+            // Check 4 — FilterText's columns must resolve against every referrer's entity.
             for (const referrer of referrers) {
                 if (!referrer.Entity) {
                     errors.push(
@@ -53,6 +61,14 @@ export class MJRowLevelSecurityFilterEntityServer extends MJRowLevelSecurityFilt
                 }
                 const validation = ValidateRowFilterTextAgainstEntity(filterText, referrer.Entity);
                 errors.push(...validation.errors.map(e => `${referrer.Description}: ${e}`));
+            }
+
+            // Check 6 — every referrer must agree on the same entity. No single referrer is
+            // "the rule" here (unlike the scope-rule save path), so anchor on the first
+            // referrer that resolves to an entity and require every other referrer to match it.
+            const anchor = referrers.find(r => r.Entity)?.Entity;
+            if (anchor) {
+                errors.push(...BuildSameEntityErrors(referrers, anchor));
             }
         } catch (e) {
             errors.push(e instanceof Error ? e.message : String(e));
