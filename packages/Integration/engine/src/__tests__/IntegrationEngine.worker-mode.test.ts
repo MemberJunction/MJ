@@ -188,6 +188,21 @@ describe('IntegrationEngine worker mode (PR 1 item 8)', () => {
             expectZeroWork(result);
         });
 
+        it('refuses to execute a queued run that was cancelled before it started, and finalizes it', async () => {
+            const cancelledAt = new Date('2026-08-04T15:50:46.643Z');
+            const run = createMockRunEntity({ Status: 'Queued', CancelRequestedAt: cancelledAt, EndedAt: null, ErrorLog: null });
+            const result = await IntegrationEngine.Instance.ExecuteQueuedRun('run-x', mockContextUser, createMockProvider(run));
+
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('cancelled by user before it started');
+            expectZeroWork(result);
+            // The row must not be left Queued — the poll would hand it straight back to a worker.
+            expect(run.Status).toBe('Failed');
+            expect(run.ErrorLog).toContain('cancelled by user before it started');
+            expect(run.EndedAt).toBeInstanceOf(Date);
+            expect(run.Save).toHaveBeenCalledTimes(1);
+        });
+
         it('refuses an already-terminal row rather than re-running it', async () => {
             for (const status of ['Success', 'Failed'] as const) {
                 const run = createMockRunEntity({ Status: status });

@@ -810,6 +810,24 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (run.Status !== 'Queued') {
             return this.emptyFailedResult(`Run ${runID} is '${run.Status}', not 'Queued' — another worker already took it`);
         }
+        // A cancel issued while the run was still QUEUED must stop it here. CancelSync stamps
+        // both 'In Progress' and 'Queued' rows, but the only consumer of the stamp is the
+        // running loop's batch-boundary / lease-renewal check — a queued run has no loop yet,
+        // so without this gate the worker claims the cancelled row moments later and executes
+        // it to completion. Verified live: run E3F51F9A was stamped CancelRequestedAt at
+        // 15:50:46.643 and still finished Status='Success' at 15:50:48.646.
+        // Finalize the same way an aborted in-flight run finalizes (FinalizeRun): 'Failed'
+        // with an explicit ErrorLog, since CompanyIntegrationRun has no 'Cancelled' status.
+        if (run.CancelRequestedAt != null) {
+            run.EndedAt = new Date();
+            run.Status = 'Failed';
+            run.ErrorLog = 'Sync cancelled by user before it started';
+            if (!(await run.Save())) {
+                console.warn(`[IntegrationEngine] Could not finalize cancelled queued run ${runID}: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+            console.log(`[IntegrationEngine] Queued run ${runID} was cancelled before start — not executing`);
+            return this.emptyFailedResult('Sync cancelled by user before it started');
+        }
 
         let triggerType: SyncTriggerType = 'Scheduled';
         let options: IntegrationSyncOptions | undefined;
