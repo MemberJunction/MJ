@@ -93,8 +93,18 @@ vi.mock('@memberjunction/ng-notifications', () => ({
   },
 }));
 
+// shared.service.ts imports IsDescendantElement from here; the real package drags in
+// @angular/common, whose partially-compiled injectables (PlatformLocation) demand the JIT
+// compiler at import time and blow up the module load before any assertion runs.
+vi.mock('@memberjunction/ng-shared-generic', () => ({
+  IsDescendantElement: vi.fn(() => false),
+}));
+
 vi.mock('@memberjunction/ng-base-types', () => ({
   BaseAngularComponent: class {},
+  // SharedService's constructor registers the Explorer's OpenEntityRecord implementation here
+  // (see guides/UI_LAYERING_GUIDE.md §3), so the mock has to expose Register.
+  RecordNavigationAdapter: { Register: vi.fn() },
 }));
 
 vi.mock('@memberjunction/ng-base-application', () => ({
