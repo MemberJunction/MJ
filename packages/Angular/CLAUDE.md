@@ -79,7 +79,7 @@ There is a known multi-provider migration in flight — many existing Angular co
 > These rules are one boundary of MJ's four-layer UX architecture (L0 runtime → L1 widget →
 > L2 composite → L3 Explorer surface). The full model — including the `Before*`/`After*`
 > cancelable event contract that replaces routing below L3, the per-layer data-access rules,
-> the package split, and the `npm run check:ui-layers` gate that enforces all of it — is in
+> the package split, and the `mj standards check` gate that enforces all of it — is in
 > **[/guides/UI_LAYERING_GUIDE.md](../../guides/UI_LAYERING_GUIDE.md)**. Read it before
 > building new UI here or in any MJ app repo.
 

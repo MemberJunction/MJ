@@ -16,7 +16,8 @@ fork, without a routing dependency, and without copy-and-paste.
 >
 > Layers talk **downward with `@Input()`** and **upward with `@Output()`**, using the
 > `Before*` / `After*` cancelable event contract. Enforce it with
-> `npm run check:ui-layers`, not with good intentions.
+> `mj standards check` ([`@memberjunction/standards`](../packages/Standards/README.md)), not with
+> good intentions.
 
 ---
 
@@ -378,7 +379,7 @@ dozen `package.json` files in that tree had drifted anyway. So the rule ships wi
 gate.
 
 ```bash
-npm run check:ui-layers        # opt-in packages only; exits 1 on a violation
+mj standards check             # every standard this repo has adopted
 ```
 
 A package opts in by declaring its layer in its own `package.json`:
@@ -397,16 +398,45 @@ A package opts in by declaring its layer in its own `package.json`:
 | `surface` | No `Router` / `ActivatedRoute` / `NavigationEnd` symbols — L3 navigates through `NavigationService` only. Importing `RouterModule` for declarative `routerLink` chrome is allowed; L3 already lives inside an app that has Router configured, and what breaks the shell is *imperative* navigation. |
 | `shell` | Nothing. This is the navigation layer **itself** — `ng-explorer-core`, `ng-explorer-app` and `ng-shared` are what `NavigationService` is implemented on top of, so banning Router there would ban the implementation of the rule. Declaring the layer makes the exception **enumerable** instead of leaving those packages looking un-reviewed. In MJ it is exactly four: `ng-explorer-core`, `ng-explorer-app`, `ng-shared`, `ng-bootstrap` (auth shell + app initialization). A `shell` declaration on anything that is not literally the navigation or bootstrap layer is a rule being avoided, not applied. |
 
-Comments are stripped before matching, so a JSDoc block that *explains* a banned
-construct is not itself a violation — a gate that can't tell those apart is a gate
-people turn off.
+Two things keep the gate from crying wolf, because a gate that cries wolf gets switched off:
 
-The script lives at
-[`.github/scripts/check-ui-layers.mjs`](../.github/scripts/check-ui-layers.mjs) and is
-**self-contained on purpose** — it has no MJ-specific imports, so app repos and
-external teams copy the single file, add the npm script, and get the same gate. It is
-opt-in per package so a repo can adopt it one package at a time instead of blocking on
-a full cleanup.
+- **Comments are stripped before matching**, so a JSDoc block that *explains* a banned construct
+  is not itself a violation.
+- **Only the zero-argument form is banned.** `new RunView(provider)` and
+  `new RunQuery(this.RunQueryToUse)` pass a provider explicitly and are correct; only
+  `new RunView()` reaches for the global.
+
+**Reviewed exceptions**: put `mj-ui-layers-allow` in a comment on the offending line, or the line
+directly above it, with a reason. One line above, not more — a marker that can drift away from the
+thing it excuses stops meaning anything.
+
+The check ships in **[`@memberjunction/standards`](../packages/Standards/README.md)**, versioned
+with the platform. A repo adopts it once:
+
+```bash
+mj standards adopt --ci github --declare-compliant   # config + CI + npm script + declarations
+```
+
+Adoption is recorded in `.mj-standards.json` and is **version-pinned**: a check whose `Since`
+postdates the repo's `StandardsVersion` is reported as available and does not run. That is what
+lets MJ ship new standards continuously without a repo on an older version waking up to a red
+build it did not ask for.
+
+**In this repo every `packages/Angular/**` package is declared and passing** — 85 of them. Once a
+tree is clean, **lock it**:
+
+```jsonc
+"ui-layers": {
+  "Severity": "error",
+  "Roots": ["packages"],
+  "Options": { "requireDeclaredIn": ["packages/Angular"] }
+}
+```
+
+Inside a locked subtree, "no `mjUILayer` field" is a **failure**, not a skip; everywhere else it is
+still a skip so the rest of the repo can keep adopting. Without this, the way drift returns is not
+an edit to an existing package — it is a **new package that never opts in**, and from the outside
+"undeclared" is indistinguishable from "compliant". That is exactly MJ's own configuration.
 
 An app repo can also express the boundary as a unit test — see
 `bizapps-accounting`'s `transfer-pending-purity.test.ts` for that idiom. Either is
@@ -459,12 +489,20 @@ This pattern is the standard for **all MemberJunction repositories** — MJ core
 BizApps Open App (`bizapps-common`, `bizapps-orders`, `bizapps-accounting`,
 `bizapps-contracts`, and their siblings), and every other Blue Cypress product built
 on MJ, including BCSaaS. It is also the **recommended pattern for external teams**
-building on MemberJunction: the guide, the layer table, and
-`.github/scripts/check-ui-layers.mjs` are all copyable without modification.
+building on MemberJunction. The guide and the layer table apply as written, and the gate is
+**installable rather than copyable**:
 
-Adoption is incremental by design: declare `mjUILayer` on packages that already
-comply, migrate one vertical slice at a time, and let the gate hold each gain. A repo
-does not have to be clean to start; it has to stop getting dirtier.
+```bash
+npm i -D @memberjunction/standards
+npx mj-standards adopt --ci github --declare-compliant
+```
+
+Client and external repos do not need the full MJ CLI — the package ships its own `mj-standards`
+binary with the same commands.
+
+Adoption is incremental by design: `--declare-compliant` declares the packages that already
+comply, then migrate one vertical slice at a time and lock each tree as it comes clean. A repo does
+not have to be clean to start; it has to stop getting dirtier.
 
 ---
 
