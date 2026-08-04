@@ -52,10 +52,11 @@ import {
 export class RuntimeUtilities {
   private debug: boolean = false;
   /**
-   * The provider every read in the built utilities goes through. Set by {@link buildUtilities};
-   * defaults to the global provider when the host doesn't supply one.
+   * The provider every read in the built utilities goes through. Always set by
+   * {@link buildUtilities} before use — falls back to the global provider there
+   * (`provider ?? Metadata.Provider`) when the host doesn't supply one.
    */
-  private provider: IMetadataProvider = Metadata.Provider;
+  private provider!: IMetadataProvider;
 
   /**
    * Builds the complete utilities object for React components
