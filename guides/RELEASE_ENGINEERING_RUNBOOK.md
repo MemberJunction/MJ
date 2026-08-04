@@ -11,25 +11,31 @@ There are four distinct operations. Know which one you're doing before you start
 
 | Operation | Frequency | Who | Automation today |
 |---|---|---|---|
-| 1. Routine Edge release | ~weekly / on demand | Release engineer | Number-picking and publishing are automatic; a human still runs `changeset version` and merges the release PR (see the automation proposal below) |
+| 1. Routine Edge release | on demand | Release engineer | **One button** (`Release Edge` workflow) |
 | 2. LTS candidate cut | per cycle (~bimonthly) | Cert owner | Scripted-manual |
-| 3. LTS line patch release | as fixes land on a line | Cert owner | Manual (workflow planned) |
+| 3. LTS line patch release | as fixes land on a line | Cert owner | **One button** (`Publish LTS line release` workflow) |
 | 4. Certification flip | once per certification | Cert owner | Scripted-manual |
 
 ---
 
 ## 1. Routine Edge release
 
-The pipeline is unchanged from the pre-LTS era; prerelease mode does the version arithmetic.
+One button. Actions → **"Release Edge"** → Run workflow. The button:
 
-1. Confirm there are pending changesets on `next` (`ls .changeset/*.md` beyond README/config).
-2. On up-to-date `next`: run `npx changeset version`. In pre mode this produces the next
-   `-edge.N` version (config auto-commits the result).
-3. Run `npm install` and commit `package-lock.json` — `changeset version` leaves it stale.
-4. Push (or PR) the version commit to `next`, then open and merge the release PR
-   `next → main`. The push to `main` triggers `publish.yml`, which builds and publishes.
-5. Verify: `npm view @memberjunction/core dist-tags` — the **`edge`** tag moved to the new
-   version and **`latest` did not move**. The GitHub Release exists and is not marked latest.
+1. Guards: the repo is in Edge prerelease mode; there are unapplied changesets;
+   the latest unit-test run on `next` is green. Any failure stops with a clear error.
+2. Merges `next → main` (the dispatcher's name goes in the merge commit).
+
+The push to `main` triggers `publish.yml`, which does everything else — this has always
+been the automatic half: `changeset version` (pre mode → the next `X.Y.0-edge.N`), the
+version-grammar guard, build, `changeset publish --tag edge`, the release commit +
+`vX.Y.0-edge.N` tag, a GitHub prerelease (never latest), and the merge of `main` back
+into `next` with a lockfile update.
+
+Manual equivalent (identical behavior): open and merge a `next → main` PR yourself.
+
+Verify after either path: `npm view @memberjunction/core dist-tags` — **`edge` moved,
+`latest` did not**; the GitHub Release exists, marked prerelease, not latest.
 
 Guard behavior you may hit: `publish.yml` **hard-fails an unsuffixed 6.x version** on this
 path. That is the era gate doing its job — a plain version (a candidate) must never ship
@@ -38,23 +44,13 @@ through the routine pipeline. Stop and find the cert owner; don't work around it
 Never run `changeset pre enter` or `changeset pre exit` in this operation. Pre-mode state
 changes only during era opens and candidate cuts (operation 2).
 
-### Proposed: scheduled + on-demand automation (not yet built)
+### Automation status
 
-Target state: Edge releases stop being a person's chore. Changesets already picks every
-version number; the remaining human work is running the ceremony (version → lockfile →
-release PR). Two candidate shapes:
-
-- **The official [changesets GitHub Action](https://github.com/changesets/action)** — maintains
-  a standing "Version Packages" PR that stays current as changesets accumulate; merging that
-  one PR is the release. No cadence decision needed, on-demand is built in, and the human act
-  shrinks to a single merge click. The likely winner.
-- **A scheduled workflow** — weekly (or nightly) + `workflow_dispatch`: if pending changesets
-  exist, run `changeset version` + lockfile refresh and open (or auto-merge) the
-  `next → main` release PR.
-
-Either way publish stays exactly as it is. Status: **proposal**, needs an owner and a
-decision (chiefly: does a human still click merge, or does green CI auto-release?). Until
-then, the manual steps above are the procedure.
+Decided and built 2026-08-03: both routine tracks are one-button (`release-edge.yml`,
+`publish-lts.yml`). A standing changesets "Version Packages" PR (changesets/action) was
+considered and passed over — versioning already runs inside `publish.yml` on `main`, so
+a merge-trigger button fit the existing pipeline with less rewiring. Revisit only if the
+button press itself becomes a bottleneck.
 
 ---
 
@@ -90,23 +86,28 @@ exit/version/re-enter dance. Avoid; cut the tip.
 
 ## 3. LTS line patch release
 
-Until the parameterized `publish-lts.yml` exists (punch list), line builds are **manual, from
-a clean checkout of the line branch** (`lts/5` today, `lts/6.1` later). Verified sequence
-(process doc §14.1):
+One button. Actions → **"Publish LTS line release"** → pick the **line branch** (`lts/5`,
+`lts/6.1`, …) in the branch selector → type the same branch name in the confirmation box →
+Run workflow. The confirmation exists because the branch picker defaults to `next`, and
+this workflow must never run there (it refuses, but don't rely on the refusal).
 
-1. Fresh clone/worktree of the line branch; `npm ci`.
-2. `npx changeset version` — backported changesets resolve to a patch (or, pre-certification
-   in the bootstrap era only, a minor). Auto-commits.
-3. `npm install`; commit `package-lock.json`.
-4. Build.
-5. `npx changeset publish --tag lts-5` (the line's npm tag — never `latest`).
-6. Push the version commit and the git tags to the line branch.
+The workflow automates the verified manual sequence: `changeset version` (normal mode —
+backported changesets resolve to a patch, or a minor pre-certification in the bootstrap
+era) → lockfile refresh → build → `changeset publish --tag lts-<line>` (tag derived from
+the branch name) → push the release commit + git tag to the line branch → GitHub Release
+with `make_latest: false`. It refuses pre-mode leakage, empty changesets, and
+prerelease-shaped versions, and asserts afterward that npm `latest` did not move.
 
-Hard rules, either era: line publishes never merge to `main` or back to `next`; `latest`
+**Manual fallback** (if Actions is unavailable — this sequence is dry-check-verified,
+process doc §14.1): fresh checkout of the line branch → `npm ci` → `npx changeset version`
+→ `npm install` + commit `package-lock.json` → build → `npx changeset publish --tag lts-5`
+→ push the version commit and tags to the line branch.
+
+Hard rules, either path: line publishes never merge to `main` or back to `next`; `latest`
 never moves here; GitHub Releases from a line stay `make_latest: false` until the line is
 the newest certified. **Do not `workflow_dispatch` the routine `publish.yml` from a line
-branch** — dispatching was verified unsafe (dry-check 2026-08-01): its publish step would
-land on `latest` and its main-gated steps silently skip.
+branch** — verified unsafe (dry-check 2026-08-01): its publish step would land on `latest`
+and its main-gated steps silently skip.
 
 DB-touching line changes need their §12 label (`metadata-migration`, `codegen-repair`, or
 `security-exception`) — the line guard enforces this on `lts/*` PRs.
