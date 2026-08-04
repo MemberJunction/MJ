@@ -1,8 +1,9 @@
 import { Component, Input, AfterViewInit, ChangeDetectorRef, ElementRef } from '@angular/core';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { IsDescendantElement } from '@memberjunction/ng-shared-generic';
 
 import { BaseEntity, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, RunView, RunViewParams, ValidationErrorInfo } from '@memberjunction/core';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
-import { SharedService } from '@memberjunction/ng-shared';
 import { BaseAngularComponent, BaseFormComponentEvent, BaseFormComponentEventCodes, FormEditingCompleteEvent } from '@memberjunction/ng-base-types';
 
 export class JoinGridCell {
@@ -371,7 +372,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
     if (this.JoinEntityExtraFilter) {
       filter = `(${filter}) AND (${this.JoinEntityExtraFilter})`;
     }
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView(
       { 
         EntityName: this.JoinEntityName, 
@@ -389,7 +390,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
   }
 
   protected async PopulateRowsAndColsData() {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     if (this.ColumnsMode==='Entity') {
       // only populate the columns if we are using the entity mode, otherwise the array from JoinGridDisplayColumns will be used
       if (this.ColumnsEntityDataSource === 'Array') {
@@ -408,7 +409,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
   }
 
   protected async RunColumnsOrRowsView(dataSource: 'FullEntity' | 'ViewName', entityName: string, viewName?: string, extraFilter?: string, orderBy?: string): Promise<BaseEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const params: RunViewParams = dataSource === 'FullEntity' ? { EntityName: entityName } : { ViewName: viewName };
     if (extraFilter)
       params.ExtraFilter = extraFilter;
@@ -605,7 +606,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
         // all good
       }
       else {
-        SharedService.Instance.CreateSimpleNotification('Error saving new ' + this.JoinEntityName + ' record','error', 2500)
+        MJNotificationService.Instance.CreateSimpleNotification('Error saving new ' + this.JoinEntityName + ' record','error', 2500)
       }
     }
     this.PopulateGridData(); // refresh the grid's grid data array that is derived from all of the source data
@@ -636,7 +637,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
           if (e.eventCode === b.BASE_CODE) {
             // we have an event from a BaseFormComponent, now we need to determine if WE are a descendant of that component
             const event: BaseFormComponentEvent = e.args as BaseFormComponentEvent;
-            if (SharedService.IsDescendant(event.elementRef, this.elementRef)) {
+            if (IsDescendantElement(event.elementRef, this.elementRef)) {
               // we are a descendant of the component that sent the event, so we need to handle it
               switch (event.subEventCode) {
                 case b.EDITING_COMPLETE:
