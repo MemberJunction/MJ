@@ -349,8 +349,13 @@ export class UploadRealtimeRecordingResult {
  */
 @Resolver()
 export class RealtimeClientSessionResolver extends ResolverBase {
-    private readonly sessionManager = new SessionManager();
+    // Declaration order matters: `clientSessionService` must be initialized before `sessionManager`
+    // reads it, so `SessionManager.CloseSession` finalizes co-agent observability runs (see
+    // `finalizeObservabilityRuns`) through the SAME `RealtimeClientSessionService` instance that
+    // `AppendPromptRunMessage`/`AccumulatePromptRunUsage` (below) accumulated per-run write-chain
+    // state on — otherwise that cleanup silently no-ops on a freshly-constructed instance.
     private readonly clientSessionService = new RealtimeClientSessionService();
+    private readonly sessionManager = new SessionManager(this.clientSessionService);
 
     /**
      * Start a client-direct realtime voice session targeting `targetAgentId`.
