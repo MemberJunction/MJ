@@ -1593,6 +1593,47 @@ export class EntityInfo extends BaseInfo {
      */
     AllowDeleteAPI: boolean = false
     /**
+     * Whether rows may be INSERTed by SQL that does not go through {@link BaseEntity}.Save() —
+     * bulk loads, ETL/integration sync, or rows created as a side effect of a stored procedure.
+     *
+     * `false` (the default, and every entity that has not opted in) means all inserts are expected
+     * to flow through `BaseEntity`, which is the only path where record-change tracking, entity
+     * actions, validation and cache invalidation actually run.
+     *
+     * **This DECLARES intent; it enforces nothing.** No constraint, trigger or grant prevents
+     * anyone from executing SQL. It exists so the code paths and tooling that *choose* to honour
+     * the platform contract — bulk/ETL and integration sync, record-set processing, and generators
+     * or agents authoring SQL — have one authoritative answer instead of tribal knowledge.
+     *
+     * A database CHECK requires {@link TrackRecordChanges} and {@link TrustServerCacheCompletely}
+     * to both be `false` when this is set, because a direct insert produces neither an audit row
+     * nor a cache-invalidation event — leaving either on yields an audit trail that looks complete
+     * but is not, and a server cache that serves stale rows indefinitely.
+     */
+    AllowDirectSQLInsert: boolean = false
+    /**
+     * Whether rows may be UPDATEd by SQL that does not go through {@link BaseEntity}.Save() —
+     * bulk backfills, integration sync, or maintenance routines.
+     *
+     * `false` (the default) means all updates are expected to flow through `BaseEntity`. See
+     * {@link AllowDirectSQLInsert} for the full rationale, the "declares, does not enforce"
+     * caveat, and the `TrackRecordChanges` / `TrustServerCacheCompletely` requirement.
+     */
+    AllowDirectSQLUpdate: boolean = false
+    /**
+     * Whether rows may be DELETEd by SQL that does not go through {@link BaseEntity}.Delete() —
+     * purge and retention routines, or integration sync reconciling against a remote source.
+     *
+     * `false` (the default) means all deletes are expected to flow through `BaseEntity`. See
+     * {@link AllowDirectSQLInsert} for the full rationale and the `TrackRecordChanges` /
+     * {@link TrustServerCacheCompletely} requirement.
+     *
+     * Additionally requires {@link DeleteType} to be `'Hard'`: a direct `DELETE` removes the row
+     * outright rather than setting `DeletedAt`, so sanctioning it on a soft-delete entity would
+     * quietly defeat soft delete. A database CHECK refuses the combination.
+     */
+    AllowDirectSQLDelete: boolean = false
+    /**
      * If true, uses a custom resolver for GraphQL operations instead of standard CRUD
      */
     CustomResolverAPI: boolean = false

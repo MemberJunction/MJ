@@ -34384,6 +34384,10 @@ export class MJContentItemChunk_ {
     ContentItem?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(500)
+    ParentChunk?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(36)
     RootParentChunkID?: string;
         
@@ -46499,6 +46503,19 @@ export class MJEntity_ {
     @MaxLength(255)
     ExternalObjectName?: string;
         
+    @Field({nullable: true, description: `When set, CodeGen generates the entity's full base view under THIS name instead of BaseView, and the application owns BaseView — which is expected to wrap it (SELECT g.*, <extras> FROM <GeneratedBaseViewName> g). This gives an entity a custom base view WITHOUT inheriting the generated SQL: related-entity display joins, geo columns and recursive root-ID columns keep regenerating underneath, so a foreign key added later still appears. NULL (the default, and every pre-existing row) means the previous all-or-nothing behaviour: BaseViewGenerated alone decides whether CodeGen writes BaseView, and there is no second view. BaseView remains the public surface — entity field discovery, permissions and the generated CRUD procedures all target it. SQL SERVER ONLY: layering relies on sp_refreshview to re-resolve the application-owned outer view's SELECT * against a regenerated inner view. PostgreSQL freezes a view's column list at creation and has no refresh equivalent, so CodeGen rejects this column on PostgreSQL rather than let the outer view go silently stale.`}) 
+    @MaxLength(255)
+    GeneratedBaseViewName?: string;
+        
+    @Field(() => Boolean, {description: `When 1, this entity may be populated by INSERT statements that do not go through BaseEntity.Save() — bulk loads, ETL/integration sync, or rows created as a side effect of a stored procedure. Default 0, meaning every insert is expected to flow through BaseEntity so that record-change tracking, entity actions, validation and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, because a direct insert produces neither an audit row nor a cache-invalidation event.`}) 
+    AllowDirectSQLInsert: boolean;
+        
+    @Field(() => Boolean, {description: `When 1, this entity may be modified by UPDATE statements that do not go through BaseEntity.Save() — bulk backfills, integration sync, or maintenance routines. Default 0, meaning every update is expected to flow through BaseEntity so that record-change tracking, entity actions, validation and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, because a direct update produces neither an audit row nor a cache-invalidation event.`}) 
+    AllowDirectSQLUpdate: boolean;
+        
+    @Field(() => Boolean, {description: `When 1, this entity may have rows removed by DELETE statements that do not go through BaseEntity.Delete() — purge and retention routines, or integration sync reconciling a remote source. Default 0, meaning every delete is expected to flow through BaseEntity so that record-change tracking, entity actions, cascade handling and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, and additionally requires DeleteType = 'Hard' — a direct DELETE removes the row outright rather than setting DeletedAt, which would defeat soft delete.`}) 
+    AllowDirectSQLDelete: boolean;
+        
     @Field({nullable: true, description: `Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`}) 
     CodeName?: string;
         
@@ -46933,6 +46950,18 @@ export class CreateMJEntityInput {
     @Field({ nullable: true })
     ExternalObjectName: string | null;
 
+    @Field({ nullable: true })
+    GeneratedBaseViewName: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDirectSQLInsert?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDirectSQLUpdate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDirectSQLDelete?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -47131,6 +47160,18 @@ export class UpdateMJEntityInput {
 
     @Field({ nullable: true })
     ExternalObjectName?: string | null;
+
+    @Field({ nullable: true })
+    GeneratedBaseViewName?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDirectSQLInsert?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDirectSQLUpdate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDirectSQLDelete?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

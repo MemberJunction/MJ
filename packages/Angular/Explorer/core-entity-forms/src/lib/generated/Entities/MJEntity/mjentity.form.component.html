@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="identityStructure"
         SectionName="Identity & Structure"
-        Icon="fa fa-cube"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -153,7 +153,7 @@
     <mj-collapsible-panel
         SectionKey="userInterfaceCustomization"
         SectionName="User Interface & Customization"
-        Icon="fa fa-paint-brush"
+        Icon="fa fa-user"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -219,7 +219,7 @@
     <mj-collapsible-panel
         SectionKey="auditingLifecycle"
         SectionName="Auditing & Lifecycle"
-        Icon="fa fa-history"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -293,7 +293,7 @@
     <mj-collapsible-panel
         SectionKey="aPISearchSettings"
         SectionName="API & Search Settings"
-        Icon="fa fa-search"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -495,7 +495,7 @@
     <mj-collapsible-panel
         SectionKey="proceduresDeletion"
         SectionName="Procedures & Deletion"
-        Icon="fa fa-code"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -585,7 +585,7 @@
     <mj-collapsible-panel
         SectionKey="rowStatistics"
         SectionName="Row Statistics"
-        Icon="fa fa-chart-bar"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -615,11 +615,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Details Section -->
+    <!-- Data Integration Section -->
     <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
+        SectionKey="dataIntegration"
+        SectionName="Data Integration"
+        Icon="fa fa-plug"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -636,6 +636,38 @@
             [ShowLabel]="true"
             FieldName="ExternalObjectName"
             Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="GeneratedBaseViewName"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowDirectSQLInsert"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowDirectSQLUpdate"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowDirectSQLDelete"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
