@@ -97,6 +97,20 @@ const dbSchemaSchema = z.object({
      *  engine auto-detects it from packages.shared (first library-role package
      *  whose name contains "entities"). */
     entityPackage: z.string().max(214).regex(npmPackageNameRegex, 'entityPackage must be a valid npm package name (lowercase, URL-safe characters, optional @scope/)').optional(),
+    /**
+     * Declares that this app's migrations seed their OWN `__mj.Entity` rows and ship their own
+     * generated base views / CRUD procs — so the host's CodeGen must keep off this schema
+     * entirely. Adds the schema to the host's `excludeSchemas`.
+     *
+     * Defaults to `false`, which is the contract the README documents ("Migration Content": an
+     * app ships raw DDL and *"MJ's CodeGen handles those automatically after entity
+     * registration"*). Setting it `true` is a statement that the app has taken over that job.
+     *
+     * This is NOT a substitute for `entityPackage`. `entityPackage` suppresses duplicate entity
+     * subclasses / GraphQL ObjectTypes and is written either way; `excludeSchemas` additionally
+     * disables entity DISCOVERY, which is why it cannot be the default (issue #3457).
+     */
+    selfManagedMetadata: z.boolean().optional().default(false),
 });
 
 // ── Migrations ────────────────────────────────────────────

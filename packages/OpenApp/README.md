@@ -612,13 +612,30 @@ The `DriverClass` value must exactly match the second argument of `@RegisterClas
 {
   "schema": {
     "name": "acme_crm",
-    "createIfNotExists": true
+    "createIfNotExists": true,
+    "entityPackage": "@acme/mj-crm-entities",
+    "selfManagedMetadata": false
   }
 }
 ```
 
 - `name`: Alphanumeric + underscores, 3-128 chars (`/^_{0,2}[a-zA-Z][a-zA-Z0-9_]{1,126}[a-zA-Z0-9]$/`)
 - `createIfNotExists`: If `true` (default), the CLI creates the schema during install
+- `entityPackage`: npm package exporting the generated entity subclasses for this schema. The
+  installer writes it into the host's CodeGen `entityPackageName` map, which is what stops the host
+  from emitting duplicate entity subclasses and GraphQL ObjectTypes for your entities. Auto-detected
+  from the first `packages.shared` library whose name contains `entities` when omitted.
+- `selfManagedMetadata`: **Default `false`.** Leave it false if your migrations ship raw DDL and you
+  rely on the host's CodeGen to register your entities — the contract described in
+  [Migration Content](#migration-content) above. Set it `true` only if your migrations seed their own
+  `__mj.Entity` rows **and** ship their own generated base views / CRUD procs; that adds your schema
+  to the host's `excludeSchemas`, which keeps CodeGen off the schema entirely.
+
+> ⚠️ `selfManagedMetadata: true` disables entity **discovery** for your schema, not just file
+> generation. If you set it without seeding your own entity metadata, `mj app install` and
+> `mj codegen` both succeed and you get tables with **zero entities** and no error. That silent
+> failure is why the flag defaults to false and why `entityPackage` — not `excludeSchemas` — is the
+> mechanism for duplicate suppression.
 
 ### Package Configuration
 

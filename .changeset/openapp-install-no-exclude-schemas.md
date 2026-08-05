@@ -1,0 +1,17 @@
+---
+"@memberjunction/open-app-engine": minor
+---
+
+fix(open-app): stop the installer silently disabling CodeGen entity registration for an app's schema.
+
+`mj app install` / `mj app upgrade` wrote the app's `manifest.schema.name` into the host's CodeGen `excludeSchemas` on every run. That flag gates **three** independent things, not one: entity **discovery** (`createNewEntities` → `createExcludeTablesAndSchemasFilter`), SQL ownership (base views + CRUD procs, `sql_codegen.ts`), and TS/GraphQL/Angular emission (`runCodeGen.ts`). Only the third is what an installed app needs suppressed, and the `entityPackageName` mapping the installer already writes does exactly that on its own.
+
+The consequence was silent and total for any app following the documented contract (README "Migration Content": ship raw DDL, *"MJ's CodeGen handles those automatically after entity registration"*): `mj app install` succeeded, `mj codegen` succeeded, and the app ended up with its tables present and **zero entities** — no error at any step. It also re-armed, so a host that removed the line by hand got it back on the next upgrade.
+
+The write is now opt-in via a new `schema.selfManagedMetadata` manifest field (default `false`), for apps whose migrations seed their own `__mj.Entity` rows **and** ship their own generated views/procs. On the default path the installer now actively **removes** the schema from `excludeSchemas`, so hosts already broken by an earlier installer version heal on the next install or upgrade rather than staying broken.
+
+`entityPackageName` continues to be written in both cases — duplicate entity subclasses and duplicate GraphQL ObjectTypes remain suppressed, which is regression-tested over the `localNonCoreEntities` filtering.
+
+The original justification for the write (app-owned `flyway_schema_history` being adopted as an entity) was already covered independently: CodeGen's default `excludeTables` has carried `{ schema: '%', table: 'flyway_schema_history' }` since well before it landed. Note that `excludeTables` **replaces** rather than merges on override, so a host that defines its own `excludeTables` should keep that entry.
+
+Fixes #3457.

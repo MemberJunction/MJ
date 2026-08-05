@@ -6,6 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { ValidateManifestObject } from '../manifest/manifest-loader.js';
+import { mjAppManifestSchema } from '../manifest/manifest-schema.js';
 
 /** Minimal valid manifest with only required fields. */
 function minimalManifest(): Record<string, unknown> {
@@ -219,6 +220,32 @@ describe('Manifest Validation', () => {
 
         it('should reject schema name too short', () => {
             const m = { ...minimalManifest(), schema: { name: 'ab' } };
+            expect(ValidateManifestObject(m).Success).toBe(false);
+        });
+    });
+
+    /**
+     * `selfManagedMetadata` opts an app out of the host CodeGen managing its schema (issue #3457).
+     * The DEFAULT is the load-bearing part: every app published before this field existed omits it,
+     * and those apps rely on the host's CodeGen to register their entities. A default of `true`
+     * would silently re-break every one of them.
+     */
+    describe('schema.selfManagedMetadata', () => {
+        it('defaults to false when omitted — host CodeGen registers the app\'s entities', () => {
+            const m = { ...minimalManifest(), schema: { name: '__mj_BizAppsCaliber' } };
+            const parsed = mjAppManifestSchema.parse(m);
+            expect(parsed.schema?.selfManagedMetadata).toBe(false);
+        });
+
+        it('round-trips true for an app that ships its own entity seed + generated SQL', () => {
+            const m = { ...minimalManifest(), schema: { name: '__mj_BizAppsCaliber', selfManagedMetadata: true } };
+            const parsed = mjAppManifestSchema.parse(m);
+            expect(parsed.schema?.selfManagedMetadata).toBe(true);
+        });
+
+        it('rejects a non-boolean value rather than coercing it', () => {
+            // 'true' as a string would be truthy at the call site and silently exclude the schema.
+            const m = { ...minimalManifest(), schema: { name: '__mj_BizAppsCaliber', selfManagedMetadata: 'true' } };
             expect(ValidateManifestObject(m).Success).toBe(false);
         });
     });

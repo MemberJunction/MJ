@@ -1799,10 +1799,22 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
   }
   warnSkipped(entityResult);
 
-  // Add app schema to excludeSchemas so CodeGen skips entity discovery,
-  // view generation, and Angular component generation for app-owned tables
+  // excludeSchemas gates THREE things in CodeGen, not one: entity DISCOVERY
+  // (createNewEntities -> createExcludeTablesAndSchemasFilter), SQL ownership (base views + CRUD
+  // procs, sql_codegen.ts), and TS/GraphQL/Angular emission (runCodeGen.ts). Only the third is
+  // what an installed app needs suppressed, and the entityPackageName mapping written just above
+  // already does exactly that. Writing the schema here as well ALSO disables entity registration
+  // — which the documented app contract depends on the host's CodeGen to perform (README
+  // "Migration Content") — producing tables with zero entities and no error anywhere (#3457).
+  //
+  // So this is opt-in, and the default branch actively UN-excludes: a host broken by an earlier
+  // installer version already has the schema sitting in its mj.config.cjs, and deleting the write
+  // alone would leave it broken forever. Removing on every install/upgrade turns the old
+  // "re-arms on every run" behavior into self-repair.
   if (manifest.schema?.name) {
-    const excludeResult = AddExcludeSchema(context.RepoRoot, manifest.schema.name, context.ServerPackagePath);
+    const excludeResult = manifest.schema.selfManagedMetadata
+      ? AddExcludeSchema(context.RepoRoot, manifest.schema.name, context.ServerPackagePath)
+      : RemoveExcludeSchema(context.RepoRoot, manifest.schema.name, context.ServerPackagePath);
     if (!excludeResult.Success) {
       return { Success: false, ErrorMessage: excludeResult.ErrorMessage };
     }
