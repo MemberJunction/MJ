@@ -320,7 +320,7 @@ export const MJActionExecutionLogSchema = z.object({
         * * Field Name: Params
         * * Display Name: Params
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON-formatted input parameters passed to the action during execution, storing the exact values used for this specific run.`),
+        * * Description: JSON-formatted input parameters AS THE ACTION WAS CALLED, captured once when execution starts and never overwritten. Custom and Generated actions mutate their parameter array in place, so this is the only durable record of the values actually passed in; the final state lives in ResultParams. Parameter values may be redacted per ActionParam.LogValue / EntityActionParam.LogValue, and whole-record value types are never written - see the parameter's own documentation.`),
     ResultCode: z.string().nullable().describe(`
         * * Field Name: ResultCode
         * * Display Name: Result Code
@@ -350,7 +350,35 @@ export const MJActionExecutionLogSchema = z.object({
         * * Field Name: Message
         * * Display Name: Message
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON-formatted output data or response from the action execution`),
+        * * Description: Human-readable summary message returned by the action - the reason for a refusal, or a short description of what was done. Not the action's output data: parameter values live in Params and ResultParams, and the outcome code in ResultCode.`),
+    EntityActionID: z.string().nullable().describe(`
+        * * Field Name: EntityActionID
+        * * Display Name: Entity Action ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)
+        * * Description: Optional. The Entity Action binding that caused this run. NULL when the action was invoked directly - from a resolver, a script, an agent step or a scheduled action.`),
+    EntityActionInvocationTypeID: z.string().nullable().describe(`
+        * * Field Name: EntityActionInvocationTypeID
+        * * Display Name: Entity Action Invocation Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)
+        * * Description: Optional. Which lifecycle event fired the binding - AfterUpdate, Validate, List and so on. Recorded separately from EntityActionID because one binding may be attached to several invocation types, and telling a Validate refusal apart from an AfterUpdate side effect is the first question anyone asks of this log.`),
+    TargetEntityID: z.string().nullable().describe(`
+        * * Field Name: TargetEntityID
+        * * Display Name: Target Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Optional. The entity of the record this run operated on. Deliberately denormalized rather than joined through EntityActionID: it survives the binding being deleted or retargeted, and it lets the log be queried by record with no join. Kept generic because every invoker has a subject - not only Entity Actions.`),
+    TargetRecordID: z.string().nullable().describe(`
+        * * Field Name: TargetRecordID
+        * * Display Name: Target Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Optional. The primary key of the record this run operated on, as text, paired with TargetEntityID. For multi-record invocation types (List, View) one log row is written per record, so this is always a single record.`),
+    ResultParams: z.string().nullable().describe(`
+        * * Field Name: ResultParams
+        * * Display Name: Result Params
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON-formatted FINAL parameter set captured when the action finished - the inputs as the action left them, plus any output parameters it produced. Written on FAILURE exactly as on success, under the same redaction rules: a failed run's partially-mutated inputs are usually the most diagnostic thing available, and an audit trail that records only successes is not an audit trail. Distinct from Params, which holds the values the action was called with and is never overwritten. NULL means one thing only - the run never finished (process died, host killed) - so it is a signal rather than an absence, and must not be backfilled.`),
     Action: z.string().describe(`
         * * Field Name: Action
         * * Display Name: Action
@@ -359,6 +387,18 @@ export const MJActionExecutionLogSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    EntityAction: z.string().nullable().describe(`
+        * * Field Name: EntityAction
+        * * Display Name: Entity Action
+        * * SQL Data Type: nvarchar(425)`),
+    EntityActionInvocationType: z.string().nullable().describe(`
+        * * Field Name: EntityActionInvocationType
+        * * Display Name: Entity Action Invocation Type
+        * * SQL Data Type: nvarchar(255)`),
+    TargetEntity: z.string().nullable().describe(`
+        * * Field Name: TargetEntity
+        * * Display Name: Target Entity
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJActionExecutionLogEntityType = z.infer<typeof MJActionExecutionLogSchema>;
@@ -537,6 +577,12 @@ export const MJActionParamSchema = z.object({
     *   * Image
     *   * Video
         * * Description: Specifies the type of media this parameter outputs when ValueType is MediaOutput. Used for action discovery and validation.`),
+    LogValue: z.boolean().describe(`
+        * * Field Name: LogValue
+        * * Display Name: Log Value
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this parameter's VALUE may be written to ActionExecutionLog.Params. Default 1. Set to 0 for parameters that carry records, credentials or personal data - for example the Data payload of Execute Agent. Independent of the hard rule that Entity Action params of ValueType 'Entity Object' or 'Entity Object Data' are never logged regardless of this flag. When logging is suppressed the log records the parameter name, its type and a redaction marker, never the value.`),
     Action: z.string().describe(`
         * * Field Name: Action
         * * Display Name: Action
@@ -16726,7 +16772,7 @@ export const MJEntityActionParamSchema = z.object({
         * * Display Name: Action Parameter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Action Params (vwActionParams.ID)`),
-    ValueType: z.union([z.literal('Entity Field'), z.literal('Entity Object'), z.literal('Script'), z.literal('Static')]).describe(`
+    ValueType: z.union([z.literal('Entity Field'), z.literal('Entity Object'), z.literal('Entity Object Data'), z.literal('Script'), z.literal('Static')]).describe(`
         * * Field Name: ValueType
         * * Display Name: Value Type
         * * SQL Data Type: nvarchar(20)
@@ -16734,9 +16780,10 @@ export const MJEntityActionParamSchema = z.object({
     * * Possible Values 
     *   * Entity Field
     *   * Entity Object
+    *   * Entity Object Data
     *   * Script
     *   * Static
-        * * Description: Type of the value, which can be Static, Entity Object, or Script.`),
+        * * Description: How the parameter value is produced at invocation time. Static = the literal Value (parsed as JSON when it parses). Entity Object = the live BaseEntity instance, for actions that call entity methods. Entity Object Data = entity.GetAll(), a plain object - use this for any action that SERIALIZES the value, such as the Data payload of Execute Agent, because a BaseEntity serializes to {} (its fields are getters, not enumerable own properties). Entity Field = the named field's value. Script = evaluated expression with the entity in scope.`),
     Value: z.string().nullable().describe(`
         * * Field Name: Value
         * * Display Name: Value
@@ -16757,6 +16804,11 @@ export const MJEntityActionParamSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    LogValue: z.boolean().nullable().describe(`
+        * * Field Name: LogValue
+        * * Display Name: Log Value
+        * * SQL Data Type: bit
+        * * Description: Optional per-binding override of ActionParam.LogValue. NULL (the default) inherits the parameter definition. Set to 0 when this particular binding passes something sensitive through a parameter that is ordinarily safe to log - a message body through a generic Text parameter, for instance. Cannot re-enable logging for a value type the hard rule suppresses.`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
         * * Display Name: Entity Action
@@ -16809,6 +16861,34 @@ export const MJEntityActionSchema = z.object({
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Execution order when multiple Entity Actions are bound to the same entity and invocation type. Lower runs first; ties fall back to creation order. Defaults to 0 so existing rows are unaffected.`),
+    ScopeEntityID: z.string().nullable().describe(`
+        * * Field Name: ScopeEntityID
+        * * Display Name: Scope Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Optional. Together with ScopeRecordID, narrows this Entity Action to records related to ONE specific record - for example a single Deal Type, Contract Type, Pipeline or Company - rather than every record of EntityID. NULL (the default) means the action applies to all records, which is the pre-existing behaviour. How a scope record relates to the subject record is resolved by the app that owns the scope entity; the framework only stores and filters on the pair.`),
+    ScopeRecordID: z.string().nullable().describe(`
+        * * Field Name: ScopeRecordID
+        * * Display Name: Scope Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Optional. The primary key of the scope record, as text, paired with ScopeEntityID. Both columns are NULL or both are set (CK_EntityAction_Scope). Lets a configuration record such as a Deal Type surface "the workflows bound to me" as a real relationship rather than something buried in filter code.`),
+    LoggingMode: z.union([z.literal('All'), z.literal('FailuresOnly'), z.literal('None')]).describe(`
+        * * Field Name: LoggingMode
+        * * Display Name: Logging Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: All
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * FailuresOnly
+    *   * None
+        * * Description: How much of this binding's activity reaches ActionExecutionLog. All (default) writes a row per invocation. FailuresOnly writes only runs that did not succeed - the right setting for a high-frequency binding on a busy entity, where the successful runs are noise. None disables logging for the binding entirely and should be rare, because it also removes the failure record.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -16817,6 +16897,10 @@ export const MJEntityActionSchema = z.object({
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)`),
+    ScopeEntity: z.string().nullable().describe(`
+        * * Field Name: ScopeEntity
+        * * Display Name: Scope Entity
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJEntityActionEntityType = z.infer<typeof MJEntityActionSchema>;
@@ -33990,7 +34074,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
     * * Field Name: Params
     * * Display Name: Params
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON-formatted input parameters passed to the action during execution, storing the exact values used for this specific run.
+    * * Description: JSON-formatted input parameters AS THE ACTION WAS CALLED, captured once when execution starts and never overwritten. Custom and Generated actions mutate their parameter array in place, so this is the only durable record of the values actually passed in; the final state lives in ResultParams. Parameter values may be redacted per ActionParam.LogValue / EntityActionParam.LogValue, and whole-record value types are never written - see the parameter's own documentation.
     */
     get Params(): string | null {
         return this.Get('Params');
@@ -34062,13 +34146,81 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
     * * Field Name: Message
     * * Display Name: Message
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON-formatted output data or response from the action execution
+    * * Description: Human-readable summary message returned by the action - the reason for a refusal, or a short description of what was done. Not the action's output data: parameter values live in Params and ResultParams, and the outcome code in ResultCode.
     */
     get Message(): string | null {
         return this.Get('Message');
     }
     set Message(value: string | null) {
         this.Set('Message', value);
+    }
+
+    /**
+    * * Field Name: EntityActionID
+    * * Display Name: Entity Action ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)
+    * * Description: Optional. The Entity Action binding that caused this run. NULL when the action was invoked directly - from a resolver, a script, an agent step or a scheduled action.
+    */
+    get EntityActionID(): string | null {
+        return this.Get('EntityActionID');
+    }
+    set EntityActionID(value: string | null) {
+        this.Set('EntityActionID', value);
+    }
+
+    /**
+    * * Field Name: EntityActionInvocationTypeID
+    * * Display Name: Entity Action Invocation Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)
+    * * Description: Optional. Which lifecycle event fired the binding - AfterUpdate, Validate, List and so on. Recorded separately from EntityActionID because one binding may be attached to several invocation types, and telling a Validate refusal apart from an AfterUpdate side effect is the first question anyone asks of this log.
+    */
+    get EntityActionInvocationTypeID(): string | null {
+        return this.Get('EntityActionInvocationTypeID');
+    }
+    set EntityActionInvocationTypeID(value: string | null) {
+        this.Set('EntityActionInvocationTypeID', value);
+    }
+
+    /**
+    * * Field Name: TargetEntityID
+    * * Display Name: Target Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Optional. The entity of the record this run operated on. Deliberately denormalized rather than joined through EntityActionID: it survives the binding being deleted or retargeted, and it lets the log be queried by record with no join. Kept generic because every invoker has a subject - not only Entity Actions.
+    */
+    get TargetEntityID(): string | null {
+        return this.Get('TargetEntityID');
+    }
+    set TargetEntityID(value: string | null) {
+        this.Set('TargetEntityID', value);
+    }
+
+    /**
+    * * Field Name: TargetRecordID
+    * * Display Name: Target Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Optional. The primary key of the record this run operated on, as text, paired with TargetEntityID. For multi-record invocation types (List, View) one log row is written per record, so this is always a single record.
+    */
+    get TargetRecordID(): string | null {
+        return this.Get('TargetRecordID');
+    }
+    set TargetRecordID(value: string | null) {
+        this.Set('TargetRecordID', value);
+    }
+
+    /**
+    * * Field Name: ResultParams
+    * * Display Name: Result Params
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON-formatted FINAL parameter set captured when the action finished - the inputs as the action left them, plus any output parameters it produced. Written on FAILURE exactly as on success, under the same redaction rules: a failed run's partially-mutated inputs are usually the most diagnostic thing available, and an audit trail that records only successes is not an audit trail. Distinct from Params, which holds the values the action was called with and is never overwritten. NULL means one thing only - the run never finished (process died, host killed) - so it is a signal rather than an absence, and must not be backfilled.
+    */
+    get ResultParams(): string | null {
+        return this.Get('ResultParams');
+    }
+    set ResultParams(value: string | null) {
+        this.Set('ResultParams', value);
     }
 
     /**
@@ -34087,6 +34239,33 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
     */
     get User(): string {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: EntityAction
+    * * Display Name: Entity Action
+    * * SQL Data Type: nvarchar(425)
+    */
+    get EntityAction(): string | null {
+        return this.Get('EntityAction');
+    }
+
+    /**
+    * * Field Name: EntityActionInvocationType
+    * * Display Name: Entity Action Invocation Type
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EntityActionInvocationType(): string | null {
+        return this.Get('EntityActionInvocationType');
+    }
+
+    /**
+    * * Field Name: TargetEntity
+    * * Display Name: Target Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TargetEntity(): string | null {
+        return this.Get('TargetEntity');
     }
 }
 
@@ -34529,6 +34708,20 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     }
     set MediaModality(value: 'Audio' | 'Image' | 'Video' | null) {
         this.Set('MediaModality', value);
+    }
+
+    /**
+    * * Field Name: LogValue
+    * * Display Name: Log Value
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this parameter's VALUE may be written to ActionExecutionLog.Params. Default 1. Set to 0 for parameters that carry records, credentials or personal data - for example the Data payload of Execute Agent. Independent of the hard rule that Entity Action params of ValueType 'Entity Object' or 'Entity Object Data' are never logged regardless of this flag. When logging is suppressed the log records the parameter name, its type and a redaction marker, never the value.
+    */
+    get LogValue(): boolean {
+        return this.Get('LogValue');
+    }
+    set LogValue(value: boolean) {
+        this.Set('LogValue', value);
     }
 
     /**
@@ -78030,14 +78223,15 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
     * * Possible Values 
     *   * Entity Field
     *   * Entity Object
+    *   * Entity Object Data
     *   * Script
     *   * Static
-    * * Description: Type of the value, which can be Static, Entity Object, or Script.
+    * * Description: How the parameter value is produced at invocation time. Static = the literal Value (parsed as JSON when it parses). Entity Object = the live BaseEntity instance, for actions that call entity methods. Entity Object Data = entity.GetAll(), a plain object - use this for any action that SERIALIZES the value, such as the Data payload of Execute Agent, because a BaseEntity serializes to {} (its fields are getters, not enumerable own properties). Entity Field = the named field's value. Script = evaluated expression with the entity in scope.
     */
-    get ValueType(): 'Entity Field' | 'Entity Object' | 'Script' | 'Static' {
+    get ValueType(): 'Entity Field' | 'Entity Object' | 'Entity Object Data' | 'Script' | 'Static' {
         return this.Get('ValueType');
     }
-    set ValueType(value: 'Entity Field' | 'Entity Object' | 'Script' | 'Static') {
+    set ValueType(value: 'Entity Field' | 'Entity Object' | 'Entity Object Data' | 'Script' | 'Static') {
         this.Set('ValueType', value);
     }
 
@@ -78088,6 +78282,19 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
     }
 
     /**
+    * * Field Name: LogValue
+    * * Display Name: Log Value
+    * * SQL Data Type: bit
+    * * Description: Optional per-binding override of ActionParam.LogValue. NULL (the default) inherits the parameter definition. Set to 0 when this particular binding passes something sensitive through a parameter that is ordinarily safe to log - a message body through a generic Text parameter, for instance. Cannot re-enable logging for a value type the hard rule suppresses.
+    */
+    get LogValue(): boolean | null {
+        return this.Get('LogValue');
+    }
+    set LogValue(value: boolean | null) {
+        this.Set('LogValue', value);
+    }
+
+    /**
     * * Field Name: EntityAction
     * * Display Name: Entity Action
     * * SQL Data Type: nvarchar(425)
@@ -78135,6 +78342,38 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Entity Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Both Scope Entity and Scope Record must be provided together, or both must be left blank. You cannot specify one without the other.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateScopeEntityAndRecordCoexistence(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Both Scope Entity and Scope Record must be provided together, or both must be left blank. You cannot specify one without the other.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeEntityAndRecordCoexistence(result: ValidationResult) {
+        if ((this.ScopeEntityID == null && this.ScopeRecordID != null) || (this.ScopeEntityID != null && this.ScopeRecordID == null)) {
+            result.Errors.push(new ValidationErrorInfo(
+                "ScopeEntityID",
+                "Scope Entity and Scope Record must either both be specified or both be empty.",
+                this.ScopeEntityID,
+                ValidationErrorType.Failure
+            ));
+        }
     }
 
     /**
@@ -78216,6 +78455,66 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
     }
 
     /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Execution order when multiple Entity Actions are bound to the same entity and invocation type. Lower runs first; ties fall back to creation order. Defaults to 0 so existing rows are unaffected.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: ScopeEntityID
+    * * Display Name: Scope Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Optional. Together with ScopeRecordID, narrows this Entity Action to records related to ONE specific record - for example a single Deal Type, Contract Type, Pipeline or Company - rather than every record of EntityID. NULL (the default) means the action applies to all records, which is the pre-existing behaviour. How a scope record relates to the subject record is resolved by the app that owns the scope entity; the framework only stores and filters on the pair.
+    */
+    get ScopeEntityID(): string | null {
+        return this.Get('ScopeEntityID');
+    }
+    set ScopeEntityID(value: string | null) {
+        this.Set('ScopeEntityID', value);
+    }
+
+    /**
+    * * Field Name: ScopeRecordID
+    * * Display Name: Scope Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Optional. The primary key of the scope record, as text, paired with ScopeEntityID. Both columns are NULL or both are set (CK_EntityAction_Scope). Lets a configuration record such as a Deal Type surface "the workflows bound to me" as a real relationship rather than something buried in filter code.
+    */
+    get ScopeRecordID(): string | null {
+        return this.Get('ScopeRecordID');
+    }
+    set ScopeRecordID(value: string | null) {
+        this.Set('ScopeRecordID', value);
+    }
+
+    /**
+    * * Field Name: LoggingMode
+    * * Display Name: Logging Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: All
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * FailuresOnly
+    *   * None
+    * * Description: How much of this binding's activity reaches ActionExecutionLog. All (default) writes a row per invocation. FailuresOnly writes only runs that did not succeed - the right setting for a high-frequency binding on a busy entity, where the successful runs are noise. None disables logging for the binding entirely and should be rare, because it also removes the failure record.
+    */
+    get LoggingMode(): 'All' | 'FailuresOnly' | 'None' {
+        return this.Get('LoggingMode');
+    }
+    set LoggingMode(value: 'All' | 'FailuresOnly' | 'None') {
+        this.Set('LoggingMode', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
@@ -78231,6 +78530,15 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
     */
     get Action(): string {
         return this.Get('Action');
+    }
+
+    /**
+    * * Field Name: ScopeEntity
+    * * Display Name: Scope Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ScopeEntity(): string | null {
+        return this.Get('ScopeEntity');
     }
 }
 

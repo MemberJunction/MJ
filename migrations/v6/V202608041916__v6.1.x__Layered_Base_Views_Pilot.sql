@@ -570,3 +570,27 @@ BEGIN
     EXEC sp_executesql N'EXEC sp_refreshview ''${flyway:defaultSchema}.vwUserViewRunDetails'';';
 END;
 
+
+-- --------------------------------------------------------------------------------------------
+-- Unrelated to layering: a validator for MJ: Entity Actions' new ScopeEntityID/ScopeRecordID
+-- CHECK, which arrived on `next`. Its own CodeGen run did not emit this — validator functions are
+-- LLM-authored and not produced deterministically — so a clean regeneration surfaces it here.
+-- Carried rather than dropped, because without it a fresh install would have the generated
+-- TypeScript method with no matching GeneratedCode row, and the next CodeGen run would stop being
+-- a no-op.
+-- --------------------------------------------------------------------------------------------
+
+/* Generated Validation Functions for MJ: Entity Actions */
+-- CHECK constraint for MJ: Entity Actions @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
+INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
+                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([ScopeEntityID] IS NULL AND [ScopeRecordID] IS NULL OR [ScopeEntityID] IS NOT NULL AND [ScopeRecordID] IS NOT NULL)', 'public ValidateScopeEntityAndRecordCoexistence(result: ValidationResult) {
+    if ((this.ScopeEntityID == null && this.ScopeRecordID != null) || (this.ScopeEntityID != null && this.ScopeRecordID == null)) {
+        result.Errors.push(new ValidationErrorInfo(
+            "ScopeEntityID",
+            "Scope Entity and Scope Record must either both be specified or both be empty.",
+            this.ScopeEntityID,
+            ValidationErrorType.Failure
+        ));
+    }
+}', 'Both Scope Entity and Scope Record must be provided together, or both must be left blank. You cannot specify one without the other.', 'ValidateScopeEntityAndRecordCoexistence', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '34248F34-2837-EF11-86D4-6045BDEE16E6');
+

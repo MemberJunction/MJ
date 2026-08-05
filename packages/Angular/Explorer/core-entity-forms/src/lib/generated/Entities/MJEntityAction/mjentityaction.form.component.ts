@@ -18,10 +18,12 @@ export class MJEntityActionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'relationshipKeys', sectionName: 'Relationship Keys', isExpanded: true },
             { sectionKey: 'actionConfiguration', sectionName: 'Action Configuration', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJEntityActionFilters', sectionName: 'Entity Action Filters', isExpanded: false },
             { sectionKey: 'mJEntityActionInvocations', sectionName: 'Entity Action Invocations', isExpanded: false },
-            { sectionKey: 'mJEntityActionParams', sectionName: 'Entity Action Params', isExpanded: false }
+            { sectionKey: 'mJEntityActionParams', sectionName: 'Entity Action Params', isExpanded: false },
+            { sectionKey: 'mJActionExecutionLogs', sectionName: 'Action Execution Logs', isExpanded: false }
         ]);
     }
 }
