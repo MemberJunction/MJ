@@ -50,6 +50,14 @@ into `next` with a lockfile update.
 Verify afterwards: `npm view @memberjunction/core dist-tags` — **`edge` moved,
 `latest` did not**; the GitHub Release exists, marked prerelease, not latest.
 
+**Then write the canonical release notes** — the one piece of a release no workflow
+produces. Run `/notes` to generate [`releases/v<version>.md`](../releases/) and PR it into
+`next` ([`DEPLOYMENT.md`](../DEPLOYMENT.md) Step 11). It goes *after* publish because the
+filename carries the version `changeset version` just computed. Nothing fails if you skip
+it; the release simply has no notes anyone reads. During the Edge era the file is committed
+but does not render publicly — `docs.yml` builds `lts/5`, not `main` — so write it for the
+record and expect it to appear when versioned docs land.
+
 Guard behavior you may hit: `publish.yml` **hard-fails an unsuffixed 6.x version** on this
 path. That is the era gate doing its job — a plain version (a candidate) must never ship
 through the routine pipeline. Stop and find the cert owner; don't work around it.
@@ -140,6 +148,11 @@ and its main-gated steps silently skip.
 DB-touching line changes need their §12 label (`metadata-migration`, `codegen-repair`, or
 `security-exception`) — the line guard enforces this on `lts/*` PRs.
 
+**Release notes for a line release do go live** — this is the one operation where they do,
+because the docs site builds the certified line. But they have to *reach* the line branch:
+PR `releases/v<version>.md` into `next`, then apply the `backport lts/<line>` label. Notes
+that stop at `next` publish nothing.
+
 ---
 
 ## 4. Certification flip
@@ -167,5 +180,8 @@ When the gates pass on a specific line build (say 6.1.2):
 - The post-publish `main` → `next` back-merge **aborts rather than auto-resolving** a
   conflict outside `pnpm-lock.yaml`. An abort means the release succeeded and only the
   back-merge is outstanding — finish it by hand, don't re-run the release.
+- A green `docs.yml` does **not** mean your docs change shipped. It checks out `lts/5` on
+  every trigger but an explicit-`ref` dispatch, so a `main` push rebuilds the LTS site and
+  reports success while ignoring the commit that triggered it.
 - Every loop in this document is bounded by a human noticing. If a step's verification
   fails, stop — don't improvise past a red check.
