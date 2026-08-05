@@ -116,9 +116,35 @@ export interface MJLeftNavSection {
 
     <aside
       class="mj-left-nav"
-      [style.width.px]="Width"
+      [style.width.px]="EffectiveWidth"
       role="navigation"
       [attr.aria-modal]="MobileNavOpen ? true : null">
+      <!-- Desktop collapse toggle (opt-in via [Collapsible]) — a compact double-angle chip, NOT a
+           hamburger (a lone hamburger row reads as a broken nav item) and NOT a nav-row lookalike.
+           The chip is LOCKED in one spot — centred in the collapsed band — in BOTH modes: only the
+           glyph flips on toggle, so the user never re-aims (a control that relocates when clicked
+           makes the user chase it). « = collapse toward the left edge, » = expand. Hidden ≤700px:
+           the mobile drawer is its own affordance and collapsing a drawer is meaningless. -->
+      @if (Collapsible) {
+        <button
+          type="button"
+          class="mj-left-nav__collapse-toggle"
+          [style.margin-left.px]="CollapseToggleMarginPx"
+          [attr.aria-label]="Collapsed ? 'Expand navigation' : 'Collapse navigation'"
+          [attr.aria-expanded]="!Collapsed"
+          [title]="Collapsed ? 'Expand navigation' : 'Collapse navigation'"
+          (click)="ToggleCollapsed()">
+          <i
+            class="fa-solid mj-left-nav__collapse-icon"
+            [class.fa-angles-right]="Collapsed"
+            [class.fa-angles-left]="!Collapsed"
+            aria-hidden="true"></i>
+        </button>
+        <!-- Wordless hairline between the toggle and the nav content: without a boundary the chip
+             reads as a destination. Same height in both modes, so items never shift on toggle. -->
+        <div class="mj-left-nav__collapse-divider" aria-hidden="true"></div>
+      }
+
       <!-- Drawer header — only visible on mobile when the rail is a drawer. -->
       <div class="mj-left-nav__drawer-header">
         <span class="mj-left-nav__drawer-title">{{ MobileTitle }}</span>
@@ -205,6 +231,8 @@ export interface MJLeftNavSection {
         [class.mj-left-nav__item--disabled]="item.disabled"
         [disabled]="item.disabled"
         [attr.aria-current]="item.id === ActiveId ? 'page' : null"
+        [attr.title]="EffectiveIconOnly ? ItemTooltip(item) : null"
+        [attr.aria-label]="EffectiveIconOnly ? ItemTooltip(item) : null"
         (click)="OnItemClick(item)">
         @if (item.icon) {
           <i class="mj-left-nav__icon" [class]="item.icon" aria-hidden="true"></i>
@@ -381,6 +409,137 @@ export interface MJLeftNavSection {
       display: inline-block;
     }
 
+    /* ── Desktop collapse (opt-in via [Collapsible]) ──────────────────────────
+       The toggle chip + the icons-only collapsed presentation. DESKTOP ONLY: below 701px the rail
+       is the off-canvas drawer, which is already dismissable — collapsing it would be nonsense —
+       so the toggle hides and the collapsed rules never apply there. Hover-to-peek is deliberately
+       NOT part of this feature (removed by ruling 2026-07-30: a rail that expands when the pointer
+       grazes it moves the target the user was aiming at). */
+
+    .mj-left-nav__collapse-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: fit-content;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--mj-text-muted);
+      font-family: inherit;
+      cursor: pointer;
+      box-sizing: border-box;
+      transition: background-color 0.12s ease, color 0.12s ease;
+      margin-bottom: 2px;
+    }
+
+    .mj-left-nav__collapse-toggle:hover {
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-primary);
+    }
+
+    .mj-left-nav__collapse-toggle:focus-visible {
+      outline: 2px solid var(--mj-border-focus);
+      outline-offset: -2px;
+    }
+
+    /* 18px box = the same footprint as .mj-left-nav__icon, so the chip sits on the items' optical
+       icon column when centred in the collapsed band. Slightly smaller glyph than the nav icons —
+       this is a chrome control, not a destination. */
+    .mj-left-nav__collapse-icon {
+      width: 18px;
+      text-align: center;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
+    .mj-left-nav__collapse-divider {
+      height: 1px;
+      margin: 4px 0;
+      background: var(--mj-border-default);
+    }
+
+    @media (max-width: 700px) {
+      .mj-left-nav__collapse-toggle,
+      .mj-left-nav__collapse-divider {
+        display: none;
+      }
+    }
+
+    @media (min-width: 701px) {
+      /* ITEM labels are HIDDEN VISUALLY, NOT REMOVED. display:none would drop them from the
+         accessibility tree too, leaving every rail button unnamed — an icon-only rail a screen
+         reader cannot read. This keeps the name and only takes the pixels. (The tooltips/aria the
+         items grow while collapsed come from EffectiveIconOnly.) */
+      :host(.mj-left-nav-host--collapsed) .mj-left-nav__text {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      /* With the text out of flow the icon is the only thing left; centre it in the narrow rail. */
+      :host(.mj-left-nav-host--collapsed) .mj-left-nav__item {
+        justify-content: center;
+        gap: 0;
+        margin-inline: auto;
+        position: relative;
+      }
+
+      /* SECTION labels become a small centred divider line, keeping the label's OWN box (padding +
+         height) so the vertical rhythm is IDENTICAL to the expanded rail — the words come back in
+         the exact same place on expand. color: transparent hides the glyphs without removing them
+         from the a11y tree or changing the box height; overflow clips the transparent glyphs so
+         they can never make the narrow rail horizontally scrollable. */
+      :host(.mj-left-nav-host--collapsed) .mj-left-nav__section-label {
+        position: relative;
+        color: transparent;
+        overflow: hidden;
+      }
+      :host(.mj-left-nav-host--collapsed) .mj-left-nav__section-label::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 20px;
+        height: 1px;
+        background: var(--mj-border-default);
+      }
+
+      /* No row edge exists in the narrow rail, so the badge docks on the icon's top-right corner
+         (the activity-bar idiom) as a compact attention count — presence = action needed. The
+         centred icon itself never moves. */
+      :host(.mj-left-nav-host--collapsed) .mj-left-nav__badge {
+        margin-left: 0;
+        align-self: auto;
+        position: absolute;
+        left: calc(50% + 4px);
+        top: 4px;
+        min-width: 15px;
+        height: 15px;
+        padding: 0 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        line-height: 1;
+        white-space: nowrap;
+        background: var(--mj-brand-primary);
+        color: var(--mj-text-inverse);
+      }
+
+      /* Belt-and-braces: a collapsed rail never scrolls sideways. */
+      :host(.mj-left-nav-host--collapsed) .mj-left-nav {
+        overflow-x: hidden;
+      }
+    }
+
     /* ── Mobile drawer pattern (≤700px) ──────────────────────────────────────
        Desktop shows the rail inline. On mobile the rail would otherwise eat the
        top of the screen, so we hide it off-canvas and surface a compact section
@@ -554,6 +713,97 @@ export class MJLeftNavComponent {
    * the rail becomes a fixed-width off-canvas drawer.
    */
   @Input() Width: number = 240;
+
+  /**
+   * Set by a consumer that has visually collapsed the rail to an icons-only strip (via `Width` plus
+   * its own CSS hiding the labels). When true, each item gains a native `title` tooltip AND an
+   * `aria-label` carrying its full text.
+   *
+   * Why it is opt-in rather than always-on:
+   *  - **Tooltip**: with labels visible, a tooltip that just repeats the label is redundant noise on
+   *    every hover. Icon-only rails everywhere (VS Code's activity bar, Slack, Linear, Jira, Figma)
+   *    show one; expanded rails do not.
+   *  - **aria-label**: when the label IS visible it already names the button, and adding an identical
+   *    aria-label is at best a no-op. When the consumer's CSS hides `.mj-left-nav__text`, the button's
+   *    accessible name goes EMPTY — a screen reader announces "button" with no destination. That is
+   *    the hole this closes.
+   *
+   * Leaving it false reproduces the previous markup exactly, so existing consumers are unaffected.
+   */
+  @Input() IconOnly: boolean = false;
+
+  /**
+   * Opt-in desktop collapse: renders a compact double-angle toggle chip at the top of the rail and,
+   * when {@link Collapsed}, presents the rail as an icons-only strip ({@link CollapsedWidth} wide) —
+   * labels visually hidden but kept in the a11y tree, section labels folded to divider lines,
+   * badges docked on the icon corner, and per-item tooltips/aria auto-enabled.
+   *
+   * The component owns the PRESENTATION only — the consumer owns the STATE (bind `[(Collapsed)]`
+   * and persist it however the app persists preferences), the same split as `ExpandedIds`.
+   * Desktop-only: ≤700px the rail is the off-canvas drawer and the toggle hides.
+   *
+   * Deliberately NOT included: hover-to-peek (auto-expand on pointer hover) — removed by ruling
+   * (2026-07-30): a rail that expands when the pointer grazes it moves the target the user was
+   * aiming at. Deliberate toggling beats clever hovering.
+   */
+  @Input() Collapsible: boolean = false;
+
+  /** Whether the rail is currently collapsed to icons. Two-way bindable via `[(Collapsed)]`. */
+  @Input() Collapsed: boolean = false;
+
+  /** Emitted when the user clicks the collapse toggle. Consumer updates + persists the state. */
+  @Output() CollapsedChange = new EventEmitter<boolean>();
+
+  /**
+   * Width of the collapsed icons-only strip. The default 60 is derived from the rail's own
+   * numbers — 8+8 container padding, 12+12 item padding, 18px icon, 1px border — so icons stay
+   * centred; retune it if those change.
+   */
+  @Input() CollapsedWidth: number = 60;
+
+  /** The width the rail actually renders at, honoring the collapse state. */
+  public get EffectiveWidth(): number {
+    return this.Collapsible && this.Collapsed ? this.CollapsedWidth : this.Width;
+  }
+
+  /** Icon-only presentation is on when the consumer forces it OR the rail is natively collapsed. */
+  public get EffectiveIconOnly(): boolean {
+    return this.IconOnly || (this.Collapsible && this.Collapsed);
+  }
+
+  /**
+   * Left margin that pins the toggle chip at the collapsed band's centre in BOTH modes, so the
+   * chip never relocates on toggle (the user never re-aims). Derived, not magic:
+   * (CollapsedWidth − 38px chip)/2 from the rail edge, minus the rail's 8px container padding.
+   * 38 = the 18px icon box + 2×10px chip padding.
+   */
+  public get CollapseToggleMarginPx(): number {
+    return Math.max(0, Math.round((this.CollapsedWidth - 38) / 2 - 8));
+  }
+
+  /** Reflects the collapsed state onto the host so the collapsed CSS can scope to it. */
+  @HostBinding('class.mj-left-nav-host--collapsed')
+  get isCollapsedHost(): boolean {
+    return this.Collapsible && this.Collapsed;
+  }
+
+  /** Flip + announce. The consumer receives the new value and persists it. */
+  public ToggleCollapsed(): void {
+    this.Collapsed = !this.Collapsed;
+    this.CollapsedChange.emit(this.Collapsed);
+  }
+
+  /**
+   * The text surfaced as an icon-only item's tooltip / accessible name. Folds in the description and
+   * badge because collapsing the rail hides both: the badge survives as an unlabeled corner count,
+   * so "Batch approvals (2)" is the only place a hovering user learns what the 2 counts.
+   */
+  public ItemTooltip(item: MJLeftNavItem): string {
+    const parts = [item.label];
+    if (item.description) parts.push(`— ${item.description}`);
+    if (item.badge != null) parts.push(`(${item.badge})`);
+    return parts.join(' ');
+  }
 
   /**
    * Label shown on the mobile drawer header and used as the switcher fallback

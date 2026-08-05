@@ -159,10 +159,36 @@ Inputs: `Padding` (default true; false removes the gutter), `Flex` (default fals
 The same pair for **sub-pages inside a left-nav shell** — card-like chrome, responsive padding. Header-interior adds `Role`/`AriaLabel` inputs and the same three slots.
 
 ### `mj-left-nav` / `mj-left-nav-content` — MJLeftNavComponent
-Canonical left rail: sections, flat + tree items (badges, descriptions, disabled), off-canvas drawer at ≤700px. Inputs: `Sections: MJLeftNavSection[]`, `ActiveId`, `ExpandedIds`, `Width` (240), `MobileTitle`. Outputs: `ItemClicked`, `ItemToggled`. Slots: `[header]`, `[footer]`. Pair with `mj-left-nav-content`, which provides `Loading`/`Error` states and hides (not destroys) content while busy.
+Canonical left rail: sections, flat + tree items (badges, descriptions, disabled), off-canvas drawer at ≤700px. Inputs: `Sections: MJLeftNavSection[]`, `ActiveId`, `ExpandedIds`, `Width` (240), `MobileTitle`, `IconOnly` (per-item tooltips + accessible names for an externally-narrowed rail). Outputs: `ItemClicked`, `ItemToggled`. Slots: `[header]`, `[footer]`. Pair with `mj-left-nav-content`, which provides `Loading`/`Error` states and hides (not destroys) content while busy.
+
+**Desktop collapse (opt-in):** set `[Collapsible]="true"` and bind `[(Collapsed)]` — the rail renders a locked-position double-angle toggle chip and, when collapsed, becomes a `CollapsedWidth` (60px) icons-only strip: labels visually hidden but kept in the a11y tree, section labels folded to divider lines, badges docked on the icon corner, item tooltips auto-enabled. The component owns presentation only — the consumer owns + persists the state (same split as `ExpandedIds`). Desktop-only; the ≤700px drawer is unaffected. There is deliberately no hover-to-peek.
+
+```html
+<mj-left-nav [Sections]="sections" [ActiveId]="activeId" [Collapsible]="true"
+             [(Collapsed)]="railCollapsed" (CollapsedChange)="persist($event)" />
+```
 
 ### `mj-tab-nav` — MJTabNavComponent
 Data-driven tab strip. `Tabs: TabConfig[]` (`key`, `label`, `icon?`, `badge?`, `badgeVariant?: 'default'|'error'|'warning'|'success'`), `ActiveKey`, `(TabChange)` emits the key.
+
+### `mj-workspace-card` / `mj-workspace-tab-strip` — MJWorkspaceCardComponent, MJWorkspaceTabStripComponent
+The **workspace** pattern: a screen where the user builds several drafts in parallel, each in a browser-style tab (open, switch, drag-reorder via CDK, close, dirty-dot, rejected/complete states). `MJWorkspaceTabStore<TState>` is the pure state machine (open-activates-existing, neighbour activation on close, reorder, lifecycle + dirty tracking — exhaustively unit-tested); `mj-workspace-tab-strip` is dumb presentation over it (renders tabs, emits intent); `mj-workspace-card` is the slotted frame — card surface, tab-strip row, `[workspaceHeader]` identity band, a single scrolling body (default slot), and an opt-in standardized footer (`ShowFooter`: primary confirm + save-as-draft + discard, only the labels vary; `[workspaceFooterNote]` caption slot). Tabs carry an opaque `State` the host owns — no app types in the framework. v1 is session-scoped (no DB persistence).
+
+The card is a **query container** (`container-type: size`): size content inside it with `cqh`/`cqw`, never `vh`/`vw` (viewport units break the moment the card sits in a split or a smaller pane).
+
+```html
+<mj-workspace-card [Tabs]="store.Tabs" [ActiveId]="store.ActiveId" NewTabLabel="New entry"
+    [ShowFooter]="true" ConfirmLabel="Create entry"
+    (TabSelected)="store.Activate($event)" (TabClosed)="onClose($event)"
+    (NewTabRequested)="openBlank()" (TabReordered)="store.Reorder($event.previousIndex, $event.currentIndex)"
+    (Confirm)="create()" (SaveDraft)="keep()" (Discard)="discard()">
+  <div workspaceHeader><!-- per-workshop identity badges --></div>
+  <!-- the workshop's form/body -->
+</mj-workspace-card>
+```
+
+### `mjTip` — MJWorkspaceTipDirective
+Delayed (~450ms still-pointer), non-interactive, token-themed hover tooltip that by default shows only when the host is truncated (`scrollWidth > clientWidth`); `mjTipAlways` forces it for hosts whose truncation can't be measured (a native `<select>`). Used by the workspace tab strip for full labels on capped tabs.
 
 ### `mj-page-search` — MJPageSearchComponent
 Compact toolbar search input. `Placeholder`, `Value`, `Icon`; `(ValueChange)` on input.

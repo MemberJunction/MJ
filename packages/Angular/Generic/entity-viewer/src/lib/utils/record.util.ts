@@ -25,8 +25,26 @@ export function buildPkString(record: Record<string, unknown>, entityInfo: Entit
  * Compute the Fields array to request from RunView based on EntityInfo and optional grid state.
  * Includes: PK fields, NameField, visible display fields, and timestamp fields.
  */
-export function computeFieldsList(entityInfo: EntityInfo, gridState?: ViewGridState | null): string[] {
+export function computeFieldsList(
+    entityInfo: EntityInfo,
+    gridState?: ViewGridState | null,
+    hostColumnFields?: readonly string[] | null,
+): string[] {
     const fields = new Set<string>();
+
+    // Fields the HOST explicitly asked to display. Without these, a page that supplies `[Columns]`
+    // renders columns whose data was never fetched — every cell shows as empty, which reads as a
+    // data bug rather than a missing SELECT. They are added unconditionally (not as an alternative
+    // to the branches below) because a host column list says what to SHOW, while DefaultInView and
+    // the grid state say what to fetch by default; the host's columns must be a superset, not a
+    // replacement. Names are validated against the entity so a stale column can't break the query.
+    if (hostColumnFields?.length) {
+        for (const name of hostColumnFields) {
+            if (entityInfo.Fields.some(f => f.Name.toLowerCase() === name.toLowerCase())) {
+                fields.add(name);
+            }
+        }
+    }
 
     // Always include PK fields
     for (const pk of entityInfo.PrimaryKeys) {
