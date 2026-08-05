@@ -13,7 +13,16 @@
 
 import { createHash, randomBytes } from 'crypto';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { RunView, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import {
+    RunView,
+    Metadata,
+    UserInfo,
+    IMetadataProvider,
+    LogError,
+    type APIKeyActingContext,
+    type APIKeyRowFilterBinding,
+    type RowLevelSecurityFilterInfo
+} from '@memberjunction/core';
 import {
     MJAPIKeyEntity,
     MJAPIApplicationEntity,
@@ -32,6 +41,7 @@ import {
     APIKeyEngineConfig,
     APIKeyGenerationConfig,
     APIKeyEncoding,
+    EffectiveFilterEntry,
     GeneratedAPIKey,
     CreateAPIKeyParams,
     CreateAPIKeyResult,
@@ -93,6 +103,45 @@ function loadFileKeyGenerationConfig(): APIKeyGenerationConfig | undefined {
 }
 
 /**
+ * Scope paths whose data path executes raw SQL and therefore BYPASSES row-level
+ * security entirely (plan §5.10): saved/tested queries run verbatim via
+ * ExecuteSQL with no RLS clause and a user-agnostic cache; dataset reads build
+ * per-item SELECTs without the RLS clause; reports execute stored SQL verbatim.
+ * A key carrying ANY row-filtered scope rule is denied these scopes — a filtered
+ * key that can run raw SQL against the filtered entity reads it unfiltered,
+ * making the filter decoration.
+ */
+const RLS_BYPASSING_SCOPE_PATHS: ReadonlySet<string> = new Set(['query:run', 'query:test', 'dataset:read', 'report:run']);
+
+/** GUID shape accepted for the GUID-typed acting tokens. */
+const GUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+/** Bounded-identifier shape accepted for {{ActingScopeID}}. */
+const ACTING_SCOPE_ID_PATTERN = /^[A-Za-z0-9_.\-]{1,128}$/;
+
+/**
+ * Fixed scope-path → EntityPermissionType mapping for row-filter bindings
+ * (plan §5.5.1). Reads reach the data layer via more than one scope, so both
+ * `entity:read` and `view:run` map to Read. Any OTHER scope path carrying a
+ * filtered matching rule has no coherent permission type and is denied.
+ */
+function mapScopePathToPermissionType(scopePath: string): APIKeyRowFilterBinding['PermissionType'] | undefined {
+    switch (scopePath) {
+        case 'entity:read':
+        case 'view:run':
+            return 'Read';
+        case 'entity:create':
+            return 'Create';
+        case 'entity:update':
+            return 'Update';
+        case 'entity:delete':
+            return 'Delete';
+        default:
+            return undefined;
+    }
+}
+
+/**
  * Result of validating an API key by hash (internal validation)
  */
 export interface KeyHashValidationResult {
@@ -136,6 +185,14 @@ export class APIKeyEngine {
     private _scopeEvaluator: ScopeEvaluator;
     private _usageLogger: UsageLogger;
     private _configured: boolean = false;
+    /**
+     * Cache of the {{Token}} names parsed from each referenced filter's
+     * FilterText, keyed by FilterID. Templates are principal-independent, so
+     * the PARSED TOKEN SET is safe to cache; RESOLVED filter values are
+     * principal-specific and are never cached here. The source text is stored
+     * alongside so an edited filter re-parses instead of serving stale tokens.
+     */
+    private _filterTokenCache: Map<string, { text: string; tokens: string[] }> = new Map();
 
     constructor(config: APIKeyEngineConfig = {}) {
         this._config = {
@@ -187,11 +244,55 @@ export class APIKeyEngine {
         provider?: IMetadataProvider
     ): Promise<void> {
         await this.Base.Config(forceRefresh, contextUser, provider);
+
+        // Startup invariant (plan §5.6 rows 3/4): the presence of ANY row-filtered
+        // scope rule requires the engine to be enforcing and default-deny. A warning
+        // here would be fail-open — refuse startup instead.
+        this.assertRowFilterStartupInvariant();
+
         this._configured = true;
 
         // Check for config drift against existing keys
         if (contextUser) {
             await this.warnIfConfigDiffers(contextUser);
+        }
+    }
+
+    /**
+     * Throws when any cached key-scope or application-scope rule carries a
+     * RowFilterID while the engine configuration would silently bypass it:
+     * `enforcementEnabled: false` allows everything unconditionally, and
+     * `defaultBehaviorNoScopes: 'allow'` lets a key with no rules for a scope
+     * through unfiltered. Either combination makes a deliberately-configured
+     * row filter silently absent — the fail-open case this feature exists to
+     * prevent — so startup is refused with the offending setting named.
+     */
+    private assertRowFilterStartupInvariant(): void {
+        const filteredKeyRules = this.Base.KeyScopes.filter(ks => ks.RowFilterID != null);
+        const filteredAppRules = this.Base.ApplicationScopes.filter(as => as.RowFilterID != null);
+        if (filteredKeyRules.length === 0 && filteredAppRules.length === 0) {
+            return;
+        }
+
+        const where =
+            `${filteredKeyRules.length} API Key Scope rule(s) and ${filteredAppRules.length} ` +
+            `API Application Scope rule(s) carry a RowFilterID`;
+
+        if (this._config.enforcementEnabled === false) {
+            throw new Error(
+                `[APIKeyEngine] Startup refused: ${where}, but 'enforcementEnabled' is false. ` +
+                `With enforcement disabled every request is allowed unconditionally, so the configured row filter(s) ` +
+                `would be silently bypassed. Remedy: set 'enforcementEnabled' to true, or remove the RowFilterID ` +
+                `from the affected scope rules.`
+            );
+        }
+        if (this._config.defaultBehaviorNoScopes === 'allow') {
+            throw new Error(
+                `[APIKeyEngine] Startup refused: ${where}, but 'defaultBehaviorNoScopes' is 'allow'. ` +
+                `A default-allow engine grants unfiltered access whenever a key has no rules for a scope, so the ` +
+                `configured row filter(s) would be silently bypassable. Remedy: set 'defaultBehaviorNoScopes' to ` +
+                `'deny' (the engine default), or remove the RowFilterID from the affected scope rules.`
+            );
         }
     }
 
@@ -560,6 +661,14 @@ export class APIKeyEngine {
             /** When true, skip writing to the usage log. Useful for speculative
              *  checks (e.g. full_access probe) that are not the real authorization decision. */
             skipLogging?: boolean;
+            /**
+             * Server-derived acting context for this request (plan §5.2/§5.8).
+             * Required when a matching allow rule carries a row filter whose
+             * FilterText references {{Acting*}} tokens; every required token
+             * must be present and type-valid or the request is denied.
+             * MUST originate server-side — never from client input.
+             */
+            actingContext?: APIKeyActingContext;
         }
     ): Promise<AuthorizationResult & { LogId?: string }> {
         const startTime = Date.now();
@@ -592,8 +701,25 @@ export class APIKeyEngine {
             };
         }
 
-        // 3. If enforcement is disabled, allow everything
+        // 3. If enforcement is disabled, allow everything — EXCEPT for a key
+        // carrying a row-filtered rule. The startup invariant refuses that
+        // combination at Config() time, but a filtered rule saved at runtime
+        // (the base cache refreshes on entity events) could otherwise slip
+        // through this early return unfiltered. Fail closed instead.
         if (!this._config.enforcementEnabled) {
+            const hasFilteredRule = this.Base.GetKeyScopesByKeyId(keyValidation.APIKey.ID)
+                .some(r => r.RowFilterID != null);
+            if (hasFilteredRule) {
+                return {
+                    Allowed: false,
+                    Reason:
+                        'Denied: this API key carries a row filter, but scope enforcement is disabled ' +
+                        '(enforcementEnabled: false), so the filter cannot be enforced. This configuration is ' +
+                        'refused at startup; a rule added at runtime fails closed here. Remedy: enable enforcement ' +
+                        'or remove the row filter.',
+                    EvaluatedRules: []
+                };
+            }
             return {
                 Allowed: true,
                 Reason: 'Enforcement disabled',
@@ -607,10 +733,14 @@ export class APIKeyEngine {
             UserId: keyValidation.APIKey.UserID,
             ApplicationId: app.ID,
             ScopePath: scopePath,
-            Resource: resource
+            Resource: resource,
+            ActingContext: options?.actingContext
         };
 
-        const result = await this._scopeEvaluator.EvaluateAccess(request, contextUser);
+        let result = await this._scopeEvaluator.EvaluateAccess(request, contextUser);
+
+        // 4b. Row-filter enforcement layer (plan §5.6.1, §5.10, §5.4) — all fail-closed.
+        result = this.applyRowFilterAuthorization(result, request);
 
         const responseTimeMs = Date.now() - startTime;
 
@@ -636,7 +766,8 @@ export class APIKeyEngine {
                         result.EvaluatedRules,
                         requestContext?.ipAddress || null,
                         requestContext?.userAgent || null,
-                        contextUser
+                        contextUser,
+                        result.EffectiveFilter
                     )) || undefined;
                 } else {
                     logId = (await this._usageLogger.LogDenied(
@@ -652,7 +783,8 @@ export class APIKeyEngine {
                         result.Reason,
                         requestContext?.ipAddress || null,
                         requestContext?.userAgent || null,
-                        contextUser
+                        contextUser,
+                        result.EffectiveFilter
                     )) || undefined;
                 }
             } catch {
@@ -661,6 +793,326 @@ export class APIKeyEngine {
         }
 
         return { ...result, LogId: logId };
+    }
+
+    // =========================================================================
+    // ROW-FILTER AUTHORIZATION (plan §5.4, §5.6.1, §5.10)
+    // =========================================================================
+
+    /**
+     * Applies the row-filter authorization layer on top of the scope-evaluation
+     * result. All branches fail closed:
+     *
+     * 1. §5.6.1 backstop — a key carrying ANY row-filtered scope rule is denied
+     *    `full_access` outright (the combination is invalid configuration; the
+     *    authoring-time rejection cannot catch stale caches or independent edits).
+     * 2. §5.10 — the same key is denied every scope whose data path bypasses RLS
+     *    (`query:run`, `query:test`, `dataset:read`, `report:run`).
+     * 3. §5.4 — for an otherwise-allowed request, every RowFilterID on a MATCHING
+     *    allow rule is resolved (rule → entity → permission type → filter), its
+     *    required {{Acting*}} tokens are validated against the request's acting
+     *    context, and the resulting bindings + effective filter are attached to
+     *    the result. Any resolution or validation failure denies with a reason.
+     */
+    private applyRowFilterAuthorization(
+        result: AuthorizationResult,
+        request: AuthorizationRequest
+    ): AuthorizationResult {
+        // Computed over ALL of this key's scope rules — not just matched ones. A
+        // filtered rule anywhere on the key is what makes full_access / raw-SQL
+        // scopes incoherent for it.
+        const keyScopeRules = this.Base.GetKeyScopesByKeyId(request.APIKeyId);
+        const filteredRules = keyScopeRules.filter(r => r.RowFilterID != null);
+        const keyHasRowFilteredRule = filteredRules.length > 0;
+
+        if (!keyHasRowFilteredRule) {
+            return result;
+        }
+
+        const filteredEntityNames = [...new Set(filteredRules.map(r => r.ResourcePattern ?? '(unspecified)'))].sort().join(', ');
+
+        // 1. full_access backstop (§5.6.1) — deny regardless of evaluation outcome.
+        if (request.ScopePath === 'full_access') {
+            return {
+                ...result,
+                Allowed: false,
+                Reason:
+                    `Denied: this API key carries a row filter (on ${filteredEntityNames}), and full_access is ` +
+                    `unrestricted by definition — the two cannot both be honored, so the combination is invalid ` +
+                    `configuration and is refused rather than silently resolved. Remedy: remove the full_access ` +
+                    `grant or the row filter, or split the key in two (one broad key without filters, one filtered key ` +
+                    `with enumerated scopes).`
+            };
+        }
+
+        // 2. RLS-bypassing scopes (§5.10) — deny key-wide, naming cause and remedy.
+        if (RLS_BYPASSING_SCOPE_PATHS.has(request.ScopePath)) {
+            return {
+                ...result,
+                Allowed: false,
+                Reason:
+                    `Denied: this API key carries a row filter (on ${filteredEntityNames}), which is incompatible ` +
+                    `with '${request.ScopePath}' because that path executes raw SQL and bypasses row-level security — ` +
+                    `a filtered key that can run it would read the filtered entity unfiltered. Remedy: split the key ` +
+                    `(one key for '${request.ScopePath}' without row filters, one filtered key for entity access), or ` +
+                    `remove the row filter.`
+            };
+        }
+
+        // 3. Resolve bindings for the filters carried by MATCHING allow rules.
+        if (!result.Allowed || !result.MatchedRowFilterIDs || result.MatchedRowFilterIDs.length === 0) {
+            return result;
+        }
+        return this.resolveRowFilterBindings(result, request);
+    }
+
+    /**
+     * Resolves each filtered MATCHING key-level allow rule into a concrete
+     * binding (EntityID + PermissionType + FilterID) and the observability
+     * EffectiveFilter entries, validating required acting tokens along the way.
+     * Every unresolvable step denies (fail closed): non-exact/unresolvable
+     * entity, dangling filter ID, scope path with no coherent permission type,
+     * missing or type-invalid acting token.
+     */
+    private resolveRowFilterBindings(
+        result: AuthorizationResult,
+        request: AuthorizationRequest
+    ): AuthorizationResult {
+        const deny = (reason: string): AuthorizationResult => ({ ...result, Allowed: false, Reason: reason });
+
+        const permissionType = mapScopePathToPermissionType(request.ScopePath);
+        if (!permissionType) {
+            return deny(
+                `Denied: a row-filtered scope rule matched this request, but scope '${request.ScopePath}' has no ` +
+                `coherent permission type for row-level enforcement (only entity:read, view:run, entity:create, ` +
+                `entity:update, and entity:delete do). Remove the row filter from the rule or grant a supported scope.`
+            );
+        }
+
+        // The matching filtered allow rules, from the evaluator's full evaluation record.
+        const filteredMatches = result.EvaluatedRules.filter(
+            er => er.Level === 'key' && er.Matched && er.Result === 'Allowed' && er.Rule.RowFilterID != null
+        );
+
+        const md = new Metadata(); // global-provider-ok: server-side engine resolving entities under the server's single default provider
+        const bindings: APIKeyRowFilterBinding[] = [];
+        const effective: EffectiveFilterEntry[] = [];
+        const seen = new Set<string>();
+
+        for (const match of filteredMatches) {
+            const filterId = match.Rule.RowFilterID as string; // non-null by the filter above
+            const pattern = match.Rule.Pattern;
+            if (!pattern) {
+                return deny(
+                    `Denied: row-filtered scope rule ${match.Rule.Id} has no ResourcePattern — a filtered rule must ` +
+                    `name a single exact entity. This is invalid configuration; fix the rule.`
+                );
+            }
+            const entity = md.EntityByName(pattern);
+            if (!entity) {
+                return deny(
+                    `Denied: row-filtered scope rule ${match.Rule.Id} names resource '${pattern}', which does not ` +
+                    `resolve to an entity. A filtered rule's ResourcePattern must be an exact entity name; failing ` +
+                    `closed rather than granting unfiltered access.`
+                );
+            }
+            const filter = this.getRowLevelSecurityFilterById(filterId);
+            if (!filter) {
+                return deny(
+                    `Denied: row filter ${filterId} referenced by scope rule ${match.Rule.Id} was not found in ` +
+                    `metadata (dangling or not yet loaded). Failing closed.`
+                );
+            }
+
+            const tokenError = this.validateRequiredActingTokens(filter, request.ActingContext);
+            if (tokenError) {
+                return deny(tokenError);
+            }
+
+            const dedupeKey = `${entity.ID}|${permissionType}|${filterId}`;
+            if (!seen.has(dedupeKey)) {
+                seen.add(dedupeKey);
+                bindings.push({ EntityID: entity.ID, PermissionType: permissionType, FilterID: filterId });
+                effective.push({ EntityName: entity.Name, FilterID: filterId, FilterText: filter.FilterText });
+            }
+        }
+
+        if (bindings.length === 0) {
+            return result;
+        }
+        return { ...result, RowFilterBindings: bindings, EffectiveFilter: effective };
+    }
+
+    /**
+     * Validates that the acting context supplies every {{Acting*}} token the
+     * filter's template requires, with a type-valid value. {{User*}} and
+     * {{Scope*}} tokens resolve from the session user and need no acting
+     * context. Returns a denial reason NAMING the offending token, or null when
+     * everything required is present and valid.
+     */
+    private validateRequiredActingTokens(
+        filter: RowLevelSecurityFilterInfo,
+        actingContext: APIKeyActingContext | undefined
+    ): string | null {
+        const actingTokens = this.getFilterTokens(filter).filter(t => t.startsWith('Acting'));
+        for (const token of actingTokens) {
+            const error = this.validateActingToken(token, actingContext);
+            if (error) {
+                return `Denied: row filter '${filter.Name}' requires the {{${token}}} token, ${error}`;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Per-token validation for the registered {{Acting*}} vocabulary. Returns an
+     * error fragment (appended after the token name) or null when valid.
+     */
+    private validateActingToken(token: string, ctx: APIKeyActingContext | undefined): string | null {
+        switch (token) {
+            case 'ActingOrganizationID':
+            case 'ActingPersonID': {
+                const value = token === 'ActingOrganizationID' ? ctx?.ActingOrganizationID : ctx?.ActingPersonID;
+                if (value == null || value.length === 0) {
+                    return `but no ${token} value was supplied in the acting context. Failing closed.`;
+                }
+                if (!GUID_PATTERN.test(value)) {
+                    return `but the supplied ${token} value is not a valid GUID. Values are not coerced; failing closed.`;
+                }
+                return null;
+            }
+            case 'ActingScopeID': {
+                const value = ctx?.ActingScopeID;
+                if (value == null || value.length === 0) {
+                    return `but no ActingScopeID value was supplied in the acting context. Failing closed.`;
+                }
+                if (!ACTING_SCOPE_ID_PATTERN.test(value)) {
+                    return `but the supplied ActingScopeID value is not a valid bounded identifier ` +
+                        `(1-128 chars of A-Z, a-z, 0-9, '_', '.', '-'). Failing closed.`;
+                }
+                return null;
+            }
+            case 'ActingCompanyIDs': {
+                const value = ctx?.ActingCompanyIDs;
+                if (!value || value.length === 0) {
+                    return `but no ActingCompanyIDs values were supplied in the acting context (a non-empty array ` +
+                        `of GUIDs is required). Failing closed.`;
+                }
+                const bad = value.find(v => !GUID_PATTERN.test(v));
+                if (bad !== undefined) {
+                    return `but an element of the supplied ActingCompanyIDs is not a valid GUID. Values are not ` +
+                        `coerced; failing closed.`;
+                }
+                return null;
+            }
+            default:
+                // An Acting-prefixed token outside the registered vocabulary is
+                // invalid configuration (save-time validation rejects it); if it
+                // reaches here through a stale cache, fail closed.
+                return `but {{${token}}} is not a registered acting token. Failing closed.`;
+        }
+    }
+
+    /**
+     * Parses (and caches) the {{Token}} names out of a filter's FilterText.
+     * Cached per FilterID keyed to the exact text it was parsed from — templates
+     * are principal-independent so the parse is safe to cache; resolved values
+     * never are and never enter this cache.
+     */
+    private getFilterTokens(filter: RowLevelSecurityFilterInfo): string[] {
+        const text = filter.FilterText ?? '';
+        const cached = this._filterTokenCache.get(filter.ID);
+        if (cached && cached.text === text) {
+            return cached.tokens;
+        }
+        const tokens: string[] = [];
+        const pattern = /\{\{(\w+)\}\}/g;
+        let match: RegExpExecArray | null;
+        while ((match = pattern.exec(text)) !== null) {
+            if (!tokens.includes(match[1])) {
+                tokens.push(match[1]);
+            }
+        }
+        this._filterTokenCache.set(filter.ID, { text, tokens });
+        return tokens;
+    }
+
+    /**
+     * Resolves a RowLevelSecurityFilter by ID from the metadata provider's
+     * filter catalog (the same catalog role RLS uses).
+     */
+    private getRowLevelSecurityFilterById(filterId: string): RowLevelSecurityFilterInfo | undefined {
+        return Metadata.Provider?.RowLevelSecurityFilters?.find(f => UUIDsEqual(f.ID, filterId)); // global-provider-ok: same resolution path EntityInfo uses for RLS filters
+    }
+
+    /**
+     * Resolves the row-filter bindings for ALL of a key's scope rules that carry
+     * a RowFilterID — the per-request stamp `context.ts` places on the cloned
+     * session UserInfo (plan §5.5.1). Uses the same rule → entity →
+     * permission-type mapping as authorization. Fail-closed per rule: a rule
+     * whose entity, scope, or permission type cannot be resolved — or that is a
+     * deny/Exclude rule, which cannot coherently carry a filter — produces NO
+     * binding and logs an error (save-time validation makes these unreachable in
+     * practice). Throws when the base engine has not loaded yet: returning an
+     * empty binding set for a filtered key would be fail-open (plan §5.6 row 7).
+     */
+    public GetRowFilterBindingsForKey(apiKeyId: string): APIKeyRowFilterBinding[] {
+        if (!this.Base.Loaded) {
+            throw new Error(
+                `[APIKeyEngine] GetRowFilterBindingsForKey called before APIKeysEngineBase loaded. ` +
+                `Refusing to return an empty binding set — a filtered key would get unfiltered access. ` +
+                `Ensure APIKeyEngine.Config() runs at server startup before requests are served.`
+            );
+        }
+
+        const md = new Metadata(); // global-provider-ok: server-side stamp resolution under the server's single default provider
+        const bindings: APIKeyRowFilterBinding[] = [];
+        const seen = new Set<string>();
+
+        for (const rule of this.Base.GetKeyScopesByKeyId(apiKeyId)) {
+            if (rule.RowFilterID == null) {
+                continue;
+            }
+            if (rule.IsDeny || rule.PatternType === 'Exclude') {
+                LogError(
+                    `[APIKeyEngine] Scope rule ${rule.ID} carries RowFilterID ${rule.RowFilterID} on a ` +
+                    `${rule.IsDeny ? 'deny' : 'Exclude'} rule — invalid configuration; no binding produced.`
+                );
+                continue;
+            }
+            const scope = this.Base.GetScopeById(rule.ScopeID);
+            const permissionType = scope ? mapScopePathToPermissionType(scope.FullPath) : undefined;
+            if (!permissionType) {
+                LogError(
+                    `[APIKeyEngine] Scope rule ${rule.ID} carries RowFilterID ${rule.RowFilterID} on scope ` +
+                    `'${scope?.FullPath ?? rule.ScopeID}', which maps to no permission type — invalid ` +
+                    `configuration; no binding produced.`
+                );
+                continue;
+            }
+            const entity = rule.ResourcePattern ? md.EntityByName(rule.ResourcePattern) : undefined;
+            if (!entity) {
+                LogError(
+                    `[APIKeyEngine] Scope rule ${rule.ID} carries RowFilterID ${rule.RowFilterID} but its ` +
+                    `ResourcePattern '${rule.ResourcePattern ?? ''}' does not resolve to an entity — invalid ` +
+                    `configuration; no binding produced.`
+                );
+                continue;
+            }
+            const dedupeKey = `${entity.ID}|${permissionType}|${rule.RowFilterID}`;
+            if (!seen.has(dedupeKey)) {
+                seen.add(dedupeKey);
+                bindings.push({ EntityID: entity.ID, PermissionType: permissionType, FilterID: rule.RowFilterID });
+            }
+        }
+
+        // Deterministic order — the binding set participates in downstream
+        // deterministic clause assembly (INV-2).
+        return bindings.sort((a, b) =>
+            a.EntityID.localeCompare(b.EntityID) ||
+            a.PermissionType.localeCompare(b.PermissionType) ||
+            a.FilterID.localeCompare(b.FilterID)
+        );
     }
 
     /**

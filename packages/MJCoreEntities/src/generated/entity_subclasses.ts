@@ -8220,6 +8220,12 @@ export const MJAPIApplicationScopeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RowFilterID: z.string().nullable().describe(`
+        * * Field Name: RowFilterID
+        * * Display Name: Row Filter ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
+        * * Description: Optional row-level filter acting as a CEILING for every API key operating under this application — a restriction keys inherit and cannot widen. Composes with the per-key filter (APIKeyScope.RowFilterID) and with role-based RLS using AND, never OR, so no layer can broaden another. References the same RowLevelSecurityFilter catalog used by role-based RLS. NULL (the default) means the application imposes no row ceiling. The same authoring constraints as APIKeyScope.RowFilterID apply: exact single-entity resource pattern, all referenced columns must exist on that entity, and all referrers of the filter record must resolve to the same entity.`),
     Application: z.string().describe(`
         * * Field Name: Application
         * * Display Name: Application Name
@@ -8227,6 +8233,10 @@ export const MJAPIApplicationScopeSchema = z.object({
     Scope: z.string().describe(`
         * * Field Name: Scope
         * * Display Name: Scope Name
+        * * SQL Data Type: nvarchar(100)`),
+    RowFilter: z.string().nullable().describe(`
+        * * Field Name: RowFilter
+        * * Display Name: Row Filter
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -8370,6 +8380,12 @@ export const MJAPIKeyScopeSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Rule evaluation order. Higher priority rules are evaluated first. Within same priority, deny rules are evaluated before allow rules.`),
+    RowFilterID: z.string().nullable().describe(`
+        * * Field Name: RowFilterID
+        * * Display Name: Row Filter ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
+        * * Description: Optional row-level filter narrowing WHICH RECORDS this scope grant applies to, in addition to the resource pattern that governs which entities. References the same RowLevelSecurityFilter catalog used by role-based RLS, so the filter text flows through the standard {{Token}} substitution engine and every existing RLS enforcement point (RunView, Load by primary key, save, delete, search). NULL (the default) means no row restriction — behavior identical to before this column existed. When set, the rule's ResourcePattern must name a single exact entity (no wildcards, no comma-separated lists), every column the filter references must resolve to a real non-virtual field on that entity, and every other referrer of the same filter record must resolve to that same entity. Critically, this filter is evaluated INDEPENDENTLY of the role-RLS exemption: a user exempt from role RLS is still bound by their key's filter, because narrowing a principal below what their roles allow is the entire purpose of a key ceiling.`),
     APIKey: z.string().describe(`
         * * Field Name: APIKey
         * * Display Name: API Key
@@ -8377,6 +8393,10 @@ export const MJAPIKeyScopeSchema = z.object({
     Scope: z.string().describe(`
         * * Field Name: Scope
         * * Display Name: Scope
+        * * SQL Data Type: nvarchar(100)`),
+    RowFilter: z.string().nullable().describe(`
+        * * Field Name: RowFilter
+        * * Display Name: Row Filter
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -55555,6 +55575,20 @@ export class MJAPIApplicationScopeEntity extends BaseEntity<MJAPIApplicationScop
     }
 
     /**
+    * * Field Name: RowFilterID
+    * * Display Name: Row Filter ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
+    * * Description: Optional row-level filter acting as a CEILING for every API key operating under this application — a restriction keys inherit and cannot widen. Composes with the per-key filter (APIKeyScope.RowFilterID) and with role-based RLS using AND, never OR, so no layer can broaden another. References the same RowLevelSecurityFilter catalog used by role-based RLS. NULL (the default) means the application imposes no row ceiling. The same authoring constraints as APIKeyScope.RowFilterID apply: exact single-entity resource pattern, all referenced columns must exist on that entity, and all referrers of the filter record must resolve to the same entity.
+    */
+    get RowFilterID(): string | null {
+        return this.Get('RowFilterID');
+    }
+    set RowFilterID(value: string | null) {
+        this.Set('RowFilterID', value);
+    }
+
+    /**
     * * Field Name: Application
     * * Display Name: Application Name
     * * SQL Data Type: nvarchar(100)
@@ -55570,6 +55604,15 @@ export class MJAPIApplicationScopeEntity extends BaseEntity<MJAPIApplicationScop
     */
     get Scope(): string {
         return this.Get('Scope');
+    }
+
+    /**
+    * * Field Name: RowFilter
+    * * Display Name: Row Filter
+    * * SQL Data Type: nvarchar(100)
+    */
+    get RowFilter(): string | null {
+        return this.Get('RowFilter');
     }
 }
 
@@ -55939,6 +55982,20 @@ export class MJAPIKeyScopeEntity extends BaseEntity<MJAPIKeyScopeEntityType> {
     }
 
     /**
+    * * Field Name: RowFilterID
+    * * Display Name: Row Filter ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
+    * * Description: Optional row-level filter narrowing WHICH RECORDS this scope grant applies to, in addition to the resource pattern that governs which entities. References the same RowLevelSecurityFilter catalog used by role-based RLS, so the filter text flows through the standard {{Token}} substitution engine and every existing RLS enforcement point (RunView, Load by primary key, save, delete, search). NULL (the default) means no row restriction — behavior identical to before this column existed. When set, the rule's ResourcePattern must name a single exact entity (no wildcards, no comma-separated lists), every column the filter references must resolve to a real non-virtual field on that entity, and every other referrer of the same filter record must resolve to that same entity. Critically, this filter is evaluated INDEPENDENTLY of the role-RLS exemption: a user exempt from role RLS is still bound by their key's filter, because narrowing a principal below what their roles allow is the entire purpose of a key ceiling.
+    */
+    get RowFilterID(): string | null {
+        return this.Get('RowFilterID');
+    }
+    set RowFilterID(value: string | null) {
+        this.Set('RowFilterID', value);
+    }
+
+    /**
     * * Field Name: APIKey
     * * Display Name: API Key
     * * SQL Data Type: nvarchar(255)
@@ -55954,6 +56011,15 @@ export class MJAPIKeyScopeEntity extends BaseEntity<MJAPIKeyScopeEntityType> {
     */
     get Scope(): string {
         return this.Get('Scope');
+    }
+
+    /**
+    * * Field Name: RowFilter
+    * * Display Name: Row Filter
+    * * SQL Data Type: nvarchar(100)
+    */
+    get RowFilter(): string | null {
+        return this.Get('RowFilter');
     }
 }
 
