@@ -959,7 +959,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (38 classes)
+// @memberjunction/core-entities-server (41 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -975,6 +975,8 @@ import {
     MJAIRemoteBrowserProviderEntityServer,
     MJAISkillEntityServer,
     MJAISkillPermissionEntityServer,
+    MJAPIApplicationScopeEntityServer,
+    MJAPIKeyScopeEntityServer,
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
@@ -991,6 +993,7 @@ import {
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
+    MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -1874,6 +1877,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIRemoteBrowserProviderEntityServer,
     MJAISkillEntityServer,
     MJAISkillPermissionEntityServer,
+    MJAPIApplicationScopeEntityServer,
+    MJAPIKeyScopeEntityServer,
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
@@ -1890,6 +1895,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
+    MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -2049,7 +2055,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 882;
+export const CLASS_REGISTRATIONS_COUNT = 885;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

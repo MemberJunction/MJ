@@ -22348,6 +22348,10 @@ export class MJAPIApplicationScope_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Optional row-level filter acting as a CEILING for every API key operating under this application — a restriction keys inherit and cannot widen. Composes with the per-key filter (APIKeyScope.RowFilterID) and with role-based RLS using AND, never OR, so no layer can broaden another. References the same RowLevelSecurityFilter catalog used by role-based RLS. NULL (the default) means the application imposes no row ceiling. The same authoring constraints as APIKeyScope.RowFilterID apply: exact single-entity resource pattern, all referenced columns must exist on that entity, and all referrers of the filter record must resolve to the same entity.`}) 
+    @MaxLength(36)
+    RowFilterID?: string;
+        
     @Field() 
     @MaxLength(100)
     Application: string;
@@ -22355,6 +22359,10 @@ export class MJAPIApplicationScope_ {
     @Field() 
     @MaxLength(100)
     Scope: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    RowFilter?: string;
         
 }
 
@@ -22383,6 +22391,9 @@ export class CreateMJAPIApplicationScopeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field({ nullable: true })
+    RowFilterID: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -22414,6 +22425,9 @@ export class UpdateMJAPIApplicationScopeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field({ nullable: true })
+    RowFilterID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -22903,6 +22917,10 @@ export class MJAPIKeyScope_ {
     @Field(() => Int, {description: `Rule evaluation order. Higher priority rules are evaluated first. Within same priority, deny rules are evaluated before allow rules.`}) 
     Priority: number;
         
+    @Field({nullable: true, description: `Optional row-level filter narrowing WHICH RECORDS this scope grant applies to, in addition to the resource pattern that governs which entities. References the same RowLevelSecurityFilter catalog used by role-based RLS, so the filter text flows through the standard {{Token}} substitution engine and every existing RLS enforcement point (RunView, Load by primary key, save, delete, search). NULL (the default) means no row restriction — behavior identical to before this column existed. When set, the rule's ResourcePattern must name a single exact entity (no wildcards, no comma-separated lists), every column the filter references must resolve to a real non-virtual field on that entity, and every other referrer of the same filter record must resolve to that same entity. Critically, this filter is evaluated INDEPENDENTLY of the role-RLS exemption: a user exempt from role RLS is still bound by their key's filter, because narrowing a principal below what their roles allow is the entire purpose of a key ceiling.`}) 
+    @MaxLength(36)
+    RowFilterID?: string;
+        
     @Field() 
     @MaxLength(255)
     APIKey: string;
@@ -22910,6 +22928,10 @@ export class MJAPIKeyScope_ {
     @Field() 
     @MaxLength(100)
     Scope: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    RowFilter?: string;
         
 }
 
@@ -22938,6 +22960,9 @@ export class CreateMJAPIKeyScopeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field({ nullable: true })
+    RowFilterID: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -22969,6 +22994,9 @@ export class UpdateMJAPIKeyScopeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field({ nullable: true })
+    RowFilterID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -34520,6 +34548,10 @@ export class MJContentItemChunk_ {
     @Field({nullable: true}) 
     @MaxLength(250)
     ContentItem?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    ParentChunk?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -46637,6 +46669,19 @@ export class MJEntity_ {
     @MaxLength(255)
     ExternalObjectName?: string;
         
+    @Field({nullable: true, description: `When set, CodeGen generates the entity's full base view under THIS name instead of BaseView, and the application owns BaseView — which is expected to wrap it (SELECT g.*, <extras> FROM <GeneratedBaseViewName> g). This gives an entity a custom base view WITHOUT inheriting the generated SQL: related-entity display joins, geo columns and recursive root-ID columns keep regenerating underneath, so a foreign key added later still appears. NULL (the default, and every pre-existing row) means the previous all-or-nothing behaviour: BaseViewGenerated alone decides whether CodeGen writes BaseView, and there is no second view. BaseView remains the public surface — entity field discovery, permissions and the generated CRUD procedures all target it. SQL SERVER ONLY: layering relies on sp_refreshview to re-resolve the application-owned outer view's SELECT * against a regenerated inner view. PostgreSQL freezes a view's column list at creation and has no refresh equivalent, so CodeGen rejects this column on PostgreSQL rather than let the outer view go silently stale.`}) 
+    @MaxLength(255)
+    GeneratedBaseViewName?: string;
+        
+    @Field(() => Boolean, {description: `When 1, this entity may be populated by INSERT statements that do not go through BaseEntity.Save() — bulk loads, ETL/integration sync, or rows created as a side effect of a stored procedure. Default 0, meaning every insert is expected to flow through BaseEntity so that record-change tracking, entity actions, validation and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, because a direct insert produces neither an audit row nor a cache-invalidation event.`}) 
+    AllowDirectSQLInsert: boolean;
+        
+    @Field(() => Boolean, {description: `When 1, this entity may be modified by UPDATE statements that do not go through BaseEntity.Save() — bulk backfills, integration sync, or maintenance routines. Default 0, meaning every update is expected to flow through BaseEntity so that record-change tracking, entity actions, validation and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, because a direct update produces neither an audit row nor a cache-invalidation event.`}) 
+    AllowDirectSQLUpdate: boolean;
+        
+    @Field(() => Boolean, {description: `When 1, this entity may have rows removed by DELETE statements that do not go through BaseEntity.Delete() — purge and retention routines, or integration sync reconciling a remote source. Default 0, meaning every delete is expected to flow through BaseEntity so that record-change tracking, entity actions, cascade handling and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, and additionally requires DeleteType = 'Hard' — a direct DELETE removes the row outright rather than setting DeletedAt, which would defeat soft delete.`}) 
+    AllowDirectSQLDelete: boolean;
+        
     @Field({nullable: true, description: `Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`}) 
     CodeName?: string;
         
@@ -46875,11 +46920,11 @@ export class MJEntity_ {
     @Field(() => [MJScopedPromptConfig_])
     MJScopedPromptConfigs_PrimaryScopeEntityIDArray: MJScopedPromptConfig_[]; // Link to MJScopedPromptConfigs
     
-    @Field(() => [MJEntityAction_])
-    MJEntityActions_ScopeEntityIDArray: MJEntityAction_[]; // Link to MJEntityActions
-    
     @Field(() => [MJActionExecutionLog_])
     MJActionExecutionLogs_TargetEntityIDArray: MJActionExecutionLog_[]; // Link to MJActionExecutionLogs
+    
+    @Field(() => [MJEntityAction_])
+    MJEntityActions_ScopeEntityIDArray: MJEntityAction_[]; // Link to MJEntityActions
     
 }
 
@@ -47076,6 +47121,18 @@ export class CreateMJEntityInput {
 
     @Field({ nullable: true })
     ExternalObjectName: string | null;
+
+    @Field({ nullable: true })
+    GeneratedBaseViewName: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDirectSQLInsert?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDirectSQLUpdate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDirectSQLDelete?: boolean;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -47275,6 +47332,18 @@ export class UpdateMJEntityInput {
 
     @Field({ nullable: true })
     ExternalObjectName?: string | null;
+
+    @Field({ nullable: true })
+    GeneratedBaseViewName?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDirectSQLInsert?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDirectSQLUpdate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDirectSQLDelete?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -48060,16 +48129,6 @@ export class MJEntityResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJEntityAction_])
-    async MJEntityActions_ScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Entity Actions', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityActions')} WHERE ${provider.QuoteIdentifier('ScopeEntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Actions', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJActionExecutionLog_])
     async MJActionExecutionLogs_TargetEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Action Execution Logs', userPayload);
@@ -48077,6 +48136,16 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwActionExecutionLogs')} WHERE ${provider.QuoteIdentifier('TargetEntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Action Execution Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJEntityAction_])
+    async MJEntityActions_ScopeEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entity Actions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityActions')} WHERE ${provider.QuoteIdentifier('ScopeEntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Actions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -77631,6 +77700,12 @@ export class MJRowLevelSecurityFilter_ {
     @Field(() => [MJEntityPermission_])
     MJEntityPermissions_UpdateRLSFilterIDArray: MJEntityPermission_[]; // Link to MJEntityPermissions
     
+    @Field(() => [MJAPIKeyScope_])
+    MJAPIKeyScopes_RowFilterIDArray: MJAPIKeyScope_[]; // Link to MJAPIKeyScopes
+    
+    @Field(() => [MJAPIApplicationScope_])
+    MJAPIApplicationScopes_RowFilterIDArray: MJAPIApplicationScope_[]; // Link to MJAPIApplicationScopes
+    
 }
 
 //****************************************************************************
@@ -77783,6 +77858,26 @@ export class MJRowLevelSecurityFilterResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityPermissions')} WHERE ${provider.QuoteIdentifier('UpdateRLSFilterID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjrowlevelsecurityfilter_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAPIKeyScope_])
+    async MJAPIKeyScopes_RowFilterIDArray(@Root() mjrowlevelsecurityfilter_: MJRowLevelSecurityFilter_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: API Key Scopes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAPIKeyScopes')} WHERE ${provider.QuoteIdentifier('RowFilterID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Key Scopes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjrowlevelsecurityfilter_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Key Scopes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAPIApplicationScope_])
+    async MJAPIApplicationScopes_RowFilterIDArray(@Root() mjrowlevelsecurityfilter_: MJRowLevelSecurityFilter_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: API Application Scopes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAPIApplicationScopes')} WHERE ${provider.QuoteIdentifier('RowFilterID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Application Scopes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjrowlevelsecurityfilter_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Application Scopes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -93479,6 +93574,10 @@ export class MJUserViewRunDetail_ {
         
     @Field() 
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    UserViewRun: string;
         
     @Field() 
     @MaxLength(36)

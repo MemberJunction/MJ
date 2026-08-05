@@ -6,9 +6,9 @@ This directory contains SQL migration scripts for MemberJunction database schema
 
 ## 🚨 IMPORTANT: Where to Create New Migrations
 
-**All new migrations MUST be created in the `migrations/v5/` directory.**
+**All new migrations MUST be created in the `migrations/v6/` directory** — the 6.x era opened in Aug 2026, so v6 is the live folder and `v5/` joined the frozen set.
 
-The `migrations/v2/`,`migrations/v3/`, and `migrations/v4/` directory are **frozen** and should not receive new migrations. They contain historical migrations for earlier MJ versions.
+The `migrations/v2/` through `migrations/v5/` directories are **frozen** and should not receive new migrations. They contain historical migrations for earlier MJ eras.
 
 ```
 migrations/
@@ -18,11 +18,20 @@ migrations/
 │   └── V202601131636...   # Historical migrations through v3.4.x
 ├── v4/                    # ❌ FROZEN - Do NOT add new migrations here
 │   └── V202602121700...   # Historical migrations through v4.4.x
-├── v5/                    # ✅ CREATE NEW MIGRATIONS HERE
+├── v5/                    # ❌ FROZEN - historical 5.x era
 │   ├── B202602151200...   # v5.0 Baseline (complete schema)
-│   └── V202602131500...   # All new v5.x migrations
+│   └── V202602131500...   # All 5.x migrations
+├── v6/                    # ✅ CREATE NEW MIGRATIONS HERE
+│   └── V202608042204...   # 6.x-era migrations (v6 baseline squash still pending)
 └── R__RefreshMetadata.sql # Repeatable migration (runs after all versioned)
 ```
+
+> **Why the folder matters even though Flyway ignores it.** `migrationsLocation` is
+> `filesystem:./migrations`, scanned recursively, and the version comes from the *filename* —
+> so a migration in the wrong era folder still executes in the right order. What breaks is
+> **PostgreSQL parity**: counterparts are paired per folder (`migrations/vN` ↔ `migrations-pg/vN`)
+> by `scripts/check-pg-migration-parity.mjs`. A misfiled migration strands its counterpart.
+> Two 6.1.x migrations landed in `v5/` this way in Aug 2026, following this file's stale guidance.
 
 ## Version 3.0 Baseline Migration
 

@@ -815,6 +815,17 @@
             "lastModified": "2026-07-31T16:12:26.160Z",
             "checksum": "9810d9dfac4530c59c7bdb885595c69131833d026c3fd452cad55c782e30c076"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT69 - Layered Base Views",
+            "Sequence": 52,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3C334350-5AA5-4F9C-94DD-CACCF140D830"
+          }
         }
       ]
     },

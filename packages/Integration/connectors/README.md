@@ -1,283 +1,122 @@
 # @memberjunction/integration-connectors
 
-Concrete integration connectors for the MemberJunction Integration Engine. This package provides connectors for CRM, accounting, membership, newsletter, and file-based systems — all implementing `BaseIntegrationConnector` from `@memberjunction/integration-engine`.
+External Data Source connector **base classes** for the MemberJunction Integration Engine.
 
-## Connectors
+> **6.x: the concrete vendor connectors have moved out of this package.**
+> Every connector that used to live here now ships from
+> [MemberJunction/Integrations](https://github.com/MemberJunction/Integrations) as its own Open App.
+> See [What moved, and where](#what-moved-and-where) below.
 
-### Production REST API Connectors
+## What's still here
 
-These connectors call live external APIs and extend `BaseRESTIntegrationConnector`.
+Three abstract base classes — the shared layer that the per-engine External Data Source connectors
+extend. They are the entire public surface of this package.
 
-#### SalesforceConnector
+| Export | Role |
+|---|---|
+| `BaseExternalDataSourceConnector` | The heart: bridges the Integration Engine's fetch/discovery contract onto the `@memberjunction/external-data-sources` connection layer. |
+| `BaseSqlExternalDataSourceConnector` | SQL-flavoured specialisation. Extended by the SQL Server, PostgreSQL, MySQL, Oracle and Snowflake leaves. |
+| `BaseDocumentDataSourceConnector` | Document-store specialisation. Extended by the MongoDB leaf. |
 
-Production connector for Salesforce CRM using the REST API v61.0 with full bidirectional sync.
+These stayed because six shipped Open Apps import them from this package rather than duplicating them:
 
-**Registration:** `@RegisterClass(BaseIntegrationConnector, 'SalesforceConnector')`
-
-**Authentication — Two Supported Flows:**
-
-The connector auto-detects the auth flow based on the credentials provided.
-
-**1. Client Credentials Flow** (recommended for new setups):
-```json
-{
-  "authFlow": "client_credentials",
-  "loginUrl": "https://myorg.my.salesforce.com",
-  "clientId": "3MVG9...your-consumer-key",
-  "clientSecret": "D4A28...your-client-secret",
-  "apiVersion": "61.0"
-}
+```ts
+// Platform/SQLServer/src/SQLServerConnector.ts  (in MemberJunction/Integrations)
+import { BaseSqlExternalDataSourceConnector } from '@memberjunction/integration-connectors';
 ```
 
-**2. JWT Bearer Token Flow** (RS256, certificate-based):
-```json
-{
-  "authFlow": "jwt_bearer",
-  "loginUrl": "https://login.salesforce.com",
-  "tokenUrl": "https://myorg.my.salesforce.com",
-  "clientId": "3MVG9...your-consumer-key",
-  "username": "integration-user@myorg.com",
-  "privateKey": "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----",
-  "apiVersion": "61.0"
-}
-```
+The leaves themselves are deliberately thin — each is little more than a `@RegisterClass` decorator, a
+name, and a side-effect import of its engine driver. The logic lives here.
 
-| Field | Required | Description |
+## Why the concrete connectors moved
+
+They were **duplicated**. The same 36 connector classes existed in both repositories, and the Integrations
+copy is the one that actually ships to customers: each connector there is a self-contained Open App with
+its own `package.json`, versioning, changesets, seed migrations (SQL Server **and** PostgreSQL), metadata
+and CI gates. Keeping a second copy in the monorepo meant every fix had to be applied twice, and the two
+copies drifted.
+
+Removing the monorepo copy makes the Integrations repo the single source of truth, and lets connectors
+version and release independently of the MJ core release train.
+
+## What moved, and where
+
+Each row is a class removed from this package in 6.x, with the Open App that now owns it.
+
+| Removed class | Open App | npm package |
 |---|---|---|
-| `loginUrl` | Yes | Org URL. For Client Credentials: My Domain URL. For JWT: `login.salesforce.com` (prod) or `test.salesforce.com` (sandbox) as the JWT audience. |
-| `clientId` | Yes | Connected App Consumer Key |
-| `clientSecret` | CC only | Client Secret from Connected App |
-| `username` | JWT only | Integration user's Salesforce email |
-| `privateKey` | JWT only | PEM-encoded RSA private key (matching X.509 cert uploaded to Connected App) |
-| `tokenUrl` | No | Token endpoint URL if different from `loginUrl` (e.g., My Domain URL for JWT flow) |
-| `apiVersion` | No | Salesforce REST API version (default: `61.0`) |
-| `authFlow` | No | Explicit flow selection. Auto-detected: `clientSecret` present → `client_credentials`; `privateKey` + `username` present → `jwt_bearer` |
+| `AptifyConnector` | `AMS/Aptify` | `@memberjunction/connector-aptify` |
+| `BlackbaudConnector` | `CRM/Blackbaud` | `@memberjunction/connector-blackbaud` |
+| `ConstantContactConnector` | `Marketing/ConstantContact` | `@memberjunction/connector-constant-contact` |
+| `CventConnector` | `Events/Cvent` | `@memberjunction/connector-cvent` |
+| `DynamicsDataverseConnector` | `CRM/DynamicsDataverse` | `@memberjunction/connector-microsoft-dynamics-365-dataverse` |
+| `FileFeedConnector` | `Platform/FileFeed` | `@memberjunction/connector-file-feed` |
+| `FontevaConnector` | `AMS/Fonteva` | `@memberjunction/connector-fonteva` |
+| `GrowthZoneConnector` | `AMS/GrowthZone` | `@memberjunction/connector-growthzone` |
+| `HivebriteConnector` | `Platform/Hivebrite` | `@memberjunction/connector-hivebrite` |
+| `HubSpotConnector` | `CRM/HubSpot` | `@memberjunction/connector-hubspot` |
+| `IMISConnector` | `AMS/iMIS` | `@memberjunction/connector-imis` |
+| `MJToMJConnector` | `Platform/MJtoMJ` | `@memberjunction/connector-mj-to-mj` |
+| `MagnetMailConnector` | `Marketing/MagnetMail` | `@memberjunction/connector-magnetmail` |
+| `MailchimpConnector` | `Marketing/Mailchimp` | `@memberjunction/connector-mailchimp` |
+| `MemberSuiteConnector` | `AMS/MemberSuite` | `@memberjunction/connector-membersuite` |
+| `NeonCRMConnector` | `CRM/NeonCRM` | `@memberjunction/connector-neon-crm` |
+| `NetForumConnector` | `AMS/NetForum` | `@memberjunction/connector-netforum-enterprise` |
+| `NetSuiteConnector` | `Finance/NetSuite` | `@memberjunction/connector-netsuite` |
+| `NimbleAMSConnector` | `AMS/NimbleAMS` | `@memberjunction/connector-nimble-ams` |
+| `NoviConnector` | `AMS/Novi` | `@memberjunction/connector-novi-ams` |
+| `ORCIDConnector` | `Platform/ORCID` | `@memberjunction/connector-orcid` |
+| `OpenWaterConnector` | `Events/OpenWater` | `@memberjunction/connector-openwater` |
+| `PathLMSConnector` | `LMS/PathLMS` | `@memberjunction/connector-path-lms` |
+| `PheedLoopConnector` | `Events/PheedLoop` | `@memberjunction/connector-pheedloop` |
+| `PropFuelConnector` | `Marketing/PropFuel` | `@memberjunction/connector-propfuel` |
+| `QuickBooksConnector` | `Finance/QuickBooks` | `@memberjunction/connector-quickbooks` |
+| `RasaConnector` | `Marketing/Rasa` | `@memberjunction/connector-rasa-io` |
+| `Reach360Connector` | `LMS/Reach360` | `@memberjunction/connector-reach360` |
+| `RelationalDBConnector` | `Platform/RelationalDB` | `@memberjunction/connector-relational-db` |
+| `RhythmConnector` | `AMS/Rhythm` | `@memberjunction/connector-rhythm-software` |
+| `SageIntacctConnector` | `Finance/SageIntacct` | `@memberjunction/connector-sage-intacct` |
+| `SalesforceConnector` | `CRM/Salesforce` | `@memberjunction/connector-salesforce` |
+| `SharePointConnector` | `Platform/SharePoint` | `@memberjunction/connector-sharepoint` |
+| `WicketConnector` | `AMS/Wicket` | `@memberjunction/connector-wicket` |
+| `WildApricotConnector` | `AMS/WildApricot` | `@memberjunction/connector-wild-apricot` |
+| `YourMembershipConnector` | `AMS/YourMembership` | `@memberjunction/connector-yourmembership` |
 
-**Capabilities:**
-- Full CRUD (Create, Read, Update, Delete)
-- SOQL-based search
-- Live schema discovery via Describe API (standard + custom objects)
-- Incremental sync with `SystemModstamp` watermarks and `queryAll` for deleted records
-- Governor limit tracking (throttles at 80%, pauses at 95%)
-- Automatic token caching and refresh
+The Integrations repo also ships connectors that never existed here — Eventbrite, Impexium, Stripe,
+Totara, Zendesk, Higher Logic (Thrive Community and Vanilla), Whova, and the per-engine EDS leaves
+(SQL Server, PostgreSQL, MySQL, Oracle, Snowflake, MongoDB).
 
-**Standard Objects (9):** Account, Contact, Lead, Opportunity, Task, Event, Case, Campaign, User (read-only)
+The `generate-integration-actions.ts` CLI was removed with them — it existed only to instantiate the
+connectors in this package and emit their action metadata.
 
-**Default field mappings:**
-| Source Object | Target Entity | Key Mappings |
-|---|---|---|
-| Contact | Contacts | Email (key), FirstName, LastName, Phone, MobilePhone, Title, Department, mailing address fields (12 total) |
-| Account | Companies | Name (key), Industry, Phone, Website, billing address fields, Type, AnnualRevenue, NumberOfEmployees (10 total) |
-| Lead | Contacts | Email (key), FirstName, LastName, Company, Phone, Title (6 total) |
+## Migrating a deployment
 
-See also: [Connector usage guide](../docs/salesforce-connector.md) · [Connected App setup guide](../docs/salesforce-connected-app-setup.md)
+1. **Install the Open App(s)** you actually use. Each ships its own seed migration for SQL Server and
+   PostgreSQL.
+2. **The catalog row is re-pointed for you.** Each Open App's seed migration writes the *same*
+   `__mj.Integration` row (same hardcoded `ID` as the monorepo's original seed) with `ClassName` and
+   `ImportPath` set to the connector's npm package name. So an existing `CompanyIntegration` keeps
+   working against the same Integration — its class resolution just moves from
+   `@memberjunction/integration-connectors` to `@memberjunction/connector-<vendor>`.
+3. **Update your imports** if you referenced a connector class directly in application code:
+   ```diff
+   - import { SalesforceConnector } from '@memberjunction/integration-connectors';
+   + import { SalesforceConnector } from '@memberjunction/connector-salesforce';
+   ```
 
-#### HubSpotConnector
+> **Note on class-registration keys.** In this package the `@RegisterClass` key was the bare class symbol
+> (`'SalesforceConnector'`). In the Integrations repo the key is the npm package name
+> (`'@memberjunction/connector-salesforce'`), enforced by that repo's four-way identity invariant
+> (registration key ≡ `Integration.ClassName` ≡ `ImportPath` ≡ package name). Step 2 above is what keeps
+> resolution working: the Open App's own migration updates `ClassName` to match. **A deployment that
+> upgrades MJ to 6.x without installing the corresponding Open App will have catalog rows pointing at a
+> package that no longer contains those classes, and those integrations will fail to resolve.**
 
-Production connector for HubSpot CRM using the V3 API with full bidirectional sync, including association objects.
+## Historical migrations are untouched
 
-**Registration:** `@RegisterClass(BaseIntegrationConnector, 'HubSpotConnector')`
-
-**Authentication:** OAuth2 Bearer token via HubSpot Private App credentials.
-
-**Capabilities:** Full CRUD, search, list, association fetching (v4 per-object associations endpoint)
-
-**Objects:** Contacts, Companies, Deals, Owners, Tickets, Line Items, plus association objects (Contact↔Company, Deal↔Company, etc.)
-
-**Default field mappings:**
-| Source Object | Target Entity | Key Mappings |
-|---|---|---|
-| Contacts | Contacts | email (key), firstname, lastname, phone, company, lifecyclestage |
-| Companies | Companies | name (key), domain, industry, city, state |
-
-#### RasaConnector
-
-Production connector for Rasa.io newsletter platform. Read-only — pulls newsletter and subscriber data.
-
-**Registration:** `@RegisterClass(BaseIntegrationConnector, 'RasaConnector')`
-
-**Authentication:** Basic auth (username/password) to obtain a JWT, scoped to a community ID.
-
-**Objects:** Newsletters, Newsletter Sections, Newsletter Section Items, Subscribers
-
-#### WicketConnector
-
-Production connector for Wicket membership management platform with full bidirectional sync.
-
-**Registration:** `@RegisterClass(BaseIntegrationConnector, 'WicketConnector')`
-
-**Authentication:** HMAC-SHA256 signed requests.
-
-**Capabilities:** Full CRUD, search
-
-### Accounting Connectors
-
-These connectors integrate with accounting and ERP systems.
-
-#### SageIntacctConnector
-
-Production connector for Sage Intacct accounting/ERP using the XML Web Services API with full bidirectional sync.
-
-**Registration:** `@RegisterClass(BaseIntegrationConnector, 'SageIntacctConnector')`
-
-**Authentication:** Session-based — Sender ID/Password (app credentials) + User ID/Password authenticate via `getAPISession`, returning a session ID for subsequent requests.
-
-**Credentials JSON:**
-```json
-{
-  "CompanyId": "your-company-id",
-  "SenderId": "your-sender-id",
-  "SenderPassword": "your-sender-password",
-  "UserId": "your-user-id",
-  "UserPassword": "your-user-password",
-  "EntityId": "optional-entity-id"
-}
-```
-
-| Field | Required | Description |
-|---|---|---|
-| `CompanyId` | Yes | Sage Intacct Company ID |
-| `SenderId` | Yes | Web Services Sender ID (from Marketplace subscription) |
-| `SenderPassword` | Yes | Web Services Sender Password |
-| `UserId` | Yes | User ID for API authentication |
-| `UserPassword` | Yes | User password |
-| `EntityId` | No | Entity ID for multi-entity shared companies |
-
-**Capabilities:**
-- Full CRUD (Create, Read, Update, Delete)
-- Query-based search via `readByQuery`
-- Paginated listing via `readMore`
-- Live schema discovery via `inspect` API
-- Incremental sync with `WHENMODIFIED` watermarks
-- Session caching and automatic refresh
-- Retry with exponential backoff
-
-**Objects (9):** Customer, Vendor, GL Account, AP Bill, AR Invoice, Project, Employee, Department, Class
-
-**Default field mappings:**
-| Source Object | Target Entity | Key Mappings |
-|---|---|---|
-| CUSTOMER | Contacts | CUSTOMERID (key), NAME, EMAIL, PHONE, STATUS |
-| VENDOR | Companies | VENDORID (key), NAME, EMAIL, PHONE, STATUS |
-
-#### QuickBooksConnector
-
-Production connector for QuickBooks Online using the REST API v3 with OAuth 2.0 authentication.
-
-**Registration:** `@RegisterClass(BaseIntegrationConnector, 'QuickBooksConnector')`
-
-**Authentication:** OAuth 2.0 with automatic token refresh. Requires a QuickBooks app with client ID/secret and an initial refresh token obtained through the OAuth consent flow.
-
-**Credentials JSON:**
-```json
-{
-  "ClientId": "your-client-id",
-  "ClientSecret": "your-client-secret",
-  "RefreshToken": "your-refresh-token",
-  "RealmId": "your-company-realm-id",
-  "Environment": "production"
-}
-```
-
-| Field | Required | Description |
-|---|---|---|
-| `ClientId` | Yes | OAuth 2.0 Client ID from QuickBooks developer portal |
-| `ClientSecret` | Yes | OAuth 2.0 Client Secret |
-| `RefreshToken` | Yes | OAuth 2.0 refresh token (auto-refreshed on each use) |
-| `RealmId` | Yes | QuickBooks Company ID (Realm ID) |
-| `Environment` | No | `production` (default) or `sandbox` |
-
-**Capabilities:**
-- Full CRUD (Create, Read, Update, Delete)
-- SQL-like query via QuickBooks Query Language
-- Paginated listing
-- Live schema discovery
-- Incremental sync with `MetaData.LastUpdatedTime` watermarks
-- Automatic OAuth token refresh
-- Minor version pinning for API stability
-
-**Objects (10):** Customer, Vendor, Account, Invoice, Bill, Item, Payment, Employee, Department, Class
-
-**Default field mappings:**
-| Source Object | Target Entity | Key Mappings |
-|---|---|---|
-| Customer | Contacts | Id (key), DisplayName, PrimaryEmailAddr, PrimaryPhone, Active |
-| Vendor | Companies | Id (key), DisplayName, PrimaryEmailAddr, PrimaryPhone, Active |
-
-### SQL-Based Connectors
-
-These connectors read from SQL Server databases and extend `RelationalDBConnector`.
-
-#### RelationalDBConnector (Base Class)
-
-Abstract base class for connectors backed by SQL Server via the `mssql` package.
-
-**Configuration JSON:**
-```json
-{
-  "server": "your-sql-server",
-  "database": "YourDatabase",
-  "user": "username",
-  "password": "password"
-}
-```
-
-**Shared capabilities:**
-- `TestConnection` — runs `SELECT @@VERSION`
-- `DiscoverObjects` — queries `INFORMATION_SCHEMA.TABLES`
-- `DiscoverFields` — queries `INFORMATION_SCHEMA.COLUMNS`
-- `FetchChangesFromTable` — incremental fetch with watermark filtering and batch limiting
-- Connection pool caching per server+database pair
-
-#### YourMembershipConnector
-
-Reads from YourMembership database tables: `ym_Members`, `ym_Events`, `ym_EventRegistrations`, `ym_Chapters`, `ym_MembershipLevels`.
-
-**Registration:** `@RegisterClass(BaseIntegrationConnector, 'YourMembershipConnector')`
-
-**Default field mappings:**
-| Source Object | Target Entity | Key Mappings |
-|---|---|---|
-| ym_Members | Contacts | email (key), first_name, last_name, phone, status |
-
-### File-Based Connectors
-
-#### FileFeedConnector
-
-Reads data from local CSV files. Always performs a full load (no incremental sync).
-
-**Registration:** `@RegisterClass(BaseIntegrationConnector, 'FileFeedConnector')`
-
-**Configuration JSON:**
-```json
-{
-  "storagePath": "/absolute/path/to/file.csv",
-  "fileType": "csv"
-}
-```
-
-**Capabilities:**
-- `TestConnection` — checks that the file exists on disk
-- `DiscoverObjects` — returns the file name as the single available object
-- `DiscoverFields` — parses the CSV header row
-- `FetchChanges` — parses all rows into `ExternalRecord[]` (watermark ignored)
-
-## Action Generation
-
-Integration connectors can auto-generate MJ Action metadata for use by AI agents and workflow engines. Each connector declares its objects and fields via `GetIntegrationObjects()`, and the CLI generator produces mj-sync compatible JSON files.
-
-```bash
-# Generate actions for all connectors
-npx tsx src/generate-integration-actions.ts
-
-# Generate for a specific connector
-npx tsx src/generate-integration-actions.ts salesforce
-npx tsx src/generate-integration-actions.ts hubspot
-npx tsx src/generate-integration-actions.ts sage-intacct
-npx tsx src/generate-integration-actions.ts quickbooks
-```
-
-See [INTEGRATION_ACTIONS.md](../INTEGRATION_ACTIONS.md) for full documentation.
+The `__mj.Integration` seeds under `migrations/v5/**` still carry the old `ClassName` / `ImportPath`
+values. Applied migrations are immutable — they are not rewritten by this change. The re-point happens
+forward, via each Open App's own migration, as described above.
 
 ## Building
 
@@ -298,18 +137,11 @@ npm run test:watch    # watch mode
 
 ```
 src/
-  index.ts                        # Package exports
-  RelationalDBConnector.ts        # Base class for SQL-based connectors
-  HubSpotConnector.ts             # HubSpot REST API connector (full CRUD)
-  SalesforceConnector.ts          # Salesforce REST API connector (full CRUD)
-  SageIntacctConnector.ts         # Sage Intacct XML API connector (full CRUD)
-  QuickBooksConnector.ts          # QuickBooks Online REST API connector (full CRUD)
-  RasaConnector.ts                # Rasa.io REST API connector (read-only)
-  WicketConnector.ts              # Wicket REST API connector (full CRUD)
-  YourMembershipConnector.ts      # YourMembership SQL connector
-  FileFeedConnector.ts            # CSV file connector
-  generate-integration-actions.ts # CLI: auto-generate action metadata from connectors
-  __tests__/                      # Unit and integration tests
-test-fixtures/
-  sample-contacts.csv             # 100-row sample for FileFeed testing
+  index.ts                                     # Package exports (the three base classes)
+  datasource/
+    BaseExternalDataSourceConnector.ts         # EDS-backed connector heart
+    BaseSqlExternalDataSourceConnector.ts      # SQL specialisation
+    BaseDocumentDataSourceConnector.ts         # Document-store specialisation
+  __tests__/
+    EdsConnectors.test.ts                      # Coverage for the three base classes
 ```

@@ -114,6 +114,9 @@ jobs:
           echo "SQL Server did not become ready within the timeout." >&2
           exit 1
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
@@ -121,11 +124,10 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       # Build the graph the aggregator imports: testing-integration (+ its deps, which cover
       # core/core-entities/sqlserver-dataprovider/graphql-dataprovider/predictive-studio/
@@ -187,4 +189,4 @@ jobs:
       # come from the local .env, which CI does not have. PS_INTEGRATION stays unset. No
       # MJAPI is up, so client-transport members skip on the MJAPI preflight.
       - name: Run integration tier (mj test)
-        run: npm run test:integration
+        run: pnpm run test:integration

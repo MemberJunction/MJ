@@ -25,7 +25,8 @@
     "@angular/compiler": "21.1.3",
     "@angular/compiler-cli": "21.1.3",
     "@memberjunction/ng-test-utils": "6.0.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "@memberjunction/actions-base": "6.0.0"
   },
   "peerDependencies": {
     "@angular/common": "21.1.3",
