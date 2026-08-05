@@ -1,6 +1,6 @@
 # Task Graphs as an Agent Primitive — Design Plan
 
-**Status:** Draft v2 — revised per review feedback
+**Status:** Draft v3 — adds the what/when program framing, the DAG-spec contract (D16), durable-async succession over MJQueue (D14), the Pipeline boundary (D15), payload-redaction posture, reconciliation-sweep scope, and the human-task notification path
 **Date:** 2026-08-05
 **Origin:** Architecture study of the Sage → Workflow Planner → TaskOrchestrator pipeline (session `claude/sage-task-graph-study-4uvtrc`)
 
@@ -20,6 +20,15 @@ This plan makes task graphs a first-class capability of the platform:
 4. **Human-in-the-loop is native**: `MJ: AI Agent Requests` is the pause/resume mechanism for approvals, and the Task schema's existing `UserID`-xor-`AgentID` design makes *human tasks* first-class graph nodes that block downstream agent work.
 5. **`BaseAgent.ts` is decomposed** from a ~13k-line monolith into composed helper classes as a parallel track, landing before/alongside the primitive work that touches it.
 
+### Where this sits in the workflow program — *what* vs. *when*
+
+MJ's workflow story separates two axes, and this plan owns exactly one of them:
+
+- **WHAT runs is a DAG** — one generic graph execution engine, delivered here. Ephemeral in-run (a Flow agent traversing its design-time graph; a constant-folded single node) or durable cross-run (the dispatcher executing Task rows). A **Loop agent spins up a DAG dynamically** to do its work; a **Flow agent IS a DAG** authored at design time, running deterministically through the same execution code. Producers differ; the engine does not.
+- **WHEN it runs is the trigger layer** — Entity Actions (record lifecycle, PR #3408), Scheduled Jobs, User Routines, on-demand invocation (UI / Remote Operations / MCP), and direct agent invocation. Triggers are out of scope here; they dispatch into agents/actions exactly as today, and anything they start can emit a graph.
+
+Companion tracks in the broader program — trigger-vocabulary normalization, a stored workflow-spec object binding a DAG to its triggers, authoring front doors (Flow visualization for business users; Agent Manager already authors flows), and unified run observability — build **on** this engine and are deliberately not in this plan's scope.
+
 ### Decisions
 
 | # | Decision |
@@ -37,6 +46,9 @@ This plan makes task graphs a first-class capability of the platform:
 | D11 | Package naming is **not** AI-prefixed (`@memberjunction/task-graph`): the submission API is producer-agnostic — an LLM, deterministic code, or a human UI can all construct and submit a DAG. |
 | D12 | `ExecuteTaskGraph` mutation and the client-driven execution path are **removed immediately** in Phase 2 — no adoption exists, so no compat window. (The server-side payload-sniff shim still bridges prompts until Phase 3 migrates them.) |
 | D13 | `BaseAgent.ts` is refactored into composed helper classes as part of this program (parallel track R), behavior-preserving, staged ahead of the Phase 3 changes that touch it. |
+| D14 | **The dispatcher's claim protocol is MJ's durable-async substrate going forward.** `MJQueue`'s durability is illusory today (rows written, never read back; no restart reclaim, no cross-process pickup) and it is not extended. New durable work targets `TaskGraphService` submission — a single-node durable graph is exactly "run this action durably with retry" — including the #3408 plan's After\*-entity-action routing (its runbook step 9), which re-targets here instead of `QueueManager`. MJQueue is absorbed/retired on its own track. |
+| D15 | **Pipelines and task graphs stay separate primitives.** A Pipeline (`plans/tool-pipelines.md`) is a single-turn, in-run *data* program — one value out, no durable state. A task graph is durable, multi-run *work* orchestration. Neither grows toward the other; an agent that needs both emits both. |
+| D16 | **`TaskGraphRequest` is the fully-qualified DAG spec.** One TS contract in `ai-core-plus` that every producer authors against — the LLM primitive, deterministic code, a human UI, and (future, out of scope here) stored workflow definitions that bind a graph to triggers. Server-side validation in `TaskGraphService` validates against this same contract; there is no looser internal shape. |
 
 ---
 
@@ -151,6 +163,8 @@ interface TaskGraphRequest {
 }
 ```
 
+**The DAG spec (D16).** `TaskGraphRequest` is not a loosely-typed LLM shape — it is the one fully-qualified TypeScript contract for a DAG, shared by every producer. `LoopAgentType` validates emissions against it (with retry correctives), `TaskGraphService.Submit` re-validates the identical contract server-side, and future producers (a manual workflow builder, a stored workflow definition, deterministic code) author against the same interface. When the broader workflow program adds a stored "definition + trigger" spec object, its graph section IS this type — no translation layer.
+
 **Mental model** (goes in the prompt docs): `subAgents[]` is *ephemeral* fan-out — blocks the run, dies with it. `Tasks` is *durable* fan-out — dependency-ordered, survives the run, visible in the Tasks UI, resumable, can wait on humans.
 
 **Semantics — submit-and-detach:** the step terminates the turn. The dispatcher executes; on completion it posts a results message into the conversation or re-invokes the submitting agent with the outcome as a new turn (Agent Requests resume pattern). No run suspension.
@@ -181,6 +195,12 @@ interface TaskGraphRequest {
 - Long tasks heartbeat-extend `ClaimExpiresAt`; reconciliation (startup + periodic) treats expired claims as orphaned → reset to `Pending`.
 - This one protocol covers horizontal scale-out **and** crash/restart recovery, and is near-free to include from day one even though v1 runs single-instance.
 
+**Durable-async succession (D14).** This dispatcher is the durable executor MJ has been missing, and it must not become a *third* async substrate next to MJQueue and fire-and-forget promises. The posture: MJQueue is frozen (its one consumer, after-save Entity AI Actions, migrates or retires on its own track); the #3408 After\*-entity-action durability work (runbook step 9) targets `TaskGraphService` submission instead of `QueueManager.AddTask`; and any future "run X durably" need is a single-node graph, not a new queue. The claim protocol's design deliberately carries the litigated lessons from `plans/scheduled-job-engine-decoupling.md` (the wedged-scheduler post-mortem): bounded-parallel dispatch, never a serial await chain; token-checked state transitions; sweep-driven orphan recovery.
+
+**Payload redaction.** `Task.InputPayload`/`OutputPayload` are persistent payload columns, user-visible in the Tasks UI — a new persister under the #3408 §5.7 invariant (*no path writes a raw `ActionParam[]` to persistent storage*). Any submission path that maps entity-action or action params into task payloads routes them through the shared `RedactParams` helper before persistence. Agent-authored payloads (the primitive's normal case) are the agent's own output and are stored as emitted — but the boundary is stated here so the invariant survives the After\*-routing work (D14) landing on this substrate.
+
+**Reconciliation sweep scope.** Beyond expired claims, the periodic sweep is the natural enforcer for two schema promises that currently have none: `MJ: AI Agent Requests.ExpiresAt` (the schema documents "may be marked Expired by a background process" — no such process exists anywhere today) and, once human tasks land in Phase 4, `Task.DueAt` (overdue notification/escalation). Both are cheap additions to a sweep that already scans task state.
+
 **Execution:** claim eligible tasks → run each via `AgentRunner.RunAgent` with a fresh provider → write `OutputPayload`/`AgentRunID`/`ErrorMessage` → recompute eligibility → repeat. Waves are implicit in claim-based dispatch; `mapWithConcurrency` caps in-process parallelism (proposed default 5).
 
 **Structured I/O:** dependency outputs injected from `OutputPayload`; `@taskX.output` references **actually resolved** by substitution. Markdown dump retained as supplementary context during migration.
@@ -204,7 +224,7 @@ interface TaskGraphRequest {
 
 Task graphs inherit conditional edges, recovery branches, and structured output mapping; Flow inherits parallelism. The bespoke `TaskOrchestrator` loop is retired at the end of Phase 4.
 
-### 3.6 Schema changes (additive; `migrations/v5/`)
+### 3.6 Schema changes (additive; `migrations/v6/` — the folder matches the major version in the migration's own filename)
 
 | Table | Change |
 |---|---|
@@ -276,7 +296,7 @@ Constraints: `BaseAgent`'s public/protected API stays stable (subclasses exist v
 1. Extract `GraphTraversalEngine` from `FlowAgentType` (pure refactor, parity-tested).
 2. Frontier + joins + concurrency; Flow `traversalMode` in its params bag (default sequential); ephemeral flows always parallel.
 3. Dispatcher adopts the engine; conditional edges, recovery branches, structured output mapping.
-4. Human task nodes end-to-end (assignment, notification, complete-to-unblock; approval-as-human-task for headless). Optional: replanner hook.
+4. Human task nodes end-to-end (assignment, notification, complete-to-unblock; approval-as-human-task for headless). Notification delivery goes through `NotificationEngine` with a typed notification definition in `metadata/notifications/` — the User Routine dispatcher's delivery path is the template; the Scheduling package's stubbed `NotificationManager` ("Would send…") is the anti-pattern this explicitly avoids. Optional: replanner hook.
 5. Retire the bespoke `TaskOrchestrator` loop.
 
 **Exit:** one traversal engine for both provenances; graphs can contain humans; parallel semantics identical everywhere.
