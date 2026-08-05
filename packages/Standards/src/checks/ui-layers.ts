@@ -88,6 +88,22 @@ const FORBIDDEN_DEPS: Record<UILayer, RegExp[]> = {
     shell: [],
 };
 
+/**
+ * Reviewed exceptions to the manifest half of the ban: `"mjUILayerAllow": { "<dep>": "<reason>" }`.
+ *
+ * The source half has the `mj-ui-layers-allow` comment marker, but JSON carries no comments, so a
+ * package holding a blessed import has no way to be green: declaring the dep trips this half, and
+ * dropping it breaks the build the blessed import still needs. ng-file-storage hit exactly that on
+ * `next` and was resolved by relabelling the package to `surface`, which is the honest fix when a
+ * package really is L3 — but it is a whole-package downgrade, so it is the wrong tool for a package
+ * that is genuinely widgets apart from one blessed import. This is the scoped alternative.
+ *
+ * The object form is deliberate. A bare array would let an exception accumulate silently; requiring
+ * a reason string holds the manifest to the same standard {@link IsAllowed} holds the comment form
+ * to — "a real exception deserves a sentence of explanation".
+ */
+export type UILayerAllowances = Record<string, string>;
+
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'];
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', '.git', '.angular', 'coverage', 'generated']);
 const ALLOW_MARKER = 'mj-ui-layers-allow';
@@ -225,6 +241,37 @@ function findSourceFiles(packageDir: string): string[] {
 // The check
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The manifest half of the ban: which declared dependencies this layer may not have.
+ *
+ * Returns one message per problem, so the caller owns file/line attribution. Three ways to fail:
+ * a forbidden dep with no exception, an exception with no reason, and an exception that no longer
+ * matches anything. The last one matters because a stale entry reads as a live, reviewed decision
+ * long after the dep it excused is gone — the allowlist has to shrink on its own.
+ */
+export function CheckForbiddenDeps(declared: string[], allowances: UILayerAllowances, layer: UILayer): string[] {
+    const messages: string[] = [];
+    const isForbidden = (dep: string): boolean => FORBIDDEN_DEPS[layer].some((pattern) => pattern.test(dep));
+
+    for (const dep of declared) {
+        if (!isForbidden(dep)) continue;
+        if (!(dep in allowances)) {
+            messages.push(`declares "${dep}" — a "${layer}" package must not depend on it`);
+            continue;
+        }
+        if (allowances[dep].trim().length === 0) {
+            messages.push(`declares "${dep}" with an empty "mjUILayerAllow" reason — say why the exception exists`);
+        }
+    }
+
+    for (const dep of Object.keys(allowances)) {
+        if (declared.includes(dep) && isForbidden(dep)) continue;
+        messages.push(`lists "${dep}" in "mjUILayerAllow", but nothing there needs excusing — drop the stale exception`);
+    }
+
+    return messages;
+}
+
 /** Check one opted-in package. */
 function checkPackage(packageDir: string, layer: UILayer, repoRoot: string, packageName: string): Violation[] {
     const violations: Violation[] = [];
@@ -236,12 +283,11 @@ function checkPackage(packageDir: string, layer: UILayer, repoRoot: string, pack
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
         dependencies?: Record<string, string>;
         peerDependencies?: Record<string, string>;
+        mjUILayerAllow?: UILayerAllowances;
     };
     const declared = { ...(manifest.dependencies ?? {}), ...(manifest.peerDependencies ?? {}) };
-    for (const dep of Object.keys(declared)) {
-        for (const pattern of FORBIDDEN_DEPS[layer]) {
-            if (pattern.test(dep)) add(manifestPath, 0, `declares "${dep}" — a "${layer}" package must not depend on it`);
-        }
+    for (const message of CheckForbiddenDeps(Object.keys(declared), manifest.mjUILayerAllow ?? {}, layer)) {
+        add(manifestPath, 0, message);
     }
 
     for (const file of findSourceFiles(packageDir)) {

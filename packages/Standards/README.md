@@ -106,7 +106,7 @@ Every registered standard, when it was introduced, and what this repo does with 
 
 | Id | Since | What it enforces |
 |---|---|---|
-| `ui-layers` | 6.0.0 | The four-layer UI architecture — [guide](https://github.com/MemberJunction/MJ/blob/next/guides/UI_LAYERING_GUIDE.md). Widgets may not import `@angular/router` or MJ Explorer, and may not construct a global-provider `RunView`/`Metadata`. Packages opt in with `"mjUILayer"` in their own `package.json`. |
+| `ui-layers` | 6.0.0 | The four-layer UI architecture — [guide](https://github.com/MemberJunction/MJ/blob/next/guides/UI_LAYERING_GUIDE.md). Widgets may not import `@angular/router` or MJ Explorer, and may not construct a global-provider `RunView`/`Metadata`. Packages opt in with `"mjUILayer"` in their own `package.json`. Reviewed exceptions: an `mj-ui-layers-allow` comment in source, or a reasoned `"mjUILayerAllow"` entry for a dependency. |
 
 ## Adding a standard
 

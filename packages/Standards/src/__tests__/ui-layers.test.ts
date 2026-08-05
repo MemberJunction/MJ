@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { IsAllowed, ParseImports, ProbeUndeclaredPackages, StripComments, UILayersCheck } from '../checks/ui-layers.js';
+import { CheckForbiddenDeps, IsAllowed, ParseImports, ProbeUndeclaredPackages, StripComments, UILayersCheck } from '../checks/ui-layers.js';
 
 describe('StripComments', () => {
     it('blanks line comments while preserving line numbers', () => {
@@ -91,6 +91,41 @@ afterEach(() => {
 const run = (options: Record<string, unknown> = {}) =>
     UILayersCheck.Run({ RepoRoot: repo, Roots: ['packages'], Options: { ...UILayersCheck.DefaultOptions, ...options } });
 
+describe('CheckForbiddenDeps — the manifest-half exception', () => {
+    const REASON = { '@memberjunction/ng-shared': 'blessed import, tracked in MJ#3404' };
+
+    it('flags a forbidden dep with no exception', () => {
+        expect(CheckForbiddenDeps(['@memberjunction/ng-shared'], {}, 'widgets')).toEqual([
+            expect.stringContaining('must not depend on it'),
+        ]);
+    });
+
+    it('excuses a forbidden dep that carries a reason', () => {
+        expect(CheckForbiddenDeps(['@memberjunction/ng-shared'], REASON, 'widgets')).toEqual([]);
+    });
+
+    it('rejects an exception whose reason is blank', () => {
+        expect(CheckForbiddenDeps(['@angular/router'], { '@angular/router': '  \t ' }, 'widgets')).toEqual([
+            expect.stringContaining('empty "mjUILayerAllow" reason'),
+        ]);
+    });
+
+    it('flags a stale exception so the allowlist has to shrink on its own', () => {
+        // The dep is gone but the entry survives, reading as a live reviewed decision.
+        expect(CheckForbiddenDeps([], REASON, 'widgets')).toEqual([expect.stringContaining('stale exception')]);
+    });
+
+    it('flags an exception for a dep that was never forbidden here', () => {
+        expect(CheckForbiddenDeps(['@memberjunction/core'], { '@memberjunction/core': 'why' }, 'widgets')).toEqual([
+            expect.stringContaining('stale exception'),
+        ]);
+    });
+
+    it('leaves layers with no forbidden deps alone', () => {
+        expect(CheckForbiddenDeps(['@memberjunction/ng-shared', '@angular/router'], {}, 'shell')).toEqual([]);
+    });
+});
+
 describe('UILayersCheck', () => {
     it('skips undeclared packages by default', async () => {
         writePackage('undeclared', {}, { 'a.ts': `import { Router } from '@angular/router';` });
@@ -112,6 +147,33 @@ describe('UILayersCheck', () => {
         const result = await run();
         expect(result.Violations).toHaveLength(1);
         expect(result.Violations[0].Message).toContain('declares "@angular/router"');
+    });
+
+    it('honours a reasoned mjUILayerAllow for a dep the source is already allowed to import', async () => {
+        // The case this exists for: an import carrying an mj-ui-layers-allow marker still has to
+        // resolve, so the dep MUST be declared for it to build — leaving the package no green state
+        // at all until the manifest half can be excused too.
+        writePackage(
+            'w',
+            {
+                mjUILayer: 'widgets',
+                dependencies: { '@memberjunction/ng-shared': '6.0.0' },
+                mjUILayerAllow: { '@memberjunction/ng-shared': 'L3 surface awaiting relocation — MJ#3404' },
+            },
+            { 'a.ts': `// mj-ui-layers-allow: MJ#3404\nimport { BaseResourceComponent } from '@memberjunction/ng-shared';` },
+        );
+        expect((await run()).Violations).toEqual([]);
+    });
+
+    it('rejects an mjUILayerAllow entry with a blank reason', async () => {
+        writePackage(
+            'w',
+            { mjUILayer: 'widgets', dependencies: { '@angular/router': '21.1.3' }, mjUILayerAllow: { '@angular/router': '   ' } },
+            { 'a.ts': 'export const x = 1;' },
+        );
+        const result = await run();
+        expect(result.Violations).toHaveLength(1);
+        expect(result.Violations[0].Message).toContain('empty "mjUILayerAllow" reason');
     });
 
     it('flags a zero-arg RunView but NOT one given a provider', async () => {

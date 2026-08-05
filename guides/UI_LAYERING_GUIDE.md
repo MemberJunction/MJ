@@ -410,6 +410,29 @@ Two things keep the gate from crying wolf, because a gate that cries wolf gets s
 directly above it, with a reason. One line above, not more — a marker that can drift away from the
 thing it excuses stops meaning anything.
 
+The manifest half needs its own form, because JSON carries no comments. A blessed import still has
+to resolve, so the dependency still has to be declared — use `mjUILayerAllow`:
+
+```jsonc
+{
+  "mjUILayer": "widgets",
+  "mjUILayerAllow": {
+    "@memberjunction/ng-shared": "why this exception exists, and what unblocks removing it"
+  }
+}
+```
+
+The reason is required, not decorative: an entry with a blank reason fails, and so does an entry
+that no longer excuses anything. Without this, a package holding a blessed import had no green
+state at all — declaring the dep tripped the manifest half, dropping it broke the build the import
+needs — and a permanently red gate teaches everyone to merge red.
+
+**Reach for the layer value first.** If the package genuinely belongs to a layer where the dependency
+is legal, say so in `mjUILayer` — that is what the field is for, and `ng-file-storage` was corrected
+to `surface` on exactly that basis. Use `mjUILayerAllow` for the narrower case: a package that is
+genuinely `widgets` apart from one reviewed import, where relabelling would drop the widget rules
+from every other file in it.
+
 The check ships in **[`@memberjunction/standards`](../packages/Standards/README.md)**, versioned
 with the platform. A repo adopts it once:
 
