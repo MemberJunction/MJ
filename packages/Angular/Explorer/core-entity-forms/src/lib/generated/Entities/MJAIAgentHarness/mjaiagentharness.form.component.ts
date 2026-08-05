@@ -16,8 +16,8 @@ export class MJAIAgentHarnessFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'harnessConfiguration', sectionName: 'Harness Configuration', isExpanded: true },
-            { sectionKey: 'technicalImplementation', sectionName: 'Technical Implementation', isExpanded: true },
-            { sectionKey: 'vendorIntegration', sectionName: 'Vendor Integration', isExpanded: true },
+            { sectionKey: 'modelAssociation', sectionName: 'Model Association', isExpanded: true },
+            { sectionKey: 'advancedSettings', sectionName: 'Advanced Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

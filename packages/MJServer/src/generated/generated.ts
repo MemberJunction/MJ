@@ -5238,6 +5238,10 @@ export class MJAIAgentHarness_ {
     @MaxLength(36)
     AIVendorID?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    AIModelID?: string;
+        
     @Field({nullable: true, description: `Default model passed to the harness where the harness supports being told which model to use. NULL leaves the harness on its own default.`}) 
     @MaxLength(255)
     DefaultModel?: string;
@@ -5258,6 +5262,10 @@ export class MJAIAgentHarness_ {
     @Field({nullable: true}) 
     @MaxLength(50)
     AIVendor?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    AIModel?: string;
         
 }
 
@@ -5283,6 +5291,9 @@ export class CreateMJAIAgentHarnessInput {
 
     @Field({ nullable: true })
     AIVendorID: string | null;
+
+    @Field({ nullable: true })
+    AIModelID: string | null;
 
     @Field({ nullable: true })
     DefaultModel: string | null;
@@ -5320,6 +5331,9 @@ export class UpdateMJAIAgentHarnessInput {
 
     @Field({ nullable: true })
     AIVendorID?: string | null;
+
+    @Field({ nullable: true })
+    AIModelID?: string | null;
 
     @Field({ nullable: true })
     DefaultModel?: string | null;
@@ -17154,6 +17168,9 @@ export class MJAIModel_ {
     @Field(() => [MJScopedPromptConfig_])
     MJScopedPromptConfigs_ModelIDArray: MJScopedPromptConfig_[]; // Link to MJScopedPromptConfigs
     
+    @Field(() => [MJAIAgentHarness_])
+    MJAIAgentHarnesses_AIModelIDArray: MJAIAgentHarness_[]; // Link to MJAIAgentHarnesses
+    
 }
 
 //****************************************************************************
@@ -17622,6 +17639,16 @@ export class MJAIModelResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwScopedPromptConfigs')} WHERE ${provider.QuoteIdentifier('ModelID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scoped Prompt Configs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaimodel_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Scoped Prompt Configs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentHarness_])
+    async MJAIAgentHarnesses_AIModelIDArray(@Root() mjaimodel_: MJAIModel_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Harnesses', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentHarnesses')} WHERE ${provider.QuoteIdentifier('AIModelID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Harnesses', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaimodel_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Harnesses', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

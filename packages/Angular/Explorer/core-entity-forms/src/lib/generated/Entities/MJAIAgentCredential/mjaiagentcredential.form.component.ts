@@ -16,7 +16,7 @@ export class MJAIAgentCredentialFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'credentialAssignment', sectionName: 'Credential Assignment', isExpanded: true },
-            { sectionKey: 'configurationDetails', sectionName: 'Configuration Details', isExpanded: true },
+            { sectionKey: 'configuration', sectionName: 'Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

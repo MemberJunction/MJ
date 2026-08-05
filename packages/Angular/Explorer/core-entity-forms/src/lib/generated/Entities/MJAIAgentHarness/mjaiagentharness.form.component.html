@@ -36,24 +36,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Status"
-            Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Technical Implementation Section -->
-    <mj-collapsible-panel
-        SectionKey="technicalImplementation"
-        SectionName="Technical Implementation"
-        Icon="fa fa-code"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="DriverClass"
             Type="textbox"
             [EditMode]="EditMode"
@@ -70,25 +52,34 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="CapabilitySettings"
-            Type="code"
+            FieldName="Status"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Vendor Integration Section -->
+    <!-- Model Association Section -->
     <mj-collapsible-panel
-        SectionKey="vendorIntegration"
-        SectionName="Vendor Integration"
-        Icon="fa fa-building"
+        SectionKey="modelAssociation"
+        SectionName="Model Association"
+        Icon="fa fa-brain"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="AIVendorID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AIModelID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -105,11 +96,29 @@
 
     </mj-collapsible-panel>
 
+    <!-- Advanced Settings Section -->
+    <mj-collapsible-panel
+        SectionKey="advancedSettings"
+        SectionName="Advanced Settings"
+        Icon="fa fa-cogs"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="CapabilitySettings"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-cog"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

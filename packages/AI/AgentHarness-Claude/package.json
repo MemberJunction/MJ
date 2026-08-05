@@ -1,0 +1,30 @@
+{
+  "name": "@memberjunction/ai-agent-harness-claude",
+  "type": "module",
+  "version": "6.0.0",
+  "description": "MemberJunction: Claude Code harness adapter — drives Claude Code as the reasoning substrate for an MJ agent via the Claude Agent SDK",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.222",
+    "@memberjunction/ai-agent-harness": "6.0.0",
+    "@memberjunction/core": "6.0.0",
+    "@memberjunction/core-entities": "6.0.0",
+    "@memberjunction/global": "6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.4.5",
+    "tsc-alias": "^1.8.10",
+    "vitest": "^4.0.18"
+  }
+}
