@@ -90,8 +90,8 @@ jobs:
       # Coverage of the converter is preserved by:
       #   - packages/SQLConverter/src/__tests__/pg-migration-regression.test.ts
       #     (107 conversion tests + sequence-dedup + TODO-marker check)
-      #   - The parity test in the same file (re-enabled) which enforces that
-      #     every T-SQL V-migration has a committed PG counterpart.
+      #   - The parity gate in Step 3a below, which enforces that every T-SQL
+      #     V-migration has a committed PG counterpart.
       #
       # If the migrations-pg version folders are empty (e.g. on a tooling-only PR before the
       # migrations PR has merged), this step skips the apply gracefully so the
@@ -109,6 +109,23 @@ jobs:
           else
             echo "skip_apply=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # ─── Step 3a: Verify a PG counterpart EXISTS for every T-SQL migration ──
+      # This gate must run BEFORE the content check, because the content check
+      # can only inspect counterparts that exist — it is structurally blind to
+      # one that is absent.
+      #
+      # The script has existed and been correct since the SQLConverter test was
+      # split out, but nothing ever ran it: this workflow claimed in a comment
+      # that "the actual coverage gate is the parity test" while running only
+      # the content check. Four 6.x-era migrations shipped without counterparts
+      # under that green CI (#3471). Wiring it in is the fix.
+      #
+      # Known gaps live on the PENDING_CONVERSION ratchet inside the script, so
+      # a NEW migration without a counterpart fails here immediately while the
+      # tracked debt stays visible in the log.
+      - name: Verify PG counterpart parity
+        run: node scripts/check-pg-migration-parity.mjs
 
       # ─── Step 3b: Verify PG counterparts have CONTENT, not just existence ──
       # Step 3 (and the parity test) assert a .pg.sql counterpart EXISTS. Nothing
