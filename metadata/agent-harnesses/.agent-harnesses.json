@@ -29,14 +29,15 @@
         "WorkspaceScoping": true,
         "ModelSelection": true
       },
-      "Status": "Inactive"
+      "Status": "Active",
+      "AIModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5"
     },
     "primaryKey": {
       "ID": "454E8374-BF0F-447F-99A5-125FDE37DE7A"
     },
     "sync": {
-      "lastModified": "2026-08-05T18:51:27.842Z",
-      "checksum": "8176e7b6d0c80c04f4b7b594e255e1c10ca1b9a0b7b4cb6ccd3044fe8c83af11"
+      "lastModified": "2026-08-05T20:23:49.228Z",
+      "checksum": "bf9f82ec852ecc6481e42697fa3bb64513ff53b7074febb74307fe05e07cc4c5"
     }
   },
   {

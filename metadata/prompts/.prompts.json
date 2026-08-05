@@ -1765,5 +1765,34 @@
     "primaryKey": {
       "ID": "9721E9AB-5FF4-40C2-A9E9-B28337EDDE09"
     }
+  },
+  {
+    "fields": {
+      "Name": "Demo Harness Agent - Main Prompt",
+      "Description": "Agent-specific prompt for the Demo Harness Agent.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/demo-harness/demo-harness-agent.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/demo-harness/demo-harness-agent.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Demo?create&Description=Demo Prompts for Demo Agents"
+    },
+    "primaryKey": {
+      "ID": "F1E4A2C7-9D3B-4A16-8C52-0B7E6D4A9F31"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T20:26:29.602Z",
+      "checksum": "05e7c1f89fec03dbd13514f5e06d769ba71dedaec03bd87869825f4384bfaed6"
+    }
   }
 ]

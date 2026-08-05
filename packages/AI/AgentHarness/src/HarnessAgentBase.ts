@@ -28,6 +28,22 @@ const HARNESS_CREDENTIAL_ENV_VARS: Record<string, string> = {
     GeminiCliAdapter: 'GEMINI_API_KEY',
 };
 
+/**
+ * Restated at the end of every turn input.
+ *
+ * Not redundant with the system prompt: a harness runs a full agentic loop inside its turn, so by
+ * the time it finishes working, the instruction it saw at the start is many internal steps behind
+ * it. Restating costs a few tokens; the alternative is a malformed-response retry, which costs a
+ * whole turn.
+ */
+const TURN_END_CONTRACT = [
+    '---',
+    'END OF TURN REQUIREMENT (this overrides any inclination to reply conversationally):',
+    'Respond with ONLY a single raw JSON object matching the response format you were given.',
+    'No prose, no markdown fences, no narration before or after. If the work is complete, say so',
+    'INSIDE the JSON. If you cannot proceed, say that inside the JSON too.',
+].join('\n');
+
 /** Shape of the harness block inside `AIAgent.TypeConfiguration`. */
 interface HarnessAgentConfig {
     harnessName?: string;
@@ -446,12 +462,29 @@ export class HarnessAgentBase extends BaseAgent {
         }
     }
 
-    /** The text handed to the harness for this turn. */
+    /**
+     * The text handed to the harness for this turn.
+     *
+     * Sends the WHOLE conversation, not just the latest message. The system message carries the
+     * turn-end JSON contract, so a harness given only the last user turn never learns it has to end
+     * with an envelope — it reasons correctly, does the work, and replies in prose, which
+     * `parseJSONResponse` then rejects. That failure looks like a confused model and is actually a
+     * truncated prompt, so it is worth being explicit about.
+     *
+     * The contract is also restated at the end of every turn. Harnesses are conversational by
+     * disposition and drift back to prose over a multi-turn run; the Loop path has the same problem
+     * and solves it with retry feedback, which costs a turn each time. Restating is cheaper.
+     */
     private buildTurnInput(promptParams: AIPromptParams): string {
         const messages = promptParams.conversationMessages ?? [];
-        const last = messages[messages.length - 1];
-        const content = last?.content;
-        return typeof content === 'string' ? content : JSON.stringify(content ?? '');
+        const rendered = messages
+            .map((m) => {
+                const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '');
+                return `[${m.role}]\n${content}`;
+            })
+            .join('\n\n');
+
+        return `${rendered}\n\n${TURN_END_CONTRACT}`;
     }
 
     /** Shapes a harness turn as the prompt result the rest of BaseAgent expects. */
@@ -518,12 +551,25 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     private _agentRunAgentId(): string {
-        return (this as unknown as { _agentRun?: { AgentID?: string } })._agentRun?.AgentID ?? '';
+        return this._executeAgentParams()?.agent?.ID ?? '';
     }
 
+    /**
+     * The agent's type-specific configuration.
+     *
+     * Read from BaseAgent's `_executeParams`, NOT from `_agentConfig`: the latter is an
+     * AgentConfiguration (agentType / systemPrompt / childPrompt) and carries no agent entity, so
+     * reaching for `.agent` there silently yields undefined and every run fails with "does not name
+     * a harness" no matter how it is configured.
+     */
     private _agentTypeConfiguration(): string | null {
-        return (this as unknown as { _agentConfig?: { agent?: { TypeConfiguration?: string | null } } })._agentConfig
-            ?.agent?.TypeConfiguration ?? null;
+        return this._executeAgentParams()?.agent?.TypeConfiguration ?? null;
+    }
+
+    private _executeAgentParams(): { agent?: { ID?: string; TypeConfiguration?: string | null } } | undefined {
+        return (this as unknown as {
+            _executeParams?: { agent?: { ID?: string; TypeConfiguration?: string | null } };
+        })._executeParams;
     }
 }
 

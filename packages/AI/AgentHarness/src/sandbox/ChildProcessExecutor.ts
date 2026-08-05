@@ -49,14 +49,40 @@ async function* readLines(stream: Readable): AsyncIterable<string> {
 export class ChildProcessExecutor implements SandboxExecutor {
     public constructor(private readonly defaultWorkingDirectory: string) {}
 
+    /**
+     * The host variables a locally-spawned harness inherits, before granted credentials are layered
+     * on top.
+     *
+     * Deliberately an ALLOWLIST, not the full process environment: passing everything through would
+     * hand the harness whatever credentials the MJAPI process happens to hold, which is exactly the
+     * over-granting the credential model exists to prevent.
+     *
+     * `HOME` is on the list for a specific reason. Local CLI harnesses keep their own login state
+     * under the user's home directory (Claude Code in `~/.claude`), so a developer who has already
+     * authenticated their CLI can run a harness agent with no credential row and no API key at all —
+     * the "true local" mode. Without HOME the harness cannot find its session and reports "Not
+     * logged in", which reads as a broken integration rather than a stripped variable.
+     *
+     * This applies ONLY to local execution. The Docker executor passes just the granted environment,
+     * because a container has no business inheriting the host developer's identity.
+     */
+    private baseEnvironment(): Record<string, string> {
+        const allowed = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'TERM'];
+        const env: Record<string, string> = {};
+        for (const key of allowed) {
+            const value = process.env[key];
+            if (value !== undefined) {
+                env[key] = value;
+            }
+        }
+        return env;
+    }
+
     /** @inheritdoc */
     public Run(spec: HarnessProcessSpec): HarnessProcess {
         const child = spawn(spec.Command, spec.Args, {
             cwd: spec.WorkingDirectory ?? this.defaultWorkingDirectory,
-            // PATH is inherited so the binary resolves; everything else is exactly what the agent
-            // was granted. Passing the host environment through would hand the harness whatever
-            // credentials the MJAPI process happens to hold.
-            env: { PATH: process.env.PATH ?? '', ...spec.Environment },
+            env: { ...this.baseEnvironment(), ...spec.Environment },
             signal: spec.CancellationToken,
         });
         return wrapChildProcess(child);
