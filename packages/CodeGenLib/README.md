@@ -589,6 +589,62 @@ CodeGen reporting success.
 **MJ core uses this itself.** `MJ: Version Installations` and `MJ: User View Run Details` are layered
 as of v6.1, and the remaining fully-custom core entities are expected to follow.
 
+### The two paths, side by side
+
+The thing to hold onto: **`BaseView` is always the public surface**, and the only question is who
+writes it. Layering splits one view into two so that the mechanical half can keep regenerating.
+
+```mermaid
+flowchart TB
+    subgraph GEN["① GENERATED — the default"]
+        direction TB
+        GT[("Foo<br/>base table")]
+        GV["<b>vwFoo</b><br/>owned by CodeGen<br/><i>regenerated every run</i>"]
+        GT --> GV
+    end
+
+    subgraph CUS["② FULLY CUSTOM — BaseViewGenerated = 0"]
+        direction TB
+        CT[("Foo<br/>base table")]
+        CV["<b>vwFoo</b><br/>owned by the application<br/><i>frozen the day it was copied</i>"]
+        CT --> CV
+    end
+
+    subgraph LAY["③ LAYERED — GeneratedBaseViewName = vwFooGenerated"]
+        direction TB
+        LT[("Foo<br/>base table")]
+        LI["<b>vwFooGenerated</b><br/>owned by CodeGen<br/><i>regenerated every run</i>"]
+        LO["<b>vwFoo</b><br/>owned by the application<br/><i>SELECT g.* + your columns</i>"]
+        LT --> LI
+        LI -->|"SELECT g.*"| LO
+    end
+
+    GV --> SURF
+    CV --> SURF
+    LO --> SURF
+
+    SURF["<b>BaseView</b> — the public surface<br/>field discovery · permissions · RunView<br/>spCreate / spUpdate / spDelete"]
+
+    classDef codegen fill:#1f6feb22,stroke:#1f6feb,stroke-width:2px
+    classDef app fill:#d2992222,stroke:#d29922,stroke-width:2px
+    classDef table fill:#8b949e22,stroke:#8b949e,stroke-width:1px
+    classDef surface fill:#23863622,stroke:#238636,stroke-width:2px
+    class GV,LI codegen
+    class CV,LO app
+    class GT,CT,LT table
+    class SURF surface
+```
+
+Read it as: **blue regenerates, amber is hand-written.** In ① the whole view is blue and you cannot
+add a column to it. In ② the whole view is amber — you can add anything, but every display join, geo
+column and root-ID column is now yours to maintain, and a foreign key added later never appears. ③
+puts the boundary in the middle: the ~80 mechanical lines stay blue and keep up with the schema,
+while your computed columns stay amber and stay reviewable.
+
+The green node is why the arrangement is invisible to everything downstream — field discovery,
+permissions, `RunView` and the CRUD routines all target `BaseView` in every case, so a column added
+by the custom layer becomes a first-class virtual `EntityField` and comes back from a save.
+
 ### Why layered exists
 
 Fully custom is all-or-nothing. To add one computed column an application inherits the whole

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { SQLServerCodeGenProvider } from '../SQLServerCodeGenProvider';
 import { SQLCodeGenBase } from '../../../sql_codegen';
 import { EntityInfo } from '@memberjunction/core';
-import type { BaseViewGenerationContext } from '../../../codeGenDatabaseProvider';
+import type { BaseViewGenerationContext, CodeGenConnection } from '../../../codeGenDatabaseProvider';
 
 /**
  * Layered base views — CodeGen writes the INNER view, the application owns the outer one.
@@ -214,5 +214,86 @@ describe('sp_refreshview emitted into the migration log', () => {
         const sql = probe.build([entity({ BaseViewGenerated: false })]);
         expect(sql).toContain("EXEC sp_refreshview 'orders.vwOrderHeaders';");
         expect(sql).not.toContain('OBJECT_ID');
+    });
+});
+
+/**
+ * The GRANTs CodeGen emits alongside a generated base view.
+ *
+ * `generateViewPermissions` grants on `entity.BaseView` — the PUBLIC view. For an ordinary entity
+ * that is the same object the view DDL just created, so the two travel together harmlessly. For a
+ * LAYERED entity they are DIFFERENT objects, and the public one may not exist: the documented setup
+ * is "name the inner view -> run CodeGen -> then create BaseView", so the bootstrap pass necessarily
+ * grants against a view that is not there yet. Unguarded, that pass fails on the one run meant to
+ * enable the feature.
+ *
+ * Both assertions below were red before the guard was added, and the third exists because the fix
+ * initially broke the formatting: `generateViewPermissions` returns a string with a LEADING NEWLINE,
+ * and wrapping it verbatim pulled that newline inside the sp_executesql literal, emitting `GOIF
+ * OBJECT_ID` — the batch separator fused to the next statement, which is a syntax error rather than
+ * anything a substring assertion would notice.
+ */
+const stubConnection: CodeGenConnection = {
+    // Only reachable for entities with related-entity join fields; the fixtures here have none, so
+    // every method throws rather than silently returning something that could mask a real query.
+    get Dialect(): never { throw new Error('stubConnection: Dialect must not be read in these tests'); },
+    query: () => { throw new Error('stubConnection: query() must not be called in these tests'); },
+    queryWithParams: () => { throw new Error('stubConnection: queryWithParams() must not be called'); },
+    executeStoredProcedure: () => { throw new Error('stubConnection: executeStoredProcedure() must not be called'); },
+    beginTransaction: () => { throw new Error('stubConnection: beginTransaction() must not be called'); },
+};
+
+class PermissionsProbe extends SQLCodeGenBase {
+    public pieces(e: EntityInfo): Promise<{ viewSQL: string; viewPermSQL: string }> {
+        return this.generateBaseViewPieces(stubConnection, e);
+    }
+    public wholeView(e: EntityInfo): Promise<string> {
+        return this.generateBaseView(stubConnection, e);
+    }
+}
+
+describe('base view permissions for a layered entity', () => {
+    let probe: PermissionsProbe;
+
+    beforeEach(() => {
+        probe = new PermissionsProbe();
+        probe.DBProvider = new SQLServerCodeGenProvider();
+    });
+
+    /** The fixture entity carries one role so `generateViewPermissions` emits something. */
+    const withRole = (over: Record<string, unknown> = {}): EntityInfo =>
+        entity({ EntityPermissions: [{ RoleSQLName: 'cdp_UI' }], ...over });
+
+    const layered = (): EntityInfo =>
+        withRole({ BaseViewGenerated: false, GeneratedBaseViewName: 'vwOrderHeadersGenerated' });
+
+    it('guards the GRANT on the application-owned view existing', async () => {
+        const { viewPermSQL } = await probe.pieces(layered());
+        expect(viewPermSQL).toContain("IF OBJECT_ID('[orders].[vwOrderHeaders]', 'V') IS NOT NULL");
+        expect(viewPermSQL).toContain('GRANT SELECT ON [orders].[vwOrderHeaders]');
+    });
+
+    it('keeps the batch separator on its own line', async () => {
+        // The view DDL ends in `GO`. If the guard swallows the leading newline the emitted script
+        // reads `GOIF OBJECT_ID(...)`, which SQL Server cannot parse — and which every
+        // "does it contain the guard" assertion would still pass.
+        const sql = await probe.wholeView(layered());
+        expect(sql).not.toContain('GOIF');
+        expect(sql).toContain("GO\nIF OBJECT_ID('[orders].[vwOrderHeaders]', 'V') IS NOT NULL");
+    });
+
+    it('leaves a NON-layered entity byte-identical', async () => {
+        // The guard must not reformat the ordinary path, or every entity in the repo regenerates.
+        const { viewPermSQL } = await probe.pieces(withRole());
+        expect(viewPermSQL).toBe('\nGRANT SELECT ON [orders].[vwOrderHeaders] TO [cdp_UI]');
+        expect(viewPermSQL).not.toContain('OBJECT_ID');
+    });
+
+    it('emits nothing at all when the entity has no roles', async () => {
+        // An empty permissions string must stay empty rather than becoming an empty guarded block.
+        const { viewPermSQL } = await probe.pieces(
+            entity({ BaseViewGenerated: false, GeneratedBaseViewName: 'vwOrderHeadersGenerated' }),
+        );
+        expect(viewPermSQL.trim()).toBe('');
     });
 });
