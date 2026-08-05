@@ -82,7 +82,11 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: 'pnpm'
+          # No dependency cache here on purpose: this job never runs `pnpm install`
+          # (the gate is shell + jq over filenames), so there is no pnpm store to save.
+          # With `cache: 'pnpm'` the post-job cache-save step fails the whole check with
+          # "Path Validation Error: Path(s) specified in the action for caching do(es) not
+          # exist" — after every real validation step has already passed.
 
       - name: Get current version
         if: steps.check_migrations.outputs.has_migrations == 'true'
