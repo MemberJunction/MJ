@@ -233,6 +233,20 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
         }
         const ref = this.contentHost.createComponent(reg.SubClass as Type<BaseDashboard>);
         const instance = ref.instance as BaseDashboard;
+        // BaseDashboard catches a failing initDashboard()/loadData(), emits Error and still signals
+        // load-complete — so without this subscription an embedded dashboard's load failure would
+        // render as a blank content pane with a console-only error. Surface it in LoadError, which
+        // the container already renders. Scoped to the INITIAL load (same reasoning as
+        // DashboardResource): sections are cached and kept alive across switches, and LoadError only
+        // resets on the next selectSection, so a post-mount Refresh() failure would otherwise pin a
+        // stale error banner — potentially while a different section is on screen.
+        let initialLoadSettled = false;
+        const onComplete = instance.LoadCompleteEvent;
+        instance.LoadCompleteEvent = () => { initialLoadSettled = true; onComplete?.(); };
+        instance.Error.subscribe((err: Error) => {
+            if (initialLoadSettled) return; // post-mount refresh failure — already logged by BaseDashboard.runGuardedLoad
+            this.LoadError = err.message;
+        });
         instance.Config = { dashboard, userState: undefined };
         instance.Refresh();
         return ref;
