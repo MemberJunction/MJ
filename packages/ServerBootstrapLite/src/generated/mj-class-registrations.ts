@@ -836,7 +836,7 @@ import {
     MJScheduledJobEntityExtended,
 } from '@memberjunction/scheduling-engine-base';
 
-// @memberjunction/search-engine (13 classes)
+// @memberjunction/search-engine (14 classes)
 import {
     AzureAISearchProvider,
     BGEReRanker,
@@ -847,6 +847,7 @@ import {
     NoopReRanker,
     OpenAIReRanker,
     OpenSearchSearchProvider,
+    SearchScopePermissionResolver,
     StorageSearchProvider,
     TypesenseSearchProvider,
     VectorSearchProvider,
@@ -1798,6 +1799,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     NoopReRanker,
     OpenAIReRanker,
     OpenSearchSearchProvider,
+    SearchScopePermissionResolver,
     StorageSearchProvider,
     TypesenseSearchProvider,
     VectorSearchProvider,
@@ -2057,7 +2059,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 887;
+export const CLASS_REGISTRATIONS_COUNT = 888;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
