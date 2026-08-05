@@ -1,4 +1,5 @@
 import { HarnessNetworkPolicy, HarnessWorkspaceScope } from '../types.js';
+import { SandboxExecutor } from './SandboxExecutor.js';
 
 /**
  * Identifies which workspace a run should get, and therefore how long its files live.
@@ -24,12 +25,31 @@ export interface SandboxConfig {
     Concurrency?: 'queue' | 'fail' | 'fork';
 }
 
-/** A provisioned workspace. */
+/** A provisioned workspace, and the means of running commands inside it. */
 export interface SandboxHandle {
+    /**
+     * Workspace path AS THE HARNESS SEES IT.
+     *
+     * For the local provider that is a host path. For a container provider it is the path inside the
+     * container, which is generally NOT the host path the workspace was created at — the two are
+     * connected by a mount the provider set up. Code that passes this to a harness process is
+     * correct; code that opens it with `fs` on the MJAPI host is only correct for the local provider,
+     * and that distinction is why the field is documented rather than just named.
+     */
     WorkspacePath: string;
     Key: WorkspaceKey;
     /** True when the workspace is discarded on finalize rather than retained for the next run. */
     Ephemeral: boolean;
+    /**
+     * Runs harness processes inside this sandbox.
+     *
+     * The reason process placement lives on the HANDLE rather than in the adapter: an adapter that
+     * called `spawn()` directly would always run on the MJAPI host, which in production means an
+     * autonomous agent executing shell commands inside the API container with its network reach and
+     * cloud credentials. Routing every process through the provider's executor is what makes
+     * `provider: 'docker'` mean something.
+     */
+    Executor: SandboxExecutor;
 }
 
 /**

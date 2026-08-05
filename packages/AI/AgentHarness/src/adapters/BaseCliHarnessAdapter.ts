@@ -1,8 +1,7 @@
-import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
-import { createInterface } from 'node:readline';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { BaseHarnessAdapter } from './BaseHarnessAdapter.js';
 import { HarnessSessionConfig, HarnessTurnEvent } from '../types.js';
+import { HarnessProcess } from '../sandbox/SandboxExecutor.js';
 
 /**
  * One line of JSON emitted by a harness CLI, before the adapter interprets it.
@@ -31,6 +30,13 @@ export type HarnessCliRawEvent = Record<string, unknown>;
  * invocation itself, and report the extra tokens through a `usage` event so the run's cost guardrail
  * sees the true spend rather than a flattering one.
  *
+ * ## Placement is the sandbox's job, not the adapter's
+ *
+ * Every process goes through `config.Executor`, never `spawn` directly. That is what lets the same
+ * adapter run on a developer's laptop and inside a per-run container without knowing the difference,
+ * and it is what stops a production deployment from executing an autonomous agent's shell commands
+ * inside the MJAPI container while the agent's config claims `provider: 'docker'`.
+ *
  * ## Failure is an event, not an exception
  *
  * A non-zero exit or unparseable stream yields a `session-error` event rather than a throw, because
@@ -40,7 +46,7 @@ export type HarnessCliRawEvent = Record<string, unknown>;
 export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
     protected config: HarnessSessionConfig | null = null;
     protected sessionId: string | undefined = undefined;
-    protected activeProcess: ChildProcessWithoutNullStreams | null = null;
+    protected activeProcess: HarnessProcess | null = null;
     private turnCount = 0;
 
     /** Absolute path or bare command name of the harness binary. */
@@ -84,21 +90,25 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
         const isFirstTurn = this.turnCount === 0;
         this.turnCount++;
 
-        let child: ChildProcessWithoutNullStreams;
+        let proc: HarnessProcess;
         try {
-            child = this.spawnTurn(input, isFirstTurn);
+            proc = this.startTurnProcess(input, isFirstTurn);
         } catch (e) {
             yield { Type: 'session-error', Error: `Failed to launch ${this.ExecutablePath}: ${this.describeError(e)}` };
             return;
         }
 
-        this.activeProcess = child;
+        this.activeProcess = proc;
         const stderrChunks: string[] = [];
-        child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk.toString()));
+        const drainStderr = (async () => {
+            for await (const line of proc.Stderr) {
+                stderrChunks.push(line);
+            }
+        })().catch(() => undefined);
 
         let sawTerminal = false;
         try {
-            for await (const event of this.readEvents(child)) {
+            for await (const event of this.readEvents(proc)) {
                 if (event.Type === 'turn-complete' || event.Type === 'session-error') {
                     sawTerminal = true;
                 }
@@ -106,11 +116,12 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
             }
 
             // Exactly one terminal event per turn is the contract the accumulation loop relies on.
-            // A clean stream that never produced one means the harness exited without answering —
+            // A clean stream that never produced one means the harness exited without answering --
             // surface it rather than letting the caller wait on a turn that already ended.
             if (!sawTerminal) {
-                const exit = await this.awaitExit(child);
-                const detail = stderrChunks.join('').trim();
+                const exit = await proc.ExitCode;
+                await drainStderr;
+                const detail = stderrChunks.join('\n').trim();
                 yield {
                     Type: 'session-error',
                     Error:
@@ -120,9 +131,7 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
             }
         } finally {
             this.activeProcess = null;
-            if (child.exitCode === null && !child.killed) {
-                child.kill();
-            }
+            proc.Kill();
         }
     }
 
@@ -135,31 +144,33 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
 
     /** @inheritdoc */
     public async EndSession(): Promise<void> {
-        const child = this.activeProcess;
+        const proc = this.activeProcess;
         this.activeProcess = null;
         this.config = null;
-        if (child && child.exitCode === null && !child.killed) {
-            child.kill();
-        }
+        proc?.Kill();
     }
 
-    /** Spawns one turn's process with the sandbox workspace as cwd and only the granted environment. */
-    protected spawnTurn(input: string, isFirstTurn: boolean): ChildProcessWithoutNullStreams {
+    /**
+     * Starts one turn's process INSIDE THE SANDBOX.
+     *
+     * Note what this does not do: call `spawn`. Where the process physically runs is the sandbox
+     * provider's decision, delivered through the executor, so this adapter behaves identically on a
+     * laptop and in a per-run container.
+     */
+    protected startTurnProcess(input: string, isFirstTurn: boolean): HarnessProcess {
         const config = this.config!;
-        return spawn(this.ExecutablePath, this.BuildTurnArgs(input, isFirstTurn), {
-            cwd: config.WorkspacePath,
-            // PATH is inherited so the binary resolves; everything else is exactly what the agent was
-            // granted. Passing the full parent environment would leak whatever the MJ server process
-            // happens to hold — including credentials this agent was never granted.
-            env: { PATH: process.env.PATH ?? '', ...config.Environment },
-            signal: config.CancellationToken,
+        return config.Executor.Run({
+            Command: this.ExecutablePath,
+            Args: this.BuildTurnArgs(input, isFirstTurn),
+            Environment: config.Environment,
+            WorkingDirectory: config.WorkspacePath,
+            CancellationToken: config.CancellationToken,
         });
     }
 
     /** Frames stdout into lines, parses each as JSON, and maps it through the subclass. */
-    protected async *readEvents(child: ChildProcessWithoutNullStreams): AsyncIterable<HarnessTurnEvent> {
-        const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
-        for await (const line of lines) {
+    protected async *readEvents(proc: HarnessProcess): AsyncIterable<HarnessTurnEvent> {
+        for await (const line of proc.Stdout) {
             const trimmed = line.trim();
             if (!trimmed) {
                 continue;
@@ -170,7 +181,7 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
                 raw = JSON.parse(trimmed) as HarnessCliRawEvent;
             } catch {
                 // Harness CLIs interleave human-readable banners with their JSON stream. A line that
-                // does not parse is noise, not a failure — logging every one would bury the real
+                // does not parse is noise, not a failure -- logging every one would bury the real
                 // events, so this is intentionally silent.
                 continue;
             }
@@ -187,14 +198,6 @@ export abstract class BaseCliHarnessAdapter extends BaseHarnessAdapter {
                 yield mapped;
             }
         }
-    }
-
-    /** Resolves with the process exit code once it has exited. */
-    protected awaitExit(child: ChildProcessWithoutNullStreams): Promise<number | null> {
-        if (child.exitCode !== null) {
-            return Promise.resolve(child.exitCode);
-        }
-        return new Promise((resolve) => child.once('close', (code) => resolve(code)));
     }
 
     /** Narrows an unknown catch binding to a readable message without reaching for `any`. */

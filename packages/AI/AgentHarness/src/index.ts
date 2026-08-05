@@ -6,7 +6,10 @@ export * from './adapters/CodexAdapter.js';
 export * from './adapters/OpenCodeAdapter.js';
 export * from './adapters/GeminiCliAdapter.js';
 export * from './adapters/PiAdapter.js';
+export * from './sandbox/SandboxExecutor.js';
 export * from './sandbox/ISandboxProvider.js';
+export * from './sandbox/ChildProcessExecutor.js';
+export * from './sandbox/DockerSandboxProvider.js';
 export * from './sandbox/LocalDirectorySandboxProvider.js';
 
 /**

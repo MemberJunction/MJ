@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { LogError } from '@memberjunction/core';
 import { ISandboxProvider, SandboxConfig, SandboxHandle, WorkspaceKey } from './ISandboxProvider.js';
+import { ChildProcessExecutor } from './ChildProcessExecutor.js';
 
 /**
  * Phase-1 sandbox: a scoped directory on the MJ server's own filesystem.
@@ -39,6 +40,9 @@ export class LocalDirectorySandboxProvider implements ISandboxProvider {
             WorkspacePath: workspacePath,
             Key: key,
             Ephemeral: key.Scope === 'run',
+            // Runs directly on the MJAPI host. The workspace path is a host path here, which is the
+            // one case where it is also safe to touch with `fs` — see the note on SandboxHandle.
+            Executor: new ChildProcessExecutor(workspacePath),
         };
     }
 

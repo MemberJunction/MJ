@@ -1,4 +1,5 @@
 import { MJAIAgentHarnessEntity } from '@memberjunction/core-entities';
+import { SandboxExecutor } from './sandbox/SandboxExecutor.js';
 
 /**
  * What a harness adapter can do, mirrored from `AIAgentHarness.CapabilitySettings`.
@@ -17,7 +18,20 @@ export type HarnessCapabilities = NonNullable<MJAIAgentHarnessEntity['Capability
  * identity, workspace and credentials are fixed for its lifetime.
  */
 export interface HarnessSessionConfig {
-    /** Absolute path the harness confines file operations to, provisioned by the sandbox provider. */
+    /**
+     * Runs harness processes inside the sandbox.
+     *
+     * Adapters MUST go through this rather than calling `spawn` themselves. An adapter that spawns
+     * directly always runs on the MJAPI host, which in production means an autonomous agent
+     * executing shell commands inside the API container with its network reach and cloud
+     * credentials — and, worse, it does so while the agent's config claims `provider: 'docker'`.
+     * Routing through the executor is what makes the sandbox choice real rather than decorative.
+     */
+    Executor: SandboxExecutor;
+    /**
+     * Workspace path AS THE HARNESS SEES IT — a host path under the local provider, a
+     * container-internal path under Docker. Pass it to harness processes; do not open it with `fs`.
+     */
     WorkspacePath: string;
     /**
      * Environment variables injected into the harness process — the LLM key and any granted
