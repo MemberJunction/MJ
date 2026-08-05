@@ -170,6 +170,7 @@ describe('AuthorizationResult interface', () => {
             PatternType: 'Exclude',
             IsDeny: true,
             Priority: 100,
+            RowFilterID: null,
         };
         const result: AuthorizationResult = {
             Allowed: false,
@@ -192,6 +193,7 @@ describe('ScopeRule interface', () => {
             PatternType: 'Include',
             IsDeny: false,
             Priority: 10,
+            RowFilterID: null,
             ApplicationID: 'app-1',
         };
         expect(rule.ApplicationID).toBe('app-1');
@@ -206,6 +208,7 @@ describe('ScopeRule interface', () => {
             PatternType: 'Include',
             IsDeny: false,
             Priority: 5,
+            RowFilterID: null,
             APIKeyID: 'key-1',
         };
         expect(rule.APIKeyID).toBe('key-1');
@@ -224,6 +227,7 @@ describe('EvaluatedRule interface', () => {
                 PatternType: 'Include',
                 IsDeny: false,
                 Priority: 10,
+                RowFilterID: null,
             },
             Matched: true,
             PatternMatched: '*',
@@ -244,6 +248,7 @@ describe('EvaluatedRule interface', () => {
                 PatternType: 'Include',
                 IsDeny: false,
                 Priority: 5,
+                RowFilterID: null,
             },
             Matched: false,
             PatternMatched: null,

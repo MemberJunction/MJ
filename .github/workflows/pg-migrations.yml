@@ -56,7 +56,10 @@ jobs:
 
       # ─── Step 1: Validate PG migration filenames ─────────────────────
       - name: Validate PG migration filenames
-        run: ./.github/scripts/validate-migration-filenames.sh migrations-pg/v5
+        run: |
+          for d in migrations-pg/v*/; do
+            ./.github/scripts/validate-migration-filenames.sh "${d%/}"
+          done
 
       # ─── Step 2: Build MJCLI + SQLConverter ─────────────────────────
       # MJCLI (`@memberjunction/cli`) is the production migration entry point —
@@ -87,14 +90,14 @@ jobs:
       #   - The parity test in the same file (re-enabled) which enforces that
       #     every T-SQL V-migration has a committed PG counterpart.
       #
-      # If migrations-pg/v5/ is empty (e.g. on a tooling-only PR before the
+      # If the migrations-pg version folders are empty (e.g. on a tooling-only PR before the
       # migrations PR has merged), this step skips the apply gracefully so the
       # workflow doesn't block. The actual coverage gate is the parity test.
       - name: Verify committed PG migration files
         id: verify_committed
         run: |
-          PG_FILES=$(ls migrations-pg/v5/*.pg.sql migrations-pg/v5/*.pg-only.sql 2>/dev/null | wc -l)
-          BASELINE=$(ls migrations-pg/v5/B*.pg.sql 2>/dev/null | head -1)
+          PG_FILES=$(ls migrations-pg/v*/*.pg.sql migrations-pg/v*/*.pg-only.sql 2>/dev/null | wc -l)
+          BASELINE=$(ls migrations-pg/v*/B*.pg.sql 2>/dev/null | head -1)
           echo "Committed PG migration files: $PG_FILES"
           echo "Baseline file: ${BASELINE:-(none)}"
           if [ "$PG_FILES" -eq 0 ]; then
@@ -177,7 +180,7 @@ jobs:
           PGPASSWORD: testpass
           PGDATABASE: mj_pg_ci
         run: |
-          npx mj migrate --dir=migrations-pg/v5 -v
+          npx mj migrate --dir=migrations-pg -v
 
           # Read back the applied count from Skyway's history table for the
           # parity report. `mj migrate` exits non-zero on any failure, so by
@@ -234,7 +237,7 @@ jobs:
           # Resolve the same Flyway placeholder Skyway resolves at apply time.
           # We use a tmp directory so we don't mutate the working tree.
           TMPDIR=$(mktemp -d)
-          for f in migrations-pg/v5/V*.sql; do
+          for f in migrations-pg/v*/V*.sql; do
             sed 's/\${flyway:defaultSchema}/__mj/g' "$f" > "$TMPDIR/$(basename "$f")"
           done
 
