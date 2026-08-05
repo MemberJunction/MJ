@@ -225,6 +225,15 @@ Floating, **non-modal** panel (no backdrop): `Draggable`, `Resizable` (8 handles
 ### `mj-filter-popover` — MJFilterPopoverComponent
 Filter trigger button + CDK popover on desktop, docked bottom-sheet on mobile. Inputs: `Label`, `Icon`, `ActiveCount` (badge), `ShowClearAll`. Output: `ClearAllRequested`. Project your filter UI (dropdowns, chips) as content.
 
+### `mj-bottom-sheet` — MJBottomSheetComponent
+Generic mobile bottom sheet: scrim + panel sliding up from the bottom edge with a grab handle. Pure chrome, no breakpoint logic — the caller decides when a sheet is the right presentation. Fully modal: `role="dialog"` + `aria-modal`, focus moves in on open and is **trapped** (Tab/Shift+Tab cycle within), body scroll locks while open, focus returns to the opener on close. Owns enter/exit transitions (class-driven, dismissal animates), Escape, scrim-click close, `prefers-reduced-motion`. Inputs: `[(Visible)]` (two-way), `Title` (optional header), `AriaLabel`. Output: `Closed` (after the exit transition). Sits in the mobile-chrome z band (9998/9999, below `mj-window`); settled open state is `transform: none` so `position: fixed` descendants (dropdowns) aren't displaced.
+
+```html
+<mj-bottom-sheet [(Visible)]="sheetOpen" Title="Open Records">
+  <div class="rows">…</div>
+</mj-bottom-sheet>
+```
+
 ## Patterns
 
 ### `mj-empty-state` — MJEmptyStateComponent

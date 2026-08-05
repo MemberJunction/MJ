@@ -64,24 +64,46 @@ jobs:
             exit 1
           fi
 
+      # lts/5 is the last npm line; 6.x and every later LTS line use pnpm. The
+      # lockfile committed on the checked-out ref is the signal, so this needs
+      # no edit when a new line is cut.
+      - name: Detect package manager
+        id: pm
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            PM=pnpm
+          elif [ -f package-lock.json ]; then
+            PM=npm
+          else
+            echo "::error::No lockfile found on ${{ github.ref_name }}"
+            exit 1
+          fi
+          echo "PM=$PM" >> "$GITHUB_OUTPUT"
+          echo "::notice::Package manager for this ref: $PM"
+
+      - name: Set up pnpm
+        if: steps.pm.outputs.PM == 'pnpm'
+        uses: pnpm/action-setup@v4
+
       - name: Set up node
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
+          cache: ${{ steps.pm.outputs.PM }}
 
       - name: Pin npm to 11.6.4
+        if: steps.pm.outputs.PM == 'npm'
         run: npm install -g npm@11.6.4
 
       - name: Validate migration filenames
         run: ./.github/scripts/validate-migration-filenames.sh
 
       - name: Validate package-lock.json case-sensitivity
+        if: steps.pm.outputs.PM == 'npm'
         run: ./.github/scripts/validate-package-lock-case.sh
 
       - name: Install dependencies
-        run: npm ci
+        run: ${{ steps.pm.outputs.PM == 'pnpm' && 'pnpm install --frozen-lockfile' || 'npm ci' }}
 
       - name: Validate package repository.url for npm provenance
         run: ./.github/scripts/validate-package-repository.sh
@@ -97,8 +119,8 @@ jobs:
       - name: Version (normal mode) and refresh lockfile
         id: version
         run: |
-          npm run version
-          npm install
+          ${{ steps.pm.outputs.PM }} run version
+          ${{ steps.pm.outputs.PM == 'pnpm' && 'pnpm install --lockfile-only' || 'npm install' }}
           if ! git diff --quiet package-lock.json; then
             git add package-lock.json
             git commit -m "chore: lockfile for line release [skip ci]"
@@ -119,10 +141,10 @@ jobs:
         run: echo "LATEST=$(npm view @memberjunction/core dist-tags.latest)" >> "$GITHUB_OUTPUT"
 
       - name: Build packages
-        run: npm run build
+        run: ${{ steps.pm.outputs.PM }} run build
 
       - name: Publish to npm (line tag, never latest)
-        run: npm run change publish -- --tag ${{ steps.version.outputs.NPM_TAG }}
+        run: ${{ steps.pm.outputs.PM }} run change publish -- --tag ${{ steps.version.outputs.NPM_TAG }}
         env:
           NPM_TOKEN: ''
 
