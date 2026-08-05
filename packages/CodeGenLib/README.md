@@ -578,6 +578,16 @@ There are three arrangements, chosen by two columns on `Entity`:
 | `1` | `NULL` | **Generated.** CodeGen writes `BaseView`. The default, and almost every entity. |
 | `0` | `NULL` | **Fully custom.** CodeGen writes nothing; the application owns `BaseView` entirely. |
 | `0` | `vwFooGenerated` | **Layered.** CodeGen writes the *inner* view; the application owns `BaseView` and wraps it. |
+| `1` | `vwFooGenerated` | **Refused** by a CHECK constraint — contradictory, see below. |
+
+The fourth combination is refused because the two halves of CodeGen read different columns and would
+disagree: view *generation* gates on `BaseViewGenerated || HasLayeredBaseView` and would write the
+inner view, while the outer view's *refresh* and its *GRANTs* gate on `!BaseViewGenerated` and would
+be skipped — leaving an entity whose public surface is never granted and never refreshed, with
+CodeGen reporting success.
+
+**MJ core uses this itself.** `MJ: Version Installations` and `MJ: User View Run Details` are layered
+as of v6.1, and the remaining fully-custom core entities are expected to follow.
 
 ### Why layered exists
 
@@ -634,11 +644,37 @@ On PostgreSQL, use a fully custom base view (`BaseViewGenerated = 0`, `Generated
 ### Setting it up
 
 1. Set `GeneratedBaseViewName` on the entity (and `BaseViewGenerated = 0`, since the application owns
-   `BaseView`).
+   `BaseView`). For MJ core entities this is declarative metadata, not SQL — see
+   `metadata/entities/.layered-base-views.json`.
 2. Run CodeGen. It writes the inner view.
 3. Create your `BaseView` in a migration that runs **after** CodeGen output, since it selects from the
    inner view — and may reference generated root-ID functions.
 4. Run CodeGen again so the new columns are discovered as `EntityField` rows.
+
+> ### ⚠️ Adopting layering on an EXISTING entity needs `forceRegeneration`
+>
+> Setting `GeneratedBaseViewName` is a **metadata** change, not a schema change. The entity therefore
+> never lands in CodeGen's modified/new list, and `logSQLForNewOrModifiedEntity` only writes to the
+> migration log for entities in that list.
+>
+> The failure is quiet and easy to miss: CodeGen **does** create the inner view in whatever database
+> you ran it against, and emits **nothing**. Your dev box looks correct while every other environment
+> never receives the view at all — and the outer view you write in step 3 then selects from an object
+> that does not exist there.
+>
+> Scope a forced regeneration to just the entities you are converting, run CodeGen, then remove it:
+>
+> ```javascript
+> // mj.config.cjs — TEMPORARY, delete after capturing the output
+> forceRegeneration: {
+>   enabled: true,
+>   baseViews: true,
+>   entityWhereClause: "Name IN ('MJ: Version Installations', 'MJ: User View Run Details')",
+> }
+> ```
+>
+> This does not apply to an entity that is layered from the start, or to later schema changes on an
+> already-layered entity — both put the entity in the modified list on their own.
 
 Step 2 necessarily runs while `BaseView` does not yet exist — it selects from the inner view that
 step 2 is creating, so it could not have been created earlier. CodeGen handles this: the
@@ -655,6 +691,11 @@ as if the guard were not there. You do not need to order the migrations around i
 - **The names must differ.** A view cannot select from itself. A CHECK constraint on `Entity` refuses
   equal names, and `EntityInfo.HasLayeredBaseView` compares case-insensitively so `VWFOO` and `vwFoo`
   are treated as the same object.
+- **The custom layer must expose a superset.** Whatever `BaseView` exposed before it was layered, it
+  must still expose afterwards — a column that disappears is a breaking change to the generated entity
+  class. Watch for *name collisions* in particular: the inner view generates a display column per
+  foreign key (`Employee` for `EmployeeID`), so an outer view hand-selecting the same alias produces a
+  duplicate column and fails at `CREATE VIEW`. Diff the column list before and after.
 - **Permissions target `BaseView`.** The inner view needs no separate grants: it is in the same schema
   with the same owner, so ownership chaining covers it.
 - **`EntityInfo.GeneratedViewName`** is the single resolution of "which view does CodeGen write". Use
