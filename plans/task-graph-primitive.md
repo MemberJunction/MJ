@@ -1,6 +1,6 @@
 # Task Graphs as an Agent Primitive — Design Plan
 
-**Status:** Draft v3 — adds the what/when program framing, the DAG-spec contract (D16), durable-async succession over MJQueue (D14), the Pipeline boundary (D15), payload-redaction posture, reconciliation-sweep scope, and the human-task notification path
+**Status:** Draft v4 — v3 added the what/when program framing, the DAG-spec contract (D16), durable-async succession over MJQueue (D14), the Pipeline boundary (D15), payload-redaction posture, reconciliation-sweep scope, and the human-task notification path; v4 renames the contract to **`TaskGraphSpec`** (aligned with `AgentSpec`), adds **Save as Workflow** (§3.9/D17), and the **"Workflow" user-facing terminology** decision (D18)
 **Date:** 2026-08-05
 **Origin:** Architecture study of the Sage → Workflow Planner → TaskOrchestrator pipeline (session `claude/sage-task-graph-study-4uvtrc`)
 
@@ -27,7 +27,9 @@ MJ's workflow story separates two axes, and this plan owns exactly one of them:
 - **WHAT runs is a DAG** — one generic graph execution engine, delivered here. Ephemeral in-run (a Flow agent traversing its design-time graph; a constant-folded single node) or durable cross-run (the dispatcher executing Task rows). A **Loop agent spins up a DAG dynamically** to do its work; a **Flow agent IS a DAG** authored at design time, running deterministically through the same execution code. Producers differ; the engine does not.
 - **WHEN it runs is the trigger layer** — Entity Actions (record lifecycle, PR #3408), Scheduled Jobs, User Routines, on-demand invocation (UI / Remote Operations / MCP), and direct agent invocation. Triggers are out of scope here; they dispatch into agents/actions exactly as today, and anything they start can emit a graph.
 
-Companion tracks in the broader program — trigger-vocabulary normalization, a stored workflow-spec object binding a DAG to its triggers, authoring front doors (Flow visualization for business users; Agent Manager already authors flows), and unified run observability — build **on** this engine and are deliberately not in this plan's scope.
+Companion tracks in the broader program — trigger-vocabulary normalization, a stored workflow-spec object binding a DAG to its triggers, authoring front doors (Flow visualization for business users; Agent Manager already authors flows), and unified run observability — build **on** this engine and are deliberately not in this plan's scope. The companion program plan lives at [`plans/unified-workflow.md`](unified-workflow.md).
+
+**Relationship to the future WorkflowSpec:** the WHAT half of a stored workflow definition IS `TaskGraphSpec` (D16) — even a "run one action" workflow is a one-node graph, which D9's constant folding executes with zero graph overhead at runtime. What `TaskGraphSpec` deliberately does not carry is the WHEN: a stored WorkflowSpec wraps it with identity (name/owner/status), triggers (entity-event / schedule / on-demand), and outcome routing (notifications/audience). Composition, not extension — trigger fields never leak into the graph contract, because runtime producers (a Loop agent mid-run) have no business setting triggers.
 
 ### Decisions
 
@@ -48,7 +50,9 @@ Companion tracks in the broader program — trigger-vocabulary normalization, a 
 | D13 | `BaseAgent.ts` is refactored into composed helper classes as part of this program (parallel track R), behavior-preserving, staged ahead of the Phase 3 changes that touch it. |
 | D14 | **The dispatcher's claim protocol is MJ's durable-async substrate going forward.** `MJQueue`'s durability is illusory today (rows written, never read back; no restart reclaim, no cross-process pickup) and it is not extended. New durable work targets `TaskGraphService` submission — a single-node durable graph is exactly "run this action durably with retry" — including the #3408 plan's After\*-entity-action routing (its runbook step 9), which re-targets here instead of `QueueManager`. MJQueue is absorbed/retired on its own track. |
 | D15 | **Pipelines and task graphs stay separate primitives.** A Pipeline (`plans/tool-pipelines.md`) is a single-turn, in-run *data* program — one value out, no durable state. A task graph is durable, multi-run *work* orchestration. Neither grows toward the other; an agent that needs both emits both. |
-| D16 | **`TaskGraphRequest` is the fully-qualified DAG spec.** One TS contract in `ai-core-plus` that every producer authors against — the LLM primitive, deterministic code, a human UI, and (future, out of scope here) stored workflow definitions that bind a graph to triggers. Server-side validation in `TaskGraphService` validates against this same contract; there is no looser internal shape. |
+| D16 | **`TaskGraphSpec` is the fully-qualified DAG spec.** One TS contract in `ai-core-plus` that every producer authors against — the LLM primitive, deterministic code, a human UI, and (future, out of scope here) stored workflow definitions that bind a graph to triggers. Server-side validation in `TaskGraphService` validates against this same contract; there is no looser internal shape. The `Spec` suffix aligns with `AgentSpec`: it memorializes a graph, it doesn't merely request execution. |
+| D17 | **"Save as Workflow" — an ephemeral graph can be promoted to a design-time flow.** Because a runtime `TaskGraphSpec` and a design-time flow are the same logical shape (§3.1), a converter (`TaskGraphSpec` → `AgentSpec` with Flow type + Steps/Paths → `AgentSpecSync.Persist`) turns a Loop agent's dynamic approach into a reusable, schedulable flow agent. Surfaced wherever a run's graph is visible: the Agent Run admin UI (via the new `TaskGraph` run-step node) and ng-conversations (detect 1+ graphs on a completed run → offer "Save as Workflow"). See §3.9. |
+| D18 | **"Workflow" is the user-facing noun; "Flow Agent" stays the implementation term.** UI surfaces (navigation, save-as affordance, authoring entry points, docs for business users) say *Workflow* — a deterministic pathway that can include AI steps. No schema/entity/agent-type rename; this is vocabulary, applied at the UX layer. The v6 retirement of the dead legacy `Workflow` tables frees the name. |
 
 ---
 
@@ -105,7 +109,7 @@ A runtime-submitted graph is materialized as an **ephemeral flow**: an in-memory
 
 ```
 @memberjunction/ai-core-plus
-    └─ TaskGraph types: TaskGraphRequest, TaskGraphNode, validation helpers
+    └─ TaskGraph types: TaskGraphSpec, TaskGraphNode, validation helpers
 
 @memberjunction/ai-agents
     └─ LoopAgentType: 'Tasks' nextStep type, shape validation + retry correctives,
@@ -143,10 +147,10 @@ type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach'
 nextStep?: {
     // ...existing fields...
     /** Durable task graph to submit. Required when type === 'Tasks'. */
-    tasks?: TaskGraphRequest;
+    tasks?: TaskGraphSpec;
 }
 
-interface TaskGraphRequest {
+interface TaskGraphSpec {
     workflowName: string;
     reasoning?: string;
     tasks: Array<{
@@ -163,13 +167,13 @@ interface TaskGraphRequest {
 }
 ```
 
-**The DAG spec (D16).** `TaskGraphRequest` is not a loosely-typed LLM shape — it is the one fully-qualified TypeScript contract for a DAG, shared by every producer. `LoopAgentType` validates emissions against it (with retry correctives), `TaskGraphService.Submit` re-validates the identical contract server-side, and future producers (a manual workflow builder, a stored workflow definition, deterministic code) author against the same interface. When the broader workflow program adds a stored "definition + trigger" spec object, its graph section IS this type — no translation layer.
+**The DAG spec (D16).** `TaskGraphSpec` is not a loosely-typed LLM shape — it is the one fully-qualified TypeScript contract for a DAG, shared by every producer. `LoopAgentType` validates emissions against it (with retry correctives), `TaskGraphService.Submit` re-validates the identical contract server-side, and future producers (a manual workflow builder, a stored workflow definition, deterministic code) author against the same interface. When the broader workflow program adds a stored "definition + trigger" spec object, its graph section IS this type — no translation layer.
 
 **Mental model** (goes in the prompt docs): `subAgents[]` is *ephemeral* fan-out — blocks the run, dies with it. `Tasks` is *durable* fan-out — dependency-ordered, survives the run, visible in the Tasks UI, resumable, can wait on humans.
 
 **Semantics — submit-and-detach:** the step terminates the turn. The dispatcher executes; on completion it posts a results message into the conversation or re-invokes the submitting agent with the outcome as a new turn (Agent Requests resume pattern). No run suspension.
 
-**Single-node constant folding (D9):** during `DetermineNextStep`, a graph with exactly one node, no edges, an `agentName` assignment, and default continuation is rewritten into a `Sub-Agent` step and executed in-run — the compiler-flattening analogy: don't spin up loop machinery for a loop of one. Tradeoff accepted: no Task row (matches today's single-task fast path). Folding is skipped when the node is a human task, `continuation` is non-default, or the graph explicitly requests durability (a `durable: true` escape hatch on `TaskGraphRequest` — final name at implementation).
+**Single-node constant folding (D9):** during `DetermineNextStep`, a graph with exactly one node, no edges, an `agentName` assignment, and default continuation is rewritten into a `Sub-Agent` step and executed in-run — the compiler-flattening analogy: don't spin up loop machinery for a loop of one. Tradeoff accepted: no Task row (matches today's single-task fast path). Folding is skipped when the node is a human task, `continuation` is non-default, or the graph explicitly requests durability (a `durable: true` escape hatch on `TaskGraphSpec` — final name at implementation).
 
 **Opt-in via the params bag (D3):**
 - `enableTaskGraphs?: boolean` added to `LoopAgentTypePromptParams` (+ `DEFAULT_LOOP_AGENT_PROMPT_PARAMS`, default **true**) and to the Loop row's `PromptParamsSchema` in `metadata/agent-types/.agent-types.json`.
@@ -248,6 +252,18 @@ Metadata (not migration): Loop agent type's `PromptParamsSchema` gains `enableTa
 - **Re-attach on load**: query active parent tasks for the conversation and subscribe — fixes the unfixable reload-mid-workflow gap.
 - Fix `agentRunMap` to use `Task.AgentRunID`; render `Blocked`/`Cancelled`; add cancel/retry affordances.
 
+### 3.9 Save as Workflow — promoting an ephemeral graph (D17)
+
+The convergence runs both directions. Phase 4 converts runtime graphs *into* ephemeral flows for execution; the same shape-equivalence makes the inverse nearly free: **persist a runtime graph as a design-time flow** the user can rerun, schedule, or hand to the Agent Manager to refine.
+
+- **Converter**: `TaskGraphSpec` → `AgentSpec` (Flow type; nodes → `Steps` with Sub-Agent/Action assignments, edges → `Step Paths`; `inputPayload` mappings → step input mappings) → `AgentSpecSync.Persist`. No new persistence machinery — AgentSpecSync already owns atomic multi-entity agent writes and the mutation audit.
+- **Surfaces**:
+  - *Agent Run admin UI* — the `TaskGraph` run-step node (D10) renders the submitted graph; a "Save as Workflow" action sits on it.
+  - *ng-conversations* — when a completed agent run carries 1+ task graphs, surface a lightweight affordance on the message/plan card ("Save this approach as a Workflow"). The UX challenge is worth design attention: this is the moment a one-off agent plan becomes reusable organizational automation.
+- **Naming per D18**: the affordance says *Workflow*, the persisted artifact is a Flow-type agent.
+- **Fidelity note**: human-task nodes persist as human-assigned steps once Phase 4 lands them; `continuation` semantics don't persist (a saved workflow is invoked, not continued). The converter states what it drops.
+- **Phase**: after Phase 4's engine convergence (the graph→flow mapping must be settled first); the converter + both surfaces are a bounded follow-on deliverable listed there.
+
 ---
 
 ## 4. Phases
@@ -298,6 +314,7 @@ Constraints: `BaseAgent`'s public/protected API stays stable (subclasses exist v
 3. Dispatcher adopts the engine; conditional edges, recovery branches, structured output mapping.
 4. Human task nodes end-to-end (assignment, notification, complete-to-unblock; approval-as-human-task for headless). Notification delivery goes through `NotificationEngine` with a typed notification definition in `metadata/notifications/` — the User Routine dispatcher's delivery path is the template; the Scheduling package's stubbed `NotificationManager` ("Would send…") is the anti-pattern this explicitly avoids. Optional: replanner hook.
 5. Retire the bespoke `TaskOrchestrator` loop.
+6. **Save as Workflow** (§3.9/D17): the `TaskGraphSpec` → Flow-agent converter via `AgentSpecSync`, surfaced in the Agent Run admin UI (`TaskGraph` node) and ng-conversations (completed-run detection).
 
 **Exit:** one traversal engine for both provenances; graphs can contain humans; parallel semantics identical everywhere.
 
