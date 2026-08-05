@@ -1,5 +1,5 @@
 ---
-"@memberjunction/open-app-engine": minor
+"@memberjunction/open-app-engine": patch
 ---
 
 fix(open-app): anchor every `mj.config.cjs` edit to the live, top-level key it targets.

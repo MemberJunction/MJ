@@ -1,5 +1,5 @@
 ---
-"@memberjunction/open-app-engine": minor
+"@memberjunction/open-app-engine": patch
 ---
 
 fix(open-app): stop the installer silently disabling CodeGen entity registration for an app's schema.
