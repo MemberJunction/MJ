@@ -106,4 +106,42 @@ describe('BaseAdminContainerComponent embedded-dashboard error surfacing', () =>
 
         expect(container.LoadError).toBe('embedded loadData blew up');
     });
+
+    it('ignores an Error emitted after the embedded dashboard finished loading', async () => {
+        const { BaseAdminContainerComponent } = await import('../Admin/base-admin-container.component');
+
+        class TestContainer extends BaseAdminContainerComponent {
+            readonly ContainerTitle = 'Test';
+            readonly ContainerIcon = 'fa-solid fa-flask';
+            readonly ContainerSubtitle = 'Test container';
+            readonly Sections = [];
+        }
+
+        const dashboardInstance = {
+            Error: new MockEventEmitter<Error>(),
+            LoadCompleteEvent: null as (() => void) | null,
+            Config: null as unknown,
+            Refresh: vi.fn(),
+        };
+
+        const container = new TestContainer() as unknown as {
+            LoadError: string | null;
+            contentHost: { createComponent: ReturnType<typeof vi.fn> };
+            createDashboardRef(name: string): Promise<unknown>;
+        };
+        container.contentHost = { createComponent: vi.fn(() => ({ instance: dashboardInstance })) };
+
+        await container.createDashboardRef('Broken Admin Dashboard');
+
+        // Initial load succeeded and signalled completion.
+        dashboardInstance.LoadCompleteEvent!();
+        expect(container.LoadError).toBeNull();
+
+        // A later refresh fails. Sections are cached and kept alive, and LoadError only resets on
+        // the next selectSection — so an unscoped subscription would pin a stale banner here,
+        // possibly while a different section is on screen.
+        dashboardInstance.Error.emit(new Error('post-mount refresh blew up'));
+
+        expect(container.LoadError).toBeNull();
+    });
 });

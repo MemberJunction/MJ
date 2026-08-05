@@ -222,4 +222,67 @@ describe('DashboardResource code-based dashboard error surfacing', () => {
     releaseUserState();
     await loadPromise;
   });
+
+  /**
+   * Once the initial load has SETTLED (the dashboard signalled LoadCompleteEvent), a later Error —
+   * e.g. a refresh button inside the dashboard whose Refresh() fails — must NOT replace the
+   * already-rendered dashboard with a sticky error card. The host scopes the error card to the
+   * initial load; this pins that so a future dashboard with a post-mount refresh can't regress it.
+   * (Fails without the initialLoadSettled scoping in loadCodeBasedDashboard/loadDataExplorer.)
+   */
+  it('does NOT blank an already-rendered dashboard when a post-mount Refresh() emits Error', async () => {
+    const { DashboardResource } = await import('./dashboard-resource.component');
+
+    const dashboardInstance = {
+      Error: new MockEventEmitter<Error>(),
+      OpenEntityRecord: new MockEventEmitter(),
+      UserStateChanged: new MockEventEmitter(),
+      LoadCompleteEvent: null as (() => void) | null,
+      Config: null as unknown,
+      Refresh: vi.fn(),
+    };
+
+    const viewContainer = {
+      createComponent: vi.fn(() => ({
+        instance: dashboardInstance,
+        hostView: { rootNodes: [{ style: {} }] },
+      })),
+    };
+
+    const markForCheck = vi.fn();
+    const resource = new DashboardResource(
+      viewContainer as any,
+      { detectChanges: vi.fn(), markForCheck } as any,
+    ) as any;
+
+    resource.containerElement = {
+      nativeElement: { innerHTML: 'old', appendChild: vi.fn() },
+    };
+    resource.navigationService = { OpenEntityRecord: vi.fn() };
+    resource.loadDashboardUserState = vi.fn(async () => ({ UserState: null }));
+
+    // Drive the initial load to completion, then let the dashboard signal it is ready.
+    await resource.loadCodeBasedDashboard({
+      ID: 'dash-1',
+      Name: 'Rendered Dashboard',
+      DriverClass: 'RenderedDashboard',
+    });
+    expect(dashboardInstance.LoadCompleteEvent).toBeTypeOf('function');
+
+    // Wrapping the completion hook must not swallow it — the shell still gets its release signal.
+    const notifyLoadComplete = vi.spyOn(resource, 'NotifyLoadComplete');
+    dashboardInstance.LoadCompleteEvent!(); // initial load has now SETTLED
+    expect(notifyLoadComplete).toHaveBeenCalledTimes(1);
+    expect(resource.errorMessage).toBeNull();
+
+    markForCheck.mockClear();
+
+    // A post-mount Refresh() inside the dashboard fails and emits Error.
+    dashboardInstance.Error.emit(new Error('refresh blew up'));
+
+    // The rendered dashboard is preserved — no error card, no repaint into one.
+    expect(resource.errorMessage).toBeNull();
+    expect(resource.errorDetails).toBeNull();
+    expect(markForCheck).not.toHaveBeenCalled();
+  });
 });

@@ -728,9 +728,14 @@ export class DashboardResource extends BaseResourceComponent {
                 this.NotifyLoadComplete();
             };
 
-            // Same as the code-based path: surface the dashboard's own load failures instead of
-            // clearing the spinner to a silent blank page (see loadCodeBasedDashboard).
+            // Surface the dashboard's own load failures — but only for the INITIAL load. Wrap the
+            // completion hook to learn when the first load has settled, so a later Refresh() that
+            // fails does NOT replace an already-rendered Data Explorer with a sticky error card.
+            let initialLoadSettled = false;
+            const onComplete = instance.LoadCompleteEvent;
+            instance.LoadCompleteEvent = () => { initialLoadSettled = true; onComplete?.(); };
             instance.Error.subscribe((err: Error) => {
+                if (initialLoadSettled) return; // post-mount refresh failure — already logged by BaseDashboard.runGuardedLoad
                 this.setError('The Data Explorer could not be loaded.', err);
                 this.cdr.markForCheck();
             });
@@ -781,13 +786,18 @@ export class DashboardResource extends BaseResourceComponent {
                 this.NotifyLoadComplete();
             };
 
-            // Surface the dashboard's own load failures in the host's error card. BaseDashboard
-            // guarantees the loading screen is released even when initDashboard()/loadData() throws
-            // (it emits Error, then NotifyLoadComplete in a finally) — without this subscription the
-            // spinner would clear to a blank/half-rendered dashboard with a console-only error.
-            // Subscribed immediately after creation, BEFORE the first await below, so an Error
-            // emitted during the instance's own ngOnInit isn't missed.
+            // Surface the dashboard's own load failures in the host's error card — but only for the
+            // INITIAL load. BaseDashboard guarantees the loading screen is released even when
+            // initDashboard()/loadData() throws (it emits Error, then NotifyLoadComplete in a
+            // finally). Wrap the completion hook to learn when the first load has settled, so a later
+            // Refresh() failure keeps the rendered dashboard instead of blanking it to a sticky error
+            // card. Wired BEFORE the first await below, so an Error during the instance's own
+            // ngOnInit isn't missed.
+            let initialLoadSettled = false;
+            const onComplete = instance.LoadCompleteEvent;
+            instance.LoadCompleteEvent = () => { initialLoadSettled = true; onComplete?.(); };
             instance.Error.subscribe((err: Error) => {
+                if (initialLoadSettled) return; // post-mount refresh failure — already logged by BaseDashboard.runGuardedLoad
                 this.setError(`The dashboard "${dashboard.Name}" could not be loaded.`, err);
                 this.cdr.markForCheck();
             });
