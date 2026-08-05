@@ -150,6 +150,11 @@ export const SearchChecks: NamedCheck[] = [
     {
         Id: 'search.SR6',
         Name: 'SR6: SearchScopePermissionResolver is fail-closed — unknown scopes deny; real-scope decisions are internally consistent',
+        // Deliberately uses the stock resolver rather than GetSearchScopePermissionResolver(). This
+        // check asserts a property of MJ's OWN policy, and a consumer's registered override is
+        // entitled to widen — so resolving through the seam would make the assertion depend on
+        // whichever deployment the suite happens to run against. A consumer wanting to pin its own
+        // widening behaviour should assert that separately, against its own resolver.
         Fn: async (ctx): Promise<void> => {
             // Fail-closed: a scope ID with no permission rows (guaranteed — it does not exist) must
             // resolve to a denial, and its SQL rendering must be the reject predicate.

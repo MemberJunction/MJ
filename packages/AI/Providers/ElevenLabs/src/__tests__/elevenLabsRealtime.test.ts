@@ -30,7 +30,7 @@ interface ParsedFrame {
     type?: string;
     user_audio_chunk?: string;
     text?: string;
-    conversation_config_override?: { agent?: { prompt?: { prompt?: string } } };
+    conversation_config_override?: { agent?: { prompt?: { prompt?: string } }; tts?: { voice_id?: string } };
     tool_call_id?: string;
     result?: unknown;
     is_error?: boolean;
@@ -52,16 +52,23 @@ class FakeSocket implements ElevenLabsRealtimeSocket {
     }
 }
 
-/** Builds a full agent detail the way the REST API would return it. */
+/**
+ * Builds a full agent detail the way the REST API would return it. By DEFAULT the agent enables
+ * every override the driver requires, i.e. it is already up to date and must not be PATCHed;
+ * individual `…OverrideEnabled` flags opt into the drifted shapes the ensure flow has to repair.
+ */
 function makeAgentDetail(opts: {
     agentId: string;
     name: string;
     tools?: RealtimeToolDefinition[];
     promptOverrideEnabled?: boolean;
+    voiceOverrideEnabled?: boolean;
+    createdAtUnixSecs?: number;
 }): ElevenLabs.GetAgentResponseModel {
     return {
         agentId: opts.agentId,
         name: opts.name,
+        createdAtUnixSecs: opts.createdAtUnixSecs ?? 0,
         conversationConfig: {
             agent: {
                 prompt: {
@@ -74,6 +81,7 @@ function makeAgentDetail(opts: {
             overrides: {
                 conversationConfigOverride: {
                     agent: { prompt: { prompt: opts.promptOverrideEnabled ?? true } },
+                    tts: { voiceId: opts.voiceOverrideEnabled ?? true },
                 },
             },
         },
@@ -96,11 +104,26 @@ class TestElevenLabsRealtime extends ElevenLabsRealtime {
     public Socket = new FakeSocket();
     public LastConnectArgs: ElevenLabsConnectArgs | null = null;
 
+    /**
+     * Number of leading `listAgents` calls that return NOTHING regardless of inventory —
+     * simulates ElevenLabs' eventually-consistent agent search, where a freshly created
+     * (or concurrently created) agent is briefly invisible to find-by-name.
+     */
+    public SearchMissesBeforeHit = 0;
+
     protected override async listAgents(search: string): Promise<ElevenLabs.AgentSummaryResponseModel[]> {
         this.ListCalls.push(search);
+        if (this.ListCalls.length <= this.SearchMissesBeforeHit) {
+            return []; // search index has not caught up yet
+        }
         return this.Agents.filter((a) => a.name.includes(search)).map(
-            (a) => ({ agentId: a.agentId, name: a.name }) as ElevenLabs.AgentSummaryResponseModel
+            (a) => ({ agentId: a.agentId, name: a.name, createdAtUnixSecs: a.createdAtUnixSecs ?? 0 }) as ElevenLabs.AgentSummaryResponseModel
         );
+    }
+
+    /** Tests must not actually sleep between lookup retries. */
+    protected override async pauseBetweenAgentLookups(): Promise<void> {
+        return undefined;
     }
     protected override async getAgent(agentId: string): Promise<ElevenLabs.GetAgentResponseModel> {
         this.GetCalls.push(agentId);
@@ -135,6 +158,42 @@ class TestElevenLabsRealtime extends ElevenLabsRealtime {
     public Emit(event: ElevenLabsServerEvent): void {
         this.LastConnectArgs?.OnMessage(event);
     }
+}
+
+/**
+ * The override object for a session with NO voice configured — i.e. exactly what the driver
+ * sent before per-session voice existed. Assertions build on this so the voice delta is the
+ * only thing visible in each test.
+ */
+function promptOnlyOverrides(prompt = 'You are the session voice.'): Record<string, unknown> {
+    return { agent: { prompt: { prompt } } };
+}
+
+/** Every `true` leaf in a nested override-enablement object, as a key path. */
+function enabledLeafPaths(node: unknown, prefix: string[] = []): string[][] {
+    if (node === null || typeof node !== 'object') {
+        return [];
+    }
+    const paths: string[][] = [];
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+        if (value === true) {
+            paths.push([...prefix, key]);
+        } else if (value !== null && typeof value === 'object') {
+            paths.push(...enabledLeafPaths(value, [...prefix, key]));
+        }
+    }
+    return paths;
+}
+
+/** Deep copy of an enablement object with the leaf at `path` turned off. */
+function withLeafDisabled(source: object, path: string[]): Record<string, unknown> {
+    const clone = JSON.parse(JSON.stringify(source)) as Record<string, unknown>;
+    let cursor = clone;
+    for (const key of path.slice(0, -1)) {
+        cursor = cursor[key] as Record<string, unknown>;
+    }
+    cursor[path[path.length - 1]] = false;
+    return clone;
 }
 
 /** Builds the minimal session params; callers override per test. */
@@ -224,12 +283,16 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
     it('creates a missing managed agent with the tool set and the prompt-override enablement', async () => {
         await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
 
-        expect(driver.ListCalls).toEqual(['MJ Realtime Co-Agent']);
+        // every lookup targets the managed name (the count varies — a miss is retried against
+        // ElevenLabs' eventually-consistent search before we conclude the agent is absent)
+        expect(driver.ListCalls.every((c) => c === 'MJ Realtime Co-Agent')).toBe(true);
         expect(driver.CreateBodies).toHaveLength(1);
         const body = driver.CreateBodies[0];
         expect(body.name).toBe('MJ Realtime Co-Agent');
-        // the per-session system-prompt override is explicitly ENABLED
+        // the per-session system-prompt AND voice overrides are explicitly ENABLED (ElevenLabs
+        // drops any override the agent has not allowed, so both must be declared up front)
         expect(body.platformSettings?.overrides?.conversationConfigOverride?.agent?.prompt?.prompt).toBe(true);
+        expect(body.platformSettings?.overrides?.conversationConfigOverride?.tts?.voiceId).toBe(true);
         // the stored prompt is a placeholder, never a session prompt
         expect(body.conversationConfig.agent?.prompt?.prompt).toContain('placeholder');
         // tools ride as inline CLIENT tools that block on (and then speak) their results
@@ -282,6 +345,83 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(driver.UpdateCalls[0].body.conversationConfig?.agent?.prompt?.tools).toHaveLength(1);
     });
 
+    /**
+     * Regression guard for issue #3374. Every agent provisioned BEFORE per-session voice shipped
+     * enables the prompt override and nothing else. Because the drift check used to test only the
+     * prompt override, such an agent matched on tools + prompt and was never PATCHed — so enabling
+     * `tts.voiceId` in the create/update body alone would have been a silent no-op on every
+     * existing deployment, and the voice sent with each session would be dropped by the platform.
+     */
+    it('PATCHes an agent provisioned BEFORE per-session voice (prompt override on, voice override missing)', async () => {
+        driver.Agents = [
+            makeAgentDetail({
+                agentId: 'agent_existing_7',
+                name: 'MJ Realtime Co-Agent',
+                tools: [WEATHER_TOOL],
+                voiceOverrideEnabled: false,
+            }),
+        ];
+
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        expect(driver.UpdateCalls).toHaveLength(1);
+        const enabled = driver.UpdateCalls[0].body.platformSettings?.overrides?.conversationConfigOverride;
+        expect(enabled?.tts?.voiceId).toBe(true);
+        expect(enabled?.agent?.prompt?.prompt).toBe(true); // the prompt override is not lost in the repair
+    });
+
+    /**
+     * Pins the two halves of the override contract together: whatever `buildAgentBody` WRITES
+     * must satisfy the `OverridesSatisfied` drift check that READS it. Enable an override on
+     * one side only and this fails — as a create-then-PATCH-forever loop on every session,
+     * which is the loud version of the silent bug in #3374.
+     */
+    it('considers an agent this driver just provisioned already satisfied (no PATCH loop)', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        const written = driver.CreateBodies[0].platformSettings?.overrides?.conversationConfigOverride;
+        expect(written).toBeDefined();
+
+        // serve that exact enablement back as a pre-existing agent
+        const second = new TestElevenLabsRealtime('fake-api-key');
+        const provisioned = makeAgentDetail({ agentId: 'agent_x', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] });
+        provisioned.platformSettings = { overrides: { conversationConfigOverride: written } };
+        second.Agents = [provisioned];
+
+        await second.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        expect(second.UpdateCalls).toEqual([]);
+    });
+
+    /**
+     * The #3374 guard, generalised. For EVERY override `buildAgentBody` writes, an agent missing
+     * just that one must be repaired — otherwise the write side can declare an override the drift
+     * check does not require, and already-deployed agents silently drop it forever (exactly the
+     * original defect, which enabled `tts.voiceId` on new agents while never repairing old ones).
+     *
+     * Driven off what the driver actually wrote, so a newly-added override is covered
+     * automatically: add one to the enablement without teaching `OverridesSatisfied` about it and
+     * this fails.
+     */
+    it('repairs an agent missing ANY single required override', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        const written = driver.CreateBodies[0].platformSettings?.overrides?.conversationConfigOverride;
+        const paths = enabledLeafPaths(written);
+        expect(paths.length).toBeGreaterThan(1); // prompt + voice at minimum
+
+        for (const path of paths) {
+            const fresh = new TestElevenLabsRealtime('fake-api-key');
+            const stale = makeAgentDetail({ agentId: 'agent_x', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] });
+            stale.platformSettings = {
+                overrides: { conversationConfigOverride: withLeafDisabled(written ?? {}, path) },
+            };
+            fresh.Agents = [stale];
+
+            await fresh.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+            expect(fresh.UpdateCalls, `override '${path.join('.')}' is written but never required`).toHaveLength(1);
+        }
+    });
+
     it('PATCHes the managed agent when the prompt override is not enabled', async () => {
         driver.Agents = [
             makeAgentDetail({
@@ -317,6 +457,47 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(driver.UpdateCalls).toEqual([]); // webhook tool did not poison the fingerprint
     });
 
+    /**
+     * Live-verified defect: ElevenLabs' agent search is EVENTUALLY CONSISTENT. A single
+     * find-by-name miss made the ensure flow conclude the agent did not exist and CREATE one,
+     * forking a duplicate managed agent — observed live, twice, against a real account.
+     * The miss must be retried before concluding absence.
+     */
+    it('ADOPTS an existing agent the search missed at first, instead of creating a duplicate', async () => {
+        driver.Agents = [
+            makeAgentDetail({ agentId: 'agent_existing_7', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
+        ];
+        driver.SearchMissesBeforeHit = 1; // first lookup returns nothing, the retry finds it
+
+        const cfg = await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        expect(driver.CreateBodies).toEqual([]); // NO duplicate agent
+        expect(cfg.SessionConfig['agentId']).toBe('agent_existing_7');
+        expect(driver.ListCalls.length).toBeGreaterThan(1); // it actually retried
+    });
+
+    it('gives up retrying and creates EXACTLY ONE agent when the name genuinely does not exist', async () => {
+        driver.SearchMissesBeforeHit = Number.MAX_SAFE_INTEGER; // search never returns anything
+
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        expect(driver.CreateBodies).toHaveLength(1); // bounded: one create, never a loop
+        expect(driver.ListCalls.length).toBeLessThanOrEqual(5); // and a small, capped number of lookups
+    });
+
+    it('adopts the OLDEST agent when duplicates share the name, so every process converges', async () => {
+        // a duplicate pair as left behind by the pre-fix race; listed newest-first
+        driver.Agents = [
+            makeAgentDetail({ agentId: 'agent_newer', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL], createdAtUnixSecs: 200 }),
+            makeAgentDetail({ agentId: 'agent_older', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL], createdAtUnixSecs: 100 }),
+        ];
+
+        const cfg = await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        expect(cfg.SessionConfig['agentId']).toBe('agent_older');
+        expect(driver.CreateBodies).toEqual([]);
+    });
+
     it('caches the ensure result per name + tool fingerprint (no repeat REST round-trips)', async () => {
         driver.Agents = [
             makeAgentDetail({ agentId: 'agent_existing_7', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
@@ -330,6 +511,62 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         await driver.CreateClientSession(makeParams({ Tools: [] }));
         expect(driver.ListCalls).toHaveLength(2);
         expect(driver.UpdateCalls).toHaveLength(1);
+    });
+
+    /**
+     * Two sessions opening AT ONCE on one driver against a not-yet-provisioned agent name must
+     * provision ONE agent, not one each.
+     *
+     * The ensure cache stores the RESOLVED agent id, so it is only populated after the whole
+     * find-create round-trip finishes. Both callers therefore used to miss the cache, both find
+     * nothing, and both create — forking a duplicate that then competes for the name forever.
+     * This is the intra-process half of the fork {@link ElevenLabsRealtime.findAgentByName}
+     * guards against across processes, and unlike that one it is fully closable here: the
+     * in-flight ensure is itself what the second caller should await.
+     *
+     * Not a contrived race — a server opening several realtime sessions the moment a new managed
+     * agent name appears is the ordinary case.
+     */
+    it('provisions ONE agent when two sessions ensure the same new name concurrently', async () => {
+        const [first, second] = await Promise.all([
+            driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] })),
+            driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] })),
+        ]);
+
+        expect(driver.CreateBodies).toHaveLength(1);
+        expect((first.SessionConfig as { agentId: string }).agentId).toBe(
+            (second.SessionConfig as { agentId: string }).agentId
+        );
+    });
+
+    /**
+     * A transient REST failure must not disable the managed agent for the life of the process.
+     *
+     * The ensure cache stores the in-flight PROMISE (so concurrent callers can join it), which
+     * means a REJECTED ensure is a cache entry too — and every later session for that name would
+     * replay the same stale failure forever, from memory, without ever retrying the API. One
+     * blipped request would take the agent down until restart. The failed entry must be evicted.
+     */
+    it('retries after a transient ensure failure instead of caching the rejection', async () => {
+        class FlakyElevenLabsRealtime extends TestElevenLabsRealtime {
+            public FailNextList = true;
+            protected override async listAgents(search: string): Promise<ElevenLabs.AgentSummaryResponseModel[]> {
+                if (this.FailNextList) {
+                    this.FailNextList = false;
+                    throw new Error('ElevenLabs REST 503: temporarily unavailable');
+                }
+                return super.listAgents(search);
+            }
+        }
+        const flaky = new FlakyElevenLabsRealtime('fake-api-key');
+
+        await expect(flaky.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }))).rejects.toThrow(
+            /temporarily unavailable/
+        );
+
+        // the blip is over — the next session must reach the API again, not replay the rejection
+        const cfg = await flaky.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect((cfg.SessionConfig as { agentId: string }).agentId).toBe('agent_created_001');
     });
 });
 
@@ -371,6 +608,79 @@ describe('ElevenLabsRealtime client-direct (CreateClientSession)', () => {
             overrides: { agent: { prompt: { prompt: 'You are the session voice.' } } },
             config: { voiceHint: 'warm' },
         });
+    });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Per-session voice (issue #3374)                                    */
+/* ------------------------------------------------------------------ */
+
+describe('ElevenLabsRealtime per-session voice', () => {
+    let driver: TestElevenLabsRealtime;
+
+    beforeEach(() => {
+        driver = new TestElevenLabsRealtime('fake-api-key');
+    });
+
+    it('carries the configured voice as a RAW-WIRE tts.voice_id override alongside the prompt', async () => {
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { voice: '21m00Tcm4TlvDq8ikWAM' } }));
+
+        expect(cfg.SessionConfig['overrides']).toEqual({
+            ...promptOnlyOverrides(),
+            // snake_case: this object is forwarded VERBATIM onto the websocket by the client
+            // driver, never through the SDK's camelCase serializer
+            tts: { voice_id: '21m00Tcm4TlvDq8ikWAM' },
+        });
+    });
+
+    it('leaves a voice-less session byte-for-byte as it was before per-session voice existed', async () => {
+        const cfg = await driver.CreateClientSession(makeParams());
+
+        expect(cfg.SessionConfig['overrides']).toEqual(promptOnlyOverrides());
+    });
+
+    it('reads the DRIVER-NEUTRAL `voice` key, the same one AssemblyAI and Inworld read', async () => {
+        // `voiceId` is NOT the contract — a bag carrying only it must not silently half-work
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { voiceId: 'ignored_key' } }));
+
+        expect(cfg.SessionConfig['overrides']).toEqual(promptOnlyOverrides());
+    });
+
+    it.each([
+        ['a blank string', '   '],
+        ['an empty string', ''],
+        ['a non-string', 42],
+        ['null', null],
+    ])('omits the tts override entirely when the voice is %s', async (_label, voice) => {
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { voice } }));
+
+        expect(cfg.SessionConfig['overrides']).toEqual(promptOnlyOverrides());
+    });
+
+    it('trims a padded voice id', async () => {
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { voice: '  voice_abc  ' } }));
+
+        expect(cfg.SessionConfig['overrides']).toEqual({ ...promptOnlyOverrides(), tts: { voice_id: 'voice_abc' } });
+    });
+
+    it('sends the SAME voice override on the server-bridged initiation frame (topology parity)', async () => {
+        await startSession(driver, { Config: { voice: 'voice_abc' } });
+
+        expect(driver.Socket.SentFrames()[0]).toEqual({
+            type: 'conversation_initiation_client_data',
+            conversation_config_override: { ...promptOnlyOverrides(), tts: { voice_id: 'voice_abc' } },
+        });
+    });
+
+    it('does not vary the MANAGED AGENT by voice — voice is per-session, so one agent is shared', async () => {
+        await driver.CreateClientSession(makeParams({ Config: { voice: 'voice_a' } }));
+        const lookupsAfterFirst = driver.ListCalls.length;
+        await driver.CreateClientSession(makeParams({ Config: { voice: 'voice_b' } }));
+
+        // one agent, and the differing voice re-ensures NOTHING: a per-session override must
+        // never fan out managed agents nor re-hit the REST surface
+        expect(driver.CreateBodies).toHaveLength(1);
+        expect(driver.ListCalls).toHaveLength(lookupsAfterFirst);
     });
 });
 
@@ -707,6 +1017,61 @@ describe('SanitizeToolParametersForElevenLabs', () => {
         const params = mapped.parameters as unknown as Record<string, Record<string, Record<string, unknown>>>;
         expect(params['properties']['fontSize']['enum']).toBeUndefined();
         expect(params['properties']['fontSize']['description']).toContain('Allowed values');
+    });
+
+    /**
+     * Live-verified defect: ElevenLabs REORDERS schema keys on round-trip (a schema sent as
+     * `{type, properties}` comes back `{description, type, properties}`). Fingerprinting a
+     * key-order-sensitive `JSON.stringify` therefore reported permanent drift and re-PATCHed
+     * the agent on EVERY session.
+     */
+    it('is insensitive to JSON key ORDER (the remote reorders schema keys)', () => {
+        const sent = { type: 'object', description: 'A thing.', properties: { city: { type: 'string', description: 'City.' } } };
+        const returned = { description: 'A thing.', properties: { city: { description: 'City.', type: 'string' } }, type: 'object' };
+
+        expect(ElevenLabsRealtime.ToolSetFingerprint([{ Name: 'T', Description: 'd', ParametersSchema: sent }]))
+            .toBe(ElevenLabsRealtime.ToolSetFingerprint([{ Name: 'T', Description: 'd', ParametersSchema: returned }]));
+    });
+
+    /**
+     * Live-verified defect (the real shape, captured from a round-tripped agent): ElevenLabs
+     * MATERIALIZES its own defaults into the stored schema — `dynamic_variable: ""`,
+     * `is_omitted: false`, `required: []`, `isSystemProvided: false`, `constantValue: ""` …
+     * The stored form is a SUPERSET of what we sent, so equality on the raw form reports drift
+     * forever and re-PATCHes the agent on every session.
+     */
+    it('ignores the empty defaults ElevenLabs materializes into the stored schema', () => {
+        const sent = { type: 'object', properties: { city: { type: 'string', description: 'A string value.' } }, description: 'An object value.' };
+        const stored = {
+            description: 'An object value.', dynamic_variable: '', is_omitted: false, type: 'object', required: [],
+            properties: { city: { type: 'string', description: 'A string value.', isSystemProvided: false,
+                dynamicVariable: '', allowed_values_dynamic_variable: '', constantValue: '', is_omitted: false } },
+        };
+
+        expect(ElevenLabsRealtime.ToolSetFingerprint([{ Name: 'T', Description: 'd', ParametersSchema: stored }]))
+            .toBe(ElevenLabsRealtime.ToolSetFingerprint([{ Name: 'T', Description: 'd', ParametersSchema: sent }]));
+    });
+
+    /**
+     * Bounds the pruning above. `isMaterializedDefault` matches on the VALUE (`''`/`false`/`[]`),
+     * not on a list of platform field names, so it also prunes meaningful entries that happen to
+     * hold one — `additionalProperties: false` among them. That costs sensitivity to an entry's
+     * PRESENCE, which is accepted and documented; it must NOT cost sensitivity to an entry's
+     * VALUE, or a genuine schema change would stop triggering the repair PATCH.
+     */
+    it('still DISTINGUISHES a meaningful value change even when one side prunes (false → true)', () => {
+        const fp = (additionalProperties: boolean): string => ElevenLabsRealtime.ToolSetFingerprint([
+            { Name: 'T', Description: 'd', ParametersSchema: { type: 'object', additionalProperties, properties: {} } },
+        ]);
+        expect(fp(false)).not.toBe(fp(true));
+    });
+
+    it('still DISTINGUISHES schemas that differ only in ARRAY order (arrays are data, not sets)', () => {
+        const fp = (values: string[]): string => ElevenLabsRealtime.ToolSetFingerprint([
+            { Name: 'T', Description: 'd', ParametersSchema: { type: 'object', properties: { shape: { type: 'string', enum: values } } } },
+        ]);
+        // a reordered enum is a genuinely different schema — canonicalization must not erase it
+        expect(fp(['rect', 'ellipse'])).not.toBe(fp(['ellipse', 'rect']));
     });
 
     it('ToolSetFingerprint hashes the sanitized form (no PATCH-loop drift vs the remote)', () => {

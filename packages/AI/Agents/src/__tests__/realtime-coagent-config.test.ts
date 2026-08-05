@@ -190,7 +190,7 @@ describe('GetProviderVoiceSettings', () => {
             voice: {
                 providers: {
                     openai: { voice: 'alloy' },
-                    elevenlabs: { voiceId: 'el-1' },
+                    elevenlabs: { voice: 'el-1' },
                     gemini: { voice: 'Puck' },
                     assemblyai: { voice: 'nova' }
                 }
@@ -200,7 +200,7 @@ describe('GetProviderVoiceSettings', () => {
 
     it('matches a DriverClass by normalized prefix for every seeded provider', () => {
         expect(GetProviderVoiceSettings(CONFIG, 'OpenAIRealtime')).toEqual({ voice: 'alloy' });
-        expect(GetProviderVoiceSettings(CONFIG, 'ElevenLabsRealtime')).toEqual({ voiceId: 'el-1' });
+        expect(GetProviderVoiceSettings(CONFIG, 'ElevenLabsRealtime')).toEqual({ voice: 'el-1' });
         expect(GetProviderVoiceSettings(CONFIG, 'GeminiRealtime')).toEqual({ voice: 'Puck' });
         expect(GetProviderVoiceSettings(CONFIG, 'AssemblyAIRealtime')).toEqual({ voice: 'nova' });
     });
@@ -210,7 +210,7 @@ describe('GetProviderVoiceSettings', () => {
     });
 
     it('is case- and punctuation-insensitive', () => {
-        expect(GetProviderVoiceSettings(CONFIG, 'eleven-labs-realtime')).toEqual({ voiceId: 'el-1' });
+        expect(GetProviderVoiceSettings(CONFIG, 'eleven-labs-realtime')).toEqual({ voice: 'el-1' });
         expect(GetProviderVoiceSettings(CONFIG, 'OPENAI_REALTIME')).toEqual({ voice: 'alloy' });
     });
 

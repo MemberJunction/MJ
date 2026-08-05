@@ -19382,7 +19382,7 @@
             "CacheWritePricePerUnit": null,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.6-terra pricing on OpenAI as of July 2026. $2.50/$15.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes."
+            "Comments": "GPT 5.6-terra pricing on OpenAI as of July 2026. $2.50/$15.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. SUPERSEDED 2026-07-30 by 20% price cut to $2.00/$12.00 (see next cost row)."
           },
           "primaryKey": {
             "ID": "60C58C8B-B5A4-4335-BCFD-2D2A65AD7DEA"
@@ -19390,6 +19390,26 @@
           "sync": {
             "lastModified": "2026-07-10T23:26:27.328Z",
             "checksum": "44b1fde790395dc54655b036a3b39cbba0fe707f517bc2b1079b691cb2925460"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-07-30T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 12,
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.6-terra price cut effective 2026-07-30: 20% reduction from $2.50/$15.00 to $2.00/$12.00 per 1M tokens (source: OpenAI 'Advancing the price-performance frontier with GPT-5.6', July 30, 2026; VentureBeat, CNBC, MLQ News coverage). Prompt-caching discount continues to apply at 10% of input price. No architecture or capability change — pricing-only update."
+          },
+          "primaryKey": {
+            "ID": "1E444DB9-773B-4B41-B1DA-F03A3EDDEA92"
           }
         }
       ]
@@ -19473,7 +19493,7 @@
             "CacheWritePricePerUnit": null,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.6-luna pricing on OpenAI as of July 2026. $1.00/$6.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes."
+            "Comments": "GPT 5.6-luna pricing on OpenAI as of July 2026. $1.00/$6.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. SUPERSEDED 2026-07-30 by 80% price cut to $0.20/$1.20 (see next cost row)."
           },
           "primaryKey": {
             "ID": "5121599E-71C3-46AB-9AA5-43006565F2B7"
@@ -19481,6 +19501,26 @@
           "sync": {
             "lastModified": "2026-07-10T23:26:27.366Z",
             "checksum": "192525b926019a8b136c342dcf1507fddcf574987b6480ea8fba36507e20ef4b"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-07-30T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.2,
+            "OutputPricePerUnit": 1.2,
+            "CacheReadPricePerUnit": 0.02,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.6-luna price cut effective 2026-07-30: 80% reduction from $1.00/$6.00 to $0.20/$1.20 per 1M tokens (source: OpenAI 'Advancing the price-performance frontier with GPT-5.6', July 30, 2026; VentureBeat, CNBC, MLQ News coverage; positioned to compete on cost with DeepSeek V4 Flash at $0.14/$0.28). Prompt-caching discount continues at 10% of input price. No architecture or capability change — pricing-only update."
+          },
+          "primaryKey": {
+            "ID": "95987637-46A3-4C7A-85C3-9660767001BB"
           }
         }
       ]
