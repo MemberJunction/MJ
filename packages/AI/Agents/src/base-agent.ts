@@ -4668,6 +4668,30 @@ export class BaseAgent {
     }> {
         const agent = params.agent;
 
+        // Refresh the run's accumulated cost/token actuals before comparing them to the agent's
+        // static limits.
+        //
+        // The LIMITS are static — MaxCostPerRun and MaxTokensPerRun live on the agent and never
+        // change during a run. What was missing is the other side of the comparison: TotalCost and
+        // TotalTokensUsed are DERIVED from the run's steps by calculateTokenStats(), and the only
+        // writer (applyTokenStatsToRun) previously ran on terminal paths alone —
+        // createFailureResult / createCancelledResult / finalizeAgentRun — plus the post-compaction
+        // top-up, which only fires if compaction happens to trigger.
+        //
+        // So mid-run both fields sat at 0, and because the checks below are guarded on
+        // `agent.MaxCostPerRun && agentRun.TotalCost`, a falsy 0 short-circuited them entirely. The
+        // cost and token ceilings were evaluated only at the moment a run ENDED, which is too late
+        // to stop anything: they became reporting, not guardrails. Only the iteration and time
+        // limits actually interrupted a run, because TotalPromptIterations is incremented in the
+        // loop.
+        //
+        // Recomputing here rather than at the call site means every caller — including subclasses
+        // that override the loop — gets a truthful comparison, and the recompute is cheap: it walks
+        // the in-memory step array, with no database round trip.
+        if (this._agentRun === agentRun) {
+            this.applyTokenStatsToRun(agentRun, this.calculateTokenStats());
+        }
+
         // Check absolute maximum iterations (safety net to prevent infinite loops)
         const DEFAULT_ABSOLUTE_MAX_ITERATIONS = 5000;
         const absoluteMaxIterations = params.absoluteMaxIterations ?? DEFAULT_ABSOLUTE_MAX_ITERATIONS;
