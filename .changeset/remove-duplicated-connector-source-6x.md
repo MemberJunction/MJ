@@ -1,7 +1,15 @@
 ---
-"@memberjunction/integration-connectors": major
-"@memberjunction/server-bootstrap": major
+"@memberjunction/integration-connectors": minor
+"@memberjunction/server-bootstrap": minor
 ---
+
+<!-- Bump type is `minor`, not `major`, even though this IS a breaking change. The repo sits
+     at an unpublished 6.0.0 (nothing above 5.51.0 is on npm) and 6.0.0 is itself the era open
+     that carries the 6.x breaking changes — so this ships *inside* it. Under the fixed group
+     and changesets pre-mode, a `major` here resolves to 7.0.0-edge.0 and burns the entire 6.x
+     era in one release; verified by running `changeset version`. publish.yml's era gate only
+     hard-fails *unsuffixed* versions, so `7.0.0-edge.0` would sail through it. Use `major`
+     only once 6.x has actually shipped and you mean to open 7. -->
 
 **BREAKING (6.x): remove the 36 vendor connectors from `@memberjunction/integration-connectors`.**
 

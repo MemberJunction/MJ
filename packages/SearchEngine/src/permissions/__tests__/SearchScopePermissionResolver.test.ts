@@ -35,9 +35,22 @@ vi.mock('@memberjunction/core', () => {
     };
 });
 
+// The resolver registers itself with the ClassFactory so consumers can replace it, so the mock has
+// to satisfy `RegisterClass` and `MJGlobal` as well as `UUIDsEqual`. Registration is a no-op here —
+// these tests exercise the stock resolver's own logic directly, not the resolution seam (that is
+// covered by `__tests__/SearchScopePermissionResolver.pluggable.test.ts`).
 vi.mock('@memberjunction/global', () => ({
     UUIDsEqual: (a?: string | null, b?: string | null) =>
         !!a && !!b && a.toLowerCase() === b.toLowerCase(),
+    RegisterClass: () => () => { /* no-op: registration is not under test here */ },
+    MJGlobal: {
+        Instance: {
+            ClassFactory: {
+                CreateInstance: () => null,
+                Register: () => { /* no-op */ },
+            },
+        },
+    },
 }));
 
 import {
