@@ -12250,12 +12250,12 @@ export const MJContentItemChunkSchema = z.object({
         * * Description: Exclusive character offset where this chunk ends within the parent Content Item's extracted text. See StartOffset. NULL for media segments.`),
     StartMs: z.number().nullable().describe(`
         * * Field Name: StartMs
-        * * Display Name: Start (ms)
+        * * Display Name: Start Milliseconds
         * * SQL Data Type: int
         * * Description: Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.`),
     EndMs: z.number().nullable().describe(`
         * * Field Name: EndMs
-        * * Display Name: End (ms)
+        * * Display Name: End Milliseconds
         * * SQL Data Type: int
         * * Description: End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.`),
     PageNumber: z.number().nullable().describe(`
@@ -12291,8 +12291,12 @@ export const MJContentItemChunkSchema = z.object({
         * * Description: Optional self-reference to another chunk of the same Content Item that is the parent of this one, expressing a chapter to sub-chapter hierarchy — for example a five-minute chapter of a recording and the individual speaker turns within it, or a document section and its subsections. NULL for top-level segments.`),
     ContentItem: z.string().nullable().describe(`
         * * Field Name: ContentItem
-        * * Display Name: Content Item
+        * * Display Name: Content Item Name
         * * SQL Data Type: nvarchar(250)`),
+    ParentChunk: z.string().nullable().describe(`
+        * * Field Name: ParentChunk
+        * * Display Name: Parent Chunk Name
+        * * SQL Data Type: nvarchar(500)`),
     RootParentChunkID: z.string().nullable().describe(`
         * * Field Name: RootParentChunkID
         * * Display Name: Root Parent Chunk
@@ -16551,7 +16555,7 @@ export const MJEntitySchema = z.object({
         * * Description: When set to 1 AND TrackRecordChanges is also 1, the external change detection system will scan this entity for changes made outside the MJ framework (direct SQL, third-party tools, etc.) and replay them through Save() to create proper RecordChange audit entries. Default is 0 (opt-out) because most entities, especially __mj schema metadata tables, are managed by migrations/CodeGen and should not be scanned.`),
     ExternalDataSourceID: z.string().nullable().describe(`
         * * Field Name: ExternalDataSourceID
-        * * Display Name: External Data Source ID
+        * * Display Name: External Data Source
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: External Data Sources (vwExternalDataSources.ID)`),
     ExternalObjectName: z.string().nullable().describe(`
@@ -16559,6 +16563,29 @@ export const MJEntitySchema = z.object({
         * * Display Name: External Object Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Remote object name (table / view / collection) on the external system that backs this entity. Resolved against the data source DefaultSchema/DefaultDatabase when unqualified. Only meaningful when ExternalDataSourceID is set.`),
+    GeneratedBaseViewName: z.string().nullable().describe(`
+        * * Field Name: GeneratedBaseViewName
+        * * Display Name: Generated Base View Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: When set, CodeGen generates the entity's full base view under THIS name instead of BaseView, and the application owns BaseView — which is expected to wrap it (SELECT g.*, <extras> FROM <GeneratedBaseViewName> g). This gives an entity a custom base view WITHOUT inheriting the generated SQL: related-entity display joins, geo columns and recursive root-ID columns keep regenerating underneath, so a foreign key added later still appears. NULL (the default, and every pre-existing row) means the previous all-or-nothing behaviour: BaseViewGenerated alone decides whether CodeGen writes BaseView, and there is no second view. BaseView remains the public surface — entity field discovery, permissions and the generated CRUD procedures all target it. SQL SERVER ONLY: layering relies on sp_refreshview to re-resolve the application-owned outer view's SELECT * against a regenerated inner view. PostgreSQL freezes a view's column list at creation and has no refresh equivalent, so CodeGen rejects this column on PostgreSQL rather than let the outer view go silently stale.`),
+    AllowDirectSQLInsert: z.boolean().describe(`
+        * * Field Name: AllowDirectSQLInsert
+        * * Display Name: Allow Direct SQL Insert
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this entity may be populated by INSERT statements that do not go through BaseEntity.Save() — bulk loads, ETL/integration sync, or rows created as a side effect of a stored procedure. Default 0, meaning every insert is expected to flow through BaseEntity so that record-change tracking, entity actions, validation and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, because a direct insert produces neither an audit row nor a cache-invalidation event.`),
+    AllowDirectSQLUpdate: z.boolean().describe(`
+        * * Field Name: AllowDirectSQLUpdate
+        * * Display Name: Allow Direct SQL Update
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this entity may be modified by UPDATE statements that do not go through BaseEntity.Save() — bulk backfills, integration sync, or maintenance routines. Default 0, meaning every update is expected to flow through BaseEntity so that record-change tracking, entity actions, validation and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, because a direct update produces neither an audit row nor a cache-invalidation event.`),
+    AllowDirectSQLDelete: z.boolean().describe(`
+        * * Field Name: AllowDirectSQLDelete
+        * * Display Name: Allow Direct SQL Delete
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this entity may have rows removed by DELETE statements that do not go through BaseEntity.Delete() — purge and retention routines, or integration sync reconciling a remote source. Default 0, meaning every delete is expected to flow through BaseEntity so that record-change tracking, entity actions, cascade handling and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, and additionally requires DeleteType = 'Hard' — a direct DELETE removes the row outright rather than setting DeletedAt, which would defeat soft delete.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -32075,11 +32102,12 @@ export type MJUserViewCategoryEntityType = z.infer<typeof MJUserViewCategorySche
 export const MJUserViewRunDetailSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     UserViewRunID: z.string().describe(`
         * * Field Name: UserViewRunID
-        * * Display Name: User View Run ID
+        * * Display Name: User View Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: User View Runs (vwUserViewRuns.ID)`),
     RecordID: z.string().describe(`
@@ -32097,6 +32125,10 @@ export const MJUserViewRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    UserViewRun: z.string().describe(`
+        * * Field Name: UserViewRun
+        * * Display Name: User View Run Name
+        * * SQL Data Type: nvarchar(100)`),
     UserViewID: z.string().describe(`
         * * Field Name: UserViewID
         * * Display Name: User View
@@ -44459,6 +44491,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     /**
     * Validate() method override for MJ: AI Agent Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * CompactionTargetPercent: The compaction target percentage must be a value between 1 and 100 percent.
+    * * CompactionTriggerPercent: The compaction trigger percentage must be a value between 1 and 100 percent.
     * * ContextWindowMaxTokens: The maximum tokens for the context window must be a positive number greater than 0.
     * * Table-Level: The compaction target percentage must be less than the compaction trigger percentage to ensure that compaction successfully reduces the resource usage below the trigger threshold.
     * @public
@@ -44468,6 +44501,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateCompactionTargetPercentRange(result);
+        this.ValidateCompactionTriggerPercentRange(result);
         this.ValidateContextWindowMaxTokensGreaterThanZero(result);
         this.ValidateCompactionTargetPercentLessThanTriggerPercent(result);
         result.Success = result.Success && (result.Errors.length === 0);
@@ -44490,6 +44524,23 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     			ValidationErrorType.Failure
     		));
     	}
+    }
+
+    /**
+    * The compaction trigger percentage must be a value between 1 and 100 percent.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactionTriggerPercentRange(result: ValidationResult) {
+        if (this.CompactionTriggerPercent < 1 || this.CompactionTriggerPercent > 100) {
+            result.Errors.push(new ValidationErrorInfo(
+                "CompactionTriggerPercent",
+                "Compaction trigger percentage must be between 1 and 100.",
+                this.CompactionTriggerPercent,
+                ValidationErrorType.Failure
+            ));
+        }
     }
 
     /**
@@ -65747,7 +65798,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: StartMs
-    * * Display Name: Start (ms)
+    * * Display Name: Start Milliseconds
     * * SQL Data Type: int
     * * Description: Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.
     */
@@ -65760,7 +65811,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: EndMs
-    * * Display Name: End (ms)
+    * * Display Name: End Milliseconds
     * * SQL Data Type: int
     * * Description: End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.
     */
@@ -65852,11 +65903,20 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: ContentItem
-    * * Display Name: Content Item
+    * * Display Name: Content Item Name
     * * SQL Data Type: nvarchar(250)
     */
     get ContentItem(): string | null {
         return this.Get('ContentItem');
+    }
+
+    /**
+    * * Field Name: ParentChunk
+    * * Display Name: Parent Chunk Name
+    * * SQL Data Type: nvarchar(500)
+    */
+    get ParentChunk(): string | null {
+        return this.Get('ParentChunk');
     }
 
     /**
@@ -76614,6 +76674,10 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     /**
     * Validate() method override for MJ: Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * Table-Level: This rule ensures that if deleting via the API is allowed and the delete type is set to 'Soft', then record merging must also be allowed. In other words, you cannot allow API deletes with a soft delete type without also allowing record merging.
+    * * Table-Level: If direct SQL deletion is allowed, the delete type must be set to 'Hard' to ensure data integrity.
+    * * Table-Level: Direct SQL operations (Insert, Update, and Delete) must be disabled if Track Record Changes or Trust Server Cache Completely is enabled, ensuring that cache integrity and change tracking are not bypassed.
+    * * Table-Level: If the base view is marked as generated, the generated base view name must be null. A generated base view name can only be set when the base view is not marked as generated.
+    * * Table-Level: If a generated base view name is specified, a base view must also be defined, and the generated base view name cannot be the same as the base view name to prevent naming conflicts.
     * @public
     * @method
     * @override
@@ -76621,6 +76685,10 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateAllowRecordMergeForSoftDeleteAPI(result);
+        this.ValidateDeleteTypeForDirectSQLDelete(result);
+        this.ValidateDirectSQLAndTrackingConstraints(result);
+        this.ValidateGeneratedBaseViewNameAndBaseViewGenerated(result);
+        this.ValidateGeneratedBaseViewNameDifferentFromBaseView(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -76635,6 +76703,83 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     public ValidateAllowRecordMergeForSoftDeleteAPI(result: ValidationResult) {
     	if (this.AllowDeleteAPI && this.DeleteType === "Soft" && !this.AllowRecordMerge) {
     		result.Errors.push(new ValidationErrorInfo("AllowRecordMerge", "When API deletes are allowed and delete type is 'Soft', record merging must be allowed.", this.AllowRecordMerge, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * If direct SQL deletion is allowed, the delete type must be set to 'Hard' to ensure data integrity.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDeleteTypeForDirectSQLDelete(result: ValidationResult) {
+    	if (this.AllowDirectSQLDelete && this.DeleteType !== "Hard") {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"DeleteType",
+    			"Delete Type must be 'Hard' if Allow Direct SQL Delete is enabled.",
+    			this.DeleteType,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Direct SQL operations (Insert, Update, and Delete) must be disabled if Track Record Changes or Trust Server Cache Completely is enabled, ensuring that cache integrity and change tracking are not bypassed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDirectSQLAndTrackingConstraints(result: ValidationResult) {
+        if ((this.AllowDirectSQLInsert || this.AllowDirectSQLUpdate || this.AllowDirectSQLDelete) && (this.TrackRecordChanges || this.TrustServerCacheCompletely)) {
+            result.Errors.push(new ValidationErrorInfo(
+                "AllowDirectSQLInsert",
+                "Direct SQL operations (Insert, Update, Delete) cannot be enabled when Track Record Changes or Trust Server Cache Completely is enabled.",
+                this.AllowDirectSQLInsert,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
+    * If the base view is marked as generated, the generated base view name must be null. A generated base view name can only be set when the base view is not marked as generated.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateGeneratedBaseViewNameAndBaseViewGenerated(result: ValidationResult) {
+        if (this.GeneratedBaseViewName != null && this.BaseViewGenerated) {
+            result.Errors.push(new ValidationErrorInfo(
+                "GeneratedBaseViewName",
+                "Generated Base View Name must be empty when Base View Generated is enabled.",
+                this.GeneratedBaseViewName,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
+    * If a generated base view name is specified, a base view must also be defined, and the generated base view name cannot be the same as the base view name to prevent naming conflicts.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateGeneratedBaseViewNameDifferentFromBaseView(result: ValidationResult) {
+    	if (this.GeneratedBaseViewName != null && this.GeneratedBaseViewName.trim() !== "") {
+    		if (this.BaseView == null || this.BaseView.trim() === "") {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"GeneratedBaseViewName",
+    				"A Base View must be specified when a Generated Base View Name is provided.",
+    				this.GeneratedBaseViewName,
+    				ValidationErrorType.Failure
+    			));
+    		} else if (this.GeneratedBaseViewName === this.BaseView) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"GeneratedBaseViewName",
+    				"The Generated Base View Name cannot be the same as the Base View name.",
+    				this.GeneratedBaseViewName,
+    				ValidationErrorType.Failure
+    			));
+    		}
     	}
     }
 
@@ -77534,7 +77679,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: ExternalDataSourceID
-    * * Display Name: External Data Source ID
+    * * Display Name: External Data Source
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: External Data Sources (vwExternalDataSources.ID)
     */
@@ -77556,6 +77701,61 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
     set ExternalObjectName(value: string | null) {
         this.Set('ExternalObjectName', value);
+    }
+
+    /**
+    * * Field Name: GeneratedBaseViewName
+    * * Display Name: Generated Base View Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: When set, CodeGen generates the entity's full base view under THIS name instead of BaseView, and the application owns BaseView — which is expected to wrap it (SELECT g.*, <extras> FROM <GeneratedBaseViewName> g). This gives an entity a custom base view WITHOUT inheriting the generated SQL: related-entity display joins, geo columns and recursive root-ID columns keep regenerating underneath, so a foreign key added later still appears. NULL (the default, and every pre-existing row) means the previous all-or-nothing behaviour: BaseViewGenerated alone decides whether CodeGen writes BaseView, and there is no second view. BaseView remains the public surface — entity field discovery, permissions and the generated CRUD procedures all target it. SQL SERVER ONLY: layering relies on sp_refreshview to re-resolve the application-owned outer view's SELECT * against a regenerated inner view. PostgreSQL freezes a view's column list at creation and has no refresh equivalent, so CodeGen rejects this column on PostgreSQL rather than let the outer view go silently stale.
+    */
+    get GeneratedBaseViewName(): string | null {
+        return this.Get('GeneratedBaseViewName');
+    }
+    set GeneratedBaseViewName(value: string | null) {
+        this.Set('GeneratedBaseViewName', value);
+    }
+
+    /**
+    * * Field Name: AllowDirectSQLInsert
+    * * Display Name: Allow Direct SQL Insert
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this entity may be populated by INSERT statements that do not go through BaseEntity.Save() — bulk loads, ETL/integration sync, or rows created as a side effect of a stored procedure. Default 0, meaning every insert is expected to flow through BaseEntity so that record-change tracking, entity actions, validation and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, because a direct insert produces neither an audit row nor a cache-invalidation event.
+    */
+    get AllowDirectSQLInsert(): boolean {
+        return this.Get('AllowDirectSQLInsert');
+    }
+    set AllowDirectSQLInsert(value: boolean) {
+        this.Set('AllowDirectSQLInsert', value);
+    }
+
+    /**
+    * * Field Name: AllowDirectSQLUpdate
+    * * Display Name: Allow Direct SQL Update
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this entity may be modified by UPDATE statements that do not go through BaseEntity.Save() — bulk backfills, integration sync, or maintenance routines. Default 0, meaning every update is expected to flow through BaseEntity so that record-change tracking, entity actions, validation and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, because a direct update produces neither an audit row nor a cache-invalidation event.
+    */
+    get AllowDirectSQLUpdate(): boolean {
+        return this.Get('AllowDirectSQLUpdate');
+    }
+    set AllowDirectSQLUpdate(value: boolean) {
+        this.Set('AllowDirectSQLUpdate', value);
+    }
+
+    /**
+    * * Field Name: AllowDirectSQLDelete
+    * * Display Name: Allow Direct SQL Delete
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this entity may have rows removed by DELETE statements that do not go through BaseEntity.Delete() — purge and retention routines, or integration sync reconciling a remote source. Default 0, meaning every delete is expected to flow through BaseEntity so that record-change tracking, entity actions, cascade handling and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, and additionally requires DeleteType = 'Hard' — a direct DELETE removes the row outright rather than setting DeletedAt, which would defeat soft delete.
+    */
+    get AllowDirectSQLDelete(): boolean {
+        return this.Get('AllowDirectSQLDelete');
+    }
+    set AllowDirectSQLDelete(value: boolean) {
+        this.Set('AllowDirectSQLDelete', value);
     }
 
     /**
@@ -78208,6 +78408,38 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Entity Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Both Scope Entity and Scope Record must be provided together, or both must be left blank. You cannot specify one without the other.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateScopeEntityAndRecordCoexistence(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Both Scope Entity and Scope Record must be provided together, or both must be left blank. You cannot specify one without the other.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeEntityAndRecordCoexistence(result: ValidationResult) {
+        if ((this.ScopeEntityID == null && this.ScopeRecordID != null) || (this.ScopeEntityID != null && this.ScopeRecordID == null)) {
+            result.Errors.push(new ValidationErrorInfo(
+                "ScopeEntityID",
+                "Scope Entity and Scope Record must either both be specified or both be empty.",
+                this.ScopeEntityID,
+                ValidationErrorType.Failure
+            ));
+        }
     }
 
     /**
@@ -117201,6 +117433,7 @@ export class MJUserViewRunDetailEntity extends BaseEntity<MJUserViewRunDetailEnt
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -117213,7 +117446,7 @@ export class MJUserViewRunDetailEntity extends BaseEntity<MJUserViewRunDetailEnt
 
     /**
     * * Field Name: UserViewRunID
-    * * Display Name: User View Run ID
+    * * Display Name: User View Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: User View Runs (vwUserViewRuns.ID)
     */
@@ -117255,6 +117488,15 @@ export class MJUserViewRunDetailEntity extends BaseEntity<MJUserViewRunDetailEnt
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: UserViewRun
+    * * Display Name: User View Run Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get UserViewRun(): string {
+        return this.Get('UserViewRun');
     }
 
     /**

@@ -1450,6 +1450,65 @@ export class EntityInfo extends BaseInfo {
      */
     public BaseViewGenerated: boolean = null
     /**
+     * When set, CodeGen generates the entity's full base view under THIS name instead of
+     * {@link BaseView}, and the application owns `BaseView` — which is expected to wrap it:
+     *
+     * ```sql
+     * CREATE VIEW vwOrderHeaders AS
+     * SELECT g.*, CASE WHEN ... END AS IsOverdue
+     * FROM   vwOrderHeadersGenerated g
+     * ```
+     *
+     * This is how an entity gets a custom base view WITHOUT inheriting the generated SQL. With
+     * `BaseViewGenerated = 0` alone the application takes over the whole view — every related-entity
+     * display join, the geo join, the recursive root-ID apply — and must hand-maintain it forever;
+     * a foreign key added later then silently never appears, because nothing regenerates the join.
+     * Naming an inner view keeps all of that regenerating underneath a thin, reviewable custom layer.
+     *
+     * NULL (the default, and every pre-existing entity) preserves the original behaviour exactly:
+     * `BaseViewGenerated` alone decides whether CodeGen writes `BaseView`, and there is no second view.
+     *
+     * `BaseView` remains the public surface either way — field discovery, permissions and the
+     * generated CRUD procedures all target it, so a column added by the custom layer becomes a
+     * first-class virtual `EntityField`.
+     */
+    public GeneratedBaseViewName: string = null
+
+    /**
+     * The view CodeGen actually WRITES for this entity.
+     *
+     * Normally {@link BaseView}. When {@link GeneratedBaseViewName} is set, the generated SQL goes
+     * there instead and `BaseView` belongs to the application, which layers over it — see
+     * {@link HasLayeredBaseView}.
+     *
+     * Resolved in ONE place because the two names must never drift: several call sites decide where
+     * to write the view, what to call the emitted file, and which object to refresh, and a
+     * disagreement between any two of them produces a view that exists under a name nothing reads.
+     *
+     * Derived FROM {@link HasLayeredBaseView} rather than re-testing `GeneratedBaseViewName`, so the
+     * two getters cannot disagree by construction. Testing the raw column here would diverge on a
+     * name that differs from `BaseView` only by case: `HasLayeredBaseView` would say "not layered"
+     * (it compares case-insensitively, because SQL Server object names are) while this getter
+     * returned the differently-cased string — leaving CodeGen writing to one object while every
+     * layering-gated code path believed there was no second view at all.
+     */
+    get GeneratedViewName(): string {
+        if (this.HasLayeredBaseView) return this.GeneratedBaseViewName.trim();
+        return this.BaseView ? this.BaseView : `vw${this.CodeName}`;
+    }
+
+    /**
+     * True when this entity has a generated inner view with an application-owned `BaseView` on top.
+     *
+     * In that arrangement CodeGen still generates everything — related-entity display fields, geo
+     * columns, recursive root-ID columns — into {@link GeneratedViewName}, so the custom layer stays
+     * thin and does not go stale when the schema gains a foreign key.
+     */
+    get HasLayeredBaseView(): boolean {
+        const layered = this.GeneratedBaseViewName?.trim();
+        return !!layered && layered.toLowerCase() !== (this.BaseView ?? '').toLowerCase();
+    }
+    /**
      * Database schema that contains this entity's table and view
      */
     SchemaName: string = null
@@ -1533,6 +1592,47 @@ export class EntityInfo extends BaseInfo {
      * Global flag controlling whether records can be deleted via API
      */
     AllowDeleteAPI: boolean = false
+    /**
+     * Whether rows may be INSERTed by SQL that does not go through {@link BaseEntity}.Save() —
+     * bulk loads, ETL/integration sync, or rows created as a side effect of a stored procedure.
+     *
+     * `false` (the default, and every entity that has not opted in) means all inserts are expected
+     * to flow through `BaseEntity`, which is the only path where record-change tracking, entity
+     * actions, validation and cache invalidation actually run.
+     *
+     * **This DECLARES intent; it enforces nothing.** No constraint, trigger or grant prevents
+     * anyone from executing SQL. It exists so the code paths and tooling that *choose* to honour
+     * the platform contract — bulk/ETL and integration sync, record-set processing, and generators
+     * or agents authoring SQL — have one authoritative answer instead of tribal knowledge.
+     *
+     * A database CHECK requires {@link TrackRecordChanges} and {@link TrustServerCacheCompletely}
+     * to both be `false` when this is set, because a direct insert produces neither an audit row
+     * nor a cache-invalidation event — leaving either on yields an audit trail that looks complete
+     * but is not, and a server cache that serves stale rows indefinitely.
+     */
+    AllowDirectSQLInsert: boolean = false
+    /**
+     * Whether rows may be UPDATEd by SQL that does not go through {@link BaseEntity}.Save() —
+     * bulk backfills, integration sync, or maintenance routines.
+     *
+     * `false` (the default) means all updates are expected to flow through `BaseEntity`. See
+     * {@link AllowDirectSQLInsert} for the full rationale, the "declares, does not enforce"
+     * caveat, and the `TrackRecordChanges` / `TrustServerCacheCompletely` requirement.
+     */
+    AllowDirectSQLUpdate: boolean = false
+    /**
+     * Whether rows may be DELETEd by SQL that does not go through {@link BaseEntity}.Delete() —
+     * purge and retention routines, or integration sync reconciling against a remote source.
+     *
+     * `false` (the default) means all deletes are expected to flow through `BaseEntity`. See
+     * {@link AllowDirectSQLInsert} for the full rationale and the `TrackRecordChanges` /
+     * {@link TrustServerCacheCompletely} requirement.
+     *
+     * Additionally requires {@link DeleteType} to be `'Hard'`: a direct `DELETE` removes the row
+     * outright rather than setting `DeletedAt`, so sanctioning it on a soft-delete entity would
+     * quietly defeat soft delete. A database CHECK refuses the combination.
+     */
+    AllowDirectSQLDelete: boolean = false
     /**
      * If true, uses a custom resolver for GraphQL operations instead of standard CRUD
      */
