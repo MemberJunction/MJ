@@ -452,6 +452,19 @@
             "lastModified": "2026-03-22T19:49:21.847Z",
             "checksum": "1af1d053d45c27f71bad52179986262c2557741a6d136fb00c8b0758d7d5907c"
           }
+        },
+        {
+          "fields": {
+            "Code": "EntityFieldPermissions",
+            "DatasetID": "@parent:ID",
+            "Sequence": 32,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Field Permissions",
+            "DateFieldToCheck": "__mj_UpdatedAt",
+            "Description": "Role-based field-level (column-level) security records, linked to their fields during metadata post-processing"
+          },
+          "primaryKey": {
+            "ID": "8B7A4C56-68EA-4C65-8F9F-232D2842FC73"
+          }
         }
       ]
     },
