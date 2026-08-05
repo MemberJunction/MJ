@@ -64,13 +64,23 @@ Follows the same algorithm as `EntityInfo.GetUserPermisions()`:
 6. If no records exist for a field → default open (CanRead=true, CanUpdate=true)
 ```
 
+### Enforcement Principles
+
+Two principles govern every enforcement point below. Both were validated against the live save/cache pipeline and both follow the precedent set by the existing field-encryption feature:
+
+1. **Mask at the output boundary — never mutate the loaded entity object.** `GenericDatabaseProvider.GenerateSaveSQL()` builds UPDATEs by iterating **all** `IsSPParameter` fields and reading `field.Value` directly — it does *not* restrict to dirty fields. Any in-memory nulling of a restricted field therefore round-trips as a real `NULL` write on the user's next save: silent data loss that no dirty-field guard can catch. The encryption feature avoids this exact trap by masking only in the outbound GraphQL payload (`MapFieldNamesToCodeNames`) and never touching the entity's in-memory `Value`. Field read-security follows the same pattern.
+
+2. **Validate input predicates, not just output columns.** Output stripping alone leaks data: a user denied `Salary` can still send `ExtraFilter: "Salary > 200000"` or `OrderBy: "Salary DESC"` and reconstruct values from the returned row set and paging order — the column never appears in output, so every output-stripping point reports "secure." Predicate validation is a first-class enforcement point, not an afterthought.
+
+Note also that stripping restricted fields from the SQL SELECT is **not** a viable primary enforcement mechanism: `ProviderBase.PreRunView` deliberately widens `params.Fields` to *all* entity fields whenever a query is cache-eligible (and always for `ResultType: 'entity_object'`), then projects back down. Restricted columns are therefore pulled into server memory for any cacheable entity regardless of the requested field list — enforcement must happen at projection/output time.
+
 ### Field Visibility Scope
 
 Field-level security applies at **three enforcement points**:
 
-1. **RunView / GraphQL queries** — Restricted fields excluded from SELECT column list
-2. **Entity Load (BaseEntity)** — Restricted field values nulled/stripped after load
-3. **Entity Save (BaseEntity)** — Updates to restricted fields rejected before SQL execution
+1. **Predicate validation (RunView input)** — `ExtraFilter`, `OrderBy`, and `UserSearchString` referencing a field the user cannot read → request rejected
+2. **Output projection (RunView / GraphQL / cache reads)** — Restricted fields stripped from results at the output boundary, post-cache and post-widening
+3. **Entity Save** — Updates to restricted fields rejected server-side before SQL generation (the client-side BaseEntity check is UX-level defense-in-depth only)
 
 ---
 
@@ -93,6 +103,11 @@ CREATE TABLE ${flyway:defaultSchema}.EntityFieldPermission (
         CONSTRAINT CK_EntityFieldPermission_Type CHECK (Type IN ('Allow', 'Deny')),
     CanRead BIT NOT NULL DEFAULT 0,
     CanUpdate BIT NOT NULL DEFAULT 0,
+    -- CanCreate is included in the schema now but NOT enforced initially
+    -- (see Open Questions). Adding the column up front is cheaper than a
+    -- follow-up schema change and avoids friction if this schema falls under
+    -- the publish-then-no-breaking-changes policy.
+    CanCreate BIT NOT NULL DEFAULT 0,
     CONSTRAINT PK_EntityFieldPermission PRIMARY KEY (ID),
     CONSTRAINT FK_EntityFieldPermission_EntityField
         FOREIGN KEY (EntityFieldID) REFERENCES ${flyway:defaultSchema}.EntityField(ID),
@@ -168,14 +183,44 @@ public get HasFieldPermissions(): boolean {
 }
 ```
 
+Also add an **entity-level** short-circuit to `EntityInfo`, computed once at metadata-load time:
+
+```typescript
+// On EntityInfo — true if ANY field on this entity has field permission records.
+// Computed once when metadata loads; every enforcement point gates on this first,
+// so entities with no FLS configured pay a single boolean test — no per-field
+// iteration, no aggregation, no allocation.
+private _hasAnyFieldPermissions: boolean = false;
+public get HasAnyFieldPermissions(): boolean {
+    return this._hasAnyFieldPermissions;
+}
+```
+
+The per-field `HasFieldPermissions` guard alone does not deliver "zero cost when unused" — the enforcement loops in Phase 2 would still iterate every entity's fields on every query/load even when zero FLS exists anywhere. `HasAnyFieldPermissions` collapses the non-FLS case (the overwhelming majority of entities in every deployment) to one boolean check.
+
 #### 1.5 Permission Aggregation on EntityFieldInfo
 
 Add a `GetUserFieldPermissions()` method:
 
 ```typescript
 public GetUserFieldPermissions(user: UserInfo): { CanRead: boolean; CanUpdate: boolean } {
+    // Unrestrictable fields: PKs and __mj_ system columns are always readable.
+    // Stripping a PK breaks entity load, CompositeKey, relationship resolution,
+    // and cache fingerprinting — enforced here AND by save-time validation on
+    // EntityFieldPermission records (see below).
+    if (this.IsPrimaryKey || this.Name.startsWith('__mj_')) {
+        return { CanRead: true, CanUpdate: this.hasUpdatePermission(user) };
+    }
+
     // Default: open access when no field permission records exist
     if (!this.HasFieldPermissions) {
+        return { CanRead: true, CanUpdate: true };
+    }
+
+    // Exemption: mirrors UserExemptFromRowLevelSecurity — without this, an
+    // Owner/admin not in a field's allow-role is locked out of both the data
+    // AND the Phase 4 UI that administers these very permissions.
+    if (this.userIsExemptFromFieldSecurity(user)) {
         return { CanRead: true, CanUpdate: true };
     }
 
@@ -207,29 +252,60 @@ public GetUserFieldPermissions(user: UserInfo): { CanRead: boolean; CanUpdate: b
 }
 ```
 
+Two guards baked in above, both cheap now and painful to retrofit once data exists:
+
+- **Unrestrictable fields (PKs / system columns):** the aggregation forces `CanRead = true` for primary keys and `__mj_` columns, *and* a server-side `EntityFieldPermissionEntity` subclass rejects records targeting PK fields at save time (belt and suspenders — the aggregation guard protects against rows inserted outside the entity path).
+- **Admin/owner exemption:** the exact exemption mechanism (Owner role, system user flag, or an entity-level setting analogous to `UserExemptFromRowLevelSecurity`) should mirror the RLS precedent in `EntityInfo.UserExemptFromRowLevelSecurity()`. This must ship **with** the initial rollout, not after — otherwise the first admin to configure a Deny on a field they don't hold an Allow for locks themselves out of the admin UI that edits these records.
+
+#### Per-Request Precompute
+
+`GetUserFieldPermissions()` is the per-field primitive, but enforcement points must **never call it per row**. `MapFieldNamesToCodeNames` runs once per row, so a naive per-field call is `fields × rows` aggregations (40,000 for a 1,000-row × 40-column result), each filtering `user.UserRoles` and allocating a result object. Every Phase 2 enforcement point follows this shape:
+
+```typescript
+// Once per (entity, user) per request — NOT per row:
+if (entityInfo.HasAnyFieldPermissions) {
+    const deniedFields: Set<string> = buildDeniedReadFieldSet(entityInfo, user);
+    // pass the Set into the per-row projection/mapping loop
+}
+```
+
 #### 1.6 Load Field Permissions in Metadata
 
 Update the metadata loading path in `EntityFieldInfo` constructor (or `EntityInfo` constructor where field permissions would be loaded from the GraphQL payload) to populate `_FieldPermissions` from the database.
+
+#### 1.7 What Ships to the Client — an Explicit Decision
+
+`EntityPermissions` already flow to every client inside `AllMetadata` (`PostProcessEntityMetadata` → client `MetadataFromSimpleObject`). If `EntityFieldPermission` records follow the same path by silent inheritance, *which roles can and cannot see which sensitive fields* becomes visible to any authenticated client. Enforcement is server-side, so this is not a data leak — but for a feature whose whole purpose is compensation/donor confidentiality, leaking the **shape** of the restrictions (e.g., "the `Salary` field has Deny rows for these roles") may itself be sensitive.
+
+**Decision: ship all records, for now.** This matches the established MJ convention — `EntityPermissions` (the full role → entity matrix) already ships to every client — and keeps client-side `GetUserFieldPermissions()` identical to the server implementation with no compatibility layer.
+
+This is explicitly an interim position. The convention itself is the problem: broadcasting raw permission matrices (entity-level and field-level), RLS filter SQL, saved-query SQL, and other need-to-know metadata to every authenticated browser is a least-privilege violation across the whole metadata pipeline, not something this feature can fix alone. The long-term fix — tiered metadata with server-computed *effective* permissions shipped in place of raw role matrices — is tracked in [#3485](https://github.com/MemberJunction/MJ/issues/3485). When that lands, `EntityFieldPermission` records move to the effective-flags model along with `EntityPermissions`.
 
 ---
 
 ### Phase 2: Server-Side Enforcement
 
-#### 2.1 RunView Field Filtering
+#### 2.1 RunView Enforcement: Predicate Validation + Output Projection
 
-In `ResolverBase.RunViewGenericInternal()` (~line 723), after resolving the user and before building the SQL query, filter the field list:
+In `ResolverBase.RunViewGenericInternal()` (~line 723), the client's `ExtraFilter`, `OrderBy`, and `UserSearchString` currently pass straight to the provider with no field-level check. Two enforcement steps, both gated on `entityInfo.HasAnyFieldPermissions`:
+
+**(a) Predicate validation — before execution.** Reject any request whose `ExtraFilter` or `OrderBy` references a field the user cannot read, and exclude unreadable fields from the `UserSearchString` search-field list. Without this, output projection is security theater: `ExtraFilter: "Salary > 200000"` reconstructs the values without the column ever appearing in a result.
 
 ```typescript
-// After getting userInfo and entityInfo...
-const allowedFields = entityInfo.Fields.filter(f => {
-    const perms = f.GetUserFieldPermissions(userInfo);
-    return perms.CanRead;
-});
-
-// Use allowedFields when building SELECT column list
+if (entityInfo.HasAnyFieldPermissions) {
+    const denied = buildDeniedReadFieldSet(entityInfo, userInfo); // per-request precompute (§1.5)
+    if (denied.size > 0) {
+        // Reject — do NOT silently strip predicate terms; rewriting a WHERE
+        // clause changes query semantics and hides the failure from the caller.
+        assertPredicatesDoNotReferenceFields(params.ExtraFilter, params.OrderBy, denied, entityInfo);
+        // UserSearchString: remove denied fields from the searched-field list
+    }
+}
 ```
 
-This ensures restricted fields never appear in the SQL SELECT — the data never leaves the database.
+Field-reference detection should build on the existing SQL expression validation infrastructure (`SQLExpressionValidator`) rather than ad-hoc string matching, and should be conservative: an identifier match on a denied field name anywhere in the predicate rejects the request. False positives (e.g., a string literal containing a field name) are acceptable for a security check on restricted entities; false negatives are not.
+
+**(b) Output projection — after execution.** Strip denied fields from result rows at the output boundary. Note that filtering the SQL SELECT list is *not* the mechanism: `ProviderBase.PreRunView` widens `params.Fields` to all entity fields for cache-eligible queries and `entity_object` results, so restricted columns reach server memory regardless. The projection pass (shared with §2.6's cache-read path) is the authoritative filter, computed once per request from the same denied-field `Set`.
 
 #### 2.2 Single-Record Resolver Field Filtering
 
@@ -238,22 +314,29 @@ This ensures restricted fields never appear in the SQL SELECT — the data never
 
 The single-record GraphQL resolver (e.g., `Account(ID: ...)`) is a separate code path from RunView. It builds raw SQL (`SELECT * FROM {baseView} WHERE {pk} {RLS}`) and does **not** go through RunView's field selection logic. Both the regular entity path and the external data source path (`LoadExternalRecordByKey()`, lines 209-223) pass results through `MapFieldNamesToCodeNames()` before returning.
 
-Field-level security must be enforced in `MapFieldNamesToCodeNames()` (~line 70), alongside the existing encryption filtering. Strip any field the user cannot read:
+Field-level security must be enforced in `MapFieldNamesToCodeNames()` (~line 70), alongside the existing encryption filtering. Strip any field the user cannot read.
+
+**Performance shape matters here:** `MapFieldNamesToCodeNames` runs **once per row**, so the denied-field `Set` must be computed once per (entity, user) for the request and passed into the per-row mapper — never call `GetUserFieldPermissions()` inside the row loop (see §1.5 Per-Request Precompute). The whole block is skipped when `entityInfo.HasAnyFieldPermissions` is false:
 
 ```typescript
-// Existing: filter encrypted fields
-// New: also filter field-permission-denied fields
-if (!fieldInfo.GetUserFieldPermissions(currentUser).CanRead) {
-    // Remove field from result row
-    continue;
+// Once, before the row loop:
+const deniedFields = entityInfo.HasAnyFieldPermissions
+    ? buildDeniedReadFieldSet(entityInfo, currentUser)
+    : null;
+
+// Inside the per-row mapper — a Set lookup, no aggregation:
+if (deniedFields?.has(fieldInfo.Name)) {
+    continue; // omit field from result row
 }
 ```
 
-This covers **all** GraphQL return paths — single-record resolvers, RunView results, and any other code path that calls `MapFieldNamesToCodeNames()`. It acts as the defense-in-depth layer: RunView filtering (2.1) prevents restricted data from being queried in the first place, while this catches the single-record path and any other code path that bypasses RunView.
+This covers **all** GraphQL return paths — single-record resolvers, RunView results, and any other code path that calls `MapFieldNamesToCodeNames()`. Together with the RunView projection (§2.1b) it forms the authoritative read boundary, exactly where encryption masking already lives.
 
 #### 2.3 BaseEntity Save Protection
 
-In `BaseEntity.Save()` or the `CheckPermissions()` flow (~line 2753), before generating the UPDATE SQL, verify field-level update permissions:
+In `BaseEntity.Save()` or the `CheckPermissions()` flow (~line 2753), before generating the UPDATE SQL, verify field-level update permissions.
+
+**Enforcement layer, stated explicitly:** `BaseEntity` also runs client-side, where this guard is trivially bypassable. The **authoritative** check is the server-side execution of this same code path — the MJServer mutation resolver re-instantiates the entity and re-runs Save/CheckPermissions on the server. The client-side occurrence of the guard is UX and defense-in-depth (fail fast with a clear message before a network round-trip), and must never be treated as the security boundary.
 
 ```typescript
 // In the Save flow, check each dirty field
@@ -270,57 +353,38 @@ for (const dirtyField of this.DirtyFields) {
 }
 ```
 
-#### 2.4 Entity Load Field Stripping
+#### 2.4 Entity Load — No In-Memory Stripping (Output-Boundary Enforcement Only)
 
-In `BaseEntity.InnerLoad()` (~line 2869), after loading entity data, null out fields the user cannot read:
+An earlier draft of this plan nulled restricted field values inside `BaseEntity.InnerLoad()` (`field.Value = null` + `ResetOldValue()`). **That approach is rejected — it causes verified silent data loss.**
 
-```typescript
-// After data is loaded into the entity object
-for (const field of this.Fields) {
-    if (field.EntityFieldInfo.HasFieldPermissions) {
-        const perms = field.EntityFieldInfo.GetUserFieldPermissions(this.ActiveUser);
-        if (!perms.CanRead) {
-            field.Value = null;
-            field.ResetOldValue(); // sets OldValue = Value (null), so Dirty = false
-        }
-    }
-}
-```
+The failure sequence: `GenericDatabaseProvider.GenerateSaveSQL()` builds UPDATEs by iterating **all** `IsSPParameter` fields and reading `theField.Value` directly — it does not restrict to dirty fields. So: server loads an Account as `entity_object` for a Salary-restricted user → load-time stripping sets `Salary = null` (deliberately non-dirty) → user edits `Notes` and saves → the UPDATE writes `Salary = NULL` → real value destroyed. The §2.3 guard cannot catch it because the field is not dirty.
 
-#### 2.5 Query Execution Field Filtering
+The encryption feature already solved this correctly: it masks only in the outbound GraphQL payload (`MapFieldNamesToCodeNames`) and never mutates the entity's in-memory `Value`, so entities round-trip safely. Field read-security follows the identical pattern:
+
+- **Single-record loads (GraphQL):** enforced at `MapFieldNamesToCodeNames` (§2.2) — the value never reaches the client.
+- **List results:** enforced by the RunView output projection (§2.1b / §2.6).
+- **Server-internal code** (agents, actions, resolvers running with a `contextUser`): entity objects retain real values in server memory, exactly as encrypted fields do today. The trust boundary is the API output, not the server-side object graph.
+
+#### 2.5 Saved Queries: Design-Time Warning + Standing Audit (No Runtime Enforcement)
 
 **File:** `packages/MJCoreEntitiesServer/src/custom/MJQueryEntityServer.server.ts`
 
-`MJQueryEntityServer` extracts entities and fields from SQL via a 5-stage pipeline (parse → resolve → enrich → merge → sync) and stores them in `MJ: Query Fields` and `MJ: Query Entities`. However, query execution currently has **no entity or field permission checks** — saved queries are treated as pre-approved artifacts, and ad-hoc queries are only validated for SQL safety (no mutations), not entity/field access.
+`MJQueryEntityServer` extracts entities and fields from SQL via a 5-stage pipeline (parse → resolve → enrich → merge → sync) and stores them in `MJ: Query Fields` and `MJ: Query Entities`.
 
-Field-level security must be enforced on query results:
+An earlier draft proposed runtime column-stripping (or blocking) on query results. **That approach is rejected**, for two reasons:
 
-```typescript
-// After query execution, before returning results to the caller,
-// strip columns the user cannot read based on field permissions.
-// Use the extracted Query Fields → EntityField mapping to determine
-// which result columns map to restricted entity fields.
-const restrictedFields = queryFields.filter(qf => {
-    const entityField = qf.resolvedEntityField;
-    if (entityField?.HasFieldPermissions) {
-        return !entityField.GetUserFieldPermissions(userInfo).CanRead;
-    }
-    return false;
-});
+1. **It fights what a saved query is** — an admin-authored, curated artifact. The admin who wrote the query and granted run access is the right owner of the conflict, at the moment they create it.
+2. **Output-stripping by column name is defeatable anyway.** Aggregates, `CASE` expressions, and computed columns rename the data out of any field mapping (`SELECT AVG(Salary) AS TeamMetric`). Runtime stripping would report "enforced" while leaking freely — a *false* sense of enforcement is worse than a documented trust boundary.
 
-// Remove restricted columns from each result row
-for (const row of results) {
-    for (const rf of restrictedFields) {
-        delete row[rf.outputColumnName];
-    }
-}
-```
+Instead, MJ already resolves each query's SQL to `MJ: Query Fields → EntityField`, which makes the conflict a cheap static metadata join. Two tiers:
 
-**Open question:** Should we block query execution entirely if it references restricted fields, or silently filter the columns from results? Options:
+**Tier 1 — save-time warning (role granularity, non-blocking).** In the query save validation path: for each role granting run access (via `UserCanRun`), evaluate field permissions as if a user held only that role; warn the saving admin if any referenced secured field resolves to `CanRead = false`. Pure metadata, no data access. Intentionally conservative — a flagged user might hold another role that grants the field — which is the correct bias for a warning.
 
-- **Option A: Filter columns from results (recommended).** The query runs but restricted columns are stripped from the output. This is consistent with how RunView handles it and avoids breaking queries that reference both restricted and unrestricted fields. The user sees everything they're allowed to see.
-- **Option B: Block execution.** Return an error listing which fields the user cannot access. More secure but potentially disruptive — a query with 20 columns would fail entirely if 1 column is restricted, even though the user could see the other 19.
-- **Option C: Hybrid.** Block for ad-hoc queries (user is actively writing SQL referencing restricted fields), filter for saved queries (pre-approved artifacts that may have been created by an admin).
+**Tier 2 — standing audit (user granularity, on-demand/scheduled).** Enumerate real users, compute effective field permissions across all their roles, and report every `(User, Query, Field)` combination where a user can run a query referencing a field they cannot read. This catches **drift** — the conflict usually appears *after* the query exists (an admin adds FLS to an already-referenced field, or grants run access later), which a one-time save check cannot see. Fits Phase 4 / Sharing Center, and can itself be implemented as a saved query.
+
+**Trust boundary (documented, deliberate):** saved-query results are **not** runtime FLS-filtered. Run access to a query is the grant; the warning + audit keep admins honest about what that grant exposes.
+
+**Ad-hoc SQL** is out of scope for the warning — there is no run-grant or artifact to analyze. Instead, gate the ad-hoc capability itself with an instance/entity-level "may run ad-hoc SQL" permission: if a user can run arbitrary SQL, field-level security is already moot for them, so the control belongs on the capability, not the columns.
 
 #### 2.6 Local Cache Manager Field-Level Security
 
@@ -346,11 +410,15 @@ The field permission filter must be applied **after cache retrieval and before r
 // In PostRunView, after ProjectRowsToFields for the caller's requested Fields,
 // apply a second projection pass for field-level security.
 // This runs on BOTH cache hits and cache misses.
-const userAllowedFields = entityInfo.Fields
-    .filter(f => !f.HasFieldPermissions || f.GetUserFieldPermissions(userInfo).CanRead)
-    .map(f => f.Name);
+// Gated on the entity-level flag so non-FLS entities skip the pass entirely,
+// and the allowed-field list is computed ONCE per request — not per row (§1.5).
+if (entityInfo.HasAnyFieldPermissions) {
+    const userAllowedFields = entityInfo.Fields
+        .filter(f => !f.HasFieldPermissions || f.GetUserFieldPermissions(userInfo).CanRead)
+        .map(f => f.Name);
 
-results = ProjectRowsToFields(results, userAllowedFields);
+    results = ProjectRowsToFields(results, userAllowedFields);
+}
 ```
 
 **Alternative approach — include field permissions in cache fingerprint:**
@@ -365,6 +433,8 @@ fingerprint += `|flp:${fieldPermHash}`;
 ```
 
 **Recommendation:** Post-read projection (first approach) is simpler, consistent with how `Fields` projection already works, and doesn't fragment the cache. The cache stores the universal superset; security filtering happens at read time.
+
+A further concrete advantage over the fingerprint approach: because projection reads *live* metadata at read time, **permission changes take effect immediately after the normal metadata refresh, with no RunView result-cache invalidation** — the cached superset stays valid; only the projection changes. With fingerprinting, a permission change would strand stale entries keyed to the old permission hash (or require a targeted invalidation sweep). This is the same immediacy property that makes the RLS fingerprint approach *necessary* for rows (row membership is baked into the cached data) but *unnecessary* for columns (column visibility is a pure read-time projection).
 
 ---
 
@@ -422,9 +492,14 @@ Register `EntityFieldPermission` as a new permission domain in the `PermissionDo
 
 Field permissions are loaded with entity metadata at startup and cached in memory on `EntityFieldInfo._FieldPermissions`. No per-request database queries. This matches the existing pattern for `EntityPermissionInfo`.
 
-### Query Optimization
+### Zero Cost When Unused
 
-RunView field filtering happens before SQL generation, so restricted fields are never included in the SELECT clause. This is actually a performance improvement (less data transferred from DB).
+The dominant case — deployments and entities with no field permissions configured — must pay effectively nothing:
+
+- **Entity-level gate:** every enforcement point checks `EntityInfo.HasAnyFieldPermissions` first (computed once at metadata load). Non-FLS entities collapse to a single boolean test — no field iteration, no allocation.
+- **Per-request precompute:** when an entity *does* have FLS, the denied-field `Set` is computed once per (entity, user) per request and shared across the row loop — never `fields × rows` aggregations.
+
+(Note: there is no "restricted fields excluded from SELECT" perf win — `PreRunView` widens cacheable queries to all columns regardless; enforcement is output projection, which is O(rows × denied fields) only on FLS entities.)
 
 ### Cache Invalidation
 
@@ -445,15 +520,20 @@ When `EntityFieldPermission` records are modified, the metadata cache must be re
 
 Add to the existing security test suite (`packages/TestingFramework/integration-test-suite/docs/security-suite.md`):
 
-- RunView excludes restricted fields from results
-- Entity Load nulls restricted field values
-- Entity Save rejects updates to restricted fields
-- API/GraphQL responses don't contain restricted fields
+- RunView excludes restricted fields from results (output projection)
+- RunView rejects `ExtraFilter` / `OrderBy` referencing a restricted field; `UserSearchString` never searches restricted fields
+- Single-record GraphQL responses don't contain restricted fields (`MapFieldNamesToCodeNames` path)
+- Entity Save rejects updates to restricted fields (server-side authoritative path)
+- **Round-trip safety:** a restricted-read user loads an entity, edits an unrelated field, saves — the restricted column's stored value is unchanged (regression test for the rejected load-time-nulling design)
 - Encryption + field permissions interact correctly (encrypted + restricted = never returned)
-- Saved query results strip restricted columns
-- Ad-hoc query results strip restricted columns
+- PK / `__mj_` system columns are always readable regardless of permission records; saving an `EntityFieldPermission` row targeting a PK field is rejected
+- Admin/owner exemption: exempt user retains full field access on an FLS-configured entity, including the ability to administer `EntityFieldPermission` records
+- Saved-query save path emits a warning when a run-granted role lacks read on a referenced secured field; standing audit reports `(User, Query, Field)` conflicts, including drift (FLS added after the query existed)
+- Ad-hoc SQL capability is gated by its own permission
 - Cache hit by restricted user does not leak columns cached by unrestricted user
 - Cache miss + cache hit return identical field sets for same user
+- Permission change becomes effective after metadata refresh without RunView result-cache invalidation
+- Client-side `GetUserFieldPermissions()` produces results identical to the server for the same user/roles (records ship to the client per §1.7)
 
 ### Skip Integration Tests
 
@@ -463,23 +543,33 @@ Add to the existing security test suite (`packages/TestingFramework/integration-
 
 ---
 
+## Resolved Decisions
+
+Formerly open questions, settled during PR review:
+
+1. **CanCreate flag** — The `CanCreate` column ships in the initial migration (a follow-up schema change is more expensive, and the publish-then-no-breaking-changes policy makes additive-now the cheap path), but **enforcement starts with CanRead/CanUpdate only**. CanCreate enforcement is a later, additive change.
+
+2. **Field masking vs. null** — **Omit the field from the response entirely, at the output boundary, in all paths** (RunView projection + `MapFieldNamesToCodeNames`). The earlier "return null for entity loads" answer is rejected: in-memory nulling round-trips as a real `NULL` write via `GenerateSaveSQL` (see §2.4). Never mutate the loaded entity.
+
+3. **Saved queries: filter vs. block** — Neither. **Design-time save warning (role-level) + standing audit (user-level), no runtime enforcement** (see §2.5). Runtime column-stripping is defeatable via aggregates/derived columns and gives false assurance. Ad-hoc SQL is gated by its own capability permission.
+
+4. **Unrestrictable fields** — **Up-front guard, not deferred**: reject `EntityFieldPermission` rows targeting PK fields at save, and force `CanRead = true` for PKs and `__mj_` system columns in the aggregation (see §1.5). Cheap now, painful to retrofit once permission data exists.
+
+5. **Cache fingerprint vs. post-read projection** — **Post-read projection**: simpler, doesn't fragment the cache, consistent with `ProjectRowsToFields()`, and — because projection reads live metadata — permission changes take effect on metadata refresh with no result-cache invalidation (see §2.6).
+
+6. **Client metadata shipping** — **Ship all `EntityFieldPermission` records for now**, consistent with the existing MJ convention for `EntityPermissions` (see §1.7). The restriction *shape* (which roles are denied which sensitive fields) leaking to all authenticated clients is acknowledged as a real problem — but it's a problem with the metadata-shipping convention itself, tracked and to be fixed holistically in [#3485](https://github.com/MemberJunction/MJ/issues/3485).
+
 ## Open Questions
 
-1. **CanCreate flag?** — Should field permissions include CanCreate (control whether a field can be set on INSERT)? Entity-level has CanCreate but it's less clear at field level since most fields have defaults. **Recommendation: Start with CanRead/CanUpdate only, add CanCreate later if needed.**
+1. **Interaction with Required fields?** — If a field is DB-required (NOT NULL) but the user can't update it, how do we handle entity creation? **Recommendation: CanUpdate restriction only applies to UPDATE operations. On INSERT, the field uses its default value or the value provided by the system (not the user).**
 
-2. **Field masking vs. null?** — When a user can't read a field, should we return null, omit the field entirely, or return a masked value (e.g., "****")? **Recommendation: Omit the field from the response entirely (don't include in SELECT) for RunView. Return null for entity loads.**
+2. **Virtual entity fields?** — Virtual entities are read-only already. Should field-level security apply to their read visibility? **Recommendation: Yes, for consistency.**
 
-3. **Interaction with Required fields?** — If a field is DB-required (NOT NULL) but the user can't update it, how do we handle entity creation? **Recommendation: CanUpdate restriction only applies to UPDATE operations. On INSERT, the field uses its default value or the value provided by the system (not the user).**
+3. **Audit trail?** — Should we log when field-level security blocks access? **Recommendation: Yes, at debug level, using the existing MJ logging infrastructure.**
 
-4. **Virtual entity fields?** — Virtual entities are read-only already. Should field-level security apply to their read visibility? **Recommendation: Yes, for consistency.**
+4. **Admin exemption mechanism?** — The need for an exemption is settled (§1.5 — without it, admins can lock themselves out of the feature's own admin UI). The *mechanism* is open: Owner role, a system-user flag, or an entity-level setting mirroring `UserExemptFromRowLevelSecurity`. **Recommendation: mirror the RLS exemption precedent; must ship with the initial rollout.**
 
-5. **Audit trail?** — Should we log when field-level security blocks access? **Recommendation: Yes, at debug level, using the existing MJ logging infrastructure.**
-
-6. **Query field filtering vs. blocking?** — When a saved or ad-hoc query references a restricted field, should we silently strip the column from results (Option A), block execution entirely (Option B), or use a hybrid approach where ad-hoc queries are blocked but saved queries are filtered (Option C)? **Recommendation: Option A (filter) for consistency with RunView behavior, but Option C is worth discussing.**
-
-7. **Unrestritable fields?** — Should certain fields be exempt from field-level security restrictions (e.g., primary keys, `__mj_` system columns, foreign keys needed for joins)? Restricting a PK would break entity loading, relationships, and caching. **Recommendation: Defer — worth discussing but not a blocker for initial implementation. Could enforce via validation on EntityFieldPermission save (reject records targeting PK fields) or handle at the aggregation level (always return CanRead=true for PKs).**
-
-8. **Cache fingerprint vs. post-read projection?** — Should field-level restrictions be part of the cache key (separate entries per permission profile, like RLS) or should we project/filter on cache read (single cached superset, filter at read time)? **Recommendation: Post-read projection — simpler, doesn't fragment cache, consistent with existing `ProjectRowsToFields()` pattern.**
+5. **Predicate rejection error shape?** — When `ExtraFilter`/`OrderBy` references a denied field (§2.1a), what does the client receive — a generic permission error, or one naming the offending field? Naming the field aids debugging but confirms the field is restricted. **Recommendation: name the field — its existence is already visible in entity metadata; only its values are secured.**
 
 ---
 
@@ -487,8 +577,8 @@ Add to the existing security test suite (`packages/TestingFramework/integration-
 
 | Phase | Packages Affected | Manual Work | CodeGen Handles |
 |-------|------------------|-------------|-----------------|
-| Phase 1: Schema & Metadata | MJCore, migrations | Migration DDL, `EntityFieldPermissionInfo` class, wiring into `EntityFieldInfo` + metadata loading | Entity/EntityField registration, base view, SPs, TS entity class, Zod, GraphQL, Angular form, `__mj` columns, FK indexes |
-| Phase 2: Server Enforcement | MJCore, MJServer, MJCoreEntitiesServer | RunView field filtering, MapFieldNamesToCodeNames, BaseEntity Save/Load guards, Query execution field filtering, Local Cache Manager post-read projection | — |
+| Phase 1: Schema & Metadata | MJCore, migrations | Migration DDL, `EntityFieldPermissionInfo` class, wiring into `EntityFieldInfo` + `EntityInfo.HasAnyFieldPermissions`, metadata loading (records ship to clients per §1.7 / #3485), PK-guard save validation | Entity/EntityField registration, base view, SPs, TS entity class, Zod, GraphQL, Angular form, `__mj` columns, FK indexes |
+| Phase 2: Server Enforcement | MJCore, MJServer, MJCoreEntitiesServer | Predicate validation (ExtraFilter/OrderBy/search), output projection (RunView + MapFieldNamesToCodeNames + cache reads), BaseEntity Save guard (server-authoritative), saved-query save-time warning + standing audit, ad-hoc SQL capability gate | — |
 | Phase 3: Skip Integration | Skip-Brain agents/core | Schema metadata filtering for LLM prompts | — |
 | Phase 4: Admin UI | Angular Explorer | Field permission management UI, PermissionDomain registration | Base CRUD form (via CodeGen) |
 
