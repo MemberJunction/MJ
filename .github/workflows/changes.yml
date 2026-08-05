@@ -70,13 +70,15 @@ jobs:
             echo "No migration files in this PR - skipping validation"
           fi
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up node
         if: steps.check_migrations.outputs.has_migrations == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
+          cache: 'pnpm'
 
       - name: Get current version
         if: steps.check_migrations.outputs.has_migrations == 'true'

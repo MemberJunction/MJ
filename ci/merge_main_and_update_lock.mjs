@@ -2,6 +2,8 @@ import { simpleGit } from 'simple-git';
 import { execSync } from 'child_process';
 import fs from 'fs';
 
+const LOCKFILE = 'pnpm-lock.yaml';
+
 const git = simpleGit();
 
 // First, do the merge
@@ -9,42 +11,43 @@ console.log('Fetching and merging main branch...');
 await git.fetch('origin', 'main');
 await git.merge(['-X', 'theirs', 'origin/main']);
 
-// Update package-lock.json with new versions
-console.log('\nUpdating package-lock.json with new package versions...');
+// Update the lockfile with the newly published versions.
+console.log(`\nUpdating ${LOCKFILE} with new package versions...`);
 try {
-  // Run npm install with package-lock-only flag
-  execSync('npm install --package-lock-only', { stdio: 'inherit' });
-  
-  // Check if package-lock.json was modified
+  // --lockfile-only resolves and rewrites the lockfile without materializing
+  // node_modules — the pnpm equivalent of `npm install --package-lock-only`.
+  execSync('pnpm install --lockfile-only', { stdio: 'inherit' });
+
   const status = await git.status();
-  const lockFileModified = status.modified.includes('package-lock.json') || 
-                          status.not_added.includes('package-lock.json');
-  
+  const lockFileModified = status.modified.includes(LOCKFILE) ||
+                          status.not_added.includes(LOCKFILE);
+
   if (lockFileModified) {
-    console.log('package-lock.json has been updated with new versions');
-    
+    console.log(`${LOCKFILE} has been updated with new versions`);
+
     // Get the version from package.json for commit message
     const packageJson = JSON.parse(fs.readFileSync('packages/MJCore/package.json', 'utf8'));
     const version = packageJson.version;
-    
+
     // Stage and commit the lock file
-    await git.add('package-lock.json');
-    await git.commit(`chore: Update package-lock.json with v${version} dependencies
+    await git.add(LOCKFILE);
+    await git.commit(`chore: Update ${LOCKFILE} with v${version} dependencies
 
 Updates @memberjunction/* package versions in lock file after publishing v${version}`);
-    
-    console.log('Committed package-lock.json updates');
+
+    console.log(`Committed ${LOCKFILE} updates`);
   } else {
-    console.log('No changes to package-lock.json needed');
+    console.log(`No changes to ${LOCKFILE} needed`);
   }
 } catch (error) {
-  console.error('Error updating package-lock.json:', error);
-  // Don't fail the entire process if lock file update fails
-  console.log('Continuing despite package-lock.json update error...');
+  console.error(`Error updating ${LOCKFILE}:`, error);
+  // Deliberate: a lockfile refresh failure must not fail an already-published
+  // release. The error is logged above; the merge and push still proceed.
+  console.log(`Continuing despite ${LOCKFILE} update error...`);
 }
 
 // Push everything to next
 console.log('\nPushing to origin/next...');
 await git.push('origin', 'HEAD:next');
 
-console.log('Successfully merged main and updated package-lock.json in next branch');
+console.log(`Successfully merged main and updated ${LOCKFILE} in next branch`);

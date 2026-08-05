@@ -30,7 +30,10 @@
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3",
-    "vitest": "^3.1.1"
+    "vitest": "^3.1.1",
+    "@types/mssql": "^9.1.9",
+    "@types/pg": "^8.16.0",
+    "@types/fs-extra": "^11.0.4"
   },
   "dependencies": {
     "@memberjunction/actions": "6.0.0",

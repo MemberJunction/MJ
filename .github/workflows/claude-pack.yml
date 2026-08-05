@@ -45,10 +45,10 @@ jobs:
       # The build script has no npm dependencies of its own — it only uses
       # node:fs / node:crypto / node:path. We still need the lockfile install
       # so `npm run claude-pack:build` finds the script entry; skipping it
-      # would still work but `npm ci --ignore-scripts` is essentially free
+      # would still work but `pnpm install --frozen-lockfile --ignore-scripts` is essentially free
       # given the cache and gives consistent behavior.
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Rebuild claude-pack
         run: npm run claude-pack:build
@@ -99,7 +99,7 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       # Build only what `mj bundle` needs: MJInstaller (assembler + RepoFetcher)
       # and MJCLI (the command entry point). Turbo picks up their transitive

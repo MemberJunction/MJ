@@ -62,7 +62,7 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       # Turbo builds the driver package plus its full transitive dep graph
       # (Engine, MJCore, core-entities, credentials, …) so the test can resolve
@@ -111,7 +111,7 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build MongoDB external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-mongodb
@@ -153,7 +153,7 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build SQL Server external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-sqlserver
@@ -224,7 +224,7 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build MySQL external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-mysql
@@ -271,7 +271,7 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build Oracle external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-oracle
@@ -310,7 +310,7 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build SQL Server external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-sqlserver
