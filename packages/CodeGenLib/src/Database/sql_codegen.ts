@@ -775,11 +775,16 @@ export class SQLCodeGenBase {
         // base view references. These MUST exist before phase 1 (view) runs;
         // otherwise PG raises `function does not exist` and phase 2 (CRUD)
         // gets gated off.
-        const tvfSQL = entity.BaseViewGenerated && !entity.VirtualEntity
-            ? this.generateRecursiveFKTVFs(entity)
-            : '';
+        // A LAYERED entity still generates. `BaseViewGenerated = 0` means "do not write BaseView",
+        // and when GeneratedBaseViewName is set that is exactly the intent — the application owns
+        // BaseView while CodeGen keeps writing the inner view underneath it. Gating on
+        // BaseViewGenerated alone would skip the inner view and leave the custom layer selecting
+        // from an object that does not exist.
+        const generatesView = (entity.BaseViewGenerated || entity.HasLayeredBaseView) && !entity.VirtualEntity;
 
-        const viewPieces = entity.BaseViewGenerated && !entity.VirtualEntity
+        const tvfSQL = generatesView ? this.generateRecursiveFKTVFs(entity) : '';
+
+        const viewPieces = generatesView
             ? await this.generateBaseViewPieces(pool, entity)
             : { viewSQL: '', viewPermSQL: '' };
 
@@ -861,7 +866,7 @@ export class SQLCodeGenBase {
         }
 
         try {
-            const viewName = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
+            const viewName = entity.GeneratedViewName;
 
             // PostgreSQL: pg_get_viewdef() returns a heavily reformatted definition (re-qualified
             // columns, normalized whitespace/casing, re-ordered expressions) that never byte-matches
@@ -1079,10 +1084,30 @@ export class SQLCodeGenBase {
 
     /**
      * Builds a combined SQL string of sp_refreshview statements for the given entities.
+     *
+     * For a LAYERED entity the outer refresh is guarded on the application-owned `BaseView`
+     * existing, matching {@link generateCustomBaseViewRefreshAndPermissions}. On the first pass
+     * after layering is enabled the outer view cannot exist yet — it selects from the inner view
+     * that same pass creates — so an unguarded refresh here fails the documented setup procedure.
+     *
+     * The inner view is refreshed first, before the outer. That ordering is defensive rather than
+     * load-bearing: every entity reaching this method is in the modified/new list (see
+     * {@link getModifiedCustomBaseViewEntities}), and `logSQLForNewOrModifiedEntity` forces a
+     * modified entity's base view DDL into the same migration regardless of whether its text
+     * changed — so the inner view is already dropped and recreated in an earlier step, which
+     * resets its cached column list more thoroughly than a refresh would. The ordering is kept
+     * anyway so this path cannot become wrong if that coupling is ever loosened.
      */
     protected buildCustomBaseViewRefreshSQL(entities: EntityInfo[]): string {
         return entities
-            .map(e => this._dbProvider.generateViewRefreshSQL(e.SchemaName, e.BaseView))
+            .map(e => {
+                const outer = this._dbProvider.generateViewRefreshSQL(e.SchemaName, e.BaseView);
+                if (!e.HasLayeredBaseView) {
+                    return outer; // fully custom — one view, and it is a standing prerequisite
+                }
+                const inner = this._dbProvider.generateViewRefreshSQL(e.SchemaName, e.GeneratedViewName);
+                return inner + '\n' + this.guardOnApplicationOwnedView(e, outer);
+            })
             .join('\n');
     }
 
@@ -1136,10 +1161,14 @@ export class SQLCodeGenBase {
             }
 
             // BASE VIEW AND RELATED TVFs
-            // Only generate if BaseViewGenerated is true (respects custom views where it's false)
-            // forceRegeneration.baseViews only forces regeneration of views where BaseViewGenerated=true
+            // Generate when the entity has a view for CodeGen to write: either BaseViewGenerated
+            // (the ordinary case, writing BaseView) or a LAYERED entity, where BaseViewGenerated is
+            // false because the application owns BaseView while CodeGen still writes the inner view
+            // underneath it. Gating on BaseViewGenerated alone would leave the custom layer selecting
+            // from an object that was never created.
+            // forceRegeneration.baseViews only forces regeneration of views CodeGen owns.
             if (!options.onlyPermissions &&
-                options.entity.BaseViewGenerated &&
+                (options.entity.BaseViewGenerated || options.entity.HasLayeredBaseView) &&
                 !options.entity.VirtualEntity) {
 
                 // ROOT ID FUNCTIONS (TVFs) + BASE VIEW
@@ -1163,7 +1192,7 @@ export class SQLCodeGenBase {
                 }
 
                 // Generate the base view (which may reference the TVFs created above)
-                const s = this.generateSingleEntitySQLFileHeader(options.entity,options.entity.BaseView) + await this.generateBaseView(options.pool, options.entity)
+                const s = this.generateSingleEntitySQLFileHeader(options.entity, options.entity.GeneratedViewName) + await this.generateBaseView(options.pool, options.entity)
 
                 // Compare generated view SQL against what's currently in the database.
                 // If the SELECT body differs, force-log just this base view via the forceLog flag
@@ -1180,7 +1209,7 @@ export class SQLCodeGenBase {
                     }
                 }
 
-                const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.BaseView, false, true));
+                const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.GeneratedViewName, false, true));
                 if (options.writeFiles) {
                     this.writeFileIfChanged(filePath, s);
                     this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
@@ -1189,7 +1218,17 @@ export class SQLCodeGenBase {
                 sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
             }
             // always generate permissions for the base view
-            const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Permissions for ' + options.entity.BaseView) + this.generateViewPermissions(options.entity)
+            const permHeader = this.generateSingleEntitySQLFileHeader(options.entity, 'Permissions for ' + options.entity.BaseView);
+            const rawPermBody = this.generateViewPermissions(options.entity);
+            // Guarded for the same reason as in generateBaseViewPieces: these GRANTs target the
+            // application-owned BaseView, which does not exist during a layered entity's bootstrap
+            // pass. This copy is what gets written to the permissions FILE and logged into the
+            // migration, so leaving it unguarded would fail on other environments even though the
+            // executed copy (generateCustomBaseViewRefreshAndPermissions, below) is guarded.
+            const permBody = options.entity.HasLayeredBaseView && rawPermBody.trim().length > 0
+                ? '\n' + this.guardOnApplicationOwnedView(options.entity, rawPermBody.trim())
+                : rawPermBody;
+            const s = permHeader + permBody;
             if (s.length > 0)
                 permissionsSQL += s + '\n' + this._dbProvider.BatchSeparator + '\n';
             if (options.writeFiles) {
@@ -1202,14 +1241,7 @@ export class SQLCodeGenBase {
             // now, append the permissions to the return string IF we did NOT generate the base view - because if we generated the base view, that
             // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
             if (!options.entity.BaseViewGenerated) {
-                // For custom base views (BaseViewGenerated=false), emit sp_refreshview before permissions
-                // so that SQL Server picks up schema changes (new columns from migrations) before we
-                // grant permissions. Developers no longer need to remember to add this manually.
-                if (this._dbProvider.NeedsViewRefresh && !options.entity.VirtualEntity) {
-                    const refreshSQL = this._dbProvider.generateViewRefreshSQL(options.entity.SchemaName, options.entity.BaseView);
-                    sRet += refreshSQL + '\n' + this._dbProvider.BatchSeparator + '\n';
-                }
-                sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
+                sRet += this.generateCustomBaseViewRefreshAndPermissions(options.entity, permHeader, permBody);
             }
 
             // CREATE SP
@@ -1671,7 +1703,22 @@ export class SQLCodeGenBase {
                 relatedFieldsString += (relatedFieldsString ? ',\n' : '') + geoFieldsSelect;
             }
         }
-        const permissions: string = this.generateViewPermissions(entity);
+        // GRANTs target the PUBLIC view (BaseView), not the one this method generates. For a
+        // LAYERED entity those are different objects, and the outer one may not exist yet: the
+        // documented setup is "name the inner view -> run CodeGen -> then create BaseView", so the
+        // bootstrap pass necessarily grants against a view that is not there. Unguarded, that pass
+        // fails on the very step meant to enable the feature. Guarded here rather than at the call
+        // sites because generateBaseView concatenates this onto the view DDL and the phased
+        // executor consumes it separately — both need it.
+        const rawPermissions: string = this.generateViewPermissions(entity);
+        // The leading newline must stay OUTSIDE the guard. `generateViewPermissions` returns
+        // "\nGRANT ..." and the view DDL it is concatenated onto ends in `GO`; wrapping the string
+        // verbatim pulls that newline inside the sp_executesql literal and emits `GOIF OBJECT_ID`,
+        // fusing the batch separator to the next statement. Non-layered entities keep the raw
+        // string byte-for-byte so this cannot churn every other entity's generated SQL.
+        const permissions: string = entity.HasLayeredBaseView && rawPermissions.trim().length > 0
+            ? '\n' + this.guardOnApplicationOwnedView(entity, rawPermissions.trim())
+            : rawPermissions;
 
         // Detect recursive foreign keys and generate TVF joins and root field selects
         const recursiveFKs = this.detectRecursiveForeignKeys(entity);
@@ -1699,6 +1746,53 @@ export class SQLCodeGenBase {
 
     protected generateViewPermissions(entity: EntityInfo): string {
         return this._dbProvider.generateViewPermissions(entity);
+    }
+
+    /**
+     * Emits the refresh + permission statements for an entity whose `BaseView` CodeGen does NOT
+     * write — fully custom, or the application-owned outer half of a layered entity.
+     *
+     * The refresh runs before the grants so SQL Server picks up schema changes (new columns from
+     * migrations) before permissions are applied; developers no longer add it by hand.
+     *
+     * Two things are specific to LAYERED entities:
+     *
+     * - **Inner before outer.** The custom view selects `g.*` from the generated one, and a view
+     *   caches its column list. Refreshing the outer against a stale inner re-caches the OLD
+     *   columns, so a newly added column stays missing — indistinguishable from never having been
+     *   added at all, which is the exact failure layering exists to eliminate.
+     * - **The outer view may not exist yet.** On the first pass after layering is enabled it cannot
+     *   exist: it selects from the inner view that this very pass creates. Unguarded, the refresh
+     *   and the `GRANT` both fail — and the step they fail on is the documented setup procedure, so
+     *   there would be no way to adopt the feature at all. Guarding makes the bootstrap pass skip
+     *   them and leaves every later pass identical to the unguarded form.
+     */
+    protected generateCustomBaseViewRefreshAndPermissions(entity: EntityInfo, permissionsHeader: string, permissionsBody: string): string {
+        const separator: string = '\n' + this._dbProvider.BatchSeparator + '\n';
+        let sOutput: string = '';
+
+        if (this._dbProvider.NeedsViewRefresh && !entity.VirtualEntity) {
+            if (entity.HasLayeredBaseView) {
+                sOutput += this._dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.GeneratedViewName) + separator;
+            }
+            const refreshSQL: string = this._dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.BaseView);
+            sOutput += this.guardOnApplicationOwnedView(entity, refreshSQL) + separator;
+        }
+
+        return sOutput + permissionsHeader + this.guardOnApplicationOwnedView(entity, permissionsBody) + separator;
+    }
+
+    /**
+     * Wraps SQL in an existence check on the application-owned `BaseView`, but only for a layered
+     * entity — that is the one arrangement where the view legitimately may not exist yet. For a
+     * fully custom base view the object is a standing prerequisite, so a missing one stays a loud
+     * failure rather than becoming a silent skip.
+     */
+    private guardOnApplicationOwnedView(entity: EntityInfo, sql: string): string {
+        if (!entity.HasLayeredBaseView || sql.trim().length === 0) {
+            return sql;
+        }
+        return this._dbProvider.generateIfViewExistsSQL(entity.SchemaName, entity.BaseView, sql);
     }
 
     protected generateBaseViewJoins(entity: EntityInfo, entityFields: EntityFieldInfo[]): string {

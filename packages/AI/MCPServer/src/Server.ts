@@ -24,6 +24,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
 import { z } from "zod";
 import { initConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
+import { loadAgentManagementTools } from './tools/agentManagementTools.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
@@ -844,6 +845,13 @@ async function registerAllTools(
     await loadEntityTools(addToolWithFilter);
     await loadActionTools(addToolWithFilter, systemUser, sessionContext);
     await loadAgentTools(addToolWithFilter, systemUser, sessionContext);
+    await loadAgentManagementTools(
+        addToolWithFilter,
+        systemUser,
+        sessionContext,
+        (agent) => addAgentExecuteTool(addToolWithFilter, agent, sessionContext),
+        _config.mcpServerSettings?.agentManagementTools
+    );
     loadAgentRunDiagnosticTools(addToolWithFilter, sessionContext);
     loadQueryTools(addToolWithFilter, sessionContext);
     await loadPromptTools(addToolWithFilter, systemUser, sessionContext);

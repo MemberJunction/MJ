@@ -19,7 +19,7 @@ import {
 } from '@memberjunction/ai-mcp-client';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
+import { publishStatusUpdate } from '../generic/PushStatusResolver.js';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { configInfo } from '../config.js';
 
@@ -583,7 +583,7 @@ export class MCPResolver extends ResolverBase {
             await manager.initialize(user, { publicUrl });
 
             // Publish initial progress
-            this.publishProgress(pubSub, sessionId, ConnectionID, 'connecting', 'Connecting to MCP server...');
+            this.publishProgress(pubSub, sessionId, user.ID, ConnectionID, 'connecting', 'Connecting to MCP server...');
 
             // Connect if not already connected
             const isConnected = manager.isConnected(ConnectionID);
@@ -595,18 +595,18 @@ export class MCPResolver extends ResolverBase {
                     // Check for OAuth authorization required
                     if (connectError instanceof OAuthAuthorizationRequiredError) {
                         const authError = connectError as OAuthAuthorizationRequiredError;
-                        this.publishProgress(pubSub, sessionId, ConnectionID, 'error',
+                        this.publishProgress(pubSub, sessionId, user.ID, ConnectionID, 'error',
                             `OAuth authorization required. Please authorize at: ${authError.authorizationUrl}`);
                         return this.createOAuthRequiredResult(authError.authorizationUrl, authError.stateParameter);
                     }
                     if (connectError instanceof OAuthReauthorizationRequiredError) {
                         const reAuthError = connectError as OAuthReauthorizationRequiredError;
-                        this.publishProgress(pubSub, sessionId, ConnectionID, 'error',
+                        this.publishProgress(pubSub, sessionId, user.ID, ConnectionID, 'error',
                             `OAuth re-authorization required: ${reAuthError.reason}`);
                         return this.createOAuthReauthorizationResult(reAuthError.reason, reAuthError.authorizationUrl, reAuthError.stateParameter);
                     }
                     const connectErrorMsg = connectError instanceof Error ? connectError.message : String(connectError);
-                    this.publishProgress(pubSub, sessionId, ConnectionID, 'error', `Connection failed: ${connectErrorMsg}`);
+                    this.publishProgress(pubSub, sessionId, user.ID, ConnectionID, 'error', `Connection failed: ${connectErrorMsg}`);
                     return this.createErrorResult(`Failed to connect to MCP server: ${connectErrorMsg}`);
                 }
             }
@@ -617,7 +617,7 @@ export class MCPResolver extends ResolverBase {
             const connectionName = connectionInfo?.connectionName || 'Unknown Connection';
 
             // Publish listing progress
-            this.publishProgress(pubSub, sessionId, ConnectionID, 'listing', 'Discovering tools from MCP server...');
+            this.publishProgress(pubSub, sessionId, user.ID, ConnectionID, 'listing', 'Discovering tools from MCP server...');
 
             // Perform the sync with event listening for granular progress
             LogStatus(`MCPResolver: Starting tool sync for connection ${ConnectionID}`);
@@ -626,7 +626,7 @@ export class MCPResolver extends ResolverBase {
             const eventHandler = (event: { type: string; data?: Record<string, unknown> }) => {
                 if (event.type === 'toolsSynced') {
                     const data = event.data as { added: number; updated: number; deprecated: number; total: number } | undefined;
-                    this.publishProgress(pubSub, sessionId, ConnectionID, 'complete', 'Tool sync complete', {
+                    this.publishProgress(pubSub, sessionId, user.ID, ConnectionID, 'complete', 'Tool sync complete', {
                         added: data?.added || 0,
                         updated: data?.updated || 0,
                         deprecated: data?.deprecated || 0,
@@ -637,7 +637,7 @@ export class MCPResolver extends ResolverBase {
             manager.addEventListener('toolsSynced', eventHandler);
 
             // Publish syncing progress
-            this.publishProgress(pubSub, sessionId, ConnectionID, 'syncing', 'Synchronizing tools to database...');
+            this.publishProgress(pubSub, sessionId, user.ID, ConnectionID, 'syncing', 'Synchronizing tools to database...');
 
             // Perform the sync
             const syncResult: MCPSyncToolsResult = await manager.syncTools(ConnectionID, { contextUser: user });
@@ -646,12 +646,12 @@ export class MCPResolver extends ResolverBase {
             manager.removeEventListener('toolsSynced', eventHandler);
 
             if (!syncResult.success) {
-                this.publishProgress(pubSub, sessionId, ConnectionID, 'error', `Sync failed: ${syncResult.error}`);
+                this.publishProgress(pubSub, sessionId, user.ID, ConnectionID, 'error', `Sync failed: ${syncResult.error}`);
                 return this.createErrorResult(syncResult.error || 'Tool sync failed');
             }
 
             // Publish final completion
-            this.publishProgress(pubSub, sessionId, ConnectionID, 'complete',
+            this.publishProgress(pubSub, sessionId, user.ID, ConnectionID, 'complete',
                 `Sync complete: ${syncResult.added} added, ${syncResult.updated} updated, ${syncResult.deprecated} deprecated`,
                 {
                     added: syncResult.added,
@@ -675,7 +675,7 @@ export class MCPResolver extends ResolverBase {
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             LogError(`MCPResolver: Error syncing tools for ${ConnectionID}: ${errorMsg}`);
-            this.publishProgress(pubSub, sessionId, ConnectionID, 'error', `Error: ${errorMsg}`);
+            this.publishProgress(pubSub, sessionId, user.ID, ConnectionID, 'error', `Error: ${errorMsg}`);
             return this.createErrorResult(errorMsg);
         }
     }
@@ -1345,6 +1345,7 @@ export class MCPResolver extends ResolverBase {
     private publishProgress(
         pubSub: PubSubEngine,
         sessionId: string,
+        ownerUserId: string,
         connectionId: string,
         phase: SyncProgressMessage['phase'],
         message: string,
@@ -1360,10 +1361,7 @@ export class MCPResolver extends ResolverBase {
             result
         };
 
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-            message: JSON.stringify(progressMessage),
-            sessionId
-        });
+        publishStatusUpdate(pubSub, { sessionId, ownerUserId, message: JSON.stringify(progressMessage) });
     }
 
     /**

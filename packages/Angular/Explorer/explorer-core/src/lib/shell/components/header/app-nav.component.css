@@ -15,6 +15,13 @@
 .nav-list .nav-item {
   flex-shrink: 0;
 }
+/* Trailing slot for projected shell items (the Records pill) — rides at the
+   end of the row; recomputeFit reserves its width so it never gets clipped. */
+.nav-list .nav-trailing {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
 /* Tight mode: even one item + More can't fit, so the lone visible pill
    yields with an ellipsis and the More button stays whole. */
 .nav-list.tight .nav-item:not(.nav-more-btn) {

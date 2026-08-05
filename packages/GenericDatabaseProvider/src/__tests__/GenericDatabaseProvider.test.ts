@@ -29,6 +29,7 @@ import {
     EntityInfo,
     EntityFieldInfo,
     EntityFieldTSType,
+    EntityPermissionType,
     UserInfo,
     BaseEntity,
     CompositeKey,
@@ -40,6 +41,7 @@ import {
 } from '@memberjunction/core';
 import type { QueryExecutionSpec } from '@memberjunction/core';
 import type { ExecuteSQLBatchOptions } from '../GenericDatabaseProvider';
+import type { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '../saveTypes.js';
 
 /**
  * Concrete test subclass that provides minimal implementations of all abstract methods.
@@ -152,6 +154,24 @@ class TestGenericProvider extends GenericDatabaseProvider {
         this.executeSQLCalls = [];
         this.executeSQLResults = [];
         this.executeSQLCallIndex = 0;
+    }
+
+    // These four are the dialect-specific save-call composition hooks
+    // `GenerateSaveSQL` normally delegates to — but this test double's own
+    // `GenerateSaveSQL` override above short-circuits with `{ fullSQL: '' }`
+    // and never reaches them. Never exercised; stubbed only to satisfy
+    // TypeScript's abstract-completeness check.
+    protected CoerceSaveFieldValue(): SaveCoercedValue {
+        throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
+    }
+    protected RenderSaveCallBinding(): SaveCallBinding {
+        throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
+    }
+    protected WrapSaveCallForResult(): SaveSQLFragment {
+        throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
+    }
+    protected WrapSaveCallWithRecordChange(): SaveSQLFragment {
+        throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
     }
 }
 
@@ -434,7 +454,7 @@ describe('GenericDatabaseProvider', () => {
                 DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
-                GetUserRowLevelSecurityWhereClause: () => '',
+                GetEffectiveRowFilterWhereClause: () => '',
             } as unknown as EntityInfo;
 
             const entity = {
@@ -471,7 +491,7 @@ describe('GenericDatabaseProvider', () => {
                 DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
-                GetUserRowLevelSecurityWhereClause: () => '',
+                GetEffectiveRowFilterWhereClause: () => '',
             } as unknown as EntityInfo;
 
             const entity = {
@@ -504,7 +524,7 @@ describe('GenericDatabaseProvider', () => {
                 DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
-                GetUserRowLevelSecurityWhereClause: () => '',
+                GetEffectiveRowFilterWhereClause: () => '',
             } as unknown as EntityInfo;
 
             const entity = {
@@ -542,7 +562,7 @@ describe('GenericDatabaseProvider', () => {
                 DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => opts.exempt,
-                GetUserRowLevelSecurityWhereClause: () => opts.exempt ? '' : opts.rlsClause,
+                GetEffectiveRowFilterWhereClause: () => opts.exempt ? '' : opts.rlsClause,
             } as unknown as EntityInfo;
         }
 
@@ -627,10 +647,10 @@ describe('GenericDatabaseProvider', () => {
     });
 
     describe('CheckRecordRLS — exemption via centralized clause', () => {
-        it('returns true when GetUserRowLevelSecurityWhereClause returns empty (exempt user)', async () => {
+        it('returns true when GetEffectiveRowFilterWhereClause returns empty (exempt user)', async () => {
             const entityInfo = {
                 UserExemptFromRowLevelSecurity: () => true,
-                GetUserRowLevelSecurityWhereClause: () => '',
+                GetEffectiveRowFilterWhereClause: () => '',
             } as unknown as EntityInfo;
             const entity = { EntityInfo: entityInfo } as unknown as BaseEntity;
 
@@ -642,6 +662,421 @@ describe('GenericDatabaseProvider', () => {
                 CheckRecordRLS: (e: BaseEntity, u: UserInfo, t: string) => Promise<boolean>;
             }).CheckRecordRLS(entity, mockUser, 'Read');
             expect(result).toBe(true);
+        });
+
+        it('escapes embedded single quotes in the primary key value instead of splicing them into the WHERE clause', async () => {
+            const entityInfo = {
+                SchemaName: 'dbo',
+                BaseView: 'vwTestEntities',
+                UserExemptFromRowLevelSecurity: () => false,
+                GetEffectiveRowFilterWhereClause: () => "OwnerID = '42'",
+                FieldByName: () => ({ NeedsQuotes: true }) as unknown as ReturnType<EntityInfo['FieldByName']>,
+            } as unknown as EntityInfo;
+            const entity = {
+                EntityInfo: entityInfo,
+                PrimaryKeys: [{ Name: 'ID', Value: "abc' OR '1'='1", NeedsQuotes: true }],
+            } as unknown as BaseEntity;
+
+            provider.executeSQLResults = [[{ cnt: 0 }]];
+
+            await (provider as unknown as {
+                CheckRecordRLS: (e: BaseEntity, u: UserInfo, t: string) => Promise<boolean>;
+            }).CheckRecordRLS(entity, mockUser, 'Read');
+
+            const sql = provider.executeSQLCalls[0].sql;
+            // The apostrophe must be doubled (SQL-escaped), not left to close the string early —
+            // structure check: the OR clause must NOT be a bare, un-quoted SQL predicate.
+            expect(sql).toContain("'abc'' OR ''1''=''1'");
+            expect(sql).not.toContain("='abc' OR '1'='1'");
+        });
+
+        it('does not alter query structure for PK values containing --, quotes, or OR 1=1', async () => {
+            const entityInfo = {
+                SchemaName: 'dbo',
+                BaseView: 'vwTestEntities',
+                UserExemptFromRowLevelSecurity: () => false,
+                GetEffectiveRowFilterWhereClause: () => "OwnerID = '42'",
+                FieldByName: () => ({ NeedsQuotes: true }) as unknown as ReturnType<EntityInfo['FieldByName']>,
+            } as unknown as EntityInfo;
+            const entity = {
+                EntityInfo: entityInfo,
+                PrimaryKeys: [{ Name: 'ID', Value: "x'; --", NeedsQuotes: true }],
+            } as unknown as BaseEntity;
+
+            provider.executeSQLResults = [[{ cnt: 1 }]];
+
+            await (provider as unknown as {
+                CheckRecordRLS: (e: BaseEntity, u: UserInfo, t: string) => Promise<boolean>;
+            }).CheckRecordRLS(entity, mockUser, 'Read');
+
+            const sql = provider.executeSQLCalls[0].sql;
+            // Single WHERE ... AND (...) structure must be preserved — no comment-truncated clause.
+            expect(sql).toMatch(/WHERE "ID"='x''; --' AND \(OwnerID = '42'\)$/);
+        });
+    });
+
+    describe('Row-Level Security — escaping, post-image checks, and projections', () => {
+        /**
+         * Typed access to the protected RLS members under test. Mirrors the narrowing-cast
+         * pattern used elsewhere in this file for protected methods.
+         */
+        interface RLSAccess {
+            CheckRecordRLS: (e: BaseEntity, u: UserInfo, t: EntityPermissionType) => Promise<boolean>;
+            CheckUpdateRLSPostImage: (e: BaseEntity, u: UserInfo) => Promise<boolean>;
+            TryExtractSimpleFilterColumns: (clause: string) => string[] | null;
+            BuildRLSSyntheticRowProjections: (e: BaseEntity, ei: EntityInfo, includeNulls: boolean) => string;
+        }
+        const RLS = (): RLSAccess => provider as unknown as RLSAccess;
+
+        /** Spec for one mocked entity field used by the RLS fixtures. */
+        interface MockRLSFieldSpec {
+            Name: string;
+            Dirty?: boolean;
+            IsVirtual?: boolean;
+            NeedsQuotes?: boolean;
+            SQLFullType?: string;
+            Value?: unknown;
+        }
+
+        /**
+         * Builds a fake BaseEntity + EntityInfo pair sufficient for the RLS check paths:
+         * EntityInfo.Fields / FieldByName / GetEffectiveRowFilterWhereClause, and the
+         * entity's PrimaryKeys / Fields (Dirty) / Get(fieldName).
+         */
+        function MakeRLSEntity(opts: {
+            rlsClause: string;
+            fields: MockRLSFieldSpec[];
+            primaryKeys?: Array<{ Name: string; Value: unknown }>;
+        }): { entity: BaseEntity; entityInfo: EntityInfo } {
+            const infoFields = opts.fields.map(f => ({
+                Name: f.Name,
+                IsVirtual: f.IsVirtual ?? false,
+                NeedsQuotes: f.NeedsQuotes ?? true,
+                SQLFullType: f.SQLFullType,
+            }));
+            const entityInfo = {
+                Name: 'TestEntity',
+                SchemaName: 'dbo',
+                BaseView: 'vwTestEntities',
+                Fields: infoFields,
+                FieldByName: (name: string) => infoFields.find(f => f.Name.trim().toLowerCase() === name.trim().toLowerCase()),
+                GetEffectiveRowFilterWhereClause: () => opts.rlsClause,
+            } as unknown as EntityInfo;
+
+            const valueMap = new Map<string, unknown>(opts.fields.map(f => [f.Name, f.Value]));
+            const entity = {
+                EntityInfo: entityInfo,
+                PrimaryKeys: opts.primaryKeys ?? [],
+                Fields: opts.fields.map(f => ({ Name: f.Name, Dirty: f.Dirty ?? false })),
+                Get: (name: string) => valueMap.get(name),
+            } as unknown as BaseEntity;
+
+            return { entity, entityInfo };
+        }
+
+        describe('CheckRecordRLS — PK value escaping', () => {
+            it('escapes embedded single quotes in client-supplied PK values (no injection into WHERE)', async () => {
+                const { entity } = MakeRLSEntity({
+                    rlsClause: "OwnerID = 'me'",
+                    fields: [{ Name: 'ID', NeedsQuotes: true }],
+                    primaryKeys: [{ Name: 'ID', Value: "x' OR '1'='1" }],
+                });
+                provider.executeSQLResults = [[{ cnt: 1 }]];
+
+                const result = await RLS().CheckRecordRLS(entity, mockUser, EntityPermissionType.Read);
+
+                expect(result).toBe(true);
+                expect(provider.executeSQLCalls).toHaveLength(1);
+                const sql = provider.executeSQLCalls[0].sql;
+                // The escaped form must be present...
+                expect(sql).toContain("\"ID\"='x'' OR ''1''=''1'");
+                // ...and the raw, unescaped injection sequence must never appear anywhere.
+                expect(sql).not.toContain("' OR '1'='1");
+            });
+        });
+
+        describe('CheckUpdateRLSPostImage — skip optimization and fail-closed behavior', () => {
+            it('returns true WITHOUT executing SQL when the simple filter references only non-dirty columns', async () => {
+                const { entity } = MakeRLSEntity({
+                    rlsClause: "OrganizationID = 'abc'",
+                    fields: [
+                        { Name: 'OrganizationID', Dirty: false, Value: 'abc' },
+                        { Name: 'Name', Dirty: true, Value: 'New Name' },
+                    ],
+                });
+
+                const result = await RLS().CheckUpdateRLSPostImage(entity, mockUser);
+
+                expect(result).toBe(true);
+                expect(provider.executeSQLCalls).toHaveLength(0); // skip optimization — no query
+            });
+
+            it('executes SQL when a filter-referenced column IS dirty; pass=1 → true', async () => {
+                const { entity } = MakeRLSEntity({
+                    rlsClause: "OrganizationID = 'abc'",
+                    fields: [{ Name: 'OrganizationID', Dirty: true, Value: 'abc', SQLFullType: 'nvarchar(50)' }],
+                });
+                provider.executeSQLResults = [[{ pass: 1 }]];
+
+                const result = await RLS().CheckUpdateRLSPostImage(entity, mockUser);
+
+                expect(result).toBe(true);
+                expect(provider.executeSQLCalls).toHaveLength(1);
+                expect(provider.executeSQLCalls[0].sql).toContain("OrganizationID = 'abc'");
+            });
+
+            it('executes SQL when a filter-referenced column IS dirty; pass=0 → false', async () => {
+                const { entity } = MakeRLSEntity({
+                    rlsClause: "OrganizationID = 'abc'",
+                    fields: [{ Name: 'OrganizationID', Dirty: true, Value: 'other-org', SQLFullType: 'nvarchar(50)' }],
+                });
+                provider.executeSQLResults = [[{ pass: 0 }]];
+
+                const result = await RLS().CheckUpdateRLSPostImage(entity, mockUser);
+
+                expect(result).toBe(false);
+                expect(provider.executeSQLCalls).toHaveLength(1);
+            });
+
+            const nonDecomposableFilters: Array<{ label: string; clause: string }> = [
+                { label: 'function call', clause: "UPPER(OrganizationID) = 'ABC'" },
+                { label: 'OR disjunction', clause: "A = 'x' OR B = 'y'" },
+                { label: 'EXISTS subquery', clause: "EXISTS (SELECT 1 FROM dbo.OrgMembers WHERE UserID = 'u1')" },
+            ];
+
+            for (const { label, clause } of nonDecomposableFilters) {
+                it(`fail-closed: still executes SQL for non-decomposable filter (${label}) even when NOTHING is dirty`, async () => {
+                    const { entity } = MakeRLSEntity({
+                        rlsClause: clause,
+                        fields: [
+                            { Name: 'OrganizationID', Dirty: false, Value: 'abc', SQLFullType: 'nvarchar(50)' },
+                            { Name: 'A', Dirty: false, Value: 'x', SQLFullType: 'nvarchar(50)' },
+                            { Name: 'B', Dirty: false, Value: 'y', SQLFullType: 'nvarchar(50)' },
+                        ],
+                    });
+                    provider.executeSQLResults = [[{ pass: 1 }]];
+
+                    const result = await RLS().CheckUpdateRLSPostImage(entity, mockUser);
+
+                    expect(result).toBe(true);
+                    expect(provider.executeSQLCalls).toHaveLength(1); // no skip — the check must run
+                });
+            }
+        });
+
+        describe('TryExtractSimpleFilterColumns', () => {
+            it('is not confused by string literals containing " AND "', () => {
+                const cols = RLS().TryExtractSimpleFilterColumns("Name = 'Tom AND Jerry' AND OrgID = 'a'");
+                expect(cols).toEqual(['name', 'orgid']);
+            });
+
+            it('extracts bracketed, double-quoted, and bare column names from a simple conjunction', () => {
+                const cols = RLS().TryExtractSimpleFilterColumns('[Col1] = \'a\' AND "Col2" <> \'b\' AND Col3 IS NOT NULL');
+                expect(cols).toEqual(['col1', 'col2', 'col3']);
+            });
+
+            it('returns null for OR', () => {
+                expect(RLS().TryExtractSimpleFilterColumns("A = 'x' OR B = 'y'")).toBeNull();
+            });
+
+            it('returns null for parenthesized groups', () => {
+                expect(RLS().TryExtractSimpleFilterColumns("(A = 'x' AND B = 'y') AND C = 'z'")).toBeNull();
+            });
+
+            it('returns null for function calls', () => {
+                expect(RLS().TryExtractSimpleFilterColumns("UPPER(OrgID) = 'ABC'")).toBeNull();
+            });
+
+            it('returns null for subqueries', () => {
+                expect(RLS().TryExtractSimpleFilterColumns('OrgID IN (SELECT ID FROM Orgs)')).toBeNull();
+            });
+
+            it('returns null for CASE expressions', () => {
+                expect(RLS().TryExtractSimpleFilterColumns("CASE WHEN A = 'x' THEN 1 ELSE 0 END = 1")).toBeNull();
+            });
+
+            it('returns null for arithmetic', () => {
+                expect(RLS().TryExtractSimpleFilterColumns('Amount + 1 = 2')).toBeNull();
+            });
+
+            it('returns null for an empty string', () => {
+                expect(RLS().TryExtractSimpleFilterColumns('')).toBeNull();
+            });
+        });
+
+        describe('BuildRLSSyntheticRowProjections', () => {
+            it('includeNulls=true emits a typed CAST(NULL AS <SQLFullType>) for null fields', () => {
+                const { entity, entityInfo } = MakeRLSEntity({
+                    rlsClause: '',
+                    fields: [{ Name: 'Notes', NeedsQuotes: true, SQLFullType: 'nvarchar(100)', Value: null }],
+                });
+
+                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+
+                expect(projections).toBe('CAST(NULL AS nvarchar(100)) AS "Notes"');
+            });
+
+            it('includeNulls=true throws for a null field with no resolvable SQLFullType', () => {
+                const { entity, entityInfo } = MakeRLSEntity({
+                    rlsClause: '',
+                    fields: [{ Name: 'Notes', NeedsQuotes: true, SQLFullType: '', Value: null }],
+                });
+
+                expect(() => RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true))
+                    .toThrow(/no resolvable SQL type/i);
+            });
+
+            it('includeNulls=false skips null fields instead of projecting them', () => {
+                const { entity, entityInfo } = MakeRLSEntity({
+                    rlsClause: '',
+                    fields: [
+                        { Name: 'Notes', NeedsQuotes: true, SQLFullType: 'nvarchar(100)', Value: null },
+                        { Name: 'Name', NeedsQuotes: true, Value: 'Keep' },
+                    ],
+                });
+
+                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, false);
+
+                expect(projections).toBe('\'Keep\' AS "Name"');
+            });
+
+            it('throws for a non-numeric string in a numeric (NeedsQuotes=false) field instead of interpolating it', () => {
+                const { entity, entityInfo } = MakeRLSEntity({
+                    rlsClause: '',
+                    fields: [{ Name: 'Amount', NeedsQuotes: false, Value: 'abc' }],
+                });
+
+                expect(() => RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true))
+                    .toThrow(/does not parse as a number/i);
+            });
+
+            it('emits numeric 42 as-is, boolean true as 1, and escapes embedded quotes in strings', () => {
+                const { entity, entityInfo } = MakeRLSEntity({
+                    rlsClause: '',
+                    fields: [
+                        { Name: 'Amount', NeedsQuotes: false, Value: 42 },
+                        { Name: 'IsActive', NeedsQuotes: false, Value: true },
+                        { Name: 'LastName', NeedsQuotes: true, Value: "O'Brien" },
+                    ],
+                });
+
+                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+
+                expect(projections).toContain('42 AS "Amount"');
+                expect(projections).toContain('1 AS "IsActive"');
+                expect(projections).toContain('\'O\'\'Brien\' AS "LastName"');
+            });
+
+            it('skips virtual fields', () => {
+                const { entity, entityInfo } = MakeRLSEntity({
+                    rlsClause: '',
+                    fields: [
+                        { Name: 'Organization', IsVirtual: true, NeedsQuotes: true, Value: 'Denorm Name' },
+                        { Name: 'OrganizationID', NeedsQuotes: true, Value: 'abc' },
+                    ],
+                });
+
+                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+
+                expect(projections).toBe('\'abc\' AS "OrganizationID"');
+            });
+        });
+
+        describe('end-to-end via Save() — a before-save hook mutation is seen by the post-hook RLS gate', () => {
+            /**
+             * `OnBeforeSaveExecute` is the real hook seam (entity actions, AI actions) that sits
+             * between the pre-hook and post-hook RLS checks in `DatabaseProviderBase.Save()`.
+             * This subclass mutates a filter-referenced field there, exactly like a real entity
+             * action would — proving (through the REAL, non-mocked `Save()` orchestration and the
+             * REAL `CheckCreateRLS`/`BuildRLSSyntheticRowProjections`) that the second, post-hook
+             * call observes the post-hook value, not the value that was current when the first
+             * call ran. This is the create-path analog of the update-path post-image check, and
+             * it is the scenario the additive second `CheckCreateRLS` call exists to close.
+             */
+            class MutatingHookProvider extends TestGenericProvider {
+                protected override async OnBeforeSaveExecute(entity: BaseEntity): Promise<void> {
+                    entity.Set('OrganizationID', 'org-B-not-mine');
+                }
+            }
+            class NonMutatingHookProvider extends TestGenericProvider {
+                protected override async OnBeforeSaveExecute(): Promise<void> {
+                    // no-op — simulates a hook that only touches unrelated fields
+                }
+            }
+
+            function makeCreateEntity() {
+                const entityInfoFields = [
+                    { Name: 'ID', IsVirtual: false, NeedsQuotes: true, SQLFullType: 'uniqueidentifier' },
+                    { Name: 'OrganizationID', IsVirtual: false, NeedsQuotes: true, SQLFullType: 'uniqueidentifier' },
+                ] as unknown as EntityFieldInfo[];
+
+                const entityInfo = {
+                    Name: 'TestEntity',
+                    SchemaName: 'dbo',
+                    BaseView: 'vwTestEntities',
+                    AllowCreateAPI: true,
+                    TrackRecordChanges: false,
+                    Fields: entityInfoFields,
+                    FieldByName: (name: string) => entityInfoFields.find(f => f.Name === name),
+                    GetEffectiveRowFilterWhereClause: () => "OrganizationID = 'org-A'",
+                } as unknown as EntityInfo;
+
+                // Stateful — Get()/Set() share this bag, so the hook's mutation is actually
+                // observable on a later Get(), the same as a real EntityField would behave.
+                const state: Record<string, unknown> = { ID: 'rec-1', OrganizationID: 'org-A' };
+
+                const entity = {
+                    EntityInfo: entityInfo,
+                    IsSaved: false,
+                    Dirty: true,
+                    Fields: entityInfoFields.map(f => ({ Name: f.Name, Dirty: false })),
+                    ResultHistory: [],
+                    RegisterResultHistoryEntry: vi.fn(),
+                    PrimaryKeys: [{ Name: 'ID', Value: 'rec-1' }],
+                    TransactionGroup: null,
+                    RegisterTransactionPreprocessing: vi.fn(),
+                    RaiseReadyForTransaction: vi.fn(),
+                    GetAll: () => ({ ...state }),
+                    Get: (name: string) => state[name] ?? null,
+                    Set: (name: string, value: unknown) => { state[name] = value; },
+                } as unknown as BaseEntity;
+
+                return entity;
+            }
+
+            it('rejects the save when the hook moves a new record out of the Create RLS filter', async () => {
+                const hookProvider = new MutatingHookProvider();
+                const entity = makeCreateEntity();
+                // Call 1: pre-hook CheckCreateRLS — the pre-hook synthetic row (org-A) passes.
+                // Call 2: post-hook CheckCreateRLS — the (now-mutated) synthetic row is rejected.
+                hookProvider.executeSQLResults = [[{ pass: 1 }], [{ pass: 0 }]];
+
+                await expect(
+                    hookProvider.Save(entity, mockUser, new EntitySaveOptions())
+                ).rejects.toThrow('a before-save hook produced field values that no longer pass row-level security');
+
+                expect(hookProvider.executeSQLCalls.length).toBe(2);
+                // The post-hook synthetic row reflects the HOOK'S value, not the original — this
+                // is the assertion that matters: the mutation was actually seen by the SECOND call.
+                expect(hookProvider.executeSQLCalls[1].sql).toContain("'org-B-not-mine' AS \"OrganizationID\"");
+                expect(hookProvider.executeSQLCalls[1].sql).not.toContain("'org-A' AS \"OrganizationID\"");
+            });
+
+            it('allows the save when the hook leaves a new record inside the Create RLS filter', async () => {
+                const hookProvider = new NonMutatingHookProvider();
+                const entity = makeCreateEntity();
+                hookProvider.executeSQLResults = [[{ pass: 1 }], [{ pass: 1 }]];
+
+                // No RLS rejection — Save() proceeds past both RLS gates to the actual (stubbed,
+                // empty-SQL) insert attempt and fails there instead — a 3rd SQL call, proving
+                // both RLS gates passed rather than short-circuiting.
+                await expect(
+                    hookProvider.Save(entity, mockUser, new EntitySaveOptions())
+                ).rejects.toThrow();
+
+                expect(hookProvider.executeSQLCalls.length).toBe(3);
+                expect(hookProvider.executeSQLCalls[1].sql).toContain("'org-A' AS \"OrganizationID\"");
+            });
         });
     });
 

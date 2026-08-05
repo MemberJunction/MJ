@@ -595,19 +595,41 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
-   * Get all applications enabled for the current user, ordered by sequence then application name
+   * Get all applications enabled for the current user, ordered by sequence, then the
+   * application's DefaultSequence, then application name
    */
   public get UserApplications(): MJUserApplicationEntity[] {
     if (!this._loadedForUserId) return [];
     return this.GetConfigData<MJUserApplicationEntity>('_UserApplications')
       .filter((ua) => UUIDsEqual(ua.UserID, this._loadedForUserId))
-      .sort((a, b) => {
-        // Sort by Sequence first, then by Application name
-        if (a.Sequence !== b.Sequence) {
-          return a.Sequence - b.Sequence;
-        }
-        return (a.Application || '').localeCompare(b.Application || '');
-      });
+      .sort((a, b) => this.compareUserApplications(a, b));
+  }
+
+  /**
+   * Canonical ordering for a user's UserApplication rows: user-owned `Sequence` first,
+   * ties broken by the application's `DefaultSequence` (Home ships at -1, so it wins a
+   * tie it didn't ask for), then application name as the final stable tie-break.
+   * Duplicate Sequences are reachable without user action (new rows default to 0 and
+   * `nextUserApplicationSequence` returns 0 for a user with no active rows), so the
+   * tie-break must be deliberate rather than incidental.
+   */
+  private compareUserApplications(a: MJUserApplicationEntity, b: MJUserApplicationEntity): number {
+    if (a.Sequence !== b.Sequence) {
+      return a.Sequence - b.Sequence;
+    }
+    const defaultSequenceDiff = this.applicationDefaultSequence(a.ApplicationID) - this.applicationDefaultSequence(b.ApplicationID);
+    if (defaultSequenceDiff !== 0) {
+      return defaultSequenceDiff;
+    }
+    return (a.Application || '').localeCompare(b.Application || '');
+  }
+
+  /**
+   * The application's DefaultSequence from metadata, or the schema default (100) when
+   * the application is not found.
+   */
+  private applicationDefaultSequence(applicationId: string): number {
+    return this.GetApplicationInfo(applicationId)?.DefaultSequence ?? 100;
   }
 
   /**
@@ -667,12 +689,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   public GetUserApplicationsForUser(userId: string): MJUserApplicationEntity[] {
     return (this._UserApplications || [])
       .filter((ua) => UUIDsEqual(ua.UserID, userId))
-      .sort((a, b) => {
-        if (a.Sequence !== b.Sequence) {
-          return a.Sequence - b.Sequence;
-        }
-        return (a.Application || '').localeCompare(b.Application || '');
-      });
+      .sort((a, b) => this.compareUserApplications(a, b));
   }
 
   // ========================================================================

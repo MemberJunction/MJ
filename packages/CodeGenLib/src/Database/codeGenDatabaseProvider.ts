@@ -1055,6 +1055,22 @@ export abstract class CodeGenDatabaseProvider {
     abstract generateViewRefreshSQL(schema: string, viewName: string): string;
 
     /**
+     * Wraps `innerSQL` so it runs only when the named view already exists.
+     *
+     * Used for objects CodeGen refreshes or grants on but does NOT create — specifically the
+     * application-owned outer view of a layered entity. On the first CodeGen pass after layering is
+     * enabled, that view legitimately does not exist yet: it selects from the inner view that this
+     * very pass is creating, so it cannot have been created earlier. Emitting an unguarded
+     * `sp_refreshview`/`GRANT` against it fails the run and blocks the only path to setting layering
+     * up. Every later pass finds the view present and behaves identically to the unguarded form.
+     *
+     * @param schema Schema of the view whose existence gates `innerSQL`
+     * @param viewName View whose existence gates `innerSQL`
+     * @param innerSQL Statements to run when the view exists. Must be a complete statement batch.
+     */
+    abstract generateIfViewExistsSQL(schema: string, viewName: string, innerSQL: string): string;
+
+    /**
      * Generates a simple test query to validate a view is functional.
      * SQL Server: `SELECT TOP 1 * FROM [schema].[viewName]`
      * PostgreSQL: `SELECT * FROM "schema"."viewName" LIMIT 1`
