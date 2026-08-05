@@ -62,12 +62,15 @@ vi.mock('../install/history-recorder.js', () => ({
     SetAppStep: vi.fn(),
     FindInstalledApp: vi.fn(),
     FindDependentApps: vi.fn(),
+    CheckSchemaSharedByOtherApps: vi.fn(),
     ListInstalledApps: vi.fn(),
     UpdateAppRecord: vi.fn(),
 }));
 vi.mock('@memberjunction/core', () => ({
     Metadata: class { async CreateTransactionGroup() { return { Submit: async () => true }; } },
-    RunView: class {},
+    // Enough shape for RemoveAppEntityMetadata, which runs for real (it lives in the orchestrator,
+    // not a mockable module) whenever the removed app owns a schema no one else shares.
+    RunView: class { async RunView() { return { Success: true, Results: [] }; } },
     BaseEntity: class {},
     DatabaseProviderBase: class {},
 }));
@@ -78,12 +81,14 @@ import { DownloadMigrations } from '../github/github-client.js';
 import { RunPackageInstall } from '../install/package-manager.js';
 import {
     FindInstalledApp,
+    CheckSchemaSharedByOtherApps,
     FindDependentApps,
     ListInstalledApps,
     SetAppStatus,
     RecordInstallHistoryEntry,
     UpdateAppRecord,
 } from '../install/history-recorder.js';
+import { RemoveExcludeSchema } from '../install/config-manager.js';
 
 /** A full Open App manifest (schema + migrations) whose migrations declare a teardownDirectory. */
 function connectorManifest(withTeardown = true): string {
@@ -135,6 +140,7 @@ describe('RemoveApp — migrations-model teardown (HandleTeardown)', () => {
         vi.clearAllMocks();
         vi.mocked(FindDependentApps).mockResolvedValue([]);
         vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(CheckSchemaSharedByOtherApps).mockResolvedValue({ Shared: false, CheckFailed: false });
         vi.mocked(SetAppStatus).mockResolvedValue(undefined);
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
         vi.mocked(UpdateAppRecord).mockResolvedValue(undefined);
@@ -201,5 +207,70 @@ describe('RemoveApp — migrations-model teardown (HandleTeardown)', () => {
         expect(result.ErrorMessage).toMatch(/Teardown failed/i);
         // App is NOT marked Removed when teardown fails.
         expect(vi.mocked(UpdateAppRecord)).not.toHaveBeenCalledWith(expect.anything(), 'app-1', { Status: 'Removed' });
+    });
+});
+
+/**
+ * Uninstall must respect a co-owner's exclusion (the mirror of AnotherInstalledAppSelfManages).
+ *
+ * `schemaShared` is already computed for the metadata-removal and schema-drop decisions, but the
+ * config cleanup ran unconditionally. So with app A (host-managed) and app B (self-managed) sharing
+ * a schema, removing A stripped the exclusion and B's schema silently became CodeGen-owned —
+ * entity registration plus base views and CRUD procs over a schema whose owner opted out. Same
+ * install-order hazard this feature closes on the install path, arriving on removal instead.
+ * `HandleAngularPrebundleExcludeRemoval`, in the same `Promise.all`, is already shared-aware.
+ */
+describe('RemoveApp — excludeSchemas cleanup respects a co-owning app', () => {
+    const SHARED_SCHEMA = 'mj_shared_schema';
+
+    function appOnSharedSchema() {
+        return {
+            ID: 'app-1',
+            Name: 'acme-connector',
+            Version: '1.2.0',
+            RepositoryURL: 'https://github.com/acme/mj-apps',
+            SchemaName: SHARED_SCHEMA,
+            Status: 'Active',
+            ManifestJSON: JSON.stringify({
+                manifestVersion: 1,
+                name: 'acme-connector',
+                displayName: 'Acme Connector',
+                description: 'Acme connector sharing a schema with another app.',
+                version: '1.2.0',
+                publisher: { name: 'Acme' },
+                repository: 'https://github.com/acme/mj-apps',
+                mjVersionRange: '>=5.43.0 <7.0.0',
+                schema: { name: SHARED_SCHEMA },
+                packages: {},
+            }),
+        };
+    }
+
+    beforeEach(() => {
+        vi.mocked(FindInstalledApp).mockResolvedValue(
+            appOnSharedSchema() as unknown as Awaited<ReturnType<typeof FindInstalledApp>>,
+        );
+        vi.mocked(CheckSchemaSharedByOtherApps).mockResolvedValue({ Shared: true, CheckFailed: false });
+    });
+
+    it('keeps the exclusion when the schema is still owned by another installed app', async () => {
+        await RemoveApp({ AppName: 'acme-connector', KeepData: true }, ctxFor('sqlserver'));
+
+        expect(RemoveExcludeSchema).not.toHaveBeenCalled();
+    });
+
+    it('still cleans up the exclusion when no other app owns the schema', async () => {
+        // The stock fixture: no co-owner, so the exclusion is this app's to remove. Uses the
+        // SchemaName-less installed record so the entity-metadata path stays out of the way —
+        // the config cleanup keys on manifest.schema, not on the persisted SchemaName.
+        vi.mocked(FindInstalledApp).mockResolvedValue(
+            installedConnector() as unknown as Awaited<ReturnType<typeof FindInstalledApp>>,
+        );
+        vi.mocked(CheckSchemaSharedByOtherApps).mockResolvedValue({ Shared: false, CheckFailed: false });
+
+        const result = await RemoveApp({ AppName: 'acme-connector' }, ctxFor('sqlserver'));
+
+        expect(result.Success).toBe(true);
+        expect(RemoveExcludeSchema).toHaveBeenCalledWith('/tmp/test-repo', 'mj_connector_acme', undefined);
     });
 });

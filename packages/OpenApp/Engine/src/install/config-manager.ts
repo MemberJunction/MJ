@@ -728,8 +728,12 @@ export function AddIncludeSchema(
 
 /**
  * Removes an app's schema from the host's `includeSchemas` positive scope — the inverse of
- * {@link AddIncludeSchema}, used when an app declares it manages its own metadata and when the app
- * is removed.
+ * {@link AddIncludeSchema}, used when an app turns out to manage its own metadata.
+ *
+ * NOT called on app removal, deliberately. A leftover include entry is inert: the schema is dropped
+ * (nothing to scope), or a co-owner still wants it in scope, or `--keep-data` left tables that a
+ * plain host would have had in scope anyway. Removing it would be the one case that could do harm —
+ * narrowing a scope another app still depends on — so the residue is the safer side.
  */
 export function RemoveIncludeSchema(
     repoRoot: string,
@@ -822,7 +826,18 @@ function FindTopLevelConfigArray(content: string, key: string): { openPos: numbe
         }
         if (ch === '/' && next === '/') { inLineComment = true; pos++; continue; }
         if (ch === '/' && next === '*') { inBlockComment = true; pos++; continue; }
-        if (ch === '"' || ch === "'" || ch === '`') { inString = ch; continue; }
+        if (ch === '"' || ch === "'" || ch === '`') {
+            // A QUOTED key is still a key — `"excludeSchemas": [...]` is legal .cjs and the natural
+            // shape when a config is copied out of JSON. Check before entering string mode, or the
+            // key reads as absent and the caller appends a SECOND, unquoted one; last-key-wins then
+            // silently retires the host's real list, `sys` included.
+            const quotedKeyRegion = MatchQuotedArrayKey(content, pos, ch, key, depth);
+            if (quotedKeyRegion) {
+                return quotedKeyRegion;
+            }
+            inString = ch;
+            continue;
+        }
         if (ch === '{' || ch === '[') { depth++; continue; }
         if (ch === '}' || ch === ']') { depth--; continue; }
         if (depth !== 0 || !content.startsWith(key, pos)) {
@@ -844,6 +859,38 @@ function FindTopLevelConfigArray(content: string, key: string): { openPos: numbe
         }
     }
     return null;
+}
+
+/**
+ * If the quote at `quotePos` opens a top-level quoted key matching `key` whose value is an array,
+ * returns that array's bracket positions. Otherwise null, and the caller treats the quote as the
+ * start of an ordinary string.
+ *
+ * @param quoteChar the quote character at `quotePos`; the closing quote must match it
+ * @param depth     nesting relative to the exported object — only its direct properties count
+ */
+function MatchQuotedArrayKey(
+    content: string,
+    quotePos: number,
+    quoteChar: string,
+    key: string,
+    depth: number,
+): { openPos: number; closePos: number } | null {
+    if (depth !== 0) {
+        return null;
+    }
+    const keyStart = quotePos + 1;
+    const keyEnd = keyStart + key.length;
+    if (content.slice(keyStart, keyEnd) !== key || content[keyEnd] !== quoteChar) {
+        return null;
+    }
+    const opener = content.slice(keyEnd + 1).match(/^\s*:\s*\[/);
+    if (!opener) {
+        return null;
+    }
+    const openPos = keyEnd + 1 + opener[0].length - 1;
+    const closePos = FindMatchingBracket(content, openPos);
+    return closePos === -1 ? null : { openPos, closePos };
 }
 
 /**

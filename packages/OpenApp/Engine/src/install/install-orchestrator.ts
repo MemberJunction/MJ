@@ -1032,11 +1032,16 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     // checkpointed — metadata/teardown/schema-drop are all no-ops against an already-removed
     // target anyway, but skipping avoids redundant work and (for teardown) re-running
     // seed-migration DELETE scripts that assume the rows are still present.
+    // Computed ONCE, above both resumable steps. `DbCleanupDone` consumes it to protect a co-tenant's
+    // data, and the config cleanup in `FilesRemoved` consumes it to protect a co-owner's exclusion —
+    // and on a resume the first block is skipped, so deriving it in there would leave the second
+    // without an answer.
+    const shareCheck: SchemaShareCheck = existingApp.SchemaName
+      ? await CheckSchemaSharedByOtherApps(context.ContextUser, existingApp.SchemaName, existingApp.ID)
+      : { Shared: false, CheckFailed: false };
+    const schemaShared = shareCheck.Shared;
+
     if (!IsStepDone(REMOVE_STEP_ORDER, resumeCheckpoint, 'DbCleanupDone')) {
-      const shareCheck: SchemaShareCheck = existingApp.SchemaName
-        ? await CheckSchemaSharedByOtherApps(context.ContextUser, existingApp.SchemaName, existingApp.ID)
-        : { Shared: false, CheckFailed: false };
-      const schemaShared = shareCheck.Shared;
       // An INDETERMINATE share-check (the query failed) is not a license to skip-and-strip — that
       // would leave a half-removed app (files gone, schema + metadata intact, status Removed). Treat
       // it like a removal error and abort BEFORE touching the filesystem (joined into removalErrors
@@ -1143,7 +1148,14 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       await Promise.all([
         Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName, context.ServerPackagePath)),
         Promise.resolve(manifest.schema ? RemoveEntityPackageMapping(context.RepoRoot, manifest.schema.name, context.ServerPackagePath) : undefined),
-        Promise.resolve(manifest.schema ? RemoveExcludeSchema(context.RepoRoot, manifest.schema.name, context.ServerPackagePath) : undefined),
+        // Only clear the exclusion if no OTHER installed app still owns this schema. Exclusion is a
+        // property of the SCHEMA, not of this app, so stripping it on the way out would hand a
+        // co-owner's self-managed schema to the host's CodeGen — the mirror of the install-order
+        // hazard AnotherInstalledAppSelfManages closes. HandleAngularPrebundleExcludeRemoval, in
+        // this same Promise.all, is shared-aware for exactly this reason.
+        Promise.resolve(manifest.schema && !schemaShared
+          ? RemoveExcludeSchema(context.RepoRoot, manifest.schema.name, context.ServerPackagePath)
+          : undefined),
         Promise.resolve(HandleAngularPrebundleExcludeRemoval(manifest, otherManifests, context)),
         Promise.resolve(
           RemoveAppPackages({

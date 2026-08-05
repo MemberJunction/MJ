@@ -346,3 +346,55 @@ module.exports = {
         expect(read()).toContain(' *   module.exports = {');
     });
 });
+
+/**
+ * A QUOTED key is still a key. `"excludeSchemas": [...]` is legal in a `.cjs` and is the natural
+ * shape when a config is copied out of JSON.
+ *
+ * The string-awareness that stops the scanner treating comments as config also made it blind to
+ * these, so the key looked absent. `EnsureExcludeSchemasSection` then appended a SECOND, unquoted
+ * `excludeSchemas` — and last-key-wins in an object literal means the host's real list stops
+ * applying entirely, `sys` included. That is destructive, not merely ineffective: CodeGen would
+ * start adopting system tables on its next run.
+ */
+describe('quoted config keys are found, not shadowed', () => {
+    for (const quote of ['"', "'"]) {
+        const label = quote === '"' ? 'double' : 'single';
+
+        it(`adds into an existing ${label}-quoted excludeSchemas rather than appending a duplicate`, () => {
+            write(`module.exports = {\n  ${quote}excludeSchemas${quote}: ['sys', 'acme_crm'],\n};\n`);
+
+            expect(AddExcludeSchema(repo, SCHEMA).Success).toBe(true);
+
+            // The host's own entries must survive — losing 'sys' is the destructive part.
+            expect(evaluate().excludeSchemas).toEqual(['sys', 'acme_crm', SCHEMA]);
+            // Exactly one key, not a shadowing pair.
+            expect(read().match(/excludeSchemas/g)?.length).toBe(1);
+        });
+
+        it(`removes from a ${label}-quoted excludeSchemas`, () => {
+            write(`module.exports = {\n  ${quote}excludeSchemas${quote}: ['sys', '${SCHEMA}'],\n};\n`);
+
+            const result = RemoveExcludeSchema(repo, SCHEMA);
+
+            expect(result.Changed).toBe(true);
+            expect(evaluate().excludeSchemas).toEqual(['sys']);
+        });
+    }
+
+    it('finds a quoted includeSchemas too', () => {
+        write(`module.exports = {\n  "includeSchemas": ['__mj', 'crm_host'],\n};\n`);
+
+        expect(AddIncludeSchema(repo, SCHEMA).Changed).toBe(true);
+
+        expect(evaluate().includeSchemas).toEqual(['__mj', 'crm_host', SCHEMA]);
+    });
+
+    it('still ignores a quoted key that only appears inside a comment', () => {
+        write(`module.exports = {\n  // "excludeSchemas": ['sys'],\n  excludeSchemas: ['staging'],\n};\n`);
+
+        expect(AddExcludeSchema(repo, SCHEMA).Success).toBe(true);
+
+        expect(evaluate().excludeSchemas).toEqual(['staging', SCHEMA]);
+    });
+});
