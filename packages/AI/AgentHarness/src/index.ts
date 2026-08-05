@@ -1,4 +1,6 @@
 export * from './types.js';
+export * from './HarnessAgentType.js';
+export * from './HarnessAgentBase.js';
 export * from './adapters/BaseHarnessAdapter.js';
 export * from './adapters/BaseCliHarnessAdapter.js';
 export * from './adapters/StdioJsonAdapter.js';
