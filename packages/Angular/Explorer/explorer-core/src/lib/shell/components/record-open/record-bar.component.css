@@ -1,0 +1,71 @@
+:host {
+  display: block;
+  flex-shrink: 0;
+}
+
+.record-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 44px; /* touch target — WCAG 2.5.8 comfortable on mobile */
+  padding: 0 10px 0 12px;
+  border: none;
+  border-bottom: 1px solid var(--mj-border-default);
+  /* Match the active tab / crumb surface so the bar reads as the record's chrome */
+  background: var(--mj-bg-surface);
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.record-bar:active {
+  background: var(--mj-bg-surface-hover);
+}
+
+.record-bar:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: -2px;
+}
+
+.record-bar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  font-size: 13px;
+  /* App color arrives via [style.color]; the chip tint derives from it */
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.record-bar-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--mj-text-sm, 14px);
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.record-bar-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--mj-border-strong);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--mj-text-secondary);
+}
+
+.record-bar-chevron {
+  font-size: 9px;
+  color: var(--mj-text-muted);
+}

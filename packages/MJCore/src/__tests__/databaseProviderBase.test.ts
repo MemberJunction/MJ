@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DatabaseProviderBase, SaveSQLResult, DeleteSQLResult, ExecuteSQLOptions } from '../generic/databaseProviderBase';
-import { EntityInfo, EntityFieldInfo, EntityPermissionType, UserInfo, CompositeKey, BaseEntity, EntitySaveOptions, EntityDeleteOptions, RunQueryResult, QueryExecutionSpec } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionType, UserInfo, CompositeKey, BaseEntity, EntitySaveOptions, EntityDeleteOptions, RunQueryResult, QueryExecutionSpec } from '../index';
 
 /**
  * Minimal concrete subclass for testing abstract DatabaseProviderBase.
@@ -33,12 +33,17 @@ class TestSQLServerProvider extends DatabaseProviderBase {
     // RLS test hooks
     public checkRecordRLSResult = true;
     public checkCreateRLSResult = true;
+    public checkUpdateRLSPostImageResult = true;
+    public checkRecordRLSCallCount = 0;
+    public checkCreateRLSCallCount = 0;
+    public checkUpdateRLSPostImageCallCount = 0;
 
     protected override async CheckRecordRLS(
         entity: BaseEntity,
         user: UserInfo,
         type: EntityPermissionType
     ): Promise<boolean> {
+        this.checkRecordRLSCallCount++;
         return this.checkRecordRLSResult;
     }
 
@@ -46,7 +51,16 @@ class TestSQLServerProvider extends DatabaseProviderBase {
         entity: BaseEntity,
         user: UserInfo
     ): Promise<boolean> {
+        this.checkCreateRLSCallCount++;
         return this.checkCreateRLSResult;
+    }
+
+    protected override async CheckUpdateRLSPostImage(
+        entity: BaseEntity,
+        user: UserInfo
+    ): Promise<boolean> {
+        this.checkUpdateRLSPostImageCallCount++;
+        return this.checkUpdateRLSPostImageResult;
     }
 }
 
@@ -244,6 +258,7 @@ describe('DatabaseProviderBase', () => {
         it('does not check RLS when in replay mode', async () => {
             sqlServer.checkCreateRLSResult = false;
             sqlServer.checkRecordRLSResult = false;
+            sqlServer.checkUpdateRLSPostImageResult = false;
             const entity = createMockEntity(false);
             const options = new EntitySaveOptions();
             options.ReplayOnly = true;
@@ -253,6 +268,81 @@ describe('DatabaseProviderBase', () => {
             const result = await sqlServer.Save(entity, mockUser, options);
             // In replay mode, it returns the entity's GetAll() result
             expect(result).toBeTruthy();
+            expect(sqlServer.checkRecordRLSCallCount).toBe(0);
+            expect(sqlServer.checkCreateRLSCallCount).toBe(0);
+            expect(sqlServer.checkUpdateRLSPostImageCallCount).toBe(0);
+        });
+
+        // Step 3b: an additive post-hook RLS gate closes the gap where a before-save hook
+        // (entity actions, AI actions) mutates a filter-referenced field after the pre-hook
+        // check (step 2b) already passed. Applies to BOTH creates and updates — a hook can move
+        // a brand-new record's values outside the Create filter just as easily as it can move
+        // an existing row outside the Update filter.
+        describe('post-hook RLS gate (step 3b)', () => {
+            it('calls CheckCreateRLS twice for a new record — once before and once after OnBeforeSaveExecute', async () => {
+                sqlServer.checkCreateRLSResult = true;
+                const entity = createMockEntity(false);
+
+                // Mocked ExecuteSQL always returns [], so Save() proceeds past both RLS gates
+                // and fails later at SQL execution — not with an RLS error. What's under test
+                // is that CheckCreateRLS ran twice and both calls passed.
+                await expect(
+                    sqlServer.Save(entity, mockUser, new EntitySaveOptions())
+                ).rejects.toThrow();
+                expect(sqlServer.checkCreateRLSCallCount).toBe(2);
+            });
+
+            it('rejects a new record when only the SECOND (post-hook) CheckCreateRLS call fails', async () => {
+                let call = 0;
+                sqlServer.CheckCreateRLS = async () => {
+                    call++;
+                    return call === 1; // pre-hook passes, post-hook (a hook mutated a field) fails
+                };
+                const entity = createMockEntity(false);
+
+                await expect(
+                    sqlServer.Save(entity, mockUser, new EntitySaveOptions())
+                ).rejects.toThrow('a before-save hook produced field values that no longer pass row-level security');
+                expect(call).toBe(2);
+            });
+
+            it('does not run the post-hook CheckCreateRLS call when the pre-hook call already failed', async () => {
+                sqlServer.checkCreateRLSResult = false;
+                const entity = createMockEntity(false);
+
+                await expect(sqlServer.Save(entity, mockUser, new EntitySaveOptions())).rejects.toThrow();
+                expect(sqlServer.checkCreateRLSCallCount).toBe(1);
+            });
+
+            it('calls both CheckRecordRLS (pre-image) and CheckUpdateRLSPostImage (post-image) exactly once for an update', async () => {
+                sqlServer.checkRecordRLSResult = true;
+                sqlServer.checkUpdateRLSPostImageResult = true;
+                const entity = createMockEntity(true);
+
+                await expect(
+                    sqlServer.Save(entity, mockUser, new EntitySaveOptions())
+                ).rejects.toThrow(); // fails later at SQL execution, past both RLS gates
+                expect(sqlServer.checkRecordRLSCallCount).toBe(1);
+                expect(sqlServer.checkUpdateRLSPostImageCallCount).toBe(1);
+            });
+
+            it('throws a distinct message when the update post-image check fails, even though the pre-image passed', async () => {
+                sqlServer.checkRecordRLSResult = true;
+                sqlServer.checkUpdateRLSPostImageResult = false;
+                const entity = createMockEntity(true);
+
+                await expect(
+                    sqlServer.Save(entity, mockUser, new EntitySaveOptions())
+                ).rejects.toThrow('would move this');
+            });
+
+            it('does not run the update post-image check when the pre-image check already failed', async () => {
+                sqlServer.checkRecordRLSResult = false;
+                const entity = createMockEntity(true);
+
+                await expect(sqlServer.Save(entity, mockUser, new EntitySaveOptions())).rejects.toThrow();
+                expect(sqlServer.checkUpdateRLSPostImageCallCount).toBe(0);
+            });
         });
     });
 

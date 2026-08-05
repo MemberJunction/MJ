@@ -1894,8 +1894,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             const perms = entity.GetUserPermisions(contextUser);
             if (!perms || !perms.CanRead) return;
 
-            // Check RLS (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
-            const rlsClause = entity.GetUserRowLevelSecurityWhereClause(
+            // Check row filters — role RLS AND API-key filters (GetEffectiveRowFilterWhereClause)
+            const rlsClause = entity.GetEffectiveRowFilterWhereClause(
                 contextUser,
                 EntityPermissionType.Read,
                 ''

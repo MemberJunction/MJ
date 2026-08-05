@@ -31,6 +31,7 @@ export * from './checks/remote-op-ai-authoring.checks';
 export * from './checks/remote-op-wire-progress.checks';
 export * from './checks/remote-operations.checks';
 export * from './checks/rls-isolation.checks';
+export * from './checks/keyrowfilter.checks'; // KF1–KF6: registers into the 'rls-isolation' bundle AFTER RLS1–RLS10 (order matters for GetBundle parity)
 export * from './checks/runquery-cache.checks';
 export * from './checks/scheduled-jobs.checks';
 export * from './checks/server-cache.checks';
@@ -57,6 +58,7 @@ export * from './checks/transaction-groups.checks';
 export * from './checks/class-resolution.checks';
 export * from './checks/metadata-sync.checks';
 export * from './checks/codegen-determinism.checks';
+export * from './checks/layered-base-views.checks';
 export * from './checks/realtime-deterministic.checks';
 export * from './checks/scoped-anon-elevation.checks';
 export * from './checks/search.checks';

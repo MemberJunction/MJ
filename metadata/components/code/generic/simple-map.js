@@ -38,6 +38,24 @@ function SimpleMap({
     onSaveUserSettings
 }) {
     // -----------------------------------------------------------------------
+    // Theme tokens
+    // -----------------------------------------------------------------------
+    // Named `theme` rather than `colors` because `colors` is already a prop of this
+    // component (the map's own data colors). Previous hardcoded values are kept as
+    // fallbacks for a host that renders without styles.
+    var theme = (styles && styles.colors) || {};
+    var textColor = theme.text || '#1f2937';
+    var textSecondaryColor = theme.textSecondary || '#6b7280';
+    var textTertiaryColor = theme.textTertiary || '#9ca3af';
+    var textInverseColor = theme.textInverse || '#fff';
+    var borderColor = theme.border || '#e5e7eb';
+    var controlBorderColor = theme.border || '#d1d5db';
+    var surfaceColor = theme.surface || '#fff';
+    var primaryColor = theme.primary || '#3b82f6';
+    var errorColor = theme.error || '#991b1b';
+    var errorSurfaceColor = theme.errorLight || '#fee2e2';
+
+    // -----------------------------------------------------------------------
     // Refs and state
     // -----------------------------------------------------------------------
     var containerRef = React.useRef(null);
@@ -251,8 +269,8 @@ function SimpleMap({
     if (error) {
         return React.createElement('div', {
             style: {
-                padding: '20px', background: '#fee2e2', borderRadius: '6px',
-                color: '#991b1b', fontSize: '14px'
+                padding: '20px', background: errorSurfaceColor, borderRadius: '6px',
+                color: errorColor, fontSize: '14px'
             }
         }, error);
     }
@@ -260,7 +278,7 @@ function SimpleMap({
     if (!data || data.length === 0) {
         return React.createElement('div', {
             style: {
-                padding: '40px', textAlign: 'center', color: '#6b7280', fontSize: '14px'
+                padding: '40px', textAlign: 'center', color: textSecondaryColor, fontSize: '14px'
             }
         }, 'No data available for map display.');
     }
@@ -270,14 +288,14 @@ function SimpleMap({
     },
         // Title
         title ? React.createElement('div', {
-            style: { padding: '8px 12px', fontWeight: '600', fontSize: '15px', color: '#1f2937' }
+            style: { padding: '8px 12px', fontWeight: '600', fontSize: '15px', color: textColor }
         }, title) : null,
 
         // Toolbar
         React.createElement('div', {
             style: {
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '6px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '13px'
+                padding: '6px 12px', borderBottom: '1px solid ' + borderColor, fontSize: '13px'
             }
         },
             React.createElement('div', { style: { display: 'flex', gap: '4px' } },
@@ -287,17 +305,17 @@ function SimpleMap({
                         onClick: function () { setRenderMode(mode); },
                         style: {
                             padding: '4px 10px',
-                            border: '1px solid ' + (renderMode === mode ? '#3b82f6' : '#d1d5db'),
+                            border: '1px solid ' + (renderMode === mode ? primaryColor : controlBorderColor),
                             borderRadius: '4px',
-                            background: renderMode === mode ? '#3b82f6' : '#fff',
-                            color: renderMode === mode ? '#fff' : '#374151',
+                            background: renderMode === mode ? primaryColor : surfaceColor,
+                            color: renderMode === mode ? textInverseColor : textColor,
                             cursor: 'pointer', fontSize: '12px'
                         }
                     }, mode.charAt(0).toUpperCase() + mode.slice(1));
                 })
             ),
             React.createElement('span', {
-                style: { color: '#9ca3af' }
+                style: { color: textTertiaryColor }
             }, markerCount + ' location' + (markerCount !== 1 ? 's' : ''))
         ),
 

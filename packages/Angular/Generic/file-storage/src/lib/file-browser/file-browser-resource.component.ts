@@ -1,9 +1,10 @@
 import { Component } from '@angular/core';
-// This component IS an Explorer surface (layer 3) and does not belong in a Generic package.
-// Moving it is the correct fix, but it is registered in THREE CodeGen-generated manifests —
-// explorer-core's lazy-feature-config.ts and both Bootstrap packages' class registrations —
-// which must be regenerated against a database, not hand-edited. Tracked in MJ#3404.
-// mj-ui-layers-allow: known debt, blocked on a CodeGen run — not a blessing of the pattern.
+// This component is an Explorer surface (layer 3), which is why the package declares
+// "mjUILayer": "surface" rather than "widgets" — a package holding a BaseResourceComponent
+// subclass cannot be widgets by the gate's own table, and ng-shared is legal at L3.
+// Splitting the surface out from the widgets in this package is still worth doing (MJ#3404);
+// it is registered in three CodeGen-generated manifests, so it needs a CodeGen run, not a
+// hand edit.
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';

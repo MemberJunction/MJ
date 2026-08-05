@@ -5,6 +5,7 @@ import { ServerCacheChecks } from '../checks/server-cache.checks';
 import { ClientCacheChecks } from '../checks/client-cache.checks';
 import { RunQueryCacheChecks } from '../checks/runquery-cache.checks';
 import { RlsIsolationChecks, RlsIsolationClientChecks } from '../checks/rls-isolation.checks';
+import { KeyRowFilterChecks } from '../checks/keyrowfilter.checks'; // must be imported AFTER rls-isolation.checks: registry order = RLS* then KF*
 import { RecordProcessChecks } from '../checks/record-process.checks';
 import { RecordProcessFacadeChecks } from '../checks/record-process-facade.checks';
 import { ScheduledJobsChecks } from '../checks/scheduled-jobs.checks';
@@ -90,7 +91,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['server-cache', ServerCacheChecks, 32],
         ['client-cache', ClientCacheChecks, 13],
         ['runquery-cache', RunQueryCacheChecks, 12], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20
-        ['rls-isolation', RlsIsolationChecks, 9],
+        // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters) share one bundle
+        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks], 15],
         ['rls-isolation-client', RlsIsolationClientChecks, 1],
         ['record-process', RecordProcessChecks, 12],
         ['record-process-facade', RecordProcessFacadeChecks, 2],

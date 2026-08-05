@@ -474,7 +474,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     InvocationType: invocationTypeEntity,
                     ContextUser: user,
                 });
-                results.push(result);
+                // null means the binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls
+                // outside it — the action never ran, so there is no result to report.
+                if (result) {
+                    results.push(result);
+                }
             }
             return results;
         } catch (e) {
@@ -1595,8 +1599,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 bHasWhere = true;
             }
 
-            // 5. Row-Level Security (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
-            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+            // 5. Row-Level Security — role RLS AND API-key row filters (GetEffectiveRowFilterWhereClause; the role-RLS exemption applies only to the role layer)
+            const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
             if (rlsWhereClause && rlsWhereClause.length > 0) {
                 whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
                 bHasWhere = true;
@@ -2382,7 +2386,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
 
-        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
         if (rlsWhereClause && rlsWhereClause.length > 0) {
             whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
         }
@@ -2531,7 +2535,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * MJ-DB entity either. Called from the external RunView and Load dispatch points.
      */
     protected assertExternalReadAllowedUnderRLS(entityInfo: EntityInfo, user: UserInfo): void {
-        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
         if (rlsWhereClause && rlsWhereClause.length > 0) {
             throw new Error(
                 `Entity '${entityInfo.Name}' is backed by an external data source and has Row-Level Security that applies ` +
@@ -3829,10 +3833,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${safeVal}${quotes}`;
         }).join(' AND ');
 
-        // Append Read RLS filter (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
+        // Append Read row filters — role RLS AND API-key filters (GetEffectiveRowFilterWhereClause)
         let fullWhere = where;
         if (user) {
-            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+            const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
             if (rlsWhereClause && rlsWhereClause.length > 0) {
                 fullWhere = `${where} AND (${rlsWhereClause})`;
             }
@@ -3911,7 +3915,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         type: EntityPermissionType
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, type, '');
+        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, type, '');
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
         }
@@ -3919,7 +3923,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const pkWhere = entity.PrimaryKeys.map(pk => {
             const fieldInfo = entityInfo.FieldByName(pk.Name);
             const quotes = fieldInfo?.NeedsQuotes ? "'" : '';
-            // Escape embedded single quotes when the value is wrapped in quotes — see Load() above.
+            // Escape embedded single quotes, mirroring the Load()-by-PK path above. The PK
+            // value can be CLIENT-SUPPLIED here (the update resolver loads OldValues from the
+            // client for entities without record tracking), and this method's only job is an
+            // authorization decision — an unescaped quote lets a crafted PK make the COUNT(*)
+            // pass RLS on rows the caller cannot see.
             const safeVal = quotes ? String(pk.Value).replace(/'/g, "''") : pk.Value;
             return `${this.QuoteIdentifier(pk.Name)}=${quotes}${safeVal}${quotes}`;
         }).join(' AND ');
@@ -3938,39 +3946,143 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         user: UserInfo
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Create, '');
+        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Create, '');
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
         }
 
-        const projections = this.BuildCreateRLSProjections(entity, entityInfo);
+        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo, false);
         const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
         const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
         return result && result.length > 0 && Number(result[0]['pass']) === 1;
     }
 
     /**
-     * Builds field projections for the Create RLS synthetic row subquery.
-     * Only includes non-virtual fields that have non-null values.
+     * Checks whether an UPDATE's pending values still pass the Update RLS filter — the
+     * post-image side of the check. {@link CheckRecordRLS} validates the row as stored
+     * (pre-image); without this, a caller can update a row they legitimately own into a
+     * state they don't (e.g. reassign its owning organization) — privilege escalation the
+     * pre-image check cannot see.
+     *
+     * Cost control: when the resolved filter FULLY decomposes into a conjunction of simple
+     * `column <op> value` terms and none of those columns is dirty, the post-image equals
+     * the pre-image on every column the predicate reads, so the (already-passed) pre-image
+     * check suffices and the query is skipped. Any filter the decomposer does not fully
+     * understand runs the check — a fail-open optimization in an authorization path is a
+     * vulnerability with a benchmark attached, so partial understanding never skips.
      */
-    private BuildCreateRLSProjections(entity: BaseEntity, entityInfo: EntityInfo): string {
+    protected override async CheckUpdateRLSPostImage(
+        entity: BaseEntity,
+        user: UserInfo
+    ): Promise<boolean> {
+        const entityInfo = entity.EntityInfo;
+        const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Update, '');
+        if (!rlsWhereClause || rlsWhereClause.length === 0) {
+            return true;
+        }
+
+        const referencedColumns = this.TryExtractSimpleFilterColumns(rlsWhereClause);
+        if (referencedColumns) {
+            const dirtyNames = new Set(
+                entity.Fields.filter(f => f.Dirty).map(f => f.Name.trim().toLowerCase())
+            );
+            const touchesFilterColumn = referencedColumns.some(c => dirtyNames.has(c));
+            if (!touchesFilterColumn) {
+                return true; // pre-image check already passed and no filter-referenced column changed
+            }
+        }
+
+        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+        const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
+        return result && result.length > 0 && Number(result[0]['pass']) === 1;
+    }
+
+    /**
+     * Attempts to fully decompose an RLS WHERE clause into the lower-cased column names it
+     * references. Returns the columns ONLY when the whole clause is a conjunction of simple
+     * `column <op> literal` terms — anything else (OR, parentheses beyond term grouping,
+     * functions, subqueries, arithmetic, unrecognized syntax) returns null, meaning "not
+     * fully understood, run the post-image check". Partial extraction is never returned:
+     * a missed column reference here would silently skip a required authorization check.
+     */
+    protected TryExtractSimpleFilterColumns(rlsWhereClause: string): string[] | null {
+        // Strip string literals first so quoted content can't confuse the term parser;
+        // a literal containing AND/OR must not affect decomposition.
+        const noStrings = rlsWhereClause.replace(/'(?:[^']|'')*'/g, "''");
+        if (/\bOR\b|\(|\)|\bSELECT\b|\bCASE\b|[+*/]/i.test(noStrings.replace(/^\s*\(|\)\s*$/g, ''))) {
+            return null;
+        }
+        const terms = noStrings.replace(/^\s*\(|\)\s*$/g, '').split(/\bAND\b/i);
+        const columns: string[] = [];
+        const simpleTerm = /^\s*(?:\[([^\]]+)\]|"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))\s*(?:=|<>|!=|<=|>=|<|>|\bLIKE\b|\bIS\s+(?:NOT\s+)?NULL\b|\bIN\b)/i;
+        for (const term of terms) {
+            const m = simpleTerm.exec(term);
+            if (!m) {
+                return null; // unrecognized term shape — do not skip the check
+            }
+            columns.push((m[1] ?? m[2] ?? m[3]).trim().toLowerCase());
+        }
+        return columns.length > 0 ? columns : null;
+    }
+
+    /**
+     * Builds field projections for an RLS synthetic-row subquery (Create post-image and
+     * Update post-image checks).
+     *
+     * @param includeNulls - The Update post-image REQUIRES null fields to be projected as
+     * typed NULLs: a filter referencing a column the caller just nulled must see SQL NULL,
+     * not a missing column. A bare `SELECT NULL AS Col` is untyped and can evaluate
+     * differently from a real row, so nulls are emitted as `CAST(NULL AS <sqltype>)` using
+     * the field's metadata-resolved type. An unresolvable type fails the save (throw)
+     * rather than emitting an untyped NULL. The Create check keeps its historical
+     * skip-nulls behavior (includeNulls=false).
+     */
+    protected BuildRLSSyntheticRowProjections(entity: BaseEntity, entityInfo: EntityInfo, includeNulls: boolean): string {
         const parts: string[] = [];
         for (const field of entityInfo.Fields) {
             if (field.IsVirtual) continue;
             const val = entity.Get(field.Name);
-            if (val == null) continue;
+            if (val == null && !includeNulls) continue;
 
-            let sqlVal: string;
-            if (typeof val === 'boolean') {
-                sqlVal = val ? '1' : '0';
-            } else if (field.NeedsQuotes) {
-                sqlVal = `'${String(val).replace(/'/g, "''")}'`;
-            } else {
-                sqlVal = String(val);
-            }
-            parts.push(`${sqlVal} AS ${this.QuoteIdentifier(field.Name)}`);
+            parts.push(`${this.renderRLSProjectionValue(field, val)} AS ${this.QuoteIdentifier(field.Name)}`);
         }
         return parts.join(', ');
+    }
+
+    /**
+     * Renders one field value for the RLS synthetic row. Every branch either escapes or
+     * validates: quoted values are `''`-escaped, booleans render as 1/0, and non-quoted
+     * (numeric) values must parse as finite numbers — a non-numeric value in a numeric
+     * field is rejected rather than interpolated raw (the same injection class as the
+     * quoted branch, previously unhandled).
+     */
+    private renderRLSProjectionValue(field: EntityFieldInfo, val: unknown): string {
+        if (val == null) {
+            const sqlType = field.SQLFullType;
+            if (!sqlType || sqlType.trim().length === 0) {
+                throw new Error(
+                    `Cannot build RLS post-image projection: field ${field.Name} has no resolvable SQL type for a typed NULL`
+                );
+            }
+            return `CAST(NULL AS ${sqlType})`;
+        }
+        if (typeof val === 'boolean') {
+            return val ? '1' : '0';
+        }
+        if (field.NeedsQuotes) {
+            return `'${String(val).replace(/'/g, "''")}'`;
+        }
+        if (val instanceof Date) {
+            return `'${val.toISOString().replace(/'/g, "''")}'`;
+        }
+        const num = typeof val === 'number' ? val : Number(String(val));
+        if (!Number.isFinite(num)) {
+            throw new Error(
+                `Cannot build RLS projection: value for numeric field ${field.Name} does not parse as a number`
+            );
+        }
+        return String(num);
     }
 
     /**************************************************************************/
