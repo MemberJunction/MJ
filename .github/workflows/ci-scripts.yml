@@ -1,0 +1,58 @@
+name: CI script tests
+
+# Unit tests for the release-plumbing scripts in ci/ — the code that merges next into
+# main, back-merges main into next, and moves npm dist-tags. It runs with real credentials
+# against published packages and a protected branch, so a defect here is expensive and
+# discovered late; these are the cheapest possible check on it.
+#
+# WHY THIS WORKFLOW EXISTS: before it, `ci/dist-tag-all.test.mjs` and the back-merge suite
+# ran nowhere. Only `ci/validate-release-lines.test.mjs` was wired up (release-lines-guard.yml),
+# by exact filename, so every other ci/ test was authored, committed, and silently never
+# executed. Globbing `ci/*.test.mjs` here means a new ci/ test is picked up by existing.
+#
+# No `pnpm install`: every ci/*.test.mjs and the modules they import use only Node's
+# stdlib. That is a deliberate constraint, not a coincidence — `simple-git` lives in the
+# thin entry points (merge_main.mjs, merge_main_and_update_lock.mjs) while the logic sits
+# in back-merge.mjs, so this job stays a ~10-second check instead of a multi-minute one.
+# If you add an ci/ test that needs a dependency, add the install step and accept the cost
+# rather than deleting the test.
+
+on:
+  pull_request:
+    branches: [next]
+    paths:
+      - 'ci/**'
+      - '.github/workflows/ci-scripts.yml'
+  push:
+    branches: [next]
+    paths:
+      - 'ci/**'
+      - '.github/workflows/ci-scripts.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-scripts-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test ci/ release scripts
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Run ci/ script tests
+        run: node --test "ci/*.test.mjs"
