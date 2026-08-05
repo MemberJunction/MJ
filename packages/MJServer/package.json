@@ -20,8 +20,7 @@
     "watch": "tsc -w",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "postinstall": "patch-package"
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@apollo/server": "^5.0.0",
@@ -155,8 +154,7 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@types/express": "^4.17.25",
-    "patch-package": "^8.0.0",
+    "@types/express": "^5.0.6",
     "pkgroll": "2.23.0",
     "typescript": "^5.9.3",
     "vitest": "^3.1.1"

@@ -9,7 +9,7 @@
     "prestart": "node ./check-workspace-deps.mjs && mj codegen manifest --exclude-packages @memberjunction --output ./src/app/generated/class-registrations-manifest.ts --open-app-client-bootstrap",
     "prebuild": "(mj codegen manifest --exclude-packages @memberjunction --output ./src/app/generated/class-registrations-manifest.ts --open-app-client-bootstrap || echo 'Warning: mj codegen manifest not available, using existing manifest')",
     "build": "NODE_OPTIONS=--max-old-space-size=16384 ng build",
-    "postbuild": "node ../../node_modules/@memberjunction/ng-explorer-service-worker/scripts/verify-sw-cache-shape.js dist/MJExplorer/browser",
+    "postbuild": "node node_modules/@memberjunction/ng-explorer-service-worker/scripts/verify-sw-cache-shape.js dist/MJExplorer/browser",
     "build:stage": "NODE_OPTIONS=--max-old-space-size=16384 ng build --configuration staging",
     "watch": "NODE_OPTIONS=--max-old-space-size=16384 ng build --watch --configuration development",
     "test": "echo \"No tests configured yet\""
@@ -132,7 +132,11 @@
     "validator": "^13.15.26",
     "xlsx": "^0.18.5",
     "zod": "^3.25.0",
-    "zone.js": "^0.16.0"
+    "zone.js": "^0.16.0",
+    "@memberjunction/ng-entity-viewer": "6.0.0",
+    "@memberjunction/ng-shared-generic": "6.0.0",
+    "@memberjunction/ng-ui-components": "6.0.0",
+    "@memberjunction/ng-explorer-service-worker": "6.0.0"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "21.1.3",
