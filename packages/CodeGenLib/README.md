@@ -565,6 +565,200 @@ The form layout system enforces stability to prevent unnecessary churn:
 - Existing fields cannot be moved to newly created categories (prevents renaming)
 - Per-field `AutoUpdateCategory` and `AutoUpdateDisplayName` flags provide granular control
 
+## Base Views: Generated, Custom, or Layered
+
+Every entity has a `BaseView` — the object everything reads. Entity field discovery, permissions and
+the generated CRUD routines all target it, so whatever columns it exposes become first-class
+`EntityField` rows.
+
+There are three arrangements, chosen by two columns on `Entity`:
+
+| `BaseViewGenerated` | `GeneratedBaseViewName` | Result |
+|---|---|---|
+| `1` | `NULL` | **Generated.** CodeGen writes `BaseView`. The default, and almost every entity. |
+| `0` | `NULL` | **Fully custom.** CodeGen writes nothing; the application owns `BaseView` entirely. |
+| `0` | `vwFooGenerated` | **Layered.** CodeGen writes the *inner* view; the application owns `BaseView` and wraps it. |
+| `1` | `vwFooGenerated` | **Refused** by a CHECK constraint — contradictory, see below. |
+
+The fourth combination is refused because the two halves of CodeGen read different columns and would
+disagree: view *generation* gates on `BaseViewGenerated || HasLayeredBaseView` and would write the
+inner view, while the outer view's *refresh* and its *GRANTs* gate on `!BaseViewGenerated` and would
+be skipped — leaving an entity whose public surface is never granted and never refreshed, with
+CodeGen reporting success.
+
+**MJ core uses this itself.** `MJ: Version Installations` and `MJ: User View Run Details` are layered
+as of v6.1, and the remaining fully-custom core entities are expected to follow.
+
+### The two paths, side by side
+
+The thing to hold onto: **`BaseView` is always the public surface**, and the only question is who
+writes it. Layering splits one view into two so that the mechanical half can keep regenerating.
+
+```mermaid
+flowchart TB
+    subgraph GEN["① GENERATED — the default"]
+        direction TB
+        GT[("Foo<br/>base table")]
+        GV["<b>vwFoo</b><br/>owned by CodeGen<br/><i>regenerated every run</i>"]
+        GT --> GV
+    end
+
+    subgraph CUS["② FULLY CUSTOM — BaseViewGenerated = 0"]
+        direction TB
+        CT[("Foo<br/>base table")]
+        CV["<b>vwFoo</b><br/>owned by the application<br/><i>frozen the day it was copied</i>"]
+        CT --> CV
+    end
+
+    subgraph LAY["③ LAYERED — GeneratedBaseViewName = vwFooGenerated"]
+        direction TB
+        LT[("Foo<br/>base table")]
+        LI["<b>vwFooGenerated</b><br/>owned by CodeGen<br/><i>regenerated every run</i>"]
+        LO["<b>vwFoo</b><br/>owned by the application<br/><i>SELECT g.* + your columns</i>"]
+        LT --> LI
+        LI -->|"SELECT g.*"| LO
+    end
+
+    GV --> SURF
+    CV --> SURF
+    LO --> SURF
+
+    SURF["<b>BaseView</b> — the public surface<br/>field discovery · permissions · RunView<br/>spCreate / spUpdate / spDelete"]
+
+    classDef codegen fill:#1f6feb22,stroke:#1f6feb,stroke-width:2px
+    classDef app fill:#d2992222,stroke:#d29922,stroke-width:2px
+    classDef table fill:#8b949e22,stroke:#8b949e,stroke-width:1px
+    classDef surface fill:#23863622,stroke:#238636,stroke-width:2px
+    class GV,LI codegen
+    class CV,LO app
+    class GT,CT,LT table
+    class SURF surface
+```
+
+Read it as: **blue regenerates, amber is hand-written.** In ① the whole view is blue and you cannot
+add a column to it. In ② the whole view is amber — you can add anything, but every display join, geo
+column and root-ID column is now yours to maintain, and a foreign key added later never appears. ③
+puts the boundary in the middle: the ~80 mechanical lines stay blue and keep up with the schema,
+while your computed columns stay amber and stay reviewable.
+
+The green node is why the arrangement is invisible to everything downstream — field discovery,
+permissions, `RunView` and the CRUD routines all target `BaseView` in every case, so a column added
+by the custom layer becomes a first-class virtual `EntityField` and comes back from a save.
+
+### Why layered exists
+
+Fully custom is all-or-nothing. To add one computed column an application inherits the whole
+generated view — every related-entity display join, the geo join, the recursive root-ID `OUTER
+APPLY`, the soft-delete predicate — and must hand-maintain it from then on.
+
+That is not a one-time cost. Add a foreign key later and its display field simply never appears,
+because nothing regenerates the join. The failure is **silent**: the column is absent rather than
+wrong, so nothing errors and no test notices until somebody asks why a name is blank. It also freezes
+the entity at whatever CodeGen produced the day the view was copied — geo columns and root-ID columns
+both arrived after custom views existed in the wild.
+
+Layering keeps CodeGen generating underneath a thin custom layer:
+
+```sql
+-- CodeGen owns this, and keeps it current
+CREATE VIEW [orders].[vwOrderHeadersGenerated] AS
+SELECT o.*, MJCompany_CompanyID.[Name] AS [Company], ... -- 80 lines, regenerated
+
+-- The application owns this, and it stays reviewable
+CREATE VIEW [orders].[vwOrderHeaders] AS
+SELECT g.*,
+       CASE WHEN g.Balance > 0 AND g.DueDate < CAST(GETUTCDATE() AS date) THEN 1 ELSE 0 END AS IsOverdue
+FROM   [orders].[vwOrderHeadersGenerated] g;
+```
+
+`IsOverdue` becomes a virtual `EntityField` like any other — typed on the entity class, filterable in
+`RunView`, visible in Explorer — and is returned by `spCreate`/`spUpdate`/`spDelete`, because those
+select from `BaseView`.
+
+### SQL Server only
+
+**Layering is rejected on PostgreSQL.** CodeGen throws when it encounters an entity with
+`GeneratedBaseViewName` set on a PG install, naming the entity and both views.
+
+The reason is that PG cannot deliver the feature's whole point. Everything above depends on the
+outer view's `SELECT g.*` being re-resolved after the inner view regenerates — that is what makes a
+late-added foreign key appear on its own. SQL Server does that with `sp_refreshview`. PostgreSQL
+expands `*` into a fixed column list at creation and freezes it, has no refresh equivalent, and
+CodeGen does not own the outer view, so nothing recreates it.
+
+The resulting behaviour would not even be consistently broken. Adding a column — the common case —
+leaves the outer view stale, because `CREATE OR REPLACE` on the inner view never touches dependents.
+Renaming a column or changing its type raises `42P16`, which sends CodeGen down its
+capture/`DROP CASCADE`/replay path; that incidentally recreates the outer view, which then *does*
+pick the new columns up. Same feature, opposite outcomes, decided by which kind of schema change
+happened to land that day. Since silent staleness is the exact failure layering exists to eliminate,
+PG refuses it outright rather than shipping a documented footgun.
+
+On PostgreSQL, use a fully custom base view (`BaseViewGenerated = 0`, `GeneratedBaseViewName` left
+`NULL`) and accept that it must be hand-maintained as the schema changes.
+
+### Setting it up
+
+1. Set `GeneratedBaseViewName` on the entity (and `BaseViewGenerated = 0`, since the application owns
+   `BaseView`). For MJ core entities this is declarative metadata, not SQL — see
+   `metadata/entities/.layered-base-views.json`.
+2. Run CodeGen. It writes the inner view.
+3. Create your `BaseView` in a migration that runs **after** CodeGen output, since it selects from the
+   inner view — and may reference generated root-ID functions.
+4. Run CodeGen again so the new columns are discovered as `EntityField` rows.
+
+> ### ⚠️ Adopting layering on an EXISTING entity needs `forceRegeneration`
+>
+> Setting `GeneratedBaseViewName` is a **metadata** change, not a schema change. The entity therefore
+> never lands in CodeGen's modified/new list, and `logSQLForNewOrModifiedEntity` only writes to the
+> migration log for entities in that list.
+>
+> The failure is quiet and easy to miss: CodeGen **does** create the inner view in whatever database
+> you ran it against, and emits **nothing**. Your dev box looks correct while every other environment
+> never receives the view at all — and the outer view you write in step 3 then selects from an object
+> that does not exist there.
+>
+> Scope a forced regeneration to just the entities you are converting, run CodeGen, then remove it:
+>
+> ```javascript
+> // mj.config.cjs — TEMPORARY, delete after capturing the output
+> forceRegeneration: {
+>   enabled: true,
+>   baseViews: true,
+>   entityWhereClause: "Name IN ('MJ: Version Installations', 'MJ: User View Run Details')",
+> }
+> ```
+>
+> This does not apply to an entity that is layered from the start, or to later schema changes on an
+> already-layered entity — both put the entity in the modified list on their own.
+
+Step 2 necessarily runs while `BaseView` does not yet exist — it selects from the inner view that
+step 2 is creating, so it could not have been created earlier. CodeGen handles this: the
+`sp_refreshview` and `GRANT` it emits against the application-owned view are wrapped in an
+`IF OBJECT_ID(...) IS NOT NULL` guard, so the bootstrap pass skips them and every later pass behaves
+as if the guard were not there. You do not need to order the migrations around it.
+
+### Things worth knowing
+
+- **A view caches its column list.** The custom layer does `SELECT g.*`, so when the schema changes,
+  the inner view must be refreshed **before** the outer one. CodeGen emits `sp_refreshview` in that
+  order automatically. Refreshing the outer against a stale inner re-caches the *old* columns, and
+  the new one stays missing — indistinguishable from never having been added.
+- **The names must differ.** A view cannot select from itself. A CHECK constraint on `Entity` refuses
+  equal names, and `EntityInfo.HasLayeredBaseView` compares case-insensitively so `VWFOO` and `vwFoo`
+  are treated as the same object.
+- **The custom layer must expose a superset.** Whatever `BaseView` exposed before it was layered, it
+  must still expose afterwards — a column that disappears is a breaking change to the generated entity
+  class. Watch for *name collisions* in particular: the inner view generates a display column per
+  foreign key (`Employee` for `EmployeeID`), so an outer view hand-selecting the same alias produces a
+  duplicate column and fails at `CREATE VIEW`. Diff the column list before and after.
+- **Permissions target `BaseView`.** The inner view needs no separate grants: it is in the same schema
+  with the same owner, so ownership chaining covers it.
+- **`EntityInfo.GeneratedViewName`** is the single resolution of "which view does CodeGen write". Use
+  it rather than re-deriving from `BaseView`; several call sites decide where to write the view, what
+  to name the emitted file, and which object to refresh, and any two disagreeing produce a view under
+  a name nothing reads.
+
 ## Force Regeneration
 
 Regenerate specific SQL objects without schema changes using surgical filtering:

@@ -691,7 +691,11 @@ export class ResolverBase {
       return;
     }
 
-    // Check specific scope
+    // Check specific scope. The acting context stamped on the session user (set
+    // server-side in context.ts, never client-supplied) rides along so filtered
+    // rules with {{Acting*}} tokens can validate their required values — without
+    // it, a filtered rule fails closed even for a session carrying valid context.
+    const sessionUser = this.GetUserFromPayload(userPayload);
     const result = await apiKeyEngine.Authorize(
       userPayload.apiKeyHash,
       'MJAPI',
@@ -701,6 +705,9 @@ export class ResolverBase {
       {
         endpoint: '/graphql',
         method: 'POST'
+      },
+      {
+        actingContext: sessionUser?.APIKeyActingContext
       }
     );
 
@@ -999,7 +1006,7 @@ export class ResolverBase {
       ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
     if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
 
-    return entityInfo.GetUserRowLevelSecurityWhereClause(user, type, returnPrefix);
+    return entityInfo.GetEffectiveRowFilterWhereClause(user, type, returnPrefix);
   }
 
   protected async createAuditLogRecord(

@@ -256,6 +256,39 @@ LogError(`Error: ${entity.LatestResult?.Message}`); // Incomplete info
 - **Never** wrap `Save()`/`Delete()` in try/catch expecting them to throw on business logic failures
 - Save/Delete CAN still throw for infrastructure errors (network, connection), but logical failures (validation, permissions, FK violations) return `false`
 
+### 🚨 NEVER WRITE DIRECT SQL DML AGAINST AN ENTITY — unless it opts in
+
+**Do not write `INSERT`, `UPDATE`, or `DELETE` against an entity's base table.** All mutations go through `BaseEntity.Save()` / `.Delete()`, because that is the only path where the platform's guarantees actually run:
+
+| Guarantee | What skipping it looks like |
+|---|---|
+| Record Changes (`TrackRecordChanges`) | An audit trail that **looks** complete but silently isn't |
+| Cache invalidation (`TrustServerCacheCompletely`) | The server RunView cache serves stale rows **indefinitely** |
+| Entity Actions | Create/update/delete hooks never fire |
+| Validation | Field rules and `BaseEntity` subclass overrides never run |
+| Soft delete (`DeleteType='Soft'`) | The row is **destroyed** instead of having `DeletedAt` set |
+
+None of these fail loudly. That's the point — raw DML produces a database that looks fine and is quietly wrong.
+
+**The opt-in.** Three flags on `Entity` declare, per verb, that direct SQL is sanctioned:
+
+```typescript
+const entity = new Metadata().EntityByName('Some Entity');
+if (!entity?.AllowDirectSQLUpdate) {
+    // Not sanctioned — go through BaseEntity.Save()
+}
+```
+
+- `AllowDirectSQLInsert` — bulk loads, ETL/integration sync, rows created as a side effect of a proc
+- `AllowDirectSQLUpdate` — bulk backfills, maintenance routines
+- `AllowDirectSQLDelete` — purge/retention, integration reconciliation
+
+All default to `false`. **They declare; they do not enforce** — nothing stops you executing SQL, so a `false` is a statement that the platform does not expect raw DML here, not a barrier that will catch you.
+
+Setting any of them requires `TrackRecordChanges = 0` **and** `TrustServerCacheCompletely = 0` (a database CHECK enforces it), since direct DML writes no audit row and fires no invalidation event. `AllowDirectSQLDelete` additionally requires `DeleteType = 'Hard'`.
+
+**If you need a bulk operation**, reach for the substrate before reaching for SQL — see [Record Set Processing & Record Processes Guide](../../guides/RECORD_SET_PROCESSING_GUIDE.md), which gives you batching, resume, rate limiting and audit without leaving the `BaseEntity` path.
+
 ### Key Benefits of This Pattern
 - **Type Safety**: Generic method provides full TypeScript typing
 - **Performance**: `ResultType: 'entity_object'` eliminates manual conversion loops
