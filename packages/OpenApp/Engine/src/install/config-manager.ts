@@ -611,40 +611,25 @@ function EnsureTrailingComma(before: string, openBracePos: number): string {
  * file has trailing code — unlike `lastIndexOf('};')`, which lands in the wrong block (B4).
  */
 function InsertBeforeModuleExportsClose(content: string, section: string): string {
-    // Try pattern 1: module.exports = { ... }
-    const inlineMatch = content.match(/module\.exports\s*=\s*\{/);
-    if (inlineMatch && inlineMatch.index !== undefined) {
-        const bracePos = content.indexOf('{', inlineMatch.index);
-        const closePos = FindMatchingBracket(content, bracePos);
-        if (closePos === -1) {
-            throw new Error('Could not locate the closing brace of module.exports in mj.config.cjs.');
-        }
-        const before = EnsureTrailingComma(content.slice(0, closePos), bracePos);
-        return before + section + content.slice(closePos);
+    // Resolve the anchor through FindExportedObjectBrace, which skips comments and strings and
+    // handles both export forms. Matching `module.exports = {` directly here selected the FIRST
+    // textual hit — and MJ's own default MJAPI scaffold documents an example `module.exports = {…}`
+    // in its header comment, so every section created on a stock host landed inside that comment and
+    // was inert while the operation reported success (issue #3301). All three callers of this
+    // helper — dynamicPackages, excludeSchemas and entityPackageName — shared that failure.
+    const bracePos = FindExportedObjectBrace(content);
+    if (bracePos === -1) {
+        throw new Error(
+            'Could not find a config object in mj.config.cjs to insert into. ' +
+            'Expected either `module.exports = { ... }` or `module.exports = <variable>;` where the variable is declared as an object literal.',
+        );
     }
-
-    // Try pattern 2: module.exports = someVar;
-    const varMatch = content.match(/module\.exports\s*=\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*;/);
-    if (varMatch && varMatch.index !== undefined) {
-        const varName = varMatch[1];
-        // Find the variable's object literal: const/let/var varName = { ... }
-        const declPattern = new RegExp(`(?:const|let|var)\\s+${EscapeRegex(varName)}\\s*=\\s*\\{`);
-        const declMatch = content.match(declPattern);
-        if (declMatch && declMatch.index !== undefined) {
-            const bracePos = content.indexOf('{', declMatch.index);
-            const closePos = FindMatchingBracket(content, bracePos);
-            if (closePos === -1) {
-                throw new Error(`Could not locate the closing brace of '${varName}' object in mj.config.cjs.`);
-            }
-            const before = EnsureTrailingComma(content.slice(0, closePos), bracePos);
-            return before + section + content.slice(closePos);
-        }
+    const closePos = FindMatchingBracket(content, bracePos);
+    if (closePos === -1) {
+        throw new Error('Could not locate the closing brace of the exported config object in mj.config.cjs.');
     }
-
-    throw new Error(
-        'Could not find a config object in mj.config.cjs to insert into. ' +
-        'Expected either `module.exports = { ... }` or `module.exports = <variable>;` where the variable is declared as an object literal.',
-    );
+    const before = EnsureTrailingComma(content.slice(0, closePos), bracePos);
+    return before + section + content.slice(closePos);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
