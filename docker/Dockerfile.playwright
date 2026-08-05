@@ -4,9 +4,9 @@ FROM mcr.microsoft.com/playwright:v1.58.1-noble
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/TestingFramework/ ./packages/TestingFramework/
 
-RUN npm ci
+RUN corepack enable && pnpm install --frozen-lockfile
 
 CMD ["npx", "mj-test", "run", "--suite=regression"]

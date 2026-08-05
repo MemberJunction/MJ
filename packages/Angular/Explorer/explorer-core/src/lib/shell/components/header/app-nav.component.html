@@ -47,6 +47,13 @@
       <span class="more-count">{{ OverflowItems.length }}</span>
     </div>
   }
+  <!-- Trailing slot: shell-level items that sit AFTER the app's own nav
+       (the Records pill). Its width is reserved by
+       recomputeFit so the priority+ arithmetic never lets nav items paint
+       under it. -->
+  <span class="nav-trailing" #trailingSlot>
+    <ng-content></ng-content>
+  </span>
 </nav>
 
 <!-- The dropdown lives OUTSIDE the clipped nav row (the row keeps

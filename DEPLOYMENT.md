@@ -1,14 +1,27 @@
 # MemberJunction Release & Deployment Guide
 
-This document covers the end-to-end process for releasing a new version of MemberJunction. All `@memberjunction/*` packages are versioned together (fixed group via changesets).
+This document is the **build-engineering guide**: the deep checklist that prepares release *content* — metadata-sync migrations, the integration-suite gate, PostgreSQL parity, npm placeholders for new packages. All `@memberjunction/*` packages are versioned together (fixed group via changesets), and the monorepo builds with **pnpm** (version pinned by `packageManager` in `package.json`; the lockfile is `pnpm-lock.yaml`).
+
+> ### Which document do you need?
+>
+> Since the 6.x era opened (Aug 2026), MJ ships on two channels and there are four distinct release operations. **Pressing the buttons is not this document's job:**
+>
+> | You are… | Read |
+> |---|---|
+> | Running a routine Edge release (one button), an LTS candidate cut, a line patch release, or a certification flip | [`guides/RELEASE_ENGINEERING_RUNBOOK.md`](guides/RELEASE_ENGINEERING_RUNBOOK.md) — the operator manual |
+> | Looking for policy — channels, certification gates, support windows, backport rules | [`plans/lts-process.md`](plans/lts-process.md) (canon) |
+> | Decoding a version string or choosing a channel | [`VERSIONING.md`](VERSIONING.md); machine-readable release state in [`release-lines.json`](release-lines.json) |
+> | Preparing the release content itself — metadata sync, integration gate, PG migrations, new packages | **This document** (Steps 0–8) |
+>
+> **When do Steps 0–8 run?** They are content-prep, not button-prep: run them whenever their inputs have changed — pending `metadata/` changes need a Metadata_Sync migration (Step 3), new SS migrations need PG counterparts (Step 8), new packages need npm placeholders (Step 5) — *before the release that ships that content, whichever channel it ships on*. The LTS candidate cut assumes all of this is already done. **Nothing downstream re-checks this list** — CI going green says nothing about whether Steps 0–8 were run, and Step 3 in particular has no automated detection at all.
 
 > ### 🤖 If you are an AI coding agent running this release
 >
 > **Build a persistent checklist of all 12 steps (0–11) before you start, and tick each one off as it completes.** A release spans hours, several CI waits, and a Docker workbench session, so steps get silently skipped — **Step 5 was nearly missed in v5.49.0** precisely because it sits between two long-running steps and has no CI equivalent to remind you.
 >
-> Include the sub-steps that are separately skippable: 3.8 (commit the mj-sync writeback), 4.2 (seed integration metadata), 4.2b (the `UserSetting` floor), 5 (new-package npm placeholders), 7's parity gate, and 11 (the changelog).
+> Include the sub-steps that are separately skippable: 3.8 (commit the mj-sync writeback), 4.2 (seed integration metadata), 4.2b (the `UserSetting` floor), 5 (new-package npm placeholders), 7's parity gate, and 8's content verification.
 >
-> Steps 5 and 11 are the ones with no automated backstop. If you skip a CI-covered step, something goes red. If you skip those two, nothing does.
+> Step 5 and Step 8's content checks are the ones with no automated backstop. If you skip a CI-covered step, something goes red. If you skip those, nothing does.
 
 > ### Local values differ per engineer — resolve them, don't copy them
 >
@@ -27,29 +40,48 @@ This document covers the end-to-end process for releasing a new version of Membe
 
 ## Release Types
 
-| Type | When | Versioning | Deployment |
+| Type | Branch flow | Versioning | How it ships |
 |------|------|-----------|------------|
-| **Patch** | Bug fixes, no schema/metadata changes | `5.5.1 → 5.5.2` | Automated via GitHub Actions |
-| **Minor** | New migration files or metadata changes | `5.5.x → 5.6.0` | Automated via GitHub Actions |
-| **Major** | Breaking changes | `5.x → 6.0.0` | **Manual deploy — do NOT use GitHub Actions** |
+| **Routine Edge release** | `release/*` prep branch → `main`, then auto back-merge to `next` | `6.Y.0-edge.N` — changesets pre-mode; the stream targets the next line's tuple | Reviewed PR into `main` (runbook op. 1). Prep happens on the branch, so `next` is never frozen |
+| **LTS candidate cut** | tip of `next` → branch `lts/6.Y` | `6.Y.0` — the pre-exit dance | Scripted-manual (runbook op. 2). **Never through `next → main`** — the era gate refuses it |
+| **LTS line patch** | `lts/*` branch only | `6.Y.Z` — patch-only; DB-touching patches carry their §12 label | **One button**: Actions → "Publish LTS line release" (runbook op. 3) |
+| **New era (major)** | — | `7.0.0-edge.0` opens the era | Era open — a genuine infrastructure-contract change, never a routine release |
 
-> The `publish.yml` workflow auto-detects minor vs patch: if new migration files exist since the last tag, it bumps minor; otherwise patch. But you must ensure the changesets are correct (see Step 3).
+> In pre-mode, `changeset version` computes the version — the old "minor if new migrations, else patch" auto-detect in `publish.yml` applies only outside pre-mode. Migrations still require a minor-or-higher tuple, which every `X.Y.0-edge.N` release satisfies by construction; on lines they ride labeled patches (process doc §12). Dist-tags: routine publishes carry `--tag edge`, line publishes `--tag lts-<line>`, and **npm `latest` moves only at certification** (`ci/dist-tag-all.mjs`). You must still ensure the changesets are correct (see Step 3).
 
 ---
 
 ## Pre-Release Checklist
 
-> **Recommended: work on a release-prep branch instead of committing to `next`
-> directly.** Cut `release/vX.Y-prep` from the tip of `next`
-> (`git checkout -b release/vX.Y-prep && git push -u origin release/vX.Y-prep` —
-> same-named remote tracking, per the branch rules), land the Step 2–7 commits
-> there, and merge into `next` via a PR (e.g. #3163 for v5.48). This keeps `next`
-> green while prep is in flight and gives the release artifacts a reviewable PR.
+> ### 🚨 Everything below happens on a release-prep branch, not on `next`
 >
-> **Reading the steps below:** where they say "commit/push to `next`" (Step 3.8,
-> Step 6), that is the target on the direct-to-`next` workflow. On the prep-branch
-> workflow, commit to your prep branch instead — it reaches `next` through the PR.
-> The steps use `next` as shorthand for "the branch that becomes the release."
+> Cut it from the `next` commit you intend to release, and land every Step 2–8 commit there:
+>
+> ```bash
+> git fetch origin next
+> git checkout -b release/vX.Y-prep origin/next
+> git push -u origin release/vX.Y-prep     # same-named remote tracking, per the branch rules
+> git rev-parse --short HEAD               # the release base — record it
+> ```
+>
+> **That branch merges into `main` (Step 9), and `publish.yml` back-merges it to `next`.**
+> It does not merge into `next` first.
+>
+> ```
+> next ──●──────────────────────────●────────────►   keeps moving throughout
+>        │ cut here                  ▲
+>        └── release/vX.Y-prep ──────┼──► PR → main ──► publish.yml
+>                  (Steps 2–8)       └────────── back-merge main → next
+> ```
+>
+> **Nobody has to stop merging while you do this, and `next` is never frozen.** Prep spans
+> hours. Because the branch was cut at a known commit, whatever lands on `next` afterwards
+> simply rides the *next* release — the branch **is** the pin. `next` also stays free of
+> release-prep churn, which is the other half of why prep lives here.
+>
+> **Reading the steps below:** where they say "commit/push to `next`" (Step 3.8, Step 6),
+> commit to your prep branch instead. The steps use `next` as shorthand for "the branch
+> that becomes the release."
 
 ### Step 0: Preflight — check the environment before you start
 
@@ -98,7 +130,7 @@ Before anything else, confirm the `next` branch is healthy:
 - [ ] **"Unit Tests"** (`test.yml`) — passes on any open PR, and on the **push-to-`next`** run (that unfiltered backstop is the one that actually proves integration-bundle ↔ `MJ: Tests` metadata sibling parity; a metadata-only PR never triggers `test.yml` at all)
 - [ ] **"Integration Tier"** (`integration.yml`) — passes on `next`. Runs the deterministic suite against a fresh SQL Server on PRs into `next` plus an unfiltered push-to-`next` backstop. It is **not** a substitute for Step 4: CI runs no MJAPI (so client-transport bundles skip) and no live-model tier.
 
-> **Don't idle here.** These runs take ~15 minutes. **Step 3 (fresh database + migrate + metadata push) is independent of them** — it works on a local scratch database and reads nothing from CI. Start Step 3 while Step 1 runs and check back. The only ordering that matters is that Step 3's results are committed before the release PR.
+> **Don't idle here.** These runs take ~15 minutes. **Step 3 (fresh database + migrate + metadata push) is independent of them** — it works on a local scratch database and reads nothing from CI. Start Step 3 while Step 1 runs and check back. The only ordering that matters is that Step 3's results are committed to your prep branch before you open the release PR.
 >
 > Step 2 must still precede Step 3, since its model metadata has to be present before the sync push.
 
@@ -140,7 +172,7 @@ Check if there are any pending metadata changes (new/updated records in `metadat
 
 #### If metadata has changed since the last release:
 
-1. **Verify MJ CLI is up to date** — run `mj version` and compare against `npm view @memberjunction/cli version`; update with `npm install -g @memberjunction/cli@latest` if behind (a stale CLI produces stale sync/codegen output)
+1. **Verify MJ CLI is up to date — against the channel of the content you're preparing.** `npm view @memberjunction/cli dist-tags` shows all channels; `latest` is the newest *certified* build, not the newest build. Prefer the repo-local CLI (`npx mj`, wired via the root `@memberjunction/cli` dependency), which rides the workspace version. If you use a global `mj`, install it from the matching tag (`npm install -g @memberjunction/cli@edge` for Edge-era content) — a stale CLI produces stale sync/codegen output
 2. **Start a fresh database** — a new empty database on your existing dev SQL Server works fine (no separate instance needed). Example, with the standard MJ logins mapped in:
    ```bash
    docker exec <your-sql-container> bash -c '
@@ -180,28 +212,31 @@ Check if there are any pending metadata changes (new/updated records in `metadat
 6. **Grab the generated SQL** from `metadata/sql_logging/` — find the most recent `MetadataSync_Push_*.sql` file
 7. **Copy it to the migrations folder** and rename using the naming convention:
    ```
-   V[YYYYMMDDHHMM]__v[NEXT_MINOR].x__Metadata_Sync.sql
+   V[YYYYMMDDHHMM]__v[TARGET_LINE].x__Metadata_Sync.sql
    ```
    Examples:
    ```
+   V202608041200__v6.1.x__Metadata_Sync.sql
    V202603021058__v5.5.x__Metadata_Sync.sql
-   V202602271034__v5.4.x__Metadata_Sync.sql
    ```
    - Timestamp format: `YYYYMMDDHHMM` (year, month, day, hour, minute)
-   - Version: use the **next minor version** (e.g., if current release is `5.5.x`, use `v5.6.x`)
+   - Version: use the **tuple the Edge stream is building toward** — while `next` streams
+     `6.1.0-edge.N`, name it `v6.1.x` (matches the existing files in `migrations/v6/`). In the
+     classic 5.x era this was "the next minor version"
+   - Folder: the highest-numbered `migrations/v*/` era folder (currently `migrations/v6/`)
    - Timestamp must be **strictly greater** than all existing migration timestamps (enforced by CI)
    - **Verify no test-only records leaked in.** No CI check catches this — `changes.yml` validates
      naming, schema placeholders and timestamps only. Grep the newly copied file by name and
      confirm zero hits:
      ```bash
      grep -c '@integration\.test\|Integration Test: RLS Scoped Reader\|IT: Probe Skill' \
-       migrations/v5/V<new-timestamp>__v5.X.x__Metadata_Sync.sql   # must print 0
+       migrations/v6/V<new-timestamp>__v6.X.x__Metadata_Sync.sql   # must print 0
      ```
 
-8. **Commit the migration script to `next`** — push this new migration file to the `next` branch so it's included in the release PR. **Also commit the mj-sync writeback**: the push back-fills `primaryKey`/`sync` blocks into the new records' metadata JSON files (`metadata/**/.*.json`) — those belong in the same commit so future pushes recognize the records as existing.
+8. **Commit the migration script to `next`** — push this new migration file to the `next` branch so it ships with the release. **Also commit the mj-sync writeback**: the push back-fills `primaryKey`/`sync` blocks into the new records' metadata JSON files (`metadata/**/.*.json`) — those belong in the same commit so future pushes recognize the records as existing.
 9. **Ensure a minor changeset exists** — if changesets only have `patch` bumps, you must add a changeset with `minor` on at least one `@memberjunction/*` package to indicate this is a minor release:
    ```bash
-   npm run change
+   pnpm run change
    # Select at least one package, choose "minor"
    ```
    The migration/metadata files themselves do **not** get their own changeset — changesets version npm packages, and the minor signal is normally already carried by the feature changesets on `next`. This step is a check, not an automatic add.
@@ -248,18 +283,18 @@ There are **two runnable suites**, and one `mj test suite` invocation runs exact
 1. **Step 3 is done** — `mj migrate` + `mj sync push --dir ./metadata` applied to the scratch database, and your `.env` points at it.
 
    > 🚨 **Repoint the database by editing `.env` (Step 3.3) — an inline `DB_DATABASE=… npx mj test …` silently does NOT work.** The testing CLI loads dotenv with `override: true` (`packages/TestingFramework/CLI/src/lib/mj-provider.ts`), so `.env` clobbers the shell variable and the suite runs against whatever `.env` says. `mj sync push` behaves the **opposite** way (its init hook does not override), so the shell-var shortcut *appears* to work while seeding and then silently targets the wrong database for the run — and this tier mutates. Confirm the target on every run: the CLI prints `config.dbDatabase: <name>` at startup.
-2. **The repo is built — and the suite package's `dist/` is *current*.** `npm run build`. The suite loads compiled `dist/`, including the private, never-published `@memberjunction/integration-test-suite` package. A `dist/` that merely **exists is not enough**: if it predates the newest `src/checks/*.checks.ts`, every bundle added since compiles to nothing and the run fails with a wall of `Unknown integration check bundle '<name>'` — naming the *newest* bundles while older ones pass. Verify freshness rather than assuming:
+2. **The repo is built — and the suite package's `dist/` is *current*.** `pnpm run build`. The suite loads compiled `dist/`, including the private, never-published `@memberjunction/integration-test-suite` package. A `dist/` that merely **exists is not enough**: if it predates the newest `src/checks/*.checks.ts`, every bundle added since compiles to nothing and the run fails with a wall of `Unknown integration check bundle '<name>'` — naming the *newest* bundles while older ones pass. Verify freshness rather than assuming:
    ```bash
    ls -t packages/TestingFramework/integration-test-suite/dist/index.js \
          packages/TestingFramework/integration-test-suite/src/checks/*.checks.ts | head -1
    # Must print the dist file. If a .checks.ts is newest, rebuild THROUGH TURBO:
    npx turbo run build --filter=@memberjunction/integration-test-suite
    ```
-   > Rebuild it with turbo, **not** `cd <pkg> && npm run build`. The check bundles depend on fixtures and context properties exported by `@memberjunction/testing-integration`; if that sibling is also stale, the direct build dies with dozens of `has no exported member 'AgentLiveFixture'` / `Property 'XFixture' does not exist on type 'IntegrationCheckContext'` errors. Turbo's `dependsOn: ["^build"]` builds the dependency first. A full `npm run build` (Step 7) covers this too.
+   > Rebuild it with turbo, **not** `cd <pkg> && pnpm run build`. The check bundles depend on fixtures and context properties exported by `@memberjunction/testing-integration`; if that sibling is also stale, the direct build dies with dozens of `has no exported member 'AgentLiveFixture'` / `Property 'XFixture' does not exist on type 'IntegrationCheckContext'` errors. Turbo's `dependsOn: ["^build"]` builds the dependency first. A full `pnpm run build` (Step 7) covers this too.
 3. **`mj.config.cjs` still carries `testing.checkModules`** (`['@memberjunction/integration-test-suite']`) — that key is how check bundles are discovered.
 4. **The integration metadata is seeded** — see 4.2. This is **not** optional any more.
 5. **MJAPI is running** against the Step-3 database, with `MJ_API_KEY` set — see 4.3.
-6. **Use the repo-local CLI**, from the repo root (`npm run test:integration` / `npx mj …`). A globally-installed `mj` cannot load the private suite package.
+6. **Use the repo-local CLI**, from the repo root (`pnpm run test:integration` / `npx mj …`). A globally-installed `mj` cannot load the private suite package.
 
 #### 4.2 Seed the integration metadata (REQUIRED)
 
@@ -301,10 +336,10 @@ With those rows present all 7 cache-gauntlet checks pass and the tier reaches 52
 
 ```bash
 # In a separate shell, pointed at the Step-3 database
-cd packages/MJAPI && npm run start
+cd packages/MJAPI && pnpm start
 ```
 
-> ⚠️ **Run it from `packages/MJAPI`, not `npm run start:api` from the repo root.** The root script is `turbo start --filter=mj_api`, and **turbo passes through only the environment variables declared in `turbo.json`** — anything else is stripped before the task sees it. Overriding the database with `DB_DATABASE=… npm run start:api` therefore fails with `Error parsing config file … "path": ["dbDatabase"] … "received": "undefined"`, which reads like a config-file problem rather than an env-passthrough one. Running from the package directory bypasses turbo entirely and the variables arrive intact.
+> ⚠️ **Run it from `packages/MJAPI`, not `pnpm run start:api` from the repo root.** The root script is `turbo start --filter=mj_api`, and **turbo passes through only the environment variables declared in `turbo.json`** — anything else is stripped before the task sees it. Overriding the database with `DB_DATABASE=… pnpm run start:api` therefore fails with `Error parsing config file … "path": ["dbDatabase"] … "received": "undefined"`, which reads like a config-file problem rather than an env-passthrough one. Running from the package directory bypasses turbo entirely and the variables arrive intact.
 
 - `MJ_API_KEY` must be in **repo-root `.env`** (Step 0.3), not just your shell — MJAPI and the test run are separate processes and both must see the same value. You invent this value; nothing issues it (`MJServer` string-compares `process.env.MJ_API_KEY` against the `x-mj-api-key` header). Confirm it authenticates end-to-end before running the suite, rather than discovering it 19 tests later:
   ```bash
@@ -330,10 +365,10 @@ The two failure modes are **asymmetric, and neither shows up in the exit code**:
 
 ```bash
 # 1) Deterministic + mutation axis — from the repo root
-RUN_MUTATION_TESTS=1 npm run test:integration 2>&1 | tee release-deterministic.log
+RUN_MUTATION_TESTS=1 pnpm run test:integration 2>&1 | tee release-deterministic.log
 ```
 
-`npm run test:integration` expands to `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"`.
+`pnpm run test:integration` expands to `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"`.
 
 - `RUN_MUTATION_TESTS` must be **literally `1`** (`true` and `0` both disable it). The mutation checks are per-check gates *inside* the deterministic bundles, not a separate suite, and they skip **silently** when disabled — the only observable difference is a smaller total check count.
 - `RUN_AGENT_TESTS` does nothing here: the deterministic suite has zero live-model members.
@@ -376,7 +411,7 @@ The exit code is driven by `failedTests`, which counts **only** status `Failed`.
 - **Environment gap** — `MJAPI is not reachable`, `MJ_API_KEY is not set`, `Bootstrap failed:`, or **exit code 2** (ran inside a process that already owns the cache, e.g. a live MJAPI). Fix the environment, re-run.
 - **A wall of `Unknown integration check bundle '<name>'`** — the private suite package wasn't built, `testing.checkModules` isn't loading, or a global `mj` / wrong cwd. Not a product regression.
 - **Seeding died with `Failed to process field 'TypeID' in MJ: Tests: Lookup failed: No record found in 'MJ: Test Types' where Name='Integration Test'`** — you ran 4.2 before Step 3's `mj sync push --dir ./metadata`, which is what supplies that TestType. The push rolls the DB transaction back and restores the file backups cleanly, so just do Step 3 first and re-run 4.2.
-- **MJAPI refuses to boot with `Schema must contain uniquely named types but contains multiple types named "<X>"`** — a **stale `dist/` orphan**, not a code defect: a resolver whose source was deleted or renamed still has compiled output, and TypeGraphQL loads every resolver in `dist/`, registering the type twice. `tsc` never deletes outputs for removed sources, so another incremental `npm run build` will **not** clear it. Find and remove the orphans, then restart:
+- **MJAPI refuses to boot with `Schema must contain uniquely named types but contains multiple types named "<X>"`** — a **stale `dist/` orphan**, not a code defect: a resolver whose source was deleted or renamed still has compiled output, and TypeGraphQL loads every resolver in `dist/`, registering the type twice. `tsc` never deletes outputs for removed sources, so another incremental `pnpm run build` will **not** clear it. Find and remove the orphans, then restart:
   ```bash
   for d in packages/MJServer/dist/resolvers/*.js; do b=$(basename "$d" .js); \
     [ -f "packages/MJServer/src/resolvers/$b.ts" ] || echo "ORPHAN: $d"; done
@@ -433,7 +468,7 @@ Make sure the changeset entries accurately reflect the release:
 
 ### Step 7: Full Repo Build
 
-**This must be done before creating the release PR.** A full local build validates compilation across all packages and regenerates bootstrap manifest files that may have drifted across merged PRs.
+**This must be done before the release that ships this content (Step 9).** A full local build validates compilation across all packages and regenerates bootstrap manifest files that may have drifted across merged PRs.
 
 ```bash
 # 1. Pull the latest next branch
@@ -441,10 +476,10 @@ git checkout next
 git pull origin next
 
 # 2. Clean install dependencies
-npm install
+pnpm install
 
 # 3. Full repo build
-npm run build
+pnpm run build
 
 # 4. Integration sibling-parity gate (check bundle <-> MJ: Tests metadata drift).
 #    --force is required: turbo's `test` inputs are src/**, vitest.config.*, tsconfig* —
@@ -454,7 +489,7 @@ npx turbo run test --force --filter=@memberjunction/integration-test-suite
 ```
 
 **Expected behavior:**
-- The `npm run build` step runs `turbo build` across all `@memberjunction/*` packages
+- The `pnpm run build` step runs `turbo build` across all `@memberjunction/*` packages
 - The `postbuild` step regenerates bootstrap manifests (`mj-class-registrations.ts`) for:
   - `packages/ServerBootstrap/src/generated/`
   - `packages/ServerBootstrapLite/src/generated/`
@@ -484,7 +519,7 @@ git push origin next
 
 > **Why this matters:** Git merging catches code-level conflicts, but bootstrap manifests are generated files that concatenate registrations from all packages. Two PRs each adding a new `@RegisterClass` will merge cleanly (no git conflict) but the manifest won't contain both registrations until a full build regenerates it. Skipping this step can cause missing class registrations at runtime.
 >
-> The same reasoning is why a *cosmetic* diff should be left alone: committing it adds release-PR noise for a file CI is about to rewrite anyway. `package-lock.json` changes from `npm install` fall in the same bucket — `publish.yml` updates lock files during the `main` → `next` back-merge.
+> The same reasoning is why a *cosmetic* diff should be left alone: committing it adds release-PR noise for a file CI is about to rewrite anyway. `pnpm-lock.yaml` changes from `pnpm install` fall in the same bucket — `publish.yml` refreshes the lockfile (`pnpm install --lockfile-only`) during the `main` → `next` back-merge.
 
 ---
 
@@ -496,7 +531,7 @@ git push origin next
 
 MemberJunction ships migrations for **both** SQL Server and PostgreSQL. SS migrations in `migrations/v5/` are authored first; each needs a validated PostgreSQL counterpart (`.pg.sql`) in `migrations-pg/v5/`. Producing those counterparts is now a standard part of the release process, run via the **`/pg-migrate-v2`** skill (the "split-and-regenerate" pipeline) or its successor runbook **`/pg-migrate-experimental`**, which carries the latest field-tested gotchas (converter dedup mutating committed files, workbench memory limits, scheduled-job OOM, `provisioningGuard`, correct `mj_api`/`mj_explorer` workspace names — see the Gotchas section in `.claude/commands/pg-migrate-experimental.md`). Whichever variant runs, the non-negotiables are the same: **the real gate is a clean `mj migrate` on a fresh PG database**, committed `.pg.sql` files are immutable, and no `.needs-hand` files may remain.
 
-> ⚠️ **Do this after the full build (Step 7) and before the release PR (Step 9).** Every new SS migration in this release must have a committed, verified `.pg.sql` counterpart on `next` before the PR is opened — otherwise PostgreSQL deployments of the release are missing migrations.
+> ⚠️ **Do this after the full build (Step 7) and before the release ships (Step 9).** Every new SS migration must have a committed, verified `.pg.sql` counterpart on `next` before the release that carries it — otherwise PostgreSQL deployments of the release are missing migrations. This applies to **every channel**: an Edge release that ships an SS migration without its counterpart leaves PG deployments gapped just as surely as an LTS one.
 
 **What the skill does** (see `.claude/commands/pg-migrate-v2.md` for the full runbook):
 
@@ -507,7 +542,7 @@ MemberJunction ships migrations for **both** SQL Server and PostgreSQL. SS migra
 5. Four verification layers run: conversion parity, SS↔PG schema parity, view semantic equivalence, and a CRUD behavioral oracle — followed by full-stack browser smoke + deep CRUD workflow tests (magic-link login, no external IdP).
 6. The verified `.pg.sql` files are copied back to the host as **uncommitted** changes for review, along with a `migrations-pg/PG_MIGRATION_REPORT.md`.
 
-**After the skill finishes:** review the converted `.pg.sql` files and the report, then **commit them to `next`** so they're included in the release PR. Confirm no `.needs-hand` files were copied back (that would mean conversion is incomplete).
+**After the skill finishes:** review the converted `.pg.sql` files and the report, then **commit them to `next`** so they ship with the release. Confirm no `.needs-hand` files were copied back (that would mean conversion is incomplete).
 
 #### 🚨 Verify content, not just existence — the gate cannot do this for you
 
@@ -603,18 +638,30 @@ Enabling it is a **code change, not configuration**: a platform branch (and a PG
 
 ---
 
-## Creating the Release
+## Shipping the Release
 
-### Step 9: Create PR from `next` → `main`
+### Step 9: Ship it — merge the prep branch into `main`
 
-> **Important:** All changes from the previous steps (metadata migration scripts, new changesets, AI model updates) must already be committed and pushed to `next` before creating this PR.
+**The release is a PR from your `release/*` prep branch into `main`.** Steps 0–8 produced content that must be reviewed — a metadata-sync migration is permanent, append-only history — and the PR is the review instrument. There is no button and no unreviewed path to `main`.
 
-1. Open a PR: `next` → `main`
-2. The **"Generate Release Notes"** workflow (`generate-release-notes.yml`) will auto-populate the PR title (e.g., `v5.6.0`) and description with structured release notes
-3. Wait for the generated PR message to appear
-4. Wait for **all CI checks** to pass:
+```bash
+git push origin release/v6.0-edge-prep
+# then open a PR:  release/v6.0-edge-prep → main
+```
+
+**This is also what pins the release.** The prep branch was cut from a chosen `next` commit, so the release contains exactly that commit plus your prep — and whatever lands on `next` while you work simply rides the *next* release. **`next` is never frozen**, and no one has to stop merging while you prepare.
+
+> **Why not a `next → main` PR?** It merges whatever `next` holds *at merge time*, so anything merged during the hours of Steps 0–8 ships unvalidated. That's the same drift, just less visible. Branch first; the branch is the pin.
+
+**Candidate cuts and line releases never go this way.** `publish.yml` hard-fails an unsuffixed version on this path — that's the era gate working, not a bug. Candidate cuts follow runbook op. 2 (the pre-exit dance); line releases ship via the **"Publish LTS line release"** button (runbook op. 3) from the `lts/*` branch.
+
+On the release PR:
+
+1. The **"Generate Release Notes"** workflow (`generate-release-notes.yml`) auto-populates the PR title and description with structured release notes. It fires for `next` **and `release/*`** heads — the gate exists so an ordinary PR into `main` can't have its title destructively overwritten, not to restrict which branch releases from.
+2. Wait for the generated PR message to appear
+3. Wait for **all CI checks** to pass:
    - `changes.yml` — validates migration filenames, version patterns, schema placeholder usage. **This is the only workflow that triggers on the release PR itself** (it's the one workflow listening on PRs into `main`).
-   - Everything else you see on the PR is **surfaced from the push-to-`next` run on the same head SHA** — `test.yml` (unit tests), `integration.yml` ("Integration Tier", deterministic suite), `build.yml`, and `migrations.yml` / `pg-migrations.yml` when migrations changed. If any of those are missing rather than green, the `next` tip never got a clean run — go back to Step 1.
+   - Everything else you see on the PR is **surfaced from the run on the same head SHA** — `test.yml` (unit tests), `integration.yml` ("Integration Tier", deterministic suite), `build.yml`, and `migrations.yml` / `pg-migrations.yml` when migrations changed. If any of those are missing rather than green, that commit never got a clean run — go back to Step 1.
 
    > Two traps in this list: the hardcoded-UUID scan for migrations is now an **advisory, non-blocking** step *inside* `changes.yml` (the old `claude.yml` workflow was deleted) — it posts a sticky PR comment plus a `::warning` and **never fails the job**, so you must read it, not just wait for green. And `dependency-check.yml` only triggers on PRs into `next`, so it will not appear on this PR at all.
 
@@ -622,20 +669,20 @@ Enabling it is a **code change, not configuration**: a platform branch (and a PG
 
    | Check | Why it's absent |
    |---|---|
-   | `build.yml` ("Build all packages for testing") | Path-filtered to `package-lock.json` and `packages/**`. A release whose only changes are `migrations/`, `migrations-pg/` and `metadata/` does not trigger it. Confirm it was green on the last commit that *did* touch `packages/**` |
+   | `build.yml` ("Build all packages for testing") | Path-filtered to `packages/**` (its filter also still lists the retired `package-lock.json` — dead since the pnpm cutover). A release whose only changes are `migrations/`, `migrations-pg/` and `metadata/` does not trigger it. Confirm it was green on the last commit that *did* touch `packages/**` |
    | `dependency-check.yml` | Triggers on PRs into `next` only |
 
    To read the advisory UUID scan when no PR comment appears (a clean scan *clears* its comment rather than posting one), check the job log — the step is `Check migration ID determinism (hard-coded UUIDs, not NEWID())`, and the following step being `Clear stale non-deterministic ID comment` is the clean outcome.
 
-### Step 10: Merge the PR
+### Step 10: Merge
 
-Once all checks pass, merge the PR into `main`.
+Once all checks pass, merge the PR into `main`. The push to `main` triggers `publish.yml` (Step 10a), which does everything else.
 
 ---
 
 ## Post-Merge: Automated Pipeline
 
-Merging to `main` triggers a chain of automated workflows. Monitor each one.
+The push to `main` — from the merged release PR — triggers a chain of automated workflows. Monitor each one.
 
 > ## 🚨 Do not cancel `publish.yml`
 >
@@ -652,8 +699,8 @@ Merging to `main` triggers a chain of automated workflows. Monitor each one.
 > `changeset publish` **skips versions already on npm**, so the re-run publishes only the remainder and then proceeds to bump, tag, and back-merge. Afterwards, verify explicitly rather than trusting the exit code:
 >
 > ```bash
-> npm view @memberjunction/cli version                              # expect the new version
-> git fetch origin --tags && git tag --sort=-creatordate | head -1  # expect vX.Y.Z
+> npm view @memberjunction/cli dist-tags                            # expect edge (or lts-*) at the new version — latest UNMOVED
+> git fetch origin --tags && git tag --sort=-creatordate | head -1  # expect vX.Y.Z[-edge.N]
 > git show origin/main:packages/MJCore/package.json | grep version  # expect the new version
 > ```
 >
@@ -661,33 +708,51 @@ Merging to `main` triggers a chain of automated workflows. Monitor each one.
 
 ### 10a. `publish.yml` — Build & Publish Packages
 
-**Triggered by:** push to `main`
+**Triggered by:** push to `main` (the merged release PR)
 
 This workflow:
 1. Runs migration tests against a fresh SQL Server container
-2. Validates package-lock.json case sensitivity
-3. Validates all `@memberjunction/*` packages exist on npm (see Step 5)
-4. Determines version bump (minor if new migrations, patch otherwise)
-5. Builds all packages
-6. Publishes to npm via OIDC
-7. Tags the release
-8. **Auto-merges `main` back into `next`** and updates lock files
+2. Validates all `@memberjunction/*` packages exist on npm (see Step 5) and carry `repository.url` for provenance
+3. Detects changesets pre-mode and versions accordingly — pre-mode yields the next `X.Y.0-edge.N`; the old migrations-mean-minor auto-detect applies only outside pre-mode
+4. **Guards the version grammar** — an unsuffixed version on this path is a hard error directing you to `publish-lts.yml` (candidates and line builds never ship through `next → main`)
+5. Builds all packages (`pnpm run build`)
+6. Publishes to npm via OIDC with the dist-tag derived from the grammar (`-edge.N` → `--tag edge`); **`latest` never moves here**
+7. Pushes the release commit and the `vX.Y.Z[-edge.N]` tag
+8. Creates the **GitHub Release** with auto-generated notes — never marked latest; edge builds are flagged prerelease. Certification later promotes the certified build (`gh release edit … --latest`)
+9. **Auto-merges `main` back into `next`** and refreshes `pnpm-lock.yaml`
+
+> **The back-merge refuses to guess, and that means it can fail loudly.** It resolves a `pnpm-lock.yaml` conflict by *regenerating* the file from the merged manifests, and **aborts on a conflict in any other file** rather than picking a side — leaving `next` untouched on the remote for a human to resolve.
+>
+> It previously merged with `-X theirs`, silently resolving every conflicting hunk in `main`'s favour. That was invisible while `next` was frozen for the release (main's source and next's were identical, so the strategy never fired), but with a pinned `ref` letting `next` legitimately run ahead of what shipped, it would silently discard whatever landed after the pin.
+>
+> **If it aborts, the release itself is fine** — packages are on npm and the tag is pushed; only the back-merge is outstanding. Resolve it by hand:
+> ```bash
+> git checkout next && git merge origin/main   # resolve conflicts, then:
+> pnpm install --lockfile-only && git add pnpm-lock.yaml && git commit && git push origin next
+> ```
+> A failed lockfile regeneration is tolerated when the merge was clean (an already-published release must not be failed by a registry hiccup) but is **fatal** when it was needed to resolve a conflict, since the committed lockfile is then a placeholder no side vouches for. Nothing is pushed in that case.
 
 ### 10b. `docker.yml` — Build & Publish Docker Images
 
-**Triggered by:** `publish.yml` completion
+**Triggered by:** `publish.yml` completion, or manual dispatch
 
 Builds and pushes multi-platform Docker images (`linux/amd64`, `linux/arm64`):
 - Docker Hub: `memberjunction/api:latest` and `memberjunction/api:v{VERSION}`
 - Azure ACR: `askskip.azurecr.io` with same tags
 
-> **Known issue:** This workflow sometimes fails because it tries to install the newly published npm packages before they've fully propagated on the npm registry. If it fails, **re-run the failed job** — it usually succeeds on the second attempt.
+> 🐳 **Docker `:latest` means the same thing npm's `latest` means — newest certified.** The workflow's `channel` job reads the version and **skips any prerelease**, so an Edge release publishes npm packages but produces **no Docker image**. Expect `docker.yml` to report a skipped `api` job on every Edge release; that is the guard working, not a failure.
+>
+> **What this means in practice during the Edge era:** nothing auto-publishes to Docker. Certified and line builds ship from `lts/*` through `publish-lts.yml`, which does not trigger this workflow — so a certified image is produced by **dispatching `docker.yml` manually against the certified tag**. The guard keys off version grammar, not the trigger, so a manual dispatch accidentally aimed at `next` is skipped too.
+>
+> **Open:** whether an `:edge` Docker tag is wanted at all, and wiring line publishes to Docker automatically (process doc §15 item 4). Until someone confirms a real need for Edge images, Edge simply doesn't get them.
+
+> **Known issue:** When it does build, this workflow sometimes fails because it tries to install the newly published npm packages before they've fully propagated on the npm registry. If it fails, **re-run the failed job** — it usually succeeds on the second attempt.
 
 ### 10c. `docs.yml` — Build & Deploy the Documentation Site
 
 **Triggered by:** `publish.yml` completion — **and** any push to `main` touching a docs source (`docs-site/**`, `guides/**`, `README.md`, `DEPLOYMENT.md`, `UPGRADE-v5.0.md`, `CONTRIBUTING.md`, `metadata/README.md`, `.claude/skills/**`) — **and** manual `workflow_dispatch`, when you need the site refreshed without waiting for a release.
 
-Runs `npm ci` → `npm run build` → `npx typedoc` → installs and unit-tests [`docs-site/`](docs-site) → ingest + Astro build → copies the TypeDoc output to `dist/api` → deploys to GitHub Pages. Publishes **https://docs.memberjunction.org** (custom domain via [`docs-site/public/CNAME`](docs-site/public/CNAME), served at the domain root with `DOCS_BASE: /`; the old `memberjunction.github.io/MJ/` now redirects here). The API reference for every shipped package (`typedoc.json` `entryPoints: ["packages/**"]`, excluding CLI/CodeGen/MJAPI/MJExplorer and generated packages) is attached at **https://docs.memberjunction.org/api**.
+Installs the workspace (`pnpm install --frozen-lockfile` — the workflow auto-detects npm vs pnpm per branch, since `lts/5` predates the cutover) → `pnpm run build` → `npx typedoc` → installs and unit-tests [`docs-site/`](docs-site) (its own npm package with its own lockfile) → ingest + Astro build → copies the TypeDoc output to `dist/api` → deploys to GitHub Pages. Publishes **https://docs.memberjunction.org** (custom domain via [`docs-site/public/CNAME`](docs-site/public/CNAME), served at the domain root with `DOCS_BASE: /`; the old `memberjunction.github.io/MJ/` now redirects here). The API reference for every shipped package (`typedoc.json` `entryPoints: ["packages/**"]`, excluding CLI/CodeGen/MJAPI/MJExplorer and generated packages) is attached at **https://docs.memberjunction.org/api**.
 
 **The site is compiled from the repo — there is no site to edit.** [`docs-site/scripts/ingest.mjs`](docs-site/scripts/ingest.mjs) turns every `guides/*.md`, every `packages/**/README.md`, and five root docs (this file among them) into pages; repo-relative links are rewritten to site links when the target is itself a page and to commit-pinned GitHub links otherwise. Nothing here is a per-release step — but it does mean **a stale README ships as stale public documentation**, and that copy-pasting prose into `docs-site/` is always the wrong fix. Correct the source file instead.
 
@@ -700,10 +765,12 @@ Runs `npm ci` → `npm run build` → `npx typedoc` → installs and unit-tests 
 ### Post-Merge Checklist
 
 - [ ] `publish.yml` completes successfully (npm packages published, tag created)
-- [ ] `docker.yml` completes successfully (Docker images pushed)
+- [ ] **Dist-tags landed on the right channel**: `npm view @memberjunction/core dist-tags` — `edge` moved to the new version, **`latest` did not move** (it moves only at certification)
+- [ ] **GitHub Release exists** for the new tag, notes auto-generated, marked prerelease (edge) and **not** latest
+- [ ] `docker.yml` behaved for the channel: on an **Edge** release its `api` job is **skipped** (correct — Docker `:latest` tracks certified builds); on a certified build dispatched manually, images pushed
 - [ ] `docs.yml` completes successfully (https://docs.memberjunction.org rebuilt, `/api` included)
-- [ ] `main` auto-merged back into `next` (includes lock file updates)
-- [ ] **`next` branch build passes** after the auto-merge — the lock file and version updates can sometimes cause issues, so always verify `build.yml` passes on `next` after a release
+- [ ] `main` auto-merged back into `next` (includes the `pnpm-lock.yaml` refresh). If it **aborted** on a conflict, the release still succeeded — finish the back-merge by hand per 10a step 9
+- [ ] **`next` branch build passes** after the auto-merge — the lockfile and version updates can sometimes cause issues, so always verify `build.yml` passes on `next` after a release
 
 ---
 
@@ -715,31 +782,18 @@ Runs `npm ci` → `npm run build` → `npx typedoc` → installs and unit-tests 
 >
 > **Nothing to do here per release.** The only residual concern is drift: if "Installation in Minutes" ever shows a hardcoded version link, fix it — but that's a rare one-off, not a release task, so it is no longer a numbered step.
 
-### Step 11: Update Changelog
+### Step 11: Release record & comms
 
-**Wait until ALL of the following are complete before saving:**
-- [ ] npm packages published
-- [ ] Docker images pushed
+**Routine Edge releases need no manual changelog work.** The release record is created automatically, in two layers:
 
-> Saving the changelog **publishes it and notifies your users.** There is no draft-then-notify-later. Everything must be live first.
+1. **Per-package `CHANGELOG.md`** — `changeset version` (inside `publish.yml`) turns each PR's `.changeset/*.md` summary into changelog bullets in every affected package.
+2. **The GitHub Release** — `publish.yml` runs `gh release create --generate-notes`, so GitHub compiles a "What's Changed" list from every merged PR since the previous tag. Edge builds are flagged prerelease and never marked latest.
 
-**Where the content comes from:** the release notes were already written for you. `generate-release-notes.yml` rewrote the `next → main` PR's title and body when you opened it (Step 9), producing a structured `# <headline>` / `## New Features` / `## Improvements` / `## Bug Fixes` document. That PR body **is** the changelog entry.
+Your only job here is the verification already in the Post-Merge Checklist — and remembering the consequence: **release-note quality is exactly PR-title quality plus changeset-summary quality.** Nobody edits notes at release time, so a lazy PR title ships verbatim in the public notes.
 
-```bash
-gh pr view <release-pr-number> --json body --jq .body | pbcopy
-```
+**Certified builds get the human layer.** At certification (runbook op. 4): the certified build's GitHub Release is marked **latest**, retitled with "(LTS)", and linked to its scorecard (`certifications/<version>.md`); the certification announcement follows process doc Appendix A.3. That is a certification step, not a per-release one.
 
-**Then, in ReadMe:**
-
-1. Left sidebar → **Changelog**
-2. Create a **new** entry (do not edit the previous release's)
-3. **Title:** `vX.Y.Z` — match the existing convention
-4. **Body:** paste. ReadMe renders markdown natively, so backticks and bold survive
-5. Publish
-
-> Two things worth doing before you publish. The body opens with an H1 headline, which may duplicate the entry title — check how the previous release's entry handled it and match. And **skim the Bug Fixes section for accuracy**: the notes are generated from the diff, and this is the one release artifact that goes to users under your name.
-
-> **There is no GitHub Release.** No workflow creates one — `ci/commit_push.mjs` pushes the `vX.Y.Z` *tag* only, and a repo-wide search for `gh release create` / `action-gh-release` finds nothing. Release information lives in three places: this ReadMe changelog entry (users), the release PR body (the source text), and per-package `CHANGELOG.md` files written by changesets (developers).
+> **The ReadMe changelog step is retired.** Older releases hand-pasted the release-PR body into the ReadMe (readme.com) changelog. Public docs now live at **https://docs.memberjunction.org** (built from this repo by `docs.yml`), the GitHub Release is the per-release public record, and the ReadMe site is being wound down — do not create new entries there.
 
 ---
 
@@ -753,7 +807,11 @@ gh pr view <release-pr-number> --json body --jq .body | pbcopy
 | `test.yml` | PR to `next` | Unit tests |
 | `migrations.yml` | Push to `next` (migrations changed) | Validate migrations |
 | `changes.yml` | PR to `next` or `main` | Validate migration naming & changesets |
-| `publish.yml` | Push to `main` | Version, build, publish to npm |
+| `publish.yml` | Push to `main` | Version (pre-mode aware), grammar guard, build, publish to npm on the channel dist-tag, GitHub Release, merge-back |
+| `publish-lts.yml` ("Publish LTS line release") | Manual dispatch from an `lts/*` branch | Line patch release: version → build → publish `--tag lts-<line>` → tag + GitHub Release (never latest). Auto-detects npm (`lts/5`) vs pnpm (6.x-era lines) |
+| `backport.yml` | `backport lts/*` label on a merged `next` PR | Opens the cherry-pick PR against the line branch (conflicts → draft PR) |
+| `release-lines-guard.yml` | PRs touching, and pushes changing, `release-lines.json` | Status-transition legality; direct pushes may change mechanical fields only |
+| `release-test.yml` | Manual dispatch | Release validation suite against a chosen branch |
 | `docker.yml` | After `publish.yml` | Build & push Docker images |
 | `docs.yml` | After `publish.yml`, doc pushes to `main`, manual dispatch | Build & deploy docs.memberjunction.org (site + `/api`) |
 | `docs-site-ci.yml` | PR touching a docs source | Fast (~2 min) "does the docs site still build" check |
@@ -764,19 +822,19 @@ gh pr view <release-pr-number> --json body --jq .body | pbcopy
 
 | Artifact | Location | Produced by |
 |---|---|---|
-| **Release notes** (the text you paste into chat / the changelog) | Body of the `next → main` PR | `generate-release-notes.yml`, on PR open |
-| Per-package changelogs | `packages/*/CHANGELOG.md` | changesets, in the `RELEASING: Releasing N package(s)` commit |
-| npm packages | `latest` dist-tag | `publish.yml` |
-| Git tag `vX.Y.Z` | repo tags | `ci/commit_push.mjs` |
-| Docker images | Docker Hub `memberjunction/api`, Azure ACR | `docker.yml` |
-| API docs | https://memberjunction.github.io/MJ/ | `docs.yml` |
-| Public changelog | ReadMe → Changelog | **manual, Step 11** |
-| ~~GitHub Release~~ | — | **nothing creates one** |
+| **Release notes** | The GitHub Release body (auto-generated "What's Changed" from merged PRs) | `publish.yml` (`gh release create --generate-notes`); on the manual-PR path, `generate-release-notes.yml` additionally writes structured notes into the PR body |
+| Per-package changelogs | `packages/*/CHANGELOG.md` | changesets, in the `RELEASING: Releasing N package(s)` commit, from each PR's changeset summary |
+| npm packages | `edge` / `lts-<line>` dist-tags — **`latest` moves only at certification** | `publish.yml` / `publish-lts.yml`; `ci/dist-tag-all.mjs` at certification |
+| Git tag `vX.Y.Z[-edge.N]` | repo tags | `ci/commit_push.mjs` |
+| Docker images | Docker Hub `memberjunction/api`, Azure ACR | `docker.yml` — certified builds only; Edge is skipped (see 10b) |
+| API docs | https://docs.memberjunction.org/api | `docs.yml` |
+| Release/support state | [`release-lines.json`](release-lines.json) | Workflows append mechanical fields; status changes only via CODEOWNERS-gated PR |
+| Certification scorecards | `certifications/<version>.md`, linked from the certified GitHub Release | Certification owner |
 
 ```bash
-gh pr view <release-pr> --json body --jq .body     # the release notes
+gh release view v6.1.0-edge.0 --json body --jq .body   # the release notes
 git show <releasing-commit>:packages/MJCore/CHANGELOG.md | head -40
-git log v5.48.0..v5.49.0 --oneline | wc -l          # raw commit count for a release
+git log v5.50.0..v5.51.0 --oneline | wc -l              # raw commit count for a release
 ```
 
 ### Migration Naming Convention
@@ -787,7 +845,7 @@ V[YYYYMMDDHHMM]__v[MAJOR].[MINOR].x__[Description].sql
 
 - `V` prefix (not `B` — that's only for baselines)
 - Timestamp: `YYYYMMDDHHMM` — must be strictly greater than all existing timestamps
-- Version: matches the target release minor version
+- Version: the line the release is building toward — `v6.1.x` while `next` streams `6.1.0-edge.N`
 - Description: underscores between words, PascalCase words
 - Use `${flyway:defaultSchema}` — never hardcode the schema name
 - Do NOT include `__mj_CreatedAt`/`__mj_UpdatedAt` columns (CodeGen handles these)
@@ -822,7 +880,7 @@ metadata/sql_logging/MetadataSync_Push_*.sql
 # the cache (e.g. a live MJAPI).
 
 # Deterministic tier (52 tests) + mutation axis — the release gate
-RUN_MUTATION_TESTS=1 npm run test:integration
+RUN_MUTATION_TESTS=1 pnpm run test:integration
 
 # Live-model tier (15 tests) — SEPARATE suite, real LLM cost. Note the em dash.
 MJ_INTEGRATION_TEST=1 npx mj test suite "Integration Tests — Live Model"
@@ -838,8 +896,9 @@ npx mj test validate --type "Integration Test"
 
 ```bash
 # Add a new changeset
-npm run change
+pnpm run change
 
-# Version packages based on changesets (done by CI, rarely manual)
-npm run version
+# Version packages based on changesets (done by CI, rarely manual — and NEVER
+# `changeset pre enter`/`exit` outside a candidate cut or era open)
+pnpm run version
 ```
