@@ -93,7 +93,10 @@
     "pg-query-stream": "~4.8.0",
     "recast": "^0.23.11",
     "simple-git": "^3.30.0",
-    "zod": "^3.25.0"
+    "zod": "^3.25.0",
+    "@memberjunction/core-entities": "6.0.0",
+    "@memberjunction/global": "6.0.0",
+    "@memberjunction/aiengine": "6.0.0"
   },
   "devDependencies": {
     "@oclif/prettier-config": "^0.2.1",

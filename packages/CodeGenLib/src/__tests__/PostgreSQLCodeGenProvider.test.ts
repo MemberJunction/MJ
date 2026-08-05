@@ -891,3 +891,67 @@ describe('PostgreSQLCodeGenProvider', () => {
         });
     });
 });
+
+/**
+ * Layered base views are refused on PostgreSQL.
+ *
+ * The feature's entire payoff is that a foreign key added later still shows up, which depends on
+ * the application-owned outer view's `SELECT g.*` being re-resolved after the inner view
+ * regenerates. SQL Server does that with `sp_refreshview`. PostgreSQL expands `*` at creation and
+ * freezes it, has no refresh equivalent, and CodeGen does not own the outer view — so nothing
+ * recreates it and the promise silently does not hold.
+ *
+ * Worse, it fails INTERMITTENTLY: an added column leaves the outer view stale (CREATE OR REPLACE on
+ * the inner never touches dependents), while a rename or type change raises 42P16 and sends CodeGen
+ * down the capture/DROP CASCADE/replay path, which incidentally recreates the outer view and does
+ * pick the columns up. Same feature, opposite outcomes, decided by what else changed that day.
+ *
+ * That is the exact silent-staleness failure layering was built to eliminate, so this is a hard
+ * refusal rather than a documented caveat.
+ */
+describe('PostgreSQLCodeGenProvider layered base views', () => {
+    let provider: PostgreSQLCodeGenProvider;
+
+    beforeEach(() => {
+        provider = new PostgreSQLCodeGenProvider();
+    });
+
+    function contextFor(entity: EntityInfo): BaseViewGenerationContext {
+        return {
+            entity,
+            relatedFieldsSelect: '',
+            relatedFieldsJoins: '',
+            parentFieldsSelect: '',
+            parentJoins: '',
+            rootFieldsSelect: '',
+            rootJoins: '',
+        };
+    }
+
+    it('refuses to generate a layered base view', () => {
+        const entity = createMockEntity({ BaseViewGenerated: false, GeneratedBaseViewName: 'vwTestEntitiesGenerated' });
+        expect(() => provider.generateBaseView(contextFor(entity))).toThrow(/not supported on PostgreSQL/);
+    });
+
+    it('names the entity and both views so the error is actionable', () => {
+        const entity = createMockEntity({ BaseViewGenerated: false, GeneratedBaseViewName: 'vwTestEntitiesGenerated' });
+        expect(() => provider.generateBaseView(contextFor(entity))).toThrow(/Test Entity/);
+        expect(() => provider.generateBaseView(contextFor(entity))).toThrow(/vwTestEntitiesGenerated/);
+        expect(() => provider.generateBaseView(contextFor(entity))).toThrow(/vwTestEntities/);
+    });
+
+    it('still generates normally for every non-layered entity', () => {
+        // The refusal must be scoped to layering alone. Fully custom base views and ordinary
+        // generated ones keep working on PostgreSQL exactly as before.
+        expect(() => provider.generateBaseView(contextFor(createMockEntity()))).not.toThrow();
+        expect(() => provider.generateBaseView(contextFor(createMockEntity({ BaseViewGenerated: false })))).not.toThrow();
+        expect(() => provider.generateBaseView(contextFor(createMockEntity({ GeneratedBaseViewName: null })))).not.toThrow();
+    });
+
+    it('does not refuse a name that differs from BaseView only by case', () => {
+        // Not a layering — HasLayeredBaseView compares case-insensitively, so there is no second
+        // view and nothing to refuse.
+        const entity = createMockEntity({ GeneratedBaseViewName: 'VWTESTENTITIES' });
+        expect(() => provider.generateBaseView(contextFor(entity))).not.toThrow();
+    });
+});
