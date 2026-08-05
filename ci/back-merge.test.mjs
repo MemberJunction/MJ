@@ -2,8 +2,9 @@
 // (also run in CI by .github/workflows/ci-scripts.yml, install-free)
 //
 // The behaviour under test is the back-merge's refusal to guess. It replaced a blind
-// `-X theirs`, which was invisible while next was frozen for a release and starts
-// discarding work the moment release-edge.yml pins a release to a commit.
+// `-X theirs`, which was invisible only while `next` was assumed frozen for the release.
+// Releases ship from a release/* prep branch cut at an earlier commit, so `next` has hours
+// of merges main never saw — and `-X theirs` would silently discard all of them.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {

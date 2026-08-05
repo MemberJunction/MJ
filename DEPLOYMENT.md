@@ -13,7 +13,7 @@ This document is the **build-engineering guide**: the deep checklist that prepar
 > | Decoding a version string or choosing a channel | [`VERSIONING.md`](VERSIONING.md); machine-readable release state in [`release-lines.json`](release-lines.json) |
 > | Preparing the release content itself — metadata sync, integration gate, PG migrations, new packages | **This document** (Steps 0–8) |
 >
-> **When do Steps 0–8 run?** They are content-prep, not button-prep: run them whenever their inputs have changed — pending `metadata/` changes need a Metadata_Sync migration (Step 3), new SS migrations need PG counterparts (Step 8), new packages need npm placeholders (Step 5) — *before the release that ships that content, whichever channel it ships on*. The LTS candidate cut assumes all of this is already done; the Release Edge button's guards check CI only, so **nothing in the button re-checks this list**.
+> **When do Steps 0–8 run?** They are content-prep, not button-prep: run them whenever their inputs have changed — pending `metadata/` changes need a Metadata_Sync migration (Step 3), new SS migrations need PG counterparts (Step 8), new packages need npm placeholders (Step 5) — *before the release that ships that content, whichever channel it ships on*. The LTS candidate cut assumes all of this is already done. **Nothing downstream re-checks this list** — CI going green says nothing about whether Steps 0–8 were run, and Step 3 in particular has no automated detection at all.
 
 > ### 🤖 If you are an AI coding agent running this release
 >
@@ -42,7 +42,7 @@ This document is the **build-engineering guide**: the deep checklist that prepar
 
 | Type | Branch flow | Versioning | How it ships |
 |------|------|-----------|------------|
-| **Routine Edge release** | `next` → `main` | `6.Y.0-edge.N` — changesets pre-mode; the stream targets the next line's tuple | **One button**: Actions → "Release Edge" (runbook op. 1) |
+| **Routine Edge release** | `release/*` prep branch → `main`, then auto back-merge to `next` | `6.Y.0-edge.N` — changesets pre-mode; the stream targets the next line's tuple | Reviewed PR into `main` (runbook op. 1). Prep happens on the branch, so `next` is never frozen |
 | **LTS candidate cut** | tip of `next` → branch `lts/6.Y` | `6.Y.0` — the pre-exit dance | Scripted-manual (runbook op. 2). **Never through `next → main`** — the era gate refuses it |
 | **LTS line patch** | `lts/*` branch only | `6.Y.Z` — patch-only; DB-touching patches carry their §12 label | **One button**: Actions → "Publish LTS line release" (runbook op. 3) |
 | **New era (major)** | — | `7.0.0-edge.0` opens the era | Era open — a genuine infrastructure-contract change, never a routine release |
@@ -53,28 +53,35 @@ This document is the **build-engineering guide**: the deep checklist that prepar
 
 ## Pre-Release Checklist
 
-> **Recommended: work on a release-prep branch instead of committing to `next`
-> directly.** Cut `release/vX.Y-prep` from the tip of `next`
-> (`git checkout -b release/vX.Y-prep && git push -u origin release/vX.Y-prep` —
-> same-named remote tracking, per the branch rules), land the Step 2–7 commits
-> there, and merge into `next` via a PR (e.g. #3163 for v5.48). This keeps `next`
-> green while prep is in flight and gives the release artifacts a reviewable PR.
+> ### 🚨 Everything below happens on a release-prep branch, not on `next`
 >
-> **Nobody has to stop merging while you do this.** Prep spans hours and `next` keeps
-> moving; note the SHA your prep PR lands at and pass it as the Release Edge button's
-> `ref` (Step 9). Everything merged after it rides the next release. Freezing the branch
-> was never a written rule — it was the workaround for a button that always shipped the
-> tip, and it is no longer needed.
+> Cut it from the `next` commit you intend to release, and land every Step 2–8 commit there:
 >
-> **Reading the steps below:** where they say "commit/push to `next`" (Step 3.8,
-> Step 6), that is the target on the direct-to-`next` workflow. On the prep-branch
-> workflow, commit to your prep branch instead — it reaches `next` through the PR.
-> The steps use `next` as shorthand for "the branch that becomes the release."
+> ```bash
+> git fetch origin next
+> git checkout -b release/vX.Y-prep origin/next
+> git push -u origin release/vX.Y-prep     # same-named remote tracking, per the branch rules
+> git rev-parse --short HEAD               # the release base — record it
+> ```
 >
-> **If you intend to pin (Step 9's `ref`), the target is a *commit*, not a branch.** Every
-> "commit/push to `next`" below then means "must be an ancestor of the commit you pin" —
-> so land your prep work first, and take the SHA afterwards. Prep that merges *after* the
-> commit you pinned is not in the release, however green `next` looks.
+> **That branch merges into `main` (Step 9), and `publish.yml` back-merges it to `next`.**
+> It does not merge into `next` first.
+>
+> ```
+> next ──●──────────────────────────●────────────►   keeps moving throughout
+>        │ cut here                  ▲
+>        └── release/vX.Y-prep ──────┼──► PR → main ──► publish.yml
+>                  (Steps 2–8)       └────────── back-merge main → next
+> ```
+>
+> **Nobody has to stop merging while you do this, and `next` is never frozen.** Prep spans
+> hours. Because the branch was cut at a known commit, whatever lands on `next` afterwards
+> simply rides the *next* release — the branch **is** the pin. `next` also stays free of
+> release-prep churn, which is the other half of why prep lives here.
+>
+> **Reading the steps below:** where they say "commit/push to `next`" (Step 3.8, Step 6),
+> commit to your prep branch instead. The steps use `next` as shorthand for "the branch
+> that becomes the release."
 
 ### Step 0: Preflight — check the environment before you start
 
@@ -123,7 +130,7 @@ Before anything else, confirm the `next` branch is healthy:
 - [ ] **"Unit Tests"** (`test.yml`) — passes on any open PR, and on the **push-to-`next`** run (that unfiltered backstop is the one that actually proves integration-bundle ↔ `MJ: Tests` metadata sibling parity; a metadata-only PR never triggers `test.yml` at all)
 - [ ] **"Integration Tier"** (`integration.yml`) — passes on `next`. Runs the deterministic suite against a fresh SQL Server on PRs into `next` plus an unfiltered push-to-`next` backstop. It is **not** a substitute for Step 4: CI runs no MJAPI (so client-transport bundles skip) and no live-model tier.
 
-> **Don't idle here.** These runs take ~15 minutes. **Step 3 (fresh database + migrate + metadata push) is independent of them** — it works on a local scratch database and reads nothing from CI. Start Step 3 while Step 1 runs and check back. The only ordering that matters is that Step 3's results are an ancestor of the commit you release (on the default path, simply committed to `next` before you press the button).
+> **Don't idle here.** These runs take ~15 minutes. **Step 3 (fresh database + migrate + metadata push) is independent of them** — it works on a local scratch database and reads nothing from CI. Start Step 3 while Step 1 runs and check back. The only ordering that matters is that Step 3's results are committed to your prep branch before you open the release PR.
 >
 > Step 2 must still precede Step 3, since its model metadata has to be present before the sync push.
 
@@ -633,38 +640,28 @@ Enabling it is a **code change, not configuration**: a platform branch (and a PG
 
 ## Shipping the Release
 
-### Step 9: Ship it — the button, or the manual PR
+### Step 9: Ship it — merge the prep branch into `main`
 
-> **Important:** All content from the previous steps (metadata migration scripts, PG counterparts, new changesets, AI model updates) must already be committed to `next` **and be an ancestor of the commit you release**. On the default path those are the same statement; with a pinned `ref` (below) they are not. Verify it mechanically rather than from memory:
->
-> ```bash
-> git merge-base --is-ancestor <prep-commit> <release-commit> && echo "included in this release"
-> ```
-
-**Routine Edge release — the normal path.** Actions → **"Release Edge"** → Run workflow. The button guards (the repo is in Edge pre-mode; unapplied changesets exist; `test.yml` is green **for the exact commit being released**), then bot-merges that commit into `main` — **no PR is opened**. The push to `main` triggers `publish.yml` (Step 10a), which does everything else. Runbook op. 1.
-
-**The `ref` input — you do not need to freeze `next`.** Leave `ref` blank to release the current tip of `next`; that is the normal case. Set it to a **commit SHA** to release exactly the tree you validated through Steps 0–8, and merges that land on `next` during the prep window simply ride the *next* release instead of gate-crashing this one. The workflow accepts only commits already on `next` (it refuses a non-ancestor, so the input cannot be used to ship an unreviewed branch), and every guard inspects the resolved commit rather than the branch — so what was validated is what ships.
-
-> **Why this exists.** The button used to merge `origin/next` as of the moment you pressed it, so anything merged during the hours of Steps 0–8 shipped unvalidated. Worse, the CI guard asked whether *the branch's most recent run* was green rather than *this commit's*, so it could be satisfied by a neighbouring commit's result while a queued run for the actual tip was still pending. Informally holding PRs back was the only mitigation, and nothing enforced it. Pinning replaces the convention with a mechanism.
-
-**Pinning on the manual-PR path.** The button is new in the 6.x era; every 5.x release shipped through a `next → main` PR, so this path is the one most people have muscle memory for and it remains fully supported. It has the same drift the button's `ref` removes: a plain `next → main` PR merges whatever `next` holds *at merge time*. To pin it, push the validated commit to its own branch and open the PR from **that** branch:
+**The release is a PR from your `release/*` prep branch into `main`.** Steps 0–8 produced content that must be reviewed — a metadata-sync migration is permanent, append-only history — and the PR is the review instrument. There is no button and no unreviewed path to `main`.
 
 ```bash
-git push origin <release-sha>:refs/heads/release/v6.1.0-edge.3
-# then open a PR:  release/v6.1.0-edge.3 → main
+git push origin release/v6.0-edge-prep
+# then open a PR:  release/v6.0-edge-prep → main
 ```
 
-`publish.yml` and `changes.yml` behave identically — both key off the push to `main` and the PR's *base*, never its head. **The one thing you lose is the auto-generated PR body:** `generate-release-notes.yml` is gated on `github.head_ref == 'next'`, so it will not fire from a pinned branch. Write the PR description yourself, or dispatch that workflow manually (it accepts `workflow_dispatch`). The GitHub *Release* notes are unaffected — `publish.yml` generates those after the merge.
+**This is also what pins the release.** The prep branch was cut from a chosen `next` commit, so the release contains exactly that commit plus your prep — and whatever lands on `next` while you work simply rides the *next* release. **`next` is never frozen**, and no one has to stop merging while you prepare.
 
-**Candidate cuts and line releases never go this way.** `publish.yml` hard-fails an unsuffixed version on the routine path — that's the era gate working, not a bug. Candidate cuts follow runbook op. 2 (the pre-exit dance); line releases ship via the **"Publish LTS line release"** button (runbook op. 3) from the `lts/*` branch, never through `next → main`.
+> **Why not a `next → main` PR?** It merges whatever `next` holds *at merge time*, so anything merged during the hours of Steps 0–8 ships unvalidated. That's the same drift, just less visible. Branch first; the branch is the pin.
 
-**Manual equivalent of the button** (identical publish behavior): open a PR `next` → `main` and merge it. On this path only:
+**Candidate cuts and line releases never go this way.** `publish.yml` hard-fails an unsuffixed version on this path — that's the era gate working, not a bug. Candidate cuts follow runbook op. 2 (the pre-exit dance); line releases ship via the **"Publish LTS line release"** button (runbook op. 3) from the `lts/*` branch.
 
-1. The **"Generate Release Notes"** workflow (`generate-release-notes.yml`) will auto-populate the PR title and description with structured release notes (it fires only on genuine `next → main` PRs)
+On the release PR:
+
+1. The **"Generate Release Notes"** workflow (`generate-release-notes.yml`) auto-populates the PR title and description with structured release notes. It fires for `next` **and `release/*`** heads — the gate exists so an ordinary PR into `main` can't have its title destructively overwritten, not to restrict which branch releases from.
 2. Wait for the generated PR message to appear
 3. Wait for **all CI checks** to pass:
    - `changes.yml` — validates migration filenames, version patterns, schema placeholder usage. **This is the only workflow that triggers on the release PR itself** (it's the one workflow listening on PRs into `main`).
-   - Everything else you see on the PR is **surfaced from the push-to-`next` run on the same head SHA** — `test.yml` (unit tests), `integration.yml` ("Integration Tier", deterministic suite), `build.yml`, and `migrations.yml` / `pg-migrations.yml` when migrations changed. If any of those are missing rather than green, the `next` tip never got a clean run — go back to Step 1.
+   - Everything else you see on the PR is **surfaced from the run on the same head SHA** — `test.yml` (unit tests), `integration.yml` ("Integration Tier", deterministic suite), `build.yml`, and `migrations.yml` / `pg-migrations.yml` when migrations changed. If any of those are missing rather than green, that commit never got a clean run — go back to Step 1.
 
    > Two traps in this list: the hardcoded-UUID scan for migrations is now an **advisory, non-blocking** step *inside* `changes.yml` (the old `claude.yml` workflow was deleted) — it posts a sticky PR comment plus a `::warning` and **never fails the job**, so you must read it, not just wait for green. And `dependency-check.yml` only triggers on PRs into `next`, so it will not appear on this PR at all.
 
@@ -677,15 +674,15 @@ git push origin <release-sha>:refs/heads/release/v6.1.0-edge.3
 
    To read the advisory UUID scan when no PR comment appears (a clean scan *clears* its comment rather than posting one), check the job log — the step is `Check migration ID determinism (hard-coded UUIDs, not NEWID())`, and the following step being `Clear stale non-deterministic ID comment` is the clean outcome.
 
-### Step 10: Merge (manual-PR path only)
+### Step 10: Merge
 
-Once all checks pass, merge the PR into `main`. (On the button path, the workflow already did this.)
+Once all checks pass, merge the PR into `main`. The push to `main` triggers `publish.yml` (Step 10a), which does everything else.
 
 ---
 
 ## Post-Merge: Automated Pipeline
 
-The push to `main` — from the button or the merged PR — triggers a chain of automated workflows. Monitor each one.
+The push to `main` — from the merged release PR — triggers a chain of automated workflows. Monitor each one.
 
 > ## 🚨 Do not cancel `publish.yml`
 >
@@ -711,7 +708,7 @@ The push to `main` — from the button or the merged PR — triggers a chain of 
 
 ### 10a. `publish.yml` — Build & Publish Packages
 
-**Triggered by:** push to `main` (the Release Edge button's merge, or the manually merged PR)
+**Triggered by:** push to `main` (the merged release PR)
 
 This workflow:
 1. Runs migration tests against a fresh SQL Server container
@@ -811,7 +808,6 @@ Your only job here is the verification already in the Post-Merge Checklist — a
 | `migrations.yml` | Push to `next` (migrations changed) | Validate migrations |
 | `changes.yml` | PR to `next` or `main` | Validate migration naming & changesets |
 | `publish.yml` | Push to `main` | Version (pre-mode aware), grammar guard, build, publish to npm on the channel dist-tag, GitHub Release, merge-back |
-| `release-edge.yml` ("Release Edge") | Manual dispatch | **The Edge button**: guarded `next → main` merge; `publish.yml` does the rest |
 | `publish-lts.yml` ("Publish LTS line release") | Manual dispatch from an `lts/*` branch | Line patch release: version → build → publish `--tag lts-<line>` → tag + GitHub Release (never latest). Auto-detects npm (`lts/5`) vs pnpm (6.x-era lines) |
 | `backport.yml` | `backport lts/*` label on a merged `next` PR | Opens the cherry-pick PR against the line branch (conflicts → draft PR) |
 | `release-lines-guard.yml` | PRs touching, and pushes changing, `release-lines.json` | Status-transition legality; direct pushes may change mechanical fields only |

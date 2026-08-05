@@ -42,12 +42,13 @@ export function classifyMergeConflicts(conflictedPaths = []) {
 /**
  * Merge origin/main into next.
  *
- * Deliberately NOT `-X theirs`, which is what this used to do. Under a frozen next, main's
- * source and next's were identical so the strategy never actually fired. Now that
- * release-edge.yml can pin a release to a commit, next legitimately runs ahead of what
- * shipped — and `-X theirs` would resolve every conflicting hunk in main's favour,
- * silently discarding whatever landed after the pin. The lockfile is the one exception,
- * and it gets regenerated rather than guessed at.
+ * Deliberately NOT `-X theirs`, which is what this used to do. That was survivable only
+ * while `next` was assumed frozen for the release, because main's source and next's were
+ * then identical and the strategy never actually fired. Releases ship from a `release/*`
+ * prep branch cut at an earlier commit (DEPLOYMENT.md Step 9), so by the time this runs
+ * `next` has hours of merges main has never seen — and `-X theirs` would resolve every
+ * conflicting hunk in main's favour, silently discarding all of it. The lockfile is the
+ * one exception, and it gets regenerated rather than guessed at.
  *
  * @param {import('simple-git').SimpleGit} client
  * @returns {Promise<{lockfileConflicted: boolean}>} whether the caller must regenerate the

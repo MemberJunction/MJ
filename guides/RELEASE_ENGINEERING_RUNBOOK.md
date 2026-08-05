@@ -1,6 +1,6 @@
 # Release Engineering Runbook
 
-Operator manual for MJ releases. Audience: whoever is pushing the buttons — the release
+Operator manual for MJ releases. Audience: whoever is running the release — the release
 engineer for routine Edge releases, the certification owner for cuts, line builds, and flips.
 
 - Policy (the *why* and the rules): [`plans/lts-process.md`](../plans/lts-process.md) — canon.
@@ -11,7 +11,7 @@ There are four distinct operations. Know which one you're doing before you start
 
 | Operation | Frequency | Who | Automation today |
 |---|---|---|---|
-| 1. Routine Edge release | on demand | Release engineer | **One button** (`Release Edge` workflow) |
+| 1. Routine Edge release | on demand | Release engineer | Reviewed PR: `release/*` prep branch → `main` |
 | 2. LTS candidate cut | per cycle (~bimonthly) | Cert owner | Scripted-manual |
 | 3. LTS line patch release | as fixes land on a line | Cert owner | **One button** (`Publish LTS line release` workflow) |
 | 4. Certification flip | once per certification | Cert owner | Scripted-manual |
@@ -20,25 +20,26 @@ There are four distinct operations. Know which one you're doing before you start
 
 ## 1. Routine Edge release
 
-One button. Actions → **"Release Edge"** → Run workflow. The button:
+**A reviewed PR from a `release/*` prep branch into `main`.** There is no button, and that
+is deliberate — see *Why there is no button* below.
 
-1. Resolves **what** to release: a blank `ref` (the normal case) means the current tip of
-   `next`; a commit SHA means exactly that commit. Only commits already merged into `next`
-   are accepted — a non-ancestor is refused.
-2. Guards: the repo is in Edge prerelease mode; there are unapplied changesets; the
-   unit-test run **for that exact commit** is green. Any failure stops with a clear error.
-3. Merges the resolved commit into `main` (the dispatcher's name and the short SHA go in
-   the merge commit).
+1. Cut `release/vX.Y-prep` from the `next` commit you intend to release, and push it with
+   same-named remote tracking.
+2. Run [`DEPLOYMENT.md`](../DEPLOYMENT.md) Steps 0–8 **on that branch**. Every release has
+   prep: the AI-model PR, a metadata-sync migration, PG counterparts, npm placeholders for
+   new packages, the integration suite.
+3. Open a PR `release/vX.Y-prep → main` and merge it once checks pass.
 
-**You do not need to freeze `next`.** Preparing a release runs for hours
-([`DEPLOYMENT.md`](../DEPLOYMENT.md) Steps 0–8) and `next` keeps moving throughout. Pass
-the SHA you validated as `ref`, and anything merged afterwards rides the *next* release
-rather than shipping unchecked. Leave it blank when the tip is what you validated.
+```
+next ──●──────────────────────────●────────────►   keeps moving throughout
+       │ cut here                  ▲
+       └── release/vX.Y-prep ──────┼──► PR → main ──► publish.yml
+                 (Steps 2–8)       └────────── back-merge main → next
+```
 
-Note the CI guard is **per-commit, not per-branch**: it asks whether `test.yml` passed for
-the commit being released, so a green run on a neighbouring commit never satisfies it. A
-`no-run` error means `test.yml` never ran for that commit — pick one that has a green run,
-or dispatch `test.yml` against it first.
+**`next` is never frozen and nobody stops merging.** Prep runs for hours; because the branch
+was cut at a known commit, whatever lands on `next` afterwards rides the *next* release.
+**The branch is the pin** — there is no separate pinning mechanism to remember.
 
 The push to `main` triggers `publish.yml`, which does everything else — this has always
 been the automatic half: `changeset version` (pre mode → the next `X.Y.0-edge.N`), the
@@ -46,9 +47,7 @@ version-grammar guard, build, `changeset publish --tag edge`, the release commit
 `vX.Y.0-edge.N` tag, a GitHub prerelease (never latest), and the merge of `main` back
 into `next` with a lockfile update.
 
-Manual equivalent (identical behavior): open and merge a `next → main` PR yourself.
-
-Verify after either path: `npm view @memberjunction/core dist-tags` — **`edge` moved,
+Verify afterwards: `npm view @memberjunction/core dist-tags` — **`edge` moved,
 `latest` did not**; the GitHub Release exists, marked prerelease, not latest.
 
 Guard behavior you may hit: `publish.yml` **hard-fails an unsuffixed 6.x version** on this
@@ -58,13 +57,25 @@ through the routine pipeline. Stop and find the cert owner; don't work around it
 Never run `changeset pre enter` or `changeset pre exit` in this operation. Pre-mode state
 changes only during era opens and candidate cuts (operation 2).
 
-### Automation status
+### Why there is no button
 
-Decided and built 2026-08-03: both routine tracks are one-button (`release-edge.yml`,
-`publish-lts.yml`). A standing changesets "Version Packages" PR (changesets/action) was
-considered and passed over — versioning already runs inside `publish.yml` on `main`, so
-a merge-trigger button fit the existing pipeline with less rewiring. Revisit only if the
-button press itself becomes a bottleneck.
+There was one — `release-edge.yml`, built 2026-08-03, which merged `next → main` on a
+guarded manual dispatch. It was deleted without ever having been dispatched, because the
+workflow it encoded cannot be correct:
+
+- **Every release needs prep.** There is no prep-free Edge release, so a button that ships
+  the tip of `next` always ships something whose Steps 0–8 were never run. Its guards
+  checked CI only, and CI going green says nothing about whether a metadata-sync migration
+  was generated.
+- **Prep must be reviewed.** A metadata-sync migration is permanent, append-only history.
+  The PR into `main` is the review instrument for it; a button bypasses review entirely.
+
+Pointing the button at a prep branch would fix the first problem and make the second worse.
+Merging a reviewed PR is already a single click, and `publish.yml` does everything after
+the push — so there was nothing left for a button to add.
+
+`publish-lts.yml` (operation 3) remains a button and is unaffected: line patches ship
+backported fixes that were already reviewed on `next`.
 
 ---
 
@@ -153,8 +164,6 @@ When the gates pass on a specific line build (say 6.1.2):
   on the routine path; don't fight it.
 - `changeset pre enter`/`exit` happen only in operation 2 (and era opens). Nowhere else.
 - Lines never merge into `main` or `next`. Fixes flow `next` → line, never the reverse.
-- Green-CI guards are **per-commit**. If a guard ever reads "the branch's latest run"
-  instead of this commit's, it can be satisfied by a different tree than the one shipping.
 - The post-publish `main` → `next` back-merge **aborts rather than auto-resolving** a
   conflict outside `pnpm-lock.yaml`. An abort means the release succeeded and only the
   back-merge is outstanding — finish it by hand, don't re-run the release.
