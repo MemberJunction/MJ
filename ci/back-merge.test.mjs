@@ -1,4 +1,5 @@
-// Tests for ci/merge_main_and_update_lock.mjs — run with: node --test ci/
+// Tests for ci/back-merge.mjs — run with: node --test "ci/*.test.mjs"
+// (also run in CI by .github/workflows/ci-scripts.yml, install-free)
 //
 // The behaviour under test is the back-merge's refusal to guess. It replaced a blind
 // `-X theirs`, which was invisible while next was frozen for a release and starts
@@ -10,7 +11,7 @@ import {
   mergeMainIntoNext,
   refreshLockfile,
   LOCKFILE,
-} from './merge_main_and_update_lock.mjs';
+} from './back-merge.mjs';
 
 /**
  * Minimal simple-git stand-in. Records every call so a test can assert on what the

@@ -8,7 +8,7 @@
  * something to paper over.
  */
 import { simpleGit } from 'simple-git';
-import { mergeMainIntoNext, LOCKFILE } from './merge_main_and_update_lock.mjs';
+import { mergeMainIntoNext, LOCKFILE } from './back-merge.mjs';
 
 const git = simpleGit();
 const { lockfileConflicted } = await mergeMainIntoNext(git);

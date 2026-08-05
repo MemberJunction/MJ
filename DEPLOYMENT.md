@@ -647,7 +647,7 @@ Enabling it is a **code change, not configuration**: a platform branch (and a PG
 
 > **Why this exists.** The button used to merge `origin/next` as of the moment you pressed it, so anything merged during the hours of Steps 0–8 shipped unvalidated. Worse, the CI guard asked whether *the branch's most recent run* was green rather than *this commit's*, so it could be satisfied by a neighbouring commit's result while a queued run for the actual tip was still pending. Informally holding PRs back was the only mitigation, and nothing enforced it. Pinning replaces the convention with a mechanism.
 
-**Pinning on the manual-PR path.** A plain `next → main` PR merges whatever `next` holds *at merge time* — the same drift `ref` exists to remove, and the manual path is exactly when you can't reach for the button. To pin it, push the validated commit to its own branch and open the PR from **that** branch:
+**Pinning on the manual-PR path.** The button is new in the 6.x era; every 5.x release shipped through a `next → main` PR, so this path is the one most people have muscle memory for and it remains fully supported. It has the same drift the button's `ref` removes: a plain `next → main` PR merges whatever `next` holds *at merge time*. To pin it, push the validated commit to its own branch and open the PR from **that** branch:
 
 ```bash
 git push origin <release-sha>:refs/heads/release/v6.1.0-edge.3
