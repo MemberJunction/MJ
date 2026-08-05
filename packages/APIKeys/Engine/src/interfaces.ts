@@ -3,6 +3,8 @@
  * @module @memberjunction/api-keys
  */
 
+import type { APIKeyActingContext, APIKeyRowFilterBinding } from '@memberjunction/core';
+
 // =========================================================================
 // API KEY GENERATION AND MANAGEMENT INTERFACES
 // =========================================================================
@@ -119,6 +121,32 @@ export interface AuthorizationRequest {
     Resource: string;
     /** Optional additional context */
     Context?: Record<string, unknown>;
+    /**
+     * Server-derived acting context for this request. Consumed when a matching
+     * allow rule carries a RowFilterID whose filter references {{Acting*}} tokens:
+     * every required token must be supplied here with a type-valid value or the
+     * request is DENIED (fail closed, reason names the token).
+     *
+     * TRUST BOUNDARY: values must originate server-side (a verified session token,
+     * a server-side lookup, a trusted upstream assertion) — never from a
+     * client-supplied header, argument, or GraphQL variable.
+     */
+    ActingContext?: APIKeyActingContext;
+}
+
+/**
+ * One entry of the effective row filter recorded on an {@link AuthorizationResult}
+ * for observability. Enforcement happens at the data layer via
+ * `EntityInfo.GetEffectiveRowFilterWhereClause` — this is the audit-trail answer
+ * to "what could this request actually see", never the enforcement contract.
+ */
+export interface EffectiveFilterEntry {
+    /** Name of the entity the filter constrains (the rule's exact ResourcePattern). */
+    EntityName: string;
+    /** ID of the referenced Row Level Security Filter. */
+    FilterID: string;
+    /** The filter's template text (principal-independent — tokens unresolved). */
+    FilterText: string;
 }
 
 /**
@@ -131,10 +159,34 @@ export interface AuthorizationResult {
     Reason: string;
     /** The app-level rule that matched (if any) */
     MatchedAppRule?: ScopeRuleMatch;
-    /** The key-level rule that matched (if any) */
+    /** The key-level rule that matched (if any). For compatibility this remains the
+     *  HIGHEST-PRIORITY matching allow rule even though evaluation no longer stops there. */
     MatchedKeyRule?: ScopeRuleMatch;
     /** All rules evaluated during the check */
     EvaluatedRules: EvaluatedRule[];
+    /**
+     * RowFilterIDs carried by EVERY matching key-level allow rule (deduped, sorted
+     * for determinism). A higher-priority unfiltered allow rule cannot shadow a
+     * lower-priority filtered one — most-restrictive-wins, so all matching allow
+     * rules' filters are collected. Empty/absent when no matching allow rule
+     * carries a filter.
+     */
+    MatchedRowFilterIDs?: string[];
+    /**
+     * Row-filter bindings resolved from the matching filtered allow rules
+     * (entity + permission type + filter). Populated only on an Allowed result
+     * for a key whose matching rules carry row filters. These are the same
+     * bindings `context.ts` stamps onto the per-request UserInfo for data-layer
+     * enforcement.
+     */
+    RowFilterBindings?: APIKeyRowFilterBinding[];
+    /**
+     * Observability record of the effective row filter for this authorization —
+     * what the usage log records and what a consumer inspects when debugging.
+     * NOT the enforcement contract: enforcement is the data layer
+     * (`EntityInfo.GetEffectiveRowFilterWhereClause`).
+     */
+    EffectiveFilter?: EffectiveFilterEntry[];
 }
 
 /**
@@ -155,6 +207,8 @@ export interface ScopeRuleMatch {
     IsDeny: boolean;
     /** Rule priority */
     Priority: number;
+    /** Row filter carried by this rule (null = unfiltered, the pre-existing behavior) */
+    RowFilterID: string | null;
 }
 
 /**
@@ -191,6 +245,8 @@ export interface ScopeRule {
     IsDeny: boolean;
     /** Priority (higher = evaluated first) */
     Priority: number;
+    /** Optional FK into the RowLevelSecurityFilter catalog — the row restriction this grant carries */
+    RowFilterID: string | null;
 }
 
 /**
@@ -243,6 +299,11 @@ export interface UsageLogEntry {
     AuthorizationResult: 'Allowed' | 'Denied' | 'NoScopesRequired';
     /** Reason for denial (if denied) */
     DeniedReason: string | null;
+    /**
+     * Effective row filter for the authorization (observability — serialized into
+     * the ScopesEvaluated column alongside the evaluated rules).
+     */
+    EffectiveFilter?: EffectiveFilterEntry[];
 }
 
 // =========================================================================

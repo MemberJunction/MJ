@@ -132,21 +132,106 @@ Design gate: 2–3 mockup variants → Matt picks → build.
 
 ---
 
-## Phase 4 — Record-open context (BLOCKED on D3)
+## Phase 4 — Record-open context (D3 ✅ DECIDED 2026-07-27: "records style")
 
-**Problem:** opening a record from inside an app silently reassigns you to the Home
-app (`NavigationService.getDefaultApplicationId()` groups orphan resources under
-Home). Header nav flips, source context vanishes, no breadcrumb, no visible way back.
+**Problem (historical):** opening a record from inside an app silently reassigned
+you to the Home app. Header nav flipped, source context vanished, no way back.
 
-Options under consideration (Matt deciding):
-- **(a) Stay in source app** — record opens as dismissible dynamic item/tab within
-  the app you're in. Change: default-app resolution + dynamic-nav-item surfacing.
-- **(b) Keep Home + breadcrumb** — smaller change; record page gets
-  `AI › Agents › ActionSmith` breadcrumb with working links.
-- **(c) Browser-style tabs** — records always open as a tab; tab bar always visible
-  when any record is open.
+**Decision:** after prototyping (a), (b), and (c) live, Matt landed on a synthesis —
+**records are their own global surface**. Shipped on branch `record-open-context`
+(`b2a2a690f5`), gated by instance config `Shell.RecordOpen.Style`
+('records' default | 'classic' escape hatch):
 
-Note: (a) and (c) compose well with D4 option (a).
+- Record opens stay in the active app (no Home reassignment, no nav flip),
+  always as a tab; re-open focuses the existing tab (browser-style dedup).
+- Records live in a **separate Golden Layout region** in the tab container
+  (own tab strip, native close/drag-split, own `recordsLayout` persistence
+  slot), visible only while a record is being viewed. The main tab bar never
+  contains records (`WorkspaceStateManager.MainLayoutTabFilter`).
+- A count-badged **Records pill** in the app-nav's trailing slot resumes the
+  last-viewed record from anywhere (+ standalone header fallback and a
+  mobile-drawer entry for reachability). Invariant: any open record is ≤2
+  clicks away from anywhere.
+- Home's dynamic orphan nav items are skipped under records style.
+
+Independently audited (3 agents: best-practices / downstream-compat / GL
+correctness); all findings remediated in the same commit.
+
+**Phase 4 follow-ups (open):**
+- Mobile records UX: drawer entry is a minimal treatment — needs a real
+  design pass.
+- Release note: one-time saved-main-layout reset on first boot when an
+  existing workspace contains record tabs.
+- **Slide-panel punch-through (FIXED 2026-07-28):** overlays whose show-state
+  class was named `visible` collided with explorer-app's global
+  `.visible { visibility: visible !important }` utility and punched through
+  the records region's visibility-hidden main area (bespoke AI detail panels
+  stayed painted over open records; also stale-open on return). Fixes: the
+  region-hidden rule now force-hides descendants
+  (`.region-hidden, .region-hidden * { visibility: hidden !important }`);
+  `mj-slide-panel`'s own state class renamed `visible` → `sp-open` (it had
+  the same collision); all four bespoke AI detail panels (Agents, Models,
+  System Config, Prompts) MIGRATED onto `mj-slide-panel`; Open Full Record
+  now closes the panel (execution-monitor precedent, Matt's ruling).
+  **QUEUED follow-up:** audit/scope the global `.visible !important` utility
+  itself (`explorer-app/src/lib/styles/_utilities.scss:425`) — it remains a
+  repo-wide name-collision landmine for any component state class.
+- **lm_tab redesign (QUEUED — own branch, Matt 2026-07-27):** GL tab chrome
+  is now a primary surface but still pre-Phase-1 design. Current state:
+  `tab-container.component.css:204-345` (!important overrides of GL stock) —
+  raised-card active tab (borders/rounded top/-1px margin trick), 3px
+  app-color left-edge bar with glow on active (the app-color-as-state +
+  left-bar pattern Phase 1 killed elsewhere), 35px/13px density, hover-X
+  error-red. Italic-title (unpinned) + thumbtack pin are INLINE styles
+  injected from `golden-layout-manager.ts` `applyTabStyles` — the redesign
+  must include that JS, not just CSS. Open design axes (Matt to pick,
+  side-by-side mockups like the launcher round): active-state language
+  (brand-tint pill recipe vs refined raised-card vs underline), app color
+  (drop / identity dot / keep bar), density (35px vs nav-pill height),
+  pinned/temp vocabulary (italic+pin is invisible vocabulary).
+- **Mobile records UX (BUILT 2026-07-30 — pending live verification):**
+  records as BROWSER-STYLE MOBILE TABS below 768px (the shell breakpoint —
+  now a canonical constant, `EXPLORER_MOBILE_BREAKPOINT_PX` +
+  `ExplorerBreakpointService` in ng-shared). Matt's design calls: RECORD BAR
+  replaces the GL tab strip (entity icon in app color + active title +
+  count button; the strip fit ONE tab at 390px with no overflow UI);
+  BOTTOM SHEET switcher (not full-screen grid); crumb stays two-segment
+  (fits at 390px). As built: (1) records GL runs HEADERLESS on mobile
+  (`GoldenLayoutInitOptions.HideHeaders` → GL `header.show:false`, no CSS
+  hacks); (2) `mj-record-bar` + `mj-record-switcher-sheet`
+  (explorer-core/record-open) — sheet rows: icon in app color, title,
+  origin subtitle from GetRecordSourceContext, tap to activate
+  (SetActiveTab), ✕ routed through the SAME close path as the tab context
+  menu; docked records included (mobile pill badge counts them too;
+  desktop badge unchanged); (3) splits FLATTEN at render via
+  `FlattenLayoutToSingleStack` (base-application; deep-clones state) and
+  layout persistence is SUPPRESSED while mobile — persisted recordsLayout
+  untouched, desktop splits survive a phone visit (mobile tab open/close
+  degrades via the existing count-mismatch restore path); (4) breakpoint
+  crossings destroy+re-init the records GL under a `recordsRebuilding`
+  guard — CRITICAL: GL Destroy() fires TabClosed per pane and the handler
+  CloseTabs records; without the guard a crossing closes every record;
+  (5) drawer Records pill opens the sheet on mobile (was a DEAD TAP while
+  viewing a record); (6) Move to Workspace/Records hidden on mobile.
+  NEW GENERIC PRIMITIVE: `mj-bottom-sheet` in ui-components (Escape, focus
+  restore, real exit transition, `transform:none` settled state,
+  z 9998/9999) — filter-popover + list-management-dialog migration onto it
+  QUEUED as follow-up (they are the 1st/2nd hand-rolled sheets; this
+  avoided a 3rd). Tests: ng-shared 74, base-application 33 (8 flatten),
+  ui-components 362 (8 sheet), explorer-core 132 (15 new); check:ui clean.
+  REMAINING: live Playwright pass at 390px (blocked on dev-server restart —
+  Vite stale-serve gotcha); gesture polish (swipe) deferred.
+- **Origin-crumb placement — DECIDED + SHIPPED (Matt 2026-07-30, commit
+  `bbd2cb642c`):** PANE-LEVEL. `mj-record-origin-crumb` (standalone) is the
+  first element inside every record pane; the region-level bar is deleted
+  (32px reclaimed). Correct in splits/docked/single-resource; two-segment
+  breadcrumb (page → full restore via ReturnToRecordSource; app → landing
+  via SwitchToAppHome); host stops mousedown/click propagation (GL
+  pane-focus stomp). The earlier toolbar-row idea is superseded — chosen
+  explicitly to AVOID the record-chrome refactor. Toolbar-row integration
+  remains a possible refinement for the lm_tab/record-chrome redesign
+  branch if ever wanted. Tab pipes (inactive-tab separators, active/hover/
+  last suppressed) shipped in the same commit.
 
 ---
 

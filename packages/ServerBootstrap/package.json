@@ -122,7 +122,6 @@
     "@memberjunction/external-data-sources": "6.0.0",
     "@memberjunction/geo-core": "6.0.0",
     "@memberjunction/integration-actions": "6.0.0",
-    "@memberjunction/integration-connectors": "6.0.0",
     "@memberjunction/integration-engine": "6.0.0",
     "@memberjunction/messaging-adapters": "6.0.0",
     "@memberjunction/predictive-studio": "6.0.0",

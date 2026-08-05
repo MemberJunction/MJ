@@ -155,19 +155,26 @@ function makeReportEntity() {
     };
 }
 
-function makeContext(getEntityObject: () => ReturnType<typeof makeReportEntity>) {
+function makeContext(
+    getEntityObject: () => ReturnType<typeof makeReportEntity>,
+    userPayload: Record<string, unknown> = { email: 'test@example.com' } // no apiKeyHash -> scope check no-ops
+) {
+    const getEntityObjectSpy = vi.fn(async (_name: string, _contextUser: unknown) => getEntityObject());
     const md = {
         Entities: [
             { Name: 'MJ: Conversation Details', SchemaName: 'dbo', BaseView: 'vwConversationDetails' },
             { Name: 'MJ: Conversations', SchemaName: 'dbo', BaseView: 'vwConversations' },
         ],
-        GetEntityObject: vi.fn(async () => getEntityObject()),
+        GetEntityObject: getEntityObjectSpy,
     };
     return {
-        dataSource: { __fakePool: true },
-        userPayload: { email: 'test@example.com' }, // no apiKeyHash -> scope check no-ops
-        providers: [{ type: 'Read-Write', provider: md }],
-    } as unknown as Parameters<ReportResolverExtended['CreateReportFromConversationDetailID']>[1];
+        context: {
+            dataSource: { __fakePool: true },
+            userPayload,
+            providers: [{ type: 'Read-Write', provider: md }],
+        } as unknown as Parameters<ReportResolverExtended['CreateReportFromConversationDetailID']>[1],
+        getEntityObjectSpy,
+    };
 }
 
 describe('ReportResolverExtended.CreateReportFromConversationDetailID', () => {
@@ -191,7 +198,7 @@ describe('ReportResolverExtended.CreateReportFromConversationDetailID', () => {
 
     it('binds ConversationDetailID as a query parameter rather than splicing it into the SQL text', async () => {
         const maliciousID = "1'; DROP TABLE MJ_Reports; --";
-        const context = makeContext(makeReportEntity);
+        const { context } = makeContext(makeReportEntity);
 
         const result = await resolver.CreateReportFromConversationDetailID(maliciousID, context);
 
@@ -211,7 +218,7 @@ describe('ReportResolverExtended.CreateReportFromConversationDetailID', () => {
 
     it('does not alter query structure for values containing quotes, --, or OR 1=1', async () => {
         const hostileID = "abc' OR '1'='1' --";
-        const context = makeContext(makeReportEntity);
+        const { context } = makeContext(makeReportEntity);
 
         await resolver.CreateReportFromConversationDetailID(hostileID, context);
 
@@ -221,12 +228,52 @@ describe('ReportResolverExtended.CreateReportFromConversationDetailID', () => {
 
     it('still succeeds end to end for a normal GUID-shaped value', async () => {
         const normalID = '12345678-1234-1234-1234-123456789012';
-        const context = makeContext(makeReportEntity);
+        const { context } = makeContext(makeReportEntity);
 
         const result = await resolver.CreateReportFromConversationDetailID(normalID, context);
 
         expect(result.Success).toBe(true);
         expect(result.ReportName).toBe('Test Report');
         expect(mssqlState.inputCalls[0].value).toBe(normalID);
+    });
+
+    // §5.6 row 11 — the operating user must come from the stamped payload user
+    // (GetUserFromPayload), never a fresh UserCache lookup by email. A fresh lookup would
+    // silently drop any per-request API-key row-filter binding (APIKeyRowFilters /
+    // APIKeyActingContext) already stamped onto userPayload.userRecord, so a filtered key's
+    // report-creation work would run unfiltered.
+    describe('operating user resolution (§5.6 row 11)', () => {
+        it('uses userPayload.userRecord (with its stamped bindings) when present, not a fresh UserCache lookup', async () => {
+            const stampedUser = {
+                ID: 'user-1',
+                Email: 'test@example.com',
+                APIKeyRowFilters: [{ EntityID: 'e1', PermissionType: 'Create', FilterID: 'f1' }],
+            };
+            // A DIFFERENT UserCache entry for the same email — if the resolver fell back to a
+            // UserCache lookup, it would get THIS unstamped object instead.
+            mockUserCacheUsers.length = 0;
+            mockUserCacheUsers.push({ Email: 'test@example.com', ID: 'user-1' });
+
+            const { context, getEntityObjectSpy } = makeContext(makeReportEntity, {
+                email: 'test@example.com',
+                userRecord: stampedUser,
+            });
+
+            const result = await resolver.CreateReportFromConversationDetailID('12345678-1234-1234-1234-123456789012', context);
+
+            expect(result.Success).toBe(true);
+            // GetEntityObject's contextUser must be the SAME stamped object reference — proving
+            // the row-filter binding flows through to the entity work, not a fresh, unstamped one.
+            expect(getEntityObjectSpy.mock.calls[0][1]).toBe(stampedUser);
+        });
+
+        it('falls back to a UserCache lookup by email when no payload user is present', async () => {
+            const { context, getEntityObjectSpy } = makeContext(makeReportEntity, { email: 'test@example.com' });
+
+            const result = await resolver.CreateReportFromConversationDetailID('12345678-1234-1234-1234-123456789012', context);
+
+            expect(result.Success).toBe(true);
+            expect((getEntityObjectSpy.mock.calls[0][1] as { ID: string }).ID).toBe('user-1');
+        });
     });
 });

@@ -960,7 +960,7 @@ ORDER BY bridge.LastName, bridge.FirstName`,
     // ================================================================
     describe('assertExternalReadAllowedUnderRLS', () => {
         const entityWithRLS = (clause: string): EntityInfo =>
-            ({ Name: 'Sales', GetUserRowLevelSecurityWhereClause: () => clause } as unknown as EntityInfo);
+            ({ Name: 'Sales', GetEffectiveRowFilterWhereClause: () => clause } as unknown as EntityInfo);
 
         it('throws when RLS applies to the user (non-empty clause) — refuses, never silently bypasses', () => {
             expect(() => provider.testAssertExternalReadAllowedUnderRLS(entityWithRLS("UserID = 'u-1'"), mockUser))
