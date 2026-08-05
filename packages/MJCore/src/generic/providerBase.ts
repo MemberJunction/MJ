@@ -167,7 +167,9 @@ export type EntityFieldMetadataRow = BaseMetadataRow & {
     Sequence: number;
     Name?: string;
     EntityFieldValues?: unknown[];
+    EntityFieldPermissions?: unknown[];
 };
+export type EntityFieldPermissionMetadataRow = BaseMetadataRow & { EntityFieldID: string };
 export type EntityFieldValueMetadataRow = BaseMetadataRow & { EntityFieldID: string };
 export type EntityChildMetadataRow = BaseMetadataRow & { EntityID: string };
 export type OrganicKeyMetadataRow = BaseMetadataRow & {
@@ -4538,7 +4540,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 }
 
                 // Post Process Entities because there's some special handling of the sub-objects
-                simpleMetadata.AllEntities = this.PostProcessEntityMetadata(simpleMetadata.Entities, simpleMetadata.EntityFields, simpleMetadata.EntityFieldValues, simpleMetadata.EntityPermissions, simpleMetadata.EntityRelationships, simpleMetadata.EntitySettings, simpleMetadata.EntityOrganicKeys, simpleMetadata.EntityOrganicKeyRelatedEntities);
+                simpleMetadata.AllEntities = this.PostProcessEntityMetadata(simpleMetadata.Entities, simpleMetadata.EntityFields, simpleMetadata.EntityFieldValues, simpleMetadata.EntityPermissions, simpleMetadata.EntityRelationships, simpleMetadata.EntitySettings, simpleMetadata.EntityOrganicKeys, simpleMetadata.EntityOrganicKeyRelatedEntities, simpleMetadata.EntityFieldPermissions);
 
                 // Post Process the Applications, because we want to handle the sub-objects properly.
                 simpleMetadata.AllApplications = simpleMetadata.Applications.map((a: any) => {
@@ -4612,7 +4614,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         relationships: EntityChildMetadataRow[],
         settings: EntityChildMetadataRow[],
         organicKeys?: OrganicKeyMetadataRow[],
-        organicKeyRelatedEntities?: OrganicKeyRelatedEntityMetadataRow[]
+        organicKeyRelatedEntities?: OrganicKeyRelatedEntityMetadataRow[],
+        fieldPermissions?: EntityFieldPermissionMetadataRow[]
     ): EntityInfo[] {
         const result: EntityInfo[] = [];
 
@@ -4624,6 +4627,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const fieldValuesByFieldId = this.groupByNormalizedUUID(fieldValues, fv => fv.EntityFieldID);
             for (const f of fields) {
                 f.EntityFieldValues = fieldValuesByFieldId.get(NormalizeUUID(f.ID)) || [];
+            }
+        }
+
+        // Link field-level security records to their fields. Optional and typically absent:
+        // the dataset item is only present on databases that have it, and the array is empty
+        // in every deployment that has not configured field security — so the whole pass is
+        // skipped rather than assigning an empty array to thousands of field rows.
+        if (fieldPermissions && fieldPermissions.length > 0) {
+            const fieldPermissionsByFieldId = this.groupByNormalizedUUID(fieldPermissions, fp => fp.EntityFieldID);
+            for (const f of fields) {
+                const fieldPerms = fieldPermissionsByFieldId.get(NormalizeUUID(f.ID));
+                if (fieldPerms) {
+                    f.EntityFieldPermissions = fieldPerms;
+                }
             }
         }
 
