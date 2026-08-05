@@ -647,12 +647,16 @@ async function CompensateSchemaOnFailure(
       callbacks?.OnError?.('Rollback', `Teardown failed during rollback: ${msg}`);
     }
   } else if (manifest.migrations) {
-    // Be explicit rather than silently claiming a clean rollback: an app with migrations but
-    // no teardown directory has no way to retire whatever those migrations seeded into the
-    // shared core schema.
+    // Be explicit rather than silently claiming a clean rollback: an app with migrations but no
+    // teardown directory has no way to retire whatever those migrations seeded into the shared
+    // core schema. State the operational consequence, not just the fact — apps seed those rows
+    // with fixed GUIDs via the generated `spCreate*` procedures, which are unconditional INSERTs
+    // (no existence guard), so re-running the same seed migration against surviving rows raises a
+    // primary-key violation and the reinstall fails there.
     callbacks?.OnWarn?.(
       'Rollback',
-      `'${manifest.name}' declares migrations but no teardownDirectory — any rows its migrations wrote to the shared core schema may remain after this rollback.`,
+      `'${manifest.name}' declares migrations but no teardownDirectory — rows its migrations wrote to the shared core schema WILL remain after this rollback. ` +
+        `If those rows were seeded with fixed IDs, reinstalling this app may fail with a primary-key violation until they are removed manually.`,
     );
   }
 

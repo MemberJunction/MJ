@@ -156,6 +156,16 @@ export interface MigrationRunResult {
  */
 export async function RunAppMigrations(options: MigrationRunOptions): Promise<MigrationRunResult> {
     const { MigrationsDir, SchemaName, DatabaseConfig, Verbose, MJCoreSchema, ExtraPlaceholders, TransactionMode } = options;
+    // The install path always supplies Platform (from the live provider's dialect), so this
+    // fallback is unreachable there. It is reachable by direct programmatic callers of this
+    // exported helper — exactly the population that could silently get SQL Server semantics
+    // against a PostgreSQL database. Keep the default (removing it would be breaking) but say so.
+    if (options.Platform === undefined) {
+        console.warn(
+            `RunAppMigrations: no Platform supplied for schema '${SchemaName}' — defaulting to 'sqlserver'. ` +
+                `Pass Platform explicitly (e.g. from your provider's Dialect.PlatformKey) to avoid running SQL Server semantics against another database.`,
+        );
+    }
     const platform: DatabasePlatform = options.Platform ?? 'sqlserver';
 
     let skyway: SkywayInstance | undefined;

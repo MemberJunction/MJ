@@ -401,8 +401,31 @@ describe('InstallApp — compensation when migrations fail', () => {
         vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: noTeardown });
         await InstallApp({ Source: source }, ctx());
         expect(teardownAttempted()).toBe(false);
-        expect(warnings.some((w) => w.includes('teardownDirectory') && w.includes('may remain'))).toBe(true);
+        expect(warnings.some((w) => w.includes('teardownDirectory') && w.includes('WILL remain'))).toBe(true);
         expect(vi.mocked(DropAppSchema)).toHaveBeenCalled();
+    });
+
+    // The second call site: every migration commits, then recording the installation fails.
+    // Proven end-to-end on a real instance; pinned here so it cannot regress silently.
+    it('compensates when recording the installation fails after migrations succeed', async () => {
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: withTeardown });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true, MigrationsApplied: 7, AppliedFiles: [] });
+        vi.mocked(RecordAppInstallation).mockRejectedValue(new Error('forced record failure'));
+
+        const r = await InstallApp({ Source: source }, ctx());
+
+        expect(r.Success).toBe(false);
+        expect(teardownAttempted()).toBe(true);
+        expect(vi.mocked(DropAppSchema)).toHaveBeenCalledWith('mj_connector_hubspot', expect.anything(), expect.anything());
+    });
+
+    it('warns that a reinstall may fail when an app has migrations but no teardownDirectory', async () => {
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: noTeardown });
+        await InstallApp({ Source: source }, ctx());
+        const warning = warnings.find((w) => w.includes('teardownDirectory'));
+        expect(warning).toBeDefined();
+        expect(warning).toContain('WILL remain');
+        expect(warning).toContain('primary-key violation');
     });
 
     it('does NOT tear down a schema it did not create (reused/adopted schema is left alone)', async () => {
