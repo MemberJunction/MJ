@@ -3,7 +3,7 @@ import { GraphQLJSON } from 'graphql-type-json';
 import { AppContext } from '../types.js';
 import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { SearchEngine, SearchResult as SearchEngineResult, SearchResultItem as SearchEngineResultItem, SearchProviderInfo, SearchContext, SearchScopePermissionResolver } from '@memberjunction/search-engine';
+import { SearchEngine, SearchResult as SearchEngineResult, SearchResultItem as SearchEngineResultItem, SearchProviderInfo, SearchContext, GetSearchScopePermissionResolver } from '@memberjunction/search-engine';
 import { SearchEngineBase, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
@@ -284,7 +284,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
         agentID: string | undefined,
     ): Promise<string | undefined> {
         const agent = await this.loadAgent(agentID, user);
-        const resolver = new SearchScopePermissionResolver();
+        const resolver = GetSearchScopePermissionResolver();
         for (const scopeID of scopeIDs) {
             const verdict = await resolver.ResolveEffectivePermission({
                 User: user,
@@ -351,7 +351,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
 
             const ownedOrUnowned = scopes.filter(s => !s.OwnerUserID || UUIDsEqual(s.OwnerUserID, userID));
             const agent = await this.loadAgent(agentID, currentUser);
-            const resolver = new SearchScopePermissionResolver();
+            const resolver = GetSearchScopePermissionResolver();
 
             const visible: SearchScopeInfo[] = [];
             for (const s of ownedOrUnowned) {

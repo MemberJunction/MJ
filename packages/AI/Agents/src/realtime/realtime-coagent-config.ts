@@ -23,7 +23,7 @@
  *     "modelPreference": "<AI Model name or ID>",
  *     "voice": { "default": { "tone": "…", "speakingStyle": "…" },
  *                "providers": { "openai": { "voice": "alloy" },
- *                               "elevenlabs": { "voiceId": "…" },
+ *                               "elevenlabs": { "voice": "<voice id>" },
  *                               "gemini": { "voice": "…" },
  *                               "assemblyai": { "voice": "…" } } },
  *     "allowUserModelOverride": true,
