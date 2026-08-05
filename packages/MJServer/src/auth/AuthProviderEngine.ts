@@ -101,7 +101,7 @@ export class AuthProviderEngine extends BaseEngine<AuthProviderEngine> {
 
     for (const row of this.Providers) {
       try {
-        const config = await this.BuildProviderConfig(row, contextUser);
+        const config = await this.buildProviderConfig(row, contextUser);
         factory.register(AuthProviderFactory.createProvider(config));
         registered++;
       } catch (error) {
@@ -141,9 +141,9 @@ export class AuthProviderEngine extends BaseEngine<AuthProviderEngine> {
    * driver-specific blob happens to repeat — the columns are the reviewable, described surface,
    * and a JSON blob must not be able to silently redefine the issuer a token is validated against.
    */
-  private async BuildProviderConfig(row: MJAuthenticationProviderEntity, contextUser?: UserInfo): Promise<AuthProviderConfig> {
-    const additional = this.ParseJsonColumn(row.AdditionalConfiguration, row.Name, 'AdditionalConfiguration');
-    const secrets = await this.ResolveCredential(row, contextUser);
+  private async buildProviderConfig(row: MJAuthenticationProviderEntity, contextUser?: UserInfo): Promise<AuthProviderConfig> {
+    const additional = this.parseJsonColumn(row.AdditionalConfiguration, row.Name, 'AdditionalConfiguration');
+    const secrets = await this.resolveCredential(row, contextUser);
 
     const config: AuthProviderConfig = {
       ...additional,
@@ -168,7 +168,7 @@ export class AuthProviderEngine extends BaseEngine<AuthProviderEngine> {
    * Almost every provider validates tokens against a public JWKS and needs no secret at all, so
    * this is the uncommon path — present for confidential-client flows, management APIs, and SCIM.
    */
-  private async ResolveCredential(row: MJAuthenticationProviderEntity, contextUser?: UserInfo): Promise<Record<string, string>> {
+  private async resolveCredential(row: MJAuthenticationProviderEntity, contextUser?: UserInfo): Promise<Record<string, string>> {
     if (!row.CredentialID || !row.Credential) {
       return {};
     }
@@ -187,7 +187,7 @@ export class AuthProviderEngine extends BaseEngine<AuthProviderEngine> {
    * Throwing here would take down an otherwise-valid provider over a stray character in an
    * optional extras blob, so the row is registered without the extras and the problem is logged.
    */
-  private ParseJsonColumn(raw: string | null, providerName: string, columnName: string): Record<string, unknown> {
+  private parseJsonColumn(raw: string | null, providerName: string, columnName: string): Record<string, unknown> {
     if (!raw?.trim()) {
       return {};
     }
@@ -228,9 +228,9 @@ export class AuthProviderEngine extends BaseEngine<AuthProviderEngine> {
       if (row.Domain) info.domain = row.Domain;
       if (row.Scopes) info.scopes = row.Scopes;
 
-      const clientConfig = this.ParseJsonColumn(row.ClientConfiguration, row.Name, 'ClientConfiguration');
+      const clientConfig = this.parseJsonColumn(row.ClientConfiguration, row.Name, 'ClientConfiguration');
       if (Object.keys(clientConfig).length > 0) {
-        info.clientConfiguration = this.ToPublicClientConfig(clientConfig, row.Name);
+        info.clientConfiguration = this.toPublicClientConfig(clientConfig, row.Name);
       }
 
       return info;
@@ -243,7 +243,7 @@ export class AuthProviderEngine extends BaseEngine<AuthProviderEngine> {
    * through, so a structured blob (the shape a credential would take) cannot ride along to an
    * anonymous caller.
    */
-  private ToPublicClientConfig(parsed: Record<string, unknown>, providerName: string): Record<string, string | number | boolean | null> {
+  private toPublicClientConfig(parsed: Record<string, unknown>, providerName: string): Record<string, string | number | boolean | null> {
     const result: Record<string, string | number | boolean | null> = {};
     for (const [key, value] of Object.entries(parsed)) {
       if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) {

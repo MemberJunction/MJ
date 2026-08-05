@@ -21,7 +21,7 @@ export function initializeAuthProviders(): void {
   factory.clear();
 
   // Environment-derived providers are DEFAULTS: each provider class maps its own variables via
-  // the configFromEnvironment hook, and they apply only when the config file declares no
+  // the ConfigFromEnvironment hook, and they apply only when the config file declares no
   // providers of its own. That mirrors the previous behaviour exactly — the env block used to sit
   // in DEFAULT_SERVER_CONFIG, and mergeConfigs replaces (rather than concatenates) arrays, so an
   // explicit `authProviders` in mj.config.cjs has always suppressed the env-derived set.
@@ -30,7 +30,7 @@ export function initializeAuthProviders(): void {
   // live registry other code reads and appends to (registerMagicLinkAuthProvider pushes into it so
   // a later re-initialize keeps magic-link).
   if (!configInfo.authProviders || configInfo.authProviders.length === 0) {
-    const discovered = AuthProviderFactory.discoverFromEnvironment();
+    const discovered = AuthProviderFactory.DiscoverFromEnvironment();
     if (discovered.length > 0) {
       configInfo.authProviders = discovered;
       LogStatusEx({

@@ -18,7 +18,7 @@ export class CognitoProvider extends BaseAuthProvider {
    *
    * Mapping preserved byte-for-byte from the env block that previously lived in MJServer's config.
    */
-  static configFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
+  static ConfigFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
     if (!env.COGNITO_USER_POOL_ID || !env.COGNITO_CLIENT_ID || !env.AWS_REGION) {
       return null;
     }

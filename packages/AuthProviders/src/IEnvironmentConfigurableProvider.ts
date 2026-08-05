@@ -18,7 +18,7 @@ import type { AuthProviderConfig } from '@memberjunction/core';
  * ```ts
  * @RegisterClass(BaseAuthProvider, 'my-idp')
  * export class MyIdpProvider extends BaseAuthProvider {
- *   static configFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
+ *   static ConfigFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
  *     if (!env.MY_IDP_DOMAIN || !env.MY_IDP_CLIENT_ID) return null;
  *     return {
  *       name: 'my-idp',
@@ -43,12 +43,12 @@ export interface IEnvironmentConfigurableProvider {
    * @param env The environment to read (injected rather than read from `process.env` directly
    *        so the mapping is testable without mutating global state).
    */
-  configFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null;
+  ConfigFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null;
 }
 
 /**
  * Narrows an unknown provider class to one that offers env-var configuration.
  */
 export function isEnvironmentConfigurable(subject: unknown): subject is IEnvironmentConfigurableProvider {
-  return typeof (subject as IEnvironmentConfigurableProvider | undefined)?.configFromEnvironment === 'function';
+  return typeof (subject as IEnvironmentConfigurableProvider | undefined)?.ConfigFromEnvironment === 'function';
 }

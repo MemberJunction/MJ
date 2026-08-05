@@ -6,7 +6,7 @@ import { MJMagicLinkProvider } from './providers/mjexplorer-magic-link-provider.
 import { MJGlobal } from '@memberjunction/global';
 import type { PublicAuthProviderInfo } from '@memberjunction/core';
 import { AuthProviderCatalog, type AuthProviderResolution } from './auth-provider-catalog';
-import { MergeCatalogEnvironment, type CatalogEnvironmentMapper } from './catalog-environment';
+import { mergeCatalogEnvironment, type CatalogEnvironmentMapper } from './catalog-environment';
 import { MJLoginPickerComponent } from './login-picker.component';
 
 // Import our generic redirect component
@@ -103,7 +103,7 @@ export class AuthServicesModule {
     // Magic-link is excluded: its session is established by the redeem flow, not by catalog config.
     const effectiveEnvironment =
       resolution.active && !magicLinkActive
-        ? MergeCatalogEnvironment(environment, resolution.active, providerClass as CatalogEnvironmentMapper | undefined)
+        ? mergeCatalogEnvironment(environment, resolution.active, providerClass as CatalogEnvironmentMapper | undefined)
         : environment;
 
     // Use the factory to get provider-specific Angular services

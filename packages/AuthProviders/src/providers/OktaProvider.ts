@@ -20,7 +20,7 @@ export class OktaProvider extends BaseAuthProvider {
    * NEW capability: Okta had no env-var form before the discovery hook existed — it was one of
    * the providers the old hard-coded block did not cover, so it required a config-file entry.
    */
-  static configFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
+  static ConfigFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
     if (!env.OKTA_DOMAIN || !env.OKTA_CLIENT_ID) {
       return null;
     }

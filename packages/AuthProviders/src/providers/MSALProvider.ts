@@ -19,7 +19,7 @@ export class MSALProvider extends BaseAuthProvider {
    * config — including the provider name 'azure', which predates the Entra rename and is kept
    * so existing deployments' registered provider names do not shift.
    */
-  static configFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
+  static ConfigFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
     if (!env.TENANT_ID || !env.WEB_CLIENT_ID) {
       return null;
     }

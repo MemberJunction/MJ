@@ -392,7 +392,7 @@ module.exports = {
    *
    * AUTH PROVIDERS ARE AUTO-CONFIGURED FROM ENVIRONMENT VARIABLES.
    *
-   * Each provider class declares its own env-var mapping (the `configFromEnvironment` static —
+   * Each provider class declares its own env-var mapping (the `ConfigFromEnvironment` static —
    * see IEnvironmentConfigurableProvider in @memberjunction/auth-providers), so this list is not
    * closed: a third-party provider gets the same treatment by shipping the static, with no change
    * to MJ core. Providers that ship with MJ:

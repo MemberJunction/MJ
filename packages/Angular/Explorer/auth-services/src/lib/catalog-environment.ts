@@ -19,7 +19,7 @@ import type { PublicAuthProviderInfo } from '@memberjunction/core';
  * `CLIENT_AUTHORITY`, so it maps the catalog row itself.
  */
 export interface CatalogEnvironmentMapper {
-  environmentFromCatalog?: (info: PublicAuthProviderInfo) => Record<string, unknown>;
+  EnvironmentFromCatalog?: (info: PublicAuthProviderInfo) => Record<string, unknown>;
 }
 
 /**
@@ -45,12 +45,12 @@ function environmentPrefix(driverClass: string): string {
  * The convention — `<DRIVER>_CLIENTID`, `<DRIVER>_DOMAIN`, `<DRIVER>_SCOPES`, plus one key per
  * `clientConfiguration` entry — is exactly what the Auth0, Okta, Cognito and WorkOS drivers
  * already read, so those four need no per-driver mapping at all. A driver that deviates
- * supplies `environmentFromCatalog`.
+ * supplies `EnvironmentFromCatalog`.
  *
  * Only defined values are emitted, so a catalog row never blanks out a key the app's compiled
  * environment legitimately supplies.
  */
-export function BuildGenericEnvironmentOverlay(info: PublicAuthProviderInfo): Record<string, unknown> {
+export function buildGenericEnvironmentOverlay(info: PublicAuthProviderInfo): Record<string, unknown> {
   const prefix = environmentPrefix(info.driverClass);
   const overlay: Record<string, unknown> = {};
 
@@ -88,15 +88,15 @@ export function BuildGenericEnvironmentOverlay(info: PublicAuthProviderInfo): Re
  * @param info The provider selected from the catalog.
  * @param providerClass The resolved `MJAuthBase` subclass, consulted for a custom mapper.
  */
-export function MergeCatalogEnvironment(
+export function mergeCatalogEnvironment(
   environment: Record<string, unknown>,
   info: PublicAuthProviderInfo,
   providerClass?: CatalogEnvironmentMapper
 ): Record<string, unknown> {
   const overlay =
-    typeof providerClass?.environmentFromCatalog === 'function'
-      ? providerClass.environmentFromCatalog(info)
-      : BuildGenericEnvironmentOverlay(info);
+    typeof providerClass?.EnvironmentFromCatalog === 'function'
+      ? providerClass.EnvironmentFromCatalog(info)
+      : buildGenericEnvironmentOverlay(info);
 
   return { ...environment, ...overlay, AUTH_TYPE: info.driverClass };
 }

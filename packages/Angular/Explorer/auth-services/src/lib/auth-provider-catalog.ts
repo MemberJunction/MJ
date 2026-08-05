@@ -156,7 +156,7 @@ export class AuthProviderCatalog {
       active,
       choices,
       showPicker: choices.length > 1,
-      autoLogin: Boolean(selected) && this.ConsumePendingLogin()
+      autoLogin: Boolean(selected) && this.consumePendingLogin()
     };
   }
 
@@ -170,35 +170,35 @@ export class AuthProviderCatalog {
    * simply calls `login()`.
    */
   public static Select(provider: PublicAuthProviderInfo, activeProviderName: string | null): { requiresReload: boolean } {
-    this.WriteStorage(SELECTED_PROVIDER_KEY, provider.name);
+    this.writeStorage(SELECTED_PROVIDER_KEY, provider.name);
 
     if (activeProviderName && provider.name === activeProviderName) {
       return { requiresReload: false };
     }
 
-    this.WriteStorage(PENDING_LOGIN_KEY, '1');
+    this.writeStorage(PENDING_LOGIN_KEY, '1');
     return { requiresReload: true };
   }
 
   /** The provider name persisted by a previous picker choice, if any. */
   public static GetSelectedProviderName(): string | null {
-    return this.ReadStorage(SELECTED_PROVIDER_KEY);
+    return this.readStorage(SELECTED_PROVIDER_KEY);
   }
 
   /** Forgets the persisted choice so the next load resolves the default again. */
   public static ClearSelection(): void {
-    this.RemoveStorage(SELECTED_PROVIDER_KEY);
-    this.RemoveStorage(PENDING_LOGIN_KEY);
+    this.removeStorage(SELECTED_PROVIDER_KEY);
+    this.removeStorage(PENDING_LOGIN_KEY);
   }
 
   /**
    * Reads and clears the "start login immediately" flag. Clearing on read is what keeps a
    * failed or cancelled login from re-triggering the redirect on every subsequent load.
    */
-  private static ConsumePendingLogin(): boolean {
-    const pending = this.ReadStorage(PENDING_LOGIN_KEY) === '1';
+  private static consumePendingLogin(): boolean {
+    const pending = this.readStorage(PENDING_LOGIN_KEY) === '1';
     if (pending) {
-      this.RemoveStorage(PENDING_LOGIN_KEY);
+      this.removeStorage(PENDING_LOGIN_KEY);
     }
     return pending;
   }
@@ -207,7 +207,7 @@ export class AuthProviderCatalog {
   // Wrapped because localStorage throws on access in some privacy modes and in
   // sandboxed iframes. Auth must degrade to "ask every time", never crash.
 
-  private static ReadStorage(key: string): string | null {
+  private static readStorage(key: string): string | null {
     try {
       return window.localStorage.getItem(key);
     } catch {
@@ -215,7 +215,7 @@ export class AuthProviderCatalog {
     }
   }
 
-  private static WriteStorage(key: string, value: string): void {
+  private static writeStorage(key: string, value: string): void {
     try {
       window.localStorage.setItem(key, value);
     } catch {
@@ -223,7 +223,7 @@ export class AuthProviderCatalog {
     }
   }
 
-  private static RemoveStorage(key: string): void {
+  private static removeStorage(key: string): void {
     try {
       window.localStorage.removeItem(key);
     } catch {

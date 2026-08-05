@@ -204,7 +204,7 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
    * @param env Environment to read from; defaults to `process.env`.
    * @returns One config per provider that found its variables, deduplicated by name.
    */
-  static discoverFromEnvironment(env: NodeJS.ProcessEnv = process.env): AuthProviderConfig[] {
+  static DiscoverFromEnvironment(env: NodeJS.ProcessEnv = process.env): AuthProviderConfig[] {
     const registrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseAuthProvider);
     const configs = new Map<string, AuthProviderConfig>();
 
@@ -214,7 +214,7 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
         continue;
       }
       try {
-        const config = providerClass.configFromEnvironment(env);
+        const config = providerClass.ConfigFromEnvironment(env);
         if (config && !configs.has(config.name)) {
           configs.set(config.name, config);
         }

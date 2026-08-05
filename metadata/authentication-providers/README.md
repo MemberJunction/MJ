@@ -62,5 +62,5 @@ No core changes are needed:
    by a class-registration manifest.
 2. For interactive login, ship the browser counterpart `@RegisterClass(MJAuthBase, 'my-idp')`. If it
    does not read the conventional `MY_IDP_CLIENTID` / `MY_IDP_DOMAIN` keys, give it a static
-   `environmentFromCatalog(info)` to map the row itself.
+   `EnvironmentFromCatalog(info)` to map the row itself.
 3. Add a row here (or through the Admin UI) with `DriverClass: "my-idp"`.

@@ -47,7 +47,7 @@ export class WorkOSProvider extends BaseAuthProvider {
    * Remember the AuthKit email caveat: access tokens omit `email` unless a JWT Template adds it,
    * and MJ resolves users by email. See WORKOS.md.
    */
-  static configFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
+  static ConfigFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
     if (!env.WORKOS_CLIENT_ID) {
       return null;
     }

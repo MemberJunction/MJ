@@ -705,7 +705,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
   // experience, because the enumeration lived in core.
   //
   // Each provider class now owns its own mapping via the optional static
-  // `configFromEnvironment` (see IEnvironmentConfigurableProvider in @memberjunction/auth-providers),
+  // `ConfigFromEnvironment` (see IEnvironmentConfigurableProvider in @memberjunction/auth-providers),
   // and `initializeAuthProviders()` collects them through the ClassFactory registry.
   //
   // Discovery cannot happen here: this literal is evaluated when config.ts is imported, which is

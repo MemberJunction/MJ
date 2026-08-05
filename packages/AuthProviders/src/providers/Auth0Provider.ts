@@ -18,7 +18,7 @@ export class Auth0Provider extends BaseAuthProvider {
    * Mapping preserved byte-for-byte from the env block that previously lived in MJServer's
    * config, so a deployment upgrading to the hook-based discovery sees no change.
    */
-  static configFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
+  static ConfigFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
     if (!env.AUTH0_DOMAIN || !env.AUTH0_CLIENT_ID) {
       return null;
     }

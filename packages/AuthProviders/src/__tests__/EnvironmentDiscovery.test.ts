@@ -16,10 +16,10 @@ import { WorkOSProvider } from '../providers/WorkOSProvider.js';
 
 const EMPTY: NodeJS.ProcessEnv = {};
 
-describe('configFromEnvironment — parity with the previous hard-coded block', () => {
+describe('ConfigFromEnvironment — parity with the previous hard-coded block', () => {
   it('Auth0 maps AUTH0_DOMAIN + AUTH0_CLIENT_ID exactly as before', () => {
     expect(
-      Auth0Provider.configFromEnvironment({
+      Auth0Provider.ConfigFromEnvironment({
         AUTH0_DOMAIN: 'example.us.auth0.com',
         AUTH0_CLIENT_ID: 'cid',
         AUTH0_CLIENT_SECRET: 'secret'
@@ -37,7 +37,7 @@ describe('configFromEnvironment — parity with the previous hard-coded block', 
   });
 
   it('Entra maps TENANT_ID + WEB_CLIENT_ID exactly as before, keeping the legacy name "azure"', () => {
-    const config = MSALProvider.configFromEnvironment({ TENANT_ID: 'tid', WEB_CLIENT_ID: 'wcid' });
+    const config = MSALProvider.ConfigFromEnvironment({ TENANT_ID: 'tid', WEB_CLIENT_ID: 'wcid' });
     expect(config).toEqual({
       name: 'azure',
       type: 'msal',
@@ -51,7 +51,7 @@ describe('configFromEnvironment — parity with the previous hard-coded block', 
 
   it('Cognito maps its three variables exactly as before', () => {
     expect(
-      CognitoProvider.configFromEnvironment({
+      CognitoProvider.ConfigFromEnvironment({
         COGNITO_USER_POOL_ID: 'pool',
         COGNITO_CLIENT_ID: 'ccid',
         AWS_REGION: 'us-east-1'
@@ -69,13 +69,13 @@ describe('configFromEnvironment — parity with the previous hard-coded block', 
   });
 });
 
-describe('configFromEnvironment — incomplete configuration', () => {
+describe('ConfigFromEnvironment — incomplete configuration', () => {
   it.each([
-    ['Auth0 without a client id', () => Auth0Provider.configFromEnvironment({ AUTH0_DOMAIN: 'd' })],
-    ['Entra without a client id', () => MSALProvider.configFromEnvironment({ TENANT_ID: 't' })],
-    ['Cognito without a region', () => CognitoProvider.configFromEnvironment({ COGNITO_USER_POOL_ID: 'p', COGNITO_CLIENT_ID: 'c' })],
-    ['Okta without a client id', () => OktaProvider.configFromEnvironment({ OKTA_DOMAIN: 'd' })],
-    ['WorkOS with nothing set', () => WorkOSProvider.configFromEnvironment(EMPTY)]
+    ['Auth0 without a client id', () => Auth0Provider.ConfigFromEnvironment({ AUTH0_DOMAIN: 'd' })],
+    ['Entra without a client id', () => MSALProvider.ConfigFromEnvironment({ TENANT_ID: 't' })],
+    ['Cognito without a region', () => CognitoProvider.ConfigFromEnvironment({ COGNITO_USER_POOL_ID: 'p', COGNITO_CLIENT_ID: 'c' })],
+    ['Okta without a client id', () => OktaProvider.ConfigFromEnvironment({ OKTA_DOMAIN: 'd' })],
+    ['WorkOS with nothing set', () => WorkOSProvider.ConfigFromEnvironment(EMPTY)]
   ])('returns null for %s rather than a partial config', (_label, build) => {
     // A partial config would fail validateConfig() at registration and surface as a startup
     // error on every deployment that simply does not use that provider.
@@ -83,13 +83,13 @@ describe('configFromEnvironment — incomplete configuration', () => {
   });
 });
 
-describe('configFromEnvironment — providers that previously had no env-var form', () => {
+describe('ConfigFromEnvironment — providers that previously had no env-var form', () => {
   it('Okta derives the default authorization server, and honours OKTA_ISSUER', () => {
-    const base = OktaProvider.configFromEnvironment({ OKTA_DOMAIN: 'org.okta.com', OKTA_CLIENT_ID: 'ocid' });
+    const base = OktaProvider.ConfigFromEnvironment({ OKTA_DOMAIN: 'org.okta.com', OKTA_CLIENT_ID: 'ocid' });
     expect(base?.issuer).toBe('https://org.okta.com/oauth2/default');
     expect(base?.jwksUri).toBe('https://org.okta.com/oauth2/default/v1/keys');
 
-    const custom = OktaProvider.configFromEnvironment({
+    const custom = OktaProvider.ConfigFromEnvironment({
       OKTA_DOMAIN: 'org.okta.com',
       OKTA_CLIENT_ID: 'ocid',
       OKTA_ISSUER: 'https://org.okta.com/oauth2/aus123'
@@ -99,7 +99,7 @@ describe('configFromEnvironment — providers that previously had no env-var for
   });
 
   it('WorkOS derives issuer and JWKS from the client id alone', () => {
-    const config = WorkOSProvider.configFromEnvironment({ WORKOS_CLIENT_ID: 'client_01H' });
+    const config = WorkOSProvider.ConfigFromEnvironment({ WORKOS_CLIENT_ID: 'client_01H' });
     expect(config).toMatchObject({
       name: 'workos',
       type: 'workos',
@@ -110,13 +110,13 @@ describe('configFromEnvironment — providers that previously had no env-var for
   });
 });
 
-describe('AuthProviderFactory.discoverFromEnvironment', () => {
+describe('AuthProviderFactory.DiscoverFromEnvironment', () => {
   it('returns nothing for an empty environment', () => {
-    expect(AuthProviderFactory.discoverFromEnvironment(EMPTY)).toEqual([]);
+    expect(AuthProviderFactory.DiscoverFromEnvironment(EMPTY)).toEqual([]);
   });
 
   it('discovers every provider whose variables are present, through the ClassFactory registry', () => {
-    const discovered = AuthProviderFactory.discoverFromEnvironment({
+    const discovered = AuthProviderFactory.DiscoverFromEnvironment({
       AUTH0_DOMAIN: 'example.us.auth0.com',
       AUTH0_CLIENT_ID: 'a',
       TENANT_ID: 't',
@@ -128,12 +128,12 @@ describe('AuthProviderFactory.discoverFromEnvironment', () => {
   });
 
   it('skips providers whose variables are absent', () => {
-    const discovered = AuthProviderFactory.discoverFromEnvironment({ AUTH0_DOMAIN: 'd', AUTH0_CLIENT_ID: 'c' });
+    const discovered = AuthProviderFactory.DiscoverFromEnvironment({ AUTH0_DOMAIN: 'd', AUTH0_CLIENT_ID: 'c' });
     expect(discovered.map((p) => p.name)).toEqual(['auth0']);
   });
 
   it('produces configs that pass the provider validity check', () => {
-    for (const config of AuthProviderFactory.discoverFromEnvironment({
+    for (const config of AuthProviderFactory.DiscoverFromEnvironment({
       AUTH0_DOMAIN: 'example.us.auth0.com',
       AUTH0_CLIENT_ID: 'a',
       OKTA_DOMAIN: 'org.okta.com',

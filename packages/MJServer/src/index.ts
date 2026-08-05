@@ -57,7 +57,7 @@ import { DataSourceInfo, raiseEvent } from './types.js';
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, SetVerboseLogging } from '@memberjunction/core';
-import { getSystemUser } from './auth/index.js';
+import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
 import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
@@ -334,6 +334,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const pgStartupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
     await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode });
 
+    // Both provider sources have now had their turn — config/env at module load, metadata via
+    // AuthProviderEngine's startup hook — so "no providers at all" is finally a meaningful check.
+    validateAuthProvidersRegistered();
+
     // Monkey-patch SQLServerDataProvider.ExecuteSQLWithPool to support PostgreSQL
     // Generated resolvers call this static method with bracket-quoted SQL.
     // When the pool is our PG-compat wrapper, translate and execute via pg.Pool.
@@ -489,6 +493,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
     await setupSQLServerClient(config, { mode: startupMode.mode });
+
+    // See the note on the PostgreSQL path above: this is the first point at which both the
+    // config/env providers and the metadata catalog have been registered.
+    validateAuthProvidersRegistered();
     lap('Metadata + Provider Setup', tPhase);
     startupLog.BeginPhase('Initializing data provider');
     const md = new Metadata(); // global-provider-ok: bootstrap
