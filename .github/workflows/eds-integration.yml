@@ -174,7 +174,10 @@ jobs:
         env:
           SAPW: Eds_CI_pass123
         run: |
-          node -e '
+          # `mssql` is declared by the sqlserver driver package, not at the root.
+          # npm hoisted it so a bare `node -e` from the repo root resolved it;
+          # pnpm links only declared deps, so run this from the package that has it.
+          pnpm --filter @memberjunction/external-data-source-sqlserver exec node -e '
             const sql = require("mssql");
             (async () => {
               for (let i = 0; i < 60; i++) {
