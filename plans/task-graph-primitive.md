@@ -1,8 +1,8 @@
 # Task Graphs as an Agent Primitive — Design Plan
 
-**Status:** Draft for review
+**Status:** Draft v2 — revised per review feedback
 **Date:** 2026-08-05
-**Origin:** Architecture study of the Sage → Workflow Planner → TaskOrchestrator pipeline (conversation study, session `claude/sage-task-graph-study-4uvtrc`)
+**Origin:** Architecture study of the Sage → Workflow Planner → TaskOrchestrator pipeline (session `claude/sage-task-graph-study-4uvtrc`)
 
 ---
 
@@ -10,25 +10,33 @@
 
 MemberJunction already has a durable, dependency-aware plan-execution substrate — the `MJ: Tasks` / `MJ: Task Dependencies` schema, the `TaskOrchestrator`, a Gantt/checklist UI, PubSub progress streaming, and completion notifications. Today that substrate is reachable only as a UI convenience of one Angular component: the Explorer conversation client detects a `taskGraph` in an agent's payload and drives execution through a single long-lived GraphQL mutation. Every other channel (Slack/Teams, scheduled routines, headless API) silently drops the plan, the agent framework itself has zero knowledge that Tasks exist, and the executor uses a fraction of what its own schema supports.
 
+**Why now — the LLM-capability context.** When Sage, the Workflow Planner, and the task-graph concept were originally built, model capability was far below where it is today. Reliable decomposition needed a dedicated planning specialist with a narrow prompt. That assumption no longer holds: a reasonably smart mid-sized model can emit a useful, well-formed task graph directly in its response as a matter of course. That shifts the design center — graph emission becomes an ordinary, default-on capability of any Loop agent, while the Workflow Planner survives as an *optional* specialist for genuinely complex decomposition (and its confirmation UX), needed rarely rather than routinely.
+
 This plan makes task graphs a first-class capability of the platform:
 
-1. **Execution moves server-side and becomes invocation-agnostic** — submission is split from execution; a durable dispatcher runs graphs regardless of where they came from; clients (all of them) are observers via the existing PubSub plumbing.
-2. **`Tasks` becomes a Loop-agent primitive** side-by-side with `ForEach`/`While`/`Sub-Agent` — any Loop agent can emit a durable, dependency-ordered plan mid-run, gated by an agent-level setting that defaults to **on**, with prompt documentation injected/stripped via the existing `AgentTypePromptParams` mechanism.
-3. **The Flow traversal engine becomes the one graph executor.** A runtime LLM-emitted graph is converted into an *ephemeral flow* and run by the same engine that runs design-time flows; runtime-vs-design-time is provenance, not architecture. Flow gains parallel DAG execution (it is strictly single-threaded today), and task graphs gain Flow's conditional paths and recovery branches.
+1. **Execution moves server-side and becomes invocation-agnostic** — submission split from execution; a durable dispatcher runs graphs regardless of origin; all clients are observers via the existing PubSub plumbing.
+2. **`Tasks` becomes a Loop-agent primitive** side-by-side with `ForEach`/`While`, gated by an `enableTaskGraphs` setting in the agent-type params bag (`AIAgent.AgentTypePromptParams`), **default on**, with prompt documentation injected/stripped via the existing include-docs + auto-alignment mechanism.
+3. **The Flow traversal engine becomes the one graph executor.** A runtime LLM-emitted graph is converted into an *ephemeral flow* and run by the same engine that runs design-time flows. Flow gains parallel DAG execution (it is strictly single-threaded today); task graphs gain Flow's conditional paths and recovery branches. Single-node graphs are *constant-folded* into direct in-run execution.
 4. **Human-in-the-loop is native**: `MJ: AI Agent Requests` is the pause/resume mechanism for approvals, and the Task schema's existing `UserID`-xor-`AgentID` design makes *human tasks* first-class graph nodes that block downstream agent work.
+5. **`BaseAgent.ts` is decomposed** from a ~13k-line monolith into composed helper classes as a parallel track, landing before/alongside the primitive work that touches it.
 
-### Decisions (settled in review discussion)
+### Decisions
 
 | # | Decision |
 |---|----------|
-| D1 | Task-graph execution is server-side and works identically regardless of invocation channel (Explorer, messaging, scheduled, headless). The client never drives execution; updates are pushed to it. |
+| D1 | Task-graph execution is server-side and works identically regardless of invocation channel. The client never drives execution; updates are pushed to it. |
 | D2 | Submission (validate + persist) is split from execution (durable dispatcher). Graph rows are an execution substrate, not bookkeeping. |
-| D3 | `Tasks` is a new Loop-agent primitive alongside `ForEach`/`While`. A new agent-level setting opts a Loop agent in/out; **default is on**. Prompt instructions for the primitive are included/excluded via `AgentTypePromptParams` (same pattern as `includeForEachDocs`), with response-type auto-alignment stripping the `nextStep` type when disabled. |
-| D4 | Capability is **not** granted by attaching the Workflow Planner sub-agent. The planner remains an optional planning *skill* (decomposition quality, `Find Candidate Agents`, confirmation UX); execution rights are a declarative agent property. |
+| D3 | `Tasks` is a new Loop-agent primitive alongside `ForEach`/`While`. Opt-in/out lives in the **agent-type params bag** (`AIAgent.AgentTypePromptParams`, schema per agent type via `AIAgentType.PromptParamsSchema`) as `enableTaskGraphs`, **default on** — *not* a column on `AIAgent`, since the capability is Loop-specific. Auto-alignment strips the `nextStep` type from the emitted response interface when disabled, and `LoopAgentType` validation rejects the step type when disabled (capability gate, not just docs). |
+| D4 | Capability is **not** granted by attaching the Workflow Planner sub-agent. With current-generation models, any opted-in Loop agent emits graphs directly; the planner remains an optional specialist for complex decomposition and confirmation UX — rarely needed. |
 | D5 | `MJ: AI Agent Requests` is the pause/resume mechanism for HITL approval gates (Plan Mode precedent). |
 | D6 | The Flow graph executor is the executor that is kept. Dynamic instructions are converted into an **ephemeral flow** and executed by the shared traversal engine. Useful pieces of the current `TaskOrchestrator` (wave computation, transactional persistence, artifact creation, PubSub frames) carry over. |
-| D7 | Flow must gain **parallel DAG execution** — verified today it is single-threaded (single `currentStepId` program counter; only `paths[0]` is followed). Frontier-set traversal + join semantics + concurrency cap are added. |
-| D8 | Phasing: (1) make the current engine truthful → (2) fix placement (extract + dispatcher + server-side detection) → (3) ship the primitive → (4) converge executors. Plan PR is reviewed before any build. |
+| D7 | Flow gains **parallel DAG execution** — verified today it is single-threaded (single `currentStepId`; only `paths[0]` followed). Frontier-set traversal + join semantics + concurrency cap are added. Design-time flows opt in via their params bag (`traversalMode`); ephemeral flows built from task graphs are always parallel. |
+| D8 | **Task rows are NOT written for in-run Flow execution.** `AIAgentRunStep` already records intra-run execution. The boundary: **run steps = intra-run forensics; Task rows = cross-run durable work items** (dispatcher state, human tasks, UI). Neither replaces the other; nothing is double-written. |
+| D9 | **Single-node graphs are flattened** ("constant folding"): a one-task, zero-edge, agent-assigned graph with default continuation semantics is compiled by `LoopAgentType` into the underlying primitive (a `Sub-Agent` step) and executed in-run — no Task row, no dispatcher hop. Flattening is skipped for human tasks, non-default continuations, or when durability is explicitly requested. |
+| D10 | The run-step type for graph submission is **`TaskGraph`** (clearer than `Tasks`); type-union recompiles are a non-issue. |
+| D11 | Package naming is **not** AI-prefixed (`@memberjunction/task-graph`): the submission API is producer-agnostic — an LLM, deterministic code, or a human UI can all construct and submit a DAG. |
+| D12 | `ExecuteTaskGraph` mutation and the client-driven execution path are **removed immediately** in Phase 2 — no adoption exists, so no compat window. (The server-side payload-sniff shim still bridges prompts until Phase 3 migrates them.) |
+| D13 | `BaseAgent.ts` is refactored into composed helper classes as part of this program (parallel track R), behavior-preserving, staged ahead of the Phase 3 changes that touch it. |
 
 ---
 
@@ -37,8 +45,8 @@ This plan makes task graphs a first-class capability of the platform:
 ### The pipeline as it exists
 
 1. **Sage's prompt mandates task-graph format for all delegation** — even single-agent handoffs are a one-task graph (`metadata/prompts/templates/sage/sage.template.md:39`, format at `:45-78`). Multi-agent work goes to the **Workflow Planner** sub-agent (`metadata/agents/.sage-agent.json:571-667`; Loop type; sole action `Find Candidate Agents`), which must present the plan and get user approval before emitting the graph (`workflow-planner.template.md:129-169`).
-2. **Detection is client-side only.** `packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts:1766` (Sage path) and `:2644` (@mention path — any agent) check `result.payload?.taskGraph`. Single-task graphs bypass the task system entirely (`handleSingleTaskExecution`, `:2159` — direct `invokeSubAgent`, no Task rows). Multi-task graphs call the `ExecuteTaskGraph` mutation and **await the entire workflow in one GraphQL request** (`:1953-1993`).
-3. **`TaskOrchestrator`** (`packages/MJServer/src/services/TaskOrchestrator.ts`) persists parent + children + dependencies transactionally (`:106-218`), then loops: find `Pending` tasks with all prerequisites `Complete` (`:356`) → execute each **sequentially** via `AgentRunner.RunAgent` (`:325`, comment: "could be parallelized in the future") → create an artifact per task output (`:707`) → completion notification (`:794`). Progress streams over PubSub frames (`resolver: 'TaskOrchestrator'`) routed by `ConversationStreaming.routeTaskProgress` (`packages/ConversationsRuntime/src/streaming/ConversationStreaming.ts:323`).
+2. **Detection is client-side only.** `packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts:1766` (Sage path) and `:2644` (@mention path — any agent) check `result.payload?.taskGraph`. Single-task graphs bypass the task system entirely (`handleSingleTaskExecution`, `:2159`). Multi-task graphs call the `ExecuteTaskGraph` mutation and **await the entire workflow in one GraphQL request** (`:1953-1993`).
+3. **`TaskOrchestrator`** (`packages/MJServer/src/services/TaskOrchestrator.ts`) persists parent + children + dependencies transactionally (`:106-218`), then loops: find `Pending` tasks with all prerequisites `Complete` (`:356`) → execute each **sequentially** via `AgentRunner.RunAgent` (`:325`) → create an artifact per task output (`:707`) → completion notification (`:794`). Progress streams over PubSub frames routed by `ConversationStreaming.routeTaskProgress` (`packages/ConversationsRuntime/src/streaming/ConversationStreaming.ts:323`).
 
 ### Verified gaps
 
@@ -46,26 +54,27 @@ This plan makes task graphs a first-class capability of the platform:
 |---|---|
 | Messaging channels drop graphs | `BaseMessagingAdapter.detectDelegation` handles `invokeAgent` and a **regex over reply text** ("I'll have the {Agent}…"), never `taskGraph`; a test asserts the graph is suppressed from output (`packages/MessagingAdapters/src/__tests__/BaseMessagingAdapter.test.ts:571-595`). Multi-step over Slack/Teams does not execute. |
 | Scheduled routines drop graphs | `UserRoutineDispatcherDriver.executeAgentTarget` serializes `result.payload` into the run record; no graph inspection (`packages/Scheduling/engine/src/drivers/UserRoutineDispatcherDriver.ts:422-458`). |
-| No server-side detection | Grep across the repo: `taskGraph` appears in exactly four TS files — the Angular component, `TaskResolver`, `TaskOrchestrator`, and one MessagingAdapters test. Nothing inspects a completed run's payload server-side. |
-| Agent framework is blind to Tasks | Zero references to `MJTaskEntity` / `'MJ: Tasks'` / `TaskOrchestrator` anywhere in `packages/AI/**`. Dependency arrow is strictly one-way. |
-| Sequential execution despite DAG | `executeTasksForParent` runs each eligible wave in a `for` loop (`TaskOrchestrator.ts:325-341`). Meanwhile `BaseAgent` already ships bounded-parallel sub-agents (concurrency 5, `base-agent.ts:273`) and parallel ForEach (concurrency 10). |
-| No failure propagation | A `Failed` dependency leaves dependents `Pending` forever; `completeParentTask` unconditionally sets the parent `Complete` / 100% (`TaskOrchestrator.ts:419-436`). `Blocked`, `Cancelled`, `Deferred` are never written by any code path. |
-| No resume / durability | Execution lives inside the mutation request. Server restart orphans `In Progress` tasks; page reload loses the awaited promise. Nothing ever resumes a graph. |
-| Payload smuggling | `inputPayload` and outputs ride inside `Task.Description` as `__TASK_METADATA__` / `__TASK_OUTPUT__` markers (`:170-176`, `:533-535`); leaks into search results and the task detail panel. Both design docs called for `InputPayload`/`OutputPayload` columns; never added. |
-| `@taskX.output` is fiction | The reference syntax in the planner prompt is resolved nowhere; the literal string reaches the downstream LLM, which copes only because all dependency outputs are also dumped as markdown (`buildConversationMessages`, `:651-684`). |
-| Agent-run mis-link in UI | The Gantt maps agent runs via `ConversationDetailID`, which every sibling task shares — all siblings link to the same run (`tasks-full-view.component.ts:373-395`). The correct `agentRunId` is captured in `__TASK_OUTPUT__` but never read. |
-| No cycle detection | A cyclic `dependsOn` would deadlock silently: tasks never become eligible, the loop exits, parent completes. |
+| No server-side detection | `taskGraph` appears in exactly four TS files repo-wide — the Angular component, `TaskResolver`, `TaskOrchestrator`, one test. Nothing inspects a completed run's payload server-side. |
+| Agent framework blind to Tasks | Zero references to `MJTaskEntity` / `'MJ: Tasks'` / `TaskOrchestrator` anywhere in `packages/AI/**`. |
+| Sequential execution despite DAG | `executeTasksForParent` runs each eligible wave in a `for` loop (`TaskOrchestrator.ts:325-341`), while `BaseAgent` ships bounded-parallel sub-agents (concurrency 5) and parallel ForEach (concurrency 10). |
+| No failure propagation | A `Failed` dependency leaves dependents `Pending` forever; `completeParentTask` unconditionally sets the parent `Complete`/100% (`:419-436`). `Blocked`/`Cancelled`/`Deferred` are never written. |
+| No resume / durability | Execution lives inside the mutation request. Server restart orphans `In Progress` tasks; page reload loses the awaited promise. |
+| Payload smuggling | Inputs/outputs ride inside `Task.Description` as `__TASK_METADATA__`/`__TASK_OUTPUT__` markers (`:170-176`, `:533-535`); leaks into search and the detail panel. |
+| `@taskX.output` is fiction | Resolved nowhere; the literal string reaches the downstream LLM, which copes only because dependency outputs are also dumped as markdown (`:651-684`). |
+| Agent-run mis-link in UI | Gantt maps agent runs via shared `ConversationDetailID` — all siblings link to the same run (`tasks-full-view.component.ts:373-395`). |
+| No cycle detection | A cyclic `dependsOn` deadlocks silently: nothing becomes eligible, loop exits, parent completes. |
 | Unknown agents silently dropped | `createTasksFromGraph` logs and skips unresolvable `agentName`s (`:140-147`) — the graph executes with holes. |
 
-### Existing machinery this plan builds on (not rebuilt)
+### Existing machinery this plan builds on
 
-- **Loop response contract + validation/retry correctives** — `packages/AI/Agents/src/agent-types/loop-agent-response-type.ts:102` (`nextStep.type` union), `loop-agent-type.ts` (`createRetryStep` correctives for malformed shapes).
-- **Prompt-section toggles with auto-alignment** — `LoopAgentTypePromptParams` (`loop-agent-prompt-params.ts:170`), three-level merge in `buildAgentTypePromptParams` (`base-agent.ts:6699`), `applyResponseTypeAutoAlignment` (`:6755`) strips disabled types from the emitted response interface.
-- **Pause/resume for HITL** — Plan Mode gate resolves approval by finding a resolved `MJ: AI Agent Requests` row (`base-agent.ts:8066-8113`).
-- **Flow traversal** — condition-gated paths via `SafeExpressionEvaluator` (`flow-agent-type.ts:395` `getValidPaths`), recovery branches (Failed-with-path, `:1275`), per-step `ActionOutputMapping` (`:841`, `:1036`).
-- **Task schema headroom** — `Status` values `Blocked/Cancelled/Deferred/Failed`; `DependencyType` values `Corequisite/Optional`; `UserID` xor `AgentID` validator (`entity_subclasses.ts:110765-110790`); `DueAt`, `ProjectID`.
+- **Loop response contract + validation/retry correctives** — `loop-agent-response-type.ts:102` (`nextStep.type` union); `createRetryStep` correctives for malformed shapes.
+- **Agent-type params bag** — `AIAgent.AgentTypePromptParams` (JSON; schema declared by `AIAgentType.PromptParamsSchema` — see column description at `entity_subclasses.ts:4684-4688`), merged schema-defaults → agent JSON → runtime overrides in `buildAgentTypePromptParams` (`base-agent.ts:6699`), auto-alignment in `applyResponseTypeAutoAlignment` (`:6755`). Loop's schema is `LoopAgentTypePromptParams` + `DEFAULT_LOOP_AGENT_PROMPT_PARAMS` (`loop-agent-prompt-params.ts:170`, `:325`) — and it already carries **behavior** settings, not just docs toggles (`scratchpadMaxTasks: 50`).
+- **Per-request provider minting** — `createPerRequestProviders` (`packages/MJServer/src/context.ts:727-760`): a fresh `SQLServerDataProvider`/`PostgreSQLDataProvider` per request over the **shared connection pool** (PG via `ConfigWithSharedPool`), with metadata reuse (`loadIfNeeded=false`). Proves provider instances are cheap and gives the dispatcher its concurrency-isolation mechanism.
+- **Pause/resume for HITL** — Plan Mode resolves approval via `MJ: AI Agent Requests` (`base-agent.ts:8066-8113`).
+- **Flow traversal** — condition-gated paths via `SafeExpressionEvaluator` (`flow-agent-type.ts:395`), recovery branches (`:1275`), per-step `ActionOutputMapping` (`:841`, `:1036`).
+- **Task schema headroom** — `Status`: `Blocked/Cancelled/Deferred/Failed`; `DependencyType`: `Corequisite/Optional`; `UserID` xor `AgentID` validator; `DueAt`, `ProjectID`.
 - **Concurrency utility** — `mapWithConcurrency` (`base-agent.ts:8389`).
-- **PubSub frame contract** — `resolver: 'TaskOrchestrator'` frames and `routeTaskProgress` client routing survive unchanged.
+- **PubSub frame contract** — `resolver: 'TaskOrchestrator'` frames + `routeTaskProgress` survive unchanged.
 
 ---
 
@@ -73,45 +82,43 @@ This plan makes task graphs a first-class capability of the platform:
 
 ### 3.1 Conceptual model: definition vs. instance
 
-Separate what the two current systems each have half of:
+- **Graph definition** — nodes, edges, conditions, input mappings. Comes from design-time metadata (`MJ: AI Agent Steps` + `Step Paths`) **or** a runtime emission (the `Tasks` primitive, deterministic code, or a human UI). Same logical shape; provenance is irrelevant (D11).
+- **Execution instance** — durable state of one run of a *cross-run* graph: `MJ: Tasks` + `MJ: Task Dependencies` rows carrying status, timing, payloads, agent-run links, claims.
 
-- **Graph definition** — the shape of the work: nodes, edges, conditions, input mappings. Comes from **either** design-time metadata (`MJ: AI Agent Steps` + `Step Paths`) **or** a runtime LLM emission (the `Tasks` primitive). Same logical shape; provenance does not matter.
-- **Execution instance** — durable state of one run of a definition: `MJ: Tasks` + `MJ: Task Dependencies` rows carrying status, timing, payloads, agent-run links. This is what the UI renders, what survives restarts, and what humans participate in.
+**The run-step / task-row boundary (D8).** `AIAgentRunStep` records what happened *inside* one agent run — including Flow agents traversing their design-time graphs. Task rows record *cross-run* orchestration: each graph node is typically its own agent run (or a human), the dispatcher is not an agent, and the graph outlives any single run. So: Flow executing in-run → run steps only, no Task rows. Dispatcher executing a durable graph → Task rows for orchestration state, and each node's agent run keeps its own run steps as usual. The tables are complementary, never duplicated. Task rows additionally carry what run steps never will: human assignment, `DueAt`, project linkage, and the user-facing Gantt/checklist surface.
 
-A runtime-submitted graph is materialized as an **ephemeral flow**: an in-memory flow definition built from the task graph (nodes ≈ steps, `dependsOn` ≈ paths) executed by the shared traversal engine, with execution state persisted as Task rows. Nothing is written to the `AIAgentStep` tables for runtime graphs.
+A runtime-submitted graph is materialized as an **ephemeral flow**: an in-memory flow definition built from the task graph, executed by the shared traversal engine, with orchestration state persisted to Task rows. Nothing is written to `AIAgentStep` tables for runtime graphs.
 
 ### 3.2 Components and package layering
 
 ```
 @memberjunction/ai-core-plus
     └─ TaskGraph types: TaskGraphRequest, TaskGraphNode, validation helpers
-       (moved/evolved from TaskOrchestrator.ts:13-29 — the only typed definition today)
 
 @memberjunction/ai-agents
     └─ LoopAgentType: 'Tasks' nextStep type, shape validation + retry correctives,
-       prompt docs section, EnableTaskGraphs → includeTaskGraphDocs mapping.
-       Emits a validated graph on the run result; DOES NOT submit or execute.
-       (keeps ai-agents 100% Task-free — no dependency cycle)
+       single-node constant folding (D9), prompt docs section, enableTaskGraphs
+       gate. Emits a validated graph on the run result; DOES NOT submit or execute.
 
-@memberjunction/task-graph   (new package; name bikeshed welcome)
-    ├─ TaskGraphService  — submission: validate (shape, agents resolvable, DAG
-    │                      acyclic, limits) + persist (transactional, from
-    │                      today's createTasksFromGraph) + enqueue
-    ├─ TaskGraphDispatcher — durable execution: eligibility computation, bounded-
-    │                      parallel wave launch, failure/cancel propagation,
-    │                      startup reconciliation, HITL waits, continuations
-    └─ (Phase 4) shared GraphTraversalEngine consumption
-       depends on ai-agents (AgentRunner) — legal because ai-agents never imports it
+@memberjunction/task-graph   (new; not AI-prefixed per D11)
+    ├─ TaskGraphService   — submission: validate (shape, agents resolvable, DAG
+    │                       acyclic, limits) + persist + enqueue. Producer-agnostic.
+    ├─ TaskGraphDispatcher — durable execution: claim protocol, eligibility,
+    │                       bounded-parallel launch, failure/cancel propagation,
+    │                       startup reconciliation, HITL waits, continuations.
+    │                       Host-agnostic via injected ProviderFactory + AgentRunner.
+    └─ (Phase 4) consumes the shared GraphTraversalEngine
+       depends on ai-agents (AgentRunner) — legal; ai-agents never imports it
 
-MJServer            — thin resolvers (submit / cancel / retry / compat
-                      ExecuteTaskGraph), run-completion detection shim, PubSub bridge
-MessagingAdapters   — structured-graph delegation strategy (before the regex)
-Scheduling          — routine/agent drivers hand completed-run graphs to the service
+MJServer            — thin resolvers (submit/cancel/retry), run-completion detection
+                      shim, PubSub bridge, supplies the ProviderFactory (see 3.4)
+MessagingAdapters   — structured-graph delegation strategy (ahead of the text regex)
+Scheduling          — drivers hand completed-run graphs to TaskGraphService
 Angular             — observer only: subscribes on load, re-attaches to in-flight
                       graphs, renders lifecycle + progress frames
 ```
 
-**Why the agent emits rather than submits (D2 + layering):** if `BaseAgent` called the executor directly we'd have `ai-agents → task-graph → ai-agents`. Instead the primitive has *submit-and-detach* semantics: emitting `nextStep.type: 'Tasks'` ends the agent's turn with the validated graph on the run result; the hosting layer (server resolver, messaging adapter, scheduler — all of which already depend on both packages) submits it. Validation feedback (malformed graph → retry corrective) still happens inside the agent loop where it belongs. An injected `ITaskGraphSubmitter` on `ExecuteAgentParams` is the fallback design if a genuine mid-run synchronous submission need appears; not in scope for v1.
+**Why the agent emits rather than submits:** direct submission from `BaseAgent` would create `ai-agents → task-graph → ai-agents`. Emitting `nextStep.type: 'Tasks'` ends the turn with the validated graph on the run result; the hosting layer submits. Validation feedback (malformed graph → corrective retry) stays inside the agent loop. An injected `ITaskGraphSubmitter` on `ExecuteAgentParams` is the fallback if a mid-run synchronous submission need ever appears; not in v1.
 
 ### 3.3 The `Tasks` primitive (Loop agent type)
 
@@ -139,150 +146,175 @@ interface TaskGraphRequest {
         dependsOn: string[];
         inputPayload?: Record<string, unknown>;
     }>;
-    /** What happens to the submitting agent's conversation when the graph finishes. */
-    continuation?: 'message' | 'reinvoke' | 'none';   // default 'message'
+    /** What happens when the graph finishes. Default 'message'. */
+    continuation?: 'message' | 'reinvoke' | 'none';
 }
 ```
 
-**Mental model** (goes in the prompt docs): `nextStep.subAgents[]` is *ephemeral* fan-out — blocks the run, dies with it. `nextStep.type: 'Tasks'` is *durable* fan-out — dependency-ordered, survives the run, visible in the Tasks UI, resumable, can include waits on humans. Quick nested work → sub-agents; multi-wave / long-running / cross-channel work → task graph.
+**Mental model** (goes in the prompt docs): `subAgents[]` is *ephemeral* fan-out — blocks the run, dies with it. `Tasks` is *durable* fan-out — dependency-ordered, survives the run, visible in the Tasks UI, resumable, can wait on humans.
 
-**Semantics — submit-and-detach (v1):** the step terminates the turn (like `Chat`). The dispatcher executes the graph; on completion it posts a results message into the conversation (`continuation: 'message'`) or re-invokes the submitting agent with the graph outcome as a new turn (`'reinvoke'` — the same continuation pattern as Agent Requests resume). No run suspension is invented.
+**Semantics — submit-and-detach:** the step terminates the turn. The dispatcher executes; on completion it posts a results message into the conversation or re-invokes the submitting agent with the outcome as a new turn (Agent Requests resume pattern). No run suspension.
 
-**Opt-in setting (D3):**
-- New column `AIAgent.EnableTaskGraphs` (bit, NOT NULL, **default 1**) — precedent: `SupportsPlanMode` / `RequirePlanMode`.
-- `buildAgentTypePromptParams` maps it to the default of a new `includeTaskGraphDocs` param; explicit `AgentTypePromptParams` / per-run overrides win, same three-level merge as every other toggle.
-- `applyResponseTypeAutoAlignment` strips `'Tasks'` from the emitted union when disabled — a disabled agent's LLM never sees the type exists.
-- Non-Loop agent types ignore the column until Phase 4.
+**Single-node constant folding (D9):** during `DetermineNextStep`, a graph with exactly one node, no edges, an `agentName` assignment, and default continuation is rewritten into a `Sub-Agent` step and executed in-run — the compiler-flattening analogy: don't spin up loop machinery for a loop of one. Tradeoff accepted: no Task row (matches today's single-task fast path). Folding is skipped when the node is a human task, `continuation` is non-default, or the graph explicitly requests durability (a `durable: true` escape hatch on `TaskGraphRequest` — final name at implementation).
 
-**Validation + guardrails (in `LoopAgentType`, with retry correctives):**
-- Shape validation; duplicate `tempId` rejection; `dependsOn` references must resolve; **DAG acyclicity check** (new — currently a silent deadlock); max tasks per graph (proposed 50, matching scratchpad `EnforceTaskLimit`); unknown `agentName` is a **validation failure fed back to the LLM**, not a silent drop.
-- Graph-spawn depth: a task's agent may itself submit a graph; a depth counter rides in task metadata (sub-agent `parentDepth` precedent), proposed cap 3.
+**Opt-in via the params bag (D3):**
+- `enableTaskGraphs?: boolean` added to `LoopAgentTypePromptParams` (+ `DEFAULT_LOOP_AGENT_PROMPT_PARAMS`, default **true**) and to the Loop row's `PromptParamsSchema` in `metadata/agent-types/.agent-types.json`.
+- Per-agent override in `AIAgent.AgentTypePromptParams` JSON, per-run override via runtime params — the existing three-level merge.
+- Auto-alignment strips `'Tasks'` from the emitted response-type union when false.
+- **Unlike pure docs toggles, this one is enforced**: `LoopAgentType` validation rejects `nextStep.type === 'Tasks'` from a disabled agent with a corrective (defense against prompt drift), making it a real capability gate.
+- No `AIAgent` column; no migration on that table.
+
+**Validation + guardrails:** duplicate `tempId` rejection; unresolvable `dependsOn` refs; **DAG acyclicity**; max tasks per graph (proposed 50, matching `scratchpadMaxTasks`); unknown `agentName` fed back to the LLM as a validation failure; graph-spawn depth counter in task metadata (sub-agent `parentDepth` precedent), cap 3.
 
 ### 3.4 Submission service and dispatcher
 
-**`TaskGraphService.Submit(graph, context) → parentTaskId`** — validate (same rules as the primitive, re-checked server-side as source of truth), persist parent + children + dependencies in one transaction (carried over from `createTasksFromGraph`), write `InputPayload` to its new column, emit a `graph-submitted` lifecycle frame, hand to dispatcher, return immediately.
+**`TaskGraphService.Submit(graph, context) → parentTaskId`** — re-validate server-side (source of truth), persist parent + children + dependencies in one transaction, write `InputPayload` to its column, emit `graph-submitted`, return immediately. Producer-agnostic: the same API serves the primitive, the transition shim, deterministic code, and a future manual-workflow UI.
 
-**`TaskGraphDispatcher`** — the durable execution loop:
-- **Eligibility**: `Pending` + all `Prerequisite` dependencies `Complete` (today's `findEligibleTasks` logic, kept).
-- **Parallel waves**: launch all eligible tasks via `mapWithConcurrency` with a configurable cap (proposed default 5, aligned with parallel sub-agents). Each task: fresh entity instances, no shared open transaction (the current code already learned to keep prep outside the txn — that discipline extends to execution).
-- **Structured I/O**: dependency outputs are read from `OutputPayload` and injected structurally; `@taskX.output` references in `inputPayload` are **actually resolved** (substitution against the named task's `OutputPayload`). The markdown dump remains as supplementary context during migration.
-- **Failure propagation**: task `Failed` → all transitive dependents → `Blocked`; parent → `Failed` unless every child completed. `PercentComplete` stays honest. Retry mutation resets a `Failed` task to `Pending` and unblocks its dependents.
-- **Cancellation**: parent `Cancelled` → all non-terminal children `Cancelled`; in-flight agent runs cancelled via the existing BaseAgent cancellation checks.
-- **Durability / restart reconciliation**: on server start, find parents `In Progress` with no live execution; re-dispatch their eligible sets. (Single-dispatcher assumption for v1; see Open Questions for multi-server.)
-- **HITL**: a task with `UserID` set is never auto-executed — it is surfaced via `MJ: User Notifications` and completed by a human through the UI/mutation, which unblocks dependents (Phase 4 end-to-end). Agent-side approval gates use `MJ: AI Agent Requests` pause/resume.
-- **Events**: keep today's frame contract (`resolver: 'TaskOrchestrator'`, `TaskProgress`/`AgentProgress`) so `ConversationStreaming.routeTaskProgress` and existing UI keep working; add graph-lifecycle frames (`submitted`, `wave-started`, `blocked-on-human`, `completed`, `failed`).
+**Provider acquisition (resolves O4).** The dispatcher runs outside any request and executes tasks concurrently, so it must never share one provider/transaction scope across parallel work. The mechanism already exists: `createPerRequestProviders` (`context.ts:727`) mints a fresh provider per HTTP request over the shared connection pool, with metadata reuse — proven cheap at request scale. Plan:
+- Extract that core into an exported **`ProviderFactory`** (`CreateProvider(): Promise<DatabaseProviderBase>`) in MJServer.
+- `TaskGraphDispatcher` takes the factory as a constructor dependency (dependency inversion — the package never imports MJServer; any host process supplies its own factory, same as `TaskOrchestrator` receives `provider` today).
+- **One fresh provider per task execution** → isolated transaction scope and entity instances per parallel run; the underlying pool governs real DB concurrency; pool sizing is the tuning knob.
 
-**Server-side detection (transition shim):** until prompts migrate to the primitive, a small detection service (`result.payload?.taskGraph`) is called at the three run-completion seams: the MJServer agent-run path, `BaseMessagingAdapter` delegation detection (as a structured strategy **ahead of** the text regex), and the Scheduling drivers. It submits to `TaskGraphService` and is deleted once the primitive is the only producer.
+**Multi-server dispatch (resolves O1).** Per-task atomic claim, portable across SQL Server and Postgres:
+- Two new `Task` columns: `ClaimedBy NVARCHAR(100) NULL` (instance identifier), `ClaimExpiresAt DATETIMEOFFSET NULL`.
+- Claim = compare-and-swap: `UPDATE Task SET Status='In Progress', ClaimedBy=@instance, ClaimExpiresAt=@t, StartedAt=... WHERE ID=@id AND Status='Pending'` — rowcount 1 wins, 0 means another instance took it. No distributed lock manager.
+- Long tasks heartbeat-extend `ClaimExpiresAt`; reconciliation (startup + periodic) treats expired claims as orphaned → reset to `Pending`.
+- This one protocol covers horizontal scale-out **and** crash/restart recovery, and is near-free to include from day one even though v1 runs single-instance.
+
+**Execution:** claim eligible tasks → run each via `AgentRunner.RunAgent` with a fresh provider → write `OutputPayload`/`AgentRunID`/`ErrorMessage` → recompute eligibility → repeat. Waves are implicit in claim-based dispatch; `mapWithConcurrency` caps in-process parallelism (proposed default 5).
+
+**Structured I/O:** dependency outputs injected from `OutputPayload`; `@taskX.output` references **actually resolved** by substitution. Markdown dump retained as supplementary context during migration.
+
+**Failure/cancel:** `Failed` → transitive dependents `Blocked`; parent `Failed` unless all children completed. Retry resets a `Failed` task to `Pending` and unblocks. Cancel propagates to non-terminal children and in-flight runs.
+
+**Events:** existing frame contract preserved; graph-lifecycle frames added.
 
 ### 3.5 Flow executor convergence + parallel DAG (D6/D7)
 
-**Verified current state:** `FlowExecutionState.currentStepId` is a single program counter (`flow-agent-type.ts:46`); after each step only the highest-priority valid path is followed (`paths[0]`, `:1266`; alternates tried only when the destination step is inactive, `:1285`). Flow cannot fan out today.
+**Verified:** `FlowExecutionState.currentStepId` is a single program counter (`flow-agent-type.ts:46`); only `paths[0]` is followed (`:1266`); alternates are consulted only when the destination step is inactive (`:1285`).
 
-**Additions to the traversal model:**
-- **Frontier set**: `activeStepIds: Set<string>` replaces the single counter; all newly-eligible nodes launch (concurrency-capped).
-- **Join semantics**: AND-join by default — a node with multiple incoming paths becomes eligible when **all** satisfied incoming paths complete. This is exactly `Prerequisite` dependency semantics, which is why the models converge cleanly. OR-join maps to the `Optional` dependency type; `Corequisite` maps to co-scheduled nodes. (Exact mapping table to be finalized in Phase 4 design.)
-- **Back-compat**: existing flows keep sequential highest-priority-path behavior unless the flow opts into parallel traversal (metadata flag on the agent or step level — open question below).
+**Additions:**
+- **Frontier set** (`activeStepIds: Set<string>`); all newly-eligible nodes launch, concurrency-capped.
+- **Join semantics**: AND-join default (all satisfied incoming paths complete — exactly `Prerequisite` semantics, which is why the models converge); OR-join ↔ `Optional`; `Corequisite` ↔ co-scheduled nodes.
+- **Opt-in mapping (resolves O3)**: design-time flows read `traversalMode: 'sequential' | 'parallel'` from **their own agent-type params bag** — a `FlowAgentTypeParams` schema on the Flow agent type row, using the same `AgentTypePromptParams` column and merge machinery as Loop (the column is generic; its schema is per-type). Default `sequential` for back-compat. **Ephemeral flows constructed from task graphs always set `parallel`** — the ephemeral attribute maps directly onto the traversal mode.
 
-**Convergence path:** extract the traversal core (frontier management, path/condition evaluation via `SafeExpressionEvaluator`, join logic, recovery-path handling) from `FlowAgentType` into a shared **GraphTraversalEngine** with two state backends:
-- **In-run backend** — `FlowAgentType` keeps executing design-time flows inside a single agent run with in-memory state (today's behavior, now parallel-capable).
-- **Durable backend** — `TaskGraphDispatcher` runs ephemeral flows (from runtime submissions) with state persisted to Task rows across runs, restarts, and human waits.
+**Convergence:** extract the traversal core (frontier, path/condition evaluation via `SafeExpressionEvaluator`, joins, recovery paths) into a shared **GraphTraversalEngine** with two state backends:
+- **In-run** — `FlowAgentType` executes design-time flows inside one agent run, state in memory, recorded as run steps (D8: no Task rows).
+- **Durable** — `TaskGraphDispatcher` executes ephemeral flows with state persisted to Task rows across runs, restarts, and human waits.
 
-What each side inherits: task graphs gain **conditional edges** (path conditions evaluated against upstream `OutputPayload`), **recovery branches** (Failed-with-a-path = declarative error handling), and **structured output mapping** (the `ActionOutputMapping` analog — the real fix for `@taskX.output`). Flow gains **durability, visibility, and human nodes** when its runs materialize as task instances (optional, stretch).
-
-The bespoke `TaskOrchestrator` wave loop is retired at the end of Phase 4.
+Task graphs inherit conditional edges, recovery branches, and structured output mapping; Flow inherits parallelism. The bespoke `TaskOrchestrator` loop is retired at the end of Phase 4.
 
 ### 3.6 Schema changes (additive; `migrations/v5/`)
 
 | Table | Change |
 |---|---|
-| `Task` | `+ InputPayload NVARCHAR(MAX) NULL`, `+ OutputPayload NVARCHAR(MAX) NULL`, `+ AgentRunID UNIQUEIDENTIFIER NULL` (FK → `AIAgentRun`; fixes the Gantt mis-link), `+ ErrorMessage NVARCHAR(MAX) NULL` |
-| `AIAgent` | `+ EnableTaskGraphs BIT NOT NULL DEFAULT 1` |
+| `Task` | `+ InputPayload NVARCHAR(MAX) NULL`, `+ OutputPayload NVARCHAR(MAX) NULL`, `+ AgentRunID UNIQUEIDENTIFIER NULL` (FK → `AIAgentRun`), `+ ErrorMessage NVARCHAR(MAX) NULL`, `+ ClaimedBy NVARCHAR(100) NULL`, `+ ClaimExpiresAt DATETIMEOFFSET NULL` |
+| `AIAgentRunStep` | `StepType` CHECK gains **`TaskGraph`** (D10) |
 
-No new tables. No CHECK changes — `Status` and `DependencyType` already carry the needed values; this plan starts *honoring* `Blocked`/`Cancelled`/`Failed` and (Phase 4) `Optional`/`Corequisite`. `Description` smuggling (`__TASK_METADATA__`/`__TASK_OUTPUT__`) is written no more; readers keep a fallback parse for pre-migration rows. Standard flow: migration → CodeGen → typed properties (no `.Get()`/`.Set()` interim code).
+No `AIAgent` changes (D3 moved the setting into the params bag). No new tables. `Status`/`DependencyType` CHECKs already carry the needed values — this plan starts honoring `Blocked`/`Cancelled`/`Failed` and (Phase 4) `Optional`/`Corequisite`. `Description` smuggling ends; readers keep a fallback parse for pre-migration rows. Standard flow: migration → CodeGen → typed properties.
+
+Metadata (not migration): Loop agent type's `PromptParamsSchema` gains `enableTaskGraphs`; Flow agent type's gains `traversalMode`.
 
 ### 3.7 Prompt & metadata migration
 
-- **Sage** (`sage.template.md`): keeps emitting graphs — including one-task graphs — but via the primitive instead of `payloadChangeRequest` smuggling. With server-side execution + existing per-task agent progress frames, the client's single-task fast path is no longer needed; delegation becomes uniform and every delegation appears in the Tasks UI.
-- **Workflow Planner** (`workflow-planner.template.md`): unchanged role — decomposition, `Find Candidate Agents` per task, user confirmation — but final submission switches to the primitive. `@taskX.output` stays in the prompt *because it becomes real* (structured resolution).
-- **Planner as replanner (Phase 4 option)**: on failure, the dispatcher may re-invoke a configured planner agent with current graph state to append/reroute tasks — plan → execute → replan. The schema supports appending tasks to a live graph today.
-- The payload-sniffing shim and the `ExecuteTaskGraph` mutation remain one release for compatibility, then are removed.
+- **Sage**: emits graphs via the primitive instead of payload smuggling. Single-agent delegations flow through the same primitive and get constant-folded (D9) — the client-side single-task fork dies, behavior stays equivalent, multi-task graphs become durable server-side executions.
+- **Workflow Planner**: role narrows per D4 — kept for complex decomposition and the confirm-then-submit UX; ordinary graph emission no longer routes through it. `@taskX.output` stays in prompts because it becomes real.
+- **Replanner (Phase 4 option)**: on failure, the dispatcher may re-invoke a planner agent with graph state to append/reroute — plan → execute → replan.
+- The server-side payload sniff bridges old prompts from Phase 2 until Phase 3 migrates them, then dies.
 
 ### 3.8 Client changes
 
-- `message-input.component.ts`: delete the await-the-mutation flow (`handleTaskGraphExecution`) and the single-task fork (`handleSingleTaskExecution`); render workflow state from lifecycle + progress frames.
-- **Re-attach on load**: query active parent tasks for the conversation and subscribe — fixes the today-unfixable "reload mid-workflow loses everything" gap.
-- Fix `agentRunMap` to use `Task.AgentRunID` (`tasks-full-view.component.ts:373-395`).
-- Render `Blocked`/`Cancelled` states (icons already exist in `simple-task-viewer.component.ts:359`); add cancel/retry affordances wired to the new mutations.
+- Delete `handleTaskGraphExecution` / `handleSingleTaskExecution` and the `ExecuteTaskGraph` call (D12 — no adoption, no compat window); render workflow state from lifecycle + progress frames.
+- **Re-attach on load**: query active parent tasks for the conversation and subscribe — fixes the unfixable reload-mid-workflow gap.
+- Fix `agentRunMap` to use `Task.AgentRunID`; render `Blocked`/`Cancelled`; add cancel/retry affordances.
 
 ---
 
 ## 4. Phases
 
-Ordering is deliberate: each phase ships value alone, and later phases replace as little as possible of earlier ones. Work explicitly marked *(interim)* is the only potentially-throwaway code, chosen because it is small and de-risks the interim.
+### Track R (parallel) — `BaseAgent.ts` decomposition (D13)
+
+`base-agent.ts` is a ~13k-line monolith. Staged, behavior-preserving extraction into composed helper classes, ordered lowest-risk first, with test parity at each stage — landing **before Phase 3** touches the same code. Candidate seams (each already a coherent cluster):
+
+| Helper | Today (approx.) |
+|---|---|
+| `SubAgentOrchestrator` — resolve/execute child & related sub-agents, parallel fan-out, payload up/downstream mapping | `:6933-7100`, `:9224-10700` |
+| `IterationExecutor` — ForEach/While loops, sequential/parallel iteration, result injection/expiry | `:12229-13080` |
+| `PromptStepRunner` — prompt execution + inline side-effects (payload change, scratchpad, artifact/conversation tools, memory writes) | `:8528-9060` |
+| `PlanModeGate` — plan-mode resolution + approval-form construction | `:8066-8113`, `:11754-11850` |
+| `RunStepPersister` — step entity lifecycle, input/output snapshots, run-tree stamping | scattered |
+| `GuardrailMonitor` — failed/unproductive/validation counters | `:329-360` + checks |
+| `MessageWindowManager` — pruning/compaction/expiration | scattered |
+
+Constraints: `BaseAgent`'s public/protected API stays stable (subclasses exist via `DriverClass`); helpers are instance-composed (not static), receive a context object, follow the repo's functional-decomposition and naming rules. Each extraction is its own PR with vitest parity + the integration tier green.
 
 ### Phase 1 — Truthful engine
-Make the existing path honest without moving it.
+1. Migration: `Task` columns + `AIAgentRunStep.StepType` value (+ CodeGen).
+2. `TaskOrchestrator`: structured payload columns (Description fallback read only); failure propagation; cycle detection; unknown-agent hard error; wave parallelization with cap *(the eligibility logic carries into the dispatcher unchanged)*.
+3. UI: `AgentRunID` links; `Blocked`/`Failed` rendering.
 
-1. Migration: `Task` columns + `AIAgent.EnableTaskGraphs` (+ CodeGen).
-2. `TaskOrchestrator`: write/read `InputPayload`/`OutputPayload`/`AgentRunID`/`ErrorMessage` (Description fallback read only); failure propagation (`Blocked` dependents, honest parent terminal status); submission-time cycle detection; unknown `agentName` = hard error; wave parallelization with concurrency cap *(interim in placement, but the eligibility/wave logic carries into the dispatcher unchanged)*.
-3. UI: `AgentRunID`-based run links; `Blocked`/`Failed` rendering.
-
-**Exit criteria:** parallel branches actually parallelize; a failed task blocks its dependents and fails its parent; task detail shows clean payloads; Gantt links the right runs.
+**Exit:** parallel branches parallelize; failures block dependents and fail the parent honestly; payloads are columns; Gantt links correct runs.
 
 ### Phase 2 — Placement
-Execution becomes server-owned, durable, channel-agnostic.
-
-1. Extract to `@memberjunction/task-graph`: `TaskGraphService` (submission) + `TaskGraphDispatcher` (execution). `TaskResolver` becomes a thin wrapper; `ExecuteTaskGraph` kept for compat.
-2. Dispatcher: detached execution, startup reconciliation, cancel/retry mutations.
-3. Server-side detection shim at the three seams (MJServer run path, `BaseMessagingAdapter` structured strategy before the regex, Scheduling drivers).
+1. Extract `@memberjunction/task-graph` (Service + Dispatcher); MJServer exposes submit/cancel/retry resolvers; **`ExecuteTaskGraph` and the client-driven path removed** (D12).
+2. Dispatcher with claim protocol (`ClaimedBy`/`ClaimExpiresAt` CAS), heartbeat, startup/periodic reconciliation; `ProviderFactory` extraction + injection.
+3. Server-side detection shim at the three seams (MJServer run path, `BaseMessagingAdapter` — structured strategy ahead of the regex, Scheduling drivers).
 4. Client observer refactor + re-attach.
 
-**Exit criteria:** a multi-step graph requested from Slack executes end-to-end; reloading Explorer mid-workflow re-attaches; a server restart resumes an in-flight graph; the client no longer awaits execution.
+**Exit:** Slack multi-step executes end-to-end; reload re-attaches; restart resumes; two server instances don't double-run a task.
 
 ### Phase 3 — The primitive
-Agents get the capability directly.
+1. Types in `ai-core-plus`; `'Tasks'` in the union; validation + correctives; `TaskGraph` run-step persistence; single-node constant folding (D9).
+2. `enableTaskGraphs` in Loop params (code defaults + `PromptParamsSchema` metadata), auto-alignment, enforced gate; prompt docs section.
+3. Detach semantics + continuations; approval-gated graphs via Agent Requests.
+4. Guardrails (task cap, spawn depth).
+5. Sage + Workflow Planner prompt migration; payload sniff removed.
 
-1. `TaskGraphRequest` types in `ai-core-plus`; `'Tasks'` in the Loop response union; validation + retry correctives; run-step persistence (likely a new `AIAgentRunStep.StepType` value — see open questions).
-2. Prompt docs section + `includeTaskGraphDocs` + auto-alignment + `EnableTaskGraphs` mapping (default on).
-3. Detach semantics + continuations (`message` / `reinvoke`); approval-gated graphs via `MJ: AI Agent Requests`.
-4. Guardrails: task cap, spawn-depth cap.
-5. Sage + Workflow Planner prompt migration; single-task client fork retired; payload sniff flagged for removal.
-
-**Exit criteria:** any opted-in Loop agent can decompose work into a durable graph mid-run without Workflow Planner attached; malformed graphs get corrective retries; Sage no longer smuggles graphs through the payload.
+**Exit:** any opted-in Loop agent emits durable graphs directly; single-node graphs fold to in-run execution; Sage no longer payload-smuggles.
 
 ### Phase 4 — Convergence
-One traversal engine; the full model lights up.
+1. Extract `GraphTraversalEngine` from `FlowAgentType` (pure refactor, parity-tested).
+2. Frontier + joins + concurrency; Flow `traversalMode` in its params bag (default sequential); ephemeral flows always parallel.
+3. Dispatcher adopts the engine; conditional edges, recovery branches, structured output mapping.
+4. Human task nodes end-to-end (assignment, notification, complete-to-unblock; approval-as-human-task for headless). Optional: replanner hook.
+5. Retire the bespoke `TaskOrchestrator` loop.
 
-1. Extract `GraphTraversalEngine` from `FlowAgentType` (pure refactor; Flow behavior unchanged; tests prove parity).
-2. Frontier set + AND/OR joins + concurrency cap; Flow gains opt-in parallel DAG traversal.
-3. Dispatcher adopts the engine; conditional edges + recovery branches + structured output mapping on task graphs; `@taskX.output` fully structural.
-4. Human task nodes end-to-end: assignment, notification, complete-to-unblock; approval-as-a-human-task for headless channels. Optional: replanner hook; optional: Flow runs materialize Task rows for visibility.
-5. Retire the bespoke `TaskOrchestrator` execution loop.
-
-**Exit criteria:** design-time flows and runtime graphs run on the same engine; a graph can contain a human approval that blocks downstream agent tasks and resumes on completion; parallel branches work identically in both provenances.
+**Exit:** one traversal engine for both provenances; graphs can contain humans; parallel semantics identical everywhere.
 
 ---
 
-## 5. Risks and open questions
+## 5. Resolved questions & remaining risks
 
-| # | Item | Notes / proposal |
+Resolved this review round:
+
+| Was | Resolution |
+|---|---|
+| O1 multi-server dispatch | Per-task CAS claim columns + heartbeat + expired-claim reconciliation (§3.4). Included from day one; doubles as crash recovery. |
+| O2 headless approval | As proposed: interactive channels keep planner confirmation; scheduled/headless auto-run unless the agent has `RequirePlanMode`, in which case approval materializes as an Agent Request / human task. |
+| O3 flow parallel opt-in | `traversalMode` in the Flow agent type's params bag; ephemeral graphs always parallel (§3.5). |
+| O4 connection/transaction isolation | `ProviderFactory` extracted from `createPerRequestProviders`, injected into the dispatcher; one fresh provider per task run over the shared pool (§3.4). |
+| O5 everything-is-a-graph overhead | Single-node constant folding in `LoopAgentType` (D9). |
+| O6 step type name | `TaskGraph` (D10). |
+| O7 package naming | Not AI-prefixed — producer-agnostic DAGs (D11). |
+| O8 `ExecuteTaskGraph` compat | Removed immediately in Phase 2; no adoption exists (D12). |
+
+Remaining risks:
+
+| # | Risk | Mitigation |
 |---|---|---|
-| O1 | **Multi-server dispatch** | v1 assumes a single dispatcher. Multi-instance MJAPI needs a claim mechanism (SQL row-lock claim on task rows is the natural pattern). Flagged, not designed here. |
-| O2 | **Headless approval policy** | Interactive channels keep the planner's confirm step. For scheduled/headless: default auto-run, unless the submitting agent has `RequirePlanMode` — in which case approval materializes as a human task / Agent Request. Needs product sign-off. |
-| O3 | **Parallel-traversal opt-in for existing flows** | Where does the flag live — agent level or step level? Proposal: agent-level default-off for Flow (back-compat), always-on for ephemeral (runtime) graphs. |
-| O4 | **Provider/transaction concurrency** | Parallel task runs must not share entity instances or an open transaction. Pattern exists (prep-outside-txn in `createTasksFromGraph`); needs a test that hammers it. |
-| O5 | **Everything-is-a-graph overhead** | Uniform single-task delegation adds a Task row + dispatcher hop per delegation. Accepted for uniformity/visibility; revisit if latency data objects. |
-| O6 | **`AIAgentRunStep.StepType` addition** | A `'Tasks'` step type keeps run forensics clean (CHECK-constraint migration + CodeGen union widening). Small, but touches generated types. |
-| O7 | **Naming** | Package (`@memberjunction/task-graph`?), column (`EnableTaskGraphs`?), prompt param (`includeTaskGraphDocs`?). Bikeshed at review. |
-| O8 | **Compat window** | How long do `ExecuteTaskGraph` + payload sniffing live? Proposal: one release after Phase 3 lands. |
+| R1 | Claim-protocol edge cases (clock skew across instances, heartbeat failure vs. slow task) | Generous claim TTL + monotonic extension; reconciliation only reclaims *expired* claims; integration test with two dispatcher instances. |
+| R2 | Pool exhaustion under wide parallel waves | Dispatcher concurrency cap independent of pool size; pool sizing documented as the tuning knob; backpressure = tasks simply stay `Pending`. |
+| R3 | Graphs-spawning-graphs runaway | Depth cap 3 + per-graph task cap 50; both configurable. |
+| R4 | Track R regressions in `BaseAgent` | Stage-per-PR with vitest parity + integration tier; extraction order lowest-risk first; public/protected API frozen. |
+| R5 | Prompt drift during the Phase 2→3 window (old prompts + new engine) | Payload sniff shim keeps old prompts working until migrated; removal gated on Sage/planner prompt PRs landing. |
 
 ---
 
 ## 6. Testing strategy
 
-- **Unit (per package, vitest):** graph validation (cycles, dupes, unknown agents, caps); eligibility/wave computation; failure/cancel propagation matrices; join semantics (AND/OR); `@taskX.output` resolution; prompt-param merge + auto-alignment for the new toggle; Flow traversal parity suite before/after engine extraction (Phase 4 gate).
-- **Integration (deterministic tier):** new bundle *"ITxx — Task Graph Orchestration"* per `guides/INTEGRATION_TESTING_QUICKSTART.md`: submit → dispatch → parallel wave → induced failure → `Blocked` propagation → retry → completion; restart-reconciliation simulation; messaging-adapter structured delegation; client re-attach against the streaming contract (existing `ConversationStreaming` test patterns).
-- **Prompt/E2E:** Sage emits the primitive for single- and multi-task delegation; Workflow Planner confirm-then-submit loop; an opted-out agent's emitted interface contains no `'Tasks'` type.
+- **Unit:** graph validation (cycles, dupes, unknown agents, caps); eligibility/claim CAS semantics; failure/cancel matrices; join semantics; `@taskX.output` resolution; params-bag merge + auto-alignment + enforced gate; constant-folding decision table; Flow traversal parity before/after engine extraction.
+- **Integration (deterministic tier):** new bundle *"ITxx — Task Graph Orchestration"*: submit → claim → parallel wave → induced failure → `Blocked` → retry → complete; restart reconciliation; two-instance no-double-run; messaging-adapter structured delegation; client re-attach against the streaming contract.
+- **Prompt/E2E:** Sage single-node fold + multi-node durable paths; planner confirm-then-submit; disabled-agent emitted interface contains no `'Tasks'`.
 
 ---
 
@@ -291,15 +323,16 @@ One traversal engine; the full model lights up.
 | Concern | Location |
 |---|---|
 | Loop response union | `packages/AI/Agents/src/agent-types/loop-agent-response-type.ts:102` |
-| Prompt-param toggles + auto-alignment | `packages/AI/Agents/src/agent-types/loop-agent-prompt-params.ts:170`; `base-agent.ts:6699`, `:6755` |
+| Params bag: interface/defaults, merge, auto-alignment | `loop-agent-prompt-params.ts:170`, `:325`; `base-agent.ts:6699`, `:6755`; column doc `entity_subclasses.ts:4684-4688` |
+| Per-request provider minting | `packages/MJServer/src/context.ts:727-760` (+ PG `ConfigWithSharedPool` `:766-833`) |
 | Plan Mode / Agent Requests gate | `base-agent.ts:8066-8113` |
 | Parallel sub-agents / concurrency util | `base-agent.ts:273`, `:8389`, `:10208` |
-| Flow single-threaded evidence | `flow-agent-type.ts:46` (`currentStepId`), `:1266` (`paths[0]`), `:1285` (inactive-only alternates) |
-| Flow conditions / recovery | `flow-agent-type.ts:395`, `:1275` |
+| Flow single-threaded evidence | `flow-agent-type.ts:46`, `:1266`, `:1285` |
+| Flow conditions / recovery / output mapping | `flow-agent-type.ts:395`, `:1275`, `:841`, `:1036` |
 | Orchestrator persistence/exec/artifacts | `packages/MJServer/src/services/TaskOrchestrator.ts:106-218`, `:303-351`, `:479-592`, `:707-788` |
-| Client detection + execution | `packages/Angular/Generic/conversations/.../message-input.component.ts:1766`, `:1873-2033`, `:2159-2250`, `:2644` |
-| Messaging gap | `packages/MessagingAdapters/src/__tests__/BaseMessagingAdapter.test.ts:571-595` |
-| Scheduling gap | `packages/Scheduling/engine/src/drivers/UserRoutineDispatcherDriver.ts:422-458` |
-| Task schema + validators | `packages/MJCoreEntities/src/generated/entity_subclasses.ts:110746`, `:110765-110790`, `:110495` |
-| Streaming routing | `packages/ConversationsRuntime/src/streaming/ConversationStreaming.ts:309-364` |
-| Sage / planner prompts | `metadata/prompts/templates/sage/sage.template.md`, `workflow-planner.template.md`; `metadata/agents/.sage-agent.json:571-667` |
+| Client detection + execution | `message-input.component.ts:1766`, `:1873-2033`, `:2159-2250`, `:2644` |
+| Messaging gap | `BaseMessagingAdapter.test.ts:571-595` |
+| Scheduling gap | `UserRoutineDispatcherDriver.ts:422-458` |
+| Task schema + validators | `entity_subclasses.ts:110746`, `:110765-110790`, `:110495` |
+| Streaming routing | `ConversationStreaming.ts:309-364` |
+| Sage / planner prompts | `metadata/prompts/templates/sage/*.md`; `metadata/agents/.sage-agent.json:571-667` |
