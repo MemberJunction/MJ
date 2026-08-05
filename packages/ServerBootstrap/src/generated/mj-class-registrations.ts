@@ -936,44 +936,6 @@ import {
     RunSyncAction,
 } from '@memberjunction/integration-actions';
 
-// @memberjunction/integration-connectors (35 classes)
-import {
-    AptifyConnector,
-    BlackbaudConnector,
-    ConstantContactConnector,
-    CventConnector,
-    DynamicsDataverseConnector,
-    FileFeedConnector,
-    FontevaConnector,
-    GrowthZoneConnector,
-    HivebriteConnector,
-    HubSpotConnector,
-    IMISConnector,
-    MJToMJConnector,
-    MagnetMailConnector,
-    MailchimpConnector,
-    MemberSuiteConnector,
-    NeonCRMConnector,
-    NetForumConnector,
-    NetSuiteConnector,
-    NimbleAMSConnector,
-    NoviConnector,
-    ORCIDConnector,
-    OpenWaterConnector,
-    PathLMSConnector,
-    PheedLoopConnector,
-    PropFuelConnector,
-    QuickBooksConnector,
-    RasaConnector,
-    Reach360Connector,
-    RhythmConnector,
-    SageIntacctConnector,
-    SalesforceConnector,
-    SharePointConnector,
-    WicketConnector,
-    WildApricotConnector,
-    YourMembershipConnector,
-} from '@memberjunction/integration-connectors';
 
 // @memberjunction/queue (2 classes)
 import {
@@ -2086,41 +2048,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     GoogleGeocodingProvider,
     HereGeocodingProvider,
     RunSyncAction,
-    AptifyConnector,
-    BlackbaudConnector,
-    ConstantContactConnector,
-    CventConnector,
-    DynamicsDataverseConnector,
-    FileFeedConnector,
-    FontevaConnector,
-    GrowthZoneConnector,
-    HivebriteConnector,
-    HubSpotConnector,
-    IMISConnector,
-    MJToMJConnector,
-    MagnetMailConnector,
-    MailchimpConnector,
-    MemberSuiteConnector,
-    NeonCRMConnector,
-    NetForumConnector,
-    NetSuiteConnector,
-    NimbleAMSConnector,
-    NoviConnector,
-    ORCIDConnector,
-    OpenWaterConnector,
-    PathLMSConnector,
-    PheedLoopConnector,
-    PropFuelConnector,
-    QuickBooksConnector,
-    RasaConnector,
-    Reach360Connector,
-    RhythmConnector,
-    SageIntacctConnector,
-    SalesforceConnector,
-    SharePointConnector,
-    WicketConnector,
-    WildApricotConnector,
-    YourMembershipConnector,
     AIActionQueue,
     EntityAIActionQueue,
     RecordComparisonCompareServerOperation,
@@ -2447,7 +2374,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1000;
+export const CLASS_REGISTRATIONS_COUNT = 965;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2521,7 +2448,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/external-data-source-sqlserver',
     '@memberjunction/geo-core',
     '@memberjunction/integration-actions',
-    '@memberjunction/integration-connectors',
     '@memberjunction/queue',
     '@memberjunction/record-comparison',
     '@memberjunction/remote-browser-selfhost',

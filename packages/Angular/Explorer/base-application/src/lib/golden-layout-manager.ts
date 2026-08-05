@@ -3,11 +3,14 @@ import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { LogError } from '@memberjunction/core';
 import { VirtualLayout } from 'golden-layout';
 import { WorkspaceConfiguration, LayoutConfig as WorkspaceLayoutConfig, LayoutNode } from './interfaces/workspace-configuration.interface';
+import { SanitizeLayoutNodeForLoad } from './layout-transforms';
 
 // Golden Layout interfaces - defined here to avoid compile-time dependency
 // These match the Golden Layout 2.6.0 API
 interface GLComponentContainer {
   state: Record<string, unknown>;
+  /** The container's content DOM element (host for the tab's rendered component) */
+  element?: HTMLElement;
   tab?: { element: HTMLElement };
   on(event: string, callback: () => void): void;
   close(): void;
@@ -35,12 +38,41 @@ interface GLLayoutItem {
 
 interface GLLayoutConfig {
   root: GLLayoutNode;
+  /**
+   * SCROLLING TAB STRIP: golden-layout's native overflow handling either
+   * overlaps tabs (negative margins) or re-homes them into a dropdown menu
+   * once `settings.tabOverlapAllowance` is exceeded. The shell renders a
+   * browser-style SCROLLING strip instead: an effectively-infinite allowance
+   * keeps every tab in the strip (GL then only writes inline zIndex +
+   * marginLeft, both neutralized by the shell's CSS), and `.lm_tabs`
+   * scrolls horizontally.
+   */
+  settings?: {
+    tabOverlapAllowance: number;
+  };
   header?: {
-    show: string;
+    // Golden Layout's Header.show is `false | Side` — false renders NO tab
+    // strip at all ("splitters only"), which is how the records region goes
+    // headerless on mobile
+    show: string | false;
     popout: boolean;
     maximise: boolean;
     close: string;
   };
+}
+
+/**
+ * Options for GoldenLayoutManager.Initialize.
+ */
+export interface GoldenLayoutInitOptions {
+  /**
+   * Render the layout with NO tab headers (Golden Layout `header.show: false`).
+   * Used by the mobile records surface, which replaces the strip with its own
+   * record bar. Header visibility is fixed at init/load time — changing it
+   * requires Destroy() + Initialize() (the mobile breakpoint-crossing rebuild
+   * does exactly that).
+   */
+  HideHeaders?: boolean;
 }
 
 interface GLResolvedLayoutConfig {
@@ -76,6 +108,13 @@ export interface TabComponentState {
   route: string;
   isPinned: boolean;
   isLoaded: boolean;
+  /**
+   * Font Awesome classes for the tab's TYPE icon (entity icon for record
+   * tabs, nav-item/app icon for nav tabs), rendered in the app color at the
+   * left of the tab. Hovering the tab swaps it to an ellipsis that opens
+   * the tab-actions menu — the icon slot IS the visible menu affordance.
+   */
+  typeIcon?: string;
 }
 
 /**
@@ -110,6 +149,92 @@ export interface LayoutChangedEvent {
 export class GoldenLayoutManager {
   private layout: GLVirtualLayout | null = null;
   private containerElement: HTMLElement | null = null;
+  /** Render all layouts headerless (see GoldenLayoutInitOptions.HideHeaders) */
+  private hideHeaders = false;
+
+  /**
+   * Vertical wheel over a tab strip scrolls it horizontally. Delegated from
+   * the container (strips are created/destroyed by GL as stacks come and
+   * go); bound field so Destroy can remove it from the persistent container.
+   */
+  private onStripWheel = (e: WheelEvent): void => {
+    const strip = (e.target as HTMLElement | null)?.closest?.('.lm_tabs') as HTMLElement | null;
+    if (!strip || strip.scrollWidth <= strip.clientWidth) {
+      return; // not over a strip, or nothing to scroll
+    }
+    const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if (delta !== 0) {
+      strip.scrollLeft += delta;
+      e.preventDefault();
+    }
+  };
+
+  /**
+   * Strip scroll events (capture phase — scroll doesn't bubble) keep the
+   * nudge arrows' visibility in sync while the user scrolls.
+   */
+  private onStripScroll = (e: Event): void => {
+    const target = e.target as HTMLElement | null;
+    if (target?.classList?.contains('lm_tabs')) {
+      this.updateStripNudges();
+    }
+  };
+
+  /**
+   * VISIBLE overflow affordance for the scrolling tab strip (Matt's call —
+   * hidden-scrollbar-plus-wheel alone is power-user-only): ‹ › nudge buttons
+   * at the strip's edges, shown only in the direction(s) with more tabs.
+   * One pair per header (splits have a strip per stack), created lazily and
+   * kept in sync by the same coalesced pass that styles tabs.
+   */
+  private updateStripNudges(): void {
+    if (!this.containerElement) {
+      return;
+    }
+    const headers = this.containerElement.querySelectorAll<HTMLElement>('.lm_header');
+    headers.forEach(header => {
+      const strip = header.querySelector<HTMLElement>('.lm_tabs');
+      if (!strip) {
+        return;
+      }
+      let left = header.querySelector<HTMLButtonElement>('.mj-strip-nudge--left');
+      let right = header.querySelector<HTMLButtonElement>('.mj-strip-nudge--right');
+      if (!left || !right) {
+        left = this.createStripNudge(header, strip, 'left');
+        right = this.createStripNudge(header, strip, 'right');
+      }
+      const overflowing = strip.scrollWidth > strip.clientWidth + 1;
+      const canLeft = overflowing && strip.scrollLeft > 1;
+      const canRight = overflowing && strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1;
+      left.hidden = !canLeft;
+      right.hidden = !canRight;
+    });
+  }
+
+  private createStripNudge(header: HTMLElement, strip: HTMLElement, direction: 'left' | 'right'): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `mj-strip-nudge mj-strip-nudge--${direction}`;
+    button.setAttribute('aria-label', direction === 'left' ? 'Scroll tabs left' : 'Scroll tabs right');
+    button.hidden = true;
+    const icon = document.createElement('i');
+    icon.className = `fa-solid fa-chevron-${direction}`;
+    icon.setAttribute('aria-hidden', 'true');
+    button.appendChild(icon);
+    button.addEventListener('click', (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const step = Math.max(120, Math.floor(strip.clientWidth * 0.6));
+      const reduceMotion = typeof window !== 'undefined'
+        && typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      strip.scrollBy({ left: direction === 'left' ? -step : step, behavior: reduceMotion ? 'auto' : 'smooth' });
+    });
+    // Keep GL's header mousedown handlers (drag/select) away from the button
+    button.addEventListener('mousedown', (e: MouseEvent) => e.stopPropagation());
+    header.appendChild(button);
+    return button;
+  }
 
   /**
    * True when Golden Layout has been initialized and not yet destroyed.
@@ -126,7 +251,7 @@ export class GoldenLayoutManager {
   private layoutChanged$ = new Subject<LayoutChangedEvent>();
   private activeTab$ = new BehaviorSubject<string | null>(null);
   private tabDoubleClicked = new Subject<string>();
-  private tabRightClicked = new Subject<{ tabId: string; x: number; y: number }>();
+  private tabRightClicked = new Subject<{ tabId: string; x: number; y: number; anchorEl?: HTMLElement }>();
 
   // Track loaded tabs for lazy loading
   private loadedTabs = new Set<string>();
@@ -172,15 +297,16 @@ export class GoldenLayoutManager {
   /**
    * Observable for tab right-click events (to show context menu)
    */
-  get TabRightClicked(): Observable<{ tabId: string; x: number; y: number }> {
+  get TabRightClicked(): Observable<{ tabId: string; x: number; y: number; anchorEl?: HTMLElement }> {
     return this.tabRightClicked.asObservable();
   }
 
   /**
    * Initialize Golden Layout in the specified container element
    */
-  Initialize(element: HTMLElement): void {
+  Initialize(element: HTMLElement, options?: GoldenLayoutInitOptions): void {
     this.containerElement = element;
+    this.hideHeaders = options?.HideHeaders === true;
 
     // Create layout with empty config
     const config: GLLayoutConfig = {
@@ -188,12 +314,8 @@ export class GoldenLayoutManager {
         type: 'row',
         content: []
       },
-      header: {
-        show: 'top',
-        popout: false,
-        maximise: false,
-        close: 'tab'
-      }
+      settings: this.settingsConfig(),
+      header: this.headerConfig()
     };
 
     this.layout = new VirtualLayout(
@@ -217,12 +339,26 @@ export class GoldenLayoutManager {
     });
 
     this.layout.on('activeContentItemChanged', (item: unknown) => {
-      const typedItem = item as { container?: { state?: TabComponentState } };
+      const typedItem = item as { container?: { state?: TabComponentState; tab?: { element?: HTMLElement } } };
       const state = typedItem?.container?.state;
       if (state?.tabId) {
         this.activeTab$.next(state.tabId);
       }
+      // Scrolling strip: keep the newly-active tab in view (no-op when the
+      // strip isn't overflowing; guarded for test DOMs without the API)
+      const tabElement = typedItem?.container?.tab?.element;
+      if (tabElement && typeof tabElement.scrollIntoView === 'function') {
+        tabElement.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+      }
     });
+
+    // Scrolling strip: translate vertical wheel/trackpad input over the tab
+    // strip into horizontal scroll (browser-tab convention — the strip hides
+    // its scrollbar, so the wheel is the mouse user's only scroll input).
+    this.containerElement.addEventListener('wheel', this.onStripWheel, { passive: false });
+    // Capture phase: scroll doesn't bubble — this keeps the nudge arrows'
+    // visibility in sync with user scrolling on any strip in the container.
+    this.containerElement.addEventListener('scroll', this.onStripScroll, true);
 
     // Load the empty config to establish root structure
     // This MUST be done before adding any components
@@ -259,6 +395,7 @@ export class GoldenLayoutManager {
       if (rect.width > 0 && rect.height > 0) {
         this.layout.setSize(rect.width, rect.height);
       }
+      this.updateStripNudges();
     }
   }
 
@@ -266,6 +403,11 @@ export class GoldenLayoutManager {
    * Destroy the Golden Layout instance
    */
   Destroy(): void {
+    // The container element PERSISTS across Destroy/Initialize cycles
+    // (breakpoint rebuilds) — release the delegated listeners or each
+    // cycle stacks another set.
+    this.containerElement?.removeEventListener('wheel', this.onStripWheel);
+    this.containerElement?.removeEventListener('scroll', this.onStripScroll, true);
     if (this.layout) {
       this.layout.destroy();
       this.layout = null;
@@ -439,13 +581,23 @@ export class GoldenLayoutManager {
     element.style.overflow = 'hidden';
     element.style.padding = '0';
 
-    // Temporary placeholder content
-    element.innerHTML = `
-      <h2>${state?.title || 'Tab Content'}</h2>
-      <p>Tab ID: ${state?.tabId || 'unknown'}</p>
-      <p>Route: ${state?.route || 'none'}</p>
-      <p>App ID: ${state?.appId || 'none'}</p>
-    `;
+    // Temporary placeholder content. textContent, never innerHTML — the
+    // title is USER DATA (entity display names) and round-trips through
+    // persisted layout state; interpolating it as markup is an injection
+    // vector on layout restore.
+    element.replaceChildren();
+    const heading = document.createElement('h2');
+    heading.textContent = state?.title || 'Tab Content';
+    element.appendChild(heading);
+    for (const line of [
+      `Tab ID: ${state?.tabId || 'unknown'}`,
+      `Route: ${state?.route || 'none'}`,
+      `App ID: ${state?.appId || 'none'}`
+    ]) {
+      const para = document.createElement('p');
+      para.textContent = line;
+      element.appendChild(para);
+    }
 
     if (state?.tabId) {
       this.containerMap.set(state.tabId, container);
@@ -508,6 +660,31 @@ export class GoldenLayoutManager {
       titleElement.style.fontStyle = state.isPinned ? 'normal' : 'italic';
     }
 
+    // Type-icon slot: the tab's type icon (app-colored) that swaps to an
+    // ellipsis on tab hover — clicking it opens the tab-actions menu. This
+    // slot is the DEFAULT visible affordance for every tab (Matt's design);
+    // the CSS driving the swap lives with the tab styles in tab-container.
+    this.applyTypeIconSlot(tabElement, titleElement, state);
+
+    // GL's close control is a bare div — give it button semantics, an
+    // accessible name that tracks the title, and keyboard activation.
+    const closeEl = tabElement.querySelector('.lm_close_tab') as HTMLElement | null;
+    if (closeEl) {
+      closeEl.setAttribute('role', 'button');
+      closeEl.setAttribute('tabindex', '0');
+      closeEl.setAttribute('aria-label', `Close ${state.title}`);
+      if (!closeEl.hasAttribute('data-key-attached')) {
+        closeEl.setAttribute('data-key-attached', 'true');
+        closeEl.addEventListener('keydown', (e: KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            closeEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+          }
+        });
+      }
+    }
+
     // Add event listeners if not already added (use data attribute to track)
     if (!tabElement.hasAttribute('data-events-attached')) {
       tabElement.setAttribute('data-events-attached', 'true');
@@ -528,28 +705,46 @@ export class GoldenLayoutManager {
 
     // Handle pin icon
     if (state.isPinned) {
+      // Keep the accessible name tracking the (mutable) title, like the
+      // close button and type slot do.
+      const existingPin = tabElement.querySelector('.pin-icon');
+      if (existingPin) {
+        existingPin.setAttribute('aria-label', `Unpin ${state.title}`);
+      }
       // Add pin icon if not present
       if (!tabElement.querySelector('.pin-icon')) {
         const pinIcon = document.createElement('i');
         pinIcon.className = 'fa-solid fa-thumbtack pin-icon';
+        pinIcon.setAttribute('role', 'button');
+        pinIcon.setAttribute('tabindex', '0');
+        pinIcon.setAttribute('aria-label', `Unpin ${state.title}`);
+        // In-flow flex sibling (tab is a flex row); order slots it between
+        // the title and the close button. 24px box = WCAG 2.5.8 target.
         pinIcon.style.cssText = `
-          position: absolute;
-          right: 4px;
-          top: 50%;
-          transform: translateY(-50%) rotate(45deg);
+          position: static;
+          transform: rotate(45deg);
           font-size: 9px;
           color: var(--mj-text-muted);
-          width: 16px;
-          height: 16px;
+          width: 24px;
+          height: 24px;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
+          flex-shrink: 0;
+          order: 9;
         `;
         // Click on pin to unpin
         pinIcon.addEventListener('click', (e) => {
           e.stopPropagation();
           this.tabDoubleClicked.next(state.tabId);
+        });
+        pinIcon.addEventListener('keydown', (e: KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            this.tabDoubleClicked.next(state.tabId);
+          }
         });
         tabElement.appendChild(pinIcon);
       }
@@ -563,16 +758,95 @@ export class GoldenLayoutManager {
   }
 
   /**
+   * Create/update the type-icon slot inside a tab element. Idempotent: the
+   * slot is created once, its icon classes are updated in place on later
+   * style passes (e.g. a nav tab whose icon resolves asynchronously). No
+   * typeIcon = no slot (and removal if one existed from a previous state).
+   */
+  private applyTypeIconSlot(tabElement: HTMLElement, titleElement: HTMLElement | null, state: TabComponentState): void {
+    let slot = tabElement.querySelector('.mj-tab-type-slot') as HTMLButtonElement | null;
+    if (!state.typeIcon) {
+      slot?.remove();
+      return;
+    }
+    if (!slot) {
+      // A REAL button: tab-focusable, Enter/Space for free, announced with an
+      // accessible name — the slot is the keyboard door to the tab-actions
+      // menu, not just a hover ornament.
+      slot = document.createElement('button');
+      slot.type = 'button';
+      slot.className = 'mj-tab-type-slot';
+      slot.title = 'Tab actions';
+      slot.setAttribute('aria-label', `Tab actions — ${state.title}`);
+      slot.setAttribute('aria-haspopup', 'menu');
+      const icon = document.createElement('i');
+      icon.className = `mj-tab-type-ico ${state.typeIcon}`;
+      icon.setAttribute('aria-hidden', 'true');
+      const dots = document.createElement('i');
+      dots.className = 'mj-tab-dots fa-solid fa-ellipsis';
+      dots.setAttribute('aria-hidden', 'true');
+      slot.appendChild(icon);
+      slot.appendChild(dots);
+      // The dots ARE the menu affordance: open the same tab-actions menu the
+      // right-click path uses, anchored under the slot. The slot passes
+      // itself as the anchor so the menu can return focus on close.
+      slot.addEventListener('click', (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Anchor the menu under the slot — EXCEPT when the slot lives in a
+        // row of the tab-overflow dropdown: GL's document-mouseup listener
+        // hides that list before this click handler runs, so the rect
+        // measures 0x0 at the origin (the menu "floats to the top left").
+        // A hidden anchor's coordinates are garbage — fall back to the
+        // pointer position (keyboard activation still has a live rect).
+        const rect = slot!.getBoundingClientRect();
+        const anchorVisible = rect.width > 0 || rect.height > 0;
+        const x = anchorVisible ? rect.left : e.clientX;
+        const y = anchorVisible ? rect.bottom + 2 : e.clientY;
+        this.tabRightClicked.next({ tabId: state.tabId, x, y, anchorEl: anchorVisible ? slot! : undefined });
+      });
+      // GL's own tab handlers listen for keydown/mousedown on the tab — keep
+      // keyboard activation of the slot from leaking into tab drag/select.
+      slot.addEventListener('keydown', (e: KeyboardEvent) => e.stopPropagation());
+      if (titleElement) {
+        tabElement.insertBefore(slot, titleElement);
+      } else {
+        tabElement.prepend(slot);
+      }
+    } else {
+      const icon = slot.querySelector('.mj-tab-type-ico') as HTMLElement | null;
+      const expected = `mj-tab-type-ico ${state.typeIcon}`;
+      if (icon && icon.className !== expected) {
+        icon.className = expected;
+      }
+      const expectedLabel = `Tab actions — ${state.title}`;
+      if (slot.getAttribute('aria-label') !== expectedLabel) {
+        slot.setAttribute('aria-label', expectedLabel);
+      }
+    }
+  }
+
+  /**
    * Refresh styles for all tabs (after drag/drop)
    */
+  private refreshAllTabStylesTimer: ReturnType<typeof setTimeout> | null = null;
+
   private refreshAllTabStyles(): void {
-    setTimeout(() => {
+    // COALESCED: stateChanged fires in bursts (drags emit dozens) — one
+    // trailing pass instead of a queued pass per event.
+    if (this.refreshAllTabStylesTimer !== null) {
+      clearTimeout(this.refreshAllTabStylesTimer);
+    }
+    this.refreshAllTabStylesTimer = setTimeout(() => {
+      this.refreshAllTabStylesTimer = null;
       this.containerMap.forEach((container, tabId) => {
         const state = container.state as unknown as TabComponentState;
         if (state) {
           this.applyTabStyles(container, state);
         }
       });
+      // Tab set / widths may have changed — re-resolve nudge visibility
+      this.updateStripNudges();
     }, 50);
   }
 
@@ -602,65 +876,42 @@ export class GoldenLayoutManager {
    * Convert workspace layout config to Golden Layout config
    */
   private convertToGoldenLayoutConfig(config: WorkspaceLayoutConfig): GLLayoutConfig {
-    // Sanitize the root node to ensure size values are valid
-    const sanitizedRoot = this.sanitizeLayoutNode(config.root);
+    // Normalize GL-serialized fields AND deep-clone componentState so GL's
+    // runtime never holds references into the persisted workspace config —
+    // see SanitizeLayoutNodeForLoad (unit-tested in layout-transforms)
+    const sanitizedRoot = SanitizeLayoutNodeForLoad(config.root);
 
     return {
       root: sanitizedRoot as GLLayoutNode,
-      header: {
-        show: 'top',
-        popout: false,
-        maximise: false,
-        close: 'tab'
-      }
+      settings: this.settingsConfig(),
+      header: this.headerConfig()
     };
   }
 
   /**
-   * Sanitize a layout node to ensure all values are Golden Layout compatible
+   * Layout-level settings for every config this manager loads. The huge
+   * tabOverlapAllowance is what makes the scrolling tab strip possible —
+   * see the GLLayoutConfig.settings doc comment.
    */
-  private sanitizeLayoutNode(node: LayoutNode): LayoutNode {
-    const sanitized: LayoutNode = {
-      ...node
+  private settingsConfig(): NonNullable<GLLayoutConfig['settings']> {
+    return {
+      tabOverlapAllowance: 1_000_000_000
     };
+  }
 
-    // Cast to any to work with dynamic properties
-    const sanitizedAny = sanitized as any;
-
-    // Convert size from number + sizeUnit to Golden Layout format
-    // Golden Layout expects strings like "100%" or "1fr", not separate fields
-    if (sanitizedAny.size !== undefined && sanitizedAny.sizeUnit !== undefined) {
-      if (typeof sanitizedAny.size === 'number') {
-        // Combine size and sizeUnit into a single string
-        sanitizedAny.size = `${sanitizedAny.size}${sanitizedAny.sizeUnit}`;
-        // Remove sizeUnit as it's now part of size
-        delete sanitizedAny.sizeUnit;
-      }
-    }
-
-    // Remove width/height if they exist and are not valid
-    // Golden Layout expects strings like "50%" or numbers (pixels)
-    // But JSON parsing might give us non-string objects
-    if (sanitized.width !== undefined) {
-      if (typeof sanitized.width !== 'number' && typeof sanitized.width !== 'string') {
-        delete sanitized.width;
-      }
-    }
-    if (sanitized.height !== undefined) {
-      if (typeof sanitized.height !== 'number' && typeof sanitized.height !== 'string') {
-        delete sanitized.height;
-      }
-    }
-
-    // Remove other Golden Layout internal fields that shouldn't be in saved config
-    delete sanitizedAny.minSizeUnit;
-
-    // Recursively sanitize child nodes
-    if (sanitized.content) {
-      sanitized.content = sanitized.content.map(child => this.sanitizeLayoutNode(child));
-    }
-
-    return sanitized;
+  /**
+   * The header config for every layout this manager loads — the single place
+   * the HideHeaders init option is honored (Initialize's empty config AND
+   * LoadLayout's restored config must agree, or a restore would resurrect
+   * the strip on the mobile records surface).
+   */
+  private headerConfig(): NonNullable<GLLayoutConfig['header']> {
+    return {
+      show: this.hideHeaders ? false : 'top',
+      popout: false,
+      maximise: false,
+      close: 'tab'
+    };
   }
 
   /**
