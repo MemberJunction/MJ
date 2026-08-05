@@ -8,6 +8,10 @@ import { MjSlidePanelComponent } from './slide-panel.component';
  * after a 300ms CSS-transition timer — the specs flush those explicitly. Covers the slide vs dialog
  * rendering, the Title header + close button, projected body, and the close/backdrop → Closed path
  * with the CanClose guard.
+ *
+ * The open-state class is `sp-open`, never `visible` — see the comment in slide-panel.component.css
+ * for why. Assert on `sp-open` here: a negative assertion against a class the template never emits
+ * passes no matter what the component does, so a wrong name here buys silence, not coverage.
  */
 
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
@@ -28,7 +32,7 @@ describe('MjSlidePanelComponent (DOM)', () => {
     const f = await renderOpen({ Title: 'Details' });
     const panel = query(f, '.sp-panel');
     expect(panel).not.toBeNull();
-    expect(panel?.classList.contains('visible')).toBe(true);
+    expect(panel?.classList.contains('sp-open')).toBe(true);
     expect(query(f, '.sp-dialog')).toBeNull();
   });
 
@@ -40,8 +44,8 @@ describe('MjSlidePanelComponent (DOM)', () => {
 
   it('is not visible when Visible is false', async () => {
     const f = await renderOpen({ Visible: false, Title: 'Details' });
-    expect(query(f, '.sp-panel')?.classList.contains('visible')).toBe(false);
-    expect(query(f, '.sp-backdrop')?.classList.contains('visible')).toBe(false);
+    expect(query(f, '.sp-panel')?.classList.contains('sp-open')).toBe(false);
+    expect(query(f, '.sp-backdrop')?.classList.contains('sp-open')).toBe(false);
   });
 
   it('renders the Title header + close button when a Title is set', async () => {
@@ -86,6 +90,6 @@ describe('MjSlidePanelComponent (DOM)', () => {
     await tick(320);
     expect(closed.length).toBe(0);
     f.detectChanges(false);
-    expect(query(f, '.sp-panel')?.classList.contains('visible')).toBe(true);
+    expect(query(f, '.sp-panel')?.classList.contains('sp-open')).toBe(true);
   });
 });

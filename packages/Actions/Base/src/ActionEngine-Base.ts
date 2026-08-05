@@ -1,5 +1,5 @@
 import { BaseEngine, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
-import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
+import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { MJActionEntityExtended } from "./MJActionEntityExtended";
 
 
@@ -172,8 +172,57 @@ export class ActionParam {
 }
 
 /**
+ * Where an action run came from, when it was dispatched by an Entity Action binding rather than
+ * invoked directly. Carried on {@link RunActionParams.Provenance} and stamped onto
+ * `ActionExecutionLog` so a failed workflow is diagnosable: *which binding fired this, on which
+ * record, from which event.*
+ *
+ * Also supplies the two things the engine cannot work out for itself once the run is under way —
+ * the binding's `LoggingMode`, and the `EntityActionParam` rows the redaction rules need in order
+ * to see a parameter's `ValueType` and per-binding `LogValue` override.
+ *
+ * Absent for direct invocations (a resolver, a script, an agent step, a scheduled action), which
+ * is exactly what the log's NULL provenance columns mean.
+ */
+export class ActionInvocationProvenance {
+   /** The Entity Action binding that caused this run. */
+   public EntityActionID?: string;
+
+   /**
+    * Which lifecycle event fired the binding — `AfterUpdate`, `Validate`, `List` and so on.
+    * Recorded separately from {@link EntityActionID} because one binding may be attached to
+    * several invocation types, and telling a `Validate` refusal apart from an `AfterUpdate` side
+    * effect is the first question anyone asks of the log.
+    */
+   public EntityActionInvocationTypeID?: string;
+
+   /**
+    * The entity of the record the run operated on. Denormalized rather than derived through
+    * {@link EntityActionID} so it survives the binding being deleted or retargeted, and so the log
+    * can be queried by record with no join. Kept generic — every invoker has a subject, not only
+    * Entity Actions.
+    */
+   public TargetEntityID?: string;
+
+   /**
+    * The primary key of the record the run operated on, as text. For multi-record invocation types
+    * (`List`, `View`) one log row is written per record, so this is always a single record.
+    */
+   public TargetRecordID?: string;
+
+   /** The binding's `LoggingMode` — `All` / `FailuresOnly` / `None`. Defaults to `All` when absent. */
+   public LoggingMode?: MJEntityActionEntity['LoggingMode'];
+
+   /**
+    * The binding's parameter rows. Required by the redaction rules: `ValueType` drives the hard
+    * whole-record rule, and `LogValue` supplies the per-binding override.
+    */
+   public EntityActionParams?: MJEntityActionParamEntity[];
+}
+
+/**
  * Class that holds the parameters for an action to be run. This is passed to the Run method of an action.
- * 
+ *
  * @template TContext - Type of the context object passed to the action execution.
  *                      This allows for type-safe context propagation from agents to actions.
  *                      Defaults to any for backward compatibility.
@@ -276,6 +325,13 @@ export class RunActionParams<TContext = any> {
     * to honor the caller's provider when supplied while remaining backward compatible.
     */
    public Provider?: IMetadataProvider;
+
+   /**
+    * Optional. Set by the Entity Action invocation path to record which binding, which event and
+    * which record produced this run — see {@link ActionInvocationProvenance}. Left undefined for
+    * direct invocations, which is what the execution log's NULL provenance columns mean.
+    */
+   public Provenance?: ActionInvocationProvenance;
 };
  
 

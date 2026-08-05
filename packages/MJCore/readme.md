@@ -1663,6 +1663,14 @@ flowchart LR
 | `AllowUpdateAPI` | Configurable | Always `false` |
 | Stored procedures | Generated | None |
 
+> **Not the same thing as a custom base view.** A virtual entity has *no base table* and is read-only.
+> If you have a real table and only want to add computed columns to what its view exposes, you want a
+> **layered base view** instead — `GeneratedBaseViewName` keeps CodeGen generating an inner view while
+> your application owns and wraps `BaseView`, and the entity stays fully writable because
+> `spCreate`/`spUpdate`/`spDelete` still target `BaseView`. See
+> [Base Views: Generated, Custom, or Layered](../CodeGenLib/README.md#base-views-generated-custom-or-layered).
+> Layering is skipped entirely for virtual entities, which have no table to generate from.
+
 ### Read-Only Enforcement
 
 Virtual entities are enforced as read-only at multiple layers:

@@ -2,6 +2,33 @@
 
 How to build a new integration connector for MemberJunction.
 
+> **⚠️ Where new connectors live (6.x).**
+> Vendor connectors are **no longer added to `packages/Integration/connectors`** in this monorepo.
+> Each connector is its own Open App in
+> [MemberJunction/Integrations](https://github.com/MemberJunction/Integrations), published as
+> `@memberjunction/connector-<vendor>` with its own versioning, seed migrations (SQL Server **and**
+> PostgreSQL), metadata and CI gates.
+>
+> **The technique below is still correct** — the connector contract, the methods you implement, and the
+> engine's expectations are unchanged. Only the *location* and a few conventions differ:
+>
+> | This guide says | In the Integrations repo |
+> |---|---|
+> | `packages/Integration/connectors/src/MySystemConnector.ts` | `<Category>/MySystem/src/MySystemConnector.ts` |
+> | `packages/Integration/connectors/src/index.ts` | `<Category>/MySystem/src/index.ts` |
+> | `@RegisterClass(BaseIntegrationConnector, 'MySystemConnector')` | `@RegisterClass(BaseIntegrationConnector, '@memberjunction/connector-mysystem')` |
+> | `"ImportPath": "@memberjunction/integration-connectors"` | `"ImportPath": "@memberjunction/connector-mysystem"` |
+> | tests under `src/__tests__/` in the shared package | tests under `<Category>/MySystem/src/__tests__/` |
+>
+> That repo enforces a **four-way identity invariant** — registration key ≡ `Integration.ClassName` ≡
+> `Integration.ImportPath` ≡ `package.json` name, all equal to `@memberjunction/connector-<vendor>` —
+> checked in CI by `scripts/validate-invariants.mjs`. Start from an existing Open App as a template and
+> read that repo's contributing docs before you begin.
+>
+> **This package still hosts** the three External Data Source connector base classes
+> (`BaseExternalDataSourceConnector`, `BaseSqlExternalDataSourceConnector`,
+> `BaseDocumentDataSourceConnector`) that the per-engine leaves in the Integrations repo extend.
+
 ## Overview
 
 A connector is a TypeScript class that extends `BaseIntegrationConnector` and implements the methods needed to communicate with an external system. The engine handles orchestration, mapping, matching, and writing — the connector only handles the external system communication.
