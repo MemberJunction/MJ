@@ -185,7 +185,7 @@ jobs:
             npx turbo run test:types "$TURBO_FILTER"
             npx turbo run test --concurrency=4 "$TURBO_FILTER"
           else
-            npm run build
+            pnpm run build
             npx turbo run test:types
             npm test -- --concurrency=4
           fi

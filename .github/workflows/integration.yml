@@ -192,4 +192,4 @@ jobs:
       # come from the local .env, which CI does not have. PS_INTEGRATION stays unset. No
       # MJAPI is up, so client-transport members skip on the MJAPI preflight.
       - name: Run integration tier (mj test)
-        run: npm run test:integration
+        run: pnpm run test:integration

@@ -37,6 +37,9 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -51,7 +54,7 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Rebuild claude-pack
-        run: npm run claude-pack:build
+        run: pnpm run claude-pack:build
 
       - name: Verify dist/ is in sync with source
         run: |
@@ -92,6 +95,9 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
