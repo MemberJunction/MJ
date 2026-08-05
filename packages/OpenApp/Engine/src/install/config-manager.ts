@@ -852,19 +852,84 @@ function FindTopLevelConfigArray(content: string, key: string): { openPos: numbe
  * Mirrors the resolution {@link InsertBeforeModuleExportsClose} performs.
  */
 function FindExportedObjectBrace(content: string): number {
-    const inlineMatch = content.match(/module\.exports\s*=\s*\{/);
-    if (inlineMatch && inlineMatch.index !== undefined) {
-        return content.indexOf('{', inlineMatch.index);
+    // Anchor on a LIVE `module.exports`, never one inside a comment. MJ's own default MJAPI config
+    // scaffold documents an example `module.exports = {…}` in its header comment, and `String.match`
+    // returns the FIRST hit — so a comment-blind anchor selects the example and every edit lands
+    // somewhere inert, reporting success while the host stays misconfigured (issue #3301).
+    const inline = MatchOutsideCommentsAndStrings(content, /module\.exports\s*=\s*\{/g);
+    if (inline) {
+        return content.indexOf('{', inline.index);
     }
-    const varMatch = content.match(/module\.exports\s*=\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*;/);
-    if (varMatch && varMatch.index !== undefined) {
-        const declPattern = new RegExp(`(?:const|let|var)\\s+${EscapeRegex(varMatch[1])}\\s*=\\s*\\{`);
-        const declMatch = content.match(declPattern);
-        if (declMatch && declMatch.index !== undefined) {
-            return content.indexOf('{', declMatch.index);
+    const varMatch = MatchOutsideCommentsAndStrings(content, /module\.exports\s*=\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*;/g);
+    if (varMatch) {
+        const decl = MatchOutsideCommentsAndStrings(
+            content,
+            new RegExp(`(?:const|let|var)\\s+${EscapeRegex(varMatch.captures[1])}\\s*=\\s*\\{`, 'g'),
+        );
+        if (decl) {
+            return content.indexOf('{', decl.index);
         }
     }
     return -1;
+}
+
+/**
+ * First match of `pattern` whose start offset is real code — not inside a line comment, block
+ * comment, or string literal.
+ *
+ * @param pattern must carry the `g` flag; it is scanned repeatedly until a live match is found
+ * @returns the match offset and its capture groups, or null when every match is inert
+ */
+function MatchOutsideCommentsAndStrings(
+    content: string,
+    pattern: RegExp,
+): { index: number; captures: RegExpExecArray } | null {
+    const inert = BuildInertOffsetSet(content);
+    pattern.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(content)) !== null) {
+        if (!inert.has(m.index)) {
+            return { index: m.index, captures: m };
+        }
+        if (m.index === pattern.lastIndex) {
+            pattern.lastIndex++; // guard against a zero-width match spinning forever
+        }
+    }
+    return null;
+}
+
+/** Offsets of every character that sits inside a comment or string literal. */
+function BuildInertOffsetSet(content: string): Set<number> {
+    const inert = new Set<number>();
+    let inString: string | null = null;
+    let inLineComment = false;
+    let inBlockComment = false;
+
+    for (let pos = 0; pos < content.length; pos++) {
+        const ch = content[pos];
+        const next = content[pos + 1];
+
+        if (inLineComment) {
+            inert.add(pos);
+            if (ch === '\n') inLineComment = false;
+            continue;
+        }
+        if (inBlockComment) {
+            inert.add(pos);
+            if (ch === '*' && next === '/') { inert.add(pos + 1); pos++; inBlockComment = false; }
+            continue;
+        }
+        if (inString) {
+            inert.add(pos);
+            if (ch === '\\') { inert.add(pos + 1); pos++; continue; }
+            if (ch === inString) inString = null;
+            continue;
+        }
+        if (ch === '/' && next === '/') { inert.add(pos); inert.add(pos + 1); pos++; inLineComment = true; continue; }
+        if (ch === '/' && next === '*') { inert.add(pos); inert.add(pos + 1); pos++; inBlockComment = true; continue; }
+        if (ch === '"' || ch === "'" || ch === '`') { inert.add(pos); inString = ch; }
+    }
+    return inert;
 }
 
 /**

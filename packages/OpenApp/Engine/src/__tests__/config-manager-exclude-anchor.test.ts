@@ -296,3 +296,53 @@ describe('includeSchemas positive scope', () => {
         expect(evaluate().includeSchemas).toBeUndefined();
     });
 });
+
+/**
+ * The `module.exports = {` anchor itself must skip comments (issue #3301).
+ *
+ * MJ's own default MJAPI config scaffold documents an example `module.exports = {…}` inside its
+ * header comment, and `String.match` returns the FIRST hit — so an anchor that ignores comments
+ * selects the commented example and every subsequent edit lands somewhere inert. The operation
+ * reports success and the host is silently misconfigured, which is the same class of failure as
+ * #3457 arriving by a different route.
+ */
+describe('the exported-object anchor skips commented-out module.exports (#3301)', () => {
+    const SCAFFOLD = `/**
+ * MJ API configuration.
+ * Example:
+ *   module.exports = {
+ *     dbHost: 'localhost',
+ *   };
+ */
+module.exports = {
+  dbHost: 'localhost',
+  excludeSchemas: ['sys', 'acme_crm'],
+};
+`;
+
+    it('adds to the REAL excludeSchemas, not the commented example', () => {
+        write(SCAFFOLD);
+
+        expect(AddExcludeSchema(repo, SCHEMA).Success).toBe(true);
+
+        expect(evaluate().excludeSchemas).toEqual(['sys', 'acme_crm', SCHEMA]);
+    });
+
+    it('removes from the REAL excludeSchemas', () => {
+        write(SCAFFOLD);
+
+        const result = RemoveExcludeSchema(repo, 'acme_crm');
+
+        expect(result.Changed).toBe(true);
+        expect(evaluate().excludeSchemas).toEqual(['sys']);
+    });
+
+    it('leaves the documentation comment untouched', () => {
+        write(SCAFFOLD);
+
+        AddExcludeSchema(repo, SCHEMA);
+
+        expect(read()).toContain("*     dbHost: 'localhost',");
+        expect(read()).toContain(' *   module.exports = {');
+    });
+});
