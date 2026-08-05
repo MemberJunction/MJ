@@ -106,7 +106,7 @@ After making code changes, **always compile the affected package** and fix all T
 
 **pnpm workspace**: add dependencies to the individual package's `package.json`, then run `pnpm install` **at the repository root**. Never run it inside a package directory. pnpm enforces declared dependencies strictly — a package that imports something it doesn't declare fails to resolve rather than falling through to a hoisted copy, so declare every import.
 
-**Migration folder**: always use the highest-numbered `migrations/v*/` folder (currently `migrations/v6/`). Flyway scans `./migrations` recursively and reads the version from the filename, so a misfiled migration still runs — but it strands its PostgreSQL counterpart, which is paired per folder (`migrations/vN` ↔ `migrations-pg/vN`).
+**Migration folder**: the `migrations/v*/` folder must match **the major version in the migration's own filename** — `V…__v6.1.x__Name.sql` belongs in `migrations/v6/`, a `v5.x` file in `migrations/v5/`. Read the folder off the name you just chose; never off a number written down here, which goes stale at every era. Flyway scans `./migrations` recursively and reads the version from the filename, so a misfiled migration still runs — but it strands its PostgreSQL counterpart, which is paired per folder (`migrations/vN` ↔ `migrations-pg/vN`).
 
 **Record Changes**: MJ has built-in version control for all entities. Don't implement custom versioning.
 

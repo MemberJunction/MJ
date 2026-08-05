@@ -6,9 +6,21 @@ This directory contains SQL migration scripts for MemberJunction database schema
 
 ## 🚨 IMPORTANT: Where to Create New Migrations
 
-**All new migrations MUST be created in the `migrations/v6/` directory** — the 6.x era opened in Aug 2026, so v6 is the live folder and `v5/` joined the frozen set.
+**The folder must match the major version in the migration's own filename.** A migration named
+`V202608042204__v6.1.x__APIKey_Scope_RowFilterID.sql` targets the 6.x era, so it belongs in
+`migrations/v6/`. A `v5.x`-named file belongs in `migrations/v5/`.
 
-The `migrations/v2/` through `migrations/v5/` directories are **frozen** and should not receive new migrations. They contain historical migrations for earlier MJ eras.
+Derive the folder from the name you just chose — **never from a folder number written down in a
+doc**, which goes stale the moment a new era opens. (That is exactly how two `v6.1.x` migrations
+ended up in `v5/` in Aug 2026: this file used to name a specific folder, and the name was correct
+when written and wrong by the time it was read.)
+
+In practice new work targets the newest era, so the newest `v*/` folder is where new migrations
+land — but the *rule* is the filename, which also gets you the right answer when you are patching
+an older certified line (an `lts/5` fix is a `v5.x` migration and belongs in `migrations/v5/`).
+
+Earlier-era directories are otherwise **frozen**: they hold history and should not receive new
+work targeting a later era.
 
 ```
 migrations/
@@ -18,13 +30,13 @@ migrations/
 │   └── V202601131636...   # Historical migrations through v3.4.x
 ├── v4/                    # ❌ FROZEN - Do NOT add new migrations here
 │   └── V202602121700...   # Historical migrations through v4.4.x
-├── v5/                    # ❌ FROZEN - historical 5.x era
-│   ├── B202602151200...   # v5.0 Baseline (complete schema)
-│   └── V202602131500...   # All 5.x migrations
-├── v6/                    # ✅ CREATE NEW MIGRATIONS HERE
-│   └── V202608042204...   # 6.x-era migrations (v6 baseline squash still pending)
+├── v5/                    # 5.x era — B202602151200 baseline + all v5.x migrations
+├── v6/                    # 6.x era — v6.1.x migrations (baseline squash still pending)
 └── R__RefreshMetadata.sql # Repeatable migration (runs after all versioned)
 ```
+
+The tree above is a snapshot, not the rule. When a `v7/` era opens, `v7.x`-named migrations go
+there without this file needing an edit.
 
 > **Why the folder matters even though Flyway ignores it.** `migrationsLocation` is
 > `filesystem:./migrations`, scanned recursively, and the version comes from the *filename* —
