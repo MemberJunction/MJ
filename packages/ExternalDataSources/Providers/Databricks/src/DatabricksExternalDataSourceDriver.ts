@@ -19,9 +19,10 @@ import {
   ExternalFkRow,
 } from '@memberjunction/external-data-sources';
 // `@databricks/sql` is an OPTIONAL PEER dependency (CLAUDE.md rule #8, category 2): loaded via a dynamic
-// import() only when this driver is actually used, and declared `optional` in peerDependenciesMeta so it
-// never enters the base install. This is a `import type` (erased at build time — no runtime dependency);
-// the SDK ships its own bundled types, so — unlike snowflake-sdk — there is no separate `@types/*` package.
+// import() only when this driver is actually used, and declared `optional` in peerDependenciesMeta so a
+// DOWNSTREAM consumer that installs the published package never pulls it in. It is ALSO a devDependency here
+// (the SDK bundles its own types — unlike snowflake-sdk there's no separate `@types/*` package), so it does
+// install in the MJ monorepo dev tree to satisfy this build-time `import type` (erased at build — no runtime dep).
 import type { DBSQLClient } from '@databricks/sql';
 
 // ─── @databricks/sql SDK surface (derived from the public DBSQLClient class) ─────────────────────────────
