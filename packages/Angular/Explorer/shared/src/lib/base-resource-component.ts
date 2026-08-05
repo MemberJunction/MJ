@@ -59,9 +59,12 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
 
     /**
      * Watchdog window: if a resource component hasn't called {@link NotifyLoadComplete} within this
-     * time, we log a warning naming the offending class. The app loading screen waits on
-     * NotifyLoadComplete, so a resource that never calls it hangs the screen forever — this makes the
-     * culprit obvious in the console instead of leaving a mystery "stuck loading" state.
+     * time, we log a warning naming the offending class AND fail open — forcing NotifyLoadComplete
+     * so the app loading screen (which blocks on that signal) is released. Without the fail-open, a
+     * resource that never signals — because it errored, hung, or has its own `ngOnInit` that
+     * bypasses BaseDashboard's guarded lifecycle — would hang the whole Explorer forever. This is
+     * the safety net covering EVERY BaseResourceComponent subclass, not just BaseDashboard (whose
+     * own try/finally already guarantees the signal on the normal path).
      */
     private static readonly LOAD_COMPLETE_WATCHDOG_MS = 15_000;
     private _loadCompleteWatchdog: ReturnType<typeof setTimeout> | null = null;
@@ -126,10 +129,18 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
                 // eslint-disable-next-line no-console
                 console.warn(
                     `[LoadComplete WATCHDOG] ${this.constructor.name} has NOT called NotifyLoadComplete() ` +
-                    `within ${BaseResourceComponent.LOAD_COMPLETE_WATCHDOG_MS / 1000}s. The app loading screen ` +
-                    `waits on this signal — if the screen is stuck, this resource is the likely cause. ` +
+                    `within ${BaseResourceComponent.LOAD_COMPLETE_WATCHDOG_MS / 1000}s — FAILING OPEN: forcing ` +
+                    `load-complete to release the app loading screen. This resource either errored/hung without ` +
+                    `signalling, or is simply still loading (a slow-but-healthy load re-signals harmlessly when ` +
+                    `it finishes). If you are chasing a "stuck loading" report, start here. ` +
                     `(tabId=${this.getTabId() || 'n/a'})`
                 );
+                // Fail-open: the shell's loading screen blocks on NotifyLoadComplete. A subclass that
+                // never calls it — one whose own ngOnInit bypasses BaseDashboard's guarded lifecycle,
+                // or whose load genuinely hangs — would otherwise brick the whole Explorer. Force the
+                // signal so no single resource can take down the shell. (Idempotent-safe: NotifyLoad
+                // Complete is already called repeatedly on the normal path, e.g. every Refresh.)
+                this.NotifyLoadComplete();
             }
         }, BaseResourceComponent.LOAD_COMPLETE_WATCHDOG_MS);
     }
