@@ -49,6 +49,9 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -67,7 +70,7 @@ jobs:
       # same path. Turbo builds MJCLI's full transitive dep graph, which also
       # covers SQLConverter (so we don't need a second build step).
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build MJ CLI + SQLConverter
         run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/sql-converter

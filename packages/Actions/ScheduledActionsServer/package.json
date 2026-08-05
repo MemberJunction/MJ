@@ -32,7 +32,6 @@
     "@memberjunction/core-entities": "6.0.0",
     "@memberjunction/scheduled-actions": "6.0.0",
     "@memberjunction/sqlserver-dataprovider": "6.0.0",
-    "@types/axios": "^0.14.4",
     "dotenv": "^17.2.4",
     "env-var": "^7.3.0",
     "express": "^5.2.1",
