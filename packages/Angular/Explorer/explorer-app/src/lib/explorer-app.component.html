@@ -98,11 +98,23 @@
       </h1>
     </div>
     <div class="login-btn">
-      <h3>Log In</h3>
-      <p>{{subHeaderText}}</p>
-      <button (click)="authBase.login()">
-        Log in
-      </button>
+      @if (ShowProviderPicker) {
+        <!-- 2+ providers published by the server catalog: the shared, app-agnostic picker.
+             The surrounding chrome above is Explorer's; the rows themselves are identical
+             in every MJ app that embeds <mj-login-picker>. -->
+        <mj-login-picker
+          [Providers]="AuthProviderChoices"
+          [Subheading]="subHeaderText"
+          [Busy]="SigningIn"
+          (ProviderSelected)="OnAuthProviderSelected($event)">
+        </mj-login-picker>
+      } @else {
+        <h3>Log In</h3>
+        <p>{{subHeaderText}}</p>
+        <button (click)="authBase.login()">
+          Log in
+        </button>
+      }
     </div>
   </div>
 }
