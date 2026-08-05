@@ -33,7 +33,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJDatasetItems', sectionName: 'Dataset Items', isExpanded: false },
             { sectionKey: 'mJDuplicateRuns', sectionName: 'Duplicate Runs', isExpanded: false },
             { sectionKey: 'mJEntities', sectionName: 'Entities', isExpanded: false },
-            { sectionKey: 'mJEntityActions', sectionName: 'Entity Actions', isExpanded: false },
+            { sectionKey: 'mJEntityActionsEntityID', sectionName: 'Entity Actions', isExpanded: false },
             { sectionKey: 'mJEntityAIActionsOutputEntityID', sectionName: 'AI Actions', isExpanded: false },
             { sectionKey: 'mJEntityCommunicationMessageTypes', sectionName: 'Entity Communication Message Types', isExpanded: false },
             { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false },
@@ -94,7 +94,9 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMLModelScoringBindings', sectionName: 'ML Model Scoring Bindings', isExpanded: false },
             { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
             { sectionKey: 'mJScopedPromptParts', sectionName: 'Scoped Prompt Parts', isExpanded: false },
-            { sectionKey: 'mJScopedPromptConfigs', sectionName: 'Scoped Prompt Configs', isExpanded: false }
+            { sectionKey: 'mJScopedPromptConfigs', sectionName: 'Scoped Prompt Configs', isExpanded: false },
+            { sectionKey: 'mJEntityActionsScopeEntityID', sectionName: 'Entity Actions (Scope Entity ID)', isExpanded: false },
+            { sectionKey: 'mJActionExecutionLogs', sectionName: 'Action Execution Logs', isExpanded: false }
         ]);
     }
 }
