@@ -97,7 +97,7 @@ interface WorkflowSpec {
 ### Track F — Front doors and observability
 
 1. **Human**: an **Automations** surface generalizing the User Routines pattern (≤3 decisions: *When? What? Who should know?*), compiling to the right substrate; personal vs. system as a scope choice. "Automate this" affordances on the Action, Agent (Workflow), and Record Process forms. The unbuilt Screen 4 of `plans/record-process-authoring-flow.html` is the design seed. Terminology per #3456 D18: users see **Workflows**.
-2. **Workflow (Flow) visualization upgrade** — one visualizer for both provenances post-Track-C: a business user's design-time workflow and a runtime task graph render through the same component; the flow canvas and the Tasks Gantt converge instead of remaining silos. Agent Manager already authors flows; Save as Workflow (#3456 §3.9) feeds it.
+2. **Workflow (Flow) visualization upgrade** — **now owned by the engine plan as Phase 5 (D19)**: the `ng-flow-editor` canvas upgraded in place to express joins/`traversalMode`/concurrency/human tasks, a runtime overlay so one visualizer serves both provenances (converging the flow canvas and the Tasks Gantt), a first-class "Create Workflow" entry point, and the D18 terminology sweep. Track F retains only what Phase 5 scopes out: the Automations wizard, the run inbox, and agent-facing tools.
 3. **Agent**: the WorkflowSpec tool (Track E) plus a **draft-then-confirm** tool shape (dry-run and Plan Mode are the shipped precedents) so the in-app assistant can *set up* a workflow, not just navigate to the page. Expose Remote Operations to MCP.
 4. **One run inbox** — a unified activity feed over `MJ: Scheduled Job Runs`, `MJ: AI Agent Runs`, `MJ: Action Execution Logs`, `MJ: Process Runs`, `MJ: User Routine Runs`, and parent `MJ: Tasks` rows (the workflow-instance record for runtime graphs). The join seams exist: `ScheduledJobType.DomainRunEntity` and the `ActionExecutionLog.TargetRecordID` ↔ `RecordChange.RecordID` format alignment.
 5. **"What fires when this record changes"** — the scope-record panel from #3408 runbook step 11, generalized: one place listing every Entity Action binding, process, and routine attached to an entity/record.
@@ -109,7 +109,9 @@ interface WorkflowSpec {
 ```
 A (correctness) ── independent, start anytime
 C (#3456): Phase 0 (legacy drop = Track B) ──► Phases 1–4 (Track R parallel)
-        C ──► D (triggers) ──► E (WorkflowSpec) ──► F (front doors + inbox)
+                                          ──► Phase 5 (Workflow UX, D19)
+        C ──► D (triggers) ──► E (WorkflowSpec) ──► F (Automations wizard,
+                                   run inbox, agent-facing tools)
                                    (D2/D3 of Track D can interleave with C)
 ```
 

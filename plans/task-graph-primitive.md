@@ -1,6 +1,6 @@
 # Task Graphs as an Agent Primitive — Design Plan
 
-**Status:** Draft v4 — v3 added the what/when program framing, the DAG-spec contract (D16), durable-async succession over MJQueue (D14), the Pipeline boundary (D15), payload-redaction posture, reconciliation-sweep scope, and the human-task notification path; v4 renames the contract to **`TaskGraphSpec`** (aligned with `AgentSpec`), adds **Save as Workflow** (§3.9/D17), and the **"Workflow" user-facing terminology** decision (D18)
+**Status:** Draft v5 — decisions now D1–D19. v3 added the what/when program framing, durable-async succession over MJQueue (D14), the Pipeline boundary (D15), the DAG-spec contract (D16), payload-redaction posture, reconciliation-sweep scope, and the human-task notification path. v4 renamed the contract to **`TaskGraphSpec`** (aligned with `AgentSpec`), added **Save as Workflow** (§3.9/D17) and the **"Workflow" terminology** decision (D18), and the companion program plan (`plans/unified-workflow.md`). v5 adds **Phase 0 — legacy retirement** and **Phase 5 — Workflow UX** (D19: the `ng-flow-editor` upgrade, runtime overlay, creation entry point).
 **Date:** 2026-08-05
 **Origin:** Architecture study of the Sage → Workflow Planner → TaskOrchestrator pipeline (session `claude/sage-task-graph-study-4uvtrc`)
 
@@ -53,6 +53,7 @@ Companion tracks in the broader program — trigger-vocabulary normalization, a 
 | D16 | **`TaskGraphSpec` is the fully-qualified DAG spec.** One TS contract in `ai-core-plus` that every producer authors against — the LLM primitive, deterministic code, a human UI, and (future, out of scope here) stored workflow definitions that bind a graph to triggers. Server-side validation in `TaskGraphService` validates against this same contract; there is no looser internal shape. The `Spec` suffix aligns with `AgentSpec`: it memorializes a graph, it doesn't merely request execution. |
 | D17 | **"Save as Workflow" — an ephemeral graph can be promoted to a design-time flow.** Because a runtime `TaskGraphSpec` and a design-time flow are the same logical shape (§3.1), a converter (`TaskGraphSpec` → `AgentSpec` with Flow type + Steps/Paths → `AgentSpecSync.Persist`) turns a Loop agent's dynamic approach into a reusable, schedulable flow agent. Surfaced wherever a run's graph is visible: the Agent Run admin UI (via the new `TaskGraph` run-step node) and ng-conversations (detect 1+ graphs on a completed run → offer "Save as Workflow"). See §3.9. |
 | D18 | **"Workflow" is the user-facing noun; "Flow Agent" stays the implementation term.** UI surfaces (navigation, save-as affordance, authoring entry points, docs for business users) say *Workflow* — a deterministic pathway that can include AI steps. No schema/entity/agent-type rename; this is vocabulary, applied at the UX layer. The v6 retirement of the dead legacy `Workflow` tables frees the name. |
+| D19 | **Workflow UX is in-scope for this program (Phase 5), and the existing `@memberjunction/ng-flow-editor` is upgraded, not replaced.** The Foblex-Flow canvas + `FlowAgentEditorComponent` become THE workflow viewer/editor: every capability this program adds (parallel traversal + joins, `traversalMode`, human tasks, runtime task graphs, Save as Workflow) must be visible and editable there, one visualizer serves both provenances (design-time workflow and runtime graph), and the editor gets a first-class creation entry point instead of being buried inside a saved AI Agent record form. |
 
 ---
 
@@ -326,6 +327,24 @@ Constraints: `BaseAgent`'s public/protected API stays stable (subclasses exist v
 6. **Save as Workflow** (§3.9/D17): the `TaskGraphSpec` → Flow-agent converter via `AgentSpecSync`, surfaced in the Agent Run admin UI (`TaskGraph` node) and ng-conversations (completed-run detection).
 
 **Exit:** one traversal engine for both provenances; graphs can contain humans; parallel semantics identical everywhere.
+
+### Phase 5 — Workflow UX (D19): see it, edit it, watch it run
+
+An intentional UX effort, not a trailing cleanup — it addresses the authoring/observability gaps the whole-repo study documented (fragmented surfaces, buried editor, no live graph view) and makes the new engine abilities usable by business users. Base: `@memberjunction/ng-flow-editor` (Foblex Flow + Dagre; generic `FlowEditorComponent` + `FlowAgentEditorComponent`/`AgentFlowTransformerService`) — upgraded in place.
+
+1. **Editor upgrade — express everything the engine can now do.**
+   - Parallel semantics: render fan-out visibly; per-step **join type** (AND default / OR ↔ `Optional`; `Corequisite` as co-scheduled) editable on the node; the flow-level `traversalMode` toggle (params bag) with a clear "sequential (legacy) / parallel" affordance; concurrency cap surfaced.
+   - **Human-task nodes** as a first-class node type (assignee/role, DueAt) once Phase 4 lands them.
+   - Path-condition editing with validation feedback (SafeExpressionEvaluator syntax), recovery-path visualization, and inline graph validation (cycle detection, unreachable nodes, unknown agents) using the same `TaskGraphSpec` validators the engine uses — one validation story, surfaced at author time.
+2. **Runtime overlay — the same canvas watches a run.** Per-node live status (pending/running/complete/failed/blocked/awaiting-human) driven by BaseEntity events over `AIAgentRunStep` rows (in-run flows) and `MJ: Tasks` rows (durable graphs) — the agent-run form's existing live-step subscription is the proven mechanism. This is the convergence point with the Tasks Gantt/checklist: one graph renderer, design-time and runtime, replacing two silos. The Agent Run admin UI's `TaskGraph` node (D10) opens this view; **Save as Workflow** (§3.9) is an action on it.
+3. **Entry points and terminology (D18).**
+   - A first-class **"Create Workflow"** entry (navigation + Agent Manager hand-off) that lands on the canvas — killing the save-the-agent-record-first requirement (`UIFormSectionKey` mount stays for the record-form context, but stops being the only door).
+   - The D18 vocabulary sweep across the touched surfaces: *Workflow* in nav, buttons, empty states; *Flow Agent* remains in metadata/dev docs.
+4. **Read-only ≠ invisible**: the viewer (not editor) embeds anywhere a graph is referenced — ng-conversations plan cards, the Tasks view, run history — via the existing `ReadOnly` mode.
+
+Scope boundary: the broader authoring front doors (the "Automations" wizard, unified run inbox, agent-facing draft-then-confirm tools) remain program Track F (`plans/unified-workflow.md`) — Phase 5 is specifically the workflow viewer/editor and its entry points, shipped with the engine so the new abilities are never invisible.
+
+**Exit:** a business user can create, understand, and edit a parallel workflow with human steps entirely on the canvas; a running graph (either provenance) is watchable live on the same canvas; "Save as Workflow" round-trips through it.
 
 ---
 
