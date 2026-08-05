@@ -1,0 +1,140 @@
+[
+  {
+    "_comments": [
+      "Registry of external agent harnesses this installation can launch. A row makes a harness",
+      "AVAILABLE; an agent opts in by naming it in AIAgent.TypeConfiguration ({ \"harnessName\": ... }).",
+      "",
+      "STATUS is 'Inactive' for every row by default. These harnesses are external binaries that must",
+      "be installed and authenticated on whatever host (or in whatever sandbox image) will run them,",
+      "so shipping them Active would mean a fresh install advertises harnesses it cannot launch.",
+      "Flip a row to Active once its binary is present.",
+      "",
+      "CapabilitySettings declares what each ADAPTER implements, not what the vendor advertises — the",
+      "runtime emulates what is missing, so an over-claim becomes a silent behavioural gap. Every row",
+      "reports PermissionHooks false because MJ's MCP permission-prompt tool does not exist yet; the",
+      "strict posture depends on it."
+    ],
+    "fields": {
+      "Name": "Claude Code",
+      "Description": "Anthropic's Claude Code, driven through its headless CLI (`claude -p --output-format stream-json`). Resumes sessions natively, so context stays server-side rather than being replayed each turn. Requires the `claude` binary on PATH (or set ExecutablePath) and an ANTHROPIC_API_KEY reaching the sandbox via MJ: AI Agent Credentials.",
+      "DriverClass": "ClaudeCodeCliAdapter",
+      "AIVendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+      "CapabilitySettings": {
+        "SessionResume": true,
+        "MidTurnCancellation": true,
+        "StructuredOutput": true,
+        "UsageReporting": true,
+        "PermissionHooks": false,
+        "McpClient": true,
+        "WorkspaceScoping": true,
+        "ModelSelection": true
+      },
+      "Status": "Inactive"
+    },
+    "primaryKey": {
+      "ID": "454E8374-BF0F-447F-99A5-125FDE37DE7A"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:51:27.842Z",
+      "checksum": "8176e7b6d0c80c04f4b7b594e255e1c10ca1b9a0b7b4cb6ccd3044fe8c83af11"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Codex CLI",
+      "Description": "OpenAI's Codex CLI, driven through `codex exec --json`. Ships as a CLI only — the npm package exposes a bin and no library entry point. Requires the `codex` binary and an OPENAI_API_KEY reaching the sandbox.",
+      "DriverClass": "CodexAdapter",
+      "AIVendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "CapabilitySettings": {
+        "SessionResume": true,
+        "StructuredOutput": false,
+        "UsageReporting": true,
+        "PermissionHooks": false,
+        "McpClient": true,
+        "WorkspaceScoping": true,
+        "ModelSelection": true
+      },
+      "Status": "Inactive"
+    },
+    "primaryKey": {
+      "ID": "4BD7C8C4-7603-4C12-983D-8A57DA28389D"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:51:27.859Z",
+      "checksum": "08fae8398246bdd8f0b9472e52154c1f45ba57fabc9c3fff1a44837415f6b7cd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OpenCode",
+      "Description": "OpenCode in non-interactive run mode. The published @opencode-ai/sdk exposes no main or types entry, so the CLI is the dependable contract. Requires the `opencode` binary.",
+      "DriverClass": "OpenCodeAdapter",
+      "CapabilitySettings": {
+        "SessionResume": true,
+        "StructuredOutput": false,
+        "UsageReporting": true,
+        "PermissionHooks": false,
+        "McpClient": true,
+        "WorkspaceScoping": true,
+        "ModelSelection": true
+      },
+      "Status": "Inactive"
+    },
+    "primaryKey": {
+      "ID": "622975D7-CB3A-4944-B76F-53C96D105C34"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:51:27.808Z",
+      "checksum": "99dc1c838ac2592f7ded69f280b5e8e29d9d4713e7169950715716d36e487600"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini CLI",
+      "Description": "Google's Gemini CLI. Built around one-shot invocations, so it does NOT resume sessions — the runtime replays accumulated context into every turn and budgets the extra tokens against the run's guardrails. Uses the CLI rather than @google/gemini-cli-core, which is internals with no stability contract. Requires the `gemini` binary and a GEMINI_API_KEY.",
+      "DriverClass": "GeminiCliAdapter",
+      "AIVendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "CapabilitySettings": {
+        "SessionResume": false,
+        "StructuredOutput": false,
+        "UsageReporting": true,
+        "PermissionHooks": false,
+        "McpClient": true,
+        "WorkspaceScoping": true,
+        "ModelSelection": true
+      },
+      "Status": "Inactive"
+    },
+    "primaryKey": {
+      "ID": "DA433068-6608-4ADB-BE26-8AF0D9D6F456"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:51:27.873Z",
+      "checksum": "b813b0d65421c601d6e37033d2b2adc48f9ce9d3599d79285fac08dce1e84ca2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pi",
+      "Description": "Pi, driven through the documented stdio-JSON contract. Pi publishes no usable npm package — the obvious name is a placeholder reservation — so there is no SDK to compile against and no stable published CLI to hard-code flags from. ExecutablePath MUST be set to the Pi binary for this row to work, and CapabilitySettings should be adjusted once its surface is pinned down.",
+      "DriverClass": "PiAdapter",
+      "CapabilitySettings": {
+        "SessionResume": false,
+        "StructuredOutput": false,
+        "UsageReporting": true,
+        "PermissionHooks": false,
+        "McpClient": false,
+        "WorkspaceScoping": true,
+        "ModelSelection": true
+      },
+      "Status": "Inactive"
+    },
+    "primaryKey": {
+      "ID": "8B333510-B1ED-475C-B721-1F2315C53568"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:51:27.827Z",
+      "checksum": "8a261935b62548d629085e06fa9b4b3674facb9531eceecc0262e53b3e14f8e3"
+    }
+  }
+]

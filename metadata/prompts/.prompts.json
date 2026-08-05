@@ -1737,5 +1737,33 @@
       "lastModified": "2026-06-26T21:32:04.364Z",
       "checksum": "b2c8ac82fb635bcd641ce3a7514401c56fe2a1d1c520be06c4fbef24df260b26"
     }
+  },
+  {
+    "fields": {
+      "Name": "Harness Agent Type: System Prompt",
+      "Description": "Control structure for the Harness Agent Type. Same turn-end JSON contract as the Loop type (a harness turn IS a Loop iteration), plus the sandbox conventions a harness needs: work freely in the workspace, request actions and sub-agents through the turn-end JSON rather than shell commands, and never echo granted credentials.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/harness-agent-type-system-prompt.template.md",
+      "Status": "Active",
+      "ResponseFormat": "Any",
+      "AssistantPrefill": null,
+      "StopSequences": null,
+      "PrefillFallbackMode": "Ignore",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/system/harness-agent-type-system-prompt-output.example.json",
+      "ValidationBehavior": "Warn",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types"
+    },
+    "primaryKey": {
+      "ID": "9721E9AB-5FF4-40C2-A9E9-B28337EDDE09"
+    }
   }
 ]

@@ -15,6 +15,19 @@ import { LocalDirectorySandboxProvider } from './sandbox/LocalDirectorySandboxPr
 import { DockerSandboxProvider } from './sandbox/DockerSandboxProvider.js';
 import { HarnessTurnResult, HarnessWorkspaceScope, HarnessNetworkPolicy } from './types.js';
 
+/**
+ * Conventional environment variable each harness reads its own credential from.
+ *
+ * Only used by the zero-config vendor-key fallback. Explicit rather than derived because writing a
+ * key into the wrong variable name fails silently from MJ's side — the harness simply reports an
+ * auth error much later, with nothing pointing back at the mapping.
+ */
+const HARNESS_CREDENTIAL_ENV_VARS: Record<string, string> = {
+    ClaudeCodeCliAdapter: 'ANTHROPIC_API_KEY',
+    CodexAdapter: 'OPENAI_API_KEY',
+    GeminiCliAdapter: 'GEMINI_API_KEY',
+};
+
 /** Shape of the harness block inside `AIAgent.TypeConfiguration`. */
 interface HarnessAgentConfig {
     harnessName?: string;
@@ -238,11 +251,31 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /**
-     * Builds the environment injected into the sandbox from the agent's credential grants.
+     * Builds the environment injected into the sandbox.
      *
-     * This is the only channel by which a secret reaches the harness, and it carries exactly what
-     * `MJ: AI Agent Credentials` grants — never the MJAPI process environment, never DB credentials,
-     * never a user token.
+     * ## Secrets travel as process environment, never as prompt text
+     *
+     * Everything resolved here is handed to the sandbox executor and becomes the harness PROCESS's
+     * environment. None of it is rendered into the turn prompt, so a credential never enters the
+     * model's context and cannot be echoed back, logged as conversation, or persisted to a run step.
+     * It lives exactly as long as the process does.
+     *
+     * ## Resolution order — credentials first, env as the documented fallback
+     *
+     * Mirrors how MJ's AI layer already resolves vendor keys, because operators should not have to
+     * learn a second scheme:
+     *
+     *   1. `MJ: AI Agent Credentials` grants for this agent, read from `MJ: Credentials`. The
+     *      governed path — auditable, revocable, per-agent.
+     *   2. The server's own `process.env[EnvVariableName]`. If a harness needs ANTHROPIC_API_KEY and
+     *      no credential row grants one, the MJAPI process's own value is used.
+     *   3. When the agent has no grants at all, the harness vendor's key under the existing
+     *      `AI_VENDOR_API_KEY__<DRIVER>` convention — the zero-config path.
+     *
+     * Preferring credentials matters: env vars are process-wide, so falling back means an agent gets
+     * whatever the server holds rather than only what it was granted. That is the pragmatic path for
+     * dev and single-tenant installs, and the reason multi-tenant deployments should grant
+     * explicitly. The distinction is logged, not silent.
      */
     private async resolveGrantedEnvironment(contextUser?: UserInfo): Promise<Record<string, string>> {
         const environment: Record<string, string> = {};
@@ -259,23 +292,71 @@ export class HarnessAgentBase extends BaseAgent {
             );
             if (!grants.Success) {
                 LogError(`Failed to load harness credential grants: ${grants.ErrorMessage}`);
-                return environment;
             }
 
-            for (const grant of grants.Results ?? []) {
+            const rows = grants.Success ? (grants.Results ?? []) : [];
+            for (const grant of rows) {
                 if (!grant.EnvVariableName) {
-                    // No variable name means the adapter decides — nothing to inject generically.
+                    // No variable name means the adapter decides how to surface it; nothing to
+                    // inject generically.
                     continue;
                 }
                 const secret = await this.loadCredentialValue(grant.CredentialID, contextUser);
                 if (secret) {
                     environment[grant.EnvVariableName] = secret;
+                    continue;
                 }
+                const fromEnv = process.env[grant.EnvVariableName];
+                if (fromEnv) {
+                    LogStatus(
+                        `Harness credential '${grant.EnvVariableName}' not resolvable from MJ: Credentials; ` +
+                            'falling back to the server environment.',
+                    );
+                    environment[grant.EnvVariableName] = fromEnv;
+                }
+            }
+
+            if (Object.keys(environment).length === 0) {
+                this.applyVendorKeyFallback(environment);
             }
         } catch (e) {
             LogError(`Failed to resolve harness environment: ${describeError(e)}`);
         }
         return environment;
+    }
+
+    /**
+     * Zero-config path: use the harness vendor's key from the environment when the agent has no
+     * explicit grants.
+     *
+     * Uses the same `AI_VENDOR_API_KEY__<DRIVER>` convention the AI layer already uses, so a
+     * developer who has MJ talking to Anthropic already has Claude Code working without seeding a
+     * credential row.
+     */
+    private applyVendorKeyFallback(environment: Record<string, string>): void {
+        const harness = this.harnessRow;
+        if (!harness?.DriverClass) {
+            return;
+        }
+        const envKey = `AI_VENDOR_API_KEY__${harness.DriverClass.toUpperCase()}`;
+        const value = process.env[envKey];
+        if (!value) {
+            return;
+        }
+        // The variable the harness itself expects. Kept as an explicit map rather than guessed,
+        // because writing a key into the wrong variable name is a silent no-op the harness reports
+        // only as an auth failure. A harness not listed here must be granted explicitly through
+        // MJ: AI Agent Credentials.
+        const target = HARNESS_CREDENTIAL_ENV_VARS[harness.DriverClass];
+        if (!target) {
+            LogStatus(
+                `Harness '${harness.Name}' has no credential grants and no known env-var convention for ` +
+                    `driver '${harness.DriverClass}'. Grant one via MJ: AI Agent Credentials.`,
+            );
+            return;
+        }
+        environment[target] = value;
+        LogStatus(`Harness '${harness.Name}' using vendor key fallback from ${envKey}.`);
     }
 
     /**
