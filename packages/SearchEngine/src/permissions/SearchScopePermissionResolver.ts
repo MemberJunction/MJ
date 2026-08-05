@@ -1,5 +1,5 @@
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import type { MJSearchScopePermissionEntity, MJAIAgentEntity, MJAISkillEntity, MJAISkillSearchScopeEntity } from '@memberjunction/core-entities';
 
 /**
@@ -104,6 +104,60 @@ function highestLevel(a: SearchScopePermissionLevel, b: SearchScopePermissionLev
 }
 
 /**
+ * The seam a consumer overrides to answer "may this principal use this scope?" its own way.
+ *
+ * The stock implementation ({@link SearchScopePermissionResolver}) reads
+ * `__mj.SearchScopePermission` rows keyed by `UserID` or by one of the user's MJ Roles. That
+ * covers MJ's own model, but it is not the only shape a permission model can take: a consumer
+ * whose entitlements are neither a user nor an MJ Role — a per-tenant capability grant, say —
+ * has no row that can express them, and its grants are invisible to the check that actually
+ * runs on every search.
+ *
+ * Rather than have such a consumer project its model into `SearchScopePermission` as derived
+ * per-user rows — which works, but creates permission state that can drift from its source —
+ * it subclasses {@link SearchScopePermissionResolver} and registers against this base:
+ *
+ * ```ts
+ * @RegisterClass(SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY)
+ * export class MyResolver extends SearchScopePermissionResolver {
+ *     public override async ResolveEffectivePermission(input: ResolvePermissionInput) {
+ *         const stock = await super.ResolveEffectivePermission(input);
+ *         if (stock.Allowed) return stock;          // never narrow what MJ already granted
+ *         return this.myOwnGrantCheck(input);        // only ever widen
+ *     }
+ * }
+ * ```
+ *
+ * **Do not pass a priority.** Subclassing the stock resolver is what orders the registration, and
+ * it does so more reliably than a number can. `ClassFactory.Register` treats an omitted priority as
+ * "one higher than the highest already registered for this (base, key)" — and a subclass cannot be
+ * defined without its parent module having loaded first, so MJ's own registration always runs
+ * before the consumer's and the consumer always lands above it. Extending the concrete resolver
+ * therefore *guarantees* the ordering as a side effect of the language.
+ *
+ * A hardcoded priority forfeits that guarantee. Two independent consumers that both pick the same
+ * number collide, `Register` warns, and resolution silently degrades to whichever happened to be
+ * registered last — a load-order bug wearing the costume of a configuration value. The priority
+ * argument exists for cases where subclassing is genuinely impossible; this is not one of them.
+ *
+ * **Failure posture.** `SearchEngine` treats a resolver throw as DENIED, never as allowed. An
+ * override that cannot reach its own store must not accidentally open a scope.
+ */
+export abstract class SearchScopePermissionResolverBase {
+    public abstract ResolveEffectivePermission(input: ResolvePermissionInput): Promise<EffectivePermission>;
+}
+
+/**
+ * The ClassFactory key every SearchScope permission resolver registers under.
+ *
+ * There is exactly one resolver per deployment — a consumer REPLACES the policy rather than
+ * selecting among several — so a single shared key is the right shape, and it keeps the registry
+ * free of the keyless-registration warning. Ordering within the key comes from subclassing rather
+ * than from a number; see {@link SearchScopePermissionResolverBase}.
+ */
+export const SEARCH_SCOPE_PERMISSION_RESOLVER_KEY = 'SearchScopePermissionResolver';
+
+/**
  * Resolves the effective SearchScope permission for a (user, scope, agent)
  * triple.
  *
@@ -128,7 +182,8 @@ function highestLevel(a: SearchScopePermissionLevel, b: SearchScopePermissionLev
  * (e.g., to make a row exist before granting it later) and would create
  * surprising lockouts when a user joins a role.
  */
-export class SearchScopePermissionResolver {
+@RegisterClass(SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY)
+export class SearchScopePermissionResolver extends SearchScopePermissionResolverBase {
     /**
      * Resolves the effective permission. All UUID comparisons go through
      * UUIDsEqual to remain case-insensitive across SQL Server / PostgreSQL.
@@ -362,6 +417,29 @@ export class SearchScopePermissionResolver {
     }
 }
 
-// Hint to consumers: keep one resolver per request unless you genuinely
-// need a different policy. The class is stateless; instantiation is cheap.
+/**
+ * The stock resolver instance.
+ *
+ * @deprecated Prefer {@link GetSearchScopePermissionResolver}, which honours a consumer's
+ * registered override. This constant always yields MJ's own implementation and therefore
+ * bypasses any subclass registered against {@link SearchScopePermissionResolverBase}. It is
+ * retained so existing imports keep compiling.
+ */
 export const DefaultSearchScopePermissionResolver = new SearchScopePermissionResolver();
+
+/**
+ * The resolver to use — a consumer's registered subclass if there is one, otherwise MJ's own.
+ *
+ * Resolved per call rather than cached at module load, because a registration made during
+ * application startup would otherwise be missed depending on import order — a failure mode that
+ * shows up as "my resolver works in tests and not in the server", which is expensive to chase.
+ * The class is stateless and construction is trivial, so there is nothing to gain by caching.
+ *
+ * Falls back to the stock instance when nothing is registered.
+ */
+export function GetSearchScopePermissionResolver(): SearchScopePermissionResolverBase {
+    return MJGlobal.Instance.ClassFactory.CreateInstance<SearchScopePermissionResolverBase>(
+        SearchScopePermissionResolverBase,
+        SEARCH_SCOPE_PERMISSION_RESOLVER_KEY,
+    ) ?? DefaultSearchScopePermissionResolver;
+}
