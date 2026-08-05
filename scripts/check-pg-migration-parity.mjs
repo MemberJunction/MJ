@@ -70,10 +70,9 @@ const INTENTIONALLY_NO_PG_COUNTERPART = new Set([
  * into a permanent exemption.
  */
 const PENDING_CONVERSION = new Map([
-    ['V202608041347__v6.1.x__CodeGen_Introspection_View_Perf', '#3471'],
-    ['V202608042200__v6.1.x__EntityAction_Workflow_Extensions', '#3471'],
-    ['V202608050100__v6.1.x__Add_Entity_GeneratedBaseViewName', '#3471'],
-    ['V202608050105__v6.1.x__Layered_Base_Views_Pilot', '#3471'],
+    // EMPTY — and it should stay that way. The four 6.x-era gaps this ratchet was
+    // introduced to hold (#3471) were all closed on 2026-08-05. Parity is now whole:
+    // every T-SQL V-migration has a committed counterpart or a documented exclusion.
 ]);
 
 function readDirOrExit(path, label) {
