@@ -70,6 +70,11 @@ This document is the **build-engineering guide**: the deep checklist that prepar
 > Step 6), that is the target on the direct-to-`next` workflow. On the prep-branch
 > workflow, commit to your prep branch instead — it reaches `next` through the PR.
 > The steps use `next` as shorthand for "the branch that becomes the release."
+>
+> **If you intend to pin (Step 9's `ref`), the target is a *commit*, not a branch.** Every
+> "commit/push to `next`" below then means "must be an ancestor of the commit you pin" —
+> so land your prep work first, and take the SHA afterwards. Prep that merges *after* the
+> commit you pinned is not in the release, however green `next` looks.
 
 ### Step 0: Preflight — check the environment before you start
 
@@ -118,7 +123,7 @@ Before anything else, confirm the `next` branch is healthy:
 - [ ] **"Unit Tests"** (`test.yml`) — passes on any open PR, and on the **push-to-`next`** run (that unfiltered backstop is the one that actually proves integration-bundle ↔ `MJ: Tests` metadata sibling parity; a metadata-only PR never triggers `test.yml` at all)
 - [ ] **"Integration Tier"** (`integration.yml`) — passes on `next`. Runs the deterministic suite against a fresh SQL Server on PRs into `next` plus an unfiltered push-to-`next` backstop. It is **not** a substitute for Step 4: CI runs no MJAPI (so client-transport bundles skip) and no live-model tier.
 
-> **Don't idle here.** These runs take ~15 minutes. **Step 3 (fresh database + migrate + metadata push) is independent of them** — it works on a local scratch database and reads nothing from CI. Start Step 3 while Step 1 runs and check back. The only ordering that matters is that Step 3's results are committed to `next` before the release ships.
+> **Don't idle here.** These runs take ~15 minutes. **Step 3 (fresh database + migrate + metadata push) is independent of them** — it works on a local scratch database and reads nothing from CI. Start Step 3 while Step 1 runs and check back. The only ordering that matters is that Step 3's results are an ancestor of the commit you release (on the default path, simply committed to `next` before you press the button).
 >
 > Step 2 must still precede Step 3, since its model metadata has to be present before the sync push.
 
@@ -642,7 +647,14 @@ Enabling it is a **code change, not configuration**: a platform branch (and a PG
 
 > **Why this exists.** The button used to merge `origin/next` as of the moment you pressed it, so anything merged during the hours of Steps 0–8 shipped unvalidated. Worse, the CI guard asked whether *the branch's most recent run* was green rather than *this commit's*, so it could be satisfied by a neighbouring commit's result while a queued run for the actual tip was still pending. Informally holding PRs back was the only mitigation, and nothing enforced it. Pinning replaces the convention with a mechanism.
 
-**The manual-PR path has no pin.** A `next → main` PR merges whatever `next` holds when you merge it. If you need a specific commit, use the button with `ref`.
+**Pinning on the manual-PR path.** A plain `next → main` PR merges whatever `next` holds *at merge time* — the same drift `ref` exists to remove, and the manual path is exactly when you can't reach for the button. To pin it, push the validated commit to its own branch and open the PR from **that** branch:
+
+```bash
+git push origin <release-sha>:refs/heads/release/v6.1.0-edge.3
+# then open a PR:  release/v6.1.0-edge.3 → main
+```
+
+`publish.yml` and `changes.yml` behave identically — both key off the push to `main` and the PR's *base*, never its head. **The one thing you lose is the auto-generated PR body:** `generate-release-notes.yml` is gated on `github.head_ref == 'next'`, so it will not fire from a pinned branch. Write the PR description yourself, or dispatch that workflow manually (it accepts `workflow_dispatch`). The GitHub *Release* notes are unaffected — `publish.yml` generates those after the merge.
 
 **Candidate cuts and line releases never go this way.** `publish.yml` hard-fails an unsuffixed version on the routine path — that's the era gate working, not a bug. Candidate cuts follow runbook op. 2 (the pre-exit dance); line releases ship via the **"Publish LTS line release"** button (runbook op. 3) from the `lts/*` branch, never through `next → main`.
 
