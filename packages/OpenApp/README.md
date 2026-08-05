@@ -631,6 +631,14 @@ The `DriverClass` value must exactly match the second argument of `@RegisterClas
   `__mj.Entity` rows **and** ship their own generated base views / CRUD procs; that adds your schema
   to the host's `excludeSchemas`, which keeps CodeGen off the schema entirely.
 
+> **Host operators:** the two values are not "write" vs "do nothing" — they are write vs **delete**.
+> With `selfManagedMetadata: false` (the default), every `mj app install` and `mj app upgrade`
+> *removes* this app's schema from your `excludeSchemas`, including an entry you added by hand. That
+> is deliberate — it is how a host broken by an older installer heals itself — but it means the app
+> author, not you, decides whether CodeGen owns that schema. If you need a schema excluded for your
+> own reasons (large staging tables you don't want registered as entities, an in-progress migration),
+> that decision will not survive the next upgrade. Track it in the app's manifest instead.
+
 > ⚠️ `selfManagedMetadata: true` disables entity **discovery** for your schema, not just file
 > generation. If you set it without seeding your own entity metadata, `mj app install` and
 > `mj codegen` both succeed and you get tables with **zero entities** and no error. That silent

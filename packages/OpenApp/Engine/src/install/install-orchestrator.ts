@@ -23,7 +23,7 @@ import { RunFkGraphTeardown, buildRootDoomedPredicate } from './entity-teardown.
 import { extractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
-import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema, AddIncludeSchema, RemoveIncludeSchema } from './config-manager.js';
 import { AngularConfigManager } from './angular-config-manager.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, TransactionGroupBase } from '@memberjunction/core';
@@ -407,7 +407,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
     // Step 12: Update server config
     if (!IsStepDone(INSTALL_STEP_ORDER, resumeCheckpoint, 'ConfigUpdated')) {
-      const configResult = HandleServerConfig(manifest, context);
+      const configResult = await HandleServerConfig(manifest, context);
       if (!configResult.Success) {
         await SetAppStatus(context.ContextUser, createdAppId!, 'Error');
         await RecordFailureHistory(context.ContextUser, createdAppId!, 'Install', manifest, 'Config', configResult.ErrorMessage ?? 'Config update failed', startTime);
@@ -811,7 +811,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     // Step 7: Update server config if changed
     if (!IsStepDone(UPGRADE_STEP_ORDER, resumeCheckpoint, 'ConfigUpdated')) {
-      const configResult = HandleServerConfig(manifest, context);
+      const configResult = await HandleServerConfig(manifest, context);
       if (!configResult.Success) {
         await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Config', configResult.ErrorMessage ?? 'Config update failed', startTime, previousVersion);
         await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
@@ -1762,7 +1762,47 @@ async function HandlePackageInstallation(
 /**
  * Adds server dynamic package entries and entity package mapping to mj.config.cjs for the app.
  */
-function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContext): InternalResult {
+/**
+ * Whether an OTHER installed app declares the same schema with `selfManagedMetadata: true`.
+ *
+ * A shared schema has one exclusion state but one manifest per app, so the default path's removal
+ * would otherwise strip a co-owner's exclusion purely because it installed second. A corrupt
+ * sibling manifest is skipped with a warning rather than failing this app's install (B24).
+ */
+async function AnotherInstalledAppSelfManages(
+  schemaName: string,
+  thisAppName: string,
+  context: OrchestratorContext,
+): Promise<boolean> {
+  const canonical = schemaName.trim().toLowerCase();
+  const others = (await ListInstalledApps(context.ContextUser))
+    .filter((a) => a.Name !== thisAppName && a.Status !== 'Removed');
+
+  for (const app of others) {
+    let other: MJAppManifest;
+    try {
+      other = JSON.parse(app.ManifestJSON) as MJAppManifest;
+    }
+    catch {
+      context.Callbacks?.OnWarn?.(
+        'Config',
+        `Ignoring app '${app.Name}' when reconciling excludeSchemas — its ManifestJSON could not be parsed.`,
+      );
+      continue;
+    }
+    const otherSchema = other.schema?.name?.trim().toLowerCase();
+    if (otherSchema === canonical && other.schema?.selfManagedMetadata) {
+      context.Callbacks?.OnWarn?.(
+        'Config',
+        `Keeping '${schemaName}' in the host's excludeSchemas: installed app '${app.Name}' declares it self-managed.`,
+      );
+      return true;
+    }
+  }
+  return false;
+}
+
+async function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContext): Promise<InternalResult> {
   context.Callbacks?.OnProgress?.('Config', 'Updating server config...');
 
   // Each config write targets EVERY mj.config.cjs a consumer may load (the server workspace's
@@ -1812,13 +1852,48 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
   // alone would leave it broken forever. Removing on every install/upgrade turns the old
   // "re-arms on every run" behavior into self-repair.
   if (manifest.schema?.name) {
-    const excludeResult = manifest.schema.selfManagedMetadata
-      ? AddExcludeSchema(context.RepoRoot, manifest.schema.name, context.ServerPackagePath)
-      : RemoveExcludeSchema(context.RepoRoot, manifest.schema.name, context.ServerPackagePath);
+    // Canonicalize for the target dialect. PostgreSQL folds unquoted DDL to lowercase, so the
+    // physical schema is `__mj_bizappscaliber` while the manifest says `__mj_BizAppsCaliber`, and
+    // CodeGen's discovery filter compares excludeSchemas against the physical name with a
+    // case-SENSITIVE SQL `<>` on PG — an uncanonicalized value silently never matches. The
+    // orchestrator already canonicalizes when persisting SchemaInfo; the config write must agree.
+    const schemaName = context.DatabaseProvider.Dialect.CanonicalSchemaName(manifest.schema.name);
+
+    // Schemas can be shared between apps. Un-excluding is a decision about the SCHEMA, not about
+    // this app, so it must not override a co-owner that declared the schema self-managed —
+    // otherwise install order silently decides whether the host's CodeGen co-owns their tables.
+    // Mirrors HandleAngularPrebundleExcludeRemoval, which already consults the other manifests.
+    const claimedSelfManaged = manifest.schema.selfManagedMetadata
+      || await AnotherInstalledAppSelfManages(schemaName, manifest.name, context);
+
+    const excludeResult = claimedSelfManaged
+      ? AddExcludeSchema(context.RepoRoot, schemaName, context.ServerPackagePath)
+      : RemoveExcludeSchema(context.RepoRoot, schemaName, context.ServerPackagePath);
     if (!excludeResult.Success) {
       return { Success: false, ErrorMessage: excludeResult.ErrorMessage };
     }
     warnSkipped(excludeResult);
+
+    // A host running an `includeSchemas` POSITIVE scope re-excludes anything the list omits, so
+    // clearing excludeSchemas alone still leaves the app at zero entities. Name the schema in the
+    // list too (and drop it again when the schema is self-managed). No-ops unless such a list is
+    // already live and non-empty — creating one would scope CodeGen to this schema alone.
+    const includeResult = claimedSelfManaged
+      ? RemoveIncludeSchema(context.RepoRoot, schemaName, context.ServerPackagePath)
+      : AddIncludeSchema(context.RepoRoot, schemaName, context.ServerPackagePath);
+    if (!includeResult.Success) {
+      return { Success: false, ErrorMessage: includeResult.ErrorMessage };
+    }
+    warnSkipped(includeResult);
+    // A removal that actually deleted something took away host config. Surface it — the host
+    // cannot otherwise tell that an exclusion they wrote by hand is gone (see ConfigOperationResult.Changed).
+    if (!claimedSelfManaged && excludeResult.Changed) {
+      context.Callbacks?.OnWarn?.(
+        'Config',
+        `Removed '${schemaName}' from the host's CodeGen excludeSchemas so this app's entities can be registered. ` +
+        `If that exclusion was intentional, the app must declare schema.selfManagedMetadata in its manifest.`,
+      );
+    }
   }
 
   return { Success: true };

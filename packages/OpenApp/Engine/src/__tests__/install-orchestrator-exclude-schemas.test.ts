@@ -53,6 +53,8 @@ vi.mock('../install/config-manager.js', () => ({
     RemoveEntityPackageMapping: vi.fn(),
     AddExcludeSchema: vi.fn(() => ({ Success: true })),
     RemoveExcludeSchema: vi.fn(() => ({ Success: true })),
+    AddIncludeSchema: vi.fn(() => ({ Success: true })),
+    RemoveIncludeSchema: vi.fn(() => ({ Success: true })),
 }));
 vi.mock('../install/history-recorder.js', () => ({
     RecordAppInstallation: vi.fn(),
@@ -231,6 +233,42 @@ describe('mj app install — excludeSchemas (issue #3457)', () => {
     });
 });
 
+describe('schema name written to the host config is dialect-canonical', () => {
+    // PostgreSQL folds unquoted DDL identifiers to lowercase, so `CREATE SCHEMA __mj_BizAppsCaliber`
+    // produces `__mj_bizappscaliber`. CodeGen's discovery filter compares the excludeSchemas value
+    // against that physical name with a case-SENSITIVE SQL `<>` on PG, so writing the raw manifest
+    // casing makes the exclusion silently never match. The orchestrator already canonicalizes for
+    // SchemaInfo; the config write must agree or the two disagree about the same schema.
+    const pgContext = {
+        ...(context as unknown as Record<string, unknown>),
+        DatabaseProvider: { Dialect: { CanonicalSchemaName: (s: string) => s.toLowerCase() } },
+    } as unknown as OrchestratorContext;
+
+    it('writes the lowercased schema on PostgreSQL (opt-in path)', async () => {
+        serve(manifestJSON(true));
+
+        await InstallApp({ Source: REPO_URL }, pgContext);
+
+        expect(AddExcludeSchema).toHaveBeenCalledWith('/tmp/test-repo', APP_SCHEMA.toLowerCase(), undefined);
+    });
+
+    it('removes the lowercased schema on PostgreSQL (default path)', async () => {
+        serve(manifestJSON());
+
+        await InstallApp({ Source: REPO_URL }, pgContext);
+
+        expect(RemoveExcludeSchema).toHaveBeenCalledWith('/tmp/test-repo', APP_SCHEMA.toLowerCase(), undefined);
+    });
+
+    it('preserves the manifest casing on SQL Server, which is case-insensitive', async () => {
+        serve(manifestJSON(true));
+
+        await InstallApp({ Source: REPO_URL }, context);
+
+        expect(AddExcludeSchema).toHaveBeenCalledWith('/tmp/test-repo', APP_SCHEMA, undefined);
+    });
+});
+
 describe('mj app upgrade — excludeSchemas (issue #3457)', () => {
     beforeEach(() => {
         vi.mocked(FindInstalledApp).mockResolvedValue(
@@ -258,5 +296,79 @@ describe('mj app upgrade — excludeSchemas (issue #3457)', () => {
 
         expect(AddExcludeSchema).toHaveBeenCalledWith('/tmp/test-repo', APP_SCHEMA, undefined);
         expect(RemoveExcludeSchema).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * Shared schemas are a first-class scenario in this engine (`CheckSchemaSharedByOtherApps` exists
+ * for exactly this), and the excludeSchemas decision is per-app. Without reconciliation, installing
+ * a default-path app onto a schema another installed app has declared self-managed silently strips
+ * that app's exclusion, and the host's CodeGen starts co-owning its tables. Reversing the install
+ * order reverses the outcome — the failure is order-dependent and silent, the worst combination.
+ *
+ * The sibling `HandleAngularPrebundleExcludeRemoval` already resolves this by consulting the other
+ * installed apps' manifests before removing anything; this mirrors that rule.
+ */
+describe('shared-schema reconciliation', () => {
+    /** Another installed app that owns the SAME schema and manages its own metadata. */
+    function selfManagedSibling() {
+        return {
+            Name: 'sibling-app',
+            Version: '1.0.0',
+            RepositoryURL: 'https://github.com/test/sibling-app',
+            Status: 'Active',
+            SchemaName: APP_SCHEMA,
+            ManifestJSON: JSON.stringify({
+                manifestVersion: 1,
+                name: 'sibling-app',
+                displayName: 'Sibling',
+                description: 'Sibling app sharing the schema.',
+                version: '1.0.0',
+                publisher: { name: 'Test' },
+                repository: 'https://github.com/test/sibling-app',
+                mjVersionRange: '>=5.0.0 <7.0.0',
+                schema: { name: APP_SCHEMA, selfManagedMetadata: true },
+                packages: {},
+                dependencies: {},
+            }),
+        };
+    }
+
+    it('does not un-exclude a schema another installed app declares self-managed', async () => {
+        vi.mocked(ListInstalledApps).mockResolvedValue(
+            [selfManagedSibling()] as unknown as Awaited<ReturnType<typeof ListInstalledApps>>,
+        );
+        serve(manifestJSON()); // this app takes the default path
+
+        const result = await InstallApp({ Source: REPO_URL }, context);
+
+        expect(result.Success).toBe(true);
+        expect(RemoveExcludeSchema).not.toHaveBeenCalled();
+    });
+
+    it('still un-excludes when the other app on that schema is NOT self-managed', async () => {
+        const sibling = selfManagedSibling();
+        sibling.ManifestJSON = sibling.ManifestJSON.replace('"selfManagedMetadata":true', '"selfManagedMetadata":false');
+        vi.mocked(ListInstalledApps).mockResolvedValue(
+            [sibling] as unknown as Awaited<ReturnType<typeof ListInstalledApps>>,
+        );
+        serve(manifestJSON());
+
+        await InstallApp({ Source: REPO_URL }, context);
+
+        expect(RemoveExcludeSchema).toHaveBeenCalledWith('/tmp/test-repo', APP_SCHEMA, undefined);
+    });
+
+    it('ignores a sibling whose ManifestJSON cannot be parsed rather than failing the install', async () => {
+        const corrupt = { ...selfManagedSibling(), ManifestJSON: '{not json' };
+        vi.mocked(ListInstalledApps).mockResolvedValue(
+            [corrupt] as unknown as Awaited<ReturnType<typeof ListInstalledApps>>,
+        );
+        serve(manifestJSON());
+
+        const result = await InstallApp({ Source: REPO_URL }, context);
+
+        expect(result.Success).toBe(true);
+        expect(RemoveExcludeSchema).toHaveBeenCalled();
     });
 });

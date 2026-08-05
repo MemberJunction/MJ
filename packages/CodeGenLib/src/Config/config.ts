@@ -1175,6 +1175,30 @@ export function getExternalEntitySchemas(config?: ConfigInfo): string[] {
 }
 
 /**
+ * Drops the entities whose schemas are owned by an EXTERNAL package (per the `entityPackageName`
+ * map) from a list this package is about to emit artifacts for. This is the ONLY thing keeping a
+ * host from emitting duplicate entity subclasses and duplicate GraphQL ObjectTypes for an installed
+ * Open App's schema — two packages emitting the same ObjectType makes graphql-js reject the unified
+ * schema at boot ("Schema must contain uniquely named types...") and the API crash-loops.
+ *
+ * Note this gates EMISSION only, never entity discovery — discovery is gated by `excludeSchemas`,
+ * which is a different and much blunter instrument (see issue #3457).
+ *
+ * @param entities the non-core entities under consideration
+ * @param config   optional config override; falls back to the module-level configInfo
+ */
+export function filterOutExternalSchemaEntities<T extends { SchemaName: string }>(
+  entities: T[],
+  config?: ConfigInfo,
+): T[] {
+  const externalSchemas = getExternalEntitySchemas(config).map((s) => s.toLowerCase());
+  if (externalSchemas.length === 0) {
+    return entities;
+  }
+  return entities.filter((e) => !externalSchemas.includes(e.SchemaName.toLowerCase()));
+}
+
+/**
  * Maximum length allowed for database index names
  */
 export const MAX_INDEX_NAME_LENGTH = 128;

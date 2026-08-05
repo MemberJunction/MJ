@@ -109,6 +109,12 @@ const dbSchemaSchema = z.object({
      * This is NOT a substitute for `entityPackage`. `entityPackage` suppresses duplicate entity
      * subclasses / GraphQL ObjectTypes and is written either way; `excludeSchemas` additionally
      * disables entity DISCOVERY, which is why it cannot be the default (issue #3457).
+     *
+     * The two values are write vs DELETE, not write vs no-op: on `false` the installer actively
+     * REMOVES this schema from the host's `excludeSchemas` on every install and upgrade — including
+     * an entry the host added by hand. That is what heals a host broken by an older installer, but
+     * it means this manifest field, not the host's config, is the authority on whether CodeGen owns
+     * the schema.
      */
     selfManagedMetadata: z.boolean().optional().default(false),
 });

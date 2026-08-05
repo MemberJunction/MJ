@@ -14,4 +14,12 @@ The write is now opt-in via a new `schema.selfManagedMetadata` manifest field (d
 
 The original justification for the write (app-owned `flyway_schema_history` being adopted as an entity) was already covered independently: CodeGen's default `excludeTables` has carried `{ schema: '%', table: 'flyway_schema_history' }` since well before it landed. Note that `excludeTables` **replaces** rather than merges on override, so a host that defines its own `excludeTables` should keep that entry.
 
+Three further conditions were needed before the default path is actually correct, each of which otherwise reproduced the original "app has tables and no entities" symptom by a different route:
+
+- **`includeSchemas` hosts.** That key is an opt-in POSITIVE scope which CodeGen resolves into `excludeSchemas` by excluding every schema it does not name — so clearing `excludeSchemas` alone still leaves the app's schema excluded. The installer now also names the schema in that list (and drops it again for a self-managed app). It never creates the key and never writes into an empty one: an absent or empty include list means "no scope in force", and populating it would scope CodeGen to that single schema and silently drop every other schema the host owns.
+- **PostgreSQL casing.** PG folds unquoted DDL identifiers to lowercase, so the physical schema is `__mj_bizappscaliber` while the manifest says `__mj_BizAppsCaliber`, and CodeGen's discovery filter compares with a case-sensitive SQL `<>` on PG. The config write now uses `Dialect.CanonicalSchemaName`, matching what the orchestrator already does when persisting `SchemaInfo`.
+- **Shared schemas.** Un-excluding is a decision about the schema, not about one app. When another installed app declares the same schema `selfManagedMetadata: true`, the exclusion is kept, so install order no longer silently decides whether the host's CodeGen co-owns that app's tables. Mirrors the existing shared-aware `HandleAngularPrebundleExcludeRemoval`.
+
+Because the default path *deletes* from the host's config rather than merely declining to write, the installer now emits a warning when it actually removed an entry, and the README and manifest JSDoc say so explicitly — the app author, not the host, is the authority on whether CodeGen owns the schema.
+
 Fixes #3457.

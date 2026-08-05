@@ -49,6 +49,8 @@ vi.mock('../install/config-manager.js', () => ({
     RemoveEntityPackageMapping: vi.fn(),
     AddExcludeSchema: vi.fn(() => ({ Success: true })),
     RemoveExcludeSchema: vi.fn(() => ({ Success: true })),
+    AddIncludeSchema: vi.fn(() => ({ Success: true })),
+    RemoveIncludeSchema: vi.fn(() => ({ Success: true })),
 }));
 vi.mock('../install/client-bootstrap-gen.js', () => ({ RegenerateClientBootstrap: vi.fn() }));
 vi.mock('../install/history-recorder.js', () => ({

@@ -18,7 +18,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ManageMetadataBase } from '../Database/manage-metadata';
-import { configInfo, getExternalEntitySchemas, DEFAULT_CODEGEN_CONFIG } from '../Config/config';
+import { configInfo, filterOutExternalSchemaEntities, DEFAULT_CODEGEN_CONFIG } from '../Config/config';
 import type { ConfigInfo } from '../Config/config';
 
 const APP_SCHEMA = '__mj_BizAppsCaliber';
@@ -30,13 +30,13 @@ class Probe extends ManageMetadataBase {
   }
 }
 
-/** Mirrors the `localNonCoreEntities` computation in `runCodeGen.runFileGenerationPhase`. */
-function localNonCoreEntities<T extends { SchemaName: string }>(entities: T[], config: ConfigInfo): T[] {
-  const externalSchemas = getExternalEntitySchemas(config).map((s) => s.toLowerCase());
-  return externalSchemas.length > 0
-    ? entities.filter((e) => !externalSchemas.includes(e.SchemaName.toLowerCase()))
-    : entities;
-}
+/**
+ * `filterOutExternalSchemaEntities` IS the production function — `runCodeGen.runFileGenerationPhase`
+ * calls it to build `localNonCoreEntities`. Calling it directly (rather than reimplementing the
+ * filter here) is what makes these assertions a real regression test: a change to the production
+ * filter fails this suite instead of silently drifting away from a copy.
+ */
+const localNonCoreEntities = filterOutExternalSchemaEntities;
 
 describe('excludeSchemas vs entityPackageName (issue #3457)', () => {
   let savedSchemas: string[];

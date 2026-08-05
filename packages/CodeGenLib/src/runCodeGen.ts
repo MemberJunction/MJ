@@ -12,7 +12,7 @@ import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { applyIncludeSchemaScope } from './Database/schema-scope';
-import { outputDir, commands, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
+import { outputDir, commands, configInfo, getSettingValue, dbPlatform, filterOutExternalSchemaEntities, initializeConfig, CommandInfo } from './Config/config';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
 import * as MJ from '@memberjunction/core';
@@ -514,10 +514,7 @@ export class RunCodeGenBase {
       // both emit an ObjectType for the same entity, graphql-js rejects the unified schema at boot with
       // "Schema must contain uniquely named types but contains multiple types named ..." and the API
       // crash-loops.
-      const externalSchemas = getExternalEntitySchemas().map(s => s.toLowerCase());
-      const localNonCoreEntities = externalSchemas.length > 0
-        ? nonCoreEntities.filter(e => !externalSchemas.includes(e.SchemaName.toLowerCase()))
-        : nonCoreEntities;
+      const localNonCoreEntities = filterOutExternalSchemaEntities(nonCoreEntities);
 
       const isVerbose = configInfo?.verboseOutput ?? false;
       if (!isVerbose) startSpinner('Generating TypeScript code...');
