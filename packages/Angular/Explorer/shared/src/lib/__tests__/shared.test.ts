@@ -1,14 +1,9 @@
-// @vitest-environment jsdom
 /**
  * Tests for shared package utilities:
  * - SimpleTextFormatPipe
  * - URLPipe
  * - TitleService
  * - EventCodes / HtmlListType constants
- *
- * Runs under jsdom (see the environment docblock above) because the TitleService suite
- * constructs Angular's `Title` with the ambient `document`. The package's default vitest
- * environment is `node`, where `document` is undefined.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -60,14 +55,15 @@ vi.mock('@memberjunction/core-entities', () => ({
   },
 }));
 
+const globalObjectStore: Record<string, unknown> = {};
 vi.mock('@memberjunction/global', () => ({
   MJGlobal: { Instance: { GetEventListener: vi.fn(() => ({ subscribe: vi.fn() })) } },
-  // SharedService's constructor self-registers in the global object store (BaseSingleton-style
-  // dedup). A fresh store per call keeps each test's instance independent.
-  GetGlobalObjectStore: vi.fn(() => ({})),
   MJEventType: { LoggedIn: 'LoggedIn', ComponentEvent: 'ComponentEvent' },
   ConvertMarkdownStringToHtmlList: vi.fn((type: string, text: string) => `<${type}>${text}</${type}>`),
   InvokeManualResize: vi.fn(),
+  // record-open-style.ts keeps its style state on the global object store
+  // (Vite chunk-duplication guard) — the mock needs a working store
+  GetGlobalObjectStore: vi.fn(() => globalObjectStore),
 }));
 
 vi.mock('@memberjunction/ai-engine-base', () => ({
@@ -93,18 +89,18 @@ vi.mock('@memberjunction/ng-notifications', () => ({
   },
 }));
 
-// shared.service.ts imports IsDescendantElement from here; the real package drags in
-// @angular/common, whose partially-compiled injectables (PlatformLocation) demand the JIT
-// compiler at import time and blow up the module load before any assertion runs.
+// ui-layers refactor: shared.service now imports IsDescendantElement from
+// ng-shared-generic — unmocked, the real Angular lib loads in this node-env
+// suite and dies on partial-ivy JIT (PlatformLocation)
 vi.mock('@memberjunction/ng-shared-generic', () => ({
   IsDescendantElement: vi.fn(() => false),
 }));
 
 vi.mock('@memberjunction/ng-base-types', () => ({
   BaseAngularComponent: class {},
-  // SharedService's constructor registers the Explorer's OpenEntityRecord implementation here
-  // (see guides/UI_LAYERING_GUIDE.md §3), so the mock has to expose Register.
-  RecordNavigationAdapter: { Register: vi.fn() },
+  // ui-layers refactor: shared.service registers itself as the record
+  // navigation adapter at construction
+  RecordNavigationAdapter: { Register: vi.fn(), Instance: { Register: vi.fn() } },
 }));
 
 vi.mock('@memberjunction/ng-base-application', () => ({
@@ -189,7 +185,9 @@ describe('TitleService', () => {
   beforeEach(async () => {
     const mod = await import('../title.service');
     const { Title } = await import('@angular/platform-browser');
-    service = new mod.TitleService(new Title(document));
+    // node environment — Angular's Title only reads/writes document.title
+    const fakeDocument = { title: '' } as Document;
+    service = new mod.TitleService(new Title(fakeDocument));
   });
 
   it('should have default base title of MemberJunction', () => {
@@ -272,9 +270,8 @@ describe('SharedService resource type mapping', () => {
     const svc = new SharedService(mjNotif as never, injector as never);
 
     expect(svc.mapResourceTypeNameToRouteSegment('Records')).toBe('record');
-    // Resource-type ROW names are unprefixed ('User Views') — the `MJ: ` prefix rule applies to
-    // ENTITY names, not to `MJ: Resource Types` row values. The caller passes `rt.Name` straight
-    // from those rows (see user-notifications.component.ts), and the baseline seeds N'User Views'.
+    // ResourceType record NAMES are unprefixed ('User Views' in the v5
+    // baseline) — the 'MJ: ' prefix belongs to entity names, not resource types
     expect(svc.mapResourceTypeNameToRouteSegment('User Views')).toBe('view');
     expect(svc.mapResourceTypeNameToRouteSegment('Dashboards')).toBe('dashboard');
     expect(svc.mapResourceTypeNameToRouteSegment('Reports')).toBe('report');

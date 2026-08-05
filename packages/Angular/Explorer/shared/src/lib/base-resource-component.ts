@@ -1,5 +1,5 @@
 import { ChangeDetectorRef, Directive, OnInit, OnDestroy, Input, inject } from "@angular/core";
-import { Subject } from "rxjs";
+import { Subject, Subscription } from "rxjs";
 import { filter, takeUntil } from "rxjs/operators";
 import { BaseEntity } from "@memberjunction/core";
 import { BaseNavigationComponent } from "./base-navigation-component";
@@ -15,6 +15,14 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     private _lastDeliveredParamsKey: string | null = null;
     protected destroy$ = new Subject<void>();
     protected navigationService = inject(NavigationService);
+    /**
+     * Optional: the tab container instantiates LIGHTWEIGHT throwaway instances
+     * of resource components (via runInInjectionContext with an environment
+     * injector) purely to call GetResourceDisplayName for background tab
+     * titles. ChangeDetectorRef only exists in node injectors, so a required
+     * inject() there throws NG0201 and silently kills every background title
+     * resolution — tabs keep raw "Entity - ID|guid" titles until opened.
+     */
     private changeDetectorRef = inject(ChangeDetectorRef, { optional: true });
 
     /**
@@ -23,6 +31,19 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * If not set, falls back to Data.Configuration.tabId.
      */
     @Input() ParentTabId: string | null = null;
+
+    /**
+     * Tab id this component was RE-HOMED to by a cache reattach. The
+     * component cache keys on driver+record+app — NOT tab id — so a cached
+     * component can be reattached to a different tab than it was born under.
+     * Without rebinding, its query-param subscription listens to the DEAD
+     * birth tab forever and every delivery to the live tab is lost (the
+     * "crumb lands on the dashboard root after promote/demote" bug).
+     */
+    private reboundTabId: string | null = null;
+
+    /** Handle for the reactive param subscription so RebindTabId can replace it */
+    private reactiveParamSub: Subscription | null = null;
 
     public get Data(): ResourceData {
         return this._data;
@@ -181,7 +202,7 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
                 }),
                 takeUntil(this.destroy$)
             )
-            .subscribe(event => this.deliverQueryParams(event.Params));
+            .subscribe(event => this.deliverQueryParams(event.Params, event.Force === true));
     }
 
     /**
@@ -197,7 +218,8 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         if (!tabId) {
             return; // No tab scope (e.g. embedded usage) — nothing to observe.
         }
-        this.navigationService.ObserveTabQueryParams(tabId)
+        this.reactiveParamSub?.unsubscribe();
+        this.reactiveParamSub = this.navigationService.ObserveTabQueryParams(tabId)
             .pipe(takeUntil(this.destroy$))
             .subscribe(params => this.deliverQueryParams(params));
     }
@@ -207,16 +229,23 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * identical deliveries (the two paths overlap on back/forward) and labels the first
      * meaningful delivery as a 'deeplink', subsequent ones as 'popstate'.
      */
-    private deliverQueryParams(params: Record<string, string>): void {
+    private deliverQueryParams(params: Record<string, string>, force = false): void {
         const key = this.queryParamsKey(params);
-        if (key === this._lastDeliveredParamsKey) {
+        // The duplicate guard assumes delivered params == applied state, but a
+        // component's state can DRIFT after a delivery (internal navigation
+        // whose write-back was suppressed or lost). Explicit restores (origin
+        // crumb) pass force to reach OnQueryParamsChanged regardless.
+        if (key === this._lastDeliveredParamsKey && !force) {
             return; // Already delivered these exact params.
         }
         const isInitial = this._lastDeliveredParamsKey === null;
         // Don't fire an initial no-op: a component entered without deep-link params has
         // nothing to apply. Leave _lastDeliveredParamsKey null so the first real params
         // (whenever they arrive) are still treated as the deep-link entry.
-        if (isInitial && Object.keys(params).length === 0) {
+        // FORCED empties bypass this too: an explicit reset (SwitchToAppHome
+        // returning a drifted dashboard to its landing) must reach
+        // OnQueryParamsChanged even when nothing was ever delivered.
+        if (isInitial && Object.keys(params).length === 0 && !force) {
             return;
         }
         this._lastDeliveredParamsKey = key;
@@ -249,7 +278,23 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * wrappers for child dashboards), then falls back to Data.Configuration.tabId.
      */
     public getTabId(): string {
-        return this.ParentTabId || this.Data?.Configuration?.['tabId'] as string || '';
+        return this.ParentTabId || this.reboundTabId || this.Data?.Configuration?.['tabId'] as string || '';
+    }
+
+    /**
+     * Re-home this component to a different tab (cache reattach across tab
+     * ids). Replaces the reactive param subscription with one bound to the
+     * new tab and resets the duplicate-delivery key so the new tab's
+     * CURRENT params apply as a fresh mount would — the replay-on-subscribe
+     * delivers them immediately.
+     */
+    public RebindTabId(tabId: string): void {
+        if (this.getTabId() === tabId) {
+            return;
+        }
+        this.reboundTabId = tabId;
+        this._lastDeliveredParamsKey = null;
+        this.setupInitialParamDelivery();
     }
 
     private getQueryParamUpdateGuard(): TabQueryParamUpdateGuard {
@@ -304,6 +349,7 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * any LATER async state change that must reach the DOM outside those signals.
      */
     protected RefreshView(): void {
+        // Null on lightweight non-view instances (background title resolution)
         this.changeDetectorRef?.markForCheck();
     }
 

@@ -1,6 +1,6 @@
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseApplication, DynamicNavItem, NavItem, WorkspaceStateManager, WorkspaceTab } from '@memberjunction/ng-base-application';
-import { SharedService } from '@memberjunction/ng-shared';
+import { SharedService, IsRecordTabsStyle } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey, FieldValueCollection } from '@memberjunction/core';
 
 /** Storage key and category for persisting the recent orphan stack */
@@ -96,8 +96,17 @@ export class HomeApplication extends BaseApplication {
    * Returns navigation items including dynamic items for recently visited orphan resources.
    * Static items come from DefaultNavItems in metadata.
    * Dynamic items are generated from the recent orphan stack (up to 3).
+   *
+   * Records style (Shell.RecordOpen.Style = 'records', the default): dynamic
+   * items are SKIPPED — the shell's Records pill + strip represent open
+   * records globally, and Home's own stack would double-represent records
+   * opened from Home. Classic style keeps this behavior as-is.
    */
   override async GetNavItems(): Promise<NavItem[]> {
+    if (IsRecordTabsStyle()) {
+      return super.GetNavItems();
+    }
+
     // Ensure persisted stack is loaded before building nav items.
     // On first call after page load, this awaits the IndexedDB read;
     // on subsequent calls the promise is already resolved (no-op await).

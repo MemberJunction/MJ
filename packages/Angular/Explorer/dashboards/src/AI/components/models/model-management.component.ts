@@ -590,6 +590,10 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   public openModelFromPanel(): void {
     if (this.selectedModel) {
       this.openModel(this.selectedModel.ID);
+      // The user's intent has moved to the full record — leaving the panel
+      // open would paint it over the records view and greet them with stale
+      // chrome when they return to this page.
+      this.closeDetailPanel();
     }
   }
 
