@@ -1,7 +1,9 @@
 # Pluggable, Metadata-Driven Authentication Providers
 
-**Status:** Proposed — migration + mockup land in this PR; engine/resolver/client implementation lands on the same branch after migration + CodeGen are run locally.
-**Branch:** `claude/workos-integration-explore-fn0nw8` (continues from the WorkOS PR)
+**Status:** IMPLEMENTED (slices 1 + 2). Migration re-stamped for the 6.x era, CodeGen run, and the
+engine / layered resolver / public catalog endpoint / reusable login picker all built and tested.
+Per-tenant + per-channel branding (§6.2, third bullet) is deliberately deferred to a final phase.
+**Branch:** `claude/pluggable-auth-providers`
 **Author:** Claude (for amith@bluecypress.io)
 **Date:** 2026-06-30
 
@@ -41,7 +43,7 @@ Secrets follow the File Storage model: a nullable `CredentialID` FK → `MJ: Cre
 
 ## 4. The entity: `__mj.AuthenticationProvider`
 
-Created by the migration in this PR (`migrations/v5/V202606300900__v5.44.x__Pluggable_Auth_Providers.sql`). Table `__mj.AuthenticationProvider` → CodeGen entity name **`MJ: Authentication Providers`** → generated class `MJAuthenticationProviderEntity`.
+Created by the migration in this PR (`migrations/v6/V202608051157__v6.1.x__Pluggable_Auth_Providers.sql`). Table `__mj.AuthenticationProvider` → CodeGen entity name **`MJ: Authentication Providers`** → generated class `MJAuthenticationProviderEntity`.
 
 Columns (see migration for full descriptions):
 
@@ -152,7 +154,7 @@ The picker must be reusable by **any** MJ-based application, not baked into Expl
 
 | Piece | Location |
 |---|---|
-| Migration | `migrations/v5/V202606300900__v5.44.x__Pluggable_Auth_Providers.sql` (this PR) |
+| Migration | `migrations/v6/V202608051157__v6.1.x__Pluggable_Auth_Providers.sql` (this PR) |
 | Generated entity `MJAuthenticationProviderEntity` | `@memberjunction/core-entities` (CodeGen, local) |
 | `AuthProviderEngine` (+ base, if a browser-safe metadata read is ever needed) | server-side auth package / `MJServer` auth dir |
 | `initializeProviders.ts` layered resolver | `@memberjunction/server` |
@@ -163,30 +165,76 @@ The picker must be reusable by **any** MJ-based application, not baked into Expl
 | Admin settings page | `@memberjunction/ng-explorer-settings` (+ Admin nav) |
 | Login concept prototypes (visual reference only) | `plans/pluggable-auth-providers/login-redesigns/` (A/B/C + `base.css`) and `login-mockup.html` (this PR) |
 
-## 8. CodeGen handoff (why this is one PR but two pushes)
+## 8. What shipped, and what deliberately did not
 
-I cannot run migrations or CodeGen in the remote environment, and MJ's rules forbid writing code against not-yet-generated entity types. So:
+**Shipped (slices 1 + 2):**
 
-1. **This push:** plan + migration + HTML mockup (no code depends on the generated entity → tree stays buildable).
-2. **You (local):** run the migration, then `mj codegen` → generates `MJAuthenticationProviderEntity`, the view, the sprocs, and registers the entity. Commit the generated output.
-3. **Next push (same branch/PR):** `AuthProviderEngine`, the layered `initializeProviders`, the public endpoint, the login picker, and the Admin page — all of which compile against the now-generated entity. Plus unit tests.
+| Piece | Where |
+|---|---|
+| `__mj.AuthenticationProvider` + CodeGen output | `migrations/v6/V202608051157__v6.1.x__Pluggable_Auth_Providers.sql` |
+| `PublicAuthProviderInfo` / `PublicAuthProviderCatalog` contract | `@memberjunction/core` (`authTypes.ts`) |
+| `AuthProviderEngine` (`@RegisterForStartup`, catalog → `AuthProviderFactory`) | `@memberjunction/server` (`auth/AuthProviderEngine.ts`) |
+| Layered `initializeProviders` (config baseline + metadata layer) | `@memberjunction/server` (`auth/initializeProviders.ts`) |
+| Public `GET /auth/providers` (rate-limited, pre-auth-middleware) | `@memberjunction/server` (`auth/AuthProviderCatalogRouter.ts`) |
+| Hard-wired built-in imports removed from the factory | `@memberjunction/auth-providers` |
+| `AuthProviderCatalog` (pre-auth fetch, resolution, selection) | `@memberjunction/ng-auth-services` |
+| Reusable `<mj-login-picker>` | `@memberjunction/ng-auth-services` |
+| Catalog → driver environment projection | `@memberjunction/ng-auth-services` (`catalog-environment.ts`) |
+| Explorer login surface embedding the picker | `@memberjunction/ng-explorer-app` |
+| Pre-bootstrap catalog preload | `packages/MJExplorer/src/main.ts` |
 
-All of it ships in **one PR**.
+**Deferred by decision:**
 
-## 9. Testing plan (phase 3)
+- **Per-tenant / per-channel branding and the white-label flag** (§6.2, third bullet; Dray's and
+  Matt's feedback on the PR). This is a separate subsystem — pre-auth tenant resolution by host,
+  a branding store, and BCSaaS theme switching — and MJ core has no Tenant entity today. The
+  picker takes branding as inputs and defaults sensibly, so this lands cleanly as a final phase.
+- **Admin settings page.** `MJ: Authentication Providers` is a normal entity, so CodeGen already
+  produced a working generated form; a curated Admin sub-page with ordering and toggles is a
+  follow-up, not a blocker.
+- **Auto-seed from config on first boot** (§11 Q1). Not implemented: the layered resolver already
+  keeps config-declared deployments working indefinitely, so seeding would add a write path — and
+  a migration-shaped failure mode — for no behaviour anyone needs yet.
+- **Per-Application provider scoping** (§11 Q2). Deferred as recommended.
 
-- **Engine:** rows → registered providers; Active filter respected; `CredentialID` resolution path; config fallback when table empty; auto-seed idempotency.
-- **Endpoint:** returns only public fields; excludes `Disabled`/non-`ClientVisible`; never leaks `CredentialID`/secrets; works unauthenticated.
-- **Client:** 0/1/2+ provider branching (fallback / direct / picker); picker selection instantiates the right `MJAuthBase`; magic-link coexistence preserved.
+## 9. Decisions taken during implementation
 
-## 10. Back-compat & rollout
+1. **Two configuration JSON columns, not one.** `AdditionalConfiguration` is server-only and never
+   published; `ClientConfiguration` is published verbatim. A single blob would have forced the
+   publish path to guess which keys were safe. The public projection is an allow-list, and
+   non-primitive `ClientConfiguration` values are dropped rather than serialized.
+2. **The endpoint is REST, not a GraphQL query** (§11 Q3, as recommended) — a truly pre-auth fetch
+   with no Apollo bootstrap.
+3. **Metadata layers on top of config; it does not replace it.** `initializeAuthProviders()` still
+   runs on every boot with no database. A catalog failure logs loudly and leaves config-declared
+   providers standing, so a metadata problem can never become a lockout.
+4. **Provider switching reloads the page.** Each browser SDK contributes Angular providers at
+   module-definition time, so a live injector cannot be re-composed. Choosing the already-active
+   provider logs in immediately; choosing another persists the choice, reloads, and resumes the
+   login automatically — one user action either way.
+5. **`Type` column dropped** from the original design. `DriverClass` is the single resolution key;
+   a second, informational type field invited drift about which one mattered.
+6. **`Status` values are `Active`/`Inactive`**, matching every other MJ lifecycle column, rather
+   than the originally-proposed `Active`/`Disabled`.
 
-- `mj.config.cjs authProviders[]` remains fully supported as a fallback (and optional auto-seed source). No deployment must change anything to keep working.
-- The migration is additive (new table only); no existing schema touched → consistent with the publish/no-breaking-changes policy.
-- WorkOS (just added) becomes the first natural catalog citizen.
+## 10. Testing
 
-## 11. Open questions
+Implemented and passing:
 
-1. **Auto-seed from config** on first boot — do it automatically, or require an explicit admin action / CLI command? (Recommendation: automatic + logged, opt-out via a config flag.)
-2. **Per-Application provider scoping** (different apps → different IdPs) — defer to a follow-up, or model now with an optional join? (Recommendation: defer.)
-3. **Endpoint shape** — GraphQL auth-exempt query vs. tiny REST route. (Recommendation: REST `/auth/providers` — simplest for a truly pre-auth fetch, no Apollo bootstrap needed.)
+- **Engine (12 tests, `@memberjunction/server`)** — public projection never leaks
+  `AdditionalConfiguration` / `CredentialID` / nested blobs; non-client-visible rows excluded;
+  registration isolates a failing row; columns beat `AdditionalConfiguration`; credential
+  resolution only on rows that link one; scopes split to an array.
+- **Catalog (16 tests, `@memberjunction/ng-auth-services`)** — fetch degrades to empty on 404,
+  network failure, and malformed bodies; resolution precedence; a de-published selection is
+  discarded rather than stranding the user; auto-login fires exactly once; storage failure is
+  survivable.
+- **Built-in registration (9 tests, `@memberjunction/auth-providers`)** — every built-in driver
+  still registers through the package entry point after the hard-wired imports were removed.
+
+## 11. Back-compat & rollout
+
+- `mj.config.cjs authProviders[]` remains fully supported. No deployment must change anything.
+- With 0 or 1 published providers the login screen is byte-for-byte what it was.
+- The migration is additive (new table only) → consistent with the publish/no-breaking-changes policy.
+- WorkOS is the first natural catalog citizen.
