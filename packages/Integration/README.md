@@ -15,7 +15,8 @@ A pluggable, metadata-driven integration framework for syncing data between exte
 ```
 packages/Integration/
 ├── engine/          @memberjunction/integration-engine     — Core orchestration
-├── connectors/      @memberjunction/integration-connectors — Connector implementations
+├── connectors/      @memberjunction/integration-connectors — External Data Source connector base classes
+│                                                           (vendor connectors ship from MemberJunction/Integrations)
 ├── actions/         @memberjunction/integration-actions    — MJ Actions for scheduling
 ├── ui-types/        @memberjunction/integration-ui-types   — Angular view model types
 └── e2e/                                                    — End-to-end test scripts
@@ -84,5 +85,5 @@ See **[INTEGRATION_ACTIONS.md](INTEGRATION_ACTIONS.md)** for the complete archit
 ## Packages
 
 - **[engine/README.md](engine/README.md)** — Engine API and orchestration details
-- **[connectors/README.md](connectors/README.md)** — Built-in connectors and how to create new ones
+- **[connectors/README.md](connectors/README.md)** — The External Data Source connector base classes, and where each vendor connector moved to
 - **[actions/README.md](actions/README.md)** — MJ Actions integration and scheduling

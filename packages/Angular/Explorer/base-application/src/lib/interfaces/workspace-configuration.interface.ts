@@ -8,6 +8,14 @@ export interface WorkspaceConfiguration {
   /** Golden Layout state (may be undefined if cleared due to corruption) */
   layout?: LayoutConfig;
 
+  /**
+   * Golden Layout state for the RECORDS region — the separate layout hosting
+   * record tabs under the records-style record-open model. Independent of
+   * `layout` (the main workspace layout) so records never mix into the main
+   * tab bar and vice versa.
+   */
+  recordsLayout?: LayoutConfig;
+
   /** ID of currently active tab */
   activeTabId: string | null;
 

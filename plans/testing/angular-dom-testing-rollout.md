@@ -175,8 +175,14 @@ covered **except three documented deferrals**:
 | `mj-livekit-room` (1)          | media (§3)                                                                     |
 | `filter-builder` (3)           | genuine component-side `NG0100`/CD instability — masking is disallowed (§3/§7) |
 
-`conversations` is **partially** covered (5 of 69 — the leaf slot/shared components); the rest is a focused
-follow-up pass (too large for the sweep; many are realtime/streaming components that need careful deferral).
+`conversations` is **partially** covered. Phase 4 added a follow-up pass — the active-tasks/agent-process
+panels, the active-agent indicator, and the presentational **realtime** widgets (agent banner, channel
+strip, composer strip/dock, delegation card, session-timeline card, channel-onboarding) — bringing it to
+27 of 70. The remaining gap is chiefly the `collection`/`conversation`/`message` groups plus the true
+media/streaming realtime components (whiteboard, media, remote-browser, evidence-playback) that are §3
+live-test territory. (Note: these new specs live in a package whose `tsconfig.spec.json` **enumerates**
+included files — each new component + spec pair must be added there or it AOT-compiles without decorator
+metadata and fails DI with NG0202. That gotcha is now called out in the guide.)
 
 **Toolkit grew to meet the rollout** (all in `@memberjunction/ng-test-utils`): `renderComponentFixture`
 (+ `imports`/`declarations`/`autoDetect` for module-declared components), `renderTemplate` (compound /
@@ -207,50 +213,93 @@ is documented in-spec** with its reason — no silent gaps, no faked green.
 
 The "keep tests honest" half of the tooling gameplan lands here, alongside the coverage gate:
 
-- **Spec type-check gate (`test:types`) — DEFERRED HERE FROM PHASE 3.** DOM specs are currently
-  type-checked by *nothing* in the normal loop: the build `tsconfig.json` excludes `*.test.ts` (correct —
-  per ANGULAR_TESTING_GUIDE §3c, tests must not ship in `dist`), and the vitest/esbuild path is
-  transpile-only (it strips types and even silently erases broken `import type` statements). During Phase 3
-  this let a batch of real spec type errors — wrong `import type` paths, `Subject`-typed component outputs
-  used where `EventEmitter` was expected, un-cast DOM elements — pass `vitest` green while failing the CI
-  `ngc` build. They were fixed reactively; the gate makes it impossible to reintroduce.
-  **Plan:** add `"test:types": "tsc --noEmit -p tsconfig.spec.json"` to each DOM package and run it from the
-  package's `test` script (`npm run test:types && vitest run`) so the existing `turbo run test` in CI
-  enforces it with **zero CI-config change**. **Prerequisite:** one pre-existing latent error must be fixed
-  first — `packages/Angular/Explorer/dashboards/src/__tests__/mcp-dashboard-tools-index.test.ts` calls
-  `new MCPDashboardComponent(cdr, svc)` with 2 args but the constructor now takes 3 (came in from `next`,
-  latent because it's excluded from the build and transpiled by vitest). As of end-of-Phase-3, all
-  `*.dom.test.ts` across the 8 Explorer DOM packages ARE `tsc --noEmit -p tsconfig.spec.json`-clean, so
-  wiring the gate is now low-friction.
-- Add a coverage threshold for Angular packages in CI (start lenient, ratchet up).
-- **Guardrails** (tooling-roadmap #4): lint/CI rules for spec naming + anti-patterns.
-- **Mutation testing** (tooling-roadmap #5): verify the tests actually catch bugs, once there's a real body of them.
-- Document the live-media e2e suite location/runner for the excluded WebRTC paths.
+- **Spec type-check gate (`test:types`) ✅ SHIPPED.** DOM specs were previously type-checked by *nothing*
+  in the normal loop: the build `tsconfig.json` excludes `*.test.ts` (correct — per ANGULAR_TESTING_GUIDE
+  §3c, tests must not ship in `dist`), and the vitest/esbuild path is transpile-only (it strips types and
+  even silently erases broken `import type` statements). During Phase 3 this let a batch of real spec type
+  errors — wrong `import type` paths, `Subject`-typed component outputs used where `EventEmitter` was
+  expected, un-cast DOM elements — pass `vitest` green while failing the CI `ngc` build.
+  **As built:** each DOM-testing package has `"test:types": "tsc --noEmit -p tsconfig.spec.json"`, run as a
+  dedicated turbo task (`test:types` in `turbo.json`, `dependsOn: ["build"]`, cached) — a separate task
+  rather than a `test`-script prefix so local `npm test` stays fast. CI (`test.yml`) runs
+  `npx turbo run test:types` on BOTH the affected path (filtered) and the full-suite backstop, before the
+  vitest run (fails fast; builds already cached). The prerequisite latent error
+  (`mcp-dashboard-tools-index.test.ts` calling the `MCPDashboardComponent` constructor with 2 of its 3
+  args) was fixed as part of the wiring. **When a new package adopts DOM testing, add the `test:types`
+  script alongside its `tsconfig.spec.json` — the turbo task and CI wiring pick it up automatically.**
+- **DOM-spec placement guard ✅ SHIPPED** (`scripts/check-dom-spec-placement.mjs`, run as a fast pre-build
+  CI step): fails when any `*.dom.test.ts` sits inside a `__tests__/` directory — in a dual-preset package
+  such a file matches NEITHER vitest project and silently never runs (`passWithNoTests` hides the silence);
+  in a single-preset package it runs today but drops out the moment the package converts to dual. The guard
+  found one real offender on arrival (`ng-markdown`'s service spec), which was relocated next to its source
+  per §3d.
+- **Coverage threshold gates ✅ SHIPPED** (two, both fast pre-build CI steps):
+  - **Explorer**: `scripts/classify-explorer-components.mjs --min 85` — % of in-scope Explorer components
+    that are covered (currently 100; lenient bar).
+  - **Generic**: `scripts/dom-test-report.mjs packages/Angular/Generic --max-none=185` — an ABSOLUTE
+    ratchet on components with no spec *and* no deferral annotation (a % bar is too coarse on a 350+
+    denominator to catch a single new untested component; an absolute count catches exactly one). Ratchet
+    the number DOWN as specs land. Both gates make a testable component shipped without a DOM spec fail
+    the PR before the gap goes silent.
+  - **Flagship gap closed**: `MjFormFieldComponent` (the visibility report's #1 by leverage — 4,144
+    usages, 0 tests) now has 21 DOM specs across its read/edit field-type matrix; the FK-dropdown machinery
+    (reads `LinkedFieldOptionsStore`/`BaseEngineRegistry` singletons) is documented as the deferred half.
+- **Guardrails (tooling-roadmap #4) ✅ SHIPPED (first tranche)**: `scripts/check-spec-antipatterns.mjs`
+  lints every `*.dom.test.ts` in CI for the test-theater patterns Phase-3 review kept catching by hand —
+  vacuous assertions (`expect(true)`, `|| true`), skipped specs, blanket schemas
+  (`NO_ERRORS_SCHEMA`/`CUSTOM_ELEMENTS_SCHEMA`), and `any`/`as never` casts. Enabling it required (and
+  drove) cleaning the pre-existing offenders across `Generic/**` (7 blanket-schema specs → explicit child
+  stubs; 4 `as never` sites → `satisfies Pick<…>` + seam casts).
+- **Mutation testing (tooling-roadmap #5) ✅ PILOT SHIPPED**: Stryker (`@stryker-mutator/core` +
+  `vitest-runner`, root devDeps) piloted on `entity-permissions`
+  ([stryker.config.json](../../packages/Angular/Explorer/entity-permissions/stryker.config.json), run
+  manually with `npx stryker run` from the package — deliberately NOT a CI gate). Monorepo gotcha solved:
+  Stryker's copied sandbox breaks the `../../../../vitest.(dom.)shared` imports, so the config uses
+  `inPlace: true` (mutates the real tree, restores on exit — run only on a committed tree).
+  **Pilot findings (honest):** 2m41s for a 389-line package; score 17.3% total / **48.1% on covered
+  code** (50 killed, 54 survived, 185 no-coverage). Reading: the DOM specs assert *rendering* well but
+  don't exercise mutation-level *behavior* — e.g. `if (!p.Dirty)` → `if (true)` survives because no
+  spec drives the save/dirty path. That's consistent with the unit-DOM scope (save paths need a backend
+  and live in integration/e2e), but the covered-code score is the number to watch and ratchet.
+  **Next**: run the pilot on 2-3 more packages to calibrate a realistic covered-score bar before any
+  CI wiring; too slow for CI on big packages (each mutant re-runs vitest under Angular AOT).
+- Document the live-media e2e suite location/runner for the excluded WebRTC paths. **Status
+  (documented, suite not yet built):** no live-media e2e suite exists today. The browser e2e home is
+  [`e2e/`](../../e2e/README.md) (Playwright against a running MJExplorer, signed-in persistent
+  profile, invoked explicitly — not part of `npm test`), and that is where live-media specs belong
+  when written, using Chromium's fake-media flags (`--use-fake-device-for-media-stream` /
+  `--use-fake-ui-for-media-stream`) or a LiveKit dev room (`docker/livekit/`). Until then, the
+  §3 exclusions (camera/mic capture, `track.attach()`/`detach()`, audio metering,
+  `requestAnimationFrame` loops) are validated manually; each media-split DOM spec documents its
+  excluded half per §3/§7.
 
-**Batched from the Phase-3 code review (recorded so they don't evaporate):**
+**Batched from the Phase-3 code review:**
 
-- **Prefer DOM events over instance-method calls.** A handful of specs invoke the handler directly
-  (`cancel()`, `closeDialog()`, toggle methods) instead of clicking the element — those pass even if the
-  template `(click)` binding is deleted, which is the exact regression a DOM test should catch. Convert to
-  `query(...).click()`.
-- **Cast hygiene.** ~10 `as never` and several `as unknown as X` casts erase compile-time drift detection
-  (and skirt the no-`any`/`unknown` rule). Replace with `satisfies Pick<…>` or typed partial fixtures. The
-  `test:types` gate above is what would police this.
-- **Magic-number selectors in SVG renderer specs.** `flame-cascade`/`constellation`/`subway-lines`/
-  `flowchart` key off styling constants (`stroke-width === '1.4'`); a design tweak breaks the "count" tests
-  confusingly. Switch to a `data-*` attribute hook.
-- **Prototype-patch teardown.** The flow specs patch `SVGElement.prototype.getBBox`/`getTotalLength` and the
-  omnibar spec registers a ClassFactory class with no `afterAll` restore — safe today only because
-  `fileParallelism: false` + per-file isolation contain them. Add teardown so they don't leak if isolation
-  is ever relaxed for speed.
-- **Consolidate duplicated stubs.** ~50 lines of copy-pasted CVA stubs (`StubNumericInput`/`StubDropdown`)
-  and `StubLoading`/`StubEmptyState` across 7+ specs belong in `@memberjunction/ng-test-utils`.
-- **Classifier heuristic refinements.** The `\w*Engine\w*\.Instance` singleton regex matches *any* usage
-  (incl. click-handler-only, e.g. `EntityLinkPillComponent`) and `mj-page-header` substring-matches
-  `mj-page-header-interior` (bucketing tab widgets like `ClassifyTagsTabComponent` as page-level). These are
-  scoping-heuristic imperfections, not blocking — refine or hand-audit the borderline entries.
-- **Lint/CI guard for a `*.dom.test.ts` placed inside `__tests__/`** — the dual-project split silently
-  excludes it from *both* projects, and `passWithNoTests: true` hides the silence.
+- ✅ **Prefer DOM events over instance-method calls — DONE.** The flagged specs (MCP dialogs,
+  edit-dashboard, general-settings toggles) now click the real element / emit the stub's `@Output`
+  instead of invoking the handler, so a deleted template `(click)` binding fails the test. Several
+  gained new binding-level tests (`mj-dialog (Close)`, footer Save/Cancel) in the process.
+- ✅ **Cast hygiene — DONE.** All `as never` casts across `Explorer/**` and `Generic/**` DOM specs are
+  gone: doubles are now `satisfies Pick<…>`-checked (or plainly typed) with at most one
+  `as unknown as T` seam per double. The anti-pattern lint above bans reintroduction.
+- ✅ **Prototype-patch teardown — DONE.** The flow specs save/restore `SVGElement.prototype.getBBox`/
+  `getTotalLength` via captured descriptors in `beforeAll`/`afterAll` (deleting when jsdom genuinely
+  lacked the member). The omnibar spec's ClassFactory registrations can't be torn down (no public
+  Unregister API) — documented in-place with the exact conditions that would make them leak.
+- ✅ **Classifier heuristic audit — DONE (no change warranted).** Measured: zero components are bucketed
+  page-level by the `mj-page-header-interior` substring alone (every user also carries real chrome or a
+  page base class), and a spec sibling always beats the `*Engine.Instance` heuristic (covered is checked
+  first — see EntityLinkPill). Findings recorded in the classifier's comments; the deferred:singleton
+  list remains the Phase-3.5 hand-audit target.
+- ✅ **Lint/CI guard for `__tests__/`-placed `*.dom.test.ts` — DONE** (`check-dom-spec-placement.mjs`,
+  see above).
+- **Magic-number selectors in SVG renderer specs** (still open). `flame-cascade`/`constellation`/
+  `subway-lines`/`flowchart` key off styling constants (`stroke-width === '1.4'`); a design tweak breaks
+  the "count" tests confusingly. Switch to a `data-*` attribute hook (requires touching the component
+  templates — schedule with a component-owner review).
+- **Consolidate duplicated stubs** (still open). ~50 lines of copy-pasted CVA stubs
+  (`StubNumericInput`/`StubDropdown`) and `StubLoading`/`StubEmptyState` across 7+ specs belong in
+  `@memberjunction/ng-test-utils`.
 
 ### LiveKit pilot — shipped + remaining
 

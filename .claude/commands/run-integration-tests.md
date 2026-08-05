@@ -48,6 +48,10 @@ The single entry path is `mj test` (there are no per-bundle dispatcher scripts �
 | `RUN_AGENT_TESTS=1` | Enables the live-model tier (real LLM calls, token cost). |
 | `PS_INTEGRATION=1` | Enables the Predictive Studio rig. |
 
+### Platform matrix (PostgreSQL)
+
+The suite is authored platform-portable and is **intended to run against BOTH SQL Server and PostgreSQL**. To run the PG cell, point `mj.config.cjs` / the `PG_*` env vars at a migrated PostgreSQL DB (root CLAUDE.md → "CodeGen Database Connections" + "Switching Database Platforms" — and clear browser cache if reusing an endpoint) and run the same command. On the first PG run, triage any failure as a portability gap in a check (SQL-Server-ism to rewrite) vs a PG-divergence behavior that belongs in a dedicated Domain-8 check — never silently edit a check to pass on one platform and break the other. See `docs/build-engineering-runbook.md` → "PostgreSQL".
+
 ## Reporting
 
 1. Report the headline: `SUMMARY N/M passed (X%)` and any `✗ FAILED` bundle names with the failing check's oracle message.

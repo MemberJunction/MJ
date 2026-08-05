@@ -3,7 +3,6 @@ import { Arg, Ctx, Field, Int, Mutation, ObjectType, Query, Resolver } from 'typ
 import { AppContext } from '../types.js';
 import { MJConversationDetailEntity, MJReportEntity } from '@memberjunction/core-entities';
 import { DataContext } from '@memberjunction/data-context';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { z } from 'zod';
 import mssql from 'mssql';
 import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
@@ -80,7 +79,15 @@ export class ReportResolverExtended extends ResolverBase {
     try {
       const md = GetReadWriteProvider(providers);
 
-      const u = UserCache.Users.find((u) => u.Email?.trim().toLowerCase() === userPayload?.email?.trim().toLowerCase());
+      // Resolve via the stamped payload user (GetUserFromPayload), NOT a fresh UserCache
+      // lookup by email. UserCache.Users returns the shared, unstamped instance — re-fetching
+      // by email here would silently drop any per-request API-key row-filter binding
+      // (APIKeyRowFilters / APIKeyActingContext) already stamped onto userPayload.userRecord,
+      // so a filtered key's report-creation work would run unfiltered. GetUserFromPayload
+      // prefers userPayload.userRecord and only falls back to a UserCache email lookup when
+      // no payload user is present (e.g. non-request-scoped callers), matching every other
+      // resolver's contextUser resolution.
+      const u = this.GetUserFromPayload(userPayload);
       if (!u) throw new Error('Unable to find user');
 
       const cde = md.Entities.find((e) => e.Name === 'MJ: Conversation Details');
@@ -98,9 +105,10 @@ export class ReportResolverExtended extends ResolverBase {
                    ON
                       cd.ConversationID = c.ID
                    WHERE
-                      cd.ID='${ConversationDetailID}'`;
+                      cd.ID=@ConversationDetailID`;
 
       const request = new mssql.Request(dataSource);
+      request.input('ConversationDetailID', mssql.UniqueIdentifier, ConversationDetailID);
       const result = await request.query(sql);
       if (!result || !result.recordset || result.recordset.length === 0) throw new Error('Unable to retrieve converation details');
       const skipData: { title?: string; reportTitle?: string; userExplanation?: string; messages?: unknown[] } = JSON.parse(result.recordset[0].Message);

@@ -1,43 +1,11 @@
-export { RelationalDBConnector, type ConnectionConfig } from './RelationalDBConnector.js';
-
 // ── EDS-consuming ingestion connector ABSTRACTIONS (the "heart" — share the External Data Sources
-//    connection layer). The thin per-engine leaves (SQLServerConnector, PostgresConnector, …) ship as
-//    per-engine Open Apps in the MemberJunction/Integrations repo, each extending one of these. ──
+//    connection layer). The thin per-engine leaves (SQLServerConnector, PostgresConnector, MongoConnector,
+//    OracleConnector, SnowflakeConnector, MySQLConnector) ship as per-engine Open Apps in the
+//    MemberJunction/Integrations repo, each extending one of these and importing it from this package. ──
+//
+// These three base classes are the ENTIRE remaining surface of this package. Every concrete vendor
+// connector that used to live here now ships from MemberJunction/Integrations as its own Open App —
+// see the README for the removal rationale.
 export { BaseExternalDataSourceConnector } from './datasource/BaseExternalDataSourceConnector.js';
 export { BaseSqlExternalDataSourceConnector } from './datasource/BaseSqlExternalDataSourceConnector.js';
 export { BaseDocumentDataSourceConnector } from './datasource/BaseDocumentDataSourceConnector.js';
-export { HubSpotConnector } from './HubSpotConnector.js';
-export { SalesforceConnector, type SalesforceConnectionConfig } from './SalesforceConnector.js';
-export { FontevaConnector, LoadFontevaConnector } from './FontevaConnector.js';
-export { YourMembershipConnector, type YMConnectionConfig } from './YourMembershipConnector.js';
-export { FileFeedConnector, parseCsvLine } from './FileFeedConnector.js';
-export { RasaConnector, type RasaConnectionConfig } from './RasaConnector.js';
-export { WicketConnector, type WicketCRUDResult, type WicketSearchOptions, type WicketSearchResult } from './WicketConnector.js';
-export { SageIntacctConnector, type SageIntacctConnectionConfig } from './SageIntacctConnector.js';
-export { QuickBooksConnector, type QuickBooksConnectionConfig } from './QuickBooksConnector.js';
-export { AptifyConnector, type AptifyConnectionConfig } from './AptifyConnector.js';
-export { MJToMJConnector } from './MJToMJConnector.js';
-export { GrowthZoneConnector } from './GrowthZoneConnector.js';
-export { ORCIDConnector, LoadORCIDConnector, type ORCIDConnectionConfig } from './ORCIDConnector.js';
-export { OpenWaterConnector, type OpenWaterConnectionConfig } from './OpenWaterConnector.js';
-export { IMISConnector, LoadIMISConnector, type IMISConnectionConfig } from './IMISConnector.js';
-export { ConstantContactConnector } from './ConstantContactConnector.js';
-export { MailchimpConnector } from './MailchimpConnector.js';
-export { SharePointConnector } from './SharePointConnector.js';
-export { DynamicsDataverseConnector, LoadDynamicsDataverseConnector, type DynamicsConnectionConfig } from './DynamicsDataverseConnector.js';
-export { MagnetMailConnector } from './MagnetMailConnector.js';
-export { WildApricotConnector } from './WildApricotConnector.js';
-export { Reach360Connector } from './Reach360Connector.js';
-export { BlackbaudConnector } from './BlackbaudConnector.js';
-export { NetSuiteConnector } from './NetSuiteConnector.js';
-export { NetForumConnector } from './NetForumConnector.js';
-export { NimbleAMSConnector } from './NimbleAMSConnector.js';
-export { PropFuelConnector, parseFileName, compareMicrotime } from './PropFuelConnector.js';
-export { PathLMSConnector, LoadPathLMSConnector } from './PathLMSConnector.js';
-export { HivebriteConnector, LoadHivebriteConnector, type HivebriteConnectionConfig } from './HivebriteConnector.js';
-export { CventConnector, LoadCventConnector, type CventConnectionConfig } from './CventConnector.js';
-export { NeonCRMConnector, LoadNeonCRMConnector, type NeonCRMConnectionConfig } from './NeonCRMConnector.js';
-export { PheedLoopConnector } from './PheedLoopConnector.js';
-export { RhythmConnector, LoadRhythmConnector, type RhythmConnectionConfig } from './RhythmConnector.js';
-export { NoviConnector, LoadNoviConnector, type NoviConnectionConfig } from './NoviConnector.js';
-export { MemberSuiteConnector } from './MemberSuiteConnector.js';
