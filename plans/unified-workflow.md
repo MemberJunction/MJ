@@ -53,7 +53,7 @@ The gaps that make the trigger substrate unsafe to promote to users. All verifie
 
 ### Track B — v6 legacy retirement
 
-v6.0 already shipped, so breaking removals are in-window now:
+**Executes as Phase 0 of the engine plan** (`plans/task-graph-primitive.md` §4) — first thing after the plan PR merges. v6.0 already shipped, so breaking removals are in-window now:
 
 - **Drop** `Workflow`, `WorkflowRun`, `WorkflowEngine` (+ their `MJ: Workflows` / `MJ: Workflow Runs` / `MJ: Workflow Engines` entities and generated forms). Nothing outside generated code reads or writes them; the referenced `WorkflowBase` class does not exist in the repo. Handle the one inbound FK: `Report.OutputWorkflowID` (drop the column). Frees the **Workflow** name for D18.
 - **Drop** `MJ: Scheduled Actions` + `MJ: Scheduled Action Params` and `packages/Actions/ScheduledActions{,Server}`. The legacy cron due-check is mathematically always-false (`scheduler.ts:159-171` — `cronParser.next()` is strictly after `evalTime`), nothing in-repo hosts the Express app, and `MJ: Scheduled Jobs` supersedes it entirely. Also drop `Report.OutputTriggerTypeID` + `MJ: Output Trigger Types` (report-era, zero non-generated consumers).
@@ -107,9 +107,8 @@ interface WorkflowSpec {
 ## 3. Sequencing
 
 ```
-A (correctness)  ──┐
-B (v6 retirement) ─┼── independent, start now
-C (#3456 Ph 1–4 + R) ──┘
+A (correctness) ── independent, start anytime
+C (#3456): Phase 0 (legacy drop = Track B) ──► Phases 1–4 (Track R parallel)
         C ──► D (triggers) ──► E (WorkflowSpec) ──► F (front doors + inbox)
                                    (D2/D3 of Track D can interleave with C)
 ```

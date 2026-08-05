@@ -284,6 +284,15 @@ The convergence runs both directions. Phase 4 converts runtime graphs *into* eph
 
 Constraints: `BaseAgent`'s public/protected API stays stable (subclasses exist via `DriverClass`); helpers are instance-composed (not static), receive a context object, follow the repo's functional-decomposition and naming rules. Each extraction is its own PR with vitest parity + the integration tier green.
 
+### Phase 0 — Legacy retirement (the v6 window is open now)
+
+1. Migration (+ PG counterpart) dropping the dead Skip-era workflow schema: `Workflow`, `WorkflowRun`, `WorkflowEngine` tables + their `MJ: Workflows` / `MJ: Workflow Runs` / `MJ: Workflow Engines` entities and generated forms, and the one inbound FK column `Report.OutputWorkflowID`. Nothing outside generated code reads or writes any of them; the `SubclassName`-referenced `WorkflowBase` class does not exist in the repo.
+2. Same sweep: `MJ: Scheduled Actions` + `MJ: Scheduled Action Params` and `packages/Actions/ScheduledActions{,Server}` (the legacy cron due-check is mathematically always-false — `scheduler.ts:159-171`, `cronParser.next()` is strictly after `evalTime` — and nothing in-repo hosts the Express app; `MJ: Scheduled Jobs` supersedes it), plus `MJ: Output Trigger Types` + `Report.OutputTriggerTypeID` (report-era, zero non-generated consumers).
+3. **Not** in this sweep: Entity AI Actions — deprecated but still live in the save path; absorption belongs with the After\*-durability work (D14).
+4. CodeGen + metadata removal; `mj sync` state consistent.
+
+**Exit:** the legacy tables/entities/forms are gone, builds and integration tier green — and the name **Workflow** is freed for D18.
+
 ### Phase 1 — Truthful engine
 1. Migration: `Task` columns + `AIAgentRunStep.StepType` value (+ CodeGen).
 2. `TaskOrchestrator`: structured payload columns (Description fallback read only); failure propagation; cycle detection; unknown-agent hard error; wave parallelization with cap *(the eligibility logic carries into the dispatcher unchanged)*.
