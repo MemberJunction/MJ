@@ -58,6 +58,7 @@ import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-de
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, SetVerboseLogging } from '@memberjunction/core';
 import { getSystemUser } from './auth/index.js';
+import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
@@ -1188,6 +1189,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const allHealthy = results.length === 0 || results.every(r => r.Healthy);
     res.status(allHealthy ? 200 : 503).json({ extensions: results });
   });
+
+  // ─── Public authentication-provider catalog (PUBLIC, before auth mw) ──────
+  // The browser needs the provider list BEFORE it holds a token, so this is necessarily
+  // unauthenticated and must mount ahead of the auth middleware. It publishes only the
+  // non-secret allow-list (see AuthProviderEngine.GetPublicCatalog) — the same values a
+  // single-provider SPA already compiled into its bundle.
+  app.use(AUTH_CATALOG_MOUNT_PATH, cors<cors.CorsRequest>(), createAuthProviderCatalogRouter());
+  startupLog.LogIf('verbose', `[Auth] Public provider catalog registered at ${AUTH_CATALOG_MOUNT_PATH}/providers`);
 
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
   app.use(createUnifiedAuthMiddleware(dataSources));

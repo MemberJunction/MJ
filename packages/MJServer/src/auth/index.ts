@@ -11,6 +11,9 @@ import { initializeAuthProviders } from './initializeProviders.js';
 
 export * from './APIKeyScopeAuth.js';
 export * from './actingContextResolver.js';
+export * from './AuthProviderEngine.js';
+export * from './AuthProviderCatalogRouter.js';
+export { initializeAuthProviders, initializeAuthProvidersFromMetadata, validateAuthProvidersRegistered } from './initializeProviders.js';
 
 // This is a hard-coded forever constant due to internal migrations
 

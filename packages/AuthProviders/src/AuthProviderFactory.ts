@@ -3,14 +3,19 @@ import { IAuthProvider } from './IAuthProvider.js';
 import { BaseAuthProvider } from './BaseAuthProvider.js';
 import { MJGlobal, BaseSingleton, MJLruCache } from '@memberjunction/global';
 
-// Import providers to ensure they're registered
-import './providers/Auth0Provider.js';
-import './providers/MSALProvider.js';
-import './providers/OktaProvider.js';
-import './providers/CognitoProvider.js';
-import './providers/GoogleProvider.js';
-import './providers/WorkOSProvider.js';
-import './providers/MagicLinkProvider.js';
+// NOTE: this file deliberately contains NO list of concrete providers.
+//
+// It used to carry a literal `import './providers/Auth0Provider.js'` roster, which made the
+// built-ins look like a closed set that had to be edited to add a provider. They never were:
+// providers are @RegisterClass plugins resolved by key, and `index.ts` already exports all of
+// them by name, so importing anything from '@memberjunction/auth-providers' loads and registers
+// every built-in. HostIdentityProvider — added later — was never in that roster and has always
+// registered fine through the package entry point and the server-bootstrap manifest, which is
+// the proof the roster was redundant rather than load-bearing.
+//
+// Adding a provider is therefore: ship a @RegisterClass(BaseAuthProvider, 'x') subclass (in this
+// package, or in any package covered by a class-registration manifest) and add an
+// `MJ: Authentication Providers` row naming 'x' as its DriverClass. No edit here.
 
 /**
  * Factory and registry for managing authentication providers
