@@ -698,15 +698,19 @@ This workflow:
 
 ### 10b. `docker.yml` — Build & Publish Docker Images
 
-**Triggered by:** `publish.yml` completion
+**Triggered by:** `publish.yml` completion, or manual dispatch
 
 Builds and pushes multi-platform Docker images (`linux/amd64`, `linux/arm64`):
 - Docker Hub: `memberjunction/api:latest` and `memberjunction/api:v{VERSION}`
 - Azure ACR: `askskip.azurecr.io` with same tags
 
-> 🚨 **Known gap — Docker tags are not channel-aware yet.** The LTS policy (process doc §4.3) calls for `:edge` on Edge builds and `:latest` following the newest *certified* build — but `docker.yml` still tags **every** publish `:latest`, so an Edge release currently moves Docker `:latest` to an uncertified image while npm `latest` correctly stays put. Per-channel Docker tags are era-split tooling (process doc §15 item 4), still pending. Until that lands, treat Docker `:latest` as "newest build", not "newest certified".
+> 🐳 **Docker `:latest` means the same thing npm's `latest` means — newest certified.** The workflow's `channel` job reads the version and **skips any prerelease**, so an Edge release publishes npm packages but produces **no Docker image**. Expect `docker.yml` to report a skipped `api` job on every Edge release; that is the guard working, not a failure.
+>
+> **What this means in practice during the Edge era:** nothing auto-publishes to Docker. Certified and line builds ship from `lts/*` through `publish-lts.yml`, which does not trigger this workflow — so a certified image is produced by **dispatching `docker.yml` manually against the certified tag**. The guard keys off version grammar, not the trigger, so a manual dispatch accidentally aimed at `next` is skipped too.
+>
+> **Open:** whether an `:edge` Docker tag is wanted at all, and wiring line publishes to Docker automatically (process doc §15 item 4). Until someone confirms a real need for Edge images, Edge simply doesn't get them.
 
-> **Known issue:** This workflow sometimes fails because it tries to install the newly published npm packages before they've fully propagated on the npm registry. If it fails, **re-run the failed job** — it usually succeeds on the second attempt.
+> **Known issue:** When it does build, this workflow sometimes fails because it tries to install the newly published npm packages before they've fully propagated on the npm registry. If it fails, **re-run the failed job** — it usually succeeds on the second attempt.
 
 ### 10c. `docs.yml` — Build & Deploy the Documentation Site
 
@@ -727,7 +731,7 @@ Installs the workspace (`pnpm install --frozen-lockfile` — the workflow auto-d
 - [ ] `publish.yml` completes successfully (npm packages published, tag created)
 - [ ] **Dist-tags landed on the right channel**: `npm view @memberjunction/core dist-tags` — `edge` moved to the new version, **`latest` did not move** (it moves only at certification)
 - [ ] **GitHub Release exists** for the new tag, notes auto-generated, marked prerelease (edge) and **not** latest
-- [ ] `docker.yml` completes successfully (Docker images pushed — note the `:latest` channel gap above)
+- [ ] `docker.yml` behaved for the channel: on an **Edge** release its `api` job is **skipped** (correct — Docker `:latest` tracks certified builds); on a certified build dispatched manually, images pushed
 - [ ] `docs.yml` completes successfully (https://docs.memberjunction.org rebuilt, `/api` included)
 - [ ] `main` auto-merged back into `next` (includes the `pnpm-lock.yaml` refresh)
 - [ ] **`next` branch build passes** after the auto-merge — the lockfile and version updates can sometimes cause issues, so always verify `build.yml` passes on `next` after a release
@@ -787,7 +791,7 @@ Your only job here is the verification already in the Post-Merge Checklist — a
 | Per-package changelogs | `packages/*/CHANGELOG.md` | changesets, in the `RELEASING: Releasing N package(s)` commit, from each PR's changeset summary |
 | npm packages | `edge` / `lts-<line>` dist-tags — **`latest` moves only at certification** | `publish.yml` / `publish-lts.yml`; `ci/dist-tag-all.mjs` at certification |
 | Git tag `vX.Y.Z[-edge.N]` | repo tags | `ci/commit_push.mjs` |
-| Docker images | Docker Hub `memberjunction/api`, Azure ACR | `docker.yml` (`:latest` not yet channel-aware — see 10b) |
+| Docker images | Docker Hub `memberjunction/api`, Azure ACR | `docker.yml` — certified builds only; Edge is skipped (see 10b) |
 | API docs | https://docs.memberjunction.org/api | `docs.yml` |
 | Release/support state | [`release-lines.json`](release-lines.json) | Workflows append mechanical fields; status changes only via CODEOWNERS-gated PR |
 | Certification scorecards | `certifications/<version>.md`, linked from the certified GitHub Release | Certification owner |
