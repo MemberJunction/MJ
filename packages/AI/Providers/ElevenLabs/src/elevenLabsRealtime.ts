@@ -201,7 +201,19 @@ function canonicalizeSchemaForFingerprint(value: JSONValue): JSONValue {
     return canonical;
 }
 
-/** Whether a value is one of the empty defaults the platform materializes into stored schemas. */
+/**
+ * Whether a value is one of the empty defaults the platform materializes into stored schemas.
+ *
+ * Matches on the VALUE, not on a list of known platform keys — deliberately, because chasing the
+ * platform's field list is exactly the maintenance burden this avoids. The consequence is that it
+ * prunes more than those fields: ANY entry whose value is `''`, `false`, or `[]` goes, including a
+ * meaningful one such as `additionalProperties: false`.
+ *
+ * That is safe in the direction that matters. Pruning happens on BOTH sides, so it never
+ * manufactures drift (no PATCH loop); it only costs sensitivity — two schemas differing solely by
+ * the PRESENCE of such an entry hash alike. A change to a meaningful value (`false` → `true`) still
+ * registers, because only one side then prunes.
+ */
 function isMaterializedDefault(value: JSONValue): boolean {
     return value === '' || value === false || (Array.isArray(value) && value.length === 0);
 }
@@ -311,11 +323,14 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
     private elevenClient: ElevenLabsClient | null = null;
 
     /**
-     * Managed-agent ensure cache: managed agent NAME → the resolved agent id + the tool-set
-     * fingerprint it was last ensured with. A cache hit with an identical fingerprint skips
-     * the REST round-trips entirely; a different fingerprint re-runs the ensure flow.
+     * Managed-agent ensure cache: managed agent NAME → the IN-FLIGHT ensure + the tool-set
+     * fingerprint it was started with. A cache hit with an identical fingerprint skips the REST
+     * round-trips entirely; a different fingerprint re-runs the ensure flow.
+     *
+     * Holds the PROMISE, not the resolved id, so concurrent callers for the same name join the
+     * one ensure already running instead of each starting their own — see {@link ensureAgent}.
      */
-    private agentCache = new Map<string, { agentId: string; fingerprint: string }>();
+    private agentCache = new Map<string, { agentId: Promise<string>; fingerprint: string }>();
 
     constructor(apiKey: string) {
         super(apiKey);
@@ -454,9 +469,21 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         if (cached && cached.fingerprint === fingerprint) {
             return cached.agentId;
         }
-        const agentId = await this.findCreateOrUpdateAgent(model, tools, fingerprint, params.Config);
-        this.agentCache.set(model, { agentId, fingerprint });
-        return agentId;
+        // Publish the in-flight ensure BEFORE awaiting it, so a second caller arriving mid-flight
+        // joins this one rather than starting a rival find-create and forking a duplicate agent.
+        const pending = this.findCreateOrUpdateAgent(model, tools, fingerprint, params.Config);
+        this.agentCache.set(model, { agentId: pending, fingerprint });
+        try {
+            return await pending;
+        } catch (error) {
+            // A REJECTED promise is a cache entry too. Evict it, or one transient REST failure
+            // would be replayed from memory to every later session for this name — disabling the
+            // agent until the process restarts, without ever retrying the API.
+            if (this.agentCache.get(model)?.agentId === pending) {
+                this.agentCache.delete(model);
+            }
+            throw error;
+        }
     }
 
     /** The uncached ensure flow: list-by-name, then create or (when drifted) update. */
@@ -487,8 +514,13 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      * ElevenLabs' agent search is EVENTUALLY CONSISTENT: an agent created moments ago — by us
      * or by a concurrent process — is briefly invisible to find-by-name. Treating one miss as
      * "does not exist" makes the ensure flow CREATE, forking a duplicate managed agent that
-     * then competes for the same name forever. Retrying costs a few hundred ms once per agent
-     * name (the result is instance-cached, and only the create path pays it at all).
+     * then competes for the same name forever.
+     *
+     * **Cost falls entirely on the FIRST-EVER provision of a name.** A name that resolves pays
+     * nothing (it hits on attempt 1); a name that genuinely does not exist yet exhausts every
+     * attempt before falling through to create, so it pays the whole backoff ladder —
+     * 500ms + 1000ms ≈ **1.5s** at the current constants, once, before the create call. Every
+     * later session for that name is served from {@link agentCache} without any of this.
      *
      * @param name The managed agent name to resolve.
      * @returns The adopted agent summary, or `undefined` once the attempts are exhausted.

@@ -512,6 +512,62 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(driver.ListCalls).toHaveLength(2);
         expect(driver.UpdateCalls).toHaveLength(1);
     });
+
+    /**
+     * Two sessions opening AT ONCE on one driver against a not-yet-provisioned agent name must
+     * provision ONE agent, not one each.
+     *
+     * The ensure cache stores the RESOLVED agent id, so it is only populated after the whole
+     * find-create round-trip finishes. Both callers therefore used to miss the cache, both find
+     * nothing, and both create — forking a duplicate that then competes for the name forever.
+     * This is the intra-process half of the fork {@link ElevenLabsRealtime.findAgentByName}
+     * guards against across processes, and unlike that one it is fully closable here: the
+     * in-flight ensure is itself what the second caller should await.
+     *
+     * Not a contrived race — a server opening several realtime sessions the moment a new managed
+     * agent name appears is the ordinary case.
+     */
+    it('provisions ONE agent when two sessions ensure the same new name concurrently', async () => {
+        const [first, second] = await Promise.all([
+            driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] })),
+            driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] })),
+        ]);
+
+        expect(driver.CreateBodies).toHaveLength(1);
+        expect((first.SessionConfig as { agentId: string }).agentId).toBe(
+            (second.SessionConfig as { agentId: string }).agentId
+        );
+    });
+
+    /**
+     * A transient REST failure must not disable the managed agent for the life of the process.
+     *
+     * The ensure cache stores the in-flight PROMISE (so concurrent callers can join it), which
+     * means a REJECTED ensure is a cache entry too — and every later session for that name would
+     * replay the same stale failure forever, from memory, without ever retrying the API. One
+     * blipped request would take the agent down until restart. The failed entry must be evicted.
+     */
+    it('retries after a transient ensure failure instead of caching the rejection', async () => {
+        class FlakyElevenLabsRealtime extends TestElevenLabsRealtime {
+            public FailNextList = true;
+            protected override async listAgents(search: string): Promise<ElevenLabs.AgentSummaryResponseModel[]> {
+                if (this.FailNextList) {
+                    this.FailNextList = false;
+                    throw new Error('ElevenLabs REST 503: temporarily unavailable');
+                }
+                return super.listAgents(search);
+            }
+        }
+        const flaky = new FlakyElevenLabsRealtime('fake-api-key');
+
+        await expect(flaky.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }))).rejects.toThrow(
+            /temporarily unavailable/
+        );
+
+        // the blip is over — the next session must reach the API again, not replay the rejection
+        const cfg = await flaky.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect((cfg.SessionConfig as { agentId: string }).agentId).toBe('agent_created_001');
+    });
 });
 
 /* ------------------------------------------------------------------ */
@@ -994,6 +1050,20 @@ describe('SanitizeToolParametersForElevenLabs', () => {
 
         expect(ElevenLabsRealtime.ToolSetFingerprint([{ Name: 'T', Description: 'd', ParametersSchema: stored }]))
             .toBe(ElevenLabsRealtime.ToolSetFingerprint([{ Name: 'T', Description: 'd', ParametersSchema: sent }]));
+    });
+
+    /**
+     * Bounds the pruning above. `isMaterializedDefault` matches on the VALUE (`''`/`false`/`[]`),
+     * not on a list of platform field names, so it also prunes meaningful entries that happen to
+     * hold one — `additionalProperties: false` among them. That costs sensitivity to an entry's
+     * PRESENCE, which is accepted and documented; it must NOT cost sensitivity to an entry's
+     * VALUE, or a genuine schema change would stop triggering the repair PATCH.
+     */
+    it('still DISTINGUISHES a meaningful value change even when one side prunes (false → true)', () => {
+        const fp = (additionalProperties: boolean): string => ElevenLabsRealtime.ToolSetFingerprint([
+            { Name: 'T', Description: 'd', ParametersSchema: { type: 'object', additionalProperties, properties: {} } },
+        ]);
+        expect(fp(false)).not.toBe(fp(true));
     });
 
     it('still DISTINGUISHES schemas that differ only in ARRAY order (arrays are data, not sets)', () => {
