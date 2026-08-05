@@ -37,9 +37,59 @@ export class SpeechResult {
 
 export class SpeechToTextParams extends BaseParams {
     /**
-     * Base 64 encoded audio file to convert to text
+     * Base 64 encoded audio file to convert to text.
+     *
+     * Optional only in the sense that `audioData` may be supplied instead; exactly one of
+     * the two is required.
      */
-    audioFile: string;    
+    audioFile: string;
+
+    /**
+     * The raw audio bytes, as an alternative to the base 64 `audioFile`.
+     *
+     * Preferred whenever the caller already holds a Buffer: base 64 encoding an hour of
+     * audio costs a third more memory than the bytes themselves, for a string the
+     * implementation immediately decodes again.
+     */
+    audioData?: Buffer;
+
+    /**
+     * Original file name, e.g. `episode-104.mp3`. Some providers infer the container
+     * format from the extension, so supplying it when known improves reliability.
+     */
+    fileName?: string;
+
+    /**
+     * ISO 639-1 language code of the spoken audio. Supplying it typically improves both
+     * accuracy and latency versus letting the model detect the language.
+     */
+    language?: string;
+
+    /**
+     * Optional text to steer style, spelling or vocabulary — e.g. proper nouns the model
+     * would otherwise mis-transcribe. Should be in the same language as the audio.
+     */
+    prompt?: string;
+}
+
+/**
+ * Splits an audio buffer into pieces small enough for a provider that caps upload size.
+ *
+ * This is a port rather than a bundled implementation on purpose. Splitting audio without
+ * re-encoding it means a media tool — in practice an ffmpeg binary — and a ~70MB
+ * platform-specific binary is not a dependency an AI provider package should force on
+ * every consumer, most of which transcribe short clips and never need it. Applications
+ * that do transcribe long audio already have such a tool and inject it here.
+ */
+export interface AudioSplitter {
+    /**
+     * Split `audio` into consecutive pieces, each no larger than `maxBytes`, ordered so
+     * that concatenating their transcripts reproduces the whole.
+     *
+     * Implementations should split on time, not byte offsets: cutting a compressed stream
+     * mid-frame produces pieces the provider cannot decode.
+     */
+    split(audio: Buffer, maxBytes: number): Promise<Buffer[]>;
 }
 
 /**
