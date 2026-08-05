@@ -1,21 +1,704 @@
 /*
- * MemberJunction docs theme — accent ramp ported from the design prototype
- * that preceded this site (plans/mj-documentation, PR #2526): indigo brand
- * on Starlight's neutral gray scale.
+ * MemberJunction docs theme.
+ *
+ * Three layers, in order:
+ *   1. Starlight accent ramp  — MJ brand blue, applies site-wide
+ *   2. Header chrome          — the navy bar from the landing mockup, site-wide
+ *   3. Landing page           — the `--mjd-*` palette + layout, index only
+ *
+ * The docs site sits OUTSIDE the pnpm workspace and has no `--mj-*` design
+ * tokens (those ship from packages/Angular/Generic/shared). Starlight's
+ * `--sl-*` custom properties are this site's token layer; the `--mjd-*` set
+ * below is the landing mockup's navy-tinted palette, which Starlight's neutral
+ * gray scale doesn't provide.
+ */
+
+/* ─── 1. Accent ramp ──────────────────────────────────────────────────────
+ * MJ brand blue (#2750b0). Replaces the indigo ported from the pre-site
+ * prototype; brand blue is the standard across the MJ product family.
  */
 :root {
-  --sl-color-accent-low: #e0e7ff;
-  --sl-color-accent: #4f46e5;
-  --sl-color-accent-high: #3730a3;
+  --sl-color-accent-low: #dbe6ff;
+  --sl-color-accent: #2750b0;
+  --sl-color-accent-high: #172952;
 }
 
 :root[data-theme='dark'] {
-  --sl-color-accent-low: #312e81;
-  --sl-color-accent: #818cf8;
-  --sl-color-accent-high: #c7d2fe;
+  --sl-color-accent-low: #172952;
+  --sl-color-accent: #5b8def;
+  --sl-color-accent-high: #a9c4ff;
 }
 
-/* Mermaid diagrams: center, breathe, and never overflow the content column. */
+/* ─── 2. Header chrome ────────────────────────────────────────────────────
+ * The mockup's navy bar, held in BOTH themes (it reads as brand chrome, not
+ * as a light/dark surface). Everything inside it is therefore styled against
+ * a dark background regardless of the active theme.
+ *
+ * The mockup specs an 88px bar. 64px here instead: 88px of navy on every docs
+ * page is a lot of permanent chrome for a reference site. Single value to
+ * change if you want the mockup's exact height.
+ */
+/*
+ * Deliberately NOT setting Starlight's `--sl-color-bg-nav` token here, even
+ * though it is the documented header-background knob. That token has three
+ * consumers: the header, the mobile "On this page" TOC bar, and the theme
+ * <select>'s options. Setting it navy turns the mobile TOC bar navy too, where
+ * it butts against the header with dark text on it and becomes unreadable.
+ * Restoring that bar would itself take another override, so the token buys
+ * nothing. One targeted property on .header has no blast radius.
+ */
+:root {
+  --sl-nav-height: 4rem;
+  --mjd-header-bg: #172952;
+  --mjd-header-ink: #c9d6ec;
+  --mjd-header-ink-dim: #a9b8d4;
+  --mjd-header-rule: rgba(255, 255, 255, 0.18);
+}
+
+/* No hairline: the navy already separates the bar from the page. */
+.header {
+  background: var(--mjd-header-bg);
+  border-bottom: 0;
+}
+
+/* Keep the logo lockup and its version pill on one baseline. */
+.header .title-wrapper {
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/*
+ * The lockup is 948x132 (~7.2:1), so height drives width: 2.5rem tall is about
+ * 288px wide. Cap it and step it down on narrow viewports so it can't crowd
+ * the search trigger out of the bar.
+ */
+.header a.site-title img {
+  height: 2.5rem;
+  width: auto;
+  max-width: 100%;
+}
+
+@media (max-width: 60rem) {
+  .header a.site-title img {
+    height: 2rem;
+  }
+}
+
+/*
+ * Group the search with the GitHub and theme controls on the right.
+ *
+ * At desktop widths Starlight lays the bar out as `grid-template-columns: auto
+ * 1fr auto` — title, search, right-group — so the search starts at the left
+ * edge of a wide middle column. Right-aligning it inside that column parks it
+ * against the right-group. It's the WRAPPER that owns the grid cell, not
+ * <site-search>, hence the `:has(> site-search)` match; the `> div` and the
+ * direct-child `>` both matter, because `.header` also matches the outer
+ * <header> element and we must not right-align the whole bar.
+ *
+ * Below the md breakpoint Starlight drops to flex with the right-group hidden,
+ * leaving title + search under `space-between`, which already puts search on
+ * the right. So this is a desktop-only concern.
+ */
+.header > div:has(> site-search) {
+  justify-self: end;
+}
+
+/*
+ * Once it stops stretching, the trigger collapses to its label. Hold the
+ * mockup's ~210px so it still reads as a search field rather than a button.
+ *
+ * Desktop only: below Starlight's 50rem breakpoint the trigger is icon-only,
+ * and forcing a min-width there squeezes the logo lockup off the bar.
+ */
+@media (min-width: 50rem) {
+  .header site-search button[data-open-modal] {
+    min-width: 13rem;
+    max-width: 15rem;
+  }
+}
+
+/*
+ * Starlight swaps the two logo files by theme. The bar is always navy, so the
+ * light-artwork file has to win in BOTH themes — otherwise the dark-ink logo
+ * renders invisible against the navy in light mode.
+ */
+:root[data-theme='light'] .header a.site-title img.light\:sl-hidden {
+  display: block;
+}
+
+:root[data-theme='light'] .header a.site-title img.dark\:sl-hidden {
+  display: none;
+}
+
+.mjd-version-pill {
+  flex: none;
+  font-family: var(--sl-font-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  line-height: 1;
+  color: var(--mjd-header-ink-dim);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 9999px;
+  padding: 0.3rem 0.7rem;
+  white-space: nowrap;
+}
+
+/* Search trigger, GitHub icon, and theme picker, all against the navy. */
+.header site-search button[data-open-modal] {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--mjd-header-rule);
+  color: var(--mjd-header-ink-dim);
+}
+
+.header site-search button[data-open-modal]:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+}
+
+/*
+ * Child combinator, not descendant. Starlight nests one <kbd> per key inside a
+ * wrapper <kbd> that IS the visual chip, so a descendant match borders the
+ * wrapper AND every key inside it. Starlight's own rule is `button > kbd` for
+ * the same reason. The keys inherit the color from the wrapper.
+ */
+.header site-search button[data-open-modal] > kbd {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--mjd-header-ink-dim);
+}
+
+.header .social-icons a,
+.header starlight-theme-select label {
+  color: var(--mjd-header-ink);
+}
+
+.header .social-icons a:hover,
+.header starlight-theme-select label:hover {
+  color: #ffffff;
+}
+
+.header starlight-theme-select select {
+  color: var(--mjd-header-ink);
+  background: transparent;
+}
+
+/* The mobile menu toggle sits in the same bar. */
+.header + * starlight-menu-button button,
+starlight-menu-button button {
+  color: var(--mjd-header-ink);
+}
+
+/* ─── 3. Landing page ─────────────────────────────────────────────────────
+ * Scoped to `.mjd-landing` so none of it leaks into the ingested doc pages.
+ */
+/*
+ * NOTE: do not reach for `--sl-color-white` here. Starlight's scale is
+ * contrast-relative, not literal — it resolves to hsl(0,0%,100%) in dark mode
+ * and hsl(224,10%,10%) in light, so using it for a surface renders black cards
+ * on the light theme. The landing's surfaces are literal colors.
+ */
+.mjd-landing {
+  --mjd-surface: #ffffff;
+  --mjd-surface-2: #f6f8fc;
+  --mjd-rule: #e2e8f0;
+  --mjd-rule-strong: #c8d3e3;
+  --mjd-ink: #172952;
+  --mjd-ink-2: #4c5b78;
+  --mjd-ink-3: #6b7a94;
+  --mjd-blue: #2750b0;
+  --mjd-blue-deep: #172952;
+  --mjd-code-bg: #0e182b;
+  --mjd-pill-bg: rgba(39, 80, 176, 0.08);
+  --mjd-shadow: 0 8px 24px rgba(23, 41, 82, 0.1);
+
+  max-width: 1120px;
+  margin-inline: auto;
+  padding: 0 1.5rem 6rem;
+  font-size: 1rem;
+}
+
+:root[data-theme='dark'] .mjd-landing {
+  --mjd-surface: #121d33;
+  --mjd-surface-2: #16233d;
+  --mjd-rule: rgba(255, 255, 255, 0.1);
+  --mjd-rule-strong: rgba(255, 255, 255, 0.22);
+  --mjd-ink: #eaf0fb;
+  --mjd-ink-2: #a9b8d4;
+  --mjd-ink-3: #7b8cab;
+  --mjd-blue: #5b8def;
+  --mjd-blue-deep: #2750b0;
+  --mjd-code-bg: #080e1a;
+  --mjd-pill-bg: rgba(91, 141, 239, 0.14);
+  --mjd-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+/*
+ * Splash pages render the page title in their own content panel above the
+ * body, and constrain the prose column. The landing supplies its own <h1> and
+ * runs to its own width, so on this page (and only this page, keyed off the
+ * landing wrapper) drop the title panel and release the container.
+ */
+main:has(.mjd-landing) > .content-panel:first-of-type {
+  display: none;
+}
+
+main:has(.mjd-landing) .content-panel {
+  border: 0;
+  padding-inline: 0;
+}
+
+/*
+ * The brand bar is the last element on the landing, so Starlight's trailing
+ * block padding (24px on .content-panel + 27px on <main>) shows up as a strip
+ * of page background below the footer. Strip both; the bar sits flush.
+ */
+main:has(.mjd-landing),
+main:has(.mjd-landing) .content-panel {
+  padding-bottom: 0;
+}
+
+main:has(.mjd-landing) .sl-container,
+main:has(.mjd-landing) .sl-markdown-content {
+  max-width: none;
+  margin-inline: 0;
+}
+
+/*
+ * Starlight's content footer (edit link, last-updated, pagination) is per-doc
+ * provenance and means nothing on the landing. Hide the whole element rather
+ * than just its .meta: with only the meta hidden the footer collapses to
+ * height 0 but keeps its 24px margin-top, which reads as a stray strip of page
+ * background below the brand bar.
+ *
+ * The landing's own footer is .mjd-brandbar, a div, so it is unaffected.
+ */
+main:has(.mjd-landing) footer {
+  display: none;
+}
+
+/* Hero */
+.mjd-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding-top: 4.5rem;
+}
+
+.mjd-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.mjd-pill {
+  font-family: var(--sl-font-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--mjd-ink-2);
+  border: 1px solid var(--mjd-rule);
+  border-radius: 9999px;
+  padding: 0.3rem 0.75rem;
+}
+
+.mjd-pill--accent {
+  color: var(--mjd-blue);
+  background: var(--mjd-pill-bg);
+}
+
+.mjd-landing h1.mjd-title {
+  margin: 1.5rem 0 0;
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  color: var(--mjd-ink);
+}
+
+.mjd-tagline {
+  margin: 1.125rem auto 0;
+  max-width: 45rem;
+  font-size: 1.1875rem;
+  line-height: 1.55;
+  color: var(--mjd-ink-2);
+  text-wrap: pretty;
+}
+
+.mjd-subtagline {
+  margin: 0.875rem auto 0;
+  max-width: 42.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--mjd-ink-3);
+  text-wrap: pretty;
+}
+
+/* Call-to-action row */
+.mjd-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  gap: 0.75rem;
+  margin-top: 2.125rem;
+}
+
+.mjd-landing a.mjd-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 6px;
+  padding: 0.875rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+
+.mjd-landing a.mjd-btn:hover {
+  text-decoration: none;
+}
+
+.mjd-landing a.mjd-btn--primary {
+  background: var(--mjd-blue);
+  border-color: var(--mjd-blue);
+  color: #ffffff;
+  padding-inline: 1.375rem;
+  box-shadow: var(--mjd-shadow);
+}
+
+.mjd-landing a.mjd-btn--primary:hover {
+  background: var(--mjd-blue-deep);
+  border-color: var(--mjd-blue-deep);
+  color: #ffffff;
+}
+
+.mjd-landing a.mjd-btn--secondary {
+  background: var(--mjd-surface-2);
+  border-color: var(--mjd-rule-strong);
+  color: var(--mjd-ink);
+}
+
+.mjd-landing a.mjd-btn--secondary:hover {
+  border-color: var(--mjd-blue);
+  color: var(--mjd-ink);
+}
+
+.mjd-landing a.mjd-btn--ghost {
+  background: transparent;
+  border-color: var(--mjd-rule);
+  color: var(--mjd-ink-2);
+}
+
+.mjd-landing a.mjd-btn--ghost:hover {
+  border-color: var(--mjd-rule-strong);
+  color: var(--mjd-ink);
+}
+
+.mjd-ctas-note {
+  margin: 0.75rem 0 0;
+  font-family: var(--sl-font-mono, ui-monospace, monospace);
+  font-size: 0.8125rem;
+  color: var(--mjd-ink-3);
+  text-align: center;
+}
+
+/* Install / hosted split */
+.mjd-split {
+  margin-top: 2.75rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+/*
+ * Column layout so the code area absorbs the extra height when the grid row
+ * stretches to match the taller of the two panels — otherwise the panel ends
+ * in dead whitespace below the prerequisite note.
+ */
+.mjd-install {
+  background: var(--mjd-surface);
+  border: 1px solid var(--mjd-rule);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: var(--mjd-shadow);
+  display: flex;
+  flex-direction: column;
+}
+
+.mjd-install__bar,
+.mjd-install__note {
+  flex: none;
+}
+
+.mjd-install__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--mjd-rule);
+  background: var(--mjd-surface-2);
+}
+
+.mjd-install__glyph {
+  color: var(--mjd-ink-3);
+  flex: none;
+}
+
+.mjd-install__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mjd-ink-3);
+}
+
+.mjd-install__copy {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: transparent;
+  border: 1px solid var(--mjd-rule);
+  border-radius: 6px;
+  color: var(--mjd-ink-2);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.625rem;
+  cursor: pointer;
+}
+
+.mjd-install__copy:hover {
+  border-color: var(--mjd-rule-strong);
+  color: var(--mjd-ink);
+}
+
+.mjd-landing pre.mjd-install__code {
+  flex: 1;
+  margin: 0;
+  padding: 1.25rem 1.375rem;
+  background: var(--mjd-code-bg);
+  border: 0;
+  border-radius: 0;
+  font-size: 0.90625rem;
+  line-height: 2;
+  color: #dbe6ff;
+  overflow-x: auto;
+}
+
+.mjd-install__prompt,
+.mjd-install__comment {
+  color: #7b8cab;
+}
+
+.mjd-install__note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--mjd-rule);
+  color: var(--mjd-ink-3);
+  font-size: 0.8125rem;
+}
+
+.mjd-install__note svg {
+  flex: none;
+}
+
+.mjd-hosted {
+  background: var(--mjd-surface);
+  border: 1px solid var(--mjd-rule);
+  border-radius: 10px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.mjd-hosted__eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mjd-ink-3);
+}
+
+.mjd-landing h3.mjd-hosted__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--mjd-ink);
+}
+
+.mjd-hosted__body {
+  margin: 0;
+  font-size: 0.90625rem;
+  line-height: 1.55;
+  color: var(--mjd-ink-2);
+  text-wrap: pretty;
+}
+
+.mjd-landing a.mjd-hosted__link {
+  margin-top: auto;
+  align-self: flex-start;
+  font-size: 0.90625rem;
+  font-weight: 600;
+  color: var(--mjd-blue);
+  text-decoration: none;
+}
+
+.mjd-landing a.mjd-hosted__link:hover {
+  text-decoration: underline;
+}
+
+/* Documentation card grid */
+.mjd-docs {
+  margin-top: 4.5rem;
+}
+
+.mjd-landing h2.mjd-docs__eyebrow {
+  margin: 0 0 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mjd-blue);
+  border: 0;
+  padding: 0;
+}
+
+.mjd-docs__lede {
+  margin: 0 0 1.5rem;
+  font-size: 0.9375rem;
+  color: var(--mjd-ink-3);
+}
+
+.mjd-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18.75rem, 1fr));
+  gap: 1rem;
+}
+
+.mjd-landing a.mjd-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--mjd-surface);
+  border: 1px solid var(--mjd-rule);
+  border-radius: 10px;
+  padding: 1.5rem;
+  text-decoration: none;
+}
+
+.mjd-landing a.mjd-card:hover {
+  border-color: var(--mjd-rule-strong);
+  box-shadow: var(--mjd-shadow);
+  text-decoration: none;
+}
+
+.mjd-card__title {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--mjd-ink);
+}
+
+.mjd-card__body {
+  font-size: 0.90625rem;
+  line-height: 1.55;
+  color: var(--mjd-ink-2);
+  text-wrap: pretty;
+}
+
+.mjd-card__cta {
+  margin-top: 0.375rem;
+  font-size: 0.84375rem;
+  font-weight: 600;
+  color: var(--mjd-blue);
+}
+
+@media (max-width: 50rem) {
+  .mjd-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mjd-hero {
+    padding-top: 3rem;
+  }
+}
+
+/* ─── Brand bar (landing footer) ──────────────────────────────────────────
+ * Rendered by src/components/LandingFooter.astro, on the landing only. It sits
+ * OUTSIDE `.mjd-landing`, so it can't inherit that block's `--mjd-*` palette
+ * and carries its own theme-aware set.
+ */
+:root {
+  --mjd-bar-bg: #f6f8fc;
+  --mjd-bar-rule: #e2e8f0;
+  --mjd-bar-ink: #6b7a94;
+}
+
+:root[data-theme='dark'] {
+  --mjd-bar-bg: #0e182b;
+  --mjd-bar-rule: rgba(255, 255, 255, 0.1);
+  --mjd-bar-ink: #7b8cab;
+}
+
+/* No margin-top: the landing's own 6rem bottom padding is the gap above. */
+.mjd-brandbar {
+  border-top: 1px solid var(--mjd-bar-rule);
+  background: var(--mjd-bar-bg);
+}
+
+.mjd-brandbar__inner {
+  max-width: 1120px;
+  margin-inline: auto;
+  padding: 2rem 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mjd-brandbar__home {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.mjd-brandbar__logo {
+  height: 1.375rem;
+  width: auto;
+}
+
+/* Swap on the site's own theme, never on prefers-color-scheme. */
+.mjd-brandbar__logo--on-dark {
+  display: none;
+}
+
+:root[data-theme='dark'] .mjd-brandbar__logo--on-light {
+  display: none;
+}
+
+:root[data-theme='dark'] .mjd-brandbar__logo--on-dark {
+  display: block;
+}
+
+.mjd-brandbar__legal {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--mjd-bar-ink);
+}
+
+/* ─── Mermaid ─────────────────────────────────────────────────────────────
+ * Center, breathe, and never overflow the content column.
+ */
 pre.mermaid {
   display: flex;
   justify-content: center;

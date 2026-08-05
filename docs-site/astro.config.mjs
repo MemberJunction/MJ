@@ -25,16 +25,25 @@ export default defineConfig({
     starlight({
       title: 'MemberJunction',
       description: 'The open-source, AI-native data platform — unify your data, add intelligence, build AI-native apps on top of it.',
+      /*
+       * Horizontal lockup (948x132). The previous stacked pair was 200px wide,
+       * which renders soft on retina and reads as a tiny mark once the header
+       * bar constrains it by height. `light`/`dark` name the THEME the file is
+       * shown in, so `light` carries the navy-ink artwork.
+       */
       logo: {
-        light: './src/assets/MJ_logo.webp',
-        dark: './src/assets/MJ_logo_dark.png',
+        light: './src/assets/MJ_logo_wide.png',
+        dark: './src/assets/MJ_logo_wide_dark.png',
         replacesTitle: true,
       },
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/MemberJunction/MJ' }],
       editLink: { baseUrl: 'https://github.com/MemberJunction/MJ/edit/next/docs-site/' },
       lastUpdated: true,
       customCss: ['./src/styles/custom.css'],
-      components: { Footer: './src/components/Footer.astro' },
+      components: {
+        Footer: './src/components/Footer.astro',
+        SiteTitle: './src/components/SiteTitle.astro',
+      },
       sidebar: [
         {
           label: 'Start Here',
