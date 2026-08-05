@@ -5,33 +5,29 @@ import { HarnessCapabilities, HarnessTurnEvent } from '../types.js';
 import { HarnessProcess } from '../sandbox/SandboxExecutor.js';
 
 /**
- * Drives Claude Code through its headless CLI.
+ * Drives Claude Code through its headless CLI. This is the ONLY Claude Code adapter.
  *
- * ## Why this exists alongside the SDK adapter
+ * ## Why not the Claude Agent SDK
  *
- * `@memberjunction/ai-agent-harness-claude` drives Claude Code through the Agent SDK, which is the
- * better-typed surface and the natural choice for local development. But the SDK runs IN-PROCESS in
- * Node, and no sandbox executor can place an in-process library inside a container. That leaves the
- * SDK adapter local-only — and, worse, it would run outside the sandbox while an agent's config
- * claimed `provider: 'docker'`, which is precisely the false-containment failure this design keeps
- * trying to avoid.
+ * An SDK-based adapter was built and then deliberately removed. The SDK offers a programmatic
+ * permission callback (`canUseTool`) and in-process MCP tools, both genuinely useful — but it runs
+ * IN-PROCESS in Node, and no sandbox executor can place an in-process library inside a container.
  *
- * The CLI has no such limitation: it is a process, so the executor can place it anywhere. This
- * adapter is therefore the one that works in all three deployments — local spawn, local container,
- * and cloud container — and the SDK adapter is the richer local option rather than the only one.
+ * That trade does not survive scrutiny: it buys better permission *hooks* at the cost of any
+ * process *isolation*, for a feature whose entire purpose is executing an autonomous agent's shell
+ * commands. Worse, an SDK-backed agent configured with `provider: 'docker'` would run outside its
+ * sandbox while the config claimed otherwise — the same false-containment failure this design
+ * refuses elsewhere. And the asymmetry is decisive: the CLI's missing permission hook is fixable
+ * (an MCP permission-prompt tool), while the SDK's missing containment is not.
  *
- * ## Why it lives in core rather than the Claude package
+ * Two incidental findings that removed the remaining arguments for it: the SDK's typing advantage
+ * largely evaporated in practice (its message union is too broad to narrow against, so the adapter
+ * read fields structurally anyway — exactly what the CLI adapter does), and the SDK is not
+ * dependency-free — it ships a ~259 MB platform-specific `claude` binary. It wraps the same program
+ * this adapter invokes.
  *
- * It has no vendor dependency. The separate `-claude` package exists solely because the Agent SDK is
- * a real npm dependency that would otherwise weigh down every consumer of the core package. A CLI
- * adapter is just argv and JSON, exactly like Codex, OpenCode, Gemini CLI and Pi — so it belongs
- * with them.
- *
- * ## Event vocabulary
- *
- * `--output-format stream-json` emits the same message shapes the SDK surfaces as objects, so the
- * mapping below mirrors the SDK adapter's. The duplication is deliberate: sharing it would make the
- * core package depend on the Claude package or vice versa, to save perhaps thirty lines.
+ * So there is one Claude path, and it works in all three deployments: local spawn, local container,
+ * cloud container.
  */
 @RegisterClass(BaseHarnessAdapter, 'ClaudeCodeCliAdapter')
 export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
@@ -49,10 +45,11 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
             MidTurnCancellation: true,
             StructuredOutput: true,
             UsageReporting: true,
-            // The SDK's canUseTool callback is the real permission hook; the CLI's equivalent needs
-            // an MCP permission-prompt tool, which the strict posture will wire up separately.
-            // Reported false until that exists, so the runtime does not assume interception it has
-            // not got.
+            // Claude Code CAN intercept permissions, but only through an MCP permission-prompt tool
+            // that MJ has not stood up yet. Reported false until that exists: claiming interception
+            // the adapter does not implement would let mutating operations through unreviewed while
+            // the strict posture believed it was gating them. This is the one capability the removed
+            // SDK adapter had and this one does not, and it is a prerequisite for `strict`.
             PermissionHooks: false,
             McpClient: true,
             WorkspaceScoping: true,
