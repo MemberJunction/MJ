@@ -93098,6 +93098,10 @@ export class MJUserViewRunDetail_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
+    @MaxLength(100)
+    UserViewRun: string;
+        
+    @Field() 
     @MaxLength(36)
     UserViewID: string;
         

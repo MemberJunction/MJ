@@ -31998,11 +31998,12 @@ export type MJUserViewCategoryEntityType = z.infer<typeof MJUserViewCategorySche
 export const MJUserViewRunDetailSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     UserViewRunID: z.string().describe(`
         * * Field Name: UserViewRunID
-        * * Display Name: User View Run ID
+        * * Display Name: User View Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: User View Runs (vwUserViewRuns.ID)`),
     RecordID: z.string().describe(`
@@ -32020,6 +32021,10 @@ export const MJUserViewRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    UserViewRun: z.string().describe(`
+        * * Field Name: UserViewRun
+        * * Display Name: User View Run Name
+        * * SQL Data Type: nvarchar(100)`),
     UserViewID: z.string().describe(`
         * * Field Name: UserViewID
         * * Display Name: User View
@@ -117054,6 +117059,7 @@ export class MJUserViewRunDetailEntity extends BaseEntity<MJUserViewRunDetailEnt
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -117066,7 +117072,7 @@ export class MJUserViewRunDetailEntity extends BaseEntity<MJUserViewRunDetailEnt
 
     /**
     * * Field Name: UserViewRunID
-    * * Display Name: User View Run ID
+    * * Display Name: User View Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: User View Runs (vwUserViewRuns.ID)
     */
@@ -117108,6 +117114,15 @@ export class MJUserViewRunDetailEntity extends BaseEntity<MJUserViewRunDetailEnt
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: UserViewRun
+    * * Display Name: User View Run Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get UserViewRun(): string {
+        return this.Get('UserViewRun');
     }
 
     /**

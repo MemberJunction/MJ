@@ -1219,7 +1219,15 @@ export class SQLCodeGenBase {
             }
             // always generate permissions for the base view
             const permHeader = this.generateSingleEntitySQLFileHeader(options.entity, 'Permissions for ' + options.entity.BaseView);
-            const permBody = this.generateViewPermissions(options.entity);
+            const rawPermBody = this.generateViewPermissions(options.entity);
+            // Guarded for the same reason as in generateBaseViewPieces: these GRANTs target the
+            // application-owned BaseView, which does not exist during a layered entity's bootstrap
+            // pass. This copy is what gets written to the permissions FILE and logged into the
+            // migration, so leaving it unguarded would fail on other environments even though the
+            // executed copy (generateCustomBaseViewRefreshAndPermissions, below) is guarded.
+            const permBody = options.entity.HasLayeredBaseView && rawPermBody.trim().length > 0
+                ? '\n' + this.guardOnApplicationOwnedView(options.entity, rawPermBody.trim())
+                : rawPermBody;
             const s = permHeader + permBody;
             if (s.length > 0)
                 permissionsSQL += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1695,7 +1703,22 @@ export class SQLCodeGenBase {
                 relatedFieldsString += (relatedFieldsString ? ',\n' : '') + geoFieldsSelect;
             }
         }
-        const permissions: string = this.generateViewPermissions(entity);
+        // GRANTs target the PUBLIC view (BaseView), not the one this method generates. For a
+        // LAYERED entity those are different objects, and the outer one may not exist yet: the
+        // documented setup is "name the inner view -> run CodeGen -> then create BaseView", so the
+        // bootstrap pass necessarily grants against a view that is not there. Unguarded, that pass
+        // fails on the very step meant to enable the feature. Guarded here rather than at the call
+        // sites because generateBaseView concatenates this onto the view DDL and the phased
+        // executor consumes it separately — both need it.
+        const rawPermissions: string = this.generateViewPermissions(entity);
+        // The leading newline must stay OUTSIDE the guard. `generateViewPermissions` returns
+        // "\nGRANT ..." and the view DDL it is concatenated onto ends in `GO`; wrapping the string
+        // verbatim pulls that newline inside the sp_executesql literal and emits `GOIF OBJECT_ID`,
+        // fusing the batch separator to the next statement. Non-layered entities keep the raw
+        // string byte-for-byte so this cannot churn every other entity's generated SQL.
+        const permissions: string = entity.HasLayeredBaseView && rawPermissions.trim().length > 0
+            ? '\n' + this.guardOnApplicationOwnedView(entity, rawPermissions.trim())
+            : rawPermissions;
 
         // Detect recursive foreign keys and generate TVF joins and root field selects
         const recursiveFKs = this.detectRecursiveForeignKeys(entity);
