@@ -20,16 +20,19 @@ jobs:
       - name: Checkout PR
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: npm
+          cache: 'pnpm'
 
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
 
       # @memberjunction/standards is a workspace package here, so build it before running it.
-      # Consumers outside this repo just `npm ci` and get it from the registry.
+      # Consumers outside this repo just `pnpm install --frozen-lockfile` and get it from the registry.
       - name: Build the standards package
         run: npx turbo run build --filter=@memberjunction/standards
 

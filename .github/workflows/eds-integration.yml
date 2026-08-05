@@ -56,13 +56,16 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       # Turbo builds the driver package plus its full transitive dep graph
       # (Engine, MJCore, core-entities, credentials, …) so the test can resolve
@@ -81,7 +84,7 @@ jobs:
           PG_DATABASE: eds_ci
           PG_USER: eds_ci
           PG_PASSWORD: eds_ci_pass
-        run: npm run test
+        run: pnpm run test
 
   mongo-driver-integration:
     name: MongoDB driver (integration)
@@ -105,13 +108,16 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build MongoDB external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-mongodb
@@ -128,7 +134,7 @@ jobs:
           MONGO_USER: eds_ci
           MONGO_PASSWORD: eds_ci_pass
           MONGO_AUTH_SOURCE: admin
-        run: npm run test
+        run: pnpm run test
 
   sqlserver-driver-integration:
     name: SQL Server driver (integration)
@@ -147,13 +153,16 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build SQL Server external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-sqlserver
@@ -165,7 +174,10 @@ jobs:
         env:
           SAPW: Eds_CI_pass123
         run: |
-          node -e '
+          # `mssql` is declared by the sqlserver driver package, not at the root.
+          # npm hoisted it so a bare `node -e` from the repo root resolved it;
+          # pnpm links only declared deps, so run this from the package that has it.
+          pnpm --filter @memberjunction/external-data-source-sqlserver exec node -e '
             const sql = require("mssql");
             (async () => {
               for (let i = 0; i < 60; i++) {
@@ -194,7 +206,7 @@ jobs:
           MSSQL_DATABASE: master
           MSSQL_USER: sa
           MSSQL_PASSWORD: Eds_CI_pass123
-        run: npm run test
+        run: pnpm run test
 
   mysql-driver-integration:
     name: MySQL driver (integration)
@@ -218,13 +230,16 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build MySQL external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-mysql
@@ -238,7 +253,7 @@ jobs:
           MYSQL_PORT: '3306'
           MYSQL_USER: root
           MYSQL_PASSWORD: eds_ci_pass
-        run: npm run test
+        run: pnpm run test
 
   oracle-driver-integration:
     name: Oracle driver (integration)
@@ -265,13 +280,16 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build Oracle external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-oracle
@@ -287,7 +305,7 @@ jobs:
           ORA_SERVICE: FREEPDB1
           ORA_USER: eds_it
           ORA_PASSWORD: Eds_CI_pass123
-        run: npm run test
+        run: pnpm run test
 
   # Microsoft Fabric — Entra service-principal auth against a live Fabric Warehouse SQL endpoint.
   # No service container exists for Fabric (like Snowflake), so this runs against a hosted trial via
@@ -304,13 +322,16 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build SQL Server external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-sqlserver
@@ -326,4 +347,4 @@ jobs:
           FABRIC_TENANT_ID: ${{ secrets.FABRIC_TENANT_ID }}
           FABRIC_CLIENT_ID: ${{ secrets.FABRIC_CLIENT_ID }}
           FABRIC_CLIENT_SECRET: ${{ secrets.FABRIC_CLIENT_SECRET }}
-        run: npm run test -- fabric.integration
+        run: pnpm run test -- fabric.integration

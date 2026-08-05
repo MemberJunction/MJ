@@ -1,5 +1,22 @@
 name: Build and publish docker images
 
+# Docker `:latest` must mean the same thing npm's `latest` dist-tag means:
+# the newest CERTIFIED build (LTS process doc §4.3). It never follows the fast
+# channel.
+#
+# Since the 6.x era opened, everything published through `next -> main` is an
+# Edge prerelease (`6.1.0-edge.N`), so an unguarded run here would drag Docker
+# `:latest` onto uncertified bits while npm `latest` correctly stayed put. The
+# `channel` job below therefore skips any prerelease version.
+#
+# Consequence, stated plainly: during the Edge era this workflow auto-publishes
+# nothing. Certified and line builds ship from `lts/*` via publish-lts.yml,
+# which does not trigger this workflow — so a certified image is produced by
+# dispatching this workflow manually against the certified tag. Wiring line
+# publishes to Docker, and deciding whether an `:edge` tag is wanted at all,
+# are open items (process doc §15 item 4). Until then: no Docker image for
+# Edge builds, by decision, not by omission.
+
 on:
   workflow_run:
     workflows: [Build and publish new package versions]
@@ -10,8 +27,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  api:
+  channel:
+    name: Decide whether this version gets an image
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+      publish: ${{ steps.decide.outputs.PUBLISH }}
     steps:
       - name: Error out if the trigger did not succeed
         run: |
@@ -22,12 +43,40 @@ jobs:
 
       - name: Checkout repo
         uses: actions/checkout@v4
+
       - name: Get version
         id: version
         run: |
           # Use MJServer package since core and global are pinned at 2.100.3
           VERSION=$(jq -r .version packages/MJServer/package.json)
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      # A prerelease suffix (`-edge.N`, `-rc.N`, …) means uncertified bits.
+      # The guard keys off the version grammar rather than the trigger, so it
+      # also protects a manual dispatch accidentally aimed at `next`.
+      - name: Decide on the channel
+        id: decide
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          case "$VERSION" in
+            *-*)
+              echo "PUBLISH=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::$VERSION is a prerelease — skipping the Docker build. Docker :latest tracks certified builds only (LTS process doc §4.3)."
+              ;;
+            *)
+              echo "PUBLISH=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::$VERSION is an unsuffixed release — building and tagging :latest."
+              ;;
+          esac
+
+  api:
+    needs: channel
+    if: needs.channel.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -44,7 +93,7 @@ jobs:
           push: true
           tags: |
             memberjunction/api:latest
-            memberjunction/api:v${{ steps.version.outputs.VERSION }}
+            memberjunction/api:v${{ needs.channel.outputs.version }}
           platforms: |
             linux/amd64
             linux/arm64
@@ -62,5 +111,5 @@ jobs:
         run: |
           docker buildx imagetools create \
             --tag askskip.azurecr.io/memberjunction/api:latest \
-            --tag askskip.azurecr.io/memberjunction/api:v${{ steps.version.outputs.VERSION }} \
+            --tag askskip.azurecr.io/memberjunction/api:v${{ needs.channel.outputs.version }} \
             memberjunction/api:latest

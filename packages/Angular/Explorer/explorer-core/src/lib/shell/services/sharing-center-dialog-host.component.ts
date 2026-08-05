@@ -68,6 +68,8 @@ export class SharingCenterDialogHostComponent {
                 if (row.ResourceType) {
                     const key = new CompositeKey();
                     key.KeyValuePairs.push({ FieldName: 'ID', Value: row.ResourceID! });
+                    // Transient dialog: default origin capture (the page
+                    // behind it) is the right "back" target once it closes.
                     this.navigationService.OpenEntityRecord(row.ResourceType, key);
                     return true;
                 }
