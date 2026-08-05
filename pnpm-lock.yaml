@@ -29,6 +29,7 @@ overrides:
   '@codemirror/view': 6.43.8
   '@codemirror/language': 6.12.4
   '@codemirror/commands': 6.10.4
+  jsdom: 26.1.0
 
 importers:
 
@@ -135,7 +136,7 @@ importers:
         specifier: 5.1.3
         version: 5.1.3(@types/eslint@9.6.1)(eslint-config-prettier@9.1.0(eslint@8.56.0))(eslint@8.56.0)(prettier@3.8.1)
       jsdom:
-        specifier: ^26.1.0
+        specifier: 26.1.0
         version: 26.1.0
       knip:
         specifier: ^5.71.0
@@ -351,7 +352,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/AgentManager/actions:
     dependencies:
@@ -522,7 +523,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/AgentsClient:
     dependencies:
@@ -584,7 +585,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/Clustering:
     dependencies:
@@ -649,7 +650,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/ContextCrush:
     devDependencies:
@@ -661,7 +662,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/Core:
     dependencies:
@@ -686,7 +687,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/CorePlus:
     dependencies:
@@ -732,7 +733,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/DatabaseDesigner/actions:
     dependencies:
@@ -772,7 +773,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/DatabaseDesigner/core:
     dependencies:
@@ -812,7 +813,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/Engine:
     dependencies:
@@ -861,7 +862,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/FormBuilder/core:
     dependencies:
@@ -910,7 +911,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/Knowledge/Pipeline:
     dependencies:
@@ -990,7 +991,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/Knowledge/TagEngineBase:
     dependencies:
@@ -1012,7 +1013,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/MCPClient:
     dependencies:
@@ -1043,7 +1044,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/MCPServer:
     dependencies:
@@ -1155,7 +1156,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/MJComputerUse:
     dependencies:
@@ -1207,7 +1208,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/PredictiveStudio/Core:
     dependencies:
@@ -1229,7 +1230,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/PredictiveStudio/Engine:
     dependencies:
@@ -1287,7 +1288,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/PredictiveStudio/Sidecar:
     dependencies:
@@ -1303,7 +1304,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/Prompts:
     dependencies:
@@ -1367,7 +1368,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/Providers/Anthropic:
     dependencies:
@@ -1657,7 +1658,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/Providers/Gemini:
     dependencies:
@@ -1988,7 +1989,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/Providers/Zhipu:
     dependencies:
@@ -2057,7 +2058,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/RealtimeBridge/Providers/Discord:
     dependencies:
@@ -2085,7 +2086,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/RealtimeBridge/Providers/GoogleMeet:
     dependencies:
@@ -2113,7 +2114,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/RealtimeBridge/Providers/LiveKit:
     dependencies:
@@ -2141,7 +2142,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/RealtimeBridge/Providers/LiveKitNative:
     dependencies:
@@ -2163,7 +2164,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
     optionalDependencies:
       '@livekit/rtc-node':
         specifier: ^0.13.0
@@ -2195,7 +2196,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
     optionalDependencies:
       '@ringcentral/sdk':
         specifier: ^5.0.4
@@ -2233,7 +2234,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/RealtimeBridge/Providers/Teams:
     dependencies:
@@ -2261,7 +2262,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
     optionalDependencies:
       '@azure/communication-call-automation':
         specifier: ^1.3.0
@@ -2296,7 +2297,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
     optionalDependencies:
       twilio:
         specifier: ^5.3.0
@@ -2328,7 +2329,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
     optionalDependencies:
       '@vonage/server-sdk':
         specifier: ^3.19.0
@@ -2360,7 +2361,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/RealtimeBridge/Providers/Zoom:
     dependencies:
@@ -2388,7 +2389,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
     optionalDependencies:
       '@zoom/rtms':
         specifier: ^1.1.0
@@ -2426,7 +2427,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
     optionalDependencies:
       '@microsoft/microsoft-graph-client':
         specifier: ^3.0.7
@@ -2502,7 +2503,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/RemoteBrowser/Cdp:
     dependencies:
@@ -2530,7 +2531,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/RemoteBrowser/Providers/Browserbase:
     dependencies:
@@ -2558,7 +2559,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/RemoteBrowser/Providers/Browserless:
     dependencies:
@@ -2586,7 +2587,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/RemoteBrowser/Providers/Hyperbrowser:
     dependencies:
@@ -2617,7 +2618,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/RemoteBrowser/Providers/SelfHost:
     dependencies:
@@ -2651,7 +2652,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/RemoteBrowser/Providers/Steel:
     dependencies:
@@ -2679,7 +2680,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/RemoteBrowser/Server:
     dependencies:
@@ -2710,7 +2711,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/Reranker:
     dependencies:
@@ -2747,7 +2748,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AI/Segmentation:
     dependencies:
@@ -3161,7 +3162,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Actions/ApolloEnrichment:
     dependencies:
@@ -3427,7 +3428,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Actions/ContentAutotag:
     dependencies:
@@ -3467,7 +3468,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Actions/CoreActions:
     dependencies:
@@ -3667,8 +3668,8 @@ importers:
         specifier: ^0.16.0
         version: 0.16.0
       jsdom:
-        specifier: ^28.0.0
-        version: 28.1.0
+        specifier: 26.1.0
+        version: 26.1.0
       jsonpath-plus:
         specifier: ^10.3.0
         version: 10.3.0
@@ -4083,7 +4084,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
     publishDirectory: dist
 
   packages/Angular/BootstrapLite:
@@ -5280,7 +5281,7 @@ importers:
         version: 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Explorer/shared:
     dependencies:
@@ -5512,7 +5513,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/action-gallery:
     dependencies:
@@ -5573,7 +5574,7 @@ importers:
         version: 1.97.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/actions:
     dependencies:
@@ -5628,7 +5629,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/agent-client:
     dependencies:
@@ -5659,7 +5660,7 @@ importers:
         version: 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/agent-requests:
     dependencies:
@@ -5714,7 +5715,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/agents:
     dependencies:
@@ -5778,7 +5779,7 @@ importers:
         version: 1.97.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/ai-test-harness:
     dependencies:
@@ -5857,7 +5858,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/archive-manager:
     dependencies:
@@ -5906,7 +5907,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/artifacts:
     dependencies:
@@ -6018,7 +6019,7 @@ importers:
         version: 1.97.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/base-forms:
     dependencies:
@@ -6100,7 +6101,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/base-types:
     dependencies:
@@ -6131,7 +6132,7 @@ importers:
         version: 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/chat:
     dependencies:
@@ -6174,7 +6175,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/clustering:
     dependencies:
@@ -6238,7 +6239,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/code-editor:
     dependencies:
@@ -6320,7 +6321,7 @@ importers:
         version: 1.97.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/composer:
     dependencies:
@@ -6357,7 +6358,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/container-directives:
     dependencies:
@@ -6388,7 +6389,7 @@ importers:
         version: 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/conversations:
     dependencies:
@@ -6518,7 +6519,7 @@ importers:
         version: 1.97.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/credentials:
     dependencies:
@@ -6570,7 +6571,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/dashboard-viewer:
     dependencies:
@@ -6643,7 +6644,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/data-context:
     dependencies:
@@ -6692,7 +6693,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/deep-diff:
     dependencies:
@@ -6729,7 +6730,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/entity-action-ux:
     dependencies:
@@ -6784,7 +6785,7 @@ importers:
         version: 5.0.10
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/entity-card:
     dependencies:
@@ -6818,7 +6819,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/entity-communication:
     dependencies:
@@ -6879,7 +6880,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/entity-relationship-diagram:
     dependencies:
@@ -6940,7 +6941,7 @@ importers:
         version: 1.97.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/entity-viewer:
     dependencies:
@@ -7031,7 +7032,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/export-service:
     dependencies:
@@ -7065,7 +7066,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/feedback:
     dependencies:
@@ -7111,7 +7112,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/file-storage:
     dependencies:
@@ -7181,7 +7182,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/filter-builder:
     dependencies:
@@ -7218,7 +7219,7 @@ importers:
         version: 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/find-record:
     dependencies:
@@ -7276,7 +7277,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/flow-editor:
     dependencies:
@@ -7349,7 +7350,7 @@ importers:
         version: 1.97.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/forms:
     dependencies:
@@ -7386,7 +7387,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/gantt:
     dependencies:
@@ -7417,7 +7418,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/generic-dialog:
     dependencies:
@@ -7445,7 +7446,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/join-grid:
     dependencies:
@@ -7497,7 +7498,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/kanban:
     dependencies:
@@ -7525,7 +7526,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/list-management:
     dependencies:
@@ -7583,7 +7584,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/livekit-room:
     dependencies:
@@ -7626,7 +7627,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/markdown:
     dependencies:
@@ -7662,11 +7663,11 @@ importers:
         specifier: 6.0.0
         version: link:../test-utils
       jsdom:
-        specifier: ^28.0.0
-        version: 28.1.0
+        specifier: 26.1.0
+        version: 26.1.0
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/media-player:
     dependencies:
@@ -7700,7 +7701,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/mj-livekit-room:
     dependencies:
@@ -7746,7 +7747,7 @@ importers:
         version: 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/ng-map-view:
     dependencies:
@@ -7795,7 +7796,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/notifications:
     dependencies:
@@ -7835,7 +7836,7 @@ importers:
         version: 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/pagination:
     dependencies:
@@ -7857,7 +7858,7 @@ importers:
         version: 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/query-viewer:
     dependencies:
@@ -7933,7 +7934,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/react:
     dependencies:
@@ -8003,7 +8004,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/record-changes:
     dependencies:
@@ -8067,7 +8068,7 @@ importers:
         version: 5.2.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/record-merge:
     dependencies:
@@ -8110,7 +8111,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/record-process-studio:
     dependencies:
@@ -8165,7 +8166,7 @@ importers:
         version: 5.0.10
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/record-selector:
     dependencies:
@@ -8208,7 +8209,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/record-tags:
     dependencies:
@@ -8257,7 +8258,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/resource-permissions:
     dependencies:
@@ -8318,7 +8319,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/scheduling:
     dependencies:
@@ -8370,7 +8371,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/search:
     dependencies:
@@ -8422,7 +8423,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/shared:
     dependencies:
@@ -8471,7 +8472,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/tab-strip:
     dependencies:
@@ -8499,7 +8500,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/tasks:
     dependencies:
@@ -8548,7 +8549,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/test-utils:
     dependencies:
@@ -8570,7 +8571,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/timeline:
     dependencies:
@@ -8607,7 +8608,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/trees:
     dependencies:
@@ -8653,7 +8654,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/ui-components:
     dependencies:
@@ -8690,7 +8691,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/user-avatar:
     dependencies:
@@ -8724,7 +8725,7 @@ importers:
         version: 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/user-routines:
     dependencies:
@@ -8800,7 +8801,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/versions:
     dependencies:
@@ -8852,7 +8853,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/whiteboard:
     dependencies:
@@ -8895,7 +8896,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Angular/Generic/word-cloud:
     dependencies:
@@ -8920,7 +8921,7 @@ importers:
         version: link:../test-utils
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AngularElements/mj-angular-elements-demo:
     dependencies:
@@ -8972,7 +8973,7 @@ importers:
     devDependencies:
       '@angular-devkit/build-angular':
         specifier: 21.1.3
-        version: 21.1.3(b843762113698bf8320c28d6b189b25f)
+        version: 21.1.3(77840571e85053daf57871e2c528a340)
       '@angular/cli':
         specifier: 21.1.3
         version: 21.1.3(@types/node@24.10.11)(chokidar@5.0.0)
@@ -9021,7 +9022,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/AuthProviders:
     dependencies:
@@ -9055,7 +9056,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/CLICore:
     dependencies:
@@ -9086,7 +9087,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/CodeGenLib:
     dependencies:
@@ -9216,7 +9217,7 @@ importers:
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Communication/base-types:
     dependencies:
@@ -9650,7 +9651,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/ContentAutotagging:
     dependencies:
@@ -9762,7 +9763,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/ConversationsRuntime:
     dependencies:
@@ -9833,7 +9834,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/DBAutoDoc:
     dependencies:
@@ -9915,7 +9916,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/DocUtils:
     dependencies:
@@ -9959,8 +9960,8 @@ importers:
         specifier: ^1.0.1
         version: 1.0.1
       jsdom:
-        specifier: ^28.0.0
-        version: 28.1.0
+        specifier: 26.1.0
+        version: 26.1.0
       nwsapi:
         specifier: ^2.2.23
         version: 2.2.23
@@ -10040,7 +10041,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
     optionalDependencies:
       '@aws-sdk/client-kms':
         specifier: ^3.700.0
@@ -10115,7 +10116,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/ExternalDataSources/Providers/MongoDB:
     dependencies:
@@ -10149,7 +10150,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/ExternalDataSources/Providers/MySQL:
     dependencies:
@@ -10183,7 +10184,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/ExternalDataSources/Providers/Oracle:
     dependencies:
@@ -10217,7 +10218,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/ExternalDataSources/Providers/Postgres:
     dependencies:
@@ -10254,7 +10255,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/ExternalDataSources/Providers/SQLServer:
     dependencies:
@@ -10291,7 +10292,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/ExternalDataSources/Providers/Snowflake:
     dependencies:
@@ -10328,7 +10329,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/FieldRulesTransforms:
     dependencies:
@@ -10353,7 +10354,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/GeneratedActions:
     dependencies:
@@ -10467,7 +10468,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/GraphQLDataProvider:
     dependencies:
@@ -10522,7 +10523,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
     optionalDependencies:
       '@esbuild/win32-x64':
         specifier: 0.24.0
@@ -10560,7 +10561,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Integration/connectors:
     dependencies:
@@ -10588,7 +10589,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Integration/engine:
     dependencies:
@@ -10619,7 +10620,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Integration/engine-base:
     dependencies:
@@ -10641,7 +10642,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Integration/pk-classifier:
     dependencies:
@@ -10663,7 +10664,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Integration/progress-artifacts:
     dependencies:
@@ -10679,7 +10680,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Integration/schema-builder:
     dependencies:
@@ -10707,7 +10708,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Integration/ui-types:
     devDependencies:
@@ -10738,7 +10739,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Lists/server:
     dependencies:
@@ -10763,7 +10764,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/LiveKitRoomCore:
     dependencies:
@@ -10825,7 +10826,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/MJAPI:
     dependencies:
@@ -10886,7 +10887,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/MJCLI:
     dependencies:
@@ -11144,7 +11145,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/MJCoreEntities:
     dependencies:
@@ -11674,7 +11675,7 @@ importers:
     devDependencies:
       '@angular-devkit/build-angular':
         specifier: 21.1.3
-        version: 21.1.3(87df26c12e6176dd43fbefdf2051245d)
+        version: 21.1.3(6204665c13878fe84f8457e137d2cfeb)
       '@angular/cli':
         specifier: 21.1.3
         version: 21.1.3(@types/node@24.10.11)(chokidar@5.0.0)
@@ -11724,7 +11725,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/MJGlobal:
     dependencies:
@@ -11746,7 +11747,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/MJInstaller:
     dependencies:
@@ -12205,7 +12206,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/MJStorage:
     dependencies:
@@ -12281,7 +12282,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/MarkdownCore:
     dependencies:
@@ -12309,7 +12310,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/MessagingAdapters:
     dependencies:
@@ -12364,7 +12365,7 @@ importers:
         version: 5.1.4(typescript@5.9.3)(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/MetadataSync:
     dependencies:
@@ -12461,7 +12462,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/MobileApp:
     dependencies:
@@ -12597,7 +12598,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/OpenApp/Engine:
     dependencies:
@@ -12643,7 +12644,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/PostgreSQLDataProvider:
     dependencies:
@@ -12680,7 +12681,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/QueryGen:
     dependencies:
@@ -12738,7 +12739,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/QueryProcessor:
     dependencies:
@@ -12763,7 +12764,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/React/linter:
     dependencies:
@@ -12806,7 +12807,7 @@ importers:
         version: 7.28.0
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/React/runtime:
     dependencies:
@@ -12855,7 +12856,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
       webpack:
         specifier: ^5.105.0
         version: 5.105.0(webpack-cli@6.0.1)
@@ -12949,7 +12950,7 @@ importers:
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/RecordComparison:
     dependencies:
@@ -12987,7 +12988,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/RecordSetProcessor/engine:
     dependencies:
@@ -13036,7 +13037,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/RedisProvider:
     dependencies:
@@ -13058,7 +13059,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/SQLConverter:
     dependencies:
@@ -13080,7 +13081,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/SQLDialect:
     devDependencies:
@@ -13092,7 +13093,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/SQLGlotTS:
     devDependencies:
@@ -13101,7 +13102,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/SQLParser:
     dependencies:
@@ -13117,7 +13118,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/SQLServerDataProvider:
     dependencies:
@@ -13190,7 +13191,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Scheduling/actions:
     dependencies:
@@ -13329,7 +13330,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/SchemaEngine:
     dependencies:
@@ -13357,7 +13358,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/SearchEngine:
     dependencies:
@@ -13995,7 +13996,7 @@ importers:
         version: 5.1.4(typescript@5.9.3)(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
       vitest:
         specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Standards:
     devDependencies:
@@ -14007,7 +14008,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Templates/base-types:
     dependencies:
@@ -14170,7 +14171,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/TestingFramework/EngineBase:
     dependencies:
@@ -14334,7 +14335,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/TestingFramework/testing-integration:
     dependencies:
@@ -14380,7 +14381,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
     optionalDependencies:
       '@memberjunction/postgresql-dataprovider':
         specifier: 6.0.0
@@ -14406,7 +14407,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/VersionHistory:
     dependencies:
@@ -14455,8 +14456,8 @@ importers:
         specifier: ^0.26.0
         version: 0.26.0
       jsdom:
-        specifier: ^24.0.0
-        version: 24.1.3
+        specifier: 26.1.0
+        version: 26.1.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -14533,7 +14534,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/geo/geo-maps: {}
 
@@ -14546,9 +14547,6 @@ packages:
     peerDependenciesMeta:
       graphql:
         optional: true
-
-  '@acemir/cssom@0.9.31':
-    resolution: {integrity: sha512-ZnR3GSaH+/vJ0YlHau21FjfLYjMpYVIzTD8M8vIEQvIGxeOXyXdzCI140rrCY862p/C/BbzWsjc1dgnM9mkoTA==}
 
   '@algolia/abtesting@1.12.2':
     resolution: {integrity: sha512-oWknd6wpfNrmRcH0vzed3UPX0i17o4kYLM5OMITyMVM2xLgaRbIafoxL0e8mcrNNb0iORCJA0evnNDKRYth5WQ==}
@@ -14969,12 +14967,6 @@ packages:
 
   '@asamuzakjp/css-color@4.1.2':
     resolution: {integrity: sha512-NfBUvBaYgKIuq6E/RBLY1m0IohzNHAYyaJGuTK79Z23uNwmz2jl1mPsC5ZxCCxylinKhT1Amn5oNTlx1wN8cQg==}
-
-  '@asamuzakjp/dom-selector@6.8.1':
-    resolution: {integrity: sha512-MvRz1nCqW0fsy8Qz4dnLIvhOlMzqDVBabZx6lH+YywFDdjXhMY37SmpV1XFX3JzG5GWHn63j6HX6QPr3lZXHvQ==}
-
-  '@asamuzakjp/nwsapi@2.3.9':
-    resolution: {integrity: sha512-n8GuYSrI9bF7FFZ/SjhwevlHc8xaVlb/7HmHelnc/PZXBD2ZR49NnN9sMMuDdEGPeeRQ5d0hqlSlEpgCX3Wl0Q==}
 
   '@auth0/auth0-angular@2.6.0':
     resolution: {integrity: sha512-+LcdhiawKUdhEMkILl9Pq1yb1a9haNLHVG5kBTQXXtbocFDobtw8dvA/S74lBAzweCoDpFmNbMzORCFQLKyCOw==}
@@ -16258,10 +16250,6 @@ packages:
 
   '@braintree/sanitize-url@7.1.2':
     resolution: {integrity: sha512-jigsZK+sMF/cuiB7sERuo9V7N9jx+dhmHHnQyDSVdpZwVutaBu7WvNYqMDLSgFgfB30n452TP3vjDAvFC973mA==}
-
-  '@bramus/specificity@2.4.2':
-    resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
-    hasBin: true
 
   '@bufbuild/protobuf@1.10.1':
     resolution: {integrity: sha512-wJ8ReQbHxsAfXhrf9ixl0aYbZorRuOWpBNzm8pL8ftmSxQx/wnJD5Eg861NwJU/czy2VXFIebCeZnZrI9rktIQ==}
@@ -21328,9 +21316,6 @@ packages:
     resolution: {integrity: sha512-pbnl5XzGBdrFU/wT4jqmJVPn2B6UHPBOhzMQkY/SPUPB6QtUXtmBHBIwCbXJol93mOpGMnQyP/+BB19q04xj7g==}
     engines: {node: '>=4'}
 
-  bidi-js@1.0.3:
-    resolution: {integrity: sha512-RKshQI1R3YQ+n9YJz2QQ147P66ELpa1FQEg20Dk8oW9t2KgLbpDLLp9aGZ7y8WHSshDknG0bknqGw5/tyCs5tw==}
-
   big-integer@1.6.52:
     resolution: {integrity: sha512-QxD8cf2eVqJOOz63z6JIN9BzvVs/dlySa5HGSBH5xtR8dPteIRQnBxxKqkNTiT6jbDTF6jAfrd4oMcND9RGbQg==}
     engines: {node: '>=0.6'}
@@ -24444,27 +24429,9 @@ packages:
   jsc-safe-url@0.2.4:
     resolution: {integrity: sha512-0wM3YBWtYePOjfyXQH5MWQ8H7sdk5EXSwZvmSLKk2RboVQ2Bu239jycHDz5J/8Blf3K0Qnoy2b6xD+z10MFB+Q==}
 
-  jsdom@24.1.3:
-    resolution: {integrity: sha512-MyL55p3Ut3cXbeBEG7Hcv0mVM8pp8PBNWxRqchZnSfAiES1v1mRnMeFfaHWIPULpwsYfvO+ZmMZz5tGCnjzDUQ==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      canvas: ^2.11.2
-    peerDependenciesMeta:
-      canvas:
-        optional: true
-
   jsdom@26.1.0:
     resolution: {integrity: sha512-Cvc9WUhxSMEo4McES3P7oK3QaXldCfNWp7pl2NNeiIFlCoLr3kfq9kb1fxftiwk1FLV7CvpvDfonxtzUDeSOPg==}
     engines: {node: '>=18'}
-    peerDependencies:
-      canvas: ^3.0.0
-    peerDependenciesMeta:
-      canvas:
-        optional: true
-
-  jsdom@28.1.0:
-    resolution: {integrity: sha512-0+MoQNYyr2rBHqO1xilltfDjV9G7ymYGlAUazgcDLQaUf8JDHbuGwsxN6U9qWaElZ4w1B2r7yEGIL3GdeW3Rug==}
-    engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
     peerDependencies:
       canvas: ^3.0.0
     peerDependenciesMeta:
@@ -26558,9 +26525,6 @@ packages:
     resolution: {integrity: sha512-hh2WYhq4fi8+b+/2Kg9CEge4fDPvHS534aOOvOZeQ3+Vf2mCFsaFBYj0i+iXcAq6I9Vzp5fjMFBlONvayDC1qg==}
     engines: {node: '>=6'}
 
-  querystringify@2.2.0:
-    resolution: {integrity: sha512-FIqgj2EUvTa7R50u0rGsyTftzjYmv/a3hO345bZNrqabNqjtgiDMgmo4mkUjd+nzU5oF3dClKqFIPUKybUyqoQ==}
-
   queue-lit@1.5.2:
     resolution: {integrity: sha512-tLc36IOPeMAubu8BkW8YDBV+WyIgKlYU7zUNs0J5Vk9skSZ4JfGlPOqplP0aHdfv7HL0B2Pg6nwiq60Qc6M2Hw==}
     engines: {node: '>=12'}
@@ -27000,9 +26964,6 @@ packages:
   router@2.2.0:
     resolution: {integrity: sha512-nLTrUKm2UyiL7rlhapu/Zl45FwNgkZGaCpZbIHajDYgwlJCOzLSk+cIPAnsEqV955GjILJnKbdQC1nVPz+gAYQ==}
     engines: {node: '>= 18'}
-
-  rrweb-cssom@0.7.1:
-    resolution: {integrity: sha512-TrEMa7JGdVm0UThDJSx7ddw5nVm3UJS9o9CCIZ72B1vSyEZoziDqBYP3XIoi/12lKrJR8rE3jeFHMok2F/Mnsg==}
 
   rrweb-cssom@0.8.0:
     resolution: {integrity: sha512-guoltQEx+9aMf2gDZ0s62EcV8lsXR+0w8915TC3ITdn2YueuNjdAYh/levpU9nFaoChh9RUS5ZdQMrKfVEN9tw==}
@@ -27849,10 +27810,6 @@ packages:
     resolution: {integrity: sha512-r0eojU4bI8MnHr8c5bNo7lJDdI2qXlWWJk6a9EAFG7vbhTjElYhBVS3/miuE0uOuoLdb8Mc/rVfsmm6eo5o9GA==}
     hasBin: true
 
-  tough-cookie@4.1.4:
-    resolution: {integrity: sha512-Loo5UUvLD9ScZ6jh8beX1T6sO1w2/MpCRpEP7V280GKMVUQ0Jzar2U3UJPsrdbziLEMMhu3Ujnq//rhiFuIeag==}
-    engines: {node: '>=6'}
-
   tough-cookie@5.1.2:
     resolution: {integrity: sha512-FVDYdxtnj0G6Qm/DhNPSb8Ju59ULcup3tuJxkFb5K8Bv2pUXILbf0xZWU8PX8Ov19OXljbUyveOFwRMwkXzO+A==}
     engines: {node: '>=16'}
@@ -28207,10 +28164,6 @@ packages:
     resolution: {integrity: sha512-rBJeI5CXAlmy1pV+617WB9J63U6XcazHHF2f2dbJix4XzpUF0RS3Zbj0FGIOCAva5P/d/GBOYaACQ1w+0azUkg==}
     engines: {node: '>= 4.0.0'}
 
-  universalify@0.2.0:
-    resolution: {integrity: sha512-CJ1QgKmNg3CwvAv/kOFmtnEN05f0D/cn9QntgNOQlQF9dgvVTHj3t+8JPdjqawCHk7V/KA+fbUqzZ9XWhcqPUg==}
-    engines: {node: '>= 4.0.0'}
-
   universalify@2.0.1:
     resolution: {integrity: sha512-gptHNQghINnc/vTGIk0SOFGFNXw7JVrlRUtConJRlvaw6DuX0wO5Jeko9sWrMBhh+PsYAZ7oXAiOnf/UKogyiw==}
     engines: {node: '>= 10.0.0'}
@@ -28239,9 +28192,6 @@ packages:
 
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
-
-  url-parse@1.5.10:
-    resolution: {integrity: sha512-WypcfiRhfeUP9vvF0j6rw0J3hrWrw6iZv3+22h6iRMJ/8z1Tj6XfLP4DsUix5MhMPnXpiHDoKyoZ/bdCkwBCiQ==}
 
   url-template@2.0.8:
     resolution: {integrity: sha512-XdVKMF4SJ0nP/O7XIPB0JwAEuT9lDIYnNsK8yGVe43y0AWoKeJNdv3ZNWh7ksJ6KqQFjOO6ox/VEitLnaVNufw==}
@@ -28446,7 +28396,7 @@ packages:
       '@vitest/browser': 3.2.6
       '@vitest/ui': 3.2.6
       happy-dom: '*'
-      jsdom: '*'
+      jsdom: 26.1.0
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
@@ -28476,7 +28426,7 @@ packages:
       '@vitest/browser-webdriverio': 4.0.18
       '@vitest/ui': 4.0.18
       happy-dom: '*'
-      jsdom: '*'
+      jsdom: 26.1.0
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
@@ -28988,8 +28938,6 @@ snapshots:
     optionalDependencies:
       graphql: 16.12.0
 
-  '@acemir/cssom@0.9.31': {}
-
   '@algolia/abtesting@1.12.2':
     dependencies:
       '@algolia/client-common': 5.46.2
@@ -29098,6 +29046,94 @@ snapshots:
     transitivePeerDependencies:
       - chokidar
 
+  '@angular-devkit/build-angular@21.1.3(6204665c13878fe84f8457e137d2cfeb)':
+    dependencies:
+      '@ampproject/remapping': 2.3.0
+      '@angular-devkit/architect': 0.2101.3(chokidar@5.0.0)
+      '@angular-devkit/build-webpack': 0.2101.3(chokidar@5.0.0)(webpack-dev-server@5.2.2(debug@4.4.3)(tslib@2.8.1)(webpack@5.105.0(esbuild@0.27.2)))(webpack@5.105.0(esbuild@0.27.2))
+      '@angular-devkit/core': 21.1.3(chokidar@5.0.0)
+      '@angular/build': 21.1.3(862f5a4d2af554646fc7079842bbc1e4)
+      '@angular/compiler-cli': 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
+      '@babel/core': 7.28.5
+      '@babel/generator': 7.28.5
+      '@babel/helper-annotate-as-pure': 7.27.3
+      '@babel/helper-split-export-declaration': 7.24.7
+      '@babel/plugin-transform-async-generator-functions': 7.28.0(@babel/core@7.28.5)
+      '@babel/plugin-transform-async-to-generator': 7.27.1(@babel/core@7.28.5)
+      '@babel/plugin-transform-runtime': 7.28.5(@babel/core@7.28.5)
+      '@babel/preset-env': 7.28.5(@babel/core@7.28.5)
+      '@babel/runtime': 7.28.4
+      '@discoveryjs/json-ext': 0.6.3
+      '@ngtools/webpack': 21.1.3(@angular/compiler-cli@21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3))(typescript@5.9.3)(webpack@5.105.0(esbuild@0.27.2))
+      ansi-colors: 4.1.3
+      autoprefixer: 10.4.23(postcss@8.5.6)
+      babel-loader: 10.0.0(@babel/core@7.28.5)(webpack@5.105.0(esbuild@0.27.2))
+      browserslist: 4.28.1
+      copy-webpack-plugin: 13.0.1(webpack@5.105.0(esbuild@0.27.2))
+      css-loader: 7.1.2(webpack@5.105.0(esbuild@0.27.2))
+      esbuild-wasm: 0.27.2
+      http-proxy-middleware: 3.0.5
+      istanbul-lib-instrument: 6.0.3
+      jsonc-parser: 3.3.1
+      karma-source-map-support: 1.4.0
+      less: 4.4.2
+      less-loader: 12.3.0(less@4.4.2)(webpack@5.105.0(esbuild@0.27.2))
+      license-webpack-plugin: 4.0.2(webpack@5.105.0(esbuild@0.27.2))
+      loader-utils: 3.3.1
+      mini-css-extract-plugin: 2.9.4(webpack@5.105.0(esbuild@0.27.2))
+      open: 11.0.0
+      ora: 9.0.0
+      picomatch: 4.0.3
+      piscina: 5.1.4
+      postcss: 8.5.6
+      postcss-loader: 8.2.0(postcss@8.5.6)(typescript@5.9.3)(webpack@5.105.0(esbuild@0.27.2))
+      resolve-url-loader: 5.0.0
+      rxjs: 7.8.2
+      sass: 1.97.1
+      sass-loader: 16.0.6(sass@1.97.1)(webpack@5.105.0(esbuild@0.27.2))
+      semver: 7.7.3
+      source-map-loader: 5.0.0(webpack@5.105.0(esbuild@0.27.2))
+      source-map-support: 0.5.21
+      terser: 5.44.1
+      tinyglobby: 0.2.15
+      tree-kill: 1.2.2
+      tslib: 2.8.1
+      typescript: 5.9.3
+      webpack: 5.105.0(esbuild@0.27.2)
+      webpack-dev-middleware: 7.4.5(tslib@2.8.1)(webpack@5.105.0(esbuild@0.27.2))
+      webpack-dev-server: 5.2.2(debug@4.4.3)(tslib@2.8.1)(webpack@5.105.0(esbuild@0.27.2))
+      webpack-merge: 6.0.1
+      webpack-subresource-integrity: 5.1.0(webpack@5.105.0(esbuild@0.27.2))
+    optionalDependencies:
+      '@angular/core': 21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/localize': 21.1.3(@angular/compiler-cli@21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3))(@angular/compiler@21.1.3)
+      '@angular/platform-browser': 21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))
+      '@angular/service-worker': 21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      esbuild: 0.27.2
+      ng-packagr: 21.1.0(@angular/compiler-cli@21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3))(tslib@2.8.1)(typescript@5.9.3)
+    transitivePeerDependencies:
+      - '@angular/compiler'
+      - '@rspack/core'
+      - '@swc/core'
+      - '@types/node'
+      - bufferutil
+      - chokidar
+      - debug
+      - html-webpack-plugin
+      - jiti
+      - lightningcss
+      - node-sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - tsx
+      - uglify-js
+      - utf-8-validate
+      - vitest
+      - webpack-cli
+      - yaml
+
   '@angular-devkit/build-angular@21.1.3(77840571e85053daf57871e2c528a340)':
     dependencies:
       '@ampproject/remapping': 2.3.0
@@ -29185,183 +29221,6 @@ snapshots:
       - vitest
       - webpack-cli
       - yaml
-    optional: true
-
-  '@angular-devkit/build-angular@21.1.3(87df26c12e6176dd43fbefdf2051245d)':
-    dependencies:
-      '@ampproject/remapping': 2.3.0
-      '@angular-devkit/architect': 0.2101.3(chokidar@5.0.0)
-      '@angular-devkit/build-webpack': 0.2101.3(chokidar@5.0.0)(webpack-dev-server@5.2.2(debug@4.4.3)(tslib@2.8.1)(webpack@5.105.0(esbuild@0.27.2)))(webpack@5.105.0(esbuild@0.27.2))
-      '@angular-devkit/core': 21.1.3(chokidar@5.0.0)
-      '@angular/build': 21.1.3(24e178ce5057a632e864b42dd970c71e)
-      '@angular/compiler-cli': 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
-      '@babel/core': 7.28.5
-      '@babel/generator': 7.28.5
-      '@babel/helper-annotate-as-pure': 7.27.3
-      '@babel/helper-split-export-declaration': 7.24.7
-      '@babel/plugin-transform-async-generator-functions': 7.28.0(@babel/core@7.28.5)
-      '@babel/plugin-transform-async-to-generator': 7.27.1(@babel/core@7.28.5)
-      '@babel/plugin-transform-runtime': 7.28.5(@babel/core@7.28.5)
-      '@babel/preset-env': 7.28.5(@babel/core@7.28.5)
-      '@babel/runtime': 7.28.4
-      '@discoveryjs/json-ext': 0.6.3
-      '@ngtools/webpack': 21.1.3(@angular/compiler-cli@21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3))(typescript@5.9.3)(webpack@5.105.0(esbuild@0.27.2))
-      ansi-colors: 4.1.3
-      autoprefixer: 10.4.23(postcss@8.5.6)
-      babel-loader: 10.0.0(@babel/core@7.28.5)(webpack@5.105.0(esbuild@0.27.2))
-      browserslist: 4.28.1
-      copy-webpack-plugin: 13.0.1(webpack@5.105.0(esbuild@0.27.2))
-      css-loader: 7.1.2(webpack@5.105.0(esbuild@0.27.2))
-      esbuild-wasm: 0.27.2
-      http-proxy-middleware: 3.0.5
-      istanbul-lib-instrument: 6.0.3
-      jsonc-parser: 3.3.1
-      karma-source-map-support: 1.4.0
-      less: 4.4.2
-      less-loader: 12.3.0(less@4.4.2)(webpack@5.105.0(esbuild@0.27.2))
-      license-webpack-plugin: 4.0.2(webpack@5.105.0(esbuild@0.27.2))
-      loader-utils: 3.3.1
-      mini-css-extract-plugin: 2.9.4(webpack@5.105.0(esbuild@0.27.2))
-      open: 11.0.0
-      ora: 9.0.0
-      picomatch: 4.0.3
-      piscina: 5.1.4
-      postcss: 8.5.6
-      postcss-loader: 8.2.0(postcss@8.5.6)(typescript@5.9.3)(webpack@5.105.0(esbuild@0.27.2))
-      resolve-url-loader: 5.0.0
-      rxjs: 7.8.2
-      sass: 1.97.1
-      sass-loader: 16.0.6(sass@1.97.1)(webpack@5.105.0(esbuild@0.27.2))
-      semver: 7.7.3
-      source-map-loader: 5.0.0(webpack@5.105.0(esbuild@0.27.2))
-      source-map-support: 0.5.21
-      terser: 5.44.1
-      tinyglobby: 0.2.15
-      tree-kill: 1.2.2
-      tslib: 2.8.1
-      typescript: 5.9.3
-      webpack: 5.105.0(esbuild@0.27.2)
-      webpack-dev-middleware: 7.4.5(tslib@2.8.1)(webpack@5.105.0(esbuild@0.27.2))
-      webpack-dev-server: 5.2.2(debug@4.4.3)(tslib@2.8.1)(webpack@5.105.0(esbuild@0.27.2))
-      webpack-merge: 6.0.1
-      webpack-subresource-integrity: 5.1.0(webpack@5.105.0(esbuild@0.27.2))
-    optionalDependencies:
-      '@angular/core': 21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)
-      '@angular/localize': 21.1.3(@angular/compiler-cli@21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3))(@angular/compiler@21.1.3)
-      '@angular/platform-browser': 21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))
-      '@angular/service-worker': 21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
-      esbuild: 0.27.2
-      ng-packagr: 21.1.0(@angular/compiler-cli@21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3))(tslib@2.8.1)(typescript@5.9.3)
-    transitivePeerDependencies:
-      - '@angular/compiler'
-      - '@rspack/core'
-      - '@swc/core'
-      - '@types/node'
-      - bufferutil
-      - chokidar
-      - debug
-      - html-webpack-plugin
-      - jiti
-      - lightningcss
-      - node-sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - supports-color
-      - tsx
-      - uglify-js
-      - utf-8-validate
-      - vitest
-      - webpack-cli
-      - yaml
-
-  '@angular-devkit/build-angular@21.1.3(b843762113698bf8320c28d6b189b25f)':
-    dependencies:
-      '@ampproject/remapping': 2.3.0
-      '@angular-devkit/architect': 0.2101.3(chokidar@5.0.0)
-      '@angular-devkit/build-webpack': 0.2101.3(chokidar@5.0.0)(webpack-dev-server@5.2.2(tslib@2.8.1)(webpack@5.105.0(esbuild@0.27.2)))(webpack@5.105.0(esbuild@0.27.2))
-      '@angular-devkit/core': 21.1.3(chokidar@5.0.0)
-      '@angular/build': 21.1.3(beb0b8a5dfb400c6d79f936f3b612f26)
-      '@angular/compiler-cli': 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
-      '@babel/core': 7.28.5
-      '@babel/generator': 7.28.5
-      '@babel/helper-annotate-as-pure': 7.27.3
-      '@babel/helper-split-export-declaration': 7.24.7
-      '@babel/plugin-transform-async-generator-functions': 7.28.0(@babel/core@7.28.5)
-      '@babel/plugin-transform-async-to-generator': 7.27.1(@babel/core@7.28.5)
-      '@babel/plugin-transform-runtime': 7.28.5(@babel/core@7.28.5)
-      '@babel/preset-env': 7.28.5(@babel/core@7.28.5)
-      '@babel/runtime': 7.28.4
-      '@discoveryjs/json-ext': 0.6.3
-      '@ngtools/webpack': 21.1.3(@angular/compiler-cli@21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3))(typescript@5.9.3)(webpack@5.105.0(esbuild@0.27.2))
-      ansi-colors: 4.1.3
-      autoprefixer: 10.4.23(postcss@8.5.6)
-      babel-loader: 10.0.0(@babel/core@7.28.5)(webpack@5.105.0(esbuild@0.27.2))
-      browserslist: 4.28.1
-      copy-webpack-plugin: 13.0.1(webpack@5.105.0(esbuild@0.27.2))
-      css-loader: 7.1.2(webpack@5.105.0(esbuild@0.27.2))
-      esbuild-wasm: 0.27.2
-      http-proxy-middleware: 3.0.5
-      istanbul-lib-instrument: 6.0.3
-      jsonc-parser: 3.3.1
-      karma-source-map-support: 1.4.0
-      less: 4.4.2
-      less-loader: 12.3.0(less@4.4.2)(webpack@5.105.0(esbuild@0.27.2))
-      license-webpack-plugin: 4.0.2(webpack@5.105.0(esbuild@0.27.2))
-      loader-utils: 3.3.1
-      mini-css-extract-plugin: 2.9.4(webpack@5.105.0(esbuild@0.27.2))
-      open: 11.0.0
-      ora: 9.0.0
-      picomatch: 4.0.3
-      piscina: 5.1.4
-      postcss: 8.5.6
-      postcss-loader: 8.2.0(postcss@8.5.6)(typescript@5.9.3)(webpack@5.105.0(esbuild@0.27.2))
-      resolve-url-loader: 5.0.0
-      rxjs: 7.8.2
-      sass: 1.97.1
-      sass-loader: 16.0.6(sass@1.97.1)(webpack@5.105.0(esbuild@0.27.2))
-      semver: 7.7.3
-      source-map-loader: 5.0.0(webpack@5.105.0(esbuild@0.27.2))
-      source-map-support: 0.5.21
-      terser: 5.44.1
-      tinyglobby: 0.2.15
-      tree-kill: 1.2.2
-      tslib: 2.8.1
-      typescript: 5.9.3
-      webpack: 5.105.0
-      webpack-dev-middleware: 7.4.5(tslib@2.8.1)(webpack@5.105.0(esbuild@0.27.2))
-      webpack-dev-server: 5.2.2(tslib@2.8.1)(webpack@5.105.0)
-      webpack-merge: 6.0.1
-      webpack-subresource-integrity: 5.1.0(webpack@5.105.0(esbuild@0.27.2))
-    optionalDependencies:
-      '@angular/core': 21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)
-      '@angular/localize': 21.1.3(@angular/compiler-cli@21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3))(@angular/compiler@21.1.3)
-      '@angular/platform-browser': 21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))
-      '@angular/service-worker': 21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
-      esbuild: 0.27.2
-      ng-packagr: 21.1.0(@angular/compiler-cli@21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3))(tslib@2.8.1)(typescript@5.9.3)
-    transitivePeerDependencies:
-      - '@angular/compiler'
-      - '@rspack/core'
-      - '@swc/core'
-      - '@types/node'
-      - bufferutil
-      - chokidar
-      - debug
-      - html-webpack-plugin
-      - jiti
-      - lightningcss
-      - node-sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - supports-color
-      - tsx
-      - uglify-js
-      - utf-8-validate
-      - vitest
-      - webpack-cli
-      - yaml
 
   '@angular-devkit/build-webpack@0.2101.3(chokidar@5.0.0)(webpack-dev-server@5.2.2(debug@4.4.3)(tslib@2.8.1)(webpack@5.105.0(esbuild@0.27.2)))(webpack@5.105.0(esbuild@0.27.2))':
     dependencies:
@@ -29407,7 +29266,7 @@ snapshots:
       '@angular/core': 21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)
       tslib: 2.8.1
 
-  '@angular/build@21.1.3(24e178ce5057a632e864b42dd970c71e)':
+  '@angular/build@21.1.3(862f5a4d2af554646fc7079842bbc1e4)':
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@angular-devkit/architect': 0.2101.3(chokidar@5.0.0)
@@ -29449,7 +29308,7 @@ snapshots:
       lmdb: 3.4.4
       ng-packagr: 21.1.0(@angular/compiler-cli@21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3))(tslib@2.8.1)(typescript@5.9.3)
       postcss: 8.5.6
-      vitest: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+      vitest: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
     transitivePeerDependencies:
       - '@types/node'
       - chokidar
@@ -29506,63 +29365,6 @@ snapshots:
       ng-packagr: 21.1.0(@angular/compiler-cli@21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3))(tslib@2.8.1)(typescript@5.9.3)
       postcss: 8.5.6
       vitest: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-    transitivePeerDependencies:
-      - '@types/node'
-      - chokidar
-      - jiti
-      - lightningcss
-      - sass-embedded
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-      - tsx
-      - yaml
-    optional: true
-
-  '@angular/build@21.1.3(beb0b8a5dfb400c6d79f936f3b612f26)':
-    dependencies:
-      '@ampproject/remapping': 2.3.0
-      '@angular-devkit/architect': 0.2101.3(chokidar@5.0.0)
-      '@angular/compiler': 21.1.3
-      '@angular/compiler-cli': 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
-      '@babel/core': 7.28.5
-      '@babel/helper-annotate-as-pure': 7.27.3
-      '@babel/helper-split-export-declaration': 7.24.7
-      '@inquirer/confirm': 5.1.21(@types/node@24.10.11)
-      '@vitejs/plugin-basic-ssl': 2.1.0(vite@7.3.0(@types/node@24.10.11)(jiti@2.6.1)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
-      beasties: 0.3.5
-      browserslist: 4.28.1
-      esbuild: 0.27.2
-      https-proxy-agent: 7.0.6
-      istanbul-lib-instrument: 6.0.3
-      jsonc-parser: 3.3.1
-      listr2: 9.0.5
-      magic-string: 0.30.21
-      mrmime: 2.0.1
-      parse5-html-rewriting-stream: 8.0.0
-      picomatch: 4.0.3
-      piscina: 5.1.4
-      rolldown: 1.0.0-beta.58
-      sass: 1.97.1
-      semver: 7.7.3
-      source-map-support: 0.5.21
-      tinyglobby: 0.2.15
-      tslib: 2.8.1
-      typescript: 5.9.3
-      undici: 7.20.0
-      vite: 7.3.0(@types/node@24.10.11)(jiti@2.6.1)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-      watchpack: 2.5.0
-    optionalDependencies:
-      '@angular/core': 21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)
-      '@angular/localize': 21.1.3(@angular/compiler-cli@21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3))(@angular/compiler@21.1.3)
-      '@angular/platform-browser': 21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))
-      '@angular/service-worker': 21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
-      less: 4.4.2
-      lmdb: 3.4.4
-      ng-packagr: 21.1.0(@angular/compiler-cli@21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3))(tslib@2.8.1)(typescript@5.9.3)
-      postcss: 8.5.6
-      vitest: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
     transitivePeerDependencies:
       - '@types/node'
       - chokidar
@@ -29896,16 +29698,6 @@ snapshots:
       '@csstools/css-parser-algorithms': 4.0.0(@csstools/css-tokenizer@4.0.0)
       '@csstools/css-tokenizer': 4.0.0
       lru-cache: 11.5.1
-
-  '@asamuzakjp/dom-selector@6.8.1':
-    dependencies:
-      '@asamuzakjp/nwsapi': 2.3.9
-      bidi-js: 1.0.3
-      css-tree: 3.1.0
-      is-potential-custom-element-name: 1.0.1
-      lru-cache: 11.5.1
-
-  '@asamuzakjp/nwsapi@2.3.9': {}
 
   '@auth0/auth0-angular@2.6.0(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/router@21.1.3(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2))':
     dependencies:
@@ -33064,10 +32856,6 @@ snapshots:
   '@bcoe/v8-coverage@1.0.2': {}
 
   '@braintree/sanitize-url@7.1.2': {}
-
-  '@bramus/specificity@2.4.2':
-    dependencies:
-      css-tree: 3.1.0
 
   '@bufbuild/protobuf@1.10.1': {}
 
@@ -39429,10 +39217,6 @@ snapshots:
     dependencies:
       is-windows: 1.0.2
 
-  bidi-js@1.0.3:
-    dependencies:
-      require-from-string: 2.0.2
-
   big-integer@1.6.52: {}
 
   big.js@5.2.2: {}
@@ -43238,34 +43022,6 @@ snapshots:
 
   jsc-safe-url@0.2.4: {}
 
-  jsdom@24.1.3:
-    dependencies:
-      cssstyle: 4.6.0
-      data-urls: 5.0.0
-      decimal.js: 10.6.0
-      form-data: 4.0.5
-      html-encoding-sniffer: 4.0.0
-      http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
-      is-potential-custom-element-name: 1.0.1
-      nwsapi: 2.2.23
-      parse5: 7.3.0
-      rrweb-cssom: 0.7.1
-      saxes: 6.0.0
-      symbol-tree: 3.2.4
-      tough-cookie: 4.1.4
-      w3c-xmlserializer: 5.0.0
-      webidl-conversions: 7.0.0
-      whatwg-encoding: 3.1.1
-      whatwg-mimetype: 4.0.0
-      whatwg-url: 14.2.0
-      ws: 8.19.0
-      xml-name-validator: 5.0.0
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-
   jsdom@26.1.0:
     dependencies:
       cssstyle: 4.6.0
@@ -43292,33 +43048,6 @@ snapshots:
       - bufferutil
       - supports-color
       - utf-8-validate
-
-  jsdom@28.1.0:
-    dependencies:
-      '@acemir/cssom': 0.9.31
-      '@asamuzakjp/dom-selector': 6.8.1
-      '@bramus/specificity': 2.4.2
-      '@exodus/bytes': 1.11.0
-      cssstyle: 6.0.1
-      data-urls: 7.0.0
-      decimal.js: 10.6.0
-      html-encoding-sniffer: 6.0.0
-      http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
-      is-potential-custom-element-name: 1.0.1
-      parse5: 8.0.0
-      saxes: 6.0.0
-      symbol-tree: 3.2.4
-      tough-cookie: 6.0.0
-      undici: 7.28.0
-      w3c-xmlserializer: 5.0.0
-      webidl-conversions: 8.0.1
-      whatwg-mimetype: 5.0.0
-      whatwg-url: 16.0.1
-      xml-name-validator: 5.0.0
-    transitivePeerDependencies:
-      - '@noble/hashes'
-      - supports-color
 
   jsep@1.4.0: {}
 
@@ -45860,8 +45589,6 @@ snapshots:
       split-on-first: 1.1.0
       strict-uri-encode: 2.0.0
 
-  querystringify@2.2.0: {}
-
   queue-lit@1.5.2: {}
 
   queue-microtask@1.2.3: {}
@@ -46504,8 +46231,6 @@ snapshots:
       path-to-regexp: 8.3.0
     transitivePeerDependencies:
       - supports-color
-
-  rrweb-cssom@0.7.1: {}
 
   rrweb-cssom@0.8.0: {}
 
@@ -47371,15 +47096,6 @@ snapshots:
     optionalDependencies:
       esbuild: 0.27.2
 
-  terser-webpack-plugin@5.3.16(webpack@5.105.0(esbuild@0.27.2)):
-    dependencies:
-      '@jridgewell/trace-mapping': 0.3.31
-      jest-worker: 27.5.1
-      schema-utils: 4.3.3
-      serialize-javascript: 6.0.2
-      terser: 5.44.1
-      webpack: 5.105.0
-
   terser-webpack-plugin@5.3.16(webpack@5.105.0):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
@@ -47520,13 +47236,6 @@ snapshots:
   toml@3.0.0: {}
 
   touch@3.1.1: {}
-
-  tough-cookie@4.1.4:
-    dependencies:
-      psl: 1.15.0
-      punycode: 2.3.1
-      universalify: 0.2.0
-      url-parse: 1.5.10
 
   tough-cookie@5.1.2:
     dependencies:
@@ -47883,8 +47592,6 @@ snapshots:
 
   universalify@0.1.2: {}
 
-  universalify@0.2.0: {}
-
   universalify@2.0.1: {}
 
   unload@2.4.1: {}
@@ -47916,11 +47623,6 @@ snapshots:
   uri-js@4.4.1:
     dependencies:
       punycode: 2.3.1
-
-  url-parse@1.5.10:
-    dependencies:
-      querystringify: 2.2.0
-      requires-port: 1.0.0
 
   url-template@2.0.8: {}
 
@@ -48119,7 +47821,7 @@ snapshots:
       tsx: 4.21.0
       yaml: 2.8.2
 
-  vitest@3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2):
+  vitest@3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/expect': 3.2.6
@@ -48147,7 +47849,7 @@ snapshots:
     optionalDependencies:
       '@types/debug': 4.1.12
       '@types/node': 24.10.11
-      jsdom: 28.1.0
+      jsdom: 26.1.0
     transitivePeerDependencies:
       - jiti
       - less
@@ -48200,46 +47902,7 @@ snapshots:
       - tsx
       - yaml
 
-  vitest@4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2):
-    dependencies:
-      '@vitest/expect': 4.0.18
-      '@vitest/mocker': 4.0.18(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
-      '@vitest/pretty-format': 4.0.18
-      '@vitest/runner': 4.0.18
-      '@vitest/snapshot': 4.0.18
-      '@vitest/spy': 4.0.18
-      '@vitest/utils': 4.0.18
-      es-module-lexer: 1.7.0
-      expect-type: 1.3.0
-      magic-string: 0.30.21
-      obug: 2.1.1
-      pathe: 2.0.3
-      picomatch: 4.0.3
-      std-env: 3.10.0
-      tinybench: 2.9.0
-      tinyexec: 1.0.2
-      tinyglobby: 0.2.15
-      tinyrainbow: 3.0.3
-      vite: 7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 24.10.11
-      jsdom: 28.1.0
-    transitivePeerDependencies:
-      - jiti
-      - less
-      - lightningcss
-      - msw
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - terser
-      - tsx
-      - yaml
-    optional: true
-
-  vitest@4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@28.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2):
+  vitest@4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       '@vitest/expect': 4.0.18
       '@vitest/mocker': 4.0.18(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
@@ -48263,7 +47926,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 24.10.11
-      jsdom: 28.1.0
+      jsdom: 26.1.0
     transitivePeerDependencies:
       - jiti
       - less
@@ -48390,19 +48053,6 @@ snapshots:
     transitivePeerDependencies:
       - tslib
 
-  webpack-dev-middleware@7.4.5(tslib@2.8.1)(webpack@5.105.0):
-    dependencies:
-      colorette: 2.0.20
-      memfs: 4.56.10(tslib@2.8.1)
-      mime-types: 3.0.2
-      on-finished: 2.4.1
-      range-parser: 1.2.1
-      schema-utils: 4.3.3
-    optionalDependencies:
-      webpack: 5.105.0
-    transitivePeerDependencies:
-      - tslib
-
   webpack-dev-server@5.2.2(debug@4.4.3)(tslib@2.8.1)(webpack@5.105.0(esbuild@0.27.2)):
     dependencies:
       '@types/bonjour': 3.5.13
@@ -48481,45 +48131,6 @@ snapshots:
       - tslib
       - utf-8-validate
 
-  webpack-dev-server@5.2.2(tslib@2.8.1)(webpack@5.105.0):
-    dependencies:
-      '@types/bonjour': 3.5.13
-      '@types/connect-history-api-fallback': 1.5.4
-      '@types/express': 4.17.25
-      '@types/express-serve-static-core': 4.19.8
-      '@types/serve-index': 1.9.4
-      '@types/serve-static': 1.15.10
-      '@types/sockjs': 0.3.36
-      '@types/ws': 8.18.1
-      ansi-html-community: 0.0.8
-      bonjour-service: 1.3.0
-      chokidar: 3.6.0
-      colorette: 2.0.20
-      compression: 1.8.1
-      connect-history-api-fallback: 2.0.0
-      express: 4.22.1
-      graceful-fs: 4.2.11
-      http-proxy-middleware: 2.0.9(@types/express@4.17.25)(debug@4.4.3)
-      ipaddr.js: 2.3.0
-      launch-editor: 2.12.0
-      open: 10.2.0
-      p-retry: 6.2.1
-      schema-utils: 4.3.3
-      selfsigned: 2.4.1
-      serve-index: 1.9.2
-      sockjs: 0.3.24
-      spdy: 4.0.2
-      webpack-dev-middleware: 7.4.5(tslib@2.8.1)(webpack@5.105.0)
-      ws: 8.19.0
-    optionalDependencies:
-      webpack: 5.105.0
-    transitivePeerDependencies:
-      - bufferutil
-      - debug
-      - supports-color
-      - tslib
-      - utf-8-validate
-
   webpack-merge@6.0.1:
     dependencies:
       clone-deep: 4.0.1
@@ -48532,38 +48143,6 @@ snapshots:
     dependencies:
       typed-assert: 1.0.9
       webpack: 5.105.0(esbuild@0.27.2)
-
-  webpack@5.105.0:
-    dependencies:
-      '@types/eslint-scope': 3.7.7
-      '@types/estree': 1.0.8
-      '@types/json-schema': 7.0.15
-      '@webassemblyjs/ast': 1.14.1
-      '@webassemblyjs/wasm-edit': 1.14.1
-      '@webassemblyjs/wasm-parser': 1.14.1
-      acorn: 8.15.0
-      acorn-import-phases: 1.0.4(acorn@8.15.0)
-      browserslist: 4.28.1
-      chrome-trace-event: 1.0.4
-      enhanced-resolve: 5.19.0
-      es-module-lexer: 2.0.0
-      eslint-scope: 5.1.1
-      events: 3.3.0
-      glob-to-regexp: 0.4.1
-      graceful-fs: 4.2.11
-      json-parse-even-better-errors: 2.3.1
-      loader-runner: 4.3.1
-      mime-types: 2.1.35
-      neo-async: 2.6.2
-      schema-utils: 4.3.3
-      tapable: 2.3.0
-      terser-webpack-plugin: 5.3.16(webpack@5.105.0(esbuild@0.27.2))
-      watchpack: 2.5.1
-      webpack-sources: 3.3.3
-    transitivePeerDependencies:
-      - '@swc/core'
-      - esbuild
-      - uglify-js
 
   webpack@5.105.0(esbuild@0.27.2):
     dependencies:
