@@ -136,7 +136,11 @@ function makeEntity(name: string, opts: {
     return {
         Name: name,
         UserExemptFromRowLevelSecurity: () => opts.exempt,
+        // ResolverBase now delegates to GetEffectiveRowFilterWhereClause (role RLS
+        // + API-key row filters); the deprecated role-only method is kept in the
+        // mock shape for completeness but is no longer what the resolver calls.
         GetUserRowLevelSecurityWhereClause: () => opts.exempt ? '' : opts.rlsClause,
+        GetEffectiveRowFilterWhereClause: () => opts.exempt ? '' : opts.rlsClause,
     } as unknown as EntityInfo;
 }
 

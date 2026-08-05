@@ -2401,10 +2401,16 @@ export class EntityInfo extends BaseInfo {
 
     /**
      * Generates a where clause for SQL filtering for a given entity for a given user and permission type. If there is no RLS for a given entity or the user is exempt from RLS for the entity, a blank string is returned.
-     * @param user 
-     * @param type 
-     * @param returnPrefix 
-     * @returns 
+     *
+     * @deprecated ROLE RLS ONLY — this method is subject to the role-RLS exemption and
+     * silently omits API-key row filters, so a caller reaching for this familiar name gets
+     * a clause that is fail-open for filtered API-key sessions. Use
+     * {@link GetEffectiveRowFilterWhereClause}, which composes every filter layer. A repo
+     * test asserts no non-test caller exists outside that method.
+     * @param user
+     * @param type
+     * @param returnPrefix
+     * @returns
      */
     public GetUserRowLevelSecurityWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string {
         // Central exemption check: if the user holds any role that grants this
@@ -2426,6 +2432,70 @@ export class EntityInfo extends BaseInfo {
         }
         else
             return '';
+    }
+
+    /**
+     * The EFFECTIVE row-filter clause for a user + permission type: role RLS (subject to the
+     * role exemption) AND the API-key row filters carried on the session (NOT subject to the
+     * role exemption — a key ceiling exists precisely to bind principals whose roles are
+     * unrestricted; see UserExemptFromRowLevelSecurity, which exempts off the mere presence
+     * of a filter-less permission row). Composition: OR within the role layer (roles are
+     * additive), AND across layers (no layer can widen another). Returns '' only when no
+     * layer contributes.
+     *
+     * This is THE method every enforcement point must call. Deterministic by construction —
+     * key-filter clauses render in FilterID order and list tokens sort their elements —
+     * because the identical clause participates in the RunView cache fingerprint (INV-2):
+     * any nondeterminism silently splits or merges cache slots.
+     *
+     * The application-ceiling layer (APIApplicationScope.RowFilterID) is deferred to v2 by
+     * design decision; the column ships unused and the term composes here when it lands.
+     */
+    public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string {
+        const layers: string[] = [];
+        const roleClause = this.GetUserRowLevelSecurityWhereClause(user, type, '');
+        if (roleClause && roleClause.length > 0) {
+            layers.push(`(${roleClause})`);
+        }
+        const keyClause = this.getAPIKeyRowFilterClause(user, type);
+        if (keyClause && keyClause.length > 0) {
+            layers.push(`(${keyClause})`);
+        }
+        if (layers.length === 0) {
+            return '';
+        }
+        const sql = layers.join(' AND ');
+        return `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sql}`;
+    }
+
+    /**
+     * Resolves the API-key row-filter clause for this entity + permission type from the
+     * bindings stamped on the session UserInfo. Multiple matching bindings AND together
+     * (most-restrictive-wins — an unfiltered grant elsewhere cannot cancel a filter).
+     * Fail-closed at every edge: a binding whose filter is missing from metadata (dangling
+     * or unloaded) contributes `(1=0)`, and unresolved tokens inside a filter collapse it
+     * to `(1=0)` via the match-nothing markup mode.
+     */
+    private getAPIKeyRowFilterClause(user: UserInfo, type: EntityPermissionType): string {
+        const bindings = user?.APIKeyRowFilters;
+        if (!bindings || bindings.length === 0) {
+            return '';
+        }
+        const mine = bindings.filter(b => UUIDsEqual(b.EntityID, this.ID) && b.PermissionType === type);
+        if (mine.length === 0) {
+            return '';
+        }
+        const clauses = [...mine]
+            .sort((a, b) => a.FilterID.localeCompare(b.FilterID)) // deterministic order for the cache fingerprint (INV-2)
+            .map(b => {
+                const filter = Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, b.FilterID)); // global-provider-ok: same resolution path as RLSFilter() above — stateless info class proxying to global metadata
+                if (!filter) {
+                    LogError(`API-key row filter ${b.FilterID} for entity ${this.Name} not found in metadata — resolving to (1=0)`);
+                    return '(1=0)';
+                }
+                return `(${filter.MarkupFilterText(user, { unresolvedBehavior: 'match-nothing' })})`;
+            });
+        return clauses.join(' AND ');
     }
 
     /**

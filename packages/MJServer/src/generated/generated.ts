@@ -22348,6 +22348,10 @@ export class MJAPIApplicationScope_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Optional row-level filter acting as a CEILING for every API key operating under this application — a restriction keys inherit and cannot widen. Composes with the per-key filter (APIKeyScope.RowFilterID) and with role-based RLS using AND, never OR, so no layer can broaden another. References the same RowLevelSecurityFilter catalog used by role-based RLS. NULL (the default) means the application imposes no row ceiling. The same authoring constraints as APIKeyScope.RowFilterID apply: exact single-entity resource pattern, all referenced columns must exist on that entity, and all referrers of the filter record must resolve to the same entity.`}) 
+    @MaxLength(36)
+    RowFilterID?: string;
+        
     @Field() 
     @MaxLength(100)
     Application: string;
@@ -22355,6 +22359,10 @@ export class MJAPIApplicationScope_ {
     @Field() 
     @MaxLength(100)
     Scope: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    RowFilter?: string;
         
 }
 
@@ -22383,6 +22391,9 @@ export class CreateMJAPIApplicationScopeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field({ nullable: true })
+    RowFilterID: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -22414,6 +22425,9 @@ export class UpdateMJAPIApplicationScopeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field({ nullable: true })
+    RowFilterID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -22903,6 +22917,10 @@ export class MJAPIKeyScope_ {
     @Field(() => Int, {description: `Rule evaluation order. Higher priority rules are evaluated first. Within same priority, deny rules are evaluated before allow rules.`}) 
     Priority: number;
         
+    @Field({nullable: true, description: `Optional row-level filter narrowing WHICH RECORDS this scope grant applies to, in addition to the resource pattern that governs which entities. References the same RowLevelSecurityFilter catalog used by role-based RLS, so the filter text flows through the standard {{Token}} substitution engine and every existing RLS enforcement point (RunView, Load by primary key, save, delete, search). NULL (the default) means no row restriction — behavior identical to before this column existed. When set, the rule's ResourcePattern must name a single exact entity (no wildcards, no comma-separated lists), every column the filter references must resolve to a real non-virtual field on that entity, and every other referrer of the same filter record must resolve to that same entity. Critically, this filter is evaluated INDEPENDENTLY of the role-RLS exemption: a user exempt from role RLS is still bound by their key's filter, because narrowing a principal below what their roles allow is the entire purpose of a key ceiling.`}) 
+    @MaxLength(36)
+    RowFilterID?: string;
+        
     @Field() 
     @MaxLength(255)
     APIKey: string;
@@ -22910,6 +22928,10 @@ export class MJAPIKeyScope_ {
     @Field() 
     @MaxLength(100)
     Scope: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    RowFilter?: string;
         
 }
 
@@ -22938,6 +22960,9 @@ export class CreateMJAPIKeyScopeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field({ nullable: true })
+    RowFilterID: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -22969,6 +22994,9 @@ export class UpdateMJAPIKeyScopeInput {
 
     @Field(() => Int, { nullable: true })
     Priority?: number;
+
+    @Field({ nullable: true })
+    RowFilterID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -77604,6 +77632,12 @@ export class MJRowLevelSecurityFilter_ {
     @Field(() => [MJEntityPermission_])
     MJEntityPermissions_UpdateRLSFilterIDArray: MJEntityPermission_[]; // Link to MJEntityPermissions
     
+    @Field(() => [MJAPIKeyScope_])
+    MJAPIKeyScopes_RowFilterIDArray: MJAPIKeyScope_[]; // Link to MJAPIKeyScopes
+    
+    @Field(() => [MJAPIApplicationScope_])
+    MJAPIApplicationScopes_RowFilterIDArray: MJAPIApplicationScope_[]; // Link to MJAPIApplicationScopes
+    
 }
 
 //****************************************************************************
@@ -77756,6 +77790,26 @@ export class MJRowLevelSecurityFilterResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityPermissions')} WHERE ${provider.QuoteIdentifier('UpdateRLSFilterID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjrowlevelsecurityfilter_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAPIKeyScope_])
+    async MJAPIKeyScopes_RowFilterIDArray(@Root() mjrowlevelsecurityfilter_: MJRowLevelSecurityFilter_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: API Key Scopes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAPIKeyScopes')} WHERE ${provider.QuoteIdentifier('RowFilterID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Key Scopes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjrowlevelsecurityfilter_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Key Scopes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAPIApplicationScope_])
+    async MJAPIApplicationScopes_RowFilterIDArray(@Root() mjrowlevelsecurityfilter_: MJRowLevelSecurityFilter_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: API Application Scopes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAPIApplicationScopes')} WHERE ${provider.QuoteIdentifier('RowFilterID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: API Application Scopes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjrowlevelsecurityfilter_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: API Application Scopes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
