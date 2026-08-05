@@ -49,6 +49,13 @@ export interface ConfigOperationResult {
      * Present only when the operation succeeded overall.
      */
     Warnings?: string[];
+    /**
+     * Whether the edit actually altered any config file. `Success` alone cannot express this — a
+     * successful no-op and a successful destructive edit look identical — which leaves callers
+     * unable to warn a host that config they wrote by hand was just removed, and lets a silently
+     * ineffective edit pass for a working one.
+     */
+    Changed?: boolean;
 }
 
 /**
@@ -228,6 +235,7 @@ function ApplyToConfigs(
     const warnings: string[] = [];
     let updated = 0;
     let delegated = 0;
+    let changed = false;
 
     for (const configPath of configPaths) {
         try {
@@ -237,7 +245,11 @@ function ApplyToConfigs(
                 delegated++;
                 continue;
             }
-            WriteConfigChecked(configPath, edit(content));
+            const edited = edit(content);
+            if (edited !== content) {
+                changed = true;
+            }
+            WriteConfigChecked(configPath, edited);
             updated++;
         }
         catch (error: unknown) {
@@ -258,7 +270,7 @@ function ApplyToConfigs(
                 : 'no candidate config had an injectable config object.';
         return { Success: false, ErrorMessage: `Failed to ${operation}: ${detail}` };
     }
-    return { Success: true, Warnings: warnings.length > 0 ? warnings : undefined };
+    return { Success: true, Changed: changed, Warnings: warnings.length > 0 ? warnings : undefined };
 }
 
 /**
@@ -687,11 +699,75 @@ export function RemoveExcludeSchema(
 }
 
 /**
+ * Adds an app's schema to the host's `includeSchemas` positive scope, when — and ONLY when — the
+ * host already runs one.
+ *
+ * `includeSchemas` is opt-in: CodeGen resolves it into `excludeSchemas` by excluding every schema
+ * in the database that it does not name. On such a host, clearing `excludeSchemas` is not enough to
+ * make an installed app's schema discoverable; absent from the include list, it is re-excluded and
+ * the app registers zero entities — the exact failure #3457 is about, one layer up.
+ *
+ * The guard matters more than the write. An absent or empty `includeSchemas` means "no positive
+ * scope, every schema is in play", and CodeGen no-ops on it. Creating one, or populating an empty
+ * one, would suddenly scope CodeGen to this single schema and silently drop every other schema the
+ * host owns. So this never creates the key and never writes into an empty list.
+ *
+ * @returns a result whose `Changed` is false when no live, non-empty include list was present
+ */
+export function AddIncludeSchema(
+    repoRoot: string,
+    schemaName: string,
+    serverPackagePath?: string
+): ConfigOperationResult {
+    if (!schemaName) {
+        return { Success: true, Changed: false };
+    }
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update includeSchemas', (content) =>
+        AddSchemaToIncludeArray(content, schemaName));
+}
+
+/**
+ * Removes an app's schema from the host's `includeSchemas` positive scope — the inverse of
+ * {@link AddIncludeSchema}, used when an app declares it manages its own metadata and when the app
+ * is removed.
+ */
+export function RemoveIncludeSchema(
+    repoRoot: string,
+    schemaName: string,
+    serverPackagePath?: string
+): ConfigOperationResult {
+    if (!schemaName) {
+        return { Success: true, Changed: false };
+    }
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'remove schema from includeSchemas', (content) =>
+        RemoveSchemaFromArrayRegion(content, 'includeSchemas', schemaName));
+}
+
+/** Appends to a LIVE, NON-EMPTY top-level `includeSchemas`; otherwise leaves the config untouched. */
+function AddSchemaToIncludeArray(content: string, schemaName: string): string {
+    const region = FindTopLevelConfigArray(content, 'includeSchemas');
+    if (!region) {
+        return content; // no positive scope in force — creating one would shrink CodeGen's world
+    }
+    const inner = content.slice(region.openPos + 1, region.closePos);
+    if (inner.trim().length === 0) {
+        return content; // empty list means the same thing as absent; populating it would impose a scope
+    }
+    if (new RegExp(`['"]${EscapeRegex(schemaName)}['"]`, 'i').test(inner)) {
+        return content; // already in scope
+    }
+    return content.slice(0, region.closePos) + `, ${JSON.stringify(schemaName)}` + content.slice(region.closePos);
+}
+
+/**
  * Ensures the config file has an excludeSchemas array.
  * If it doesn't exist, adds one inside the module.exports object.
  */
 function EnsureExcludeSchemasSection(content: string): string {
-    if (/excludeSchemas\s*:/.test(content)) {
+    // A COMMENTED-OUT `excludeSchemas` does not count — distribution.config.cjs ships one, and a
+    // plain `/excludeSchemas\s*:/` test treats it as present. The editors would then write into the
+    // comment and report success while CodeGen sees no exclusions at all.
+    if (FindTopLevelConfigArray(content, 'excludeSchemas')) {
         return content;
     }
 
@@ -700,27 +776,111 @@ function EnsureExcludeSchemasSection(content: string): string {
 }
 
 /**
+ * Locates a TOP-LEVEL, LIVE array-valued key in the exported config object.
+ *
+ * "Top-level" because `excludeSchemas` also exists under `dbSchemaJSONOutput` and inside
+ * `bundles[]`, and those are different settings — only the top-level array gates CodeGen's entity
+ * discovery. A plain `content.match(/excludeSchemas\s*:\s*\[/)` binds to whichever appears first in
+ * the file, so a host who lists `dbSchemaJSONOutput` above it gets their nested array edited instead.
+ *
+ * "Live" because a match inside a comment or a string is not configuration. Writing there succeeds
+ * silently and changes nothing that Node will evaluate.
+ *
+ * @returns the positions of the array's `[` and its matching `]`, or null when there is no such key
+ */
+function FindTopLevelConfigArray(content: string, key: string): { openPos: number; closePos: number } | null {
+    const objectStart = FindExportedObjectBrace(content);
+    if (objectStart === -1) {
+        return null;
+    }
+    const objectEnd = FindMatchingBracket(content, objectStart);
+    if (objectEnd === -1) {
+        return null;
+    }
+
+    let depth = 0; // nesting relative to the exported object — we only want its direct properties
+    let inString: string | null = null;
+    let inLineComment = false;
+    let inBlockComment = false;
+
+    for (let pos = objectStart + 1; pos < objectEnd; pos++) {
+        const ch = content[pos];
+        const next = content[pos + 1];
+
+        if (inLineComment) {
+            if (ch === '\n') inLineComment = false;
+            continue;
+        }
+        if (inBlockComment) {
+            if (ch === '*' && next === '/') { inBlockComment = false; pos++; }
+            continue;
+        }
+        if (inString) {
+            if (ch === '\\') { pos++; continue; }
+            if (ch === inString) inString = null;
+            continue;
+        }
+        if (ch === '/' && next === '/') { inLineComment = true; pos++; continue; }
+        if (ch === '/' && next === '*') { inBlockComment = true; pos++; continue; }
+        if (ch === '"' || ch === "'" || ch === '`') { inString = ch; continue; }
+        if (ch === '{' || ch === '[') { depth++; continue; }
+        if (ch === '}' || ch === ']') { depth--; continue; }
+        if (depth !== 0 || !content.startsWith(key, pos)) {
+            continue;
+        }
+        // Reject a substring hit inside a longer identifier (e.g. `dbSchemaExcludeSchemas`).
+        const prev = content[pos - 1];
+        if (prev && /[A-Za-z0-9_$]/.test(prev)) {
+            continue;
+        }
+        const opener = content.slice(pos + key.length).match(/^\s*:\s*\[/);
+        if (!opener) {
+            continue;
+        }
+        const openPos = pos + key.length + opener[0].length - 1;
+        const closePos = FindMatchingBracket(content, openPos);
+        if (closePos !== -1) {
+            return { openPos, closePos };
+        }
+    }
+    return null;
+}
+
+/**
+ * Returns the position of the `{` opening the object assigned to `module.exports`, handling both
+ * `module.exports = { ... }` and `module.exports = someVar` where `someVar` is an object literal.
+ * Mirrors the resolution {@link InsertBeforeModuleExportsClose} performs.
+ */
+function FindExportedObjectBrace(content: string): number {
+    const inlineMatch = content.match(/module\.exports\s*=\s*\{/);
+    if (inlineMatch && inlineMatch.index !== undefined) {
+        return content.indexOf('{', inlineMatch.index);
+    }
+    const varMatch = content.match(/module\.exports\s*=\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*;/);
+    if (varMatch && varMatch.index !== undefined) {
+        const declPattern = new RegExp(`(?:const|let|var)\\s+${EscapeRegex(varMatch[1])}\\s*=\\s*\\{`);
+        const declMatch = content.match(declPattern);
+        if (declMatch && declMatch.index !== undefined) {
+            return content.indexOf('{', declMatch.index);
+        }
+    }
+    return -1;
+}
+
+/**
  * Adds a schema name to the first excludeSchemas array if not already present.
  */
 function AddSchemaToExcludeArray(content: string, schemaName: string): string {
-    // Check if the schema is already in the array (case-insensitive)
-    const alreadyExists = new RegExp(
-        `excludeSchemas\\s*:\\s*\\[[^\\]]*['"]${EscapeRegex(schemaName)}['"]`,
-        'i'
-    );
-    if (alreadyExists.test(content)) {
+    const region = FindTopLevelConfigArray(content, 'excludeSchemas');
+    if (!region) {
         return content;
     }
+    const { openPos: openBracketPos, closePos: closingBracket } = region;
 
-    // Find the first excludeSchemas array's closing bracket
-    const arrayMatch = content.match(/excludeSchemas\s*:\s*\[/);
-    if (!arrayMatch || arrayMatch.index === undefined) {
-        return content;
-    }
-
-    const openBracketPos = arrayMatch.index + arrayMatch[0].length - 1;
-    const closingBracket = FindMatchingBracket(content, openBracketPos);
-    if (closingBracket === -1) {
+    // Already present (case-insensitive)? Scoped to THIS array, so an identically-named entry in a
+    // nested excludeSchemas can't make us skip a write the top-level array still needs.
+    const alreadyExists = new RegExp(`['"]${EscapeRegex(schemaName)}['"]`, 'i');
+    if (alreadyExists.test(content.slice(openBracketPos + 1, closingBracket))) {
         return content;
     }
 
@@ -739,21 +899,40 @@ function AddSchemaToExcludeArray(content: string, schemaName: string): string {
  * Removes a schema name from all excludeSchemas arrays in the config.
  */
 function RemoveSchemaFromExcludeArray(content: string, schemaName: string): string {
-    // Remove the schema entry (with optional leading comma+space or trailing comma+space).
-    // Both quote styles accepted: AddSchemaToExcludeArray now writes JSON.stringify (double
-    // quotes), while pre-existing configs hold single-quoted entries.
+    return RemoveSchemaFromArrayRegion(content, 'excludeSchemas', schemaName);
+}
+
+/**
+ * Removes a quoted schema name from a top-level string-array config key, editing ONLY the bytes
+ * inside that array.
+ *
+ * The scoping is the whole point. The patterns below degrade to a BARE quoted name, so run across
+ * the file they match the schema anywhere — the `entityPackageName` key `HandleServerConfig` writes
+ * moments earlier (leaving `: "@pkg/x"`, invalid JavaScript), an `includeSchemas` entry (silently
+ * inverting that positive scope), an `excludeTables` schema field, even a comment. That was
+ * survivable while the only caller was app-remove, which drops the colliding key first; the #3457
+ * install/upgrade caller has it guaranteed present.
+ */
+function RemoveSchemaFromArrayRegion(content: string, key: string, schemaName: string): string {
+    const region = FindTopLevelConfigArray(content, key);
+    if (!region) {
+        return content; // no live top-level array to remove from
+    }
+    const { openPos, closePos } = region;
+
+    // Both quote styles accepted: the Add helpers write JSON.stringify (double quotes), while
+    // pre-existing configs hold single-quoted entries. Ordered so that an entry with a leading
+    // comma is consumed with its comma, then one with a trailing comma, then a sole entry.
     const patterns = [
-        // Entry with leading comma: , 'schemaName'
         new RegExp(`,\\s*['"]${EscapeRegex(schemaName)}['"]`, 'gi'),
-        // Entry with trailing comma (first in array): 'schemaName',
         new RegExp(`['"]${EscapeRegex(schemaName)}['"]\\s*,\\s*`, 'gi'),
-        // Sole entry: 'schemaName'
         new RegExp(`['"]${EscapeRegex(schemaName)}['"]`, 'gi'),
     ];
 
+    const inner = content.slice(openPos + 1, closePos);
     for (const pattern of patterns) {
-        if (pattern.test(content)) {
-            return content.replace(pattern, '');
+        if (pattern.test(inner)) {
+            return content.slice(0, openPos + 1) + inner.replace(pattern, '') + content.slice(closePos);
         }
     }
     return content;
