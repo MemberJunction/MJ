@@ -2,8 +2,11 @@
  * Tests for base-application package:
  * - WorkspaceConfiguration defaults
  * - WorkspaceStateManager (tab management)
+ * - BaseApplication.CreateDefaultTab (isDefault nav-item resolution)
+ * - ApplicationManager.GetDefaultLandingApp (declared-default landing pick)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { BehaviorSubject } from 'rxjs';
 
 // Mock Angular
 vi.mock('@angular/core', () => ({
@@ -46,6 +49,13 @@ vi.mock('@memberjunction/core-entities', () => ({
   },
   MJWorkspaceEntity: class {},
   MJUserApplicationEntity: class {},
+  MJDashboardUserPreferenceEntity: class {},
+  DashboardEngine: {
+    Instance: {
+      Config: vi.fn().mockResolvedValue(undefined),
+      DashboardUserPreferences: [],
+    }
+  },
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -58,6 +68,8 @@ vi.mock('@memberjunction/global', () => ({
     }
   },
   MJEventType: { LoggedIn: 'LoggedIn' },
+  RegisterClass: () => (target: Function) => target,
+  UUIDsEqual: (a?: string, b?: string) => a?.toLowerCase() === b?.toLowerCase(),
 }));
 
 vi.mock('rxjs', async () => {
@@ -372,6 +384,188 @@ describe('WorkspaceStateManager', () => {
 
       manager.ClearLayout();
       expect(manager.GetConfiguration()!.layout).toBeUndefined();
+    });
+  });
+});
+
+// ======================= BaseApplication.CreateDefaultTab =======================
+describe('BaseApplication.CreateDefaultTab', () => {
+  it('uses the nav item flagged isDefault, not the first item', async () => {
+    const { BaseApplication } = await import('../base-application');
+    const app = new BaseApplication({
+      ID: 'app-1',
+      Name: 'Test App',
+      DefaultNavItems: JSON.stringify([
+        { Label: 'First', ResourceType: 'Custom', DriverClass: 'FirstDashboard' },
+        { Label: 'Preferred', ResourceType: 'Custom', DriverClass: 'PreferredDashboard', isDefault: true },
+      ]),
+    });
+
+    const tab = await app.CreateDefaultTab();
+
+    expect(tab).not.toBeNull();
+    expect(tab!.Title).toBe('Preferred');
+    expect(tab!.Configuration!.driverClass).toBe('PreferredDashboard');
+  });
+
+  it('falls back to the first nav item when none is flagged isDefault', async () => {
+    const { BaseApplication } = await import('../base-application');
+    const app = new BaseApplication({
+      ID: 'app-1',
+      Name: 'Test App',
+      DefaultNavItems: JSON.stringify([
+        { Label: 'First', ResourceType: 'Custom', DriverClass: 'FirstDashboard' },
+        { Label: 'Second', ResourceType: 'Custom', DriverClass: 'SecondDashboard' },
+      ]),
+    });
+
+    const tab = await app.CreateDefaultTab();
+
+    expect(tab).not.toBeNull();
+    expect(tab!.Title).toBe('First');
+  });
+});
+
+// ======================= ApplicationManager.GetDefaultLandingApp =======================
+describe('ApplicationManager.GetDefaultLandingApp', () => {
+  async function makeManagerWithApps(appDefs: { ID: string; Name: string; DefaultSequence: number }[]) {
+    const { ApplicationManager } = await import('../application-manager');
+    const { BaseApplication } = await import('../base-application');
+    const manager = new ApplicationManager();
+    const apps = appDefs.map(def => new BaseApplication(def));
+    const applications$ = Reflect.get(manager, 'applications$') as BehaviorSubject<InstanceType<typeof BaseApplication>[]>;
+    applications$.next(apps);
+    return manager;
+  }
+
+  it('returns the app with the lowest DefaultSequence regardless of user Sequence order', async () => {
+    // User has dragged Accounting above Home (list order = user Sequence order);
+    // the landing pick must still be Home (DefaultSequence -1).
+    const manager = await makeManagerWithApps([
+      { ID: 'app-acc', Name: 'Accounting', DefaultSequence: 100 },
+      { ID: 'app-home', Name: 'Home', DefaultSequence: -1 },
+    ]);
+
+    expect(manager.GetDefaultLandingApp()!.Name).toBe('Home');
+  });
+
+  it('keeps the earlier app in Sequence order when DefaultSequence ties (degrades to first app)', async () => {
+    // applications$ is fed [Bravo, Alpha] directly to probe reduce stability on a tie.
+    // In production this list arrives comparator-sorted (Sequence → DefaultSequence →
+    // name), so the same data would surface as [Alpha, Bravo] and land on Alpha — the
+    // assertion is about tie stability (first-in-list wins), not production ordering.
+    const manager = await makeManagerWithApps([
+      { ID: 'app-b', Name: 'Bravo', DefaultSequence: 100 },
+      { ID: 'app-a', Name: 'Alpha', DefaultSequence: 100 },
+    ]);
+
+    expect(manager.GetDefaultLandingApp()!.Name).toBe('Bravo');
+  });
+
+  it('returns null when the user has no apps', async () => {
+    const manager = await makeManagerWithApps([]);
+
+    expect(manager.GetDefaultLandingApp()).toBeNull();
+  });
+});
+
+// ======================= Records-style layout filters =======================
+// The shell (explorer-core) sets these predicates under the records style;
+// inline lambdas here mirror its exact expressions without importing
+// ng-shared (base-application sits BELOW it — that layering is why the
+// filters are settable predicates in the first place).
+describe('WorkspaceStateManager records-style filters (docked records)', () => {
+  let manager: InstanceType<typeof import('../workspace-state-manager').WorkspaceStateManager>;
+
+  const isRecord = (tab: { configuration?: Record<string, unknown> }) =>
+    tab.configuration?.['resourceType'] === 'Records';
+  const isRegionRecord = (tab: { configuration?: Record<string, unknown> }) =>
+    isRecord(tab) && tab.configuration?.['recordDockedToWorkspace'] !== true;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const mod = await import('../workspace-state-manager');
+    manager = new mod.WorkspaceStateManager();
+    // The shell's records-style assignments:
+    manager.MainLayoutTabFilter = (tab) => !isRegionRecord(tab);
+    manager.TempTabConsumptionFilter = (tab) => !isRecord(tab);
+    const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+    manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+  });
+
+  function openNav(title: string) {
+    return manager.OpenTab(
+      { ApplicationId: 'app-1', Title: title, Configuration: { resourceType: 'Dashboards', navItemName: title } },
+      '#ff0000');
+  }
+  // PreservePinState mirrors NavigationService.OpenEntityRecord's records-style
+  // request — without it OpenTabForced's pin cascade pins the nav tab and
+  // pollutes the bar-visibility assertions.
+  function openDockedRecord(title: string, recordId: string) {
+    return manager.OpenTabForced(
+      { ApplicationId: 'app-1', Title: title, ResourceRecordId: recordId, PreservePinState: true,
+        Configuration: { resourceType: 'Records', Entity: 'Widgets', recordId, recordDockedToWorkspace: true } },
+      '#ff0000');
+  }
+  function openRegionRecord(title: string, recordId: string) {
+    return manager.OpenTabForced(
+      { ApplicationId: 'app-1', Title: title, ResourceRecordId: recordId, PreservePinState: true,
+        Configuration: { resourceType: 'Records', Entity: 'Widgets', recordId } },
+      '#ff0000');
+  }
+
+  describe('temp-tab protection', () => {
+    it('never consumes an unpinned DOCKED record as the replaceable temp tab', () => {
+      const dockedId = openDockedRecord('Docked Widget', 'r1');
+      openNav('Queries');
+      const config = manager.GetConfiguration()!;
+      expect(config.tabs.some(t => t.id === dockedId)).toBe(true); // docked record survived
+      expect(config.tabs.length).toBe(2); // nav opened as a NEW tab
+    });
+
+    it('still replaces an ordinary unpinned nav temp tab', () => {
+      openNav('Data');
+      openNav('Queries');
+      const config = manager.GetConfiguration()!;
+      expect(config.tabs.length).toBe(1);
+      expect(config.tabs[0].title).toBe('Queries');
+    });
+  });
+
+  describe('main tab bar visibility (shouldShowTabs via MainLayoutTabFilter)', () => {
+    it('a docked record counts toward the bar: nav + docked = visible', () => {
+      let visible = false;
+      const sub = manager.TabBarVisible.subscribe(v => visible = v);
+      openNav('Data');
+      openDockedRecord('Docked Widget', 'r1');
+      expect(visible).toBe(true);
+      sub.unsubscribe();
+    });
+
+    it('a REGION record does not: nav + region record = hidden', () => {
+      let visible = true;
+      const sub = manager.TabBarVisible.subscribe(v => visible = v);
+      openNav('Data');
+      openRegionRecord('Region Widget', 'r2');
+      expect(visible).toBe(false);
+      sub.unsubscribe();
+    });
+  });
+
+  describe('CloseTab keep-alive', () => {
+    it('retains (unpins) a sole remaining DOCKED record instead of closing it', () => {
+      const dockedId = openDockedRecord('Docked Widget', 'r1');
+      manager.CloseTab(dockedId);
+      const config = manager.GetConfiguration()!;
+      expect(config.tabs.length).toBe(1);
+      expect(config.tabs[0].id).toBe(dockedId);
+      expect(config.tabs[0].isPinned).toBe(false);
+    });
+
+    it('closes a sole remaining REGION record outright', () => {
+      const regionId = openRegionRecord('Region Widget', 'r2');
+      manager.CloseTab(regionId);
+      expect(manager.GetConfiguration()!.tabs.length).toBe(0);
     });
   });
 });

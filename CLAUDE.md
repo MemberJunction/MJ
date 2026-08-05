@@ -71,13 +71,13 @@ A change is not done until **both** test tiers pass. Report results — pass/fai
 
 **Unit tests** — when you modify ANY package's source, run that package's tests:
 ```bash
-cd packages/PackageName && npm run test
+cd packages/PackageName && pnpm test
 ```
 If tests fail because of your change, **update them**. If they fail for other reasons, **fix them**. Never leave broken tests behind. Never assume tests still pass after changing signatures, renaming methods, changing return values, or altering behavior.
 
 **Integration tests** — the deterministic tier must be run headless and pass:
 ```bash
-npm run test:integration     # = MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"
+pnpm run test:integration    # = MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"
 npx mj test run "IT30 - Conversation Compaction (assembly layer)"   # single bundle while iterating
 ```
 Unit tests passing is necessary but **not sufficient** — the integration tier catches the seams between packages that unit tests mock away. Run it after migrations + CodeGen have been applied. Full details, authoring rules, and the client-first transport doctrine: [`guides/INTEGRATION_TESTING_QUICKSTART.md`](guides/INTEGRATION_TESTING_QUICKSTART.md).
@@ -94,19 +94,19 @@ Unit tests passing is necessary but **not sufficient** — the integration tier 
 
 **CodeGen reads JSONType definitions from the database, not from `metadata/`.** Run `mj sync push` **before** `mj codegen`, or CodeGen regenerates from stale definitions and *silently deletes* properties from the generated types. Full ordering + why it's silent: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
-**Build commands:**
+**Build commands** — this is a **pnpm** workspace (`packageManager` in `package.json` pins the version; the lockfile is `pnpm-lock.yaml`). Never run `npm install` here — it would create a `package-lock.json` the repo no longer uses and resolve a different tree:
 ```bash
-npm run build            # all packages, from repo root
-npm run watch            # watch mode
-npm run start:api        # MJAPI (port 4001)
-npm run start:explorer   # MJExplorer (port 4201)
-cd packages/PackageName && npm run build   # single package — use this, NOT turbo from root
+pnpm run build            # all packages, from repo root
+pnpm run watch            # watch mode
+pnpm run start:api        # MJAPI (port 4001)
+pnpm run start:explorer   # MJExplorer (port 4201)
+cd packages/PackageName && pnpm run build   # single package — use this, NOT turbo from root
 ```
 After making code changes, **always compile the affected package** and fix all TypeScript errors before proceeding.
 
-**NPM workspace**: add dependencies to the individual package's `package.json`, then run `npm install` **at the repository root**. Never run `npm install` inside a package directory.
+**pnpm workspace**: add dependencies to the individual package's `package.json`, then run `pnpm install` **at the repository root**. Never run it inside a package directory. pnpm enforces declared dependencies strictly — a package that imports something it doesn't declare fails to resolve rather than falling through to a hoisted copy, so declare every import.
 
-**Migration folder**: always use the highest-numbered `migrations/v*/` folder (currently `migrations/v5/`).
+**Migration folder**: the `migrations/v*/` folder must match **the major version in the migration's own filename** — `V…__v6.1.x__Name.sql` belongs in `migrations/v6/`, a `v5.x` file in `migrations/v5/`. Read the folder off the name you just chose; never off a number written down here, which goes stale at every era. Flyway scans `./migrations` recursively and reads the version from the filename, so a misfiled migration still runs — but it strands its PostgreSQL counterpart, which is paired per folder (`migrations/vN` ↔ `migrations-pg/vN`).
 
 **Record Changes**: MJ has built-in version control for all entities. Don't implement custom versioning.
 
@@ -148,7 +148,9 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 
 ### Guides — the complete index is [`guides/README.md`](guides/README.md)
 
-40 cross-cutting "read this before you build that" guides, categorized. **Consult the index before starting work in an unfamiliar area** — these capture patterns already litigated. Frequently needed: [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
+41 cross-cutting "read this before you build that" guides, categorized. **Consult the index before starting work in an unfamiliar area** — these capture patterns already litigated. Frequently needed: [UI Layering](guides/UI_LAYERING_GUIDE.md), [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
+
+**UI work is layered — L0 runtime → L1 widget → L2 composite → L3 Explorer surface.** Nothing below L3 imports `@angular/router` or an Explorer package; nothing at L3 holds domain logic. Read [`guides/UI_LAYERING_GUIDE.md`](guides/UI_LAYERING_GUIDE.md) before building any UI, in this repo or any MJ app repo.
 
 ### Skills — load only when invoked
 
@@ -163,6 +165,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 
 ```bash
 npm run check:ui          # design-token + button gates on changed CSS/SCSS (mirrors the PR gate)
+npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
 npm run check:esm         # native-ESM import guard for "type": "module" packages
 npm run check:claude-md   # instruction-file budget, link validity, and routing-table coverage
 ```
