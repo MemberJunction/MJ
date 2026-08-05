@@ -2,6 +2,7 @@ export * from './types.js';
 export * from './adapters/BaseHarnessAdapter.js';
 export * from './adapters/BaseCliHarnessAdapter.js';
 export * from './adapters/StdioJsonAdapter.js';
+export * from './adapters/ClaudeCodeCliAdapter.js';
 export * from './adapters/CodexAdapter.js';
 export * from './adapters/OpenCodeAdapter.js';
 export * from './adapters/GeminiCliAdapter.js';
