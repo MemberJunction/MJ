@@ -225,14 +225,23 @@ describe('Manifest Validation', () => {
     });
 
     /**
-     * `selfManagedMetadata` opts an app out of the host CodeGen managing its schema (issue #3457).
-     * The DEFAULT is the load-bearing part: every app published before this field existed omits it,
-     * and those apps rely on the host's CodeGen to register their entities. A default of `true`
-     * would silently re-break every one of them.
+     * `selfManagedMetadata` overrides whether the host's CodeGen manages the app's schema (#3457).
+     *
+     * It must stay TRI-STATE: `undefined` is not "false", it means "no declaration, so detect it"
+     * — the installer counts the schema's `__mj.Entity` rows after migrations run. Collapsing
+     * `undefined` to `false` with a zod default is precisely the bug this replaced: every Open App
+     * published to date omits the field, and `mj-bizapps-common` / `-forms` / `-tasks` all seed
+     * their own entity rows while declaring nothing, so a `false` default un-excludes all three.
      */
     describe('schema.selfManagedMetadata', () => {
-        it('defaults to false when omitted — host CodeGen registers the app\'s entities', () => {
+        it('stays undefined when omitted, so the installer detects instead of assuming', () => {
             const m = { ...minimalManifest(), schema: { name: '__mj_BizAppsCaliber' } };
+            const parsed = mjAppManifestSchema.parse(m);
+            expect(parsed.schema?.selfManagedMetadata).toBeUndefined();
+        });
+
+        it('round-trips an explicit false, which is distinct from omitting it', () => {
+            const m = { ...minimalManifest(), schema: { name: '__mj_BizAppsCaliber', selfManagedMetadata: false } };
             const parsed = mjAppManifestSchema.parse(m);
             expect(parsed.schema?.selfManagedMetadata).toBe(false);
         });

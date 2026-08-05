@@ -625,25 +625,25 @@ The `DriverClass` value must exactly match the second argument of `@RegisterClas
   installer writes it into the host's CodeGen `entityPackageName` map, which is what stops the host
   from emitting duplicate entity subclasses and GraphQL ObjectTypes for your entities. Auto-detected
   from the first `packages.shared` library whose name contains `entities` when omitted.
-- `selfManagedMetadata`: **Default `false`.** Leave it false if your migrations ship raw DDL and you
-  rely on the host's CodeGen to register your entities — the contract described in
-  [Migration Content](#migration-content) above. Set it `true` only if your migrations seed their own
-  `__mj.Entity` rows **and** ship their own generated base views / CRUD procs; that adds your schema
-  to the host's `excludeSchemas`, which keeps CodeGen off the schema entirely.
+- `selfManagedMetadata`: **Optional override — leave it unset.** When absent, the installer *detects*
+  whether your app manages its own entity metadata: after your migrations run it counts your schema's
+  rows in `__mj.Entity`. Rows present means your migrations seeded them, so CodeGen stays off the
+  schema; zero means nothing registered them, so the host's CodeGen must — the contract described in
+  [Migration Content](#migration-content) above. Set it only to override a probe that would be wrong
+  for your app: `true` keeps CodeGen off even with no entities yet, `false` hands the schema to the
+  host's CodeGen even though entities already exist.
 
-> **Host operators:** the two values are not "write" vs "do nothing" — they are write vs **delete**.
-> With `selfManagedMetadata: false` (the default), every `mj app install` and `mj app upgrade`
-> *removes* this app's schema from your `excludeSchemas`, including an entry you added by hand. That
-> is deliberate — it is how a host broken by an older installer heals itself — but it means the app
-> author, not you, decides whether CodeGen owns that schema. If you need a schema excluded for your
-> own reasons (large staging tables you don't want registered as entities, an in-progress migration),
-> that decision will not survive the next upgrade. Track it in the app's manifest instead.
+> **Why detection rather than a default:** every Open App published before this field existed omits
+> it, and several first-party apps (`mj-bizapps-common`, `-forms`, `-tasks`) seed their own
+> `__mj.Entity` rows in their baseline while declaring nothing. Any fixed default gets one group or
+> the other wrong, silently. The entity count is the fact itself, and it is observable at exactly the
+> moment the installer needs it.
 
-> ⚠️ `selfManagedMetadata: true` disables entity **discovery** for your schema, not just file
-> generation. If you set it without seeding your own entity metadata, `mj app install` and
-> `mj codegen` both succeed and you get tables with **zero entities** and no error. That silent
-> failure is why the flag defaults to false and why `entityPackage` — not `excludeSchemas` — is the
-> mechanism for duplicate suppression.
+> **Host operators:** when the probe says the host owns the schema, `mj app install` / `mj app upgrade`
+> will *remove* that schema from your `excludeSchemas` — including an entry you added by hand. That is
+> deliberate: it is how a host broken by an older installer heals itself. If you need a schema excluded
+> for your own reasons, the app must declare `selfManagedMetadata: true`. If the probe cannot run at
+> all, the installer changes nothing and warns, rather than guessing.
 
 ### Package Configuration
 

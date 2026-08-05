@@ -1769,6 +1769,43 @@ async function HandlePackageInstallation(
  * would otherwise strip a co-owner's exclusion purely because it installed second. A corrupt
  * sibling manifest is skipped with a warning rather than failing this app's install (B24).
  */
+/**
+ * Whether the app's schema already has `__mj.Entity` rows — i.e. its own migrations seeded them.
+ *
+ * This is the real discriminator for "does this app manage its own entity metadata", and it is
+ * observable precisely here: migrations run before config is written, so a self-seeding app's rows
+ * already exist. Reading the fact beats reading a manifest flag because every Open App published to
+ * date predates that flag — `mj-bizapps-common`, `-forms` and `-tasks` all seed their own rows
+ * (`INSERT INTO [__mj].Entity` in their baseline) while declaring nothing, whereas
+ * `mj-bizapps-caliber` seeds none and depends on the host's CodeGen. A manifest-only default
+ * silently gets the first three wrong, and getting them wrong means the host's CodeGen starts
+ * co-owning entity metadata the app already owns.
+ *
+ * @returns true when rows exist, false when none do, and `undefined` when the probe could not run —
+ *          which the caller must treat as "do not touch the config", never as a default.
+ */
+async function SchemaHasSeededEntities(
+  schemaName: string,
+  context: OrchestratorContext,
+): Promise<boolean | undefined> {
+  try {
+    const rows = await context.DatabaseProvider.ExecuteSQL<{ EntityCount: number }>(
+      `SELECT COUNT(*) AS EntityCount FROM ${context.MJCoreSchema ?? '__mj'}.Entity ` +
+      `WHERE SchemaName = '${EscapeSqlString(schemaName)}'`,
+    );
+    const count = Number(rows?.[0]?.EntityCount ?? 0);
+    return count > 0;
+  }
+  catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    context.Callbacks?.OnWarn?.(
+      'Config',
+      `Could not count existing entities for schema '${schemaName}': ${message}`,
+    );
+    return undefined;
+  }
+}
+
 async function AnotherInstalledAppSelfManages(
   schemaName: string,
   thisAppName: string,
@@ -1863,7 +1900,24 @@ async function HandleServerConfig(manifest: MJAppManifest, context: Orchestrator
     // this app, so it must not override a co-owner that declared the schema self-managed —
     // otherwise install order silently decides whether the host's CodeGen co-owns their tables.
     // Mirrors HandleAngularPrebundleExcludeRemoval, which already consults the other manifests.
-    const claimedSelfManaged = manifest.schema.selfManagedMetadata
+    // Does this app manage its own entity metadata? Prefer the OBSERVED fact over a declaration —
+    // see SchemaHasSeededEntities. An explicit manifest value overrides the probe in both directions.
+    const selfManaged = manifest.schema.selfManagedMetadata
+      ?? await SchemaHasSeededEntities(schemaName, context);
+
+    if (selfManaged === undefined) {
+      // The probe failed and the app declared nothing, so we do not know which way to edit. Both
+      // edits are destructive in one direction or the other, so change nothing and say so.
+      context.Callbacks?.OnWarn?.(
+        'Config',
+        `Could not determine whether '${schemaName}' manages its own entity metadata, so the host's ` +
+        `excludeSchemas was left untouched. If this app's entities are missing after CodeGen, remove ` +
+        `'${schemaName}' from excludeSchemas; if CodeGen starts co-owning its objects, add it back.`,
+      );
+      return { Success: true };
+    }
+
+    const claimedSelfManaged = selfManaged
       || await AnotherInstalledAppSelfManages(schemaName, manifest.name, context);
 
     const excludeResult = claimedSelfManaged

@@ -98,13 +98,19 @@ const dbSchemaSchema = z.object({
      *  whose name contains "entities"). */
     entityPackage: z.string().max(214).regex(npmPackageNameRegex, 'entityPackage must be a valid npm package name (lowercase, URL-safe characters, optional @scope/)').optional(),
     /**
-     * Declares that this app's migrations seed their OWN `__mj.Entity` rows and ship their own
-     * generated base views / CRUD procs — so the host's CodeGen must keep off this schema
-     * entirely. Adds the schema to the host's `excludeSchemas`.
+     * OPTIONAL override for whether this app manages its own entity metadata.
      *
-     * Defaults to `false`, which is the contract the README documents ("Migration Content": an
-     * app ships raw DDL and *"MJ's CodeGen handles those automatically after entity
-     * registration"*). Setting it `true` is a statement that the app has taken over that job.
+     * **Leave it unset.** When absent, the installer DETECTS the answer after migrations run, by
+     * counting the app schema's rows in `__mj.Entity`: rows present means the app's own migrations
+     * seeded them (so CodeGen stays off the schema), zero means nothing registered them (so the
+     * host's CodeGen must). Detection is used because it reads the fact rather than a declaration —
+     * every Open App published to date predates this field, and `mj-bizapps-common` / `-forms` /
+     * `-tasks` all seed their own rows via `INSERT INTO [__mj].Entity` in their baseline while
+     * declaring nothing. A manifest-only default would get all three wrong.
+     *
+     * Set it only to override a probe that would be wrong for your app:
+     *   `true`  — keep CodeGen off the schema even though no entities exist yet
+     *   `false` — let the host's CodeGen own the schema even though entities are already present
      *
      * This is NOT a substitute for `entityPackage`. `entityPackage` suppresses duplicate entity
      * subclasses / GraphQL ObjectTypes and is written either way; `excludeSchemas` additionally
@@ -116,7 +122,7 @@ const dbSchemaSchema = z.object({
      * it means this manifest field, not the host's config, is the authority on whether CodeGen owns
      * the schema.
      */
-    selfManagedMetadata: z.boolean().optional().default(false),
+    selfManagedMetadata: z.boolean().optional(),
 });
 
 // ── Migrations ────────────────────────────────────────────

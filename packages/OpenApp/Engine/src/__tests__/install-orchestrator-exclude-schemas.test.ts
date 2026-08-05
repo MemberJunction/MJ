@@ -136,7 +136,11 @@ function manifestJSON(selfManagedMetadata?: boolean, version = '1.0.0'): string 
 
 const context = {
     ContextUser: {},
-    DatabaseProvider: { Dialect: { CanonicalSchemaName: (s: string) => s } },
+    DatabaseProvider: {
+        Dialect: { CanonicalSchemaName: (s: string) => s },
+        // No seeded entities — the bizapps-caliber shape, where the host's CodeGen must register them.
+        ExecuteSQL: async () => [{ EntityCount: 0 }],
+    },
     DatabaseConfig: {},
     GitHubOptions: {},
     RepoRoot: '/tmp/test-repo',
@@ -241,7 +245,10 @@ describe('schema name written to the host config is dialect-canonical', () => {
     // SchemaInfo; the config write must agree or the two disagree about the same schema.
     const pgContext = {
         ...(context as unknown as Record<string, unknown>),
-        DatabaseProvider: { Dialect: { CanonicalSchemaName: (s: string) => s.toLowerCase() } },
+        DatabaseProvider: {
+            Dialect: { CanonicalSchemaName: (s: string) => s.toLowerCase() },
+            ExecuteSQL: async () => [{ EntityCount: 0 }],
+        },
     } as unknown as OrchestratorContext;
 
     it('writes the lowercased schema on PostgreSQL (opt-in path)', async () => {
@@ -370,5 +377,81 @@ describe('shared-schema reconciliation', () => {
 
         expect(result.Success).toBe(true);
         expect(RemoveExcludeSchema).toHaveBeenCalled();
+    });
+});
+
+/**
+ * Detection-based default (the manifest flag is an override, not the primary signal).
+ *
+ * Whether an app self-manages its entity metadata is observable at install time — its seed
+ * migration has already run by the time config is written — so the installer reads the fact
+ * instead of asking the manifest for it. That matters because the apps whose behaviour we need to
+ * respect are already published: `mj-bizapps-common`, `-forms` and `-tasks` all seed their own
+ * `__mj.Entity` rows in their baseline (`INSERT INTO [__mj].Entity`), and none of them declares
+ * `selfManagedMetadata`. A manifest-only default would un-exclude all three on the next upgrade and
+ * hand the host's CodeGen co-ownership of entities the apps already own.
+ *
+ * `mj-bizapps-caliber`, by contrast, seeds nothing — which is why it was the one that broke.
+ */
+describe('self-management is DETECTED, with the manifest flag as an override', () => {
+    /** Stubs the entity-count probe the installer runs against the app's schema. */
+    function contextWithSeededEntities(count: number, opts: { failQuery?: boolean } = {}) {
+        return {
+            ...(context as unknown as Record<string, unknown>),
+            DatabaseProvider: {
+                Dialect: { CanonicalSchemaName: (s: string) => s },
+                ExecuteSQL: vi.fn(async () => {
+                    if (opts.failQuery) throw new Error('connection reset');
+                    return count > 0 ? [{ EntityCount: count }] : [{ EntityCount: 0 }];
+                }),
+            },
+        } as unknown as OrchestratorContext;
+    }
+
+    it('KEEPS the exclusion when the app seeded its own entities (bizapps-common shape)', async () => {
+        serve(manifestJSON()); // no selfManagedMetadata declared — every published app today
+
+        const result = await InstallApp({ Source: REPO_URL }, contextWithSeededEntities(10));
+
+        expect(result.Success).toBe(true);
+        expect(AddExcludeSchema).toHaveBeenCalledWith('/tmp/test-repo', APP_SCHEMA, undefined);
+        expect(RemoveExcludeSchema).not.toHaveBeenCalled();
+    });
+
+    it('REMOVES the exclusion when the app seeded nothing (bizapps-caliber shape)', async () => {
+        serve(manifestJSON());
+
+        await InstallApp({ Source: REPO_URL }, contextWithSeededEntities(0));
+
+        expect(RemoveExcludeSchema).toHaveBeenCalledWith('/tmp/test-repo', APP_SCHEMA, undefined);
+        expect(AddExcludeSchema).not.toHaveBeenCalled();
+    });
+
+    it('an explicit selfManagedMetadata:true wins over a zero-entity probe', async () => {
+        serve(manifestJSON(true));
+
+        await InstallApp({ Source: REPO_URL }, contextWithSeededEntities(0));
+
+        expect(AddExcludeSchema).toHaveBeenCalled();
+        expect(RemoveExcludeSchema).not.toHaveBeenCalled();
+    });
+
+    it('an explicit selfManagedMetadata:false wins over a seeded-entity probe', async () => {
+        serve(manifestJSON(false));
+
+        await InstallApp({ Source: REPO_URL }, contextWithSeededEntities(10));
+
+        expect(RemoveExcludeSchema).toHaveBeenCalled();
+        expect(AddExcludeSchema).not.toHaveBeenCalled();
+    });
+
+    it('changes NOTHING when the probe fails — never guess with a destructive edit', async () => {
+        serve(manifestJSON());
+
+        const result = await InstallApp({ Source: REPO_URL }, contextWithSeededEntities(0, { failQuery: true }));
+
+        expect(result.Success).toBe(true);
+        expect(AddExcludeSchema).not.toHaveBeenCalled();
+        expect(RemoveExcludeSchema).not.toHaveBeenCalled();
     });
 });
