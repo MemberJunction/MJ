@@ -9,7 +9,7 @@
       "so shipping them Active would mean a fresh install advertises harnesses it cannot launch.",
       "Flip a row to Active once its binary is present.",
       "",
-      "CapabilitySettings declares what each ADAPTER implements, not what the vendor advertises — the",
+      "CapabilitySettings declares what each ADAPTER implements, not what the vendor advertises \u2014 the",
       "runtime emulates what is missing, so an over-claim becomes a silent behavioural gap. Every row",
       "reports PermissionHooks false because MJ's MCP permission-prompt tool does not exist yet; the",
       "strict posture depends on it."
@@ -29,7 +29,7 @@
         "WorkspaceScoping": true,
         "ModelSelection": true
       },
-      "Status": "Active",
+      "Status": "Inactive",
       "AIModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5"
     },
     "primaryKey": {
@@ -43,7 +43,7 @@
   {
     "fields": {
       "Name": "Codex CLI",
-      "Description": "OpenAI's Codex CLI, driven through `codex exec --json`. Ships as a CLI only — the npm package exposes a bin and no library entry point. Requires the `codex` binary and an OPENAI_API_KEY reaching the sandbox.",
+      "Description": "OpenAI's Codex CLI, driven through `codex exec --json`. Ships as a CLI only \u2014 the npm package exposes a bin and no library entry point. Requires the `codex` binary and an OPENAI_API_KEY reaching the sandbox.",
       "DriverClass": "CodexAdapter",
       "AIVendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
       "CapabilitySettings": {
@@ -92,7 +92,7 @@
   {
     "fields": {
       "Name": "Gemini CLI",
-      "Description": "Google's Gemini CLI. Built around one-shot invocations, so it does NOT resume sessions — the runtime replays accumulated context into every turn and budgets the extra tokens against the run's guardrails. Uses the CLI rather than @google/gemini-cli-core, which is internals with no stability contract. Requires the `gemini` binary and a GEMINI_API_KEY.",
+      "Description": "Google's Gemini CLI. Built around one-shot invocations, so it does NOT resume sessions \u2014 the runtime replays accumulated context into every turn and budgets the extra tokens against the run's guardrails. Uses the CLI rather than @google/gemini-cli-core, which is internals with no stability contract. Requires the `gemini` binary and a GEMINI_API_KEY.",
       "DriverClass": "GeminiCliAdapter",
       "AIVendorID": "@lookup:MJ: AI Vendors.Name=Google",
       "CapabilitySettings": {
@@ -117,7 +117,7 @@
   {
     "fields": {
       "Name": "Pi",
-      "Description": "Pi (@earendil-works/pi-coding-agent), driven through its non-interactive CLI: `pi -p --mode json --session-id <id>`. Verified against a real install (0.83.0) rather than inferred — MJ supplies the session id up front, so turns resume instead of replaying context. Authenticates from environment variables or its own `pi /login`; the local executor passes HOME through, so a developer who has already logged in needs no credential row.",
+      "Description": "Pi (@earendil-works/pi-coding-agent), driven through its non-interactive CLI: `pi -p --mode json --session-id <id>`. Verified against a real install (0.83.0) rather than inferred \u2014 MJ supplies the session id up front, so turns resume instead of replaying context. Authenticates from environment variables or its own `pi /login`; the local executor passes HOME through, so a developer who has already logged in needs no credential row.",
       "DriverClass": "PiAdapter",
       "CapabilitySettings": {
         "SessionResume": true,
