@@ -83,7 +83,7 @@ interface MockEntity {
     FirstPrimaryKey: { Name: string };
     GetUserPermisions: (u: UserInfo) => { CanRead: boolean } | null;
     UserExemptFromRowLevelSecurity: (u: UserInfo, _t: number) => boolean;
-    GetUserRowLevelSecurityWhereClause: (u: UserInfo, _t: number, _prefix: string) => string;
+    GetEffectiveRowFilterWhereClause: (u: UserInfo, _t: number, _prefix: string) => string;
 }
 
 function makeEntity(opts: {
@@ -98,7 +98,7 @@ function makeEntity(opts: {
         FirstPrimaryKey: { Name: opts.PrimaryKeyName ?? 'ID' },
         GetUserPermisions: () => ({ CanRead: opts.CanRead }),
         UserExemptFromRowLevelSecurity: () => opts.Exempt,
-        GetUserRowLevelSecurityWhereClause: () => opts.RlsClause,
+        GetEffectiveRowFilterWhereClause: () => opts.RlsClause,
     };
 }
 

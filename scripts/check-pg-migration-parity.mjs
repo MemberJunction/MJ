@@ -30,8 +30,10 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
-const MIGRATIONS_DIR = join(REPO_ROOT, 'migrations', 'v5');
-const PG_MIGRATIONS_DIR = join(REPO_ROOT, 'migrations-pg', 'v5');
+// Version folders under active parity enforcement. v2-v4 predate the PG port
+// entirely (no counterparts exist by design), so enforcement starts at v5 and
+// covers every later major automatically as its folder appears.
+const ENFORCED_VERSION_DIRS = ['v5', 'v6'];
 
 /**
  * Intentionally-removed pre-baseline files. These T-SQL migrations exist
@@ -53,15 +55,25 @@ function readDirOrExit(path, label) {
     }
 }
 
-const tsqlFiles = readDirOrExit(MIGRATIONS_DIR, 'T-SQL migrations dir')
-    .filter(f => f.startsWith('V') && f.endsWith('.sql'))
-    .sort();
-
-const pgBases = new Set(
-    readDirOrExit(PG_MIGRATIONS_DIR, 'PG migrations dir')
-        .filter(f => f.startsWith('V'))
-        .map(f => f.replace(/\.pg\.sql$/, '').replace(/\.pg-only\.sql$/, ''))
-);
+const tsqlFiles = [];
+const pgBases = new Set();
+for (const v of ENFORCED_VERSION_DIRS) {
+    const ssDir = join(REPO_ROOT, 'migrations', v);
+    const pgDir = join(REPO_ROOT, 'migrations-pg', v);
+    // A version folder that doesn't exist yet on either side is simply not open;
+    // a folder open on the SS side MUST exist on the PG side (readDirOrExit exits 2).
+    let ssEntries;
+    try {
+        ssEntries = readdirSync(ssDir);
+    } catch {
+        continue; // version not opened yet
+    }
+    tsqlFiles.push(...ssEntries.filter(f => f.startsWith('V') && f.endsWith('.sql')));
+    for (const f of readDirOrExit(pgDir, `PG migrations dir (${v})`).filter(f => f.startsWith('V'))) {
+        pgBases.add(f.replace(/\.pg\.sql$/, '').replace(/\.pg-only\.sql$/, ''));
+    }
+}
+tsqlFiles.sort();
 
 const missing = tsqlFiles
     .map(f => f.replace(/\.sql$/, ''))

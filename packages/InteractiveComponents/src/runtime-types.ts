@@ -185,6 +185,23 @@ export interface ComponentStyles {
      * chart series follow the active theme/brand.
      */
     chartPalette?: string[]
+    /**
+     * Sequential (single-hue) ramp for intensity visualizations — heatmaps,
+     * choropleths, density shading. Ordered light-to-dark; interpolate between
+     * stops for continuous scales. Populated from the host theme's
+     * `--mj-viz-seq-*` tokens by the theme bridge.
+     */
+    sequentialScale?: string[]
+    /**
+     * Diverging ramp for visualizations with a meaningful midpoint — variance vs
+     * target, sentiment, gain/loss. `mid` is the neutral center when present.
+     * Populated from the host theme's `--mj-viz-div-*` tokens by the theme bridge.
+     */
+    divergingScale?: {
+        low: string
+        mid?: string
+        high: string
+    }
 }
 
 

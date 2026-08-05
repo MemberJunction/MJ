@@ -113,6 +113,8 @@ export {
     verifyUserRecord,
 } from './auth/index.js';
 export * from './auth/APIKeyScopeAuth.js';
+export * from './auth/actingContextResolver.js';
+export { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 
 export * from './generic/PushStatusResolver.js';
 export * from './generic/PubSubManager.js';
