@@ -14,6 +14,27 @@ export class CognitoProvider extends BaseAuthProvider {
   }
 
   /**
+   * Configures Amazon Cognito from COGNITO_USER_POOL_ID + COGNITO_CLIENT_ID + AWS_REGION.
+   *
+   * Mapping preserved byte-for-byte from the env block that previously lived in MJServer's config.
+   */
+  static configFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
+    if (!env.COGNITO_USER_POOL_ID || !env.COGNITO_CLIENT_ID || !env.AWS_REGION) {
+      return null;
+    }
+    return {
+      name: 'cognito',
+      type: 'cognito',
+      issuer: `https://cognito-idp.${env.AWS_REGION}.amazonaws.com/${env.COGNITO_USER_POOL_ID}`,
+      audience: env.COGNITO_CLIENT_ID,
+      jwksUri: `https://cognito-idp.${env.AWS_REGION}.amazonaws.com/${env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
+      clientId: env.COGNITO_CLIENT_ID,
+      region: env.AWS_REGION,
+      userPoolId: env.COGNITO_USER_POOL_ID
+    };
+  }
+
+  /**
    * Extracts user information from Cognito JWT payload
    */
   extractUserInfo(payload: JwtPayload): AuthUserInfo {

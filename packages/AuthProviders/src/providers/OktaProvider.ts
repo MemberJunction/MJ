@@ -14,6 +14,29 @@ export class OktaProvider extends BaseAuthProvider {
   }
 
   /**
+   * Configures Okta from OKTA_DOMAIN + OKTA_CLIENT_ID, with OKTA_ISSUER overriding the issuer
+   * for orgs that use a custom authorization server rather than the default one.
+   *
+   * NEW capability: Okta had no env-var form before the discovery hook existed — it was one of
+   * the providers the old hard-coded block did not cover, so it required a config-file entry.
+   */
+  static configFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
+    if (!env.OKTA_DOMAIN || !env.OKTA_CLIENT_ID) {
+      return null;
+    }
+    const issuer = env.OKTA_ISSUER || `https://${env.OKTA_DOMAIN}/oauth2/default`;
+    return {
+      name: 'okta',
+      type: 'okta',
+      issuer,
+      audience: env.OKTA_AUDIENCE || env.OKTA_CLIENT_ID,
+      jwksUri: `${issuer.replace(/\/$/, '')}/v1/keys`,
+      clientId: env.OKTA_CLIENT_ID,
+      domain: env.OKTA_DOMAIN
+    };
+  }
+
+  /**
    * Extracts user information from Okta JWT payload
    */
   extractUserInfo(payload: JwtPayload): AuthUserInfo {

@@ -35,6 +35,33 @@ export class WorkOSProvider extends BaseAuthProvider {
   }
 
   /**
+   * Configures WorkOS AuthKit from WORKOS_CLIENT_ID.
+   *
+   * Issuer and JWKS are both derived from the client ID — AuthKit's issuer is
+   * https://api.workos.com/user_management/<clientId> and its JWKS lives at
+   * https://api.workos.com/sso/jwks/<clientId> — so a single variable is enough.
+   * WORKOS_AUDIENCE overrides the audience when a Resource Indicator is configured.
+   *
+   * NEW capability: WorkOS had no env-var form before the discovery hook existed.
+   *
+   * Remember the AuthKit email caveat: access tokens omit `email` unless a JWT Template adds it,
+   * and MJ resolves users by email. See WORKOS.md.
+   */
+  static configFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
+    if (!env.WORKOS_CLIENT_ID) {
+      return null;
+    }
+    return {
+      name: 'workos',
+      type: 'workos',
+      issuer: `https://api.workos.com/user_management/${env.WORKOS_CLIENT_ID}`,
+      audience: env.WORKOS_AUDIENCE || env.WORKOS_CLIENT_ID,
+      jwksUri: `https://api.workos.com/sso/jwks/${env.WORKOS_CLIENT_ID}`,
+      clientId: env.WORKOS_CLIENT_ID
+    };
+  }
+
+  /**
    * Extracts user information from a WorkOS AuthKit JWT payload.
    *
    * `email`, `given_name`, and `family_name` are expected to be supplied by a WorkOS JWT

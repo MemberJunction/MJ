@@ -26,3 +26,11 @@ subclass plus a row in the new `MJ: Authentication Providers` entity, resolved a
   only when 2+ client-visible providers exist. Single-provider deployments look exactly as before.
 - `AuthProviderFactory` no longer carries a hard-wired list of built-in provider imports; the
   package entry point and the class-registration manifests already covered registration.
+- **Environment-variable configuration is now pluggable too.** The hard-coded block in MJServer's
+  config that enumerated Entra / Auth0 / Cognito inline is replaced by an optional
+  `configFromEnvironment` static on each provider class (`IEnvironmentConfigurableProvider`),
+  collected through the ClassFactory registry by `AuthProviderFactory.discoverFromEnvironment()`.
+  A third-party provider can now offer the same "set two variables and you're done" experience
+  with no change to MJ core. The three existing mappings are preserved byte-for-byte; **Okta**
+  (`OKTA_DOMAIN` + `OKTA_CLIENT_ID`) and **WorkOS** (`WORKOS_CLIENT_ID`) gain env-var support they
+  did not previously have.
