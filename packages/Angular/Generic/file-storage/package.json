@@ -19,6 +19,7 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
     "build": "ngc",
     "watch": "ngc -w",
     "test:watch": "vitest"
@@ -45,7 +46,7 @@
     "@memberjunction/graphql-dataprovider": "6.0.0",
     "@memberjunction/ng-base-types": "6.0.0",
     "@memberjunction/ng-container-directives": "6.0.0",
-    "@memberjunction/ng-notifications": "5.51.0",
+    "@memberjunction/ng-notifications": "6.0.0",
     "@memberjunction/ng-shared": "6.0.0",
     "@memberjunction/ng-shared-generic": "6.0.0",
     "@memberjunction/ng-ui-components": "6.0.0",
@@ -59,5 +60,5 @@
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
   },
-  "mjUILayer": "widgets"
+  "mjUILayer": "surface"
 }

@@ -6,8 +6,12 @@ on:
       - next
       - main
 
+# Keyed by ref, like every other PR-scoped workflow here (test.yml, integration.yml,
+# docs-site-ci.yml). A constant group makes the group REPO-WIDE: with cancel-in-progress,
+# one PR's run cancels every other open PR's run, so `Check migrations` can only be green
+# on whichever PR pushed last — and a re-run just moves the cancellation elsewhere.
 concurrency:
-  group: "changes"
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 # `pull-requests: write` lets the migration-ID-determinism step post a sticky PR

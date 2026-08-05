@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
-import { renderComponentFixture, query, queryAll, text, hasClass, click, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, hasClass, click, capture, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { SearchResultsComponent } from './search-results.component';
 import { SearchResultItem } from './search-types';
 
@@ -11,8 +10,6 @@ import { SearchResultItem } from './search-types';
  * to render so SearchResultsComponent's loading branch can be asserted; the real
  * spinner's behavior is out of scope for this component's contract.
  */
-@Component({ standalone: false, selector: 'mj-loading', template: '<span class="stub-loading"></span>' })
-class StubLoadingComponent {}
 
 function makeResult(overrides: Partial<SearchResultItem> = {}): SearchResultItem {
   return {
@@ -40,8 +37,8 @@ function makeResult(overrides: Partial<SearchResultItem> = {}): SearchResultItem
 describe('SearchResultsComponent (DOM)', () => {
   const render = (inputs: Record<string, unknown> = {}) =>
     renderComponentFixture(SearchResultsComponent, {
-      imports: [CommonModule, MJEmptyStateComponent],
-      declarations: [SearchResultsComponent, StubLoadingComponent],
+      imports: [CommonModule, MJEmptyStateComponent, StubLoadingComponent],
+      declarations: [SearchResultsComponent],
       inputs,
     });
 

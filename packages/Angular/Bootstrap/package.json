@@ -15,6 +15,7 @@
     "watch": "ng-packagr -p ng-package.json --watch",
     "clean": "rimraf dist",
     "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
     "test:watch": "vitest"
   },
   "keywords": [

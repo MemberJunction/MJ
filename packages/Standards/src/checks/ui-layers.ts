@@ -74,7 +74,7 @@ const FORBIDDEN_PATTERNS: Record<UILayer, Array<[RegExp, string, string]>> = {
         [/\bnew\s+RunViews?\s*\(\s*\)/, 'new RunView()', 'binds the global provider — use RunView.FromMetadataProvider(this.ProviderToUse)'],
         [/\bnew\s+RunQuery\s*\(\s*\)/, 'new RunQuery()', 'binds the global provider — use this.RunQueryToUse'],
         [/\bnew\s+RunReport\s*\(\s*\)/, 'new RunReport()', 'binds the global provider — use this.RunReportToUse'],
-        [/\bnew\s+Metadata\s*\(\s*\)/, 'new Metadata()', 'binds the global provider — use this.ProviderToUse'],
+        [/\bnew\s+Metadata\s*\(\s*\)/, 'new Metadata()', 'binds the global provider — use this.ProviderToUse'], // global-provider-ok: this is the pattern TABLE (a documentation string), not a call site
     ],
     surface: [],
     shell: [],
@@ -232,18 +232,11 @@ function checkPackage(packageDir: string, layer: UILayer, repoRoot: string, pack
         violations.push({ File: relative(repoRoot, file), Line: line, Message: message, Package: packageName });
     };
 
-    const manifestPath = join(packageDir, 'package.json');
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
-        dependencies?: Record<string, string>;
-        peerDependencies?: Record<string, string>;
-    };
-    const declared = { ...(manifest.dependencies ?? {}), ...(manifest.peerDependencies ?? {}) };
-    for (const dep of Object.keys(declared)) {
-        for (const pattern of FORBIDDEN_DEPS[layer]) {
-            if (pattern.test(dep)) add(manifestPath, 0, `declares "${dep}" — a "${layer}" package must not depend on it`);
-        }
-    }
-
+    // Sources first: the manifest half needs to know which forbidden imports carry a reviewed
+    // exception, because the dependency-check gate (Knip) requires every real import to be
+    // declared — an excused import therefore FORCES a declaration, and flagging that declaration
+    // would put the two gates in deadlock.
+    const excusedSpecifiers = new Set<string>();
     for (const file of findSourceFiles(packageDir)) {
         const raw = readFileSync(file, 'utf8');
         const source = StripComments(raw);
@@ -252,7 +245,10 @@ function checkPackage(packageDir: string, layer: UILayer, repoRoot: string, pack
         const codeLines = source.split('\n');
 
         for (const { Specifier, Names, Line } of ParseImports(source)) {
-            if (IsAllowed(lines, Line)) continue;
+            if (IsAllowed(lines, Line)) {
+                if (FORBIDDEN_MODULES[layer].some(([pattern]) => pattern.test(Specifier))) excusedSpecifiers.add(Specifier);
+                continue;
+            }
             for (const [pattern, reason] of FORBIDDEN_MODULES[layer]) {
                 if (pattern.test(Specifier)) add(file, Line, `imports "${Specifier}" — ${reason}`);
             }
@@ -265,6 +261,22 @@ function checkPackage(packageDir: string, layer: UILayer, repoRoot: string, pack
             codeLines.forEach((text, index) => {
                 if (pattern.test(text) && !IsAllowed(lines, index + 1)) add(file, index + 1, `uses ${label} — ${reason}`);
             });
+        }
+    }
+
+    const manifestPath = join(packageDir, 'package.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+        dependencies?: Record<string, string>;
+        peerDependencies?: Record<string, string>;
+    };
+    const declared = { ...(manifest.dependencies ?? {}), ...(manifest.peerDependencies ?? {}) };
+    for (const dep of Object.keys(declared)) {
+        for (const pattern of FORBIDDEN_DEPS[layer]) {
+            if (!pattern.test(dep)) continue;
+            // A declaration backing a marker-excused import inherits the exception; an unexcused
+            // import of the same module still flags on its own line, so nothing slips through.
+            const backsExcusedImport = [...excusedSpecifiers].some((s) => s === dep || s.startsWith(`${dep}/`));
+            if (!backsExcusedImport) add(manifestPath, 0, `declares "${dep}" — a "${layer}" package must not depend on it`);
         }
     }
 

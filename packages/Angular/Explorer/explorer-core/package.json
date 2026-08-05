@@ -11,7 +11,8 @@
     "test": "vitest run",
     "prebuild": "mj codegen manifest --exclude-packages @memberjunction --appDir ../../../../packages/MJExplorer --output /dev/null --lazy-config ./src/generated/lazy-feature-config.ts || echo 'Warning: mj codegen manifest not available, using existing lazy-feature-config'",
     "build": "ngc",
-    "watch": "ngc -w"
+    "watch": "ngc -w",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json"
   },
   "keywords": [],
   "author": "",
