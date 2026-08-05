@@ -1,15 +1,27 @@
 name: Release Edge
 
 # The one-button Edge release (guides/RELEASE_ENGINEERING_RUNBOOK.md, operation 1).
-# Dispatching this merges next into main; the push to main triggers publish.yml,
-# which does everything else: changeset version (pre-mode -> X.Y.0-edge.N), the
-# version-grammar guard, build, publish to the `edge` dist-tag, release commit +
+# Dispatching this merges a commit from next into main; the push to main triggers
+# publish.yml, which does everything else: changeset version (pre-mode -> X.Y.0-edge.N),
+# the version-grammar guard, build, publish to the `edge` dist-tag, release commit +
 # tag, GitHub prerelease (never latest), and the merge of main back into next.
 # This workflow ONLY performs guarded merge-and-push - all release logic stays
 # in publish.yml so the button and a manual next->main merge behave identically.
+#
+# The `ref` input pins WHAT ships. Leave it blank to release the current tip of next.
+# Pass a SHA to release the exact commit you validated through DEPLOYMENT.md Steps 0-8:
+# merges that land on next during the prep window then ride the NEXT release instead of
+# gate-crashing this one, so preparing a release no longer requires holding PRs back.
+# Every guard below reads the resolved commit, never the branch tip - a guard that reads
+# the branch while the merge reads a pin would be worse than no guard at all.
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit SHA on next to release (blank = current tip of next)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -31,10 +43,42 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Resolve the release commit
+        id: target
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+        run: |
+          # actions/checkout put us on next, so HEAD is its tip. Using HEAD rather than
+          # origin/next keeps this independent of which remote-tracking refs the checkout
+          # action happens to populate.
+          NEXT_TIP=$(git rev-parse HEAD)
+
+          if [ -z "$INPUT_REF" ]; then
+            SHA="$NEXT_TIP"
+            echo "::notice::No ref given - releasing the current tip of next ($SHA)."
+          else
+            SHA=$(git rev-parse --verify --quiet "${INPUT_REF}^{commit}") || {
+              echo "::error::'$INPUT_REF' does not resolve to a commit in this repository."
+              exit 1
+            }
+            # Only commits already on next may ship: this is what makes the pin safe to
+            # expose. Without it the input would be a way to release an unreviewed branch.
+            if ! git merge-base --is-ancestor "$SHA" "$NEXT_TIP"; then
+              echo "::error::$SHA is not an ancestor of next. Only commits already merged into next can be released."
+              exit 1
+            fi
+            BEHIND=$(git rev-list --count "$SHA..$NEXT_TIP")
+            echo "::notice::Releasing pinned commit $SHA ($BEHIND commit(s) on next will ride the next release)."
+          fi
+          # Detach onto the release commit so every guard below inspects the tree that
+          # actually ships, not whatever landed on next since.
+          git checkout --quiet --detach "$SHA"
+          echo "SHA=$SHA" >> "$GITHUB_OUTPUT"
+
       - name: Guard - repo must be in Edge prerelease mode
         run: |
           if [ ! -f .changeset/pre.json ] || [ "$(jq -r .mode .changeset/pre.json)" != "pre" ]; then
-            echo "::error::next is not in Edge prerelease mode (.changeset/pre.json missing or mode != pre). If a candidate cut is in progress, finish it before releasing Edge."
+            echo "::error::The release commit is not in Edge prerelease mode (.changeset/pre.json missing or mode != pre). If a candidate cut is in progress, finish it before releasing Edge."
             exit 1
           fi
 
@@ -48,31 +92,45 @@ jobs:
             echo "$applied" | grep -qx "$id" || pending="$pending $id"
           done
           if [ -z "$pending" ]; then
-            echo "::error::No unapplied changesets on next - nothing to release."
+            echo "::error::No unapplied changesets on the release commit - nothing to release."
             exit 1
           fi
           echo "::notice::Pending changesets:$pending"
 
-      - name: Guard - latest unit-test run on next must be green
+      - name: Guard - unit tests must be green on the release commit
         env:
           GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.target.outputs.SHA }}
         run: |
-          RESULT=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow test.yml --branch next --limit 1 \
-            --json status,conclusion --jq '.[0] | if .status != "completed" then "still-running" else .conclusion end')
+          # head_sha filtering is exact: this asks "did Unit Tests pass for THIS tree",
+          # not "was the most recent run on next green". The latter passed on a
+          # neighbouring commit's run whenever next moved while a run was still queued -
+          # a hole that a pinned release would otherwise widen, since the pin and the
+          # branch tip are now deliberately allowed to differ.
+          RESULT=$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/test.yml/runs?head_sha=$SHA&per_page=1" \
+            --jq '.workflow_runs[0]
+                  | if . == null then "no-run"
+                    elif .status != "completed" then "still-running"
+                    else .conclusion end')
           if [ "$RESULT" != "success" ]; then
-            echo "::error::Latest Unit Tests run on next is '$RESULT'. Wait for a green run (or investigate) before releasing."
+            echo "::error::Unit Tests for $SHA is '$RESULT' (expected 'success'). A 'no-run' means test.yml never ran for this commit - pick a commit that has a green run, or dispatch test.yml against it first."
             exit 1
           fi
+          echo "::notice::Unit Tests green on $SHA."
 
-      - name: Merge next into main and push (this triggers publish.yml)
+      - name: Merge the release commit into main and push (this triggers publish.yml)
         env:
           REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+          SHA: ${{ steps.target.outputs.SHA }}
+          ACTOR: ${{ github.actor }}
         run: |
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "GitHub Actions"
           git remote set-url origin "https://$REPO_PAT@github.com/${GITHUB_REPOSITORY}"
           git fetch origin main
           git checkout main
-          git merge --no-ff origin/next -m "Release edge (dispatched by @${{ github.actor }}): merge next into main"
+          SHORT=$(git rev-parse --short "$SHA")
+          git merge --no-ff "$SHA" -m "Release edge (dispatched by @${ACTOR}): merge next@${SHORT} into main"
           git push origin main
-          echo "::notice::Pushed to main - publish.yml takes it from here."
+          echo "::notice::Pushed $SHORT to main - publish.yml takes it from here."

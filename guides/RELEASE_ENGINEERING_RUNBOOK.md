@@ -22,9 +22,23 @@ There are four distinct operations. Know which one you're doing before you start
 
 One button. Actions → **"Release Edge"** → Run workflow. The button:
 
-1. Guards: the repo is in Edge prerelease mode; there are unapplied changesets;
-   the latest unit-test run on `next` is green. Any failure stops with a clear error.
-2. Merges `next → main` (the dispatcher's name goes in the merge commit).
+1. Resolves **what** to release: a blank `ref` (the normal case) means the current tip of
+   `next`; a commit SHA means exactly that commit. Only commits already merged into `next`
+   are accepted — a non-ancestor is refused.
+2. Guards: the repo is in Edge prerelease mode; there are unapplied changesets; the
+   unit-test run **for that exact commit** is green. Any failure stops with a clear error.
+3. Merges the resolved commit into `main` (the dispatcher's name and the short SHA go in
+   the merge commit).
+
+**You do not need to freeze `next`.** Preparing a release runs for hours
+([`DEPLOYMENT.md`](../DEPLOYMENT.md) Steps 0–8) and `next` keeps moving throughout. Pass
+the SHA you validated as `ref`, and anything merged afterwards rides the *next* release
+rather than shipping unchecked. Leave it blank when the tip is what you validated.
+
+Note the CI guard is **per-commit, not per-branch**: it asks whether `test.yml` passed for
+the commit being released, so a green run on a neighbouring commit never satisfies it. A
+`no-run` error means `test.yml` never ran for that commit — pick one that has a green run,
+or dispatch `test.yml` against it first.
 
 The push to `main` triggers `publish.yml`, which does everything else — this has always
 been the automatic half: `changeset version` (pre mode → the next `X.Y.0-edge.N`), the
@@ -139,5 +153,10 @@ When the gates pass on a specific line build (say 6.1.2):
   on the routine path; don't fight it.
 - `changeset pre enter`/`exit` happen only in operation 2 (and era opens). Nowhere else.
 - Lines never merge into `main` or `next`. Fixes flow `next` → line, never the reverse.
+- Green-CI guards are **per-commit**. If a guard ever reads "the branch's latest run"
+  instead of this commit's, it can be satisfied by a different tree than the one shipping.
+- The post-publish `main` → `next` back-merge **aborts rather than auto-resolving** a
+  conflict outside `pnpm-lock.yaml`. An abort means the release succeeded and only the
+  back-merge is outstanding — finish it by hand, don't re-run the release.
 - Every loop in this document is bounded by a human noticing. If a step's verification
   fails, stop — don't improvise past a red check.

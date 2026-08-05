@@ -60,6 +60,12 @@ This document is the **build-engineering guide**: the deep checklist that prepar
 > there, and merge into `next` via a PR (e.g. #3163 for v5.48). This keeps `next`
 > green while prep is in flight and gives the release artifacts a reviewable PR.
 >
+> **Nobody has to stop merging while you do this.** Prep spans hours and `next` keeps
+> moving; note the SHA your prep PR lands at and pass it as the Release Edge button's
+> `ref` (Step 9). Everything merged after it rides the next release. Freezing the branch
+> was never a written rule — it was the workaround for a button that always shipped the
+> tip, and it is no longer needed.
+>
 > **Reading the steps below:** where they say "commit/push to `next`" (Step 3.8,
 > Step 6), that is the target on the direct-to-`next` workflow. On the prep-branch
 > workflow, commit to your prep branch instead — it reaches `next` through the PR.
@@ -624,9 +630,19 @@ Enabling it is a **code change, not configuration**: a platform branch (and a PG
 
 ### Step 9: Ship it — the button, or the manual PR
 
-> **Important:** All content from the previous steps (metadata migration scripts, PG counterparts, new changesets, AI model updates) must already be committed and pushed to `next` before shipping.
+> **Important:** All content from the previous steps (metadata migration scripts, PG counterparts, new changesets, AI model updates) must already be committed to `next` **and be an ancestor of the commit you release**. On the default path those are the same statement; with a pinned `ref` (below) they are not. Verify it mechanically rather than from memory:
+>
+> ```bash
+> git merge-base --is-ancestor <prep-commit> <release-commit> && echo "included in this release"
+> ```
 
-**Routine Edge release — the normal path.** Actions → **"Release Edge"** → Run workflow. The button guards (the repo is in Edge pre-mode; unapplied changesets exist; the latest `test.yml` run on `next` is green), then bot-merges `next → main` — **no PR is opened**. The push to `main` triggers `publish.yml` (Step 10a), which does everything else. Runbook op. 1.
+**Routine Edge release — the normal path.** Actions → **"Release Edge"** → Run workflow. The button guards (the repo is in Edge pre-mode; unapplied changesets exist; `test.yml` is green **for the exact commit being released**), then bot-merges that commit into `main` — **no PR is opened**. The push to `main` triggers `publish.yml` (Step 10a), which does everything else. Runbook op. 1.
+
+**The `ref` input — you do not need to freeze `next`.** Leave `ref` blank to release the current tip of `next`; that is the normal case. Set it to a **commit SHA** to release exactly the tree you validated through Steps 0–8, and merges that land on `next` during the prep window simply ride the *next* release instead of gate-crashing this one. The workflow accepts only commits already on `next` (it refuses a non-ancestor, so the input cannot be used to ship an unreviewed branch), and every guard inspects the resolved commit rather than the branch — so what was validated is what ships.
+
+> **Why this exists.** The button used to merge `origin/next` as of the moment you pressed it, so anything merged during the hours of Steps 0–8 shipped unvalidated. Worse, the CI guard asked whether *the branch's most recent run* was green rather than *this commit's*, so it could be satisfied by a neighbouring commit's result while a queued run for the actual tip was still pending. Informally holding PRs back was the only mitigation, and nothing enforced it. Pinning replaces the convention with a mechanism.
+
+**The manual-PR path has no pin.** A `next → main` PR merges whatever `next` holds when you merge it. If you need a specific commit, use the button with `ref`.
 
 **Candidate cuts and line releases never go this way.** `publish.yml` hard-fails an unsuffixed version on the routine path — that's the era gate working, not a bug. Candidate cuts follow runbook op. 2 (the pre-exit dance); line releases ship via the **"Publish LTS line release"** button (runbook op. 3) from the `lts/*` branch, never through `next → main`.
 
@@ -696,6 +712,17 @@ This workflow:
 8. Creates the **GitHub Release** with auto-generated notes — never marked latest; edge builds are flagged prerelease. Certification later promotes the certified build (`gh release edit … --latest`)
 9. **Auto-merges `main` back into `next`** and refreshes `pnpm-lock.yaml`
 
+> **The back-merge refuses to guess, and that means it can fail loudly.** It resolves a `pnpm-lock.yaml` conflict by *regenerating* the file from the merged manifests, and **aborts on a conflict in any other file** rather than picking a side — leaving `next` untouched on the remote for a human to resolve.
+>
+> It previously merged with `-X theirs`, silently resolving every conflicting hunk in `main`'s favour. That was invisible while `next` was frozen for the release (main's source and next's were identical, so the strategy never fired), but with a pinned `ref` letting `next` legitimately run ahead of what shipped, it would silently discard whatever landed after the pin.
+>
+> **If it aborts, the release itself is fine** — packages are on npm and the tag is pushed; only the back-merge is outstanding. Resolve it by hand:
+> ```bash
+> git checkout next && git merge origin/main   # resolve conflicts, then:
+> pnpm install --lockfile-only && git add pnpm-lock.yaml && git commit && git push origin next
+> ```
+> A failed lockfile regeneration is tolerated when the merge was clean (an already-published release must not be failed by a registry hiccup) but is **fatal** when it was needed to resolve a conflict, since the committed lockfile is then a placeholder no side vouches for. Nothing is pushed in that case.
+
 ### 10b. `docker.yml` — Build & Publish Docker Images
 
 **Triggered by:** `publish.yml` completion, or manual dispatch
@@ -733,7 +760,7 @@ Installs the workspace (`pnpm install --frozen-lockfile` — the workflow auto-d
 - [ ] **GitHub Release exists** for the new tag, notes auto-generated, marked prerelease (edge) and **not** latest
 - [ ] `docker.yml` behaved for the channel: on an **Edge** release its `api` job is **skipped** (correct — Docker `:latest` tracks certified builds); on a certified build dispatched manually, images pushed
 - [ ] `docs.yml` completes successfully (https://docs.memberjunction.org rebuilt, `/api` included)
-- [ ] `main` auto-merged back into `next` (includes the `pnpm-lock.yaml` refresh)
+- [ ] `main` auto-merged back into `next` (includes the `pnpm-lock.yaml` refresh). If it **aborted** on a conflict, the release still succeeded — finish the back-merge by hand per 10a step 9
 - [ ] **`next` branch build passes** after the auto-merge — the lockfile and version updates can sometimes cause issues, so always verify `build.yml` passes on `next` after a release
 
 ---
