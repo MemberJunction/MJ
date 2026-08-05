@@ -89,7 +89,8 @@ export {
 export {
   SetupStyles,
   createDefaultComponentStyles,
-  BuildStylesFromTheme
+  BuildStylesFromTheme,
+  ApplyStyleOverrides
 } from './utilities/component-styles';
 
 export {

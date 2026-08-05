@@ -65,7 +65,7 @@ Worked example — cutting line 6.1 while `next` streams `6.1.0-edge.12`:
    next stream).
 2. On up-to-date `next`: `npx changeset pre exit` → commit.
 3. `npx changeset version` — accumulated changesets resolve; the repo versions to plain
-   **`6.1.0`**. `npm install`, commit lockfile.
+   **`6.1.0`**. `pnpm install`, commit `pnpm-lock.yaml`.
 4. Push to `next`; tag the version commit **`v6.1.0`** and push the tag.
 5. **Branch `lts/6.1` from that tag** and push the branch. This is the candidate's home.
 6. **Publish 6.1.0 from the line branch** (operation 3's mechanics) — npm tag **`lts-6.1`**,
@@ -101,7 +101,10 @@ prerelease-shaped versions, and asserts afterward that npm `latest` did not move
 **Manual fallback** (if Actions is unavailable — this sequence is dry-check-verified,
 process doc §14.1): fresh checkout of the line branch → `npm ci` → `npx changeset version`
 → `npm install` + commit `package-lock.json` → build → `npx changeset publish --tag lts-5`
-→ push the version commit and tags to the line branch.
+→ push the version commit and tags to the line branch. (That is `lts/5`'s sequence — the
+last npm-era line. On 6.x-era lines the same steps run under pnpm: `pnpm install
+--frozen-lockfile`, `pnpm install`, commit `pnpm-lock.yaml`. The workflow auto-detects
+the package manager per branch; match it when working by hand.)
 
 Hard rules, either path: line publishes never merge to `main` or back to `next`; `latest`
 never moves here; GitHub Releases from a line stay `make_latest: false` until the line is

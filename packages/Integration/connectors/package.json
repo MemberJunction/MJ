@@ -2,7 +2,7 @@
   "name": "@memberjunction/integration-connectors",
   "type": "module",
   "version": "6.0.0",
-  "description": "MemberJunction Integration Connectors - HubSpot, Salesforce, YourMembership, and FileFeed connectors",
+  "description": "MemberJunction External Data Source connector base classes. Concrete vendor connectors ship from the MemberJunction/Integrations repo as individual Open Apps.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -17,15 +17,10 @@
     "@memberjunction/core": "6.0.0",
     "@memberjunction/core-entities": "6.0.0",
     "@memberjunction/external-data-sources": "6.0.0",
-    "@memberjunction/global": "6.0.0",
     "@memberjunction/integration-engine": "6.0.0",
-    "@memberjunction/integration-engine-base": "6.0.0",
-    "jsonwebtoken": "9.0.3",
-    "mssql": "^12.2.0",
-    "zod": "^3.25.0"
+    "@memberjunction/integration-engine-base": "6.0.0"
   },
   "devDependencies": {
-    "@types/jsonwebtoken": "^9.0.10",
     "typescript": "^5.9.3",
     "tsc-alias": "^1.8.16",
     "vitest": "^4.0.18"

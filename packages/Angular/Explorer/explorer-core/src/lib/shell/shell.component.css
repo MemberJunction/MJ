@@ -47,20 +47,23 @@ mj-tab-container {
   transition: all 0.2s ease-in-out;
 }
 
-/* Hide Golden Layout tab headers when only one tab */
-mj-tab-container.hide-tab-bar ::ng-deep .lm_header {
+/* Hide Golden Layout tab headers when only one tab — scoped to the MAIN
+   region: the RECORDS region is a separate Golden Layout whose tab strip is
+   its whole point (switching between open records) and must never be hidden
+   by the main bar's visibility policy. */
+mj-tab-container.hide-tab-bar ::ng-deep .main-region .lm_header {
   display: none;
 }
 
 /* Show tab headers when multiple tabs */
-mj-tab-container:not(.hide-tab-bar) ::ng-deep .lm_header {
+mj-tab-container:not(.hide-tab-bar) ::ng-deep .main-region .lm_header {
   opacity: 1;
   max-height: 40px;
   transition: opacity 0.2s ease-in-out, max-height 0.2s ease-in-out;
 }
 
 /* Adjust content area height when tabs hidden */
-mj-tab-container.hide-tab-bar ::ng-deep .lm_content {
+mj-tab-container.hide-tab-bar ::ng-deep .main-region .lm_content {
   height: 100% !important;
 }
 
@@ -748,6 +751,19 @@ mj-tab-container ::ng-deep .lm_stack {
   color: var(--mj-text-disabled);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+/* Records entry in the mobile drawer (records-style record opens) —
+   the desktop pill lives in the mobile-hidden app nav, so the drawer
+   carries its own touch-friendly instance. */
+.mobile-nav-records {
+  padding: var(--mj-space-2) var(--mj-space-3);
+  border-top: 1px solid var(--mj-border-default);
+}
+.mobile-nav-records .records-pill {
+  width: 100%;
+  min-height: 48px; /* Touch-target parity with drawer nav items */
+  justify-content: flex-start;
 }
 
 .mobile-nav-footer {

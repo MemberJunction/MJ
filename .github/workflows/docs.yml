@@ -64,6 +64,27 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.inputs.ref || 'lts/5' }}
 
+      # lts/5 is the last npm line; 6.x and every later LTS line use pnpm. The
+      # lockfile committed on the checked-out ref is the signal, so this needs
+      # no edit when a new line is cut.
+      - name: Detect package manager
+        id: pm
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            PM=pnpm
+          elif [ -f package-lock.json ]; then
+            PM=npm
+          else
+            echo "::error::No lockfile found on ${{ github.ref_name }}"
+            exit 1
+          fi
+          echo "PM=$PM" >> "$GITHUB_OUTPUT"
+          echo "::notice::Package manager for this ref: $PM"
+
+      - name: Set up pnpm
+        if: steps.pm.outputs.PM == 'pnpm'
+        uses: pnpm/action-setup@v4
+
       - name: Set up node
         uses: actions/setup-node@v6
         with:
@@ -74,10 +95,10 @@ jobs:
             docs-site/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: ${{ steps.pm.outputs.PM == 'pnpm' && 'pnpm install --frozen-lockfile' || 'npm ci' }}
 
       - name: Build packages
-        run: npm run build
+        run: ${{ steps.pm.outputs.PM }} run build
 
       - name: Generate API reference (TypeDoc)
         run: npx typedoc

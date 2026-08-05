@@ -24,6 +24,10 @@
  * "without including the RLS clause in the cache key, a scoped user could be served a
  * cached unscoped result set (a data leak)." These checks are the executable proof.
  *
+ * The bundle also carries the API-KEY ROW FILTER checks KF1–KF6 (plans/api-key-row-filters.md
+ * §7.4) — same transport, fixture, and threat model — which live in the sibling file
+ * keyrowfilter.checks.ts and register under this bundle's prefix after RLS10.
+ *
  * Fixture: DISCOVERY, not provisioning (D6). `discoverRlsFixture` reads the provider's
  * RLS filters + the live user list and surfaces three independent pieces, each guarding
  * its own checks so partial availability degrades gracefully (skip-as-pass with a note):
