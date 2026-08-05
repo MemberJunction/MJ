@@ -17,9 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-
       - name: Checkout PR
         uses: actions/checkout@v4
 
