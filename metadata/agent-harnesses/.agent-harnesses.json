@@ -117,10 +117,11 @@
   {
     "fields": {
       "Name": "Pi",
-      "Description": "Pi, driven through the documented stdio-JSON contract. Pi publishes no usable npm package — the obvious name is a placeholder reservation — so there is no SDK to compile against and no stable published CLI to hard-code flags from. ExecutablePath MUST be set to the Pi binary for this row to work, and CapabilitySettings should be adjusted once its surface is pinned down.",
+      "Description": "Pi (@earendil-works/pi-coding-agent), driven through its non-interactive CLI: `pi -p --mode json --session-id <id>`. Verified against a real install (0.83.0) rather than inferred — MJ supplies the session id up front, so turns resume instead of replaying context. Authenticates from environment variables or its own `pi /login`; the local executor passes HOME through, so a developer who has already logged in needs no credential row.",
       "DriverClass": "PiAdapter",
       "CapabilitySettings": {
-        "SessionResume": false,
+        "SessionResume": true,
+        "MidTurnCancellation": true,
         "StructuredOutput": false,
         "UsageReporting": true,
         "PermissionHooks": false,
@@ -134,8 +135,8 @@
       "ID": "8B333510-B1ED-475C-B721-1F2315C53568"
     },
     "sync": {
-      "lastModified": "2026-08-05T18:51:27.827Z",
-      "checksum": "8a261935b62548d629085e06fa9b4b3674facb9531eceecc0262e53b3e14f8e3"
+      "lastModified": "2026-08-05T20:39:46.379Z",
+      "checksum": "03e6d077cca0a5ead787cdb786a985f62ed4444236ef1ecadaf762f86b4acfbf"
     }
   }
 ]
