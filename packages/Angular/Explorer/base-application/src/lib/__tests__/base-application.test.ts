@@ -468,3 +468,104 @@ describe('ApplicationManager.GetDefaultLandingApp', () => {
     expect(manager.GetDefaultLandingApp()).toBeNull();
   });
 });
+
+// ======================= Records-style layout filters =======================
+// The shell (explorer-core) sets these predicates under the records style;
+// inline lambdas here mirror its exact expressions without importing
+// ng-shared (base-application sits BELOW it — that layering is why the
+// filters are settable predicates in the first place).
+describe('WorkspaceStateManager records-style filters (docked records)', () => {
+  let manager: InstanceType<typeof import('../workspace-state-manager').WorkspaceStateManager>;
+
+  const isRecord = (tab: { configuration?: Record<string, unknown> }) =>
+    tab.configuration?.['resourceType'] === 'Records';
+  const isRegionRecord = (tab: { configuration?: Record<string, unknown> }) =>
+    isRecord(tab) && tab.configuration?.['recordDockedToWorkspace'] !== true;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const mod = await import('../workspace-state-manager');
+    manager = new mod.WorkspaceStateManager();
+    // The shell's records-style assignments:
+    manager.MainLayoutTabFilter = (tab) => !isRegionRecord(tab);
+    manager.TempTabConsumptionFilter = (tab) => !isRecord(tab);
+    const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+    manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+  });
+
+  function openNav(title: string) {
+    return manager.OpenTab(
+      { ApplicationId: 'app-1', Title: title, Configuration: { resourceType: 'Dashboards', navItemName: title } },
+      '#ff0000');
+  }
+  // PreservePinState mirrors NavigationService.OpenEntityRecord's records-style
+  // request — without it OpenTabForced's pin cascade pins the nav tab and
+  // pollutes the bar-visibility assertions.
+  function openDockedRecord(title: string, recordId: string) {
+    return manager.OpenTabForced(
+      { ApplicationId: 'app-1', Title: title, ResourceRecordId: recordId, PreservePinState: true,
+        Configuration: { resourceType: 'Records', Entity: 'Widgets', recordId, recordDockedToWorkspace: true } },
+      '#ff0000');
+  }
+  function openRegionRecord(title: string, recordId: string) {
+    return manager.OpenTabForced(
+      { ApplicationId: 'app-1', Title: title, ResourceRecordId: recordId, PreservePinState: true,
+        Configuration: { resourceType: 'Records', Entity: 'Widgets', recordId } },
+      '#ff0000');
+  }
+
+  describe('temp-tab protection', () => {
+    it('never consumes an unpinned DOCKED record as the replaceable temp tab', () => {
+      const dockedId = openDockedRecord('Docked Widget', 'r1');
+      openNav('Queries');
+      const config = manager.GetConfiguration()!;
+      expect(config.tabs.some(t => t.id === dockedId)).toBe(true); // docked record survived
+      expect(config.tabs.length).toBe(2); // nav opened as a NEW tab
+    });
+
+    it('still replaces an ordinary unpinned nav temp tab', () => {
+      openNav('Data');
+      openNav('Queries');
+      const config = manager.GetConfiguration()!;
+      expect(config.tabs.length).toBe(1);
+      expect(config.tabs[0].title).toBe('Queries');
+    });
+  });
+
+  describe('main tab bar visibility (shouldShowTabs via MainLayoutTabFilter)', () => {
+    it('a docked record counts toward the bar: nav + docked = visible', () => {
+      let visible = false;
+      const sub = manager.TabBarVisible.subscribe(v => visible = v);
+      openNav('Data');
+      openDockedRecord('Docked Widget', 'r1');
+      expect(visible).toBe(true);
+      sub.unsubscribe();
+    });
+
+    it('a REGION record does not: nav + region record = hidden', () => {
+      let visible = true;
+      const sub = manager.TabBarVisible.subscribe(v => visible = v);
+      openNav('Data');
+      openRegionRecord('Region Widget', 'r2');
+      expect(visible).toBe(false);
+      sub.unsubscribe();
+    });
+  });
+
+  describe('CloseTab keep-alive', () => {
+    it('retains (unpins) a sole remaining DOCKED record instead of closing it', () => {
+      const dockedId = openDockedRecord('Docked Widget', 'r1');
+      manager.CloseTab(dockedId);
+      const config = manager.GetConfiguration()!;
+      expect(config.tabs.length).toBe(1);
+      expect(config.tabs[0].id).toBe(dockedId);
+      expect(config.tabs[0].isPinned).toBe(false);
+    });
+
+    it('closes a sole remaining REGION record outright', () => {
+      const regionId = openRegionRecord('Region Widget', 'r2');
+      manager.CloseTab(regionId);
+      expect(manager.GetConfiguration()!.tabs.length).toBe(0);
+    });
+  });
+});

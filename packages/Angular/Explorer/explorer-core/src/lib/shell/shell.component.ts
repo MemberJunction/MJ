@@ -15,7 +15,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -60,6 +60,7 @@ interface ShellChromeFlags {
   appSwitcher: boolean;
   appSwitcherStyle: AppSwitcherStyle;
   appNav: boolean;
+  recordOpenStyle: RecordOpenStyle;
 }
 
 @Component({
@@ -71,6 +72,8 @@ interface ShellChromeFlags {
 export class ShellComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   private urlBasedNavigation = false; // Track if we're loading from a URL
+  /** Newest workspace configuration emission — see the staleness guard in the Configuration subscription */
+  private latestSyncedConfig: WorkspaceConfiguration | null = null;
   private initialNavigationComplete = false; // Track if initial navigation has completed
 
   activeApp: BaseApplication | null = null;
@@ -78,6 +81,17 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   initialized = false;
   private waitingForFirstResource = false;
   tabBarVisible = true; // Controlled by workspace manager
+
+  /**
+   * True when the deployment uses the records-as-tabs record-open style
+   * (`Shell.RecordOpen.Style` != 'classic'): records open as native Golden
+   * Layout tabs in the app the user is standing in, and the Records pill in
+   * the nav is the global entry point (count + resume-last-viewed). The GL
+   * tab header is the tab UI — native close/drag/pin apply to records too.
+   */
+  public get RecordTabsStyle(): boolean {
+    return this.chromeFlags.recordOpenStyle === 'records';
+  }
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
   unreadNotificationCount = 0; // Notification badge count
@@ -170,11 +184,48 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           // to 'auto' (compact under a handful of apps, launcher otherwise)
           appSwitcherStyle: rawStyle === 'launcher' || rawStyle === 'compact' ? rawStyle : 'auto',
           appNav: engine.GetBoolean('Shell.AppNav.Enabled', true),
+          // Resolved (and pushed to collaborators) in resolveRecordOpenStyle()
+          // during initializeShell — NEVER as a getter side effect; getters
+          // run at change detection's whim and startup correctness must not
+          // depend on when a template happens to be evaluated.
+          recordOpenStyle: this.resolvedRecordOpenStyle,
       };
       if (engine.Loaded) {
           this._chromeFlags = flags;
       }
       return flags;
+  }
+
+  /** The record-open style resolved at startup ('records' until resolved) */
+  private resolvedRecordOpenStyle: RecordOpenStyle = 'records';
+
+  /**
+   * Resolve `Shell.RecordOpen.Style` from instance config and push it to the
+   * two collaborators that partition tabs by it: the ng-shared style module
+   * (NavigationService forks record opens on it) and the workspace manager's
+   * main-layout filter (record tabs must never count toward — or be consumed
+   * by — main-layout semantics). Called ONCE from initializeShell, after the
+   * InstanceConfigEngine load attempt and BEFORE workspace initialization.
+   */
+  private resolveRecordOpenStyle(): void {
+      const raw = InstanceConfigEngine.Instance.Get('Shell.RecordOpen.Style');
+      // Case/whitespace-insensitive: this compare is the ONLY opt-out for a
+      // default-behavior flip — an admin typing 'Classic' or 'classic ' must
+      // not silently get records anyway (GetBoolean parses insensitively;
+      // this value deserves the same tolerance).
+      this.resolvedRecordOpenStyle = raw?.trim().toLowerCase() === 'classic' ? 'classic' : 'records';
+      SetRecordOpenStyle(this.resolvedRecordOpenStyle);
+      // Region membership, not record identity: a record DOCKED to the
+      // workspace ("Move to Workspace") is a main-layout tab.
+      this.workspaceManager.MainLayoutTabFilter = this.resolvedRecordOpenStyle === 'records'
+        ? (tab) => !IsRecordsRegionTab(tab.configuration)
+        : null;
+      // But NO record tab — docked included — may be consumed as the
+      // replaceable nav temp tab: the next nav click must never silently
+      // destroy an open record.
+      this.workspaceManager.TempTabConsumptionFilter = this.resolvedRecordOpenStyle === 'records'
+        ? (tab) => !IsRecordsTabConfiguration(tab.configuration)
+        : null;
   }
 
   get ShowSearchBar(): boolean {
@@ -428,6 +479,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         LogStatus('InstanceConfigEngine initialization skipped (not critical)');
     });
 
+    // Resolve the record-open style EAGERLY, before workspace initialization.
+    // The first workspace configuration emission fires synchronously inside
+    // Initialize() below, and everything that partitions tabs between the
+    // main layout and the records region reads this style. Resolving it
+    // lazily (e.g. in a getter evaluated by change detection) leaves a
+    // startup window where a 'classic' deployment runs records-style —
+    // wiping saved main layouts on every boot and potentially hiding the
+    // main region permanently. This MUST happen here, awaited, first.
+    this.resolveRecordOpenStyle();
+
     // Get current user
     const md = this.ProviderToUse;
     const user = md.CurrentUser;
@@ -611,8 +672,20 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.subscriptions.push(
       this.workspaceManager.Configuration.subscribe(async config => {
         if (config && this.initialized) {
+          this.latestSyncedConfig = config;
           // Sync active app with active tab's application
           await this.syncActiveAppWithTab(config);
+          // STALENESS GUARD: rapid multi-step flows (e.g. the origin crumb's
+          // apply-params-then-activate) emit several configurations in one
+          // tick, and each handler suspends at the await above. A handler
+          // resuming with an OLD snapshot must NOT sync the URL: it would
+          // navigate the browser to the previous active tab's URL, and
+          // syncWorkspaceWithUrl would then make that stale URL real by
+          // re-activating its tab (the "crumb click bounces back to the
+          // record" bug). Only the newest emission drives URL and title.
+          if (this.latestSyncedConfig !== config) {
+            return;
+          }
           this.syncUrlWithWorkspace(config);
           // Update browser tab title
           this.updateBrowserTitle(config);
@@ -797,6 +870,18 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.isViewingSystemTab = false;
     this.cdr.detectChanges();
 
+    // Records style: records-REGION tabs are a GLOBAL
+    // surface — viewing one must never flip the user's app context. Without
+    // this guard, resuming a record opened from another app yanked the whole
+    // header to that app (the "clicked Records in AI, landed in Data
+    // Explorer" bug). The Records pill carries the active state; the nav
+    // stays wherever the user is. Records DOCKED to the workspace fall
+    // through: they are ordinary main-layout tabs and DO flip app context.
+    if (this.RecordTabsStyle && IsRecordsRegionTab(activeTab.configuration)) {
+      this.titleService.setContext(this.activeApp?.Name || null, activeTab.title || null);
+      return;
+    }
+
     // Check if active app needs to be updated
     const currentActiveApp = this.appManager.GetActiveApp();
     if (!UUIDsEqual(currentActiveApp?.ID, tabAppId)) {
@@ -934,7 +1019,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         const recordId = decodeURIComponent(appRecordMatch[3]);
         const compositeKey = new CompositeKey();
         compositeKey.SimpleLoadFromURLSegment(recordId);
-        this.navigationService.OpenEntityRecord(entityName, compositeKey);
+        // Recreating a closed tab from browser history — the user's CURRENT
+        // page is not where this record came from, so don't stamp it as the
+        // origin (recordSource 'none' = no crumb rather than a false one).
+        this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none' });
         return;
       }
 
@@ -1062,7 +1150,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         const recordId = decodeURIComponent(legacyRecordMatch[2]);
         const compositeKey = new CompositeKey();
         compositeKey.SimpleLoadFromURLSegment(recordId);
-        this.navigationService.OpenEntityRecord(entityName, compositeKey);
+        // Same as the app-scoped branch above: history recreation has no
+        // truthful origin — suppress the crumb instead of inventing one.
+        this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none' });
         return;
       }
 
@@ -2173,13 +2263,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.userMenuVisible = !this.userMenuVisible;
 
     if (this.userMenuVisible) {
-      // Close menu when clicking outside
+      // Close menu when clicking outside. CAPTURE phase so clicks whose
+      // bubbling something stopped (e.g. the origin crumb's GL-focus
+      // stoppers) still dismiss the menu.
       const closeHandler = () => {
         this.userMenuVisible = false;
-        document.removeEventListener('click', closeHandler);
+        document.removeEventListener('click', closeHandler, true);
       };
       setTimeout(() => {
-        document.addEventListener('click', closeHandler);
+        document.addEventListener('click', closeHandler, true);
       }, 0);
     }
   }
@@ -2864,7 +2956,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
       if (!result.EntityName || !result.RecordID) return;
 
-      // Entity records — open via NavigationService
+      // Entity records — open via NavigationService. Search is a TRANSIENT
+      // launcher: it dismisses on selection, so the page behind it is the
+      // truthful origin (default capture) — "back" returns the user there.
+      // Contrast the chat overlay, a persistent surface whose true origin is
+      // the conversation (it passes an explicit recordSource).
       const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
       this.navigationService.OpenEntityRecord(result.EntityName, pkey);
   }
