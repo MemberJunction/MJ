@@ -161,9 +161,17 @@ export class AgentRunStepSaveQueue {
     /**
      * Fires a step's "started" INSERT without awaiting (the caller continues immediately). The step's PK
      * must already be client-generated (`NewRecord`) so its id is valid before the INSERT lands.
+     *
+     * @param parentStep When provided, the INSERT is chained **after** the parent step's pending INSERT
+     *   to satisfy the self-referencing `FK_AIAgentRunStep_ParentID` constraint. Without this, a child
+     *   step whose fire-and-forget INSERT races the parent's INSERT can hit an FK violation.
      */
-    public Insert(step: MJAIAgentRunStepEntity): void {
-        this.queue.Insert(step);
+    public Insert(step: MJAIAgentRunStepEntity, parentStep?: MJAIAgentRunStepEntity): void {
+        if (parentStep) {
+            this.queue.InsertAfter(step, parentStep);
+        } else {
+            this.queue.Insert(step);
+        }
     }
 
     /**

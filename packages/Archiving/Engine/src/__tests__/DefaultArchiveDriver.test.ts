@@ -70,6 +70,13 @@ function createMockRecord(overrides?: Partial<MockBaseEntity>): MockBaseEntity {
                 { Name: 'Description', AllowsNull: true },
                 { Name: 'Notes', AllowsNull: true },
             ],
+            FieldByName: (name: string) => {
+                const fields = [
+                    { Name: 'Description', AllowsNull: true },
+                    { Name: 'Notes', AllowsNull: true },
+                ];
+                return fields.find(f => f.Name === name);
+            }
         },
         PrimaryKey: { KeyValuePairs: [{ FieldName: 'ID', Value: 'record-1' }] },
         LatestResult: null,

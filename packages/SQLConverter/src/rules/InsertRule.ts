@@ -204,10 +204,23 @@ export class InsertRule implements IConversionRule {
     const onConditions: string[] = [];
     for (let i = 1; i < fragments.length; i++) {
       const body = fragments[i].trim();
-      const parsed = body.match(/^([\w]+\."[^"]+"\s+(?:AS\s+)?\w+)\s+ON\s+([\s\S]+)$/i);
+      // A join target is either a schema-qualified quoted table (__mj."Table"), a bare
+      // quoted table ("Table"), or a bare word (a CTE name or unqualified table, e.g.
+      // `JOIN numbered ON ...`). The alias is optional — CTE joins commonly omit it —
+      // so a negative lookahead keeps ON from being swallowed as an alias.
+      const parsed = body.match(
+        /^((?:\w+\.)?"[^"]+"|\w+)(?:\s+(?:AS\s+)?(?!ON\b)(\w+))?\s+ON\s+([\s\S]+)$/i
+      );
       if (parsed) {
-        otherTables.push(parsed[1].trim());
-        onConditions.push(parsed[2].trim());
+        const aliasPart = parsed[2] ? ` ${parsed[2]}` : '';
+        otherTables.push(`${parsed[1]}${aliasPart}`.trim());
+        onConditions.push(parsed[3].trim());
+      } else {
+        // Unparseable join fragment: rewriting anyway would silently drop it and corrupt
+        // the statement's semantics (it would strip the FROM clause but leave references
+        // to the dropped table dangling). Emit the statement unchanged so the failure is
+        // loud at apply time instead of a silent data bug.
+        return sql;
       }
     }
 

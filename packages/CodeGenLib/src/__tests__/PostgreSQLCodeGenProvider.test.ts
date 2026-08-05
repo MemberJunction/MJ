@@ -854,4 +854,104 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).toContain('WARNING');
         });
     });
+
+    // Regression: a multi-word (camelCase) PRIMARY KEY must yield a FLAT param name
+    // (`p_recordkey`) consistently across create/update/delete — never the snake form
+    // (`p_record_key`). Before the ParameterRef unification the CRUD *declaration* used
+    // the flat builder while several body references hand-built the name with toSnakeCase,
+    // so a save/delete against a connector table keyed on a soft-PK like `recordKey`
+    // failed on PostgreSQL with `column "p_record_key" does not exist`. ID-keyed entities
+    // were immune because toLowerCase('id') === toSnakeCase('ID'), which is why the bug
+    // stayed hidden until a connector minted its own multi-word PK.
+    describe('multi-word primary key — flat param-name consistency (regression: p_record_key)', () => {
+        const recordKeyEntity = () => createMockEntity(
+            { BaseTable: 'Customer', BaseTableCodeName: 'Customer', SchemaName: 'mj_connector_acgi', BaseView: 'vwCustomers' },
+            [
+                { ID: 'pk-rk', Name: 'recordKey', CodeName: 'recordKey', Type: 'nvarchar', Length: 400, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                { ID: 'f-cust', Name: 'custId', CodeName: 'custId', Type: 'nvarchar', Length: 100, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+            ]
+        );
+
+        it('create references the PK param flat (p_recordkey), never snake (p_record_key)', () => {
+            const sql = provider.generateCRUDCreate(recordKeyEntity());
+            expect(sql).toContain('p_recordkey');
+            expect(sql).not.toContain('p_record_key');
+        });
+
+        it('update references the PK param flat, never snake', () => {
+            const sql = provider.generateCRUDUpdate(recordKeyEntity());
+            expect(sql).toContain('p_recordkey');
+            expect(sql).not.toContain('p_record_key');
+        });
+
+        it('delete declares AND references the PK param flat, never snake', () => {
+            const sql = provider.generateCRUDDelete(recordKeyEntity(), '');
+            expect(sql).toContain('p_recordkey');
+            expect(sql).not.toContain('p_record_key');
+        });
+    });
+});
+
+/**
+ * Layered base views are refused on PostgreSQL.
+ *
+ * The feature's entire payoff is that a foreign key added later still shows up, which depends on
+ * the application-owned outer view's `SELECT g.*` being re-resolved after the inner view
+ * regenerates. SQL Server does that with `sp_refreshview`. PostgreSQL expands `*` at creation and
+ * freezes it, has no refresh equivalent, and CodeGen does not own the outer view — so nothing
+ * recreates it and the promise silently does not hold.
+ *
+ * Worse, it fails INTERMITTENTLY: an added column leaves the outer view stale (CREATE OR REPLACE on
+ * the inner never touches dependents), while a rename or type change raises 42P16 and sends CodeGen
+ * down the capture/DROP CASCADE/replay path, which incidentally recreates the outer view and does
+ * pick the columns up. Same feature, opposite outcomes, decided by what else changed that day.
+ *
+ * That is the exact silent-staleness failure layering was built to eliminate, so this is a hard
+ * refusal rather than a documented caveat.
+ */
+describe('PostgreSQLCodeGenProvider layered base views', () => {
+    let provider: PostgreSQLCodeGenProvider;
+
+    beforeEach(() => {
+        provider = new PostgreSQLCodeGenProvider();
+    });
+
+    function contextFor(entity: EntityInfo): BaseViewGenerationContext {
+        return {
+            entity,
+            relatedFieldsSelect: '',
+            relatedFieldsJoins: '',
+            parentFieldsSelect: '',
+            parentJoins: '',
+            rootFieldsSelect: '',
+            rootJoins: '',
+        };
+    }
+
+    it('refuses to generate a layered base view', () => {
+        const entity = createMockEntity({ BaseViewGenerated: false, GeneratedBaseViewName: 'vwTestEntitiesGenerated' });
+        expect(() => provider.generateBaseView(contextFor(entity))).toThrow(/not supported on PostgreSQL/);
+    });
+
+    it('names the entity and both views so the error is actionable', () => {
+        const entity = createMockEntity({ BaseViewGenerated: false, GeneratedBaseViewName: 'vwTestEntitiesGenerated' });
+        expect(() => provider.generateBaseView(contextFor(entity))).toThrow(/Test Entity/);
+        expect(() => provider.generateBaseView(contextFor(entity))).toThrow(/vwTestEntitiesGenerated/);
+        expect(() => provider.generateBaseView(contextFor(entity))).toThrow(/vwTestEntities/);
+    });
+
+    it('still generates normally for every non-layered entity', () => {
+        // The refusal must be scoped to layering alone. Fully custom base views and ordinary
+        // generated ones keep working on PostgreSQL exactly as before.
+        expect(() => provider.generateBaseView(contextFor(createMockEntity()))).not.toThrow();
+        expect(() => provider.generateBaseView(contextFor(createMockEntity({ BaseViewGenerated: false })))).not.toThrow();
+        expect(() => provider.generateBaseView(contextFor(createMockEntity({ GeneratedBaseViewName: null })))).not.toThrow();
+    });
+
+    it('does not refuse a name that differs from BaseView only by case', () => {
+        // Not a layering — HasLayeredBaseView compares case-insensitively, so there is no second
+        // view and nothing to refuse.
+        const entity = createMockEntity({ GeneratedBaseViewName: 'VWTESTENTITIES' });
+        expect(() => provider.generateBaseView(contextFor(entity))).not.toThrow();
+    });
 });

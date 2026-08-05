@@ -346,7 +346,10 @@ function runningInBrowser(): boolean {
 }
 
 function runningOnNode(): boolean {
-    return (typeof process !== 'undefined' && process.versions !== null && process.versions.node !== null)
+    // Use loose `!= null` so this is safe in React Native / Hermes, where `process`
+    // exists as a shim but `process.versions` is undefined (strict `!== null` would
+    // pass and then throw on `.node`).
+    return (typeof process !== 'undefined' && process.versions != null && process.versions.node != null)
 }
 
 export function FormatConsoleMessage(message: string, serverity: SeverityType): string {

@@ -16,6 +16,7 @@ import {
     HostListener
 } from '@angular/core';
 import { RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import {
     TreeNode,
@@ -53,7 +54,7 @@ import {
     templateUrl: './tree.component.html',
     styleUrls: ['./tree.component.css']
 })
-export class TreeComponent implements OnInit, OnDestroy {
+export class TreeComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     // ========================================
     // Configuration Inputs with Getter/Setter
     // ========================================
@@ -129,7 +130,7 @@ export class TreeComponent implements OnInit, OnDestroy {
         return this._selectedIDs;
     }
 
-    /** Initially expanded node IDs (null = auto-expand first level) */
+    /** Initially expanded node IDs (null = defer to DefaultExpansion) */
     private _expandedIDs: string[] | null = null;
     @Input()
     set ExpandedIDs(value: string[] | null) {
@@ -138,6 +139,14 @@ export class TreeComponent implements OnInit, OnDestroy {
     get ExpandedIDs(): string[] | null {
         return this._expandedIDs;
     }
+
+    /**
+     * Initial expansion applied when ExpandedIDs is null:
+     * 'first-level' (default) expands only the root branches, 'all' expands every
+     * branch (small pickers where the whole catalog should be visible), 'none'
+     * starts fully collapsed.
+     */
+    @Input() DefaultExpansion: 'first-level' | 'all' | 'none' = 'first-level';
 
     /** Show expand/collapse all buttons */
     private _showExpandCollapseAll: boolean = false;
@@ -344,7 +353,8 @@ export class TreeComponent implements OnInit, OnDestroy {
     constructor(
         private readonly cdr: ChangeDetectorRef,
         private readonly elementRef: ElementRef
-    ) {}
+    ) {
+        super();}
 
     // ========================================
     // Lifecycle
@@ -881,7 +891,7 @@ export class TreeComponent implements OnInit, OnDestroy {
      * Load branch entities from database
      */
     private async loadBranches(config: TreeBranchConfig): Promise<Record<string, unknown>[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({
             EntityName: config.EntityName,
             ExtraFilter: config.ExtraFilter || '',
@@ -901,7 +911,7 @@ export class TreeComponent implements OnInit, OnDestroy {
      * Load leaf entities from database
      */
     private async loadLeaves(config: TreeLeafConfig): Promise<Record<string, unknown>[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({
             EntityName: config.EntityName,
             ExtraFilter: config.ExtraFilter || '',
@@ -934,7 +944,7 @@ export class TreeComponent implements OnInit, OnDestroy {
         junctionConfig: TreeJunctionConfig,
         leafIdField: string
     ): Promise<Map<string, string[]>> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const mappings = new Map<string, string[]>();
 
         // Load junction records
@@ -1399,11 +1409,20 @@ export class TreeComponent implements OnInit, OnDestroy {
      */
     private applyInitialExpansion(): void {
         if (this._expandedIDs === null) {
-            // Auto-expand first level
-            for (const node of this.Nodes) {
-                if (node.Type === 'branch') {
-                    node.Expanded = true;
-                }
+            switch (this.DefaultExpansion) {
+                case 'all':
+                    this.expandAllRecursive(this.Nodes);
+                    break;
+                case 'none':
+                    break;
+                default:
+                    // Auto-expand first level
+                    for (const node of this.Nodes) {
+                        if (node.Type === 'branch') {
+                            node.Expanded = true;
+                        }
+                    }
+                    break;
             }
         } else {
             // Expand specified nodes

@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT19 - Remote Operations AI Authoring (RO-4)",
+    "Description": "LIVE-MODEL tier (gated by RUN_AGENT_TESTS — the code is model-authored, costs tokens). Proves the whole RO-4 AI-from-Description authoring loop: RO4-1 saving a GenerationType='AI' Remote Operation invokes the authoring prompt to write the InternalExecute body, stores Code/CodeComments + declared libraries, and sets CodeApprovalStatus='Pending'. RO4-2 approving + saving does NOT regenerate (Description unchanged). RO4-3 the RO-2 emitter produces a complete @RegisterClass'd class with the authored body in InternalExecute. Deterministic structure (creates + deletes its own op); asserts on shape, not exact model text. Skips-as-pass when RUN_AGENT_TESTS is unset.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "An AI op authors a Pending body on save, doesn't regenerate on approve, and emits a complete registered class."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "remote-op-ai-authoring"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "8D9DE24C-1DFB-42F2-912B-C28FB6EA5C5C"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T19:15:10.542Z",
+    "checksum": "854c528f46cff84e8ae624c2b7050da619389502bff8a0fad6ba7f8f54a5f97a"
+  }
+}

@@ -18,7 +18,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject, BaseEventArgs } from '@memberjunction/interactive-component-types';
+import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject, BaseEventArgs, StyleOverrides } from '@memberjunction/interactive-component-types';
 import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
 import {
@@ -28,6 +28,9 @@ import {
   reactRootManager,
   ResolvedComponents,
   SetupStyles,
+  BuildStylesFromTheme,
+  ApplyStyleOverrides,
+  wrapWithLibraryThemeProviders,
   ComponentRegistryService,
   resolveUserStateScope,
   userStateStorageKey,
@@ -176,6 +179,14 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
 
       if (isDifferent) {
         this.reinitializeComponent();
+      } else if (JSON.stringify(previousComponent.styleOverrides) !== JSON.stringify(value.styleOverrides)) {
+        // Same code, new styleOverrides (a regenerated spec whose only change is the
+        // requested styling): re-render in place — no teardown needed. The resolved
+        // spec must be kept in step because the styleOverrides getter prefers it.
+        if (this.resolvedComponentSpec) {
+          this.resolvedComponentSpec.styleOverrides = value.styleOverrides;
+        }
+        this.renderComponent();
       }
     }
   }
@@ -201,7 +212,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     // Lazy initialization - only create default utilities when needed
     if (!this._utilities) {
       const runtimeUtils = createRuntimeUtilities();
-      this._utilities = runtimeUtils.buildUtilities(this.enableLogging);
+      this._utilities = runtimeUtils.buildUtilities(this.enableLogging, this.ProviderToUse);
       if (this.enableLogging) {
         console.log('MJReactComponent: Auto-initialized utilities using createRuntimeUtilities()');
       }
@@ -211,19 +222,107 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   
   // Auto-initialize styles if not provided
   private _styles?: Partial<ComponentStyles>;
+  // Theme-bridge cache: the ComponentStyles derived from the live `--mj-*` theme,
+  // memoized per theme key so we don't re-read getComputedStyle on every access.
+  private _themeStyles?: ComponentStyles;
+  private _themeStylesKey?: string;
+  private themeObserver?: MutationObserver;
   @Input()
   set styles(value: Partial<ComponentStyles> | undefined) {
     this._styles = value;
   }
   get styles(): Partial<ComponentStyles> {
-    // Lazy initialization - only create default styles when needed
-    if (!this._styles) {
-      this._styles = SetupStyles();
+    // An explicitly-provided styles input always wins — but user-requested overrides
+    // still layer on top, since they represent an explicit request rather than a theme.
+    if (this._styles) {
+      return this.applyStyleOverridesMemoized(this._styles);
+    }
+    // Otherwise bridge the host's live MJ theme (--mj-* tokens) into ComponentStyles
+    // so generated components inherit the active theme — including dark mode and
+    // hover/active/focus state families — instead of the frozen defaults. Memoized
+    // per theme key; invalidated by the MutationObserver on data-theme changes.
+    const key = this.computeThemeKey();
+    if (!this._themeStyles || this._themeStylesKey !== key) {
+      this._themeStyles = BuildStylesFromTheme();
+      this._themeStylesKey = key;
       if (this.enableLogging) {
-        console.log('MJReactComponent: Auto-initialized styles using SetupStyles()');
+        console.log(`MJReactComponent: Bridged styles from live theme (key="${key}")`);
       }
     }
-    return this._styles;
+    // Applied outside the theme memo so the spec's overrides survive a theme flip
+    // (the memo caches the theme, not the request).
+    return this.applyStyleOverridesMemoized(this._themeStyles);
+  }
+
+  /**
+   * Explicitly user-requested styling from the spec being rendered, resolved above
+   * the theme. Reads the resolved spec when available (registry components resolve
+   * asynchronously) and falls back to the spec passed in.
+   */
+  private get styleOverrides(): StyleOverrides | undefined {
+    return this.resolvedComponentSpec?.styleOverrides ?? this._component?.styleOverrides;
+  }
+
+  // Memo for the override merge. ApplyStyleOverrides allocates a new object whenever
+  // overrides are present, and components key effects/memos on the styles identity
+  // (e.g. simple-chart tears down and rebuilds its Chart.js instance) — so the merged
+  // result must be stable across reads. Keyed by reference: a theme rebuild, a new
+  // styles input, or a restyled spec each produce a new ref, which is exactly when
+  // the merge must re-run.
+  private _mergedStylesBase?: Partial<ComponentStyles>;
+  private _mergedStylesOverrides?: StyleOverrides;
+  private _mergedStylesResult?: Partial<ComponentStyles>;
+
+  private applyStyleOverridesMemoized(base: Partial<ComponentStyles>): Partial<ComponentStyles> {
+    const overrides = this.styleOverrides;
+    if (!overrides) {
+      return base;
+    }
+    if (!this._mergedStylesResult || this._mergedStylesBase !== base || this._mergedStylesOverrides !== overrides) {
+      this._mergedStylesBase = base;
+      this._mergedStylesOverrides = overrides;
+      this._mergedStylesResult = ApplyStyleOverrides(base, overrides);
+    }
+    return this._mergedStylesResult;
+  }
+
+  /**
+   * Identifies the current theme so bridged styles can be memoized and refreshed
+   * when the user's mode (`data-theme`) or the org overlay (`data-theme-overlay`)
+   * changes. Non-DOM environments return a constant key.
+   */
+  private computeThemeKey(): string {
+    if (typeof document === 'undefined') {
+      return 'no-dom';
+    }
+    const root = document.documentElement;
+    return `${root.getAttribute('data-theme') || 'light'}|${root.getAttribute('data-theme-overlay') || ''}`;
+  }
+
+  /**
+   * Watches the document root for theme changes (`data-theme` / `data-theme-overlay`)
+   * and, when the theme flips, invalidates the bridged-styles cache and re-renders so
+   * the live React component picks up the new theme. No-op when styles are supplied
+   * explicitly or when there is no DOM.
+   */
+  private setupThemeObserver(): void {
+    if (this._styles || typeof MutationObserver === 'undefined' || typeof document === 'undefined') {
+      return;
+    }
+    this.themeObserver = new MutationObserver(() => {
+      const key = this.computeThemeKey();
+      if (key !== this._themeStylesKey) {
+        this._themeStyles = undefined;
+        this._themeStylesKey = undefined;
+        if (this.isInitialized) {
+          this.renderComponent();
+        }
+      }
+    });
+    this.themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'data-theme-overlay'],
+    });
   }
   
   private _savedUserSettings: any = {};
@@ -350,6 +449,8 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     
     // Trigger change detection to show loading state
     this.cdr.detectChanges();
+    // Refresh bridged theme styles when the user's mode / org overlay changes.
+    this.setupThemeObserver();
     await this.initializeComponent();
   }
 
@@ -359,6 +460,9 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
 
     // Cancel any pending renders
     this.pendingRender = false;
+
+    this.themeObserver?.disconnect();
+    this.themeObserver = undefined;
 
     this.destroyed$.next();
     this.destroyed$.complete();
@@ -913,11 +1017,21 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
       recovery: 'retry'
     });
 
-    // Create element with error boundary
+    // Create element with error boundary. Auto-theme component libraries (antd) from
+    // the live MJ theme by wrapping the mounted tree in their theme provider — antd
+    // components don't read styles.* on their own and would otherwise render in their
+    // built-in light theme even in dark mode. One wrap themes every antd component in
+    // the subtree; no-op when antd isn't loaded.
+    const themedComponent = wrapWithLibraryThemeProviders(
+      React,
+      React.createElement(this.compiledComponent.component, props),
+      libraries,
+      this.styles as ComponentStyles
+    );
     const element = React.createElement(
       ErrorBoundary,
       null,
-      React.createElement(this.compiledComponent.component, props)
+      themedComponent
     );
 
     // Render with timeout protection using resource manager
@@ -1313,8 +1427,11 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     this.isInitialized = false;
     this.capturedData = [];
 
-    // Trigger registry cleanup
-    this.adapter.getRegistry().cleanup();
+    // Trigger registry cleanup (guard: adapter may not be initialized if
+    // React bootstrap failed or was destroyed during retry)
+    if (this.adapter.isInitialized()) {
+      this.adapter.getRegistry().cleanup();
+    }
   }
 
   /**

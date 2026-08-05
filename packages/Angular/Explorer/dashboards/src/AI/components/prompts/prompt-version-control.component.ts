@@ -4,6 +4,7 @@ import { MJRecordChangeEntity, MJTemplateContentEntity } from '@memberjunction/c
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
@@ -88,7 +89,7 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
   
   private destroy$ = new Subject<void>();
   
-  constructor(private notificationService: MJNotificationService) { super(); }
+  constructor(private notificationService: MJNotificationService, private confirmService: MJConfirmService) { super(); }
   
   ngOnInit(): void {
     this.loadAvailablePrompts();
@@ -318,8 +319,8 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
       return;
     }
     
-    const confirm = window.confirm(`Are you sure you want to restore to version ${version.version} from ${version.changedAt.toLocaleString()}? This will overwrite the current prompt.`);
-    if (!confirm) return;
+    const confirmed = await this.confirmService.Confirm({ title: 'Restore version', message: `Restore to version ${version.version} from ${version.changedAt.toLocaleString()}?`, detail: 'This will overwrite the current prompt.' });
+    if (!confirmed) return;
     
     try {
       this.isLoading = true;

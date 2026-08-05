@@ -990,6 +990,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             /\binsert\b/, /\bupdate\b/, /\bdelete\b/,
             /\bexec\b/, /\bexecute\b/, /\bdrop\b/,
             /--/, /\/\*/, /\*\//, /\bunion\b/, /\bxp_/, /;/,
+            // Time-based blind injection vector — no legitimate filter/order-by clause uses WAITFOR.
+            /\bwaitfor\b/,
         ];
 
         for (const pattern of forbiddenPatterns) {
@@ -1270,6 +1272,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         try {
             entity.RegisterTransactionPreprocessing();
 
+            // External-data-source entities are read-only — MJ is never the system of record for
+            // remote data. Refuse writes at the provider layer so the guarantee holds regardless of
+            // the generated base class (ReadOnlyExternalBaseEntity covers the normal path — returning
+            // false per the Save contract — before ever reaching here). This provider-level backstop
+            // exists only for the edge case where a custom subclass replaces ReadOnlyExternalBaseEntity;
+            // it intentionally THROWS (a hard stop for a should-never-happen misconfiguration) rather
+            // than returning false, since by this point the normal read-only path has been bypassed.
+            // No-op for MJ-DB entities (ExternalDataSourceID null).
+            if (entity.EntityInfo.ExternalDataSourceID)
+                throw new Error(`Save() not allowed for ${entity.EntityInfo.Name}: it is sourced from an external data source (read-only).`);
+
             const bNewRecord = !entity.IsSaved;
             if (!options) options = new EntitySaveOptions();
             const bReplay = !!options.ReplayOnly;
@@ -1336,6 +1349,41 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 // Step 3: Before-save hook (entity actions, AI actions)
                 if (!bReplay) {
                     await this.OnBeforeSaveExecute(entity, user, options, saveContext);
+                }
+
+                // Step 3b: Post-image RLS check. The pre-image/pre-hook check at step 2b
+                // validates values as they exist BEFORE the before-save hooks run, which cannot
+                // catch a hook that mutates a filter-referenced field afterward (e.g. reassigning
+                // a row's owning organization to one the caller doesn't belong to — privilege
+                // escalation, not just a leak). This runs AFTER the before-save hooks by design:
+                // hooks can mutate field values, including filter-referenced ones, and the
+                // authorization boundary must cover the values that actually get written.
+                // Nothing existing moves — step 2b and step 3 keep their order; this is a new,
+                // additive step. Applies to BOTH creates and updates: a before-save hook can
+                // move a brand-new record's values outside the Create filter just as easily as
+                // it can move an existing row outside the Update filter, so CheckCreateRLS is
+                // called a second time here (idempotent, side-effect-free) rather than only
+                // gating updates. Post-image failure gets a specific message (unlike step 2b's
+                // deliberately generic one on the update path): the caller demonstrably had
+                // access to the pre-hook state, so the diagnostic leaks nothing new.
+                if (!bReplay) {
+                    if (bNewRecord) {
+                        const postHookCreatePass = await this.CheckCreateRLS(entity, user);
+                        if (!postHookCreatePass) {
+                            entityResult.Success = false;
+                            entityResult.EndedAt = new Date();
+                            entityResult.Message = `Access denied for new ${entity.EntityInfo.Name} record: a before-save hook produced field values that no longer pass row-level security`;
+                            throw new Error(entityResult.Message);
+                        }
+                    } else {
+                        const postImagePass = await this.CheckUpdateRLSPostImage(entity, user);
+                        if (!postImagePass) {
+                            entityResult.Success = false;
+                            entityResult.EndedAt = new Date();
+                            entityResult.Message = `Access denied: the requested changes would move this ${entity.EntityInfo.Name} record outside your permitted row scope`;
+                            throw new Error(entityResult.Message);
+                        }
+                    }
                 }
 
                 // Step 4: Generate provider-specific SQL
@@ -1441,6 +1489,14 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const entityResult = new BaseEntityResult();
         try {
             entity.RegisterTransactionPreprocessing();
+
+            // External-data-source entities are read-only (see Save) — refuse deletes at the provider
+            // layer regardless of the generated base class. The normal path (ReadOnlyExternalBaseEntity)
+            // returns false before reaching here; this backstop intentionally throws only for the
+            // custom-subclass edge case that bypasses it. No-op for MJ-DB entities.
+            if (entity.EntityInfo.ExternalDataSourceID)
+                throw new Error(`Delete() not allowed for ${entity.EntityInfo.Name}: it is sourced from an external data source (read-only).`);
+
             if (!options) options = new EntityDeleteOptions();
             const bReplay = options.ReplayOnly;
 
@@ -1572,6 +1628,20 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * Subclasses must implement the actual RLS check logic.
      */
     protected abstract CheckCreateRLS(
+        entity: BaseEntity,
+        user: UserInfo
+    ): Promise<boolean>;
+
+    /**
+     * Checks whether an UPDATE's pending (post-image) field values still pass the
+     * Update RLS filter. The pre-image check ({@link CheckRecordRLS}) validates the
+     * row as stored; this validates the row as it WILL be after the update, so a
+     * caller cannot move a row they legitimately own outside their own row scope
+     * (a privilege escalation the pre-image check cannot see). Runs after the
+     * before-save hooks so it validates the final values. Subclasses must
+     * implement; return true when no Update filter applies.
+     */
+    protected abstract CheckUpdateRLSPostImage(
         entity: BaseEntity,
         user: UserInfo
     ): Promise<boolean>;
@@ -2141,6 +2211,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     deletionLog.Set('Status', d.Success ? 'Complete' : 'Error');
                     if (!d.Success) deletionLog.Set('ProcessingLog', d.Message);
                     if (!(await deletionLog.Save())) throw new Error('Error saving record merge deletion log');
+                    d.RecordMergeDeletionLogID = deletionLog.Get('ID') as string;
                 }
             } else {
                 throw new Error('Error saving record merge log');

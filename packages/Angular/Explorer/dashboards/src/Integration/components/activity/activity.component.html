@@ -61,11 +61,19 @@
       <!-- Left panel: Run list -->
       <div class="run-list-panel">
         @for (run of FilteredRuns; track run.ID) {
-          <!-- Run row -->
-          <div class="run-row"
-               [class.selected]="IsSelectedRun(run.ID)"
-               (click)="SelectRun(run.ID)">
-            <div class="run-row-main">
+          <!-- Run row → accordion panel. The title slot carries the run's status +
+               integration + meta columns; the accordion toggle reveals the entity
+               breakdown (formerly the chevron's ToggleExpand). SelectRun (the
+               right-hand detail panel) moves to the header actions slot, since the
+               accordion header click now owns expand/collapse.
+               Side-effecting handler (ToggleExpand async-loads the breakdown) +
+               Default CD → [Expanded] + (ExpandedChange). -->
+          <mj-accordion-panel class="run-panel"
+                              [class.selected]="IsSelectedRun(run.ID)"
+                              Size="sm" [FlushBody]="true"
+                              [Expanded]="IsExpanded(run.ID)"
+                              (ExpandedChange)="ToggleExpand(run.ID)">
+            <ng-template mjAccordionTitle>
               <!-- Status indicator -->
               <span [class]="GetStatusDotClass(run.Status)"></span>
               <i [class]="GetStatusIcon(run.Status)"
@@ -107,19 +115,23 @@
               <div class="run-meta run-user">
                 {{ run.RunByUser || 'Scheduled' }}
               </div>
+            </ng-template>
 
-              <!-- Expand chevron -->
-              <button class="expand-btn"
-                      (click)="ToggleExpand(run.ID); $event.stopPropagation()"
-                      title="Show entity breakdown">
-                <i class="fa-solid fa-chevron-down"
-                   [class.rotated]="IsExpanded(run.ID)"></i>
+            <!-- Open/close the right-hand detail panel (entity breakdown +
+                 watermarks). Lives in the actions slot because the accordion
+                 header click is now the expand/collapse toggle. -->
+            <ng-template mjAccordionActions>
+              <button type="button" class="detail-toggle-btn"
+                      [class.active]="IsSelectedRun(run.ID)"
+                      (click)="SelectRun(run.ID)"
+                      title="Show run detail panel">
+                <i class="fa-solid fa-table-columns"></i>
               </button>
-            </div>
+            </ng-template>
 
-            <!-- Expanded section: entity breakdown -->
-            @if (IsExpanded(run.ID)) {
-              <div class="expanded-section" (click)="$event.stopPropagation()">
+            <!-- Expanded section: entity breakdown (lazy body) -->
+            <ng-template mjAccordionBody>
+              <div class="expanded-section">
                 @if (IsLoadingExpandedDetails()) {
                   <div class="expanded-loading">
                     <mj-loading text="Loading breakdown..." size="small"></mj-loading>
@@ -166,8 +178,8 @@
                   </div>
                 }
               </div>
-            }
-          </div>
+            </ng-template>
+          </mj-accordion-panel>
         }
       </div>
 

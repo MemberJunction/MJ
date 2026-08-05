@@ -40,6 +40,14 @@ import { IntegrationEngine } from '../IntegrationEngine.js';
 
 // ---- Mock state (reset per test) ----
 let mockRunViewsFn: ReturnType<typeof vi.fn>;
+
+/**
+ * Default batched-read behaviour: fan a `RunViews` call out to the per-params `RunView` mock, so
+ * the entity-aware routers each test installs answer batched legs too. A test that pins a specific
+ * batched read with `mockResolvedValueOnce` still overrides this.
+ */
+const fanOutToRunView = async (params: Array<Record<string, unknown>>, contextUser?: unknown) =>
+    Promise.all(params.map(p => mockRunViewFn(p, contextUser)));
 let mockRunViewFn: ReturnType<typeof vi.fn>;
 
 // Every record-map row that SaveRecordMap actually persists, captured at Save().
@@ -271,7 +279,7 @@ describe('IntegrationEngine — RecordMap on UPDATE (1:1, no drift)', () => {
     beforeEach(() => {
         orchestrator = new IntegrationEngine();
         mockRunViewFn = vi.fn();
-        mockRunViewsFn = vi.fn();
+        mockRunViewsFn = vi.fn(fanOutToRunView);
         savedRecordMapRows = [];
         targetSaveCount = 0;
         (IntegrationEngine as Record<string, unknown>)['activeSyncs'] = new Map();
@@ -512,6 +520,109 @@ describe('IntegrationEngine — RecordMap on UPDATE (1:1, no drift)', () => {
         }
     });
 
+    it('REPAIRS a content-unchanged record whose sync state is wrong (resurrects a tombstone)', async () => {
+        // The dirty check is now evaluated on the BUSINESS fields alone,
+        // with the standard integration fields stamped afterwards — so an unchanged record costs
+        // no write (proved by the test above). The corollary this test pins: "unchanged" must be
+        // judged on content, NOT taken as "nothing to do". A row the previous sync tombstoned (or
+        // left with a sync error / non-Active status) is content-identical to the record now
+        // arriving from the source — and skipping it would leave a live external record marked
+        // deleted in MJ, forever, because it will look unchanged on every subsequent sync too.
+        const targetEntity = createMockTargetEntity();
+        targetEntity._data['Name'] = 'Unchanged Contact';
+        targetEntity._data['Email'] = 'same@test.com';
+        // ...but the row is marked deleted from a previous sync — the state that must be repaired.
+        targetEntity._data['__mj_integration_IsTombstoned'] = true;
+
+        // Declare the sync-state column on the entity metadata for this test only.
+        const { Metadata } = await import('@memberjunction/core');
+        const contactsInfo = new Metadata().EntityByName('Contacts');
+        const originalFields = contactsInfo!.Fields;
+        contactsInfo!.Fields = [
+            ...originalFields,
+            { Name: '__mj_integration_IsTombstoned' } as unknown as (typeof originalFields)[number],
+        ];
+        targetEntity.Fields = [...targetEntity.Fields, { Name: '__mj_integration_IsTombstoned' }];
+
+        const incoming: ExternalRecord[] = [{
+            ExternalID: 'ext-tombstoned-1',
+            ObjectType: 'Contact',
+            Fields: { Name: 'Unchanged Contact', Email: 'same@test.com' },
+            IsDeleted: false,
+        }];
+        const connector = createMockConnector({
+            Records: incoming, HasMore: false, NewWatermarkValue: '2024-06-15T12:00:00.000Z',
+        });
+
+        const companyIntegration = createMockCompanyIntegration();
+        const integration = {
+            ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+            Name: 'TestIntegration',
+            ClassName: 'TestConnector',
+        } as unknown as MJIntegrationEntity;
+
+        mockRunViewsFn.mockResolvedValueOnce([
+            { Success: true, Results: [companyIntegration] },
+            {
+                Success: true,
+                Results: [{
+                    Get: vi.fn((f: string) => f === 'ID' ? 'em-1' : null),
+                    ID: 'em-1', CompanyIntegrationID: 'ci-1', EntityID: 'entity-1',
+                    ConflictResolution: 'SourceWins', DeleteBehavior: 'SoftDelete',
+                    Entity: 'Contacts', ExternalObjectName: 'contacts',
+                    SyncEnabled: true, Status: 'Active',
+                } as unknown as ICompanyIntegrationEntityMap],
+            },
+            { Success: true, Results: [integration] },
+            { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
+        ]);
+
+        mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+            const entityName = params['EntityName'] as string;
+            if (entityName === 'MJ: Company Integration Field Maps') {
+                return {
+                    Success: true,
+                    Results: [{
+                        SourceFieldName: 'Name', DestinationFieldName: 'Name',
+                        TransformPipeline: null, IsKeyField: true, Status: 'Active', Priority: 0,
+                    } as unknown as ICompanyIntegrationFieldMap],
+                };
+            }
+            if (entityName === 'MJ: Company Integration Sync Watermarks') return { Success: true, Results: [] };
+            if (entityName === 'Contacts') return { Success: true, Results: [{ ID: 'mj-contact-1' }] };
+            if (entityName === 'MJ: Company Integration Record Maps') return { Success: true, Results: [] };
+            return { Success: true, Results: [] };
+        });
+
+        const { ConnectorFactory } = await import('../ConnectorFactory.js');
+        const resolveOrig = ConnectorFactory.Resolve;
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+
+        const provider = (Metadata as unknown as { Provider: { GetEntityObject: (...a: unknown[]) => Promise<unknown> } }).Provider;
+        const getEntityObjectOrig = provider.GetEntityObject;
+        provider.GetEntityObject = vi.fn(async (entityName: string) => {
+            if (entityName === 'Contacts') return targetEntity;
+            if (entityName === 'MJ: Company Integration Record Maps') return createMockRecordMapEntity();
+            return createMockBookkeepingEntity({ ID: `new-${entityName}-id` });
+        }) as unknown as typeof provider.GetEntityObject;
+
+        try {
+            const result = await orchestrator.RunSync('ci-1', contextUser);
+
+            expect(result.Success).toBe(true);
+            // NOT skipped — the row was written to clear the tombstone.
+            expect(result.RecordsSkipped).toBe(0);
+            expect(result.RecordsUpdated).toBe(1);
+            expect(targetSaveCount).toBe(1);
+            expect(targetEntity._data['__mj_integration_IsTombstoned']).toBe(false);
+        } finally {
+            ConnectorFactory.Resolve = resolveOrig;
+            provider.GetEntityObject = getEntityObjectOrig;
+            contactsInfo!.Fields = originalFields;
+        }
+    });
+
     it('re-updating the same external record reuses the existing map row (idempotent upsert, still 1:1)', async () => {
         // The SAME external record is updated across TWO separate sync runs. The FIRST run's
         // UpdateRecord creates the map row; the SECOND run's UpdateRecord must LOOK IT UP via
@@ -577,9 +688,11 @@ describe('IntegrationEngine — RecordMap on UPDATE (1:1, no drift)', () => {
             { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
         ]);
 
-        // Track whether a record-map row already exists so the SECOND run's SaveRecordMap
-        // existence-check returns it (forcing the Load()+reuse branch, not NewRecord()).
-        let recordMapExists = false;
+        // Whether a record-map row already exists is a function of WHICH RUN we are in, not of
+        // how many times the engine reads the table — run 1 creates it, so every read in run 2
+        // sees it. (Keying this off "first read" broke the moment MatchEngine started resolving
+        // a batch's map lookups in one prefetch query, which reads before SaveRecordMap does.)
+        const recordMapExists = () => runIndex >= 2;
         mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
             const entityName = params['EntityName'] as string;
             if (entityName === 'MJ: Company Integration Field Maps') {
@@ -602,12 +715,9 @@ describe('IntegrationEngine — RecordMap on UPDATE (1:1, no drift)', () => {
                 return { Success: true, Results: [{ ID: 'mj-contact-1' }] };
             }
             if (entityName === 'MJ: Company Integration Record Maps') {
-                if (recordMapExists) {
-                    return { Success: true, Results: [{ ID: 'existing-map-1' }] };
-                }
-                // First lookup: no row yet — but the upcoming Save will create one.
-                recordMapExists = true;
-                return { Success: true, Results: [] };
+                return recordMapExists()
+                    ? { Success: true, Results: [{ ID: 'existing-map-1', ExternalSystemRecordID: 'ext-1', EntityRecordID: 'mj-contact-1' }] }
+                    : { Success: true, Results: [] };
             }
             return { Success: true, Results: [] };
         });

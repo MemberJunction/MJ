@@ -2,6 +2,14 @@
 
 This guide covers the text processing utilities in the Vector Core package: `TextChunker` and `TextExtractor`. It explains why chunking matters, how to choose the right strategy, how to tune overlap, and how these utilities integrate with the vectorization and autotagging pipelines.
 
+> **Scope note.** This guide documents the low-level *primitives*. The **strategy** layer — deciding
+> where content should be cut (document headings, LLM-detected topic shifts, audio/video chapters) and
+> handling non-text modalities — lives in
+> [`@memberjunction/ai-segmentation`](../../../Segmentation/README.md); see the
+> [Content Segmentation Guide](../../../../../guides/CONTENT_SEGMENTATION_GUIDE.md). Ingestion
+> pipelines should resolve a segmenter rather than calling `TextChunker` directly. Read this guide
+> when you need the mechanics of splitting and extraction themselves.
+
 ## Table of Contents
 
 - [Why Text Chunking Matters](#why-text-chunking-matters)

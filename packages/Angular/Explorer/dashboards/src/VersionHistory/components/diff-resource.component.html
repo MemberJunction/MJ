@@ -156,34 +156,30 @@
       @if (FilteredEntityGroups.length > 0) {
         <div class="entity-groups">
           @for (group of FilteredEntityGroups; track group) {
-            <div class="entity-group">
-              <div class="entity-group-header" (click)="ToggleEntityGroup(group)">
-                <div class="entity-group-left">
-                  <i class="fa-solid fa-chevron-right entity-chevron"
-                    [class.expanded]="group.IsExpanded">
-                  </i>
-                  <i [class]="group.EntityIcon" class="entity-icon"></i>
-                  <span class="entity-group-name">{{group.EntityName}}</span>
-                </div>
+            <mj-accordion-panel Size="sm" [FlushBody]="true"
+                [Expanded]="group.IsExpanded" (ExpandedChange)="ToggleEntityGroup(group)">
+              <ng-template mjAccordionTitle>
+                <i [class]="group.EntityIcon" class="entity-icon"></i>
+                <span class="entity-group-name">{{group.EntityName}}</span>
                 <div class="entity-group-badges">
                   @if (group.AddedCount > 0) {
-                    <span class="badge change-added">
+                    <span class="mj-accordion-badge mj-accordion-badge--success">
                       +{{group.AddedCount}}
                     </span>
                   }
                   @if (group.RemovedCount > 0) {
-                    <span class="badge change-removed">
+                    <span class="mj-accordion-badge mj-accordion-badge--error">
                       -{{group.RemovedCount}}
                     </span>
                   }
                   @if (group.ModifiedCount > 0) {
-                    <span class="badge change-modified">
+                    <span class="mj-accordion-badge mj-accordion-badge--warning">
                       ~{{group.ModifiedCount}}
                     </span>
                   }
                 </div>
-              </div>
-              @if (group.IsExpanded) {
+              </ng-template>
+              <ng-template mjAccordionBody>
                 <div class="entity-group-items">
                   @for (item of group.Items; track item) {
                     <div class="diff-item-wrapper">
@@ -242,8 +238,8 @@
                     </div>
                   }
                 </div>
-              }
-            </div>
+              </ng-template>
+            </mj-accordion-panel>
           }
         </div>
       }

@@ -11,8 +11,33 @@ import {
 import fs from 'fs';
 import path from 'path';
 import { logError } from './status_logging';
-import { mjCoreSchema, resolveEntityPackageName } from '../Config/config';
+import { getExternalEntitySchemas, mjCoreSchema, resolveEntityPackageName } from '../Config/config';
 import { makeDir, sortBySequenceAndCreatedAt, sortRelatedEntities } from './util';
+
+/**
+ * Describes which GraphQL ObjectTypes are actually resolvable in the file being generated, so the
+ * generator can decide whether a reverse-relationship (child-array) member may reference a related
+ * entity's type by name.
+ *
+ * A reverse-relationship member references the related entity's type by BARE class name, which only
+ * compiles when that class is declared in the same file. This carries the ground truth for that
+ * question — the exact set of entities handed to the generator for this file — instead of inferring
+ * it from schema/package heuristics, which can only ever approximate the set.
+ */
+export interface GeneratedTypeAvailability {
+  /**
+   * Lower-cased, trimmed names of every entity whose ObjectType is emitted inline into the file being
+   * generated. Membership is the compile condition for a bare-name reference.
+   */
+  generatedEntityNames: Set<string>;
+  /**
+   * True when generating the CORE entity file. The core file has NO
+   * `mj_core_schema_server_object_types` namespace import (it *is* that module), so core related
+   * entities must satisfy set membership like everything else. In a non-core file, core types resolve
+   * through that namespace import regardless of the set.
+   */
+  isInternal: boolean;
+}
 
 /**
  * This class is responsible for generating the GraphQL Server resolvers and types for the entities, you can sub-class this class to extend/modify the logic, make sure to use @memberjunction/global RegisterClass decorator
@@ -26,12 +51,24 @@ export class GraphQLServerGeneratorBase {
     excludeRelatedEntitiesExternalToSchema: boolean
   ): boolean {
     const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase().startsWith('@memberjunction/');
+    // Every entity in THIS call gets its ObjectType emitted inline into the single generated.ts, so this
+    // set is exactly the set of types a reverse-relationship member may reference by bare name.
+    const availability: GeneratedTypeAvailability = {
+      generatedEntityNames: new Set(entities.map((e) => e.Name.trim().toLowerCase())),
+      isInternal,
+    };
     let sRet: string = '';
     try {
       sRet = this.generateAllEntitiesServerFileHeader(entities, generatedEntitiesImportLibrary, isInternal);
 
       for (let i: number = 0; i < entities.length; ++i) {
-        sRet += this.generateServerEntityString(entities[i], false, generatedEntitiesImportLibrary, excludeRelatedEntitiesExternalToSchema);
+        sRet += this.generateServerEntityString(
+          entities[i],
+          false,
+          generatedEntitiesImportLibrary,
+          excludeRelatedEntitiesExternalToSchema,
+          availability
+        );
       }
       makeDir(outputDirectory);
       fs.writeFileSync(path.join(outputDirectory, 'generated.ts'), sRet);
@@ -63,6 +100,50 @@ export class GraphQLServerGeneratorBase {
   }
 
   /**
+   * True when the related entity's GraphQL ObjectType will NOT be declared in the file being
+   * generated, so emitting a `@Field`/`@FieldResolver` that names it would not compile (TS2304).
+   *
+   * When `availability` is supplied (every in-tree caller supplies it), the decision is made against
+   * the ACTUAL set of entities being generated into this file rather than inferred from schema or
+   * package heuristics. That set is ground truth: a bare-name reference compiles iff the class is
+   * emitted here, and the class is emitted here iff the entity was in the array handed to the
+   * generator. Heuristics can only approximate that set — `runCodeGen` narrows the generated entities
+   * by BOTH the `entityPackageName` schema→package map AND the `excludeSchemas`/inclusion filters, so
+   * a predicate that models only the package map still emits uncompilable references for anything
+   * dropped by the other filter (the linked-Open-App break: a base app generated alongside a
+   * dependent app that foreign-keys into it).
+   *
+   * The one exception is a CORE (`__mj`) related entity in a NON-core file: it is absent from the
+   * generated set but resolves through the `mj_core_schema_server_object_types` namespace import, so
+   * it is always in scope. In the core file itself there is no such import (that file *is* the
+   * module), so core related entities must satisfy set membership like everything else.
+   *
+   * `excludeRelatedEntitiesExternalToSchema` is honored first and unchanged: it asks for a
+   * schema-scoped file, which is a narrower request than type availability.
+   *
+   * @param availability the types resolvable in this file; when omitted, falls back to the legacy
+   *                     `entityPackageName` schema→package heuristic so that existing subclasses and
+   *                     callers using the pre-availability signature keep their previous behavior.
+   */
+  protected isRelatedTypeOutOfScope(
+    entity: EntityInfo,
+    relatedEntity: EntityInfo,
+    excludeRelatedEntitiesExternalToSchema: boolean,
+    availability?: GeneratedTypeAvailability
+  ): boolean {
+    if (excludeRelatedEntitiesExternalToSchema && relatedEntity.SchemaName !== entity.SchemaName) return true;
+    if (availability) {
+      // Core types in a non-core file come from the namespace import, not a local declaration.
+      if (relatedEntity.SchemaName === mjCoreSchema && !availability.isInternal) return false;
+      return !availability.generatedEntityNames.has(relatedEntity.Name.trim().toLowerCase());
+    }
+    // Legacy path (no availability supplied): approximate the generated set from the package map.
+    if (relatedEntity.SchemaName === mjCoreSchema) return false;
+    const schema = relatedEntity.SchemaName.toLowerCase();
+    return getExternalEntitySchemas().some((s) => s.toLowerCase() === schema);
+  }
+
+  /**
    * Generates the full server GraphQL type name for an entity (with suffix).
    * @param entity - The entity to generate the type name for
    * @returns The full GraphQL type name (with suffix)
@@ -75,7 +156,8 @@ export class GraphQLServerGeneratorBase {
     entity: EntityInfo,
     includeFileHeader: boolean,
     generatedEntitiesImportLibrary: string,
-    excludeRelatedEntitiesExternalToSchema: boolean
+    excludeRelatedEntitiesExternalToSchema: boolean,
+    availability?: GeneratedTypeAvailability
   ): string {
     const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase() === '@memberjunction/core-entities';
     let sEntityOutput: string = '';
@@ -91,7 +173,8 @@ export class GraphQLServerGeneratorBase {
         sEntityOutput = this.generateEntitySpecificServerFileHeader(
           entity,
           resolvedLib,
-          excludeRelatedEntitiesExternalToSchema
+          excludeRelatedEntitiesExternalToSchema,
+          availability
         );
       }
 
@@ -110,9 +193,13 @@ export class GraphQLServerGeneratorBase {
         const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
         // only include the relationship if we are IncludeInAPI for the related entity
         if (re.IncludeInAPI) {
-          if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
-            // only include the relationship if either we are NOT excluding related entities external to the schema
-            // or if the related entity is in the same schema as the current entity
+          if (re.ExternalDataSourceID) {
+            // Related entity is external (no MJ base view) — its resolver is skipped (see
+            // generateServerGraphQLResolver), so skip the paired field declaration too for consistency.
+            sEntityOutput += `// Relationship field to ${r.RelatedEntity} not generated: related entity is external (no local base view).\n`;
+          } else if (this.isRelatedTypeOutOfScope(entity, re, excludeRelatedEntitiesExternalToSchema, availability)) {
+            sEntityOutput += `// Relationship field to ${r.RelatedEntity} not generated: its GraphQL type is not declared in this file.\n`;
+          } else {
             sEntityOutput += this.generateServerRelationship(md, sortedRelatedEntities[j], isInternal);
           }
         } else {
@@ -127,7 +214,8 @@ export class GraphQLServerGeneratorBase {
         entity,
         serverGraphQLTypeName,
         excludeRelatedEntitiesExternalToSchema,
-        isInternal
+        isInternal,
+        availability
       );
     } catch (err) {
       logError(err as string);
@@ -197,7 +285,8 @@ ${this.generateEntityImports(entities, importLibrary, isInternal)}
   public generateEntitySpecificServerFileHeader(
     entity: EntityInfo,
     importLibrary: string,
-    excludeRelatedEntitiesExternalToSchema: boolean
+    excludeRelatedEntitiesExternalToSchema: boolean,
+    availability?: GeneratedTypeAvailability
   ): string {
     const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     let sRet: string = `/********************************************************************************
@@ -220,9 +309,15 @@ import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
     for (let i: number = 0; i < sortedRelatedEntities.length; ++i) {
       const r = sortedRelatedEntities[i];
       const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
-      if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
-        // we only include entities that are in the same schema as the current entity
-        // OR if we are not excluding related entities external to the schema
+      // This per-entity file imports each related type from a RELATIVE SIBLING file, so the rule here is
+      // narrower than the field gate: a sibling file exists only for an entity generated in this run.
+      // Core types are deliberately NOT sibling-imported — in a non-core file they resolve through the
+      // `mj_core_schema_server_object_types` namespace import, so emitting `./MJUser` would break the
+      // build. Hence set membership directly rather than isRelatedTypeOutOfScope.
+      const emitSiblingImport = availability
+        ? availability.generatedEntityNames.has(re.Name.trim().toLowerCase())
+        : !this.isRelatedTypeOutOfScope(entity, re, excludeRelatedEntitiesExternalToSchema);
+      if (emitSiblingImport) {
         const tableName = sortedRelatedEntities[i].RelatedEntityBaseTableCodeName;
         sRet += `\nimport ${tableName} from './${tableName}';`;
       }
@@ -324,7 +419,8 @@ export class ${serverGraphQLTypeName} {`;
     entity: EntityInfo,
     serverGraphQLTypeName: string,
     excludeRelatedEntitiesExternalToSchema: boolean,
-    isInternal: boolean
+    isInternal: boolean,
+    availability?: GeneratedTypeAvailability
   ): string {
     const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
@@ -400,8 +496,26 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         pkParamNames.push(pk.CodeName);
       }
       const pkParamsList = pkParamNames.join(', ');
+      // CompositeKey.Validate() matches FieldName against entity.Fields…Name (the DB field name), so the
+      // key MUST use pk.Name — not pk.CodeName, which diverges for PKs whose DB name needs sanitizing
+      // (spaces, leading digit, reserved word). The bound value still comes from the CodeName arg variable.
+      const pkCompositeKeyPairs = entity.PrimaryKeys.map((pk) => `{ FieldName: '${pk.Name}', Value: ${pk.CodeName} }`).join(', ');
 
-      sRet += `
+      if (entity.ExternalDataSourceID) {
+        // External-data-source entities have no MJ base view to query — proxy the single-record
+        // load through a BaseEntity object, which the provider dispatches to the external read
+        // router (same path as the grid's RunView). RLS + field post-processing are applied there.
+        sRet += `
+    @Query(() => ${serverGraphQLTypeName}, { nullable: true })
+    async ${typeNameBase}(${graphQLPKEYArgs}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
+        this.CheckUserReadPermissions('${entity.Name}', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });${auditAccessCode}
+        const compositeKey = new CompositeKey([${pkCompositeKeyPairs}]);
+        return this.LoadExternalRecordByKey<${serverGraphQLTypeName}>('${entity.Name}', compositeKey, provider, userPayload);
+    }
+    `;
+      } else {
+        sRet += `
     @Query(() => ${serverGraphQLTypeName}, { nullable: true })
     async ${typeNameBase}(${graphQLPKEYArgs}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
@@ -412,9 +526,17 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         return result;
     }
     `;
+      }
       if (entity.AllowAllRowsAPI) {
-        // this entity allows a query to return all rows, so include that type of query next
-        sRet += `
+        if (entity.ExternalDataSourceID) {
+          // External-data-source entities have no MJ base view, so `SELECT * FROM <baseView>` cannot run.
+          // The equivalent "all rows" capability is available via Run${typeNameBase}DynamicView (the same
+          // provider→external-read-router path the grid uses), so we skip the redundant All query here
+          // rather than emit a resolver that would fail at runtime.
+          sRet += `\n    // All${entity.CodeName}() intentionally not generated: external-data-source entity has no base view. Use Run${typeNameBase}DynamicView to retrieve external rows.\n`;
+        } else {
+          // this entity allows a query to return all rows, so include that type of query next
+          sRet += `
     @Query(() => [${serverGraphQLTypeName}])
     async All${entity.CodeName}(@Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
@@ -425,6 +547,7 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         return result;
     }
     `;
+        }
       }
 
       // now, generate the FieldResolvers for each of the one-to-many relationships
@@ -437,9 +560,15 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
 
         // only include the relationship if we are IncludeInAPI for the related entity
         if (re.IncludeInAPI) {
-          if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
-            // only include the relationship if either we are NOT excluding related entities external to the schema
-            // or if the related entity is in the same schema as the current entity
+          if (re.ExternalDataSourceID) {
+            // The related entity is external-data-source-backed: its field resolver would query
+            // `SELECT * FROM <re.BaseView>`, but external entities have no MJ base view. Skip it rather
+            // than emit a resolver that fails at runtime (external rows are reachable via that entity's
+            // own RunView with a filter on the join column).
+            sRet += `// Relationship to ${r.RelatedEntity} not generated: related entity is external (no local base view to query).\n`;
+          } else if (this.isRelatedTypeOutOfScope(entity, re, excludeRelatedEntitiesExternalToSchema, availability)) {
+            sRet += `// Relationship to ${r.RelatedEntity} not generated: its GraphQL type is not declared in this file.\n`;
+          } else {
             if (r.Type.toLowerCase().trim() == 'many to many') sRet += this.generateManyToManyFieldResolver(entity, r);
             else sRet += this.generateOneToManyFieldResolver(entity, r, isInternal);
           }
@@ -551,6 +680,13 @@ export class ${classPrefix}${typeNameBase}Input {`;
 
     // MUTATIONS
     // First, determine if the entity has either Create/Edit allowed, if either, we need to generate a InputType
+    //
+    // External-data-source entities intentionally generate mutations like any other entity (gated only
+    // by Allow*API + !VirtualEntity). The generated resolver routes through CreateRecord/UpdateRecord/
+    // DeleteRecord → entity.Save()/.Delete(), and an external entity extends ReadOnlyExternalBaseEntity
+    // whose Save/Delete reject (returning false + LatestResult) BEFORE any sproc is reached — so the
+    // mutation fails loudly with the read-only reason rather than silently not existing. (No sproc is
+    // generated for these entities, but none is ever called.)
     if (entity.AllowCreateAPI && !entity.VirtualEntity) {
       // generate a create mutation
       sRet += `

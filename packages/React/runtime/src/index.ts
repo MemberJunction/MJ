@@ -86,10 +86,17 @@ export {
 
 // Export utilities
 
-export { 
+export {
   SetupStyles,
-  createDefaultComponentStyles 
+  createDefaultComponentStyles,
+  BuildStylesFromTheme,
+  ApplyStyleOverrides
 } from './utilities/component-styles';
+
+export {
+  buildAntdThemeConfig,
+  wrapWithLibraryThemeProviders
+} from './utilities/component-library-theming';
 
 export {
   StandardLibraries,

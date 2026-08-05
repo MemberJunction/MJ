@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT57 - Agent Artifact Tools (live)",
+    "Description": "Artifact interrogation across types via the reader agent, extractions asserted against the MANIFEST: CSV rows, JSON path/keys, PDF pages/search/metadata, Markdown grep, XML grep-fallback, PNG binary sha, malformed-artifact structured error, >50k externalization boundary. 9 checks AT1-AT9.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Artifact interrogation across types via the reader agent, extractions asserted against the MANIFEST: CSV rows, JSON path/keys, PDF pages/search/metadata, Markdown grep, XML grep-fallback, PNG binary sha, malformed-artifact structured error, >50k externalization boundary. 9 checks AT1-AT9."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-artifact-tools"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "9E1C3E4E-5077-446B-8079-82DBAB266954"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T17:00:43.424Z",
+    "checksum": "aaf7bae28b763daea7f4452ae629935f8794d40a761efacb93677891198f326e"
+  }
+}

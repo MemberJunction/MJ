@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { MJAIAgentRunStepEntity_AgentSkillInvocation } from '@memberjunction/core-entities';
 import { TimelineItem } from './ai-agent-run-timeline.component';
 
 @Component({
@@ -128,6 +129,30 @@ export class AIAgentRunStepNodeComponent {
     if (entityName && recordId) {
       this.navigateToEntity.emit({ entityName, recordId });
     }
+  }
+
+  /**
+   * Skill-invocation records associated with this step (parsed from `AIAgentRunStep.Skills`).
+   * Non-empty on Skill steps (the activation performed), Prompt steps (skills in effect for
+   * the turn), and Actions/Sub-Agent steps whose tool was granted by a skill rather than a
+   * native agent grant.
+   */
+  get SkillInvocations(): MJAIAgentRunStepEntity_AgentSkillInvocation[] {
+    const raw = this.item.type === 'step' ? this.item.data?.Skills : null;
+    if (!raw) return [];
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Tooltip summarizing an invocation's provenance for the badge hover. */
+  public GetSkillChipTooltip(inv: MJAIAgentRunStepEntity_AgentSkillInvocation): string {
+    const who = inv.ActivationType === 'requested' ? 'requested by the user (/skill mention)' : 'self-activated by the agent';
+    const reason = inv.Reason ? ` — ${inv.Reason}` : '';
+    return `${inv.SkillName}: ${who}${reason}`;
   }
 
   getAdditionalInfo(): string {

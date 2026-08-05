@@ -142,5 +142,109 @@
       "lastModified": "2026-04-11T04:11:23.345Z",
       "checksum": "d4eb43de527d6d1f898038a7185bfcdf4b03352351b94f3bc775831b2e489908"
     }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.Notifications.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Shell",
+      "DisplayName": "Show Notifications Bell",
+      "Description": "Display the notifications bell and unread-count badge in the Explorer header (desktop and mobile).",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "27610CF8-9303-4DDD-B962-D7FC4B7DE477"
+    },
+    "sync": {
+      "lastModified": "2026-07-22T13:40:31.288Z",
+      "checksum": "679a4aa78bd3a2958bbb40bbc27be77b52477ccf48b1109827574c90425f2718"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.AppSwitcher.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Shell",
+      "DisplayName": "Show App Switcher",
+      "Description": "Display the app switcher in the Explorer header (also the add/configure-apps entry point).",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "9F30B9D3-7384-486B-BBC3-04890BF23ECD"
+    },
+    "sync": {
+      "lastModified": "2026-07-22T13:40:31.301Z",
+      "checksum": "5563737483cee1924570d1ac2ea24391f3246ec095a4c5191a4526e92235b964"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.AppNav.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Shell",
+      "DisplayName": "Show App Navigation",
+      "Description": "Display the active app's navigation strip in the Explorer header and the mobile navigation drawer.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "92C44CCC-A7CA-41B7-913E-26E68605CBB8"
+    },
+    "sync": {
+      "lastModified": "2026-07-22T13:40:31.319Z",
+      "checksum": "7cea021b55ebb74a5d6621946580f2bb2c27eec6cae589e8afce2f55be95590e"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.UpdateToasts.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Shell",
+      "DisplayName": "Show Update Notifications",
+      "Description": "Display the service-worker update toast when a new application version is available.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "BD22E144-2192-4562-A994-87954BCF234B"
+    },
+    "sync": {
+      "lastModified": "2026-07-22T13:40:31.330Z",
+      "checksum": "7a95641b9365efd582a208fcbba7ff51c7f88db00e5df4175f914746500a09b8"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.AppSwitcher.Style",
+      "Value": "auto",
+      "ValueType": "string",
+      "Category": "Shell",
+      "DisplayName": "App Switcher Style",
+      "Description": "Presentation of the header app switcher: 'launcher' always opens the centered card launcher, 'compact' always opens the anchored dropdown-style panel, and 'auto' (default) picks compact when the user has fewer than 8 apps and the launcher otherwise.",
+      "DefaultValue": "auto"
+    },
+    "primaryKey": {
+      "ID": "6A7E686F-CE89-4BF5-B27D-25BE4D8432CF"
+    },
+    "sync": {
+      "lastModified": "2026-07-28T16:46:10.772Z",
+      "checksum": "f0d6b6cc23b1726be7ea0113480c4abadce48964fd7bbc341409f19a43f52b5b"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.RecordOpen.Style",
+      "Value": "records",
+      "ValueType": "string",
+      "Category": "Shell",
+      "DisplayName": "Record Open Style",
+      "Description": "How Explorer treats records opened from within apps: 'records' (default) keeps the user in the current app, opens every record as its own tab, and shows the global Records pill + record tab strip; 'classic' restores the previous behavior (records reassigned to the Home app, Golden Layout tab header as the multi-tab UI).",
+      "DefaultValue": "records"
+    },
+    "primaryKey": {
+      "ID": "A255910E-D36D-4F1D-B25D-6B7FADB82C74"
+    }
   }
 ]

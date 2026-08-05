@@ -2,7 +2,7 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJAccordionModule, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 import { SearchOverlayComponent } from './search-overlay.component';
 import { SearchResultsComponent } from './search-results.component';
@@ -28,7 +28,8 @@ import { SearchScopeChildGridComponent } from './search-scope-child-grid.compone
         CommonModule,
         FormsModule,
         SharedGenericModule,
-        MJEmptyStateComponent
+        MJEmptyStateComponent,
+        MJAccordionModule
     ],
     exports: [
         SearchOverlayComponent,

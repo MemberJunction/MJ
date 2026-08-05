@@ -1,17 +1,17 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
 import { AgentRunner, ArtifactToolManager } from '@memberjunction/ai-agents';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, AgentExecutionStreamingCallback } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { startLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
+import { resolveWidgetGuestRunContext, elevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -77,6 +77,17 @@ export class AgentStreamingContent {
 
     @Field({ nullable: true })
     agentName?: string;
+
+    /**
+     * Content discriminator passed through from the agent's streaming chunk (see
+     * `AgentExecutionStreamingCallback` in @memberjunction/ai-core-plus).
+     * 'final-response' marks user-facing reply deltas the conversation client
+     * accumulates + renders into the message bubble; chunks without a kind are
+     * raw prompt output (e.g. a Loop agent's JSON turn envelope) and are not
+     * rendered by the conversation client.
+     */
+    @Field({ nullable: true })
+    kind?: string;
 }
 
 @ObjectType()
@@ -294,35 +305,29 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     private PublishProgressUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, { 
-            message: JSON.stringify({
-                resolver: 'RunAIAgentResolver',
-                type: 'ExecutionProgress',
-                status: 'ok',
-                data,
-            }),
-            sessionId: userPayload.sessionId,
-        });
+        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+            resolver: 'RunAIAgentResolver',
+            type: 'ExecutionProgress',
+            status: 'ok',
+            data,
+        }), userPayload);
     }
 
 
     private PublishStreamingUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, { 
-            message: JSON.stringify({
-                resolver: 'RunAIAgentResolver',
-                type: 'StreamingContent',
-                status: 'ok',
-                data,
-            }),
-            sessionId: userPayload.sessionId,
-        });
+        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+            resolver: 'RunAIAgentResolver',
+            type: 'StreamingContent',
+            status: 'ok',
+            data,
+        }), userPayload);
     }
 
     /**
      * Create streaming content callback
      */
-    private createStreamingCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: any }) {
-        return (chunk: any) => {
+    private createStreamingCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: MJAIAgentRunEntityExtended | null }): AgentExecutionStreamingCallback {
+        return (chunk) => {
             // Use the agent run from the ref
             const agentRun = agentRunRef.current;
             if (!agentRun) {
@@ -340,7 +345,8 @@ export class RunAIAgentResolver extends ResolverBase {
                     content: chunk.content,
                     isPartial: !chunk.isComplete,
                     stepName: chunk.stepType,
-                    agentName: chunk.modelName
+                    agentName: chunk.modelName,
+                    kind: chunk.kind
                 },
                 timestamp: new Date()
             };
@@ -376,7 +382,12 @@ export class RunAIAgentResolver extends ResolverBase {
         conversationId?: string,
         /** Optional external ref the caller can read to observe the agent run as it becomes available
          *  (used by the fire-and-forget liveness pulse to enrich heartbeats with the run id/status). */
-        runRef?: { current: MJAIAgentRunEntityExtended | null }
+        runRef?: { current: MJAIAgentRunEntityExtended | null },
+        /** Per-request Plan Mode toggle — threaded into ExecuteAgentParams.planMode (root-agent HITL gate). */
+        planMode?: boolean,
+        /** Skill IDs the user requested (via `/skill-name`) — threaded into ExecuteAgentParams.requestedSkillIDs.
+         *  The framework intersects them with the agent's accepted skills AND the user's Run permission. */
+        requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         
@@ -428,6 +439,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 lastRunId: lastRunId,
                 autoPopulateLastRunPayload: autoPopulateLastRunPayload,
                 configurationId: configurationId,
+                planMode: planMode,
+                requestedSkillIDs: requestedSkillIDs,
                 data: parsedData,
                 context: {
                     dataSource: dataSource
@@ -614,7 +627,12 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('createNotification', { nullable: true }) createNotification?: boolean,
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
         @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string,
-        @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean
+        @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean,
+        /** Per-request Plan Mode toggle — symmetric with RunAIAgentFromConversationDetail. */
+        @Arg('planMode', { nullable: true }) planMode?: boolean,
+        /** Skill IDs the user requested — symmetric with RunAIAgentFromConversationDetail. Intersected
+         *  server-side with the agent's accepted skills AND the user's Run permission. */
+        @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         // Check API key scope authorization for agent execution
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
@@ -628,7 +646,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
                 data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                 conversationDetailId, createArtifacts || false, createNotification || false,
-                sourceArtifactId, sourceArtifactVersionId
+                sourceArtifactId, sourceArtifactVersionId, undefined /*conversationId*/, planMode, requestedSkillIDs
             );
 
             LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
@@ -658,7 +676,11 @@ export class RunAIAgentResolver extends ResolverBase {
             createArtifacts || false,
             createNotification || false,
             sourceArtifactId,
-            sourceArtifactVersionId
+            sourceArtifactVersionId,
+            undefined, // conversationId (not pre-resolved on this path)
+            undefined, // runRef
+            planMode,
+            requestedSkillIDs
         );
     }
 
@@ -684,7 +706,11 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('createArtifacts', { nullable: true }) createArtifacts?: boolean,
         @Arg('createNotification', { nullable: true }) createNotification?: boolean,
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
-        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
+        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string,
+        /** Per-request Plan Mode toggle — symmetric with the other run mutations. */
+        @Arg('planMode', { nullable: true }) planMode?: boolean,
+        /** User-requested skill IDs — symmetric with the other run mutations. */
+        @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
@@ -705,7 +731,11 @@ export class RunAIAgentResolver extends ResolverBase {
             createArtifacts || false,
             createNotification || false,
             sourceArtifactId,
-            sourceArtifactVersionId
+            sourceArtifactVersionId,
+            undefined, // conversationId (not pre-resolved on this path)
+            undefined, // runRef
+            planMode,
+            requestedSkillIDs
         );
     }
 
@@ -777,17 +807,15 @@ export class RunAIAgentResolver extends ResolverBase {
                 LogStatus(`📬 Notification sent via ${channelList} (ID: ${result.inAppNotificationId})`);
 
                 // Publish real-time notification event so client updates immediately
-                pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-                    userPayload: JSON.stringify(userPayload),
-                    message: JSON.stringify({
-                        type: 'notification',
-                        notificationId: result.inAppNotificationId,
-                        action: 'create',
-                        title: `${agentName} completed your request`,
-                        message: message,
-                        conversationId: conversationId
-                    })
-                });
+                // NOTE (B49): normalized from a malformed no-sessionId payload
+                this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+                    type: 'notification',
+                    notificationId: result.inAppNotificationId,
+                    action: 'create',
+                    title: `${agentName} completed your request`,
+                    message: message,
+                    conversationId: conversationId
+                }), userPayload);
 
                 LogStatus(`📡 Published notification event to client`);
             } else if (!result.success) {
@@ -889,16 +917,14 @@ export class RunAIAgentResolver extends ResolverBase {
                 LogStatus(`📬 Feedback request notification sent (ID: ${notifResult.inAppNotificationId})`);
 
                 // Publish real-time notification event
-                pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-                    userPayload: JSON.stringify(userPayload),
-                    message: JSON.stringify({
-                        type: 'notification',
-                        notificationId: notifResult.inAppNotificationId,
-                        action: 'create',
-                        title: `${agentName} needs your input`,
-                        message: truncatedMessage
-                    })
-                });
+                // NOTE (B49): normalized from a malformed no-sessionId payload
+                this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+                    type: 'notification',
+                    notificationId: notifResult.inAppNotificationId,
+                    action: 'create',
+                    title: `${agentName} needs your input`,
+                    message: truncatedMessage
+                }), userPayload);
             } else if (!notifResult.success) {
                 LogError(`Feedback request notification failed: ${notifResult.errors?.join(', ')}`);
             }
@@ -932,7 +958,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('createNotification', { nullable: true }) createNotification?: boolean,
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
         @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string,
-        @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean
+        @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean,
+        @Arg('planMode', { nullable: true }) planMode?: boolean,
+        @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         // Check API key scope authorization for agent execution
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
@@ -947,6 +975,17 @@ export class RunAIAgentResolver extends ResolverBase {
                 result: JSON.stringify({ success: false, errorMessage: 'Unable to determine current user' })
             };
         }
+
+        // PUBLIC WEB-WIDGET PRIVILEGED DISPATCH (public-web-widget.md Phase 0): when the request is a
+        // widget guest, the agent runs under a TRUSTED SERVER PRINCIPAL and the agent id is taken
+        // AUTHORITATIVELY from the widget instance (never the client-supplied arg) — so a guest needs
+        // no grants to WRITE the AI run entities and cannot run an arbitrary agent under elevation.
+        // Conversation OWNERSHIP is still enforced under the guest principal below: the guest loads its
+        // own ConversationDetail through the Widget Guest RLS filters, so a detail id from another
+        // session resolves to "not found" before any elevated work happens.
+        const widgetElevation = await resolveWidgetGuestRunContext(userPayload, p);
+        const effectiveAgentId = widgetElevation ? widgetElevation.pinnedAgentId : agentId;
+        const effectiveUserPayload = widgetElevation ? elevateUserPayload(userPayload, widgetElevation.elevatedUser) : userPayload;
 
         try {
             // LATENCY OPTIMIZATION (Opt #2 + #3): Load ConversationDetail once here to extract
@@ -968,7 +1007,10 @@ export class RunAIAgentResolver extends ResolverBase {
                 conversationId,
                 currentUser,
                 maxHistoryMessages || 20,
-                p
+                p,
+                // The UI creates the agent-response placeholder row ('⏳ ...') before invoking
+                // this mutation — exclude it so the model never sees an empty assistant turn.
+                [conversationDetailId]
             );
 
             // Convert to JSON string for the existing executeAIAgent method
@@ -978,13 +1020,13 @@ export class RunAIAgentResolver extends ResolverBase {
                 // Fire-and-forget mode: start execution in background, return immediately.
                 // The client will receive the result via WebSocket PubSub completion event.
                 this.executeAgentInBackground(
-                    p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
+                    p, dataSource, effectiveAgentId, effectiveUserPayload, messagesJson, sessionId, pubSub,
                     data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                     conversationDetailId, createArtifacts || false, createNotification || false,
-                    sourceArtifactId, sourceArtifactVersionId, conversationId
+                    sourceArtifactId, sourceArtifactVersionId, conversationId, planMode, requestedSkillIDs
                 );
 
-                LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
+                LogStatus(`🔥 Fire-and-forget: Agent ${effectiveAgentId} execution started in background for session ${sessionId}`);
 
                 return {
                     success: true,
@@ -996,8 +1038,8 @@ export class RunAIAgentResolver extends ResolverBase {
             return this.executeAIAgent(
                 p,
                 dataSource,
-                agentId,
-                userPayload,
+                effectiveAgentId,
+                effectiveUserPayload,
                 messagesJson,
                 sessionId,
                 pubSub,
@@ -1012,7 +1054,10 @@ export class RunAIAgentResolver extends ResolverBase {
                 createNotification || false,
                 sourceArtifactId,
                 sourceArtifactVersionId,
-                conversationId // LATENCY OPT #2: pass pre-resolved conversationId
+                conversationId, // LATENCY OPT #2: pass pre-resolved conversationId
+                undefined, // runRef
+                planMode,
+                requestedSkillIDs
             );
         } catch (error) {
             const errorMessage = (error as Error).message || 'Unknown error loading conversation history';
@@ -1227,13 +1272,18 @@ export class RunAIAgentResolver extends ResolverBase {
         sourceArtifactId?: string,
         sourceArtifactVersionId?: string,
         /** LATENCY OPT #2: Pre-resolved conversationId avoids redundant DB load in AgentRunner */
-        conversationId?: string
+        conversationId?: string,
+        /** Per-request Plan Mode toggle — threaded through to ExecuteAgentParams.planMode. */
+        planMode?: boolean,
+        /** Skill IDs the user requested — threaded through to ExecuteAgentParams.requestedSkillIDs. */
+        requestedSkillIDs?: string[]
     ): void {
         // Ref the liveness pulse reads to enrich heartbeats once the run is created.
         const runRef: { current: MJAIAgentRunEntityExtended | null } = { current: null };
         const pulse = startLivenessPulse({
             pubSub,
             sessionId,
+            ownerUserId: userPayload.userRecord.ID,
             resolver: 'RunAIAgentResolver',
             readStatus: () => runRef.current
                 ? { runId: runRef.current.ID, status: runRef.current.Status }
@@ -1245,7 +1295,7 @@ export class RunAIAgentResolver extends ResolverBase {
             p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
             data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
             configurationId, conversationDetailId, createArtifacts, createNotification,
-            sourceArtifactId, sourceArtifactVersionId, conversationId, runRef
+            sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs
         ).catch((error: unknown) => {
             // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
             // so this would only fire for truly unexpected errors).
@@ -1280,58 +1330,89 @@ export class RunAIAgentResolver extends ResolverBase {
      * passes conversationId down.
      *
      * Opt #8: Switched from ResultType 'entity_object' to 'simple' with explicit Fields.
-     * The history query only needs ID, Role, and Message from each ConversationDetail record.
-     * Using 'entity_object' created full BaseEntity instances with getters/setters, dirty tracking,
-     * and validation — none of which are needed for read-only history assembly. The 'simple' result
-     * type returns plain JS objects, reducing per-record overhead (~30ms total savings).
+     * The history query only needs the window-assembly fields (ConversationWindowFields:
+     * ID, Sequence, Role, Message, SummaryOfEarlierConversation) from each
+     * ConversationDetail record. Using 'entity_object' created full BaseEntity instances
+     * with getters/setters, dirty tracking, and validation — none of which are needed for
+     * read-only history assembly. The 'simple' result type returns plain JS objects,
+     * reducing per-record overhead (~30ms total savings).
      */
     private async loadConversationHistoryWithAttachments(
         conversationId: string,
         contextUser: UserInfo,
         maxMessages: number,
-        provider: IMetadataProvider
+        provider: IMetadataProvider,
+        excludeDetailIds?: string[]
     ): Promise<ChatMessage[]> {
-        const rv = RunView.FromMetadataProvider(provider);
-        const attachmentService = GetAttachmentService();
+        // Context windowing (summary boundary + raw tail, or legacy last-N when no
+        // summary exists) shares ONE fold implementation with all other callers —
+        // ConversationEngine.AssembleContextWindow — and the ROWS come from the
+        // single-sourced fresh-per-request loader (same one the compaction pass uses).
+        // Three deliberate properties vs. the engine's cached GetAgentContextWindow:
+        //   1. Entity RLS applies (the engine path loads via a stored query with no
+        //      row-level security — wrong for guest/widget-scoped users), and the
+        //      process-global per-conversation cache — keyed by conversation, not user —
+        //      can't leak the first toucher's row visibility to later callers.
+        //   2. No server-side population of the engine's unbounded detail cache, and no
+        //      cross-server staleness (a warm cache misses rows written by other nodes).
+        //   3. Load failure THROWS → the mutation fails, instead of silently running
+        //      the agent against zero history.
+        const rows = await ConversationEngine.LoadWindowRowsFresh(conversationId, contextUser, provider);
+        const window = ConversationEngine.AssembleContextWindow(rows, {
+            maxTailMessages: maxMessages,
+            excludeDetailIds
+        });
 
-        // Load recent conversation details (messages) for this conversation.
-        // Only fetch the three fields we actually use — ID for attachment lookups,
-        // Role for message routing, Message for content.
-        const detailsResult = await rv.RunView<{ ID: string; Role: string; Message: string }>({
-            EntityName: 'MJ: Conversation Details',
-            ExtraFilter: `ConversationID='${conversationId}'`,
-            OrderBy: '__mj_CreatedAt DESC',
-            MaxRows: maxMessages,
-            Fields: ['ID', 'Role', 'Message'],
-            ResultType: 'simple'
-        }, contextUser);
-
-        if (!detailsResult.Success || !detailsResult.Results) {
-            throw new Error('Failed to load conversation history');
-        }
-
-        // Reverse to get chronological order (oldest first)
-        const details = detailsResult.Results.reverse();
-
-        // Get all message IDs for batch loading artifacts
-        const messageIds = details.map(d => d.ID);
-
-        // Batch load input artifacts for these messages. Since the backfill migration
+        // Batch load input artifacts for the windowed messages. Since the backfill migration
         // (V202605271400__Backfill_Attachment_Artifacts) converted all legacy
         // ConversationDetailAttachment rows to artifact pairs, the artifact junction
-        // is the single source of truth — no separate attachment query needed.
+        // is the single source of truth — no separate attachment query needed. The synthetic
+        // summary message has no detail row and needs no enrichment.
+        const messageIds = window
+            .map(m => m.metadata?.conversationDetailId)
+            .filter((id): id is string => !!id);
         const inputArtifactsByDetailId = await this.loadInputArtifactsBatch(messageIds, contextUser, provider);
 
         // Build ChatMessage array with attachments and input artifacts
         const messages: ChatMessage[] = [];
 
-        for (const detail of details) {
-            const role = this.mapDetailRoleToMessageRole(detail.Role);
-            const validAttachments: AttachmentData[] = [];
+        for (const windowMessage of window) {
+            const detailId = windowMessage.metadata?.conversationDetailId;
+            const baseText = typeof windowMessage.content === 'string' ? windowMessage.content : '';
+            const inputArtifacts = detailId ? (inputArtifactsByDetailId.get(detailId) || []) : [];
+            const validAttachments = await this.buildAttachmentsForArtifacts(inputArtifacts, contextUser, provider);
 
-            // Get input artifacts for this message — routing via RouteArtifact.
-            const inputArtifacts = inputArtifactsByDetailId.get(detail.ID) || [];
-            for (const artifactVersion of inputArtifacts) {
+            // Build message content (with or without attachments)
+            let content: ChatMessageContent;
+            if (validAttachments.length > 0) {
+                // Use ConversationUtility to build multimodal content blocks
+                content = await ConversationUtility.BuildChatMessageContent(baseText, validAttachments);
+            } else {
+                content = baseText;
+            }
+
+            messages.push({
+                role: windowMessage.role,
+                content,
+                metadata: windowMessage.metadata
+            });
+        }
+
+        return messages;
+    }
+
+    /**
+     * Converts a message's input artifact versions into inline attachment payloads,
+     * honoring each artifact's delivery routing (inline vs. tools-only) via RouteArtifact.
+     */
+    private async buildAttachmentsForArtifacts(
+        inputArtifacts: MJArtifactVersionEntity[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<AttachmentData[]> {
+        const validAttachments: AttachmentData[] = [];
+
+        for (const artifactVersion of inputArtifacts) {
                 const artifactMime = artifactVersion.MimeType || '';
                 const fileName = artifactVersion.FileName ?? '';
                 const ext = fileName.includes('.') ? fileName.split('.').pop() : undefined;
@@ -1420,37 +1501,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 }
             }
 
-            // Build message content (with or without attachments)
-            let content: ChatMessageContent;
-
-            if (validAttachments.length > 0) {
-                // Use ConversationUtility to build multimodal content blocks
-                content = await ConversationUtility.BuildChatMessageContent(
-                    detail.Message || '',
-                    validAttachments
-                );
-            } else {
-                content = detail.Message || '';
-            }
-
-            messages.push({
-                role,
-                content
-            });
-        }
-
-        return messages;
-    }
-
-    /**
-     * Map ConversationDetail Role to ChatMessage role
-     */
-    private mapDetailRoleToMessageRole(role: string): 'user' | 'assistant' | 'system' {
-        const roleLower = (role || '').toLowerCase();
-        if (roleLower === 'user') return 'user';
-        if (roleLower === 'assistant' || roleLower === 'agent' || roleLower === 'ai') return 'assistant';
-        if (roleLower === 'system') return 'system';
-        return 'user'; // Default to user
+        return validAttachments;
     }
 
     /**

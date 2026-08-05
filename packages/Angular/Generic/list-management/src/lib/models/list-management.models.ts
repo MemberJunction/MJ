@@ -83,6 +83,22 @@ export interface ListManagementResult {
    * New lists that were created during this session
    */
   newListsCreated: MJListEntity[];
+
+  /**
+   * Aggregate outcome of the apply operation, so hosts can tell the user
+   * about silently-skipped duplicates or partial failures. Only present
+   * when action === 'apply'.
+   */
+  summary?: {
+    /** Membership rows actually created */
+    added: number;
+    /** Membership rows actually removed */
+    removed: number;
+    /** Records skipped because they were already in the target list(s) */
+    skipped: number;
+    /** Records that failed to add/remove */
+    failed: number;
+  };
 }
 
 /**

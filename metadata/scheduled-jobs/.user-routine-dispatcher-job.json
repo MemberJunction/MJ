@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "User Routine Dispatcher",
+      "Description": "Every-minute sweep that claims and executes due user routines (MJ: User Routines) — the single dispatcher behind the User Routines feature. Claims each due routine by advancing NextRunAt BEFORE running so an overlapping pass can never double-run it; ConcurrencyMode=Skip additionally prevents two dispatcher sweeps from running concurrently across servers. Routine-level failures are isolated and recorded on their MJ: User Routine Runs rows — the sweep itself only fails on infrastructure errors.",
+      "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=UserRoutineDispatcherDriver",
+      "CronExpression": "0 * * * * *",
+      "Timezone": "UTC",
+      "Status": "Active",
+      "ConcurrencyMode": "Skip",
+      "Configuration": {
+        "MaxConcurrentRoutines": 3
+      }
+    },
+    "primaryKey": {
+      "ID": "07C5F06E-239F-4575-9687-2C1075B153E6"
+    },
+    "sync": {
+      "lastModified": "2026-07-07T15:18:39.726Z",
+      "checksum": "607ebdfd4eebfe74b0ce5fb48a23c531bc0a70b24d67168c512d0f02f9fe9616"
+    }
+  }
+]

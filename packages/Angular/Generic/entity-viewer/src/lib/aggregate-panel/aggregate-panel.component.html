@@ -1,68 +1,70 @@
 <div class="aggregate-panel"
   [class.position-right]="Position === 'right'"
   [class.position-bottom]="Position === 'bottom'"
-  [class.collapsed]="IsCollapsed"
   [ngStyle]="PanelStyle">
 
-  <!-- Panel Header -->
-  <div class="panel-header" (click)="ToggleCollapse()">
-    <span class="panel-title">{{ Title }}</span>
+  <!-- Migrated to <mj-accordion-panel>. The bespoke .panel-header / .collapse-toggle
+       and the @if(!IsCollapsed) body gate are replaced by the accordion's own header,
+       chevron, and lazy/animated body. Expanded is the inverse of IsCollapsed; the
+       (ExpandedChange) handler preserves the CollapsedChange emit side-effect. -->
+  <mj-accordion-panel
+    Size="sm"
+    [FlushBody]="true"
+    [Expanded]="!IsCollapsed"
+    [Disabled]="!Collapsible"
+    (ExpandedChange)="OnPanelExpandedChange($event)">
 
-    <div class="panel-header-right">
-      <!-- Loading indicator -->
+    <ng-template mjAccordionTitle>
+      <span class="panel-title">{{ Title }}</span>
+    </ng-template>
+
+    <!-- Loading indicator lives in the header actions slot (sibling of the chevron). -->
+    <ng-template mjAccordionActions>
       @if (Loading) {
         <span class="loading-indicator">
           <i class="fa-solid fa-spinner fa-spin"></i>
         </span>
       }
+    </ng-template>
 
-      <!-- Collapse toggle -->
-      @if (Collapsible) {
-        <button class="collapse-toggle" type="button">
-          <i class="fa-solid" [class.fa-chevron-up]="!IsCollapsed" [class.fa-chevron-down]="IsCollapsed"></i>
-        </button>
-      }
-    </div>
-  </div>
-
-  <!-- Panel Content -->
-  @if (!IsCollapsed) {
-    <div class="panel-content">
-      <!-- Empty state -->
-      @if (CardAggregates.length === 0) {
-        <mj-empty-state
-          Size="compact"
-          Icon="fa-solid fa-chart-simple"
-          Title="No summaries configured" />
-      }
-      <!-- Cards Container -->
-      <div class="cards-container"
-        [class.layout-horizontal]="Layout === 'horizontal'"
-        [class.layout-vertical]="Layout === 'vertical'"
-        [class.layout-grid]="Layout === 'grid'"
-        [ngStyle]="Layout === 'grid' ? {'grid-template-columns': GridTemplateColumns} : {}">
-        <!-- Individual Aggregate Cards -->
-        @for (agg of CardAggregates; track agg) {
-          <div class="aggregate-card"
-            [class]="GetStyleClass(agg)"
-            (click)="OnAggregateClick(agg)"
-            [title]="agg.description || agg.label">
-            <!-- Icon -->
-            @if (agg.icon) {
-              <div class="card-icon">
-                <i [class]="agg.icon"></i>
-              </div>
-            }
-            <!-- Content -->
-            <div class="card-content">
-              <div class="card-value" [class.loading]="Loading">
-                {{ Loading ? '...' : FormatValue(agg) }}
-              </div>
-              <div class="card-label">{{ agg.label }}</div>
-            </div>
-          </div>
+    <ng-template mjAccordionBody>
+      <div class="panel-content">
+        <!-- Empty state -->
+        @if (CardAggregates.length === 0) {
+          <mj-empty-state
+            Size="compact"
+            Icon="fa-solid fa-chart-simple"
+            Title="No summaries configured" />
         }
+        <!-- Cards Container -->
+        <div class="cards-container"
+          [class.layout-horizontal]="Layout === 'horizontal'"
+          [class.layout-vertical]="Layout === 'vertical'"
+          [class.layout-grid]="Layout === 'grid'"
+          [ngStyle]="Layout === 'grid' ? {'grid-template-columns': GridTemplateColumns} : {}">
+          <!-- Individual Aggregate Cards -->
+          @for (agg of CardAggregates; track agg) {
+            <div class="aggregate-card"
+              [class]="GetStyleClass(agg)"
+              (click)="OnAggregateClick(agg)"
+              [title]="agg.description || agg.label">
+              <!-- Icon -->
+              @if (agg.icon) {
+                <div class="card-icon">
+                  <i [class]="agg.icon"></i>
+                </div>
+              }
+              <!-- Content -->
+              <div class="card-content">
+                <div class="card-value" [class.loading]="Loading">
+                  {{ Loading ? '...' : FormatValue(agg) }}
+                </div>
+                <div class="card-label">{{ agg.label }}</div>
+              </div>
+            </div>
+          }
+        </div>
       </div>
-    </div>
-  }
+    </ng-template>
+  </mj-accordion-panel>
 </div>

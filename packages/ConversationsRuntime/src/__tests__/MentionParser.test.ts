@@ -77,6 +77,39 @@ describe('MentionParser', () => {
             const result = parser.parseMentions(text, agents);
             expect(result.mentions).toHaveLength(0);
         });
+
+        it('parses skill mentions into skillMentions', () => {
+            const text = '@{"type":"skill","id":"sk-1","name":"Report Builder"} build me a report';
+            const result = parser.parseMentions(text, []);
+
+            expect(result.mentions).toHaveLength(1);
+            expect(result.mentions[0].type).toBe('skill');
+            expect(result.skillMentions).toHaveLength(1);
+            expect(result.skillMentions[0].id).toBe('sk-1');
+            expect(result.skillMentions[0].name).toBe('Report Builder');
+            expect(result.agentMention).toBeNull();
+        });
+
+        it('separates skill mentions from agent mentions in mixed text', () => {
+            const text =
+                '@{"type":"agent","id":"a-1","name":"Sage"} use ' +
+                '@{"type":"skill","id":"sk-1","name":"Data Validator"} and ' +
+                '@{"type":"skill","id":"sk-2","name":"Email Drafter"} please';
+            const agents = [createMockAgent('a-1', 'Sage')] as never[];
+            const result = parser.parseMentions(text, agents);
+
+            expect(result.mentions).toHaveLength(3);
+            expect(result.agentMention?.id).toBe('a-1');
+            expect(result.skillMentions.map((m) => m.id)).toEqual(['sk-1', 'sk-2']);
+            expect(result.userMentions).toHaveLength(0);
+        });
+
+        it('returns empty skillMentions when no skills mentioned', () => {
+            const text = '@{"type":"agent","id":"123","name":"Sage"} hi';
+            const agents = [createMockAgent('123', 'Sage')] as never[];
+            const result = parser.parseMentions(text, agents);
+            expect(result.skillMentions).toEqual([]);
+        });
     });
 
     describe('parseMentions - legacy format', () => {

@@ -1,3 +1,6 @@
-## 2024-05-14 - Replace O(N) array scans with O(1) hash map lookups
-**Learning:** Found an anti-pattern in core providers (`GenericDatabaseProvider`, etc.) where `entity.Fields.find(...)` and `entityInfo.Fields.find(...)` were used to look up fields by name, which is an O(N) operation. This is especially slow inside loops like query string building or field diffing.
-**Action:** Always prefer the `GetFieldByName(name)` (for `BaseEntity` instances) and `FieldByName(name)` (for `EntityInfo` instances) methods. These methods utilize internally cached `Map`s for O(1) lookups, providing a significant performance boost in hot paths.
+## 2025-02-13 - Mocking FieldByName in Unit Tests
+**Learning:** When migrating from `Fields.find()` to `FieldByName()` for O(1) field lookups on `EntityInfo`, existing unit tests that manually mock the `EntityInfo` object will fail with "FieldByName is not a function" unless updated.
+**Action:** Always ensure that when migrating an O(N) array scan to a cached method on a domain object, the corresponding test mocks are updated to include a stub implementation of that method (e.g., `FieldByName: (name: string) => fields.find(f => f.Name === name)`).
+## 2026-07-11 - FieldByName internal matching
+**Learning:** The `FieldByName(name)` method in `EntityInfo` internally handles `.trim().toLowerCase()` for field name comparisons.
+**Action:** It is a safe and exact O(1) replacement for `Fields.find(f => f.Name.trim().toLowerCase() === name.trim().toLowerCase())` without risking case-sensitivity regressions.

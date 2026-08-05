@@ -46,6 +46,7 @@ export type {
 export {
     CheckMJVersionCompatibility,
     CheckDependencyVersionCompatibility,
+    CoerceToBaseVersion,
     IsValidUpgrade
 } from './dependency/version-checker.js';
 export type { VersionCheckResult } from './dependency/version-checker.js';
@@ -107,6 +108,18 @@ export {
     UpgradeApp,
     RemoveApp,
     DisableApp,
-    EnableApp
+    EnableApp,
+    RemoveAppEntityMetadata
 } from './install/install-orchestrator.js';
 export type { OrchestratorContext } from './install/install-orchestrator.js';
+
+// FK-graph teardown (Solution 1) + migration-declared Application extraction (Solution 2)
+export {
+    buildEntityTeardownPlan,
+    EnumerateMjEntityFkGraph,
+    ReportTeardownPlan,
+    ExecTeardownBatch,
+    RunFkGraphTeardown
+} from './install/entity-teardown.js';
+export type { FkEdge, TeardownPlanItem, TeardownPlan } from './install/entity-teardown.js';
+export { extractApplicationIds } from './install/migration-application-ids.js';

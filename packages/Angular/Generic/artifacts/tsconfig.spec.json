@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"]
+  },
+  "include": [
+    "src/lib/components/file-artifact-toolbar.component.ts",
+    "src/lib/components/file-artifact-toolbar.component.dom.test.ts",
+    "src/lib/components/artifact-version-history.component.ts",
+    "src/lib/components/artifact-version-history.component.dom.test.ts",
+    "src/lib/components/artifact-message-card.component.ts",
+    "src/lib/components/artifact-message-card.component.dom.test.ts",
+    "src/lib/components/artifact-viewer-panel.component.ts",
+    "src/lib/components/artifact-viewer-panel.component.dom.test.ts",
+    "src/lib/services/artifact-icon.service.ts",
+    "src/lib/services/artifact-preview-resolver.service.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

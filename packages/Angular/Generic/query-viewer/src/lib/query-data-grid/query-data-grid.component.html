@@ -8,7 +8,11 @@
         @if (ShowRowCount) {
           <span class="row-count">
             <i class="fa-solid fa-table-list"></i>
-            {{ RowCount | number }} {{ RowCount === 1 ? 'row' : 'rows' }}
+            @if (TotalRowCount > RowCount) {
+              {{ RowCount | number }} of {{ TotalRowCount | number }} {{ TotalRowCount === 1 ? 'row' : 'rows' }}
+            } @else {
+              {{ RowCount | number }} {{ RowCount === 1 ? 'row' : 'rows' }}
+            }
           </span>
         }
         <!-- Selection count -->
@@ -36,11 +40,11 @@
         <!-- Export button -->
         @if (ShowExport) {
           <button
-            [disabled]="RowCount === 0"
+            [disabled]="RowCount === 0 || IsPreparingExport"
             title="Export data"
             class="toolbar-btn"
             (click)="OpenExportDialog()">
-            <i class="fa-solid fa-file-export"></i>
+            <i class="fa-solid" [class.fa-file-export]="!IsPreparingExport" [class.fa-spinner]="IsPreparingExport" [class.fa-spin]="IsPreparingExport"></i>
             <span class="button-text">Export</span>
           </button>
         }

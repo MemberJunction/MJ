@@ -7,6 +7,8 @@
  ******************************************************************************************************/
 
 import { GetRootClass, IsRootClass } from './ClassUtils';
+import { ClassRequiresSubclass } from './RequiresSubclass';
+import { ClassIsOptionalKeyedSpecialization } from './OptionalKeyedSpecialization';
 
 /**
  * Type for constructor functions that have a name property
@@ -40,11 +42,60 @@ export class ClassRegistration {
  
 
 /**
- * ClassFactory is used to register and create instances of classes. It is a singleton class that can be used to register a sub-class for a given base class and key. Do NOT directly attempt to instantiate this class, 
+ * The outcome of a {@link ClassFactory.TryCreateInstance} call — an EXPLICIT resolution result
+ * so callers can distinguish "a registered subclass was found and instantiated" from "no
+ * registration matched the key and we fell back to the anchor base class".
+ *
+ * ## Why this type exists
+ * {@link ClassFactory.CreateInstance} has NEVER returned `null` for an unregistered key — it
+ * falls back to `new BaseClass(...)`. Call sites written as `const x = CreateInstance(Base, key);
+ * if (x) { use it } else { error }` therefore have a DEAD else-branch and silently install a
+ * hollow base-class object. That failure mode is invisible until something calls a method the
+ * base does not implement. `TryCreateInstance` makes the distinction explicit and checkable.
+ */
+export type ClassResolutionResult<T> = {
+    /**
+     * `true` only when a REGISTERED subclass matched the requested key. `false` means the key did
+     * not resolve — check {@link Instance} to see whether a base-class fallback was produced.
+     */
+    Resolved: boolean;
+    /**
+     * The instance to use, or `null`.
+     *
+     * - `Resolved: true` → the registered subclass instance.
+     * - `Resolved: false` and the anchor base is marked `@RequiresSubclass()` → `null`
+     *   (the base cannot function standalone, so no fallback is produced).
+     * - `Resolved: false` and no marker → the base-class fallback instance. This is a legitimate,
+     *   long-standing pattern (e.g. `BaseEntity`, which is fully functional standalone).
+     */
+    Instance: T | null;
+    /** Human-readable explanation, present whenever `Resolved` is `false`. */
+    Reason?: string;
+};
+
+/**
+ * Shape of a base class that opts in to the "I cannot be instantiated standalone" contract.
+ *
+ * TypeScript's `abstract` keyword is ERASED at runtime — there is no marker property, and plain
+ * JS will happily `new` an abstract class — so abstractness cannot be introspected. Bases that
+ * genuinely cannot function without a subclass therefore declare this static marker explicitly.
+ */
+// NOTE: resolved via ClassRequiresSubclass(), which performs an OWN-property check. A plain
+// `cls.RequiresSubclass` read walks the constructor prototype chain, so every SUBCLASS of a
+// marked base would also report true — and resolving against a concrete subclass would then
+// wrongly throw. See RequiresSubclass.ts.
+
+/**
+ * ClassFactory is used to register and create instances of classes. It is a singleton class that can be used to register a sub-class for a given base class and key. Do NOT directly attempt to instantiate this class,
  * instead use the static Instance property of the MJGlobal class to get the instance of the ClassFactory for your application.
  */
 export class ClassFactory {
     private _registrations: ClassRegistration[] = [];
+
+    /** Per-base fallback-warning counter, backing the volume cap in reportResolutionFailure. */
+    private _fallbackCountByBase = new Map<string, number>();
+    /** Fallback warnings emitted per base class before summarising and going quiet. */
+    private static readonly MAX_FALLBACK_REPORTS_PER_BASE = 3;
 
     /**
      * Memoized results of {@link GetRegistration}, keyed by `baseClassName|normalizedKey`.
@@ -67,6 +118,12 @@ export class ClassFactory {
      * successfully loaded the module containing the requested class registration.
      */
     private _lazyLoaders: ((baseClassName: string, key: string) => Promise<boolean>)[] = [];
+
+    /**
+     * `baseClassName|normalizedKey` pairs whose base-class-fallback diagnostic has already been
+     * emitted, so a hot-path resolution failure logs once instead of on every call.
+     */
+    private _reportedResolutionFailures: Set<string> = new Set();
 
     /**
      * Registers a lazy loader callback that will be called when a class registration cannot
@@ -121,7 +178,8 @@ export class ClassFactory {
      * retrying and creating the instance.
      *
      * Falls back to instantiating the base class directly if no registration is found even
-     * after lazy loading (same behavior as the sync CreateInstance).
+     * after lazy loading (same behavior as the sync CreateInstance) — including throwing when the
+     * anchor base is marked `@RequiresSubclass()`.
      */
     public async CreateInstanceAsync<T>(baseClass: unknown, key: string | null = null, ...params: unknown[]): Promise<T | null> {
         if (!baseClass) {
@@ -129,17 +187,23 @@ export class ClassFactory {
         }
 
         const reg = await this.GetRegistrationAsync(baseClass, key);
-        if (reg) {
-            const SubClassConstructor = reg.SubClass as new (...args: unknown[]) => T;
-            if (params !== undefined) {
-                return new SubClassConstructor(...params);
-            }
-            return new SubClassConstructor();
+        const result = this.resolveAndInstantiate<T>(baseClass, reg, key, params);
+        if (!result.Resolved && result.Instance === null) {
+            throw new Error(result.Reason);
         }
+        return result.Instance;
+    }
 
-        // Fallback to base class (same as sync CreateInstance)
-        const BaseClassConstructor = baseClass as new (...args: unknown[]) => T;
-        return new BaseClassConstructor(...params);
+    /**
+     * Explicit-result, lazy-loading-aware sibling of {@link TryCreateInstance}. Never throws for
+     * an unresolved key.
+     */
+    public async TryCreateInstanceAsync<T>(baseClass: unknown, key: string | null = null, ...params: unknown[]): Promise<ClassResolutionResult<T>> {
+        if (!baseClass) {
+            return { Resolved: false, Instance: null, Reason: 'ClassFactory: no base class was provided.' };
+        }
+        const reg = await this.GetRegistrationAsync(baseClass, key);
+        return this.resolveAndInstantiate<T>(baseClass, reg, key, params);
     }
 
     /**
@@ -208,34 +272,171 @@ export class ClassFactory {
             // Invalidate the GetRegistration memo — a new registration may change the
             // highest-priority winner for any (baseClass, key) bucket.
             this._registrationCache.clear();
+            // A new registration may resolve a key that previously fell back, so allow the
+            // diagnostic to be emitted again if it fails a second time.
+            this._reportedResolutionFailures.clear();
         }
     }
 
     /**
-     * Creates an instance of the class registered for the given base class and key. 
-     * If no registration is found, will return an instance of the base class.
+     * Creates an instance of the class registered for the given base class and key.
+     *
+     * If no registration is found, falls back to instantiating the base class itself — a
+     * long-standing, deliberate behavior that legitimate consumers (notably `BaseEntity`) rely on.
+     * **This method therefore does NOT return `null` for an unregistered key**, so `if (instance)`
+     * is not a valid resolution-failure test. Use {@link TryCreateInstance} when you need to know
+     * whether the key actually resolved.
+     *
+     * @throws when the key does not resolve AND the anchor base class declares
+     *         `@RequiresSubclass()` (i.e. it cannot function standalone). Bases without
+     *         that marker keep the historical fallback behavior and only emit a structured warning.
      */
     public CreateInstance<T>(baseClass: unknown, key: string | null = null, ...params: unknown[]): T | null {
-        if (baseClass) {
-            let reg = this.GetRegistration(baseClass, key);
-            if (reg) {
-                const SubClassConstructor = reg.SubClass as new (...args: unknown[]) => T;
-                let instance: T | null = null;
-                if (params !== undefined)
-                    instance = new SubClassConstructor(...params);
-                else
-                    instance = new SubClassConstructor(); // dont pass in anything if we got undefined for that parameter into our function because it is different to call a function with no params than to pass in a single null/undefined param
+        const result = this.resolveAndInstantiate<T>(baseClass, this.GetRegistration(baseClass, key), key, params);
+        if (!result.Resolved && result.Instance === null && baseClass) {
+            // The base explicitly cannot stand alone — fail LOUD rather than handing back a hollow object.
+            throw new Error(result.Reason);
+        }
+        return result.Instance;
+    }
 
-                return instance;
+    /**
+     * Explicit-result sibling of {@link CreateInstance}. Never throws for an unresolved key —
+     * returns a {@link ClassResolutionResult} so the caller can branch on `Resolved`.
+     *
+     * ```typescript
+     * const res = MJGlobal.Instance.ClassFactory.TryCreateInstance<MyProvider>(MyProviderBase, key);
+     * if (!res.Resolved || !res.Instance) {
+     *     LogError(`provider '${key}' did not resolve: ${res.Reason}`);
+     *     return; // skip — do NOT install a hollow base instance
+     * }
+     * use(res.Instance);
+     * ```
+     */
+    public TryCreateInstance<T>(baseClass: unknown, key: string | null = null, ...params: unknown[]): ClassResolutionResult<T> {
+        return this.resolveAndInstantiate<T>(baseClass, this.GetRegistration(baseClass, key), key, params);
+    }
+
+    /**
+     * Single shared resolution path behind `CreateInstance`, `TryCreateInstance`, and
+     * `CreateInstanceAsync` — so the sync and async surfaces (and the throwing and non-throwing
+     * surfaces) can never drift apart in how they treat a fallback.
+     */
+    private resolveAndInstantiate<T>(
+        baseClass: unknown,
+        reg: ClassRegistration | null,
+        key: string | null,
+        params: unknown[]
+    ): ClassResolutionResult<T> {
+        if (!baseClass) {
+            return { Resolved: false, Instance: null, Reason: 'ClassFactory: no base class was provided.' };
+        }
+
+        if (reg) {
+            const SubClassConstructor = reg.SubClass as new (...args: unknown[]) => T;
+            return { Resolved: true, Instance: new SubClassConstructor(...params) };
+        }
+
+        // ── Fallback path: the requested key did not resolve to any registered subclass. ──
+        const requiresSubclass = ClassRequiresSubclass(baseClass);
+        const reason = this.describeResolutionFailure(baseClass, key, requiresSubclass);
+
+        // Only REPORT when the caller actually asked for something specific.
+        //
+        // A null/empty key means "give me the default implementation for this base" — landing on
+        // the base is the INTENDED outcome, not a failed lookup, so warning about it is a false
+        // positive. This fired on every `CreateInstance(LoggerBase, null)` and made the
+        // instrumentation noisy enough to obscure real resolution failures during a full repo
+        // build, which is the opposite of what it was added for.
+        //
+        // A marker-bearing base is always reported: there, landing on the base IS an error
+        // regardless of whether a key was supplied.
+        const keyWasSupplied = key !== null && key !== undefined && String(key).trim().length > 0;
+        // A base marked '@OptionalKeyedSpecialization()' declares the opposite contract for keyed
+        // lookups: the key is a "specialize if registered" PROBE and landing on the base is the
+        // designed common case (EntityField hydration probes '<Entity>.<Field>' for every field of
+        // every entity). Reporting there is a false positive by construction, so such bases are
+        // exempt. Marker-bearing (@RequiresSubclass) bases are never exempt — fallback is a hard
+        // error there regardless.
+        const fallbackIsDesigned = !requiresSubclass && ClassIsOptionalKeyedSpecialization(baseClass);
+        if ((keyWasSupplied && !fallbackIsDesigned) || requiresSubclass) {
+            this.reportResolutionFailure(baseClass, key, requiresSubclass, reason);
+        }
+
+        if (requiresSubclass) {
+            return { Resolved: false, Instance: null, Reason: reason };
+        }
+
+        // No marker — the base is presumed usable standalone (e.g. BaseEntity). Preserve the
+        // historical fallback so existing, CORRECT consumers keep working.
+        const BaseClassConstructor = baseClass as new (...args: unknown[]) => T;
+        return { Resolved: false, Instance: new BaseClassConstructor(...params), Reason: reason };
+    }
+
+    /**
+     * Builds the diagnostic message for a failed key resolution. The registered-key list is the
+     * highest-value part: a typo'd or tree-shaken key is immediately obvious next to the keys the
+     * factory actually knows about.
+     */
+    private describeResolutionFailure(baseClass: unknown, key: string | null, requiresSubclass: boolean): string {
+        const baseClassName = (baseClass as NamedClass).name;
+        const known = this.GetAllRegistrations(baseClass)
+            .map(r => r.Key)
+            .filter((k): k is string => k != null);
+        const uniqueKnown = Array.from(new Set(known)).sort();
+        const knownText = uniqueKnown.length > 0 ? uniqueKnown.map(k => `'${k}'`).join(', ') : '(none)';
+
+        return (
+            `ClassFactory: no registration found for base class '${baseClassName}' with key '${key ?? '(null)'}'. ` +
+            `Registered keys for '${baseClassName}': ${knownText}. ` +
+            `RequiresSubclass=${requiresSubclass}. ` +
+            (requiresSubclass
+                ? `'${baseClassName}' is marked '@RequiresSubclass()', so it CANNOT be used as a fallback — ` +
+                  `no instance was created. Likely causes: a typo in the key, a class that was never imported ` +
+                  `(tree-shaken out — check the class-registration manifest), or a missing @RegisterClass decorator.`
+                : `Falling back to an instance of '${baseClassName}' itself. If that base cannot function standalone, ` +
+                  `apply the '@RequiresSubclass()' decorator to it so this becomes a hard error.`)
+        );
+    }
+
+    /**
+     * Emits the fallback diagnostic exactly once per (baseClass, key) pair — resolution happens on
+     * very hot paths (once per entity-field hydration), so an un-deduped log would be a firehose.
+     * A captured stack is included so the offending call site is identifiable.
+     */
+    private reportResolutionFailure(baseClass: unknown, key: string | null, requiresSubclass: boolean, reason: string): void {
+        // Volume cap, PER BASE CLASS (not per base+key).
+        //
+        // The existing dedup keys on base+key, which is useless for callers whose key varies per
+        // item: every EntityField hydration passes '<entity>.<field>', so a full repo build
+        // emitted thousands of distinct warnings and buried the real ones. Suppressing by
+        // "base has no registrations" was tried and REVERTED — that is exactly the B34/B35 shape
+        // (a tree-shaken registration leaves zero registrations), so it would hide the case this
+        // instrumentation exists to catch.
+        //
+        // Capping keeps the signal — you still learn which base is falling back, with examples —
+        // while bounding the output. Marker-bearing bases are never capped: those are hard errors.
+        if (!requiresSubclass) {
+            const baseName = (baseClass as NamedClass).name;
+            const seen = (this._fallbackCountByBase.get(baseName) ?? 0) + 1;
+            this._fallbackCountByBase.set(baseName, seen);
+            if (seen === ClassFactory.MAX_FALLBACK_REPORTS_PER_BASE + 1) {
+                console.warn(`ClassFactory: further '${baseName}' fallback warnings suppressed (${ClassFactory.MAX_FALLBACK_REPORTS_PER_BASE} shown). If fallback is by design for this base, mark it '@OptionalKeyedSpecialization()'.`);
+                return;
             }
-            else {
-                // this is a normal condition to use the base class if we can't find a registration
-                const BaseClassConstructor = baseClass as new (...args: unknown[]) => T;
-                return new BaseClassConstructor(...params); // if we can't find a registration, just return a new instance of the base class
+            if (seen > ClassFactory.MAX_FALLBACK_REPORTS_PER_BASE) {
+                return;
             }
         }
 
-        return null;
+        const logKey = `${(baseClass as NamedClass).name}|${key == null ? '' : key.trim().toLowerCase()}`;
+        if (this._reportedResolutionFailures.has(logKey)) return;
+        this._reportedResolutionFailures.add(logKey);
+
+        const stack = new Error().stack ?? '(stack unavailable)';
+        const message = `${reason}\nCall site:\n${stack}`;
+        if (requiresSubclass) console.error(message);
+        else console.warn(message);
     }
 
     /**

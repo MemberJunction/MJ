@@ -408,8 +408,24 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     if (!liveSession) {
       return {};
     }
-    const screenshot = await liveSession.CaptureScreenshot();
-    return { ScreenshotBase64: screenshot, CurrentUrl: liveSession.GetCurrentUrl() };
+    // The snapshot is a best-effort PERCEPTION poll (the surface fires it every ~700ms). A session
+    // whose underlying browser adapter has been torn down — a stale/dead handle still in the live
+    // map, a mid-poll teardown race, or a recycled backend container — makes CaptureScreenshot()
+    // throw "Browser not launched". That must degrade to an empty snapshot (the surface keeps its
+    // last good frame), NOT surface as a recurring GraphQL error the client logs on every tick —
+    // exactly as this query's contract above promises ("null rather than an error"). The live
+    // navigate/click path (ExecuteRemoteBrowserAction) is where a genuine browser failure is
+    // reported to the agent; the read-only view poll never should be.
+    try {
+      const screenshot = await liveSession.CaptureScreenshot();
+      return { ScreenshotBase64: screenshot, CurrentUrl: liveSession.GetCurrentUrl() };
+    } catch (err) {
+      LogError(
+        `[RemoteBrowserActionResolver] Snapshot capture failed for agent session ${agentSessionID} ` +
+          `(returning empty snapshot): ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return {};
+    }
   }
 
   /**
@@ -734,18 +750,15 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     agentSessionID: string,
     frame: { DataBase64: string; Width: number; Height: number; SequenceNumber: number },
   ): void {
-    pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-      message: JSON.stringify({
-        resolver: 'RemoteBrowserActionResolver',
-        type: 'RemoteBrowserScreencastFrame',
-        agentSessionID,
-        dataBase64: frame.DataBase64,
-        width: frame.Width,
-        height: frame.Height,
-        seq: frame.SequenceNumber,
-      }),
-      sessionId: userPayload.sessionId,
-    });
+    this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+      resolver: 'RemoteBrowserActionResolver',
+      type: 'RemoteBrowserScreencastFrame',
+      agentSessionID,
+      dataBase64: frame.DataBase64,
+      width: frame.Width,
+      height: frame.Height,
+      seq: frame.SequenceNumber,
+    }), userPayload);
   }
 
   /**
@@ -759,19 +772,16 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * @param chunk The encoded audio chunk.
    */
   private publishAudioChunk(pubSub: PubSubEngine, userPayload: UserPayload, agentSessionID: string, chunk: RemoteBrowserAudioChunk): void {
-    pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-      message: JSON.stringify({
-        resolver: 'RemoteBrowserActionResolver',
-        type: 'RemoteBrowserAudioChunk',
-        agentSessionID,
-        dataBase64: chunk.DataBase64,
-        codec: chunk.Codec,
-        sampleRate: chunk.SampleRate,
-        channels: chunk.Channels,
-        seq: chunk.SequenceNumber,
-      }),
-      sessionId: userPayload.sessionId,
-    });
+    this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+      resolver: 'RemoteBrowserActionResolver',
+      type: 'RemoteBrowserAudioChunk',
+      agentSessionID,
+      dataBase64: chunk.DataBase64,
+      codec: chunk.Codec,
+      sampleRate: chunk.SampleRate,
+      channels: chunk.Channels,
+      seq: chunk.SequenceNumber,
+    }), userPayload);
   }
 
   /**

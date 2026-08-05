@@ -43,8 +43,19 @@ export interface StatementBatch {
 
 const GO_SPLIT = /^[ \t]*GO[ \t]*;?[ \t]*$/im;
 
-/** CodeGen routine/view/trigger naming conventions — these are regenerated, not translated. */
-const CODEGEN_NAME = /^(spCreate|spUpdate|spDelete|spRecompile|vw|fn|trgUpdate|trgCreate|trgDelete|trg)/i;
+/**
+ * CodeGen routine/view/trigger naming conventions — these are regenerated, not translated.
+ *
+ * The bare `trg` alternative was REMOVED (issue #3252 RC2): it matched EVERY trigger name,
+ * so a hand-written trigger (the only one in the v5 ledger is `trgConversationDetail_AssignSequence`)
+ * was misclassified as a CodeGen object and silently dropped. A ledger sweep of migrations/v5/*.sql
+ * confirms the narrowing is safe: of 381 distinct triggers, 379 are `trgUpdate*` (kept below),
+ * zero are `trgCreate*`/`trgDelete*`, and the only two non-`trgUpdate` triggers are hand-written
+ * (`trgConversationDetail_AssignSequence`, and `tr_APIScope_UpdateFullPath` which the `tr_` prefix
+ * excludes from BOTH the old and new regex — already hand-procedural, unaffected). `trgCreate|trgDelete`
+ * are retained as documented CodeGen conventions though none are currently committed.
+ */
+const CODEGEN_NAME = /^(spCreate|spUpdate|spDelete|spRecompile|vw|fn|trgUpdate|trgCreate|trgDelete)/i;
 
 /**
  * Hand-written objects whose names collide with the CodeGen conventions. CodeGen does
@@ -76,7 +87,17 @@ function classifyBatch(batch: string): StatementBatch {
   }
   if (/^\s*CREATE\s+TABLE\b/i.test(head)) return mk('schema-ddl', batch, 'CREATE TABLE');
   if (/^\s*ALTER\s+TABLE\b/i.test(head)) return mk('schema-ddl', batch, 'ALTER TABLE');
-  if (/^\s*CREATE\s+(?:UNIQUE\s+)?(?:CLUSTERED\s+|NONCLUSTERED\s+)?INDEX\b/i.test(head)) return mk('schema-ddl', batch, 'CREATE INDEX');
+  if (/^\s*CREATE\s+(?:UNIQUE\s+)?(?:CLUSTERED\s+|NONCLUSTERED\s+)?INDEX\b/i.test(head)) {
+    // Auto-generated FK indexes (IDX_AUTO_MJ_FKEY_*) are CodeGen output — regenerated
+    // natively on PG with collision-safe naming (truncation + hash for names > PG's 63-char
+    // identifier limit). Keeping the raw SS-named ones from a squashed baseline both DUPLICATES
+    // the regenerated indexes and COLLIDES on PG: two long SS names (e.g.
+    // IDX_AUTO_MJ_FKEY_CommunicationProviderMessageType_Communication{Base,}…ID) truncate to the
+    // same 63-char string → "relation already exists". Drop them; keep hand-authored indexes.
+    return /^\s*CREATE\s+(?:UNIQUE\s+)?(?:CLUSTERED\s+|NONCLUSTERED\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?\[?"?IDX_AUTO_MJ_FKEY/i.test(head)
+      ? mk('codegen-object', batch, 'CREATE INDEX (auto FK — regenerated natively)')
+      : mk('schema-ddl', batch, 'CREATE INDEX');
+  }
   if (/^\s*CREATE\s+TYPE\b/i.test(head)) return mk('schema-ddl', batch, 'CREATE TYPE');
   if (/^\s*CREATE\s+(?:ROLE|SCHEMA|USER)\b/i.test(head)) return mk('role-setup', batch, 'CREATE ROLE/SCHEMA');
 

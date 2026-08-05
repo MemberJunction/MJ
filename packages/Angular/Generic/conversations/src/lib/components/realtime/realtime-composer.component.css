@@ -9,9 +9,7 @@
   align-items: flex-start;
   justify-content: center;
   gap: 22px;
-  /* Top padding reserves a row for the centered "press T to type" hint so it never
-     overlaps the End control/label sitting at the bottom-right. */
-  padding: 30px 22px 20px;
+  padding: 20px 22px;
   border-top: 1px solid var(--mj-border-subtle);
 }
 
@@ -70,37 +68,6 @@
 }
 .ctrl-label--end {
   color: var(--mj-status-error);
-}
-
-/* The whispered type-to-text hint (level 1: typing exists, no visible composer yet).
-   Centered ABOVE the controls — never overlapping the rightmost End control/label. The
-   strip reserves top room for it so the round controls never collide with it. */
-.thint {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--mj-text-disabled);
-  white-space: nowrap;
-}
-.thint i {
-  font-size: 12px;
-}
-kbd {
-  font-family: var(--mj-font-mono, ui-monospace, monospace);
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--mj-text-muted);
-  border: 1px solid var(--mj-border-strong);
-  border-bottom-width: 2px;
-  border-radius: 4px;
-  padding: 0 5px;
-  background: var(--mj-bg-surface-sunken);
 }
 
 /* ---------- Level 2+: the fused dock (minis + composer in one bar) ---------- */

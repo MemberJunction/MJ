@@ -1,0 +1,46 @@
+name: MJ standards
+
+on:
+  pull_request:
+    branches:
+      - next
+    paths:
+      - 'packages/**/*.ts'
+      - 'packages/**/package.json'
+      - '.mj-standards.json'
+      - 'packages/Standards/**'
+      - '.github/workflows/ci-standards.yml'
+
+jobs:
+  standards:
+    name: adopted standards
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      # @memberjunction/standards is a workspace package here, so build it before running it.
+      # Consumers outside this repo just `pnpm install --frozen-lockfile` and get it from the registry.
+      - name: Build the standards package
+        run: npx turbo run build --filter=@memberjunction/standards
+
+      # What runs is decided by .mj-standards.json, not by this file. packages/Angular is listed
+      # under requireDeclaredIn, so a NEW Angular package that never declares mjUILayer fails here
+      # — that, not the one-time cleanup, is what stops drift returning.
+      - name: Check adopted standards
+        run: node packages/Standards/bin/run.js check
+
+      - name: Test the standards package
+        run: npx turbo run test --filter=@memberjunction/standards

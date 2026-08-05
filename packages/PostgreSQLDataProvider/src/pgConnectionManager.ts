@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { MJPostgresTypes } from './pgTypeParsers.js';
 
 /**
  * Configuration for establishing a PostgreSQL connection pool.
@@ -100,6 +101,10 @@ export class PGConnectionManager {
             min: config.MinConnections ?? 2,
             idleTimeoutMillis: config.IdleTimeoutMillis ?? 30000,
             connectionTimeoutMillis: config.ConnectionTimeoutMillis ?? 30000,
+            // Parse NUMERIC/DECIMAL and BIGINT to JS numbers (pg's default is strings) —
+            // see MJPostgresTypes. Pools passed to InitializeWithExistingPool must set
+            // this themselves; type parsers can't be retrofitted onto an existing pool.
+            types: MJPostgresTypes,
             // Optional libpq startup options (e.g. `-c statement_timeout=30000`) — applied
             // by every backend from connection #1, including the verify-SELECT-1 below.
             ...(config.Options ? { options: config.Options } : {}),

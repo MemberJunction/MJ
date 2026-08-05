@@ -56,6 +56,87 @@ export interface MagicLinkScope {
 }
 
 /**
+ * Per-request acting context for an API-key session, carried on {@link UserInfo}.
+ * Consumed by API-key-scoped RLS filters via the `{{Acting*}}` tokens in
+ * {@link RowLevelSecurityFilterInfo.MarkupFilterText}.
+ *
+ * TRUST BOUNDARY: these values MUST be derived server-side from an authenticated
+ * identity. The engine binds what it is given and cannot validate provenance —
+ * never populate from a client-supplied header, argument, or GraphQL variable,
+ * and never expose via a resolver. A client-settable acting context is a total
+ * bypass of API-key row filtering.
+ *
+ * Cardinality is a one-way door, decided per token at registration: the three
+ * scalar tokens are scalar forever (moving to a set later changes the token's
+ * shape and breaks every filter authored against it), and ActingCompanyIDs is
+ * list-capable from day one for exactly that reason.
+ */
+export interface APIKeyActingContext {
+    /** Organization / tenant the caller is acting on behalf of (GUID, scalar forever). */
+    ActingOrganizationID?: string;
+    /** Person / contact the caller is acting on behalf of (GUID, scalar forever). */
+    ActingPersonID?: string;
+    /** Opaque per-integration scope value (bounded identifier, scalar forever). */
+    ActingScopeID?: string;
+    /**
+     * Companies the caller is acting for — LIST-capable. Renders inside
+     * `Col IN ({{ActingCompanyIDs}})` as a sorted, per-element-validated,
+     * quoted and escaped list; an empty or absent set resolves the whole
+     * filter to `(1=0)` (match nothing), same as any unresolved token.
+     */
+    ActingCompanyIDs?: string[];
+}
+
+/**
+ * One API-key row-filter binding carried on {@link UserInfo}: for the named
+ * entity and permission type, the referenced Row Level Security Filter applies
+ * IN ADDITION TO (AND-composed with) role RLS — and independently of the
+ * role-RLS exemption, because a key ceiling exists precisely to bind
+ * principals whose roles are unrestricted. Resolved server-side per request
+ * from the validated API key's scope rules; plain data so MJCore can consume
+ * it without depending on the APIKeys packages.
+ */
+export interface APIKeyRowFilterBinding {
+    /** ID of the entity the filtered scope rule targets (exact entity — patterns are rejected at rule save). */
+    EntityID: string;
+    /** Which operation the binding constrains, resolved from the rule's scope path at stamp time. */
+    PermissionType: 'Read' | 'Create' | 'Update' | 'Delete';
+    /** FK into the RowLevelSecurityFilter catalog (same catalog role RLS uses). */
+    FilterID: string;
+}
+
+/**
+ * Returning-visitor context carried on {@link UserInfo} for a public web-widget guest session,
+ * sourced from the verified session token's claims. Lets a server-created conversation (the voice
+ * path, which mints its conversation server-side) stamp the same returning-visitor anchor + linked
+ * identity the text path stamps client-side, so cross-session memory works uniformly across modalities.
+ * Not a database/GraphQL field — an in-memory, per-session carrier.
+ */
+export interface ReturningVisitorContext {
+    /** Durable, opaque returning-visitor anchor (stamped on Conversation.VisitorKey). */
+    VisitorKey?: string;
+    /** The prior conversation this visit chains from (stamped on Conversation.LastConversationID). */
+    LastConversationID?: string;
+    /** Resolved polymorphic identity entity id (stamped on the existing Conversation.LinkedEntityID when set; also on AIAgentSession.LinkedEntityID). */
+    LinkedEntityID?: string;
+    /** Resolved polymorphic identity record id (stamped on the existing Conversation.LinkedRecordID when set; also on AIAgentSession.LinkedRecordID). */
+    LinkedRecordID?: string;
+}
+
+/**
+ * Identity of the public web-widget instance a guest session was minted for, carried on
+ * {@link UserInfo} and sourced from the verified session token's `mj_widget_id` claim. Lets a
+ * privileged server-side dispatch resolve the AUTHORITATIVE pinned support agent (and other
+ * per-widget configuration) from the trusted token rather than from client-supplied arguments —
+ * the backstop that lets a widget guest run only its widget's pinned agent. In-memory, per-session;
+ * not a database/GraphQL field.
+ */
+export interface WidgetGuestContext {
+    /** The MJ: Conversation Widget Instances row id this guest session is bound to. */
+    WidgetID: string;
+}
+
+/**
  * A list of all users who have or had access to the system.
  * Contains user profile information, authentication details, and role assignments.
  */
@@ -195,6 +276,74 @@ export class UserInfo extends BaseInfo {
     }
     public set MagicLinkScope(value: MagicLinkScope | undefined) {
         this._MagicLinkScope = value;
+    }
+
+    private _APIKeyActingContext?: APIKeyActingContext = undefined;
+
+    /**
+     * Per-request acting context for an API-key session. Set server-side in the
+     * API-key auth path from an authenticated identity, ON A CLONED UserInfo
+     * (the resolved userRecord may be the shared UserCache instance — stamping
+     * it in place leaks one session's scope to every concurrent session of the
+     * same user). Consumed by API-key row filters via the {{Acting*}} tokens.
+     * Same getter/setter (non-enumerable accessor) rationale as TenantContext —
+     * not a DB/GraphQL field, and it must NEVER be exposed via a resolver.
+     */
+    public get APIKeyActingContext(): APIKeyActingContext | undefined {
+        return this._APIKeyActingContext;
+    }
+    public set APIKeyActingContext(value: APIKeyActingContext | undefined) {
+        this._APIKeyActingContext = value;
+    }
+
+    private _APIKeyRowFilters?: APIKeyRowFilterBinding[] = undefined;
+
+    /**
+     * Row-filter bindings for the API key this session authenticated with,
+     * resolved per request from the key's scope rules and stamped on the CLONED
+     * per-request UserInfo. Consumed by
+     * {@link EntityInfo.GetEffectiveRowFilterWhereClause}, which AND-composes
+     * each matching binding's filter with role RLS — outside the role-RLS
+     * exemption. Plain data on purpose: MJCore cannot depend on the APIKeys
+     * packages, so the bridge is this carrier. Never a DB/GraphQL field; never
+     * exposed to or settable by a client.
+     */
+    public get APIKeyRowFilters(): APIKeyRowFilterBinding[] | undefined {
+        return this._APIKeyRowFilters;
+    }
+    public set APIKeyRowFilters(value: APIKeyRowFilterBinding[] | undefined) {
+        this._APIKeyRowFilters = value;
+    }
+
+    private _ReturningVisitorContext?: ReturningVisitorContext = undefined;
+
+    /**
+     * Returning-visitor context for a public web-widget guest session. Set at request time from the
+     * verified session token's claims (the widget mint embeds the resolved VisitorKey / prior
+     * conversation / resolved identity). Consumed when a conversation is created server-side (the voice
+     * path) so it carries the same returning-visitor anchor + resolved identity the text path stamps
+     * client-side. Same getter/setter (non-enumerable) rationale as MagicLinkScope — not a DB/GraphQL field.
+     */
+    public get ReturningVisitorContext(): ReturningVisitorContext | undefined {
+        return this._ReturningVisitorContext;
+    }
+    public set ReturningVisitorContext(value: ReturningVisitorContext | undefined) {
+        this._ReturningVisitorContext = value;
+    }
+
+    private _WidgetGuestContext?: WidgetGuestContext = undefined;
+
+    /**
+     * Widget-instance identity for a public web-widget guest session. Set at request time from the
+     * verified session token's `mj_widget_id` claim. Read by the privileged agent-dispatch path to
+     * resolve the authoritative pinned agent for this guest (never trusting a client-supplied agent
+     * id). Same getter/setter (non-enumerable) rationale as MagicLinkScope — not a DB/GraphQL field.
+     */
+    public get WidgetGuestContext(): WidgetGuestContext | undefined {
+        return this._WidgetGuestContext;
+    }
+    public set WidgetGuestContext(value: WidgetGuestContext | undefined) {
+        this._WidgetGuestContext = value;
     }
 
     private _IsMagicLinkAnonymous: boolean = false;
@@ -398,30 +547,97 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
      * @param {UserInfo} user - The user whose properties will be substituted into the filter text
      * @returns {string} The filter text with all user tokens replaced with actual values
      */
-    public MarkupFilterText(user: UserInfo): string {
+    public MarkupFilterText(user: UserInfo, options?: MarkupFilterOptions): string {
         let ret = this.FilterText
         if (user) {
             const keys = Object.keys(user)
             for (let i = 0; i < keys.length; i++) {
                 const key = keys[i];
                 const val = (user as unknown as Record<string, unknown>)[key]
-                if (val !== null && typeof val !== 'object') {
-                    ret = ret.replace(new RegExp(`{{User${key}}}`, 'g'), String(val))
+                // `val != null` deliberately excludes BOTH null and undefined. The old
+                // `val !== null` guard let `undefined` through, substituting the literal
+                // string "undefined" — which made negation-shaped filters
+                // (Col <> '{{UserX}}') match every row. Undefined is unresolved, period.
+                if (val != null && typeof val !== 'object') {
+                    // Escape embedded quotes in the substituted value: a user-sourced value
+                    // containing an apostrophe must not break (or rewrite) the predicate —
+                    // the same defect class as the tenant-header injection, in the engine
+                    // every RLS filter depends on.
+                    ret = ret.replace(new RegExp(`{{User${key}}}`, 'g'), String(val).replace(/'/g, "''"))
                 }
             }
             // Per-session magic-link resource scope. Fail-closed: an absent scope resolves
             // to '' so a resource-pinned predicate (e.g. ID = '{{ScopeResourceID}}') matches
             // NO rows rather than leaking — a session without the scope sees nothing.
             const scope = user.MagicLinkScope;
-            ret = ret.replace(/\{\{ScopeResourceID\}\}/g, scope?.ResourceID ?? '');
-            ret = ret.replace(/\{\{ScopeResourceType\}\}/g, scope?.ResourceType ?? '');
+            ret = ret.replace(/\{\{ScopeResourceID\}\}/g, (scope?.ResourceID ?? '').replace(/'/g, "''"));
+            ret = ret.replace(/\{\{ScopeResourceType\}\}/g, (scope?.ResourceType ?? '').replace(/'/g, "''"));
+
+            ret = this.resolveActingTokens(ret, user);
         }
-        const unresolvedMatch = ret.match(/\{\{User\w+\}\}/);
+        const unresolvedMatch = ret.match(/\{\{(?:User|Acting)\w+\}\}/);
         if (unresolvedMatch) {
+            if (options?.unresolvedBehavior === 'match-nothing') {
+                // API-key row filters fail closed AND diagnosably: '' substitution is only
+                // safe for equality shapes (Col <> '' or LIKE '%%' match everything), so an
+                // unresolved token collapses the ENTIRE filter to a predicate that matches
+                // nothing regardless of the expression's operators.
+                LogError('Row filter has unresolved token after markup — resolving filter to (1=0): ' + unresolvedMatch[0] + ' in filter: ' + this.FilterText);
+                return '(1=0)';
+            }
             LogError('RLS filter has unresolved token after markup: ' + unresolvedMatch[0] + ' in filter: ' + this.FilterText);
         }
         return ret;
     }
+
+    /**
+     * Resolves the `{{Acting*}}` token family from {@link UserInfo.APIKeyActingContext}.
+     * Scalars substitute escaped; the list token renders as a canonical (sorted),
+     * per-element-escaped, quoted list for use inside `IN (...)`. Sorting is not
+     * cosmetic: the resolved clause participates in the RunView cache fingerprint,
+     * so the same set must always produce the same clause bytes (INV-2). An absent
+     * context or empty list leaves tokens unresolved, which the caller's
+     * unresolved-token handling turns into a match-nothing filter for key filters.
+     */
+    private resolveActingTokens(text: string, user: UserInfo): string {
+        const acting = user.APIKeyActingContext;
+        let ret = text;
+        const scalars: Array<[string, string | undefined]> = [
+            ['ActingOrganizationID', acting?.ActingOrganizationID],
+            ['ActingPersonID', acting?.ActingPersonID],
+            ['ActingScopeID', acting?.ActingScopeID],
+        ];
+        for (const [token, value] of scalars) {
+            if (value != null && value.length > 0) {
+                ret = ret.replace(new RegExp(`\\{\\{${token}\\}\\}`, 'g'), value.replace(/'/g, "''"));
+            }
+        }
+        const companies = acting?.ActingCompanyIDs;
+        if (companies && companies.length > 0) {
+            const rendered = [...companies]
+                .sort()
+                .map(c => `'${c.replace(/'/g, "''")}'`)
+                .join(',');
+            ret = ret.replace(/\{\{ActingCompanyIDs\}\}/g, rendered);
+        }
+        return ret;
+    }
+}
+
+/**
+ * Options for {@link RowLevelSecurityFilterInfo.MarkupFilterText}.
+ */
+export interface MarkupFilterOptions {
+    /**
+     * How an unresolved token is handled after markup:
+     * - `'legacy'` (default): log the error and return the text with the token in
+     *   place — the resulting SQL fails to match/parse, which is fail-closed but
+     *   produces an unexplainable result. Role-RLS behavior, unchanged.
+     * - `'match-nothing'`: the entire filter resolves to `(1=0)` — required for
+     *   API-key row filters, where an unresolved token must deny regardless of the
+     *   expression's operator shapes.
+     */
+    unresolvedBehavior?: 'legacy' | 'match-nothing';
 }
 
 /**

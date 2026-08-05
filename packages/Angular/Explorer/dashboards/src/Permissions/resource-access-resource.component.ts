@@ -1,5 +1,5 @@
 import { AfterViewInit, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
-import { NormalizedPermission } from '@memberjunction/core';
+import { NormalizedPermission, PermissionConstrainedError } from '@memberjunction/core';
 import { MJPermissionDomainEntity, PermissionEngine, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -55,7 +55,15 @@ export class PermissionsResourceAccessResourceComponent extends BaseResourceComp
 
     override async ngOnInit(): Promise<void> {
         super.ngOnInit();
-        this.Domains = PermissionEngine.Instance.Domains;
+        try {
+            this.Domains = PermissionEngine.Instance.Domains;
+        } catch (e) {
+            if (e instanceof PermissionConstrainedError) {
+                this.Domains = [];
+            } else {
+                throw e;
+            }
+        }
         if (this.Domains.length > 0) {
             this.SelectedDomainName = this.Domains[0].Name;
             this.loadResourceTypesForDomain(this.SelectedDomainName);

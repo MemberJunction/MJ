@@ -55,6 +55,8 @@ vi.mock('../install/config-manager.js', () => ({
     ToggleServerDynamicPackages: vi.fn(),
     AddEntityPackageMapping: vi.fn(),
     RemoveEntityPackageMapping: vi.fn(),
+    AddExcludeSchema: vi.fn(() => ({ Success: true })),
+    RemoveExcludeSchema: vi.fn(() => ({ Success: true })),
 }));
 vi.mock('../install/history-recorder.js', () => ({
     RecordAppInstallation: vi.fn(),
@@ -62,6 +64,7 @@ vi.mock('../install/history-recorder.js', () => ({
     RecordAppDependencies: vi.fn(),
     DeleteAppDependencies: vi.fn(),
     SetAppStatus: vi.fn(),
+    SetAppStep: vi.fn(),
     FindInstalledApp: vi.fn(),
     FindDependentApps: vi.fn(),
     ListInstalledApps: vi.fn(),
@@ -127,9 +130,10 @@ function serveManifests(byRepoUrl: Record<string, string>): void {
 
 // Minimal context — the stubbed collaborators ignore the provider/user objects,
 // so a cast is sufficient for wiring (no real DB or GitHub is contacted).
+// CanonicalSchemaName is the one Dialect member HandleSchemaCreation calls directly.
 const context = {
     ContextUser: {},
-    DatabaseProvider: {},
+    DatabaseProvider: { Dialect: { CanonicalSchemaName: (s: string) => s } },
     DatabaseConfig: {},
     GitHubOptions: {},
     RepoRoot: '/tmp/test-repo',
@@ -281,7 +285,7 @@ describe('HandleMigrations — platform-aware dialect directory', () => {
     });
     const source = 'https://github.com/MemberJunction/Integrations/CRM/HubSpot';
     const ctxFor = (platformKey: string) =>
-        ({ ...context, DatabaseProvider: { Dialect: { PlatformKey: platformKey } }, DatabaseConfig: {} } as unknown as OrchestratorContext);
+        ({ ...context, DatabaseProvider: { Dialect: { PlatformKey: platformKey, CanonicalSchemaName: (s: string) => s } }, DatabaseConfig: {} } as unknown as OrchestratorContext);
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -471,7 +475,7 @@ describe('InstallApp — npm-install failure disables the app AND its dynamicPac
         // The app's dynamicPackages entries are flipped off (array-agnostic by AppName → both
         // server and client) so `mj codegen manifest --open-app-client-bootstrap` emits commented
         // imports — a static import of a not-yet-installed package would break the MJExplorer build.
-        expect(vi.mocked(ToggleServerDynamicPackages)).toHaveBeenCalledWith(expect.anything(), 'app-x', false);
+        expect(vi.mocked(ToggleServerDynamicPackages)).toHaveBeenCalledWith(expect.anything(), 'app-x', false, undefined);
     });
 });
 
@@ -485,7 +489,7 @@ describe('InstallApp — schema rollback tracks actual creation (B18)', () => {
     }
     const migContext = {
         ...context,
-        DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver' } },
+        DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver', CanonicalSchemaName: (s: string) => s } },
     } as unknown as OrchestratorContext;
 
     beforeEach(() => {
@@ -545,7 +549,7 @@ describe('InstallApp — schema rollback tracks actual creation (B18)', () => {
 describe('UpgradeApp — migration failure is honest + recoverable (B21)', () => {
     const migContext = {
         ...context,
-        DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver' } },
+        DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver', CanonicalSchemaName: (s: string) => s } },
     } as unknown as OrchestratorContext;
 
     function v2ManifestWithMigrations(name: string): string {

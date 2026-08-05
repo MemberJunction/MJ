@@ -31,8 +31,8 @@
  */
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
-import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity, MJApplicationEntity } from '@memberjunction/core-entities';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import { MJGlobal, MJLruCache, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
     ChatMessage,
@@ -72,6 +72,7 @@ import {
     GetDisclosureForTarget,
     GetNarrationPaceMs,
     GetProviderVoiceSettings,
+    GetSessionTuningSettings,
     JSONObjectLike,
     RealtimeAllowedAgent,
     RealtimeCoAgentConfig,
@@ -162,6 +163,14 @@ export interface PrepareClientSessionInput {
      * addressing GATE is the bridge's `RegexAddressedMatcher`. Ignored unless {@link DisableAutoResponse}.
      */
     SelfNames?: string[];
+    /**
+     * Optional server-authoritative hard ceiling on the session's wall-clock duration, in seconds.
+     * Threaded into {@link RealtimeSessionParams.MaxSessionSeconds} so a driver can bound the
+     * provider session/token, and surfaced so the transport layer (the MJServer resolver) can stamp
+     * the absolute deadline on the session for the janitor to enforce. Set for abuse-sensitive
+     * deployments (a public web-widget guest's `VoiceMaxSessionMinutes`); omitted otherwise.
+     */
+    MaxSessionSeconds?: number;
 }
 
 /**
@@ -283,6 +292,16 @@ export interface ExecuteRelayedToolInput {
      * the SAME interactive run (e.g. confirming a Query Builder task graph).
      */
     ResumeRunID?: string;
+    /**
+     * The id of the human this delegation is FOR, threaded into the delegated run's `userId`.
+     *
+     * The relayed-tool path may execute under an ELEVATED principal (a scoped anonymous magic-link
+     * caller's role deliberately cannot write the AI run entities — issue #3371), so `contextUser`
+     * is not always the person. `userId` is what stamps `MJ: AI Agent Runs.UserID` and scopes
+     * context memory, both of which must stay the visitor's. Absent ⇒ falls back to `contextUser.ID`,
+     * which is correct for every non-elevated caller.
+     */
+    AttributionUserID?: string;
 }
 
 /**
@@ -407,19 +426,28 @@ export class RealtimeClientSessionService {
      * whole row — including the STALE `Messages` it loaded — and perpetually clobber freshly-appended turns
      * back to an empty snapshot (the "transcript never persists" bug). Funnelling every write for a given
      * run through a single promise chain makes each load happen AFTER the prior save committed, so no writer
-     * overwrites another's field. Keyed by promptRunID; the entry is dropped on {@link finalizePromptRun}.
+     * overwrites another's field. Keyed by promptRunID; the entry is normally dropped on
+     * {@link finalizePromptRun}. Bounded with `MJLruCache` (rather than a plain `Map`) as a backstop: a
+     * session can be closed through a DIFFERENT `RealtimeClientSessionService` instance than the one that
+     * accumulated its write chain (e.g. `SessionManager`'s default construction, background janitor sweeps),
+     * in which case `finalizePromptRun`'s delete lands on the wrong object and this map's entry is
+     * never explicitly removed — the TTL/maxSize eviction here is what keeps that scenario bounded
+     * instead of an unbounded per-process leak.
      */
-    private readonly promptRunWriteChains = new Map<string, Promise<unknown>>();
+    private readonly promptRunWriteChains = new MJLruCache<string, Promise<unknown>>({
+        maxSize: 5_000,
+        ttlMs: 4 * 60 * 60 * 1000, // 4h backstop — generous vs. any realistic session duration
+    });
 
     /**
      * Serializes `task` against all other writes to the same `AIPromptRun` (see {@link promptRunWriteChains}).
      * Tasks run in call order; a failing task never breaks the chain for the next one. Returns the task's result.
      */
     private serializePromptRunWrite<T>(promptRunID: string, task: () => Promise<T>): Promise<T> {
-        const prior = this.promptRunWriteChains.get(promptRunID) ?? Promise.resolve();
+        const prior = this.promptRunWriteChains.Get(promptRunID) ?? Promise.resolve();
         const run = prior.then(task, task);
         // Store an error-swallowing tail so one failed write doesn't reject every queued write behind it.
-        this.promptRunWriteChains.set(promptRunID, run.then(() => undefined, () => undefined));
+        this.promptRunWriteChains.Set(promptRunID, run.then(() => undefined, () => undefined));
         return run;
     }
 
@@ -856,7 +884,6 @@ export class RealtimeClientSessionService {
         promptRun.RunAt = new Date();
         promptRun.RunType = 'Single';
         promptRun.Status = 'Running';
-        promptRun.AgentRunID = coAgentRunID;
         if (await promptRun.Save()) {
             return promptRun.ID;
         }
@@ -982,21 +1009,50 @@ export class RealtimeClientSessionService {
         return finalized;
     }
 
-    /** Finds the still-`Running` prompt-run + run-step ids for a co-agent run (orphan finalize path). */
+    /**
+     * Finds the still-`Running` prompt-run + run-step ids for a co-agent run (orphan finalize path).
+     *
+     * `AIPromptRun.AgentRunID` was dropped in v5.50 (Break_CodeGen_Cycle_Remove_PromptRun_AgentRunID);
+     * filtering prompt runs on it now fails outright and yields no rows. The relationship is derived
+     * through the run's Prompt-type steps instead — `AIAgentRunStep.TargetLogID` points at the prompt
+     * run — which is the replacement path that migration's design notes prescribe.
+     */
     private async findCoAgentChildLogIds(
         coAgentRunID: string,
         contextUser: UserInfo,
     ): Promise<{ PromptRunID: string | null; StepID: string | null }> {
         const rv = new RunView();
-        const results = await rv.RunViews([
-            { EntityName: 'MJ: AI Prompt Runs', ExtraFilter: `AgentRunID='${this.escapeSqlLiteral(coAgentRunID)}' AND Status='Running'`, Fields: ['ID'], ResultType: 'simple' },
-            { EntityName: 'MJ: AI Agent Run Steps', ExtraFilter: `AgentRunID='${this.escapeSqlLiteral(coAgentRunID)}' AND Status='Running'`, Fields: ['ID'], ResultType: 'simple' },
-        ], contextUser);
-        const firstId = (r: { Success: boolean; Results: unknown[] } | undefined): string | null => {
-            const first = r?.Success ? (r.Results[0] as { ID?: string } | undefined) : undefined;
-            return first?.ID ?? null;
-        };
-        return { PromptRunID: firstId(results[0]), StepID: firstId(results[1]) };
+        const steps = await rv.RunView<{ ID: string; StepType: string; TargetLogID: string | null }>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `AgentRunID='${this.escapeSqlLiteral(coAgentRunID)}' AND Status='Running'`,
+            Fields: ['ID', 'StepType', 'TargetLogID'],
+            ResultType: 'simple',
+        }, contextUser);
+        if (!steps.Success) {
+            LogError(`RealtimeClientSessionService.findCoAgentChildLogIds: step lookup failed for co-agent run ${coAgentRunID}: ${steps.ErrorMessage}`);
+            return { PromptRunID: null, StepID: null };
+        }
+
+        const stepID = steps.Results[0]?.ID ?? null;
+        const promptLogIDs = steps.Results.filter(s => s.StepType === 'Prompt' && s.TargetLogID).map(s => s.TargetLogID!);
+        if (promptLogIDs.length === 0) {
+            return { PromptRunID: null, StepID: stepID };
+        }
+
+        // Re-check Status on the prompt runs themselves: a Prompt step can still be Running while its
+        // underlying prompt run has already landed, and this path only finalizes what is still open.
+        const inList = promptLogIDs.map(id => `'${this.escapeSqlLiteral(id)}'`).join(',');
+        const promptRuns = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: AI Prompt Runs',
+            ExtraFilter: `ID IN (${inList}) AND Status='Running'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+        }, contextUser);
+        if (!promptRuns.Success) {
+            LogError(`RealtimeClientSessionService.findCoAgentChildLogIds: prompt-run lookup failed for co-agent run ${coAgentRunID}: ${promptRuns.ErrorMessage}`);
+            return { PromptRunID: null, StepID: stepID };
+        }
+        return { PromptRunID: promptRuns.Results[0]?.ID ?? null, StepID: stepID };
     }
 
     /** Escapes single quotes for safe embedding in an `ExtraFilter` literal. */
@@ -1085,7 +1141,7 @@ export class RealtimeClientSessionService {
             return true;
         });
         // Drop the per-run lock chain — no further writes are expected after finalize.
-        this.promptRunWriteChains.delete(promptRunID);
+        this.promptRunWriteChains.Delete(promptRunID);
     }
 
     /**
@@ -1641,7 +1697,7 @@ export class RealtimeClientSessionService {
         driverClass?: string
     ): Promise<RealtimeSessionParams> {
         const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig);
-        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser);
+        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
         const tools = this.buildStableToolSet(input.ExtraTools);
 
         // One line per mint: confirms which tools + whether the channel-direct framing actually reach
@@ -1659,7 +1715,11 @@ export class RealtimeClientSessionService {
             SystemPrompt: systemPrompt,
             Tools: tools,
             InitialContext: memoryContext || undefined,
-            Config: this.buildSessionConfigBag(input, effectiveConfig, driverClass)
+            Config: this.buildSessionConfigBag(input, effectiveConfig, driverClass),
+            // Server-authoritative duration ceiling (public web-widget voice cap). Drivers that can
+            // bound the provider session/token apply min(default, this); the janitor enforces it
+            // regardless of driver support via the session deadline stamped by the transport layer.
+            MaxSessionSeconds: input.MaxSessionSeconds,
         };
     }
 
@@ -1684,8 +1744,12 @@ export class RealtimeClientSessionService {
         driverClass?: string
     ): JSONObject | undefined {
         const providerVoice = GetProviderVoiceSettings(effectiveConfig, driverClass ?? null);
-        let bag: JSONObject | undefined = providerVoice
-            ? (DeepMergeConfigs(providerVoice, input.Config as JSONObjectLike | undefined) as JSONObject)
+        // Session-tuning knobs (realtime.session: effortLevel / parallelToolCalls / mcpTools /
+        // inputTranscriptionModel) merge UNDER the provider voice UNDER the runtime bag — the
+        // exact cascade precedence every other config entry follows (runtime wins per key).
+        const sessionTuning = GetSessionTuningSettings(effectiveConfig);
+        let bag: JSONObject | undefined = (sessionTuning || providerVoice)
+            ? (DeepMergeConfigs(sessionTuning, providerVoice, input.Config as JSONObjectLike | undefined) as JSONObject)
             : input.Config;
         // Multi-agent meeting: carry the host-NEUTRAL disable-auto-response flag in the open config bag so
         // each provider translates it its own way (OpenAI → turn_detection.create_response=false) — the
@@ -1736,7 +1800,7 @@ export class RealtimeClientSessionService {
         const appContextSection = this.buildAppContextSection(input.AppContext);
         const priorTranscript = this.formatPriorTranscript(input.PriorTranscript);
         const history = this.formatConversationHistory(input.ConversationMessages);
-        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser);
+        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
 
         return [framing, meetingFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memoryContext]
             .filter(part => part && part.trim().length > 0)
@@ -1992,11 +2056,18 @@ export class RealtimeClientSessionService {
     protected async assembleMemoryContext(
         input: PrepareClientSessionInput,
         coAgent: MJAIAgentEntityExtended,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider: IMetadataProvider
     ): Promise<string> {
         const lastUserMessage = (input.ConversationMessages ?? []).filter(m => m.role === 'user').pop();
         const inputText = typeof lastUserMessage?.content === 'string' ? lastUserMessage.content : '';
         const scratch: ChatMessage[] = [];
+
+        // RV3 — returning-visitor memory: resolve this conversation's identity scope so the existing
+        // note-injection path pulls in the recap a prior session left for this returning visitor. A
+        // brand-new visitor (no resolved identity, no linked prior conversation) resolves to undefined
+        // and gets no scoped memory — exactly the loop-agent behavior before returning-visitor memory.
+        const scope = await this.resolveConversationMemoryScope(input.ConversationID, provider, contextUser);
 
         const builder = new AgentMemoryContextBuilder();
         await builder.InjectContextMemory(
@@ -2006,8 +2077,8 @@ export class RealtimeClientSessionService {
             input.CompanyID,
             contextUser,
             scratch,
-            undefined,
-            undefined,
+            scope?.entityId,
+            scope?.recordId,
             undefined,
             null
         );
@@ -2016,6 +2087,51 @@ export class RealtimeClientSessionService {
             .map(m => (typeof m.content === 'string' ? m.content : ''))
             .filter(c => c.length > 0)
             .join('\n\n');
+    }
+
+    /**
+     * Resolves the primary-scope pair a returning visitor's memory is filed under, mirroring the
+     * recap side ({@link writeReturningVisitorRecap}'s `resolveRecapScope`):
+     *
+     *   - linked visitor    → `(Conversation.LinkedEntityID, Conversation.LinkedRecordID)`
+     *   - linked anonymous  → `(the "MJ: Conversations" entity, Conversation.LastConversationID)`
+     *   - brand-new visitor → `undefined` (no scoped memory)
+     *
+     * Best-effort: any failure (no conversation id, load failure, entity not found) resolves to
+     * `undefined` so memory injection silently falls back to unscoped behavior.
+     *
+     * @param conversationId the current session's conversation id, if any.
+     * @param provider the request/session metadata provider (multi-provider-safe — never global Metadata).
+     * @param contextUser the calling user.
+     * @returns the scope pair, or undefined when this isn't a returning visitor.
+     */
+    protected async resolveConversationMemoryScope(
+        conversationId: string | undefined,
+        provider: IMetadataProvider,
+        contextUser: UserInfo
+    ): Promise<{ entityId: string; recordId: string } | undefined> {
+        try {
+            if (!conversationId) {
+                return undefined;
+            }
+            const conversation = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+            if (!conversation || !(await conversation.Load(conversationId))) {
+                return undefined;
+            }
+            if (conversation.LinkedEntityID && conversation.LinkedRecordID) {
+                return { entityId: conversation.LinkedEntityID, recordId: conversation.LinkedRecordID };
+            }
+            if (conversation.LastConversationID) {
+                const conversationsEntityId = provider.EntityByName('MJ: Conversations')?.ID;
+                if (conversationsEntityId) {
+                    return { entityId: conversationsEntityId, recordId: conversation.LastConversationID };
+                }
+            }
+            return undefined;
+        } catch (e) {
+            LogError(`[RealtimeCoAgent] resolveConversationMemoryScope failed for conversation ${conversationId}: ${e instanceof Error ? e.message : String(e)}`);
+            return undefined;
+        }
     }
 
     /**
@@ -2297,6 +2413,10 @@ export class RealtimeClientSessionService {
             agent: target,
             conversationMessages: [{ role: 'user', content: requestText }],
             contextUser,
+            // Attribution and context-memory scope follow the PERSON, not the executing principal —
+            // see `ExecuteRelayedToolInput.AttributionUserID`. Undefined ⇒ base-agent falls back to
+            // `contextUser.ID`, preserving today's behavior for every non-elevated caller.
+            userId: input.AttributionUserID,
             provider,
             cancellationToken: this.combineSignals(request.AbortSignal, input.AbortSignal),
             parentRun: parentRun ?? undefined,

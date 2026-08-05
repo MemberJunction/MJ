@@ -1,0 +1,45 @@
+---
+/**
+ * Starlight Footer override: renders the default footer, then adds the
+ * client-side mermaid renderer for the <pre class="mermaid"> blocks emitted
+ * by scripts/lib/remark-mermaid.mjs. Mermaid is bundled from npm (no CDN)
+ * and re-renders when the Starlight theme toggle flips data-theme.
+ */
+import Default from '@astrojs/starlight/components/Footer.astro';
+---
+
+<Default><slot /></Default>
+
+<script>
+  import mermaid from 'mermaid';
+
+  const blocks = Array.from(document.querySelectorAll<HTMLPreElement>('pre.mermaid'));
+  if (blocks.length > 0) {
+    for (const block of blocks) block.dataset.source ??= block.textContent ?? '';
+
+    let rendering = false;
+    const render = async () => {
+      if (rendering) return;
+      rendering = true;
+      try {
+        for (const block of blocks) {
+          block.removeAttribute('data-processed');
+          block.textContent = block.dataset.source ?? '';
+        }
+        const dark = document.documentElement.dataset.theme === 'dark';
+        mermaid.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'default' });
+        await mermaid.run({ nodes: blocks });
+      } catch (error) {
+        console.error('[docs] mermaid render failed', error);
+      } finally {
+        rendering = false;
+      }
+    };
+
+    render();
+    new MutationObserver(render).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+  }
+</script>

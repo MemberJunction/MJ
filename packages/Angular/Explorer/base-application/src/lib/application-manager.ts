@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
-import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager, IMetadataProvider } from '@memberjunction/core';
+import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager, IMetadataProvider, PermissionConstrainedError } from '@memberjunction/core';
 import { MJUserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
 
@@ -185,6 +185,7 @@ export class ApplicationManager {
   private syncFromEngine(): void {
     const allApps = this.allApplications$.value;
     const engine = UserInfoEngine.Instance;
+    if (engine.IsPermissionConstrained) return; // No data available — nothing to sync
     const userApps = engine.UserApplications;
 
     // Build a map for quick lookup
@@ -351,6 +352,15 @@ export class ApplicationManager {
     // Load user's UserApplication records using UserInfoEngine for caching
     const engine = UserInfoEngine.Instance;
 
+    // If the engine can't read user application data, skip the self-healing path —
+    // a permission-denied user is NOT the same as a new user with no records.
+    if (engine.IsPermissionConstrained) {
+      LogStatus(`${this.constructor.name}: UserInfoEngine is permission-constrained, skipping application config load`);
+      this.userAppConfigs$.next([]);
+      this.applications$.next([]);
+      return;
+    }
+
     let userApps: MJUserApplicationEntity[] = engine.UserApplications;
 
     // Self-healing: If user has no UserApplication records, create from DefaultForNewUser apps
@@ -444,6 +454,30 @@ export class ApplicationManager {
    */
   GetAppById(appId: string): BaseApplication | undefined {
     return this.applications$.value.find(a => UUIDsEqual(a.ID, appId));
+  }
+
+  /**
+   * The app a fresh session should land on when the URL names no app and there is no
+   * workspace state to restore: the user's active, access-granted application with the
+   * lowest `Application.DefaultSequence` (Home ships at -1; everything else defaults
+   * to 100). Ties keep the earlier app in the user's Sequence-ordered list, so when no
+   * app is flagged below the default the result degrades to the first app the user
+   * ordered — deterministic either way.
+   *
+   * Deliberately independent of `UserApplication.Sequence`: that value is a user-owned
+   * DISPLAY preference for the app switcher, and reordering the switcher must never
+   * change where a session lands.
+   */
+  GetDefaultLandingApp(): BaseApplication | null {
+    const apps = this.applications$.value;
+    if (apps.length === 0) {
+      return null;
+    }
+    // Mirror UserInfoEngine.applicationDefaultSequence's missing-value guard (?? 100):
+    // the constructor's Object.assign can overwrite the class default with undefined,
+    // and a NaN comparison would make this reduce silently order-dependent.
+    const defaultSequence = (app: BaseApplication): number => (Number.isFinite(app.DefaultSequence) ? app.DefaultSequence : 100);
+    return apps.reduce((best, app) => (defaultSequence(app) < defaultSequence(best) ? app : best));
   }
 
   /**

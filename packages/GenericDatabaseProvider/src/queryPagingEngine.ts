@@ -132,6 +132,12 @@ export class QueryPagingEngine {
      * Used when the AST recognises the shape but cannot inject the cap
      * cleanly, or when the AST can't parse the input but the SQL is known
      * to be wrap-safe (no FOR JSON/FOR XML/OPTION at top level).
+     *
+     * Strips any top-level ORDER BY before wrapping: ORDER BY is illegal
+     * inside a derived table on SQL Server (unless TOP/OFFSET/FOR XML is
+     * present), and the outer SELECT doesn't preserve inner ordering anyway.
+     * The ORDER BY is moved to the outer SELECT so the final result retains
+     * the intended sort order.
      */
     private static outerWrap(sql: string, cap: number, dialect: SQLDialect): string {
         // Route the cap form through the dialect's LimitClause so there is a
@@ -139,7 +145,23 @@ export class QueryPagingEngine {
         const lc = dialect.LimitClause(cap);
         const prefix = lc.prefix ? `${lc.prefix} ` : '';   // 'TOP N ' (SQL Server) or ''
         const suffix = lc.suffix ? ` ${lc.suffix}` : '';   // ' LIMIT N' (PostgreSQL) or ''
-        return `SELECT ${prefix}* FROM (\n${sql}\n) AS _mj_capped${suffix}`;
+
+        // Strip top-level ORDER BY from the inner SQL to avoid SQL Server error:
+        // "The ORDER BY clause is invalid in views, inline functions, derived tables,
+        //  subqueries, and common table expressions, unless TOP, OFFSET or FOR XML
+        //  is also specified."
+        // Uses the lexer-based Tier 2 scanner which handles unparseable SQL
+        // (TRY_CAST, IIF, STRING_AGG, etc.) that the AST path cannot parse.
+        const orderByAnalysis = AnalyzeTopLevelOrderBy(sql, dialect);
+        const innerSQL = orderByAnalysis.OrderByClause && !orderByAnalysis.IsLegalInCTE
+            ? orderByAnalysis.SqlWithoutOrderBy
+            : sql;
+
+        const outerOrderBy = orderByAnalysis.OrderByClause && !orderByAnalysis.IsLegalInCTE
+            ? `\nORDER BY ${orderByAnalysis.OrderByClause}`
+            : '';
+
+        return `SELECT ${prefix}* FROM (\n${innerSQL}\n) AS _mj_capped${suffix}${outerOrderBy}`;
     }
 
     /**

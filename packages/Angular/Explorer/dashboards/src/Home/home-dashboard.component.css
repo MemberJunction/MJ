@@ -1249,47 +1249,10 @@
   margin-bottom: 20px;
 }
 
-.panel-section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: var(--mj-font-semibold);
-  color: var(--mj-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--mj-border-subtle);
-}
+/* Section header (title row + chevron) now owned by <mj-accordion-panel>. */
 
-.panel-section-title i:first-child {
-  font-size: 12px;
-}
-
-.panel-section-title.collapsible {
-  cursor: pointer;
-  user-select: none;
-  transition: color var(--mj-transition-base);
-}
-
-.panel-section-title.collapsible:hover {
-  color: var(--mj-text-secondary);
-}
-
-.section-chevron {
-  font-size: 10px;
-  transition: transform 0.2s ease;
-}
-
-.panel-count {
-  margin-left: auto;
-  background: var(--mj-bg-surface-card);
-  padding: 1px 6px;
-  border-radius: 8px;
-  font-size: 10px;
-  color: var(--mj-text-disabled);
-}
+/* Section count pill migrated to <mj-accordion-badge mj-accordion-badge--right>;
+   bespoke .panel-count rule removed. */
 
 /* App hierarchy in panel */
 .panel-app-header {

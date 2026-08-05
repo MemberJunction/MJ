@@ -1,0 +1,5 @@
+{
+    "name": "fixture-cjs-pkg",
+    "private": true,
+    "main": "built/index.js"
+}

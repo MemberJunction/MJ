@@ -99,4 +99,85 @@ describe('KeyedSerialTaskQueue', () => {
         await delay(5);
         expect(await q.flush()).toEqual({ failures: 0, rejections: 0 });
     });
+
+    // ── opts.after (cross-key dependency gate) ──────────────────────────────
+
+    it('opts.after gates child task until the dependency key settles', async () => {
+        const q = new KeyedSerialTaskQueue();
+        const parent = {};
+        const child = {};
+        const order: string[] = [];
+
+        // Parent task takes 30ms.
+        q.enqueue(parent, async () => { await delay(30); order.push('parent'); });
+        // Child task is instant but depends on parent — must not start until parent settles.
+        q.enqueue(child, async () => { order.push('child'); }, { after: parent });
+
+        await q.flush();
+        expect(order).toEqual(['parent', 'child']);
+    });
+
+    it('opts.after resolves immediately when dependency key has no pending tasks', async () => {
+        const q = new KeyedSerialTaskQueue();
+        const parent = {};
+        const child = {};
+        const order: string[] = [];
+
+        // No tasks enqueued on parent — dependency gate is a resolved promise.
+        q.enqueue(child, async () => { order.push('child'); }, { after: parent });
+        await q.flush();
+        expect(order).toEqual(['child']);
+    });
+
+    it('opts.after does not block unrelated keys', async () => {
+        const q = new KeyedSerialTaskQueue();
+        const parent = {};
+        const child = {};
+        const unrelated = {};
+        const order: string[] = [];
+
+        // Parent is slow.
+        q.enqueue(parent, async () => { await delay(40); order.push('parent'); });
+        // Child waits for parent.
+        q.enqueue(child, async () => { order.push('child'); }, { after: parent });
+        // Unrelated key has no dependency — runs concurrently with parent.
+        q.enqueue(unrelated, async () => { order.push('unrelated'); });
+
+        await q.flush();
+        // Unrelated finishes first (instant, no gate), then parent (40ms), then child (after parent).
+        expect(order).toEqual(['unrelated', 'parent', 'child']);
+    });
+
+    it('opts.after still serializes with same-key prior tasks', async () => {
+        const q = new KeyedSerialTaskQueue();
+        const parent = {};
+        const child = {};
+        const order: string[] = [];
+
+        // Parent is slow.
+        q.enqueue(parent, async () => { await delay(20); order.push('parent'); });
+        // First child task on child key (no dependency).
+        q.enqueue(child, async () => { order.push('child-1'); });
+        // Second child task on child key depends on parent — waits for BOTH child-1 AND parent.
+        q.enqueue(child, async () => { order.push('child-2'); }, { after: parent });
+
+        await q.flush();
+        // child-1 runs immediately (no gate), parent takes 20ms, child-2 waits for both.
+        expect(order).toEqual(['child-1', 'parent', 'child-2']);
+    });
+
+    it('opts.after still works when the dependency task fails', async () => {
+        const q = new KeyedSerialTaskQueue();
+        const parent = {};
+        const child = {};
+        const order: string[] = [];
+
+        // Parent throws — chain must not break.
+        q.enqueue(parent, async () => { await delay(15); throw new Error('boom'); });
+        // Child depends on parent — should still run after parent settles (even on failure).
+        q.enqueue(child, async () => { order.push('child'); }, { after: parent });
+
+        await q.flush();
+        expect(order).toEqual(['child']);
+    });
 });

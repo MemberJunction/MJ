@@ -16,17 +16,15 @@
     </div>
 
     <!-- Input Parameters Section -->
-    <div class="parameters-section" [class.collapsed]="InputsCollapsed">
-        <h4 class="section-header clickable" (click)="ToggleInputsCollapsed()">
+    <mj-accordion-panel class="parameters-section" [Expanded]="!InputsCollapsed" (ExpandedChange)="InputsCollapsed = !$event">
+        <ng-template mjAccordionTitle>
             <i class="fa-solid fa-sliders"></i>
             Input Parameters
             @if (ParamValues.length > 0) {
-                <span class="param-count">({{ ParamValues.length }})</span>
+                <span class="mj-accordion-badge mj-accordion-badge--muted">({{ ParamValues.length }})</span>
             }
-            <i class="collapse-icon fa-solid" [class.fa-chevron-down]="InputsCollapsed" [class.fa-chevron-up]="!InputsCollapsed"></i>
-        </h4>
+        </ng-template>
 
-        @if (!InputsCollapsed) {
             @if (ParamValues.length === 0) {
                 <div class="no-params">
                     <i class="fa-solid fa-inbox"></i>
@@ -110,8 +108,7 @@
                     }
                 </div>
             }
-        }
-    </div>
+    </mj-accordion-panel>
 
     <!-- Action Buttons -->
     <div class="action-buttons">

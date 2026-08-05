@@ -53,25 +53,12 @@
   flex-direction: column;
 }
 
-.run-row {
-  border-bottom: 1px solid var(--mj-border-subtle);
-  cursor: pointer;
-  transition: background 0.1s;
-}
-
-.run-row:hover {
-  background: var(--mj-bg-page);
-}
-
-.run-row.selected {
+/* Run rows are now <mj-accordion-panel> (Size="sm", FlushBody). The accordion
+   owns the header chrome + chevron + hover, so the old .run-row / .run-row-main /
+   .expand-btn wrappers were removed. We keep only the selection highlight: the
+   run whose detail panel is open on the right tints its accordion header row. */
+.run-panel.selected ::ng-deep .mj-accordion-header-row {
   background: var(--mj-status-info-bg);
-}
-
-.run-row-main {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
 }
 
 /* Status indicator */
@@ -152,7 +139,9 @@
   text-overflow: ellipsis;
 }
 
-.expand-btn {
+/* Detail-panel toggle in the accordion header actions slot (formerly the
+   row-level SelectRun click). Reuses the old .expand-btn affordance. */
+.detail-toggle-btn {
   background: none;
   border: none;
   cursor: pointer;
@@ -163,26 +152,28 @@
   align-items: center;
   justify-content: center;
   color: var(--mj-text-disabled);
-  font-size: 11px;
-  transition: background 0.15s, transform 0.2s;
+  font-size: 13px;
+  transition: background 0.15s, color 0.15s;
   flex-shrink: 0;
 }
 
-.expand-btn:hover {
+.detail-toggle-btn:hover {
   background: var(--mj-bg-surface-hover);
   color: var(--mj-text-secondary);
 }
 
-.expand-btn i.rotated {
-  transform: rotate(180deg);
+.detail-toggle-btn.active {
+  color: var(--mj-brand-primary);
 }
 
 /* ── Expanded Section ─────────────────────────────────────── */
 
 .expanded-section {
+  /* Now the accordion body content (FlushBody → it provides its own padding).
+     border-top removed: the accordion's expanded header-row already draws the
+     header/body separator. */
   padding: 8px 14px 14px 48px;
   background: var(--mj-bg-page);
-  border-top: 1px solid var(--mj-border-subtle);
 }
 
 .expanded-loading,

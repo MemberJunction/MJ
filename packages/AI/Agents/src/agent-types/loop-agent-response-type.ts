@@ -1,9 +1,10 @@
 import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest } from "@memberjunction/ai-core-plus";
 import { ArtifactToolCall } from "../ArtifactToolManager";
+import { ConversationToolCall } from "../ConversationToolManager";
 import { MemoryWriteRequest } from "../MemoryWriteManager";
 
 // Re-export universal types for backward compatibility
-export type { ForEachOperation, WhileOperation, ArtifactToolCall, MemoryWriteRequest };
+export type { ForEachOperation, WhileOperation, ArtifactToolCall, ConversationToolCall, MemoryWriteRequest };
 
 /**
  * Response structure for Loop Agent Type
@@ -62,6 +63,15 @@ export interface LoopAgentResponse<P = any> {
     artifactToolCalls?: ArtifactToolCall[];
 
     /**
+     * Conversation-history retrieval tool invocations — page exact pre-summary
+     * messages back into context by their persisted `Sequence` handles, or search
+     * the full stored history. Processed inline on the same turn as other response
+     * fields (zero turn cost); results are injected as a conversation message on
+     * the next turn. Only honored when the run has a conversationId.
+     */
+    conversationToolCalls?: ConversationToolCall[];
+
+    /**
      * Durable memory writes — record facts/preferences that persist across
      * runs. Processed inline on the same turn as other response fields (zero
      * turn cost). Each write lands as a Provisional agent note — immediately
@@ -87,9 +97,9 @@ export interface LoopAgentResponse<P = any> {
      */
     nextStep?: {
         /**
-         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline'
+         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill'
          */
-        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline';
+        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill' | 'Plan';
 
         /**
          * Actions to execute (when type='Actions')
@@ -178,6 +188,29 @@ export interface LoopAgentResponse<P = any> {
          * While operation details (when type='While')
          */
         while?: WhileOperation;
+
+        /**
+         * Skills to activate (when type='Skill'). Reference by catalog Name only — you only ever
+         * see name + description for skills you haven't activated yet (progressive disclosure).
+         * Activating a skill appends its full instructions to your context and enables its
+         * bundled Actions/sub-agents for the rest of this run. This is NOT a nested agent run.
+         */
+        skills?: Array<{
+            name: string;
+            /**
+             * Brief (one sentence) rationale for why you are activating this skill — what the
+             * current task needs that the skill provides. Recorded in the run's audit trail
+             * (AIAgentRunStep.Skills) so humans can review why capabilities were expanded.
+             */
+            reason?: string;
+        }>;
+
+        /**
+         * The proposed plan (when type='Plan', Plan Mode only). Presenting a plan pauses the run
+         * and asks the human to approve or edit it via a response-form card before you may execute
+         * any Actions or Sub-Agents. See the Plan Mode section for when this is required.
+         */
+        plan?: string;
     };
 }
 

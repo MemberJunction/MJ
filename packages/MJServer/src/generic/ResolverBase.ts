@@ -32,7 +32,7 @@ import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './Run
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
 import { EncryptionEngine } from '@memberjunction/encryption';
-import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
+import { PUSH_STATUS_UPDATES_TOPIC, publishStatusUpdate } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
@@ -192,6 +192,34 @@ export class ResolverBase {
       }
     }
     return dataObjectArray;
+  }
+
+  /**
+   * Loads a single external-data-source-backed entity record by primary key and returns it in
+   * GraphQL field-name (CodeName) shape, or null if not found.
+   *
+   * External entities (`Entity.ExternalDataSourceID` set) have no MJ base view or sproc — their
+   * data is proxied live from a remote system — so the generated single-record resolver cannot run
+   * `SELECT * FROM <baseView>`. Instead it loads through a BaseEntity object, whose `InnerLoad`
+   * the data provider dispatches to the external read router's `LoadExternalRecord` (a composite-key
+   * aware, quoted, parameter-bound single-record lookup), applying the same RLS gate and field
+   * post-processing (decryption / datetime normalization) as the MJ-DB path. The caller is
+   * responsible for the `CheckUserReadPermissions` gate beforehand.
+   */
+  protected async LoadExternalRecordByKey<T>(
+    entityName: string,
+    compositeKey: CompositeKey,
+    provider: DatabaseProviderBase,
+    userPayload: UserPayload,
+  ): Promise<T | null> {
+    const contextUser = this.GetUserFromPayload(userPayload);
+    const entityObject = await provider.GetEntityObject(entityName, contextUser);
+    const loaded = await entityObject.InnerLoad(compositeKey);
+    if (!loaded) {
+      return null;
+    }
+    const mapped = await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), contextUser);
+    return mapped as T;
   }
 
   /**
@@ -645,14 +673,17 @@ export class ResolverBase {
 
     const apiKeyEngine = GetAPIKeyEngine();
 
-    // Check for full_access scope first (god power - bypasses all other checks)
+    // Check for full_access scope first (god power - bypasses all other checks).
+    // Use skipLogging to avoid polluting the usage log with expected denials —
+    // this is a fast-path optimization, not the real authorization decision.
     const fullAccessResult = await apiKeyEngine.Authorize(
       userPayload.apiKeyHash,
       'MJAPI',
       'full_access',
       '*',
       systemUser,
-      { endpoint: '/graphql', method: 'POST' }
+      { endpoint: '/graphql', method: 'POST' },
+      { skipLogging: true }
     );
 
     if (fullAccessResult.Allowed) {
@@ -660,7 +691,11 @@ export class ResolverBase {
       return;
     }
 
-    // Check specific scope
+    // Check specific scope. The acting context stamped on the session user (set
+    // server-side in context.ts, never client-supplied) rides along so filtered
+    // rules with {{Acting*}} tokens can validate their required values — without
+    // it, a filtered rule fails closed even for a session carrying valid context.
+    const sessionUser = this.GetUserFromPayload(userPayload);
     const result = await apiKeyEngine.Authorize(
       userPayload.apiKeyHash,
       'MJAPI',
@@ -670,6 +705,9 @@ export class ResolverBase {
       {
         endpoint: '/graphql',
         method: 'POST'
+      },
+      {
+        actingContext: sessionUser?.APIKeyActingContext
       }
     );
 
@@ -968,7 +1006,7 @@ export class ResolverBase {
       ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
     if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
 
-    return entityInfo.GetUserRowLevelSecurityWhereClause(user, type, returnPrefix);
+    return entityInfo.GetEffectiveRowFilterWhereClause(user, type, returnPrefix);
   }
 
   protected async createAuditLogRecord(
@@ -1070,6 +1108,22 @@ export class ResolverBase {
     });
   }
 
+  /**
+   * Publishes a push-status update to the client on {@link PUSH_STATUS_UPDATES_TOPIC}, stamping the
+   * authenticated owner's user ID from `userPayload` so the subscription filter can bind delivery
+   * to identity (see B49 / `statusUpdatesFilter`). The ergonomic wrapper every resolver should use
+   * instead of calling `pubSub.publish` on the topic directly — it makes omitting identity
+   * impossible. Non-resolver publishers (services, the liveness heartbeat) call the shared
+   * `publishStatusUpdate()` function directly with an explicit `ownerUserId`.
+   */
+  protected PublishStatusUpdate(pubSub: PubSubEngine, sessionId: string, message: string | undefined, userPayload: UserPayload): void {
+    publishStatusUpdate(pubSub, {
+      sessionId,
+      ownerUserId: userPayload?.userRecord?.ID ?? '',
+      message,
+    });
+  }
+
   protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
     // The unique key is set up for each entity object via it's primary key to ensure that we only have one listener at most for each unique
     // entity in the system. This is important because we don't want to have multiple listeners for the same entity as it could
@@ -1099,16 +1153,13 @@ export class ResolverBase {
             const baseEntityEvent = event.args as BaseEntityEvent;
             // message from our entity object, relay it to the client
             LogDebug('ResolverBase.ListenForEntityMessages: About to publish PUSH_STATUS_UPDATES_TOPIC');
-            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-              message: JSON.stringify({
-                status: 'OK',
-                type: 'EntityObjectStatusMessage',
-                entityName: baseEntityEvent.baseEntity.EntityInfo.Name,
-                primaryKey: baseEntityEvent.baseEntity.PrimaryKey,
-                message: event.args.payload,
-              }),
-              sessionId: userPayload.sessionId,
-            });
+            this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+              status: 'OK',
+              type: 'EntityObjectStatusMessage',
+              entityName: baseEntityEvent.baseEntity.EntityInfo.Name,
+              primaryKey: baseEntityEvent.baseEntity.PrimaryKey,
+              message: event.args.payload,
+            }), userPayload);
           }
         }
       });

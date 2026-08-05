@@ -83,6 +83,11 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     // BaseEntitySaveQueue that ActionEngine's action-log queue now uses) — pulled from the actual module.
     MJLruCache: (await importOriginal<typeof import('@memberjunction/global')>()).MJLruCache,
     KeyedSerialTaskQueue: (await importOriginal<typeof import('@memberjunction/global')>()).KeyedSerialTaskQueue,
+    // Real RequiresSubclass decorator — imported transitively through the ActionEngine
+    // module graph; the mocked module must re-export it or the suite fails to load.
+    RequiresSubclass: (await importOriginal<typeof import('@memberjunction/global')>()).RequiresSubclass,
+    // Same story for OptionalKeyedSpecialization (baseEntity.ts marks EntityField with it, B47).
+    OptionalKeyedSpecialization: (await importOriginal<typeof import('@memberjunction/global')>()).OptionalKeyedSpecialization,
     MJGlobal: {
         Instance: {
             ClassFactory: mockClassFactory,
@@ -96,6 +101,9 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
         }
     }),
     RegisterClass: () => (target: Function) => target,
+    // No-op decorator factory — some classes in the ActionEngine module graph declare
+    // `@RequiresSubclass()`; the mock must expose it or module init throws on the missing export.
+    RequiresSubclass: () => (target: Function) => target,
     // Case-insensitive UUID equality. Used by ActionEngineServer when
     // matching action result codes and by EntityActionInvocation*.MapParams.
     UUIDsEqual: (a: unknown, b: unknown): boolean =>
@@ -181,6 +189,19 @@ vi.mock('@memberjunction/actions-base', () => {
         EntityActionEngineBase: MockEntityActionEngineBase,
         EntityActionInvocationParams: class {},
         EntityActionResult: class {},
+        ActionInvocationProvenance: class {
+            EntityActionID?: string;
+            EntityActionInvocationTypeID?: string;
+            TargetEntityID?: string;
+            TargetRecordID?: string;
+            LoggingMode?: string;
+            EntityActionParams?: Array<Record<string, unknown>>;
+        },
+        // Stand-in for the real redactor: these tests are about the engine's log lifecycle, not about
+        // redaction rules (those are covered exhaustively in actions-base/ParamRedaction.test.ts). The
+        // engine's own use of the redactor — snapshot-at-call-time, Params vs ResultParams, provenance,
+        // LoggingMode — is covered in ActionEngine.logging.test.ts.
+        RedactParamsToJSON: (params: unknown[] | null | undefined) => JSON.stringify(params ?? []),
     };
 });
 
@@ -297,7 +318,9 @@ describe('ActionEngineServer', () => {
 
             const result = await engine.RunAction(params as unknown as Record<string, Function>);
 
-            expect(internalSpy).toHaveBeenCalledWith(params);
+            // The second argument is the input-parameter snapshot RunAction takes before the action can
+            // mutate its params — here an empty param set, so the redacted JSON is "[]".
+            expect(internalSpy).toHaveBeenCalledWith(params, '[]');
             expect(result.Success).toBe(true);
         });
     });
@@ -803,7 +826,8 @@ describe('ActionEngineServer', () => {
 
             const logEntry = await (engine as unknown as Record<string, Function>)['StartAndEndActionLog'](params as never, result as unknown as Record<string, Function>);
 
-            expect(startSpy).toHaveBeenCalledWith(params, false);
+            // Called without a pre-taken snapshot here, so StartActionLog takes its own.
+            expect(startSpy).toHaveBeenCalledWith(params, false, undefined);
             expect(endSpy).toHaveBeenCalledWith(mockLogEntity, params, result);
             expect(logEntry).toBe(mockLogEntity);
         });

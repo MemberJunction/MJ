@@ -1,0 +1,24 @@
+{
+  "name": "mj-docs-site",
+  "private": true,
+  "type": "module",
+  "description": "MemberJunction documentation site — Astro Starlight build that ingests guides, package READMEs, and TypeDoc output from this repo at build time. Deliberately OUTSIDE the npm workspaces: install and build from this directory.",
+  "scripts": {
+    "ingest": "node scripts/ingest.mjs",
+    "dev": "npm run ingest && astro dev",
+    "build": "npm run ingest && astro build",
+    "preview": "astro preview",
+    "test": "node --test scripts/lib/*.test.mjs"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.36.0",
+    "astro": "^5.0.0",
+    "mdast-util-to-string": "^4.0.0",
+    "mermaid": "^11.0.0",
+    "remark-gfm": "^4.0.0",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "unified": "^11.0.0",
+    "unist-util-visit": "^5.0.0"
+  }
+}

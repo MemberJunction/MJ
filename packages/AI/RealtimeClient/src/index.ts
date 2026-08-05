@@ -1,4 +1,5 @@
 export * from './generic/baseRealtimeClient';
+export * from './generic/openAIProtocolClient';
 export * from './audio/pcmUtils';
 export * from './audio/audioMeter';
 export * from './audio/pcmPlayback';
@@ -8,3 +9,4 @@ export * from './drivers/geminiRealtimeClient';
 export * from './drivers/elevenLabsRealtimeClient';
 export * from './drivers/assemblyAIRealtimeClient';
 export * from './drivers/xaiRealtimeClient';
+export * from './drivers/huggingFaceRealtimeClient';

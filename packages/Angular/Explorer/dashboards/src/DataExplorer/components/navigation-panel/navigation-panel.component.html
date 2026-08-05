@@ -7,124 +7,110 @@
   @if (!collapsed) {
     <div class="panel-content">
       <!-- Favorites Section -->
-      <div class="section favorites-section">
-        <div class="section-header" (click)="onSectionToggle('favorites')">
+      <mj-accordion-panel class="nav-accordion" Size="sm"
+        [Expanded]="favoritesSectionExpanded" (ExpandedChange)="onSectionToggle('favorites')">
+        <ng-template mjAccordionTitle>
           <i class="fa-solid fa-star section-icon"></i>
           <span class="section-title">Favorites</span>
           @if (favoriteRecords.length + favoriteEntities.length > 0) {
-            <span class="section-count">({{ favoriteRecords.length + favoriteEntities.length }})</span>
+            <span class="mj-accordion-badge mj-accordion-badge--right">{{ favoriteRecords.length + favoriteEntities.length }}</span>
           }
-          <i class="fa-solid expand-icon" [class.fa-chevron-down]="favoritesSectionExpanded" [class.fa-chevron-right]="!favoritesSectionExpanded"></i>
-        </div>
+        </ng-template>
 
-        @if (favoritesSectionExpanded) {
-          <div class="section-content scrollable-section">
-            @if (favoriteRecords.length + favoriteEntities.length === 0) {
-              <mj-empty-state class="empty-section" Size="compact"
-                Icon="" Title="No favorites yet" />
-            } @else {
-              <div class="scrollable-list">
-                <div class="scrollable-list-inner">
-                  @for (favorite of favoriteEntities; track favorite.entityName) {
-                    <div class="nav-item" (click)="onFavoriteClick(favorite)" [title]="favorite.entityName ? favorite.entityName + ' - ' + favorite.displayName : favorite.displayName">
-                      <i [class]="getFavoriteIcon(favorite)"></i>
-                      <span class="nav-item-label">{{ favorite.displayName }}</span>
-                    </div>
-                  }
-                  @for (favorite of favoriteRecords; track favorite.entityName + '|' + favorite.compositeKeyString) {
-                    <div class="nav-item" (click)="onFavoriteClick(favorite)" [title]="favorite.entityName ? favorite.entityName + ' - ' + favorite.displayName : favorite.displayName">
-                      <i [class]="getFavoriteIcon(favorite)"></i>
-                      <span class="nav-item-label">{{ favorite.displayName }}</span>
-                    </div>
-                  }
-                </div>
+        @if (favoriteRecords.length + favoriteEntities.length === 0) {
+          <mj-empty-state class="empty-section" Size="compact"
+            Icon="" Title="No favorites yet" />
+        } @else {
+          <div class="nav-scroll">
+            @for (favorite of favoriteEntities; track favorite.entityName) {
+              <div class="nav-item" (click)="onFavoriteClick(favorite)" [title]="favorite.entityName ? favorite.entityName + ' - ' + favorite.displayName : favorite.displayName">
+                <i [class]="getFavoriteIcon(favorite)"></i>
+                <span class="nav-item-label">{{ favorite.displayName }}</span>
+              </div>
+            }
+            @for (favorite of favoriteRecords; track favorite.entityName + '|' + favorite.compositeKeyString) {
+              <div class="nav-item" (click)="onFavoriteClick(favorite)" [title]="favorite.entityName ? favorite.entityName + ' - ' + favorite.displayName : favorite.displayName">
+                <i [class]="getFavoriteIcon(favorite)"></i>
+                <span class="nav-item-label">{{ favorite.displayName }}</span>
               </div>
             }
           </div>
         }
-      </div>
+      </mj-accordion-panel>
 
       <!-- Recent Items Section -->
-      <div class="section recent-section">
-        <div class="section-header" (click)="onSectionToggle('recent')">
+      <mj-accordion-panel class="nav-accordion" Size="sm"
+        [Expanded]="recentSectionExpanded" (ExpandedChange)="onSectionToggle('recent')">
+        <ng-template mjAccordionTitle>
           <i class="fa-solid fa-clock section-icon"></i>
           <span class="section-title">Recent</span>
           @if (filteredRecentItems.length > 0) {
-            <span class="section-count">({{ filteredRecentItems.length }})</span>
+            <span class="mj-accordion-badge mj-accordion-badge--right">{{ filteredRecentItems.length }}</span>
           }
-          <i class="fa-solid expand-icon" [class.fa-chevron-down]="recentSectionExpanded" [class.fa-chevron-right]="!recentSectionExpanded"></i>
-        </div>
+        </ng-template>
 
-        @if (recentSectionExpanded) {
-          <div class="section-content scrollable-section">
-            @if (filteredRecentItems.length === 0) {
-              <mj-empty-state class="empty-section" Size="compact"
-                Icon="" Title="No recent items" />
-            } @else {
-              <div class="scrollable-list">
-                <div class="scrollable-list-inner">
-                  @for (item of filteredRecentItems; track item.entityName + '|' + item.compositeKeyString) {
-                    <div class="nav-item" (click)="onRecentClick(item)" [title]="item.entityName + ' - ' + item.displayName">
-                      <i [class]="getRecentItemIcon(item)"></i>
-                      <div class="nav-item-content">
-                        <span class="nav-item-label">{{ item.displayName }}</span>
-                        <span class="nav-item-meta">{{ formatTimestamp(item.timestamp) }}</span>
-                      </div>
-                    </div>
-                  }
+        @if (filteredRecentItems.length === 0) {
+          <mj-empty-state class="empty-section" Size="compact"
+            Icon="" Title="No recent items" />
+        } @else {
+          <div class="nav-scroll">
+            @for (item of filteredRecentItems; track item.entityName + '|' + item.compositeKeyString) {
+              <div class="nav-item" (click)="onRecentClick(item)" [title]="item.entityName + ' - ' + item.displayName">
+                <i [class]="getRecentItemIcon(item)"></i>
+                <div class="nav-item-content">
+                  <span class="nav-item-label">{{ item.displayName }}</span>
+                  <span class="nav-item-meta">{{ formatTimestamp(item.timestamp) }}</span>
                 </div>
               </div>
             }
           </div>
         }
-      </div>
+      </mj-accordion-panel>
 
-      <!-- Entities Section (ng-tree) -->
-      <div class="section entities-section">
-        <div class="section-header" (click)="onSectionToggle('entities')">
+      <!-- Entities Section (ng-tree) — Fill so the tree owns the leftover rail height -->
+      <mj-accordion-panel class="nav-accordion nav-accordion--entities" Size="sm" [Fill]="true" [FlushBody]="true"
+        [Expanded]="entitiesSectionExpanded" (ExpandedChange)="onSectionToggle('entities')">
+        <ng-template mjAccordionTitle>
           <i class="fa-solid fa-database section-icon"></i>
           <span class="section-title">Entities</span>
-          <span class="section-count">({{ entities.length }})</span>
-          <i class="fa-solid expand-icon" [class.fa-chevron-down]="entitiesSectionExpanded" [class.fa-chevron-right]="!entitiesSectionExpanded"></i>
-        </div>
+          <span class="mj-accordion-badge mj-accordion-badge--right">{{ entities.length }}</span>
+        </ng-template>
 
-        @if (entitiesSectionExpanded) {
-          <div class="section-content entity-tree-container">
-            <!-- Entity Search -->
-            <div class="entity-search">
-              <i class="fa-solid fa-search search-icon"></i>
-              <input
-                type="text"
-                class="search-input"
-                placeholder="Search entities..."
-                [(ngModel)]="entitySearchTerm"
-                (ngModelChange)="onEntitySearchChanged()"
-              />
-              @if (entitySearchTerm) {
-                <button class="clear-search" (click)="clearEntitySearch()">
-                  <i class="fa-solid fa-times"></i>
-                </button>
-              }
-            </div>
-
-            <!-- Entity Tree -->
-            <mj-tree
-              #entityTree
-              [BranchConfig]="treeBranchConfig"
-              [LeafConfig]="treeLeafConfig"
-              [SelectionMode]="'single'"
-              [SelectableTypes]="'leaf'"
-              [SelectedIDs]="selectedEntityIds"
-              [ShowIcons]="true"
-              [ShowExpandCollapseAll]="false"
-              [AnimateExpandCollapse]="true"
-              [EmptyMessage]="entitySearchTerm ? 'No matches for: ' + entitySearchTerm : 'No entities available'"
-              [EmptyIcon]="'fa-solid fa-database'"
-              (SelectionChange)="onTreeEntitySelected($event)">
-            </mj-tree>
+        <div class="entity-tree-container">
+          <!-- Entity Search -->
+          <div class="entity-search">
+            <i class="fa-solid fa-search search-icon"></i>
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Search entities..."
+              [(ngModel)]="entitySearchTerm"
+              (ngModelChange)="onEntitySearchChanged()"
+            />
+            @if (entitySearchTerm) {
+              <button class="clear-search" (click)="clearEntitySearch()">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            }
           </div>
-        }
-      </div>
+
+          <!-- Entity Tree -->
+          <mj-tree
+            #entityTree
+            [BranchConfig]="treeBranchConfig"
+            [LeafConfig]="treeLeafConfig"
+            [SelectionMode]="'single'"
+            [SelectableTypes]="'leaf'"
+            [SelectedIDs]="selectedEntityIds"
+            [ShowIcons]="true"
+            [ShowExpandCollapseAll]="false"
+            [AnimateExpandCollapse]="true"
+            [EmptyMessage]="entitySearchTerm ? 'No matches for: ' + entitySearchTerm : 'No entities available'"
+            [EmptyIcon]="'fa-solid fa-database'"
+            (SelectionChange)="onTreeEntitySelected($event)">
+          </mj-tree>
+        </div>
+      </mj-accordion-panel>
     </div>
   } @else {
     <!-- Collapsed State - Show Icons Only -->

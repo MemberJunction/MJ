@@ -1,5 +1,370 @@
 # Change Log - @memberjunction/content-autotagging
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/tag-engine@6.0.0
+  - @memberjunction/tag-engine-base@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/ai-segmentation@6.0.0
+  - @memberjunction/ai-vectors@6.0.0
+  - @memberjunction/ai-vectordb@6.0.0
+  - @memberjunction/ai-vector-sync@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/storage@6.0.0
+  - @memberjunction/templates@6.0.0
+  - @memberjunction/ai-provider-bundle@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/tag-engine@5.51.0
+  - @memberjunction/tag-engine-base@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/ai-segmentation@5.51.0
+  - @memberjunction/ai-vectors@5.51.0
+  - @memberjunction/ai-vectordb@5.51.0
+  - @memberjunction/ai-vector-sync@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/storage@5.51.0
+  - @memberjunction/templates@5.51.0
+  - @memberjunction/ai-provider-bundle@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Minor Changes
+
+- 12691e3: Content autotagging: metadata-driven vector config, chunk purge + backfill, and parity with the entity-vectorization pipeline
+
+  Brings the ContentSource / autotag embedding pipeline (`AutotagBaseEngine`) up to parity with the
+  EntityDocument pipeline, and wires up chunk lifecycle operations. All additive and opt-in — existing
+  setups behave identically. No schema/migration changes (config rides the `Configuration` JSONType).
+  - **Metadata-driven vector config** on the `Configuration` JSONType of both `ContentSource` and
+    `ContentType` (ContentSource overrides ContentType, then a hardcoded default):
+    - **`VectorIDStrategy`** (`'hash' | 'recordId'`, default `'recordId'`): `'recordId'` uses each
+      chunk's own id as its vector-DB id (purge-safe); `'hash'` is 5.49 EntityDocument parity and
+      unsafe with re-chunk + purge (documented).
+    - **`ChunkTextStorage`** (`'mixed' | 'alwaysChunk'`, default `'alwaysChunk'`): `'alwaysChunk'`
+      writes a `ContentItemChunk` row for every item and leaves `ContentItem.VectorRecordID` null;
+      `'mixed'` keeps single-chunk items' text/vector on the ContentItem.
+    - **`VectorMetadata`** — full structural parity with the entity pipeline's metadata control:
+      `FieldStrategy: 'all' | 'include' | 'exclude' | 'explicit'` (unset ⇒ the curated content
+      default, preserving historical behavior), per-field `Fields` overrides
+      (`Included`/`TruncationLimit`/`StoreAs`), `DefaultTruncationLimit`,
+      and `IncludeEntityIcon`/`IncludeUpdatedAt`/`IncludeTags`/`IncludeText` toggles. The runner mirrors
+      the entity side's decomposition (system/icon/updatedAt/display-field helpers, StoreAs coercion,
+      UUID normalization, truncation) driven off the ContentItem entity. Content-specific deviations:
+      `Entity` is always kept under `'explicit'` (so results stay labeled; record id recovers from the
+      vector id under the default `recordId` strategy), and `Tags` (not a ContentItem field) is a
+      toggle rather than a discovered field.
+  - **Chunk-Identity Contract** — chunk vectors now carry their own identity: `Entity='MJ: Content
+Item Chunks'`, `RecordID=<ContentItemChunk.ID>`, `ContentItemID`, `Sequence`. The chunk row PK is
+    minted up front and used as its identity (and, under `recordId`, its vector id), so a scoped
+    search hit returns the matched **chunk** id (not just the parent content item id) with no
+    search-side changes. Item-level ('mixed' single-chunk) vectors keep `MJ: Content Items` identity.
+  - **`AutotagBaseEngine.EmbedPendingChunks(user, {maxItems})`** — (re)embeds persisted
+    `ContentItemChunk` rows whose `EmbeddingStatus='Pending'`, for migration backfill and error
+    recovery. Bounded per run + rate-limited; best-effort per chunk.
+  - **Embedding dimensions** — the resolved infrastructure now carries `MJ: Vector Indexes.Dimensions`
+    and threads it into the embedding call (new optional `Dimensions` on `AIModelRunner`'s
+    `EmbeddingRunParams`, forwarded to `EmbedTexts`), so reduced-dimension indexes work in the autotag
+    path and the dedup-check query embeds at the matching size.
+  - **Provider routing** — the resolved infrastructure carries the parsed `VectorIndex.ProviderConfig`;
+    per-record `providerTemporaryDirectives` are built via `VectorDBBase.BuildProviderDirectives`
+    (e.g. Pinecone namespace from a configured source field) and `providerConfig` is passed to
+    `CreateRecords`. Only invoked when the index actually has a ProviderConfig.
+  - **`AutotagBaseEngine.PurgeDeletedChunks`** is now triggerable: the Autotag/Vectorize action gains
+    optional **`Purge`** (Phase 4) and **`EmbedPendingChunks`** (Phase 3) params, both independent of
+    Vectorize, both bounded by `MaxItems`, both best-effort.
+
+  Behavior note: the default `ChunkTextStorage='alwaysChunk'` + `VectorIDStrategy='recordId'` means
+  newly-embedded single-chunk items now get a `ContentItemChunk` row with a unique vector id instead
+  of an item-level hash id. Already-embedded (`EmbeddingStatus='Complete'`) items are not reprocessed,
+  so existing data is untouched until re-embedded; set `ChunkTextStorage='mixed'` per source to retain
+  the item-level single-chunk behavior.
+
+- 1afdc40: Content autotagging: persist vector-database record identifiers, and add the ContentItemChunk entity
+
+  Vectorized Content Items previously had no back-reference to their stored vectors, and chunked items produced multiple vectors with no record of which portion of the item each represented. This adds that provenance.
+  - **`ContentItem.VectorRecordID`** (new `NVARCHAR(100)` column) — the vector-database record id for an item embedded as a single vector, providing traceability from the item to its stored vector.
+  - **New `ContentItemChunk` entity** — `ContentItemID` / `Sequence` / `Text` / `VectorRecordID`. When an item's text is split into multiple embedding chunks, each chunk becomes a row here, linking the stored vector back to the specific portion of the parent item. `(ContentItemID, Sequence)` is intentionally NOT unique — superseded chunks are soft-deleted (kept as tombstones) so a chunk and its replacement can share a Sequence until purged.
+  - **`AutotagBaseEngine.VectorizeContentItems`** — after a successful upsert, persists the record ids: single-chunk items write `ContentItem.VectorRecordID`; multi-chunk items write ordered `ContentItemChunk` rows in a server-side transaction. For multi-chunk items the item-level `VectorRecordID` is left null — the chunk table is the source of truth. Each chunk gets a **unique, persistent per-chunk vector id** (not the old item-hash scheme) so a re-chunk's new rows never reuse a superseded chunk's vector id. Each chunk row is stamped `EmbeddingStatus='Complete'` with `LastEmbeddedAt` on creation.
+  - **Re-chunking is a soft-delete + append** — re-vectorizing an item marks its current live chunks `DeleteStatus='Pending'` (rows kept) and appends the new chunks, all in one SQL transaction (no third-party call inside it). **`AutotagBaseEngine.PurgeDeletedChunks`** then removes the superseded chunks' vectors from the vector database (`vectorDB.DeleteRecords`, bounded sub-batches + rate-limited) and flips them to `DeleteStatus='Deleted'` with `LastDeletedAt` — delete-vector-first so a mid-run failure stays retryable, and out-of-band from vectorization so the remote deletes can be batched to each provider's limits.
+  - **`ContentItem` also gains** a self-referencing `ParentID` (nullable FK, enabling a content-item hierarchy) and a nullable `DisplayLink` (`NVARCHAR(2000)`, a display/clickable URL).
+  - **`ContentItemChunk` also gains** status-lifecycle + tracking fields mirroring the `ContentItem` pattern: `EmbeddingStatus` / `TaggingStatus` (NOT NULL, default `Pending`; value list = ContentItem's plus `Active` and `Processed`), a nullable `DeleteStatus` (`Pending` / `Deleted`), and `LastEmbeddedAt` / `LastTaggedAt` / `LastDeletedAt` timestamps.
+  - **Standalone vectorization** (`@memberjunction/actions-content-autotag`) — the Autotag/Vectorize action now runs vectorization whenever `Vectorize=1`, decoupled from whether autotagging produced new items, so `Autotag=0, Vectorize=1` embeds pending content without re-tagging or `ForceReprocess`. `RunDirectVectorization` selects only items awaiting embedding (`EmbeddingStatus='Pending'`) and honors the `ContentSourceIDs` filter; `ForceReprocess` re-embeds everything.
+  - **Re-embed on change** — when a content item is (re)tagged because its content changed, `AutotagBaseEngine` resets its `EmbeddingStatus` to `Pending` as tagging begins, so the vectorization phase picks it up and re-embeds it.
+
+  Additive only; existing vectorization behavior is unchanged when items fit in a single chunk.
+
+- 8b4c6b2: Route both autotag chunking sites through the pluggable segmentation layer (`@memberjunction/ai-segmentation`).
+
+  `buildEmbeddingChunks` and `chunkExtractedText` previously each called `TextChunker` directly with their own inline parameters. Both now resolve a segmenter via `ResolveSegmenter` and go through a single shared `segmentTextForChunking` seam.
+
+  **Behavior is unchanged.** The strategy defaults to `FixedWindow` with the same token budgets, overlap, and sentence strategy each site used before, and both keep their short-circuit that passes already-fitting text through verbatim. This is a refactor that makes the strategy swappable, not a change to how content is chunked.
+  - New `protected resolveSegmenterKey()` is the extension point — override it (or, once the config field lands, resolve it from the Content Source / Content Type `Configuration`) to opt into `StructuralText`, `SemanticText`, or `Transcript` segmentation.
+  - New `protected segmentTextForChunking()` runs the resolved strategy and returns null on failure so each caller keeps its own fallback rather than silently embedding nothing.
+  - The two sites deliberately keep **separate token budgets** — embedding chunks are sized to the embedding model (7500 tokens) and persisted; tagging chunks are sized to the LLM context window (`InputTokenLimit / 1.5`) and transient. They share a strategy, not a budget.
+
+  `chunkExtractedText` is now `async` (it was synchronous). It is public, so this is a signature change, though the only callers in the repo are its own tests.
+
+### Patch Changes
+
+- 8ce3356: Follow-up polish for #3275 (resolves #3287) — no behavior change:
+  - **Export the vector-config interfaces** from `@memberjunction/content-autotagging` with TSDoc
+    (`ResolvedVectorInfrastructure`, `ResolvedVectorStorageConfig`, `EmbeddingChunk`, `PersistedChunk`,
+    `ChunkPurgeStats`, `ChunkEmbedStats`, and the `VectorIDStrategy` / `ChunkTextStorage` /
+    `VectorMetadataConfig` / `VectorMetadataFieldConfig` aliases) so downstream consumers can reason
+    about resolved vector infrastructure.
+  - **`AutotagBaseEngine` chunk-record shaping is now subclass-overridable**: the per-chunk record
+    construction is extracted into a new `protected buildVectorRecord(...)`, and `buildVectorRecords`
+    plus its collaborators (`resolveChunkVectorId`, `buildVectorMetadata`, `buildProviderDirectives`,
+    `resolveItemVectorStorageConfig`, `isItemLevelVector`) are now `protected` with TSDoc.
+  - **O(1) by-id lookups in `KnowledgeHubMetadataEngine`**: `GetContentSourceByID`,
+    `GetContentTypeByID`, `GetContentSourceTypeByID`, `GetContentFileTypeByID` (plus the existing
+    `GetVectorIndexByID` / `GetEntityDocumentByID`) are now backed by lazily-built id indexes that
+    self-invalidate on the engine's `DataChange$`. `AutotagBaseEngine` now routes its by-id lookups
+    through these helpers instead of repeated `.find()` scans.
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [0686d52]
+- Updated dependencies [9efcfe6]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai-prompts@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/ai-segmentation@5.50.0
+  - @memberjunction/ai-vectors@5.50.0
+  - @memberjunction/storage@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/tag-engine@5.50.0
+  - @memberjunction/tag-engine-base@5.50.0
+  - @memberjunction/ai-vector-sync@5.50.0
+  - @memberjunction/templates@5.50.0
+  - @memberjunction/ai-vectordb@5.50.0
+  - @memberjunction/ai-provider-bundle@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [7db8ef5]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+- Updated dependencies [9d6e3d9]
+- Updated dependencies [78a5e44]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/ai-prompts@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai-vector-sync@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/ai-vectordb@5.49.0
+  - @memberjunction/templates@5.49.0
+  - @memberjunction/aiengine@5.49.0
+  - @memberjunction/tag-engine@5.49.0
+  - @memberjunction/tag-engine-base@5.49.0
+  - @memberjunction/ai-vectors@5.49.0
+  - @memberjunction/storage@5.49.0
+  - @memberjunction/ai-provider-bundle@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/tag-engine@5.48.0
+  - @memberjunction/tag-engine-base@5.48.0
+  - @memberjunction/ai-prompts@5.48.0
+  - @memberjunction/ai-vectors@5.48.0
+  - @memberjunction/ai-vectordb@5.48.0
+  - @memberjunction/ai-vector-sync@5.48.0
+  - @memberjunction/storage@5.48.0
+  - @memberjunction/templates@5.48.0
+  - @memberjunction/ai-provider-bundle@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/tag-engine@5.47.0
+  - @memberjunction/tag-engine-base@5.47.0
+  - @memberjunction/ai-prompts@5.47.0
+  - @memberjunction/ai-vectors@5.47.0
+  - @memberjunction/ai-vectordb@5.47.0
+  - @memberjunction/ai-vector-sync@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/storage@5.47.0
+  - @memberjunction/templates@5.47.0
+  - @memberjunction/ai-provider-bundle@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-prompts@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/tag-engine@5.46.0
+  - @memberjunction/tag-engine-base@5.46.0
+  - @memberjunction/ai-vectors@5.46.0
+  - @memberjunction/ai-vectordb@5.46.0
+  - @memberjunction/ai-vector-sync@5.46.0
+  - @memberjunction/storage@5.46.0
+  - @memberjunction/templates@5.46.0
+  - @memberjunction/ai-provider-bundle@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/aiengine@5.45.1
+  - @memberjunction/tag-engine@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/ai-vectors@5.45.1
+  - @memberjunction/ai-vector-sync@5.45.1
+  - @memberjunction/templates@5.45.1
+  - @memberjunction/ai-provider-bundle@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/tag-engine-base@5.45.1
+  - @memberjunction/ai-vectordb@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/storage@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/tag-engine@5.45.0
+  - @memberjunction/tag-engine-base@5.45.0
+  - @memberjunction/ai-prompts@5.45.0
+  - @memberjunction/ai-vectors@5.45.0
+  - @memberjunction/ai-vectordb@5.45.0
+  - @memberjunction/ai-vector-sync@5.45.0
+  - @memberjunction/storage@5.45.0
+  - @memberjunction/templates@5.45.0
+  - @memberjunction/ai@5.45.0
+  - @memberjunction/ai-provider-bundle@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/aiengine@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/ai-vectordb@5.44.0
+  - @memberjunction/storage@5.44.0
+  - @memberjunction/tag-engine@5.44.0
+  - @memberjunction/ai-prompts@5.44.0
+  - @memberjunction/ai-vectors@5.44.0
+  - @memberjunction/ai-vector-sync@5.44.0
+  - @memberjunction/templates@5.44.0
+  - @memberjunction/tag-engine-base@5.44.0
+  - @memberjunction/ai-provider-bundle@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

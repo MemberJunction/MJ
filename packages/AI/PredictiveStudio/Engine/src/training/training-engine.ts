@@ -28,20 +28,21 @@
  */
 
 import { LogError } from '@memberjunction/core';
-import type {
-  TrainRequest,
-  TrainResponse,
-  ValidationConfig,
-  MatrixData,
-  FeatureSchemaEntry,
-  PreprocessingOp,
-  SourceBinding,
-  AsOfStrategy,
-  LeakageGuard,
-  ValidationStrategy,
-  ProblemType,
-  FittedPreprocessing,
-  FeatureStepGraph,
+import {
+  DOMINANCE_THRESHOLD_DEFAULT,
+  type TrainRequest,
+  type TrainResponse,
+  type ValidationConfig,
+  type MatrixData,
+  type FeatureSchemaEntry,
+  type PreprocessingOp,
+  type SourceBinding,
+  type AsOfStrategy,
+  type LeakageGuard,
+  type ValidationStrategy,
+  type ProblemType,
+  type FittedPreprocessing,
+  type FeatureStepGraph,
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
@@ -122,17 +123,24 @@ export class TrainingEngine {
     if (!pipeline) {
       throw new Error(`TrainingEngine: ML Training Pipeline '${pipelineId}' not found.`);
     }
+    // `pipeline.Algorithm` is the algorithm's display *Name* (e.g. "XGBoost") from
+    // the pipeline view — NOT the sidecar driver key. Resolve the real `DriverClass`
+    // (e.g. "xgboost") by id; fall back to the display name only when the loader
+    // can't resolve it (e.g. in-memory test fakes that set the driver key directly).
+    const resolvedDriverKey =
+      (await deps.recordLoader.resolveAlgorithmDriverKey?.(pipeline.AlgorithmID, deps.contextUser, deps.provider)) ??
+      pipeline.Algorithm;
     return {
       pipeline,
       targetEntityName: pipeline.TargetEntity,
       targetVariable: pipeline.TargetVariable,
       problemType: pipeline.ProblemType,
-      algorithmDriverKey: pipeline.Algorithm,
+      algorithmDriverKey: resolvedDriverKey,
       hyperparameters: parseJson<Record<string, unknown>>(pipeline.Hyperparameters, {}),
       sourceBindings: parseJson<SourceBinding[]>(pipeline.SourceBindings, []),
       featureSteps: parseJson<FeatureStepGraph>(pipeline.FeatureSteps, { Steps: [] }),
       asOf: parseJson<AsOfStrategy>(pipeline.AsOfStrategy, { Mode: 'none' }),
-      leakageGuard: parseJson<LeakageGuard>(pipeline.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: 0.6 }),
+      leakageGuard: parseJson<LeakageGuard>(pipeline.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT }),
       validation: parseJson<ValidationStrategy>(pipeline.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.1 }),
     };
   }

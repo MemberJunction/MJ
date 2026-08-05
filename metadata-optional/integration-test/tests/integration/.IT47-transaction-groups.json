@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT47 - Transaction Group Atomicity",
+    "Description": "TransactionGroup atomicity over the wire: all-or-nothing on forced failure, ordering, variable passing; includes the scope-bypass pin per the register. Self-cleaning tagged fixtures. Client transport.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "TransactionGroup atomicity over the wire: all-or-nothing on forced failure, ordering, variable passing; includes the scope-bypass pin per the register. Self-cleaning tagged fixtures. Client transport."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "transaction-groups"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "085B0C3C-1191-4117-A473-8045EB145CB1"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T12:49:20.677Z",
+    "checksum": "d9c94fc37543a1388ff3cb1da117c20a0b5b7c6871278a219ef57e851e9971c2"
+  }
+}

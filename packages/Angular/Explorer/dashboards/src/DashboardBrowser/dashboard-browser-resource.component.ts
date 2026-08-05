@@ -1,7 +1,4 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ViewChild } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
@@ -145,7 +142,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     // Effective category map for shared dashboards (maps dashboard ID to effective category for display)
     public effectiveCategoryMap: Map<string, string | null> = new Map();
 
-    private readonly _destroy$ = new Subject<void>();
+    // Query params that arrived before the dashboard list finished loading (cold
+    // load / deep link / pin navigation). Applied once loadDashboards() completes.
+    private _pendingQueryParams: Record<string, string> | null = null;
 
     @ViewChild('dashboardViewer') dashboardViewer!: DashboardViewerComponent;
 
@@ -153,9 +152,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     // Constructor
     // ========================================
 
-    constructor(
-        private cdr: ChangeDetectorRef,
-        private route: ActivatedRoute) {
+    constructor(private cdr: ChangeDetectorRef) {
         super();
     }
 
@@ -165,8 +162,10 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
     ngOnInit(): void {
         super.ngOnInit();
+        // super.ngOnInit() wires up the query-param delivery. Any deep-link/pin params
+        // that arrive before loadDashboards() finishes are captured by OnQueryParamsChanged
+        // into _pendingQueryParams and applied once the dashboard list is available.
         this.loadDashboards();
-        this.subscribeToQueryParams();
         this.loadViewPreference();
         this.syncAgentToolsForMode();
         this.emitAgentContext();
@@ -174,8 +173,52 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
     ngOnDestroy(): void {
         super.ngOnDestroy();
-        this._destroy$.next();
-        this._destroy$.complete();
+    }
+
+    // ========================================
+    // Query-Param Round-Trip (back/forward, deep links, Home pins)
+    // ========================================
+
+    /**
+     * React to query-param changes from browser back/forward, deep links, and Home
+     * pin navigation. Driven by BaseResourceComponent's reactive tab-param stream,
+     * which reaches this component even when it's cached/detached — the path the old
+     * ActivatedRoute subscription could not reliably cover.
+     */
+    protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+        // Category is a cheap assignment with no list lookup — apply it eagerly either way.
+        this.selectedCategoryId = params['category'] || null;
+
+        if (params['dashboard'] && this.dashboards.length === 0) {
+            // List not loaded yet — defer the dashboard selection until it is.
+            this._pendingQueryParams = params;
+            this.cdr.detectChanges();
+            return;
+        }
+        this.applyDashboardSelectionFromParams(params);
+    }
+
+    /**
+     * Open/close the dashboard to match the `dashboard` query param. Requires the
+     * dashboard list to be loaded. URL pushes from openDashboard()/backToList() are
+     * auto-suppressed while delivering, so this reflects URL → state without looping.
+     */
+    private applyDashboardSelectionFromParams(params: Record<string, string>): void {
+        const dashboardId = params['dashboard'] || null;
+        const currentDashboardId = this.selectedDashboard?.ID || null;
+        if (dashboardId === currentDashboardId) {
+            this.cdr.detectChanges();
+            return;
+        }
+
+        if (dashboardId) {
+            const dashboard = this.dashboards.find(d => UUIDsEqual(d.ID, dashboardId));
+            if (dashboard) {
+                this.openDashboard(dashboard);
+            }
+        } else {
+            this.backToList();
+        }
     }
 
     // ========================================
@@ -1641,12 +1684,15 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 categories: this.categories.map(c => ({ id: c.ID, name: c.Name, parentId: c.ParentID }))
             });
 
-            // After dashboards are loaded, check for deep-link from configuration
-            // (e.g., pin navigation passes dashboard ID via queryParams in config)
-            this.applyConfigurationState();
-
-            // Also watch for late-arriving query params from pin navigation
-            this.watchForLateQueryParams();
+            // List is now loaded — apply any query-param selection. Use params deferred by
+            // OnQueryParamsChanged during the cold load if present, otherwise read the tab's
+            // current params (covers deep links and Home pin navigation).
+            const params = this._pendingQueryParams ?? this.GetQueryParams();
+            this._pendingQueryParams = null;
+            if (params && Object.keys(params).length > 0) {
+                this.selectedCategoryId = params['category'] || this.selectedCategoryId;
+                this.applyDashboardSelectionFromParams(params);
+            }
 
             this.emitAgentContext();
             this.NotifyLoadComplete();
@@ -1658,103 +1704,16 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         }
     }
 
-    /**
-     * Apply initial state from resource configuration (handles pin navigation
-     * and other deep-link scenarios where ActivatedRoute may not fire).
-     */
-    private applyConfigurationState(): void {
-        const config = this.Data?.Configuration;
-        if (!config) return;
-
-        const qp = config['queryParams'] as Record<string, string> | undefined;
-        const dashboardId = qp?.['dashboard'] || config['dashboard'] as string;
-        const categoryId = qp?.['category'] || config['category'] as string;
-
-        if (categoryId && categoryId !== this.selectedCategoryId) {
-            this.selectedCategoryId = categoryId;
-        }
-
-        if (dashboardId && !this.selectedDashboard) {
-            const dashboard = this.dashboards.find(d => UUIDsEqual(d.ID, dashboardId));
-            if (dashboard) {
-                this.openDashboard(dashboard);
-            }
-        }
-    }
-
-    /**
-     * Check for late-arriving query params (e.g., from pin navigation where
-     * UpdateActiveTabQueryParams runs after the component has already loaded).
-     * Polls briefly for queryParams to appear in the URL.
-     */
-    private watchForLateQueryParams(): void {
-        // Check every 200ms for up to 3 seconds for queryParams to appear
-        // AND for dashboards to be loaded (both conditions must be met)
-        let attempts = 0;
-        const interval = setInterval(() => {
-            attempts++;
-            if (attempts > 15 || this.selectedDashboard) {
-                clearInterval(interval);
-                return;
-            }
-            // Re-check the URL directly since ActivatedRoute may not fire
-            const url = window.location.href;
-            const dashboardMatch = url.match(/[?&]dashboard=([^&]+)/);
-            if (dashboardMatch && !this.selectedDashboard && this.dashboards.length > 0) {
-                const dashboardId = decodeURIComponent(dashboardMatch[1]);
-                const dashboard = this.dashboards.find(d => UUIDsEqual(d.ID, dashboardId));
-                if (dashboard) {
-                    this.openDashboard(dashboard);
-                    this.cdr.detectChanges();
-                    clearInterval(interval);
-                }
-            }
-        }, 200);
-    }
-
     // ========================================
     // Private Methods - URL Query Params
     // ========================================
 
-    private subscribeToQueryParams(): void {
-        this.route.queryParams
-            .pipe(takeUntil(this._destroy$))
-            .subscribe(params => {
-                const categoryId = params['category'] || null;
-                const dashboardId = params['dashboard'] || null;
-
-                // Handle category change
-                if (categoryId !== this.selectedCategoryId) {
-                    this.selectedCategoryId = categoryId;
-                }
-
-                // Handle dashboard change (for browser back/forward)
-                const currentDashboardId = this.selectedDashboard?.ID || null;
-                if (dashboardId !== currentDashboardId) {
-                    if (dashboardId) {
-                        // Find and open the dashboard
-                        const dashboard = this.dashboards.find(d => UUIDsEqual(d.ID, dashboardId));
-                        if (dashboard) {
-                            this.selectedDashboard = dashboard;
-                            this.mode = 'view';
-                        }
-                    } else {
-                        // Go back to list
-                        this.selectedDashboard = null;
-                        this.mode = 'list';
-                    }
-                }
-
-                this.emitAgentContext();
-                this.cdr.detectChanges();
-            });
-    }
-
     /**
      * Update the URL query params for the current tab.
-     * Uses NavigationService to update the tab configuration, which triggers
-     * the shell's URL sync mechanism to update the browser URL properly
-     * while respecting app-scoped routes.
+     * Routes through BaseResourceComponent.UpdateQueryParams, which updates the tab
+     * configuration (triggering the shell's URL sync while respecting app-scoped
+     * routes) and is auto-suppressed while delivering OnQueryParamsChanged so
+     * reflecting URL → state never loops back into a redundant URL push.
      */
     private updateUrlQueryParams(): void {
         const queryParams: Record<string, string | null> = {};
@@ -1773,9 +1732,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             queryParams['dashboard'] = null;
         }
 
-        // Use NavigationService to update query params properly
-        // This ensures the URL update respects app-scoped routes
-        this.navigationService.UpdateActiveTabQueryParams(queryParams);
+        // Push via the base-class method (auto-suppressed during OnQueryParamsChanged
+        // delivery) so the URL update respects app-scoped routes without loop-back.
+        this.UpdateQueryParams(queryParams);
     }
 
     // ========================================

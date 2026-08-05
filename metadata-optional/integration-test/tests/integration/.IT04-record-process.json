@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT04 - RecordSetProcessor Substrate",
+    "Description": "Exercises the RecordSetProcessor substrate end-to-end against the live DB (deterministic — a FunctionRecordProcessor, no model calls). RP1: a 3-record run persists an MJ: Process Runs header + one terminal MJ: Process Run Details per record (fire-and-forget tracker writes land + carry CompletedAt). RP2: mixed success/error/skip counts are recorded accurately. RP3: a processor that throws isolates the bad record (Error) and still persists every detail. RP4: the error-rate circuit breaker trips (Status=Failed, processed < total). RP5: a run spanning multiple batches processes every record. RP6: bounded concurrency runs in parallel but never exceeds maxConcurrency. RP7/RP8: dry-run persists DryRun=1 vs a normal apply persists DryRun=0 (history can tell a preview from an apply). The substrate's own ProcessRun/Detail audit rows are its output and are left in place.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Runs persist accurate Process Run headers + one terminal Process Run Detail per record; counts, isolation, circuit breaker, batching, concurrency cap, and the DryRun flag all behave as specified."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "record-process"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "CCE99A04-0EEA-45BE-AAC9-44562A1E8046"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T18:38:01.098Z",
+    "checksum": "a6ca433e5c03d5c38de870b27ad06f50f63387c7013e06a3c5f2b4f3d2db4e17"
+  }
+}

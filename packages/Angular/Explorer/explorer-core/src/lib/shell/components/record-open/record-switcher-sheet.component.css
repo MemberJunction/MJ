@@ -1,0 +1,95 @@
+.switcher-list {
+  padding: 0 10px;
+}
+
+.switcher-row {
+  display: flex;
+  align-items: center;
+  border-radius: 11px;
+}
+
+.switcher-row--active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+
+.switcher-row-main {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 11px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.switcher-row-main:active {
+  background: var(--mj-bg-surface-hover);
+}
+
+.switcher-row-main:focus-visible,
+.switcher-row-close:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: -2px;
+}
+
+.switcher-row-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  font-size: 16px;
+  /* App color arrives via [style.color]; the chip tint derives from it */
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.switcher-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.switcher-row-title {
+  font-size: var(--mj-text-sm, 14px);
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.switcher-row-origin {
+  font-size: 11.5px;
+  color: var(--mj-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.switcher-row-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: var(--mj-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.switcher-row-close:active {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}

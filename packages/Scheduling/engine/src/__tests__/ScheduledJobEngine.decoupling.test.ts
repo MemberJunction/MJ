@@ -640,7 +640,11 @@ describe('T7: StopPolling maxWaitMs bounds the wait', () => {
 
         // Generous upper bound for CI jitter — 100ms target, allow up to 500ms.
         expect(elapsed).toBeLessThan(500);
-        expect(elapsed).toBeGreaterThanOrEqual(100);
+        // Lower bound has a small tolerance: a setTimeout(100) is not guaranteed to leave
+        // Date.now() exactly 100ms later — timer coalescing and clock granularity routinely
+        // measure 99ms, which is what made this assertion flaky in CI. What is being pinned is
+        // "it actually waited" rather than "it returned immediately", so 90 preserves the intent.
+        expect(elapsed).toBeGreaterThanOrEqual(90);
     });
 });
 

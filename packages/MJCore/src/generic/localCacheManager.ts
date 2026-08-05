@@ -108,6 +108,13 @@ export interface CachedRunViewResult {
     aggregateResults?: AggregateResult[];
     /** Total row count from the database — may differ from rowCount for paginated queries */
     totalRowCount?: number;
+    /**
+     * Schema fingerprint captured when these rows were cached, surfaced from the stored payload
+     * so in-place maintenance can carry it FORWARD when rewriting the slot (B38). Without it the
+     * rewrite drops the hash, and `isSchemaStaleCacheEntry` short-circuits on a missing hash —
+     * permanently disabling post-migration drift detection for that slot.
+     */
+    schemaHash?: string;
 }
 
 /**
@@ -128,6 +135,17 @@ export interface LocalCacheManagerConfig {
      * entries for that entity are evicted. Default: 50. Set to 0 to disable.
      */
     maxPercentOfCachePerEntity: number;
+    /**
+     * Maximum size of any single cache entry, expressed as a percentage of
+     * maxSizeBytes. An entry estimated larger than this cap is not cached at
+     * all — the write is skipped (logged, data still returned to the caller
+     * uncached). Without this cap, storing an oversized entry is strictly worse
+     * than not caching it: evictIfNeeded frees max(incoming, 10% of budget), so
+     * an entry larger than the whole budget evicts EVERY other entry and still
+     * cannot be retained within budget — a full cache wipe on every store.
+     * Applies to RunView and RunQuery entries. Default: 25. Set to 0 to disable.
+     */
+    maxEntryPercentOfCache: number;
     /**
      * Interval in milliseconds for the periodic eviction sweep.
      * Catches entries that should have been evicted (TTL expired) but weren't
@@ -152,6 +170,7 @@ const DEFAULT_CONFIG: LocalCacheManagerConfig = {
     defaultTTLMs: 0, // No TTL — event-based invalidation is the primary mechanism
     evictionPolicy: 'lru',
     maxPercentOfCachePerEntity: 50,
+    maxEntryPercentOfCache: 25,
     evictionSweepIntervalMs: 300000, // 5 minutes
     verboseLogging: false,
 };
@@ -448,7 +467,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
     /**
      * Extracts the entity name from a RunView fingerprint.
-     * Fingerprint format: `EntityName|Filter|OrderBy|ResultType|MaxRows|StartRow|AggHash[|Connection]`
+     * Fingerprint format: `Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|…]`
+     * (built in GenerateRunViewFingerprint below — that array is the ground truth). NOTE:
+     * `ResultType` is deliberately NOT a segment; the cache stores plain JSON regardless and
+     * transformation happens post-cache. An earlier version of this comment listed it, which
+     * would put any new segment-indexing predicate one position off — MaxRows is [3], not [4].
      * @param fingerprint - The RunView cache fingerprint
      * @returns The entity name, or null if the fingerprint is malformed
      */
@@ -465,7 +488,191 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     protected isFilteredFingerprint(fingerprint: string): boolean {
         const parts = fingerprint.split('|');
-        return parts.length >= 2 && parts[1] !== '_' && parts[1] !== '';
+        return (parts.length >= 2 && parts[1] !== '_' && parts[1] !== '')
+            || this.hasOrderBy(parts)
+            || this.hasUserSearch(parts)
+            || this.hasNarrowingSegment(parts)
+            || this.hasAggregates(parts);
+    }
+
+    /**
+     * Returns true if the slot was cached under an ORDER BY (fingerprint segment [2]).
+     *
+     * An ordered slot's row SET can be maintained in place, but its ORDER cannot: an upsert
+     * appends the new row at map-insertion end and leaves re-sorted rows at their old positions,
+     * so the slot silently stops honoring the order the caller asked for — wrong for any
+     * "first row of the ordered set" consumer. Re-sorting in JS would require reimplementing SQL
+     * ORDER BY semantics (collations, NULL ordering, expression sorts), which is exactly the kind
+     * of "derive it in JS" shortcut this file keeps having to walk back.
+     *
+     * DELETE remains maintainable: removing a row preserves the relative order of the rest. This
+     * mirrors the filtered-slot asymmetry, and the branch order in
+     * processEntityEventForFingerprint (delete is checked before the filtered classification)
+     * delivers it without extra wiring. `BaseEngine` already refuses ordered configs for
+     * in-place mutation (`canUseImmediateMutation`); this closes the same gap in the raw
+     * provider cache. (B42)
+     *
+     * @param parts - the fingerprint already split on '|'
+     */
+    protected hasOrderBy(parts: string[]): boolean {
+        const ORDER_BY_INDEX = 2;
+        const orderBy = parts[ORDER_BY_INDEX];
+        return !!orderBy && orderBy !== '_';
+    }
+
+    /**
+     * Returns true if the slot was produced by a user search (fingerprint segment [6]).
+     *
+     * `UserSearchString` generates LIKE / full-text WHERE clauses, so it narrows rows exactly as
+     * `ExtraFilter` does — but it lives at index [6], INSIDE the 7-segment base, where neither the
+     * `parts[1]` filter check nor `hasNarrowingSegment` (which starts at index 7) was looking.
+     *
+     * Same bug class as H1/H3, different hiding place: a row-narrowing predicate invisible to the
+     * maintainability check. Demonstrated by upserting a non-matching row into a search slot —
+     * a search for "annual gala" subsequently served "Totally Unrelated Row". Explorer grid
+     * searches are the reachable surface. (N1)
+     *
+     * @param parts - the fingerprint already split on '|'
+     */
+    protected hasUserSearch(parts: string[]): boolean {
+        const USER_SEARCH_INDEX = 6;
+        const search = parts[USER_SEARCH_INDEX];
+        return !!search && search !== '_';
+    }
+
+    /**
+     * Returns true if the slot carries aggregate results (fingerprint segment [5], `aggHash`).
+     *
+     * ## Why an aggregate slot must be INVALIDATED, not maintained (H2)
+     * The aggregate was computed by the DATABASE over the pre-mutation row set. After an in-place
+     * upsert/remove there is no way to recompute it in JS for the general case: `COUNT(*)` shifts
+     * by one, `SUM`/`AVG` need the mutated row's contribution to the specific expression, and
+     * `MAX`/`MIN` may or may not move depending on the value.
+     *
+     * The first attempt at this fix CARRIED the cached aggregate forward — which was worse than
+     * the bug it replaced. Verified live: after a save the slot reported `rows=7` alongside
+     * `COUNT(*) = 6`. A caller can detect a MISSING aggregate; it cannot detect a stale one, and
+     * the read path reports `Success: true` / `cacheStatus: 'hit'` either way. Silently wrong
+     * beats loudly absent only if you never look.
+     *
+     * So: same treatment as subset slots. The value is not derivable in JS, therefore the slot is
+     * dropped and the next read recomputes it against the database.
+     *
+     * @param parts - the fingerprint already split on '|'
+     */
+    protected hasAggregates(parts: string[]): boolean {
+        const AGG_HASH_INDEX = 5;
+        const agg = parts[AGG_HASH_INDEX];
+        return !!agg && agg !== '_';
+    }
+
+    /**
+     * Returns true if the fingerprint carries any segment BEYOND the 7-part base that narrows the
+     * result set — i.e. the slot holds fewer rows than an unfiltered read of the same entity would.
+     *
+     * ## Why this exists (H1/H3)
+     * The base fingerprint is `Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch`, and the
+     * original filtered-check inspected ONLY `parts[1]`. But two later segments narrow the rows
+     * WITHOUT touching that segment:
+     *
+     *   - `vw:<id>`  — a saved view's `WhereClause` lives ON THE VIEW, not in `params.ExtraFilter`,
+     *                  so the filter segment stays `_`. The slot was therefore classified
+     *                  unfiltered and UPSERTED IN PLACE on save — serving rows the view's own
+     *                  WhereClause excludes. Views are how users are shown a restricted row set,
+     *                  so this reads as a data/permission leak, not merely stale data.
+     *   - `rls:<h>`  — the per-user Row-Level-Security predicate is appended AFTER the filter
+     *                  segment is built. Same misclassification, worse consequence: a save by
+     *                  user A was upserted into user B's RLS-scoped slot, injecting a row B's
+     *                  predicate excludes. That is an RLS bypass.
+     *
+     * ## Why it is written as a DENY-by-default allowlist
+     * Enumerating the narrowing segments would repeat the original mistake: the next segment
+     * someone appends is silently treated as maintainable until it causes a leak. So this
+     * enumerates only what is provably SAFE and treats everything else as narrowing:
+     *
+     *   - `imr:1`     — IgnoreMaxRows WIDENS the set (it removes a cap), so in-place maintenance
+     *                   remains valid.
+     *   - connection  — the `<driver>://host:port/` suffix is slot IDENTITY, not a predicate.
+     *
+     * Anything else — present or future — falls through to "narrowing", and the slot is
+     * conservatively invalidated on mutation rather than maintained. A new segment can therefore
+     * cost a cache refill, but it can never silently serve the wrong rows.
+     *
+     * @param parts - the fingerprint already split on '|'
+     */
+    protected hasNarrowingSegment(parts: string[]): boolean {
+        const BASE_SEGMENTS = 7;   // Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch
+        for (let i = BASE_SEGMENTS; i < parts.length; i++) {
+            const seg = parts[i];
+            if (!seg) {
+                continue;
+            }
+            if (seg.startsWith('imr:')) {
+                continue;          // widens the set — safe to maintain
+            }
+            if (seg.includes('://')) {
+                continue;          // connection identity — not a predicate
+            }
+            if (seg === 'f:*') {
+                // Full-width client projection. `ProviderBase.clientCacheFingerprint` appends an
+                // `f:<fields>` segment to EVERY client fingerprint, so omitting this classified
+                // 100% of client slots as narrowing — which disabled the client's entire
+                // differential-merge path (R1). `f:*` means "all fields", so it narrows neither
+                // rows nor columns and is genuinely safe to maintain.
+                //
+                // A NARROW `f:<a,b,c>` deliberately still falls through to narrowing: upserting a
+                // full row into a column-projected slot poisons its shape for the next reader.
+                continue;
+            }
+            return true;           // unknown or known-narrowing segment → do not maintain
+        }
+        return false;
+    }
+
+    /**
+     * Returns true if the fingerprint identifies a **subset slot** — a cache entry whose rows are
+     * a TRUNCATION (`MaxRows`) or an OFFSET WINDOW (`StartRow`) of the matching set rather than
+     * the complete set.
+     *
+     * Subset slots are safe to STORE and SERVE (a cold read of the slot is exactly what the DB
+     * would have returned), but they must NEVER be maintained in place by the BaseEntity
+     * save/delete event path:
+     *
+     *  - **Save/upsert** appends the saved row to the slot, so a `MaxRows: 1` slot grows to 2, 3,
+     *    4 … rows — silently violating the caller's own row limit and serving a set that is
+     *    neither the first-N nor the full set (one arbitrary original row plus every locally
+     *    saved row).
+     *  - **Delete/remove** shrinks the slot below the limit, so a `MaxRows: 1` slot serves 0 rows
+     *    while the DB still has 47 matching rows to choose a TOP 1 from.
+     *
+     * Neither can be repaired in JS: deciding whether a newly saved row belongs *inside* the
+     * window, and which row it would displace, requires re-running the query's TOP/OFFSET against
+     * the database. So we treat subset slots exactly as filtered slots are treated on save —
+     * conservatively INVALIDATE and let the next read repopulate from the DB.
+     *
+     * This is the row-level counterpart to the `totalRowCount` subset-slot handling: the total is
+     * maintained across the delta because the DB total is knowable; the ROWS are not, so the slot
+     * is dropped instead.
+     *
+     * Fingerprint format: `Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|…]`.
+     * Parsing is deliberately conservative — if the segments aren't cleanly numeric (e.g. a filter
+     * value containing a literal `|` shifts the positions), we return false and preserve existing
+     * behavior rather than over-invalidating. Such a fingerprint is filtered by definition, and
+     * filtered slots are already invalidated on save.
+     *
+     * @param fingerprint - The RunView cache fingerprint
+     */
+    protected isSubsetFingerprint(fingerprint: string): boolean {
+        const parts = fingerprint.split('|');
+        if (parts.length < 5) return false;
+
+        // MaxRows: -1 (or 0) means "no limit"; any positive value truncates the set.
+        const maxRows = Number(parts[3]);
+        if (Number.isFinite(maxRows) && maxRows > 0) return true;
+
+        // StartRow: > 0 means the slot is an offset window, not the head of the set.
+        const startRow = Number(parts[4]);
+        return Number.isFinite(startRow) && startRow > 0;
     }
 
     /**
@@ -726,7 +933,22 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             LogStatusVerbose(`LocalCacheManager: remote-invalidate (delete) for "${entityName}" PK=${key.ToConcatenatedString()}, removing from ${fingerprints.size} cached fingerprint(s)`);
             for (const fingerprint of fingerprintSnapshot) {
                 try {
-                    await this.RemoveSingleEntity(fingerprint, key, nowISO);
+                    // Subset slot (MaxRows/StartRow): removing a row would shrink it below the
+                    // caller's own row limit while the DB still has rows to fill the window.
+                    if (this.hasAggregates(fingerprint.split('|'))) {
+                        // The remote DELETE branch checked only isSubsetFingerprint, so an
+                        // aggregate slot took RemoveSingleEntity — whose storeCachedResults drops
+                        // aggregates on the premise "this path never runs for one". False here.
+                        // The slot survived with correct rows and NO aggregates, so later hits
+                        // returned Success with nothing for a caller that requested COUNT(*).
+                        // Same miss the LOCAL delete branch had; this is the second copy of the
+                        // maintenance logic. (N2)
+                        await this.InvalidateRunViewResult(fingerprint);
+                    } else if (this.isSubsetFingerprint(fingerprint)) {
+                        await this.InvalidateRunViewResult(fingerprint);
+                    } else {
+                        await this.RemoveSingleEntity(fingerprint, key, nowISO);
+                    }
                 } catch (err) {
                     LogError(`HandleRemoteInvalidateEvent: failed to remove from "${fingerprint}": ${(err as Error).message}`);
                 }
@@ -747,7 +969,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
                 for (const fingerprint of fingerprintSnapshot) {
                     try {
-                        if (!this.isFilteredFingerprint(fingerprint)) {
+                        // Subset slot (MaxRows/StartRow): upserting would grow the slot past the
+                        // caller's own row limit. Invalidate, same as a filtered slot.
+                        if (!this.isFilteredFingerprint(fingerprint) && !this.isSubsetFingerprint(fingerprint)) {
                             await this.UpsertSingleEntity(fingerprint, recordData, key, nowISO);
                         } else {
                             await this.InvalidateRunViewResult(fingerprint);
@@ -848,7 +1072,21 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         nowISO: string
     ): Promise<void> {
         const keyStr = key.ToConcatenatedString();
-        if (eventType === 'delete') {
+        // Subset slots (MaxRows-truncated / StartRow-offset) cannot be maintained in place in
+        // EITHER direction — upserting grows them past the caller's own row limit and removing
+        // shrinks them below it. Drop the slot and let the next read repopulate it from the DB.
+        if (this.isSubsetFingerprint(fingerprint)) {
+            LogStatusVerbose(`LocalCacheManager: Invalidating subset (MaxRows/StartRow) cache "${fingerprint.substring(0, 60)}"`);
+            await this.InvalidateRunViewResult(fingerprint);
+        } else if (this.hasAggregates(fingerprint.split('|'))) {
+            // Aggregates go stale on EITHER mutation, so this must precede the delete branch.
+            // Removal is safe for the ROWS of a filtered/view slot (a deleted row matches no
+            // predicate), which is why delete otherwise maintains in place — but a cached
+            // COUNT/SUM/MAX computed by the DB cannot be adjusted in JS, so the slot would serve
+            // rows=6 alongside COUNT(*)=7. Drop it and let the next read recompute (H2, delete half).
+            LogStatusVerbose(`LocalCacheManager: Invalidating aggregate-bearing cache "${fingerprint.substring(0, 60)}"`);
+            await this.InvalidateRunViewResult(fingerprint);
+        } else if (eventType === 'delete') {
             LogStatusVerbose(`LocalCacheManager: Removing entity ${keyStr} from cache "${fingerprint.substring(0, 60)}"`);
             await this.RemoveSingleEntity(fingerprint, key, nowISO);
         } else if (!this.isFilteredFingerprint(fingerprint)) {
@@ -1143,7 +1381,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Generates a human-readable cache fingerprint for a RunView request.
      * This fingerprint uniquely identifies the query based on its parameters and connection.
      *
-     * Format: EntityName|filter|orderBy|resultType|maxRows|startRow|aggHash|connection
+     * Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|appended…][|connection]
+     * (the parts array below is the ground truth). NOTE: resultType is NOT a segment — an older
+     * version of this comment listed it, which put every index after [2] off by one; that exact
+     * off-by-one trap has already bitten a segment-indexing predicate once (see the note on
+     * extractEntityFromFingerprint).
      * Example: Users|Active=1|Name ASC|simple|100|0|a1b2c3d4|localhost
      *
      * @param params - The RunView parameters
@@ -1181,10 +1423,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // and MUST be part of the fingerprint to prevent cross-query cache poisoning.
         const userSearch = (params.UserSearchString ?? '').trim();
 
-        // NOTE: ViewID and ViewName are intentionally excluded from the fingerprint.
-        // Views are just containers for entity + filter + orderBy. Two different views
-        // that resolve to the same entity/filter/orderBy produce identical SQL and results,
-        // so they should share the same cache entry.
+        // NOTE: a stored view's identity IS part of the fingerprint (appended below as `vw:`).
+        // The prior assumption — "views are just containers for entity + filter + orderBy" — is
+        // false: a saved view carries its own server-side WhereClause that is NOT reflected in
+        // params.ExtraFilter (it's applied later, in InternalRunView). Without the view segment a
+        // filtered view and a plain unfiltered read of the same entity produce identical
+        // fingerprints and cross-serve — the view is handed the unfiltered slot and returns rows
+        // outside its own WhereClause (a correctness/permission leak). See the `vw:` append below.
 
         // Build human-readable fingerprint with pipe separators
         // Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|Connection]
@@ -1197,6 +1442,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             aggHash,                 // Aggregate hash (or '_' for no aggregates)
             userSearch || '_'        // User search string (generates LIKE/FTS clauses)
         ];
+
+        // IgnoreMaxRows skips the entity-level UserViewMaxRows TOP cap, so a request with it
+        // returns a DIFFERENT (larger) row set than the otherwise-identical default (capped)
+        // query for the same entity — the two must never share a cache slot (else the capped
+        // result gets served to an IgnoreMaxRows caller, or vice-versa). Appended only when
+        // true, so the common case keeps producing the exact pre-existing fingerprint and no
+        // existing cache entries are invalidated.
+        if (params.IgnoreMaxRows === true) {
+            parts.push('imr:1');
+        }
 
         // Keyset (AfterKey) seek cursor MUST be part of the fingerprint. Each keyset page
         // sends a different AfterKey but otherwise-identical params; without this, sequential
@@ -1217,6 +1472,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const rls = (rlsWhereClause ?? '').trim();
         if (rls.length > 0) {
             parts.push(`rls:${this.simpleHash(rls)}`);
+        }
+
+        // Stored-view identity. A saved view's WhereClause/OrderBy live on the view, not in
+        // params.ExtraFilter, so a view run and a plain entity read (or a different view) can
+        // otherwise collide on the same fingerprint and be cross-served the wrong rows. Keyed by
+        // ViewID / ViewName / the passed ViewEntity's PK. Appended ONLY when a view identifier is
+        // present, so plain entity+filter queries keep the exact pre-existing fingerprint (no cache
+        // invalidation). Per-view rendering is deterministic; per-user row scoping is the separate
+        // `rls:` segment above.
+        const viewKey = (params.ViewID || params.ViewName || params.ViewEntity?.PrimaryKey?.ToConcatenatedString() || '').trim();
+        if (viewKey.length > 0) {
+            parts.push(`vw:${viewKey}`);
         }
 
         // Only include connection if provided
@@ -1245,6 +1512,50 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             .join(';');
 
         return this.simpleHash(aggString);
+    }
+
+    /**
+     * Reorders cached AggregateResults to match the CALLER's requested Aggregates[] order.
+     *
+     * The aggregate fingerprint (see {@link generateAggregateHash}) is deliberately
+     * order-insensitive — it sorts the aggregates — so two semantically-identical views
+     * requested as [A,B] and [B,A] share a single cache slot (cache-efficient). But the
+     * {@link RunViewResult.AggregateResults} contract is "in same order as input Aggregates
+     * array" — PER caller. A slot warmed as [A,B] therefore hands a [B,A] caller its results
+     * in the wrong order unless we remap on the way out. This does that remap.
+     *
+     * Matching is by (expression, effective alias) — the same identity that produced the
+     * aggHash (a result's alias defaults to its expression when the request omitted one).
+     * Fail-safe: returns the input unchanged when there are no aggregates to reorder, the
+     * counts differ, or any aggregate can't be matched — so a remap is never able to drop or
+     * fabricate a result.
+     */
+    public ReorderAggregateResultsToRequest(
+        cachedResults: AggregateResult[] | undefined,
+        requestedAggregates: AggregateExpression[] | undefined
+    ): AggregateResult[] | undefined {
+        if (!cachedResults || cachedResults.length === 0 || !requestedAggregates || requestedAggregates.length === 0) {
+            return cachedResults;
+        }
+        if (cachedResults.length !== requestedAggregates.length) {
+            return cachedResults; // shape mismatch — don't risk a bad remap
+        }
+        const key = (expression: string, alias: string): string => `${expression} ${alias}`;
+        const remaining = new Map<string, AggregateResult>();
+        for (const r of cachedResults) {
+            remaining.set(key(r.expression, r.alias), r);
+        }
+        const reordered: AggregateResult[] = [];
+        for (const agg of requestedAggregates) {
+            const k = key(agg.expression, agg.alias || agg.expression);
+            const match = remaining.get(k);
+            if (!match) {
+                return cachedResults; // can't confidently remap — leave as-is
+            }
+            remaining.delete(k);
+            reordered.push(match);
+        }
+        return reordered;
     }
 
     /**
@@ -1310,7 +1621,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         maxUpdatedAt: string,
         aggregateResults?: AggregateResult[],
         totalRowCount?: number,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        ttlMs?: number
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
@@ -1348,6 +1660,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for non-cacheable entity "${params.EntityName}" (AllowCaching=false)`, verboseOnly: true });
                     return;
                 }
+                // External-data-source entities have no BaseEntity events to invalidate their
+                // cache (their data changes on the remote system), so an entry written without a
+                // TTL would serve stale data forever. Require an explicit TTL for them — the
+                // provider passes ttlMs from the data source's DefaultCacheTTLSeconds. Without
+                // one, skip the write entirely (fail-safe against the stale-forever hazard).
+                if (entity?.ExternalDataSourceID && !ttlMs) {
+                    LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for external entity "${params.EntityName}" — no TTL provided (would never invalidate)`, verboseOnly: true });
+                    return;
+                }
             } catch (err) {
                 // fall through and write — fail-open is safer than fail-closed here
                 // (an unexpected exception shouldn't break caching for valid entities)
@@ -1380,6 +1701,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // value is the native object — no full JSON.stringify on the hot path.
         const sizeBytes = this.estimateResultsSize(data.results as unknown[]);
 
+        // Oversized-entry gate: an entry above maxEntryPercentOfCache of the budget is
+        // never cached. Attempting to store it would trigger a full-cache eviction to
+        // make room for an entry the very next store would evict again — strictly worse
+        // than serving this one query uncached. Always logged (not verbose-gated): an
+        // oversized result is a perf smell the operator should be able to see.
+        if (this.exceedsMaxEntrySize(sizeBytes)) {
+            LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for "${params.EntityName || fingerprint.substring(0, 60)}" — estimated entry size ${sizeBytes} bytes exceeds per-entry cap (${this._config.maxEntryPercentOfCache}% of ${this._config.maxSizeBytes} byte budget)` });
+            return;
+        }
+
         // Per-entity memory limit: evict oldest entries for this entity if over budget
         const entityName = params.EntityName || 'Unknown';
         await this.enforcePerEntityMemoryLimit(entityName, sizeBytes);
@@ -1409,7 +1740,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 accessCount: 1,
                 sizeBytes,
                 maxUpdatedAt,
-                rowCount: results.length  // Registry still tracks this for display/stats, derived from actual results
+                rowCount: results.length,  // Registry still tracks this for display/stats, derived from actual results
+                expiresAt: ttlMs ? Date.now() + ttlMs : undefined  // time-based expiry (external entities); undefined => event-invalidated (MJ-DB entities)
             });
 
             // Maintain entity→fingerprint reverse index for universal cache invalidation
@@ -1506,6 +1838,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return null;
         }
 
+        // TTL expiry — external-data-source entries carry an expiresAt (time-based, since their
+        // remote data changes can't be observed via BaseEntity events); MJ-DB entries don't and
+        // fall through to the normal event-invalidated path.
+        const registryEntry = this._registry.get(fingerprint);
+        if (registryEntry?.expiresAt && Date.now() > registryEntry.expiresAt) {
+            this.InvalidateRunViewResult(fingerprint).catch(() => {});
+            this._stats.misses++;
+            return null;
+        }
+
         if (this.isSchemaStaleCacheEntry(fingerprint, parsed)) {
             this.InvalidateRunViewResult(fingerprint).catch(() => {});
             this._stats.misses++;
@@ -1520,6 +1862,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             maxUpdatedAt: parsed.maxUpdatedAt,
             rowCount: results.length,
             totalRowCount: parsed.totalRowCount,
+            // Surfaced so in-place maintenance can carry it forward on rewrite (B38).
+            schemaHash: parsed.schemaHash,
         };
         if (parsed.aggregateResults) {
             result.aggregateResults = parsed.aggregateResults;
@@ -1565,7 +1909,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param deletedRecordIDs - Record IDs (in CompositeKey concatenated string format) that have been deleted
      * @param primaryKeyFieldName - The name of the primary key field (or first PK field for composite keys)
      * @param newMaxUpdatedAt - The new maxUpdatedAt timestamp after applying the delta
-     * @param _serverRowCount - DEPRECATED: This parameter is ignored. rowCount is always derived from merged results.length.
+     * @param serverRowCount - The database's authoritative total row count (fresh COUNT(*) over the
+     *   view) from the smart-cache check. Used as the merged entry's `totalRowCount` when it exceeds
+     *   the cached slice size — this keeps paginated / MaxRows-limited slots from undercounting the
+     *   true total. The visible `rowCount` is still derived from the merged results length.
      * @param aggregateResults - Optional fresh aggregate results (since aggregates can't be differentially computed)
      * @param provider - The IMetadataProvider that produced these results (for AllowCaching gating
      *   in multi-provider scenarios). Falls back to global Metadata.Provider when omitted.
@@ -1578,13 +1925,50 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         deletedRecordIDs: string[],
         primaryKeyFieldName: string,
         newMaxUpdatedAt: string,
-        _serverRowCount?: number,
+        serverRowCount?: number,
         aggregateResults?: AggregateResult[],
         provider?: IMetadataProvider
     ): Promise<CachedRunViewResult | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
         try {
+            // Subset / narrowing slots are NOT differentially updatable (H5 / H4).
+            //
+            // H5 — the #3199 defect, third instance. Merging a delta into a MaxRows/StartRow slot
+            // shrinks it below the caller's limit on deletes and cannot know window membership on
+            // inserts, exactly as the BaseEntity-event path could not. #3199 fixed
+            // processEntityEventForFingerprint and HandleRemoteInvalidateEvent; this third write
+            // path was left unfixed and, critically, unpinned by any test.
+            //
+            // H4 — this path delegates its write to SetRunViewResult, which RECOMPUTES schemaHash
+            // from the CURRENT entity. That stamps today's schema onto a merged array containing
+            // rows fetched under the OLD schema — asserting they match a field list they may not,
+            // and masking the very drift the guard exists to catch. B38's fix was to CARRY the
+            // hash, never recompute it; refusing the merge here keeps that invariant intact
+            // instead of duplicating the carry logic on a second path.
+            //
+            // Aggregate slots are refused for a third reason: this path's own contract is "if
+            // aggregateResults are not provided, cached aggregates are cleared (they'd be stale)".
+            // A revalidation that carries only row deltas therefore SILENTLY STRIPS the aggregates
+            // from a slot the caller still expects them from — the caller asked for COUNT(*) and
+            // gets Success with nothing. Invalidating instead forces a clean refetch that returns
+            // them. (Diagnosed from client-cache C13.)
+            //
+            // Refusing the merge is safe: the caller falls back to a normal fetch, which
+            // repopulates the slot correctly. A missed optimization, never wrong data.
+            const fpParts = fingerprint.split('|');
+            // hasNarrowingSegment is INCLUDED here again (B41 closed). It was removed under R1
+            // because the caller THREW on a decline with no refetch path — one undecidable slot
+            // failed the whole batch. The caller now performs a real full fetch on decline
+            // (processSingleSmartCacheResult), so declining a vw:/rls:/narrow-f: slot costs one
+            // plain query instead of correctness or availability. Note `f:*` is allowlisted in
+            // hasNarrowingSegment itself, so ordinary full-width client slots still merge.
+            if (this.isSubsetFingerprint(fingerprint) || this.hasAggregates(fpParts) || this.hasNarrowingSegment(fpParts)) {
+                LogStatusVerbose(`LocalCacheManager.ApplyDifferentialUpdate: refusing to merge into a subset/narrowing slot "${fingerprint.substring(0, 60)}" — invalidating instead`);
+                await this.InvalidateRunViewResult(fingerprint);
+                return null;
+            }
+
             // Get existing cached data
             const cached = await this.GetRunViewResult(fingerprint);
             if (!cached) {
@@ -1618,9 +2002,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // Convert map back to array
             const mergedResults = Array.from(resultMap.values());
 
-            // For differential updates, the merged result count IS the new total
-            // (differential applies to full-dataset caches, not paginated ones)
-            const mergedTotalRowCount = mergedResults.length;
+            // TotalRowCount must reflect the DATABASE total, not the size of the cached
+            // slice. The server sends the authoritative fresh COUNT(*) over the view in
+            // `serverRowCount` (via the smart-cache check). Collapsing the total to
+            // `mergedResults.length` is only correct for a FULL-dataset cache slot, where the
+            // cached rows ARE every matching row. For a paginated / MaxRows-limited slot the
+            // cached rows are a SUBSET, so `mergedResults.length` silently UNDERCOUNTS the true
+            // total — the exact defect behind the RunView TotalRowCount discrepancy where a
+            // fresh `count_only` read reported a LARGER count than a cached paginated read of
+            // the same entity. Take the max so the total is never below the rows we actually
+            // hold and always honors the server's (larger) authoritative count when provided.
+            const mergedTotalRowCount = serverRowCount != null && serverRowCount > mergedResults.length
+                ? serverRowCount
+                : mergedResults.length;
 
             // Store the updated cache with optional aggregate results
             // Note: If aggregateResults not provided, cached aggregates are cleared (they'd be stale)
@@ -1723,7 +2117,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
                 const updatedResults = Array.from(resultMap.values());
 
-                return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt);
+                return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt,
+                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash });
             } catch (e) {
                 LogError(`LocalCacheManager.UpsertSingleEntity failed: ${e}`);
                 return false;
@@ -1774,7 +2169,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
                 const updatedResults = Array.from(resultMap.values());
 
-                return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt);
+                return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt,
+                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash });
             } catch (e) {
                 LogError(`LocalCacheManager.RemoveSingleEntity failed: ${e}`);
                 return false;
@@ -1785,16 +2181,47 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     /**
      * Stores updated results array back to the cache and updates the registry.
      * Shared by UpsertSingleEntity and RemoveSingleEntity to avoid duplication.
+     *
+     * `prior` carries the pre-mutation total + row count so `totalRowCount` (the DATABASE
+     * total) is MAINTAINED across the in-place add/remove rather than dropped. Dropping it
+     * made reads fall back to `results.length`, which for a paginated / MaxRows-limited slot
+     * is only a SUBSET of the rows — so after the first save/delete event the slot's total
+     * collapsed to the cached slice size, undercounting the true total. That is the RunView
+     * TotalRowCount discrepancy where a fresh `count_only` reported a larger count than a
+     * cached paginated read. We adjust the prior total by the net row delta (add/remove) so a
+     * full-dataset slot is unchanged (prior total == prior length) while a subset slot keeps a
+     * correct total.
      */
     private async storeCachedResults(
         fingerprint: string,
         updatedResults: unknown[],
-        newMaxUpdatedAt: string
+        newMaxUpdatedAt: string,
+        prior?: { totalRowCount?: number; rowCount: number; schemaHash?: string }
     ): Promise<boolean> {
         const data: CachedRunViewData = {
             results: updatedResults,
             maxUpdatedAt: newMaxUpdatedAt
         };
+        // Carry the schemaHash FORWARD — never recompute it here (B38).
+        //
+        // Omitting it silently disabled schema-drift protection for the slot: rewriting a slot
+        // without a hash makes `isSchemaStaleCacheEntry` short-circuit (`if (!data.schemaHash)
+        // return false`), so a single save left that slot permanently unable to detect a
+        // post-migration column change. Same class of omission as the totalRowCount loss fixed
+        // in #3195, on this same write path.
+        //
+        // CARRY, don't RECOMPUTE: these rows were fetched under the OLD schema. Stamping the
+        // CURRENT hash onto them would assert they match today's field list — actively masking
+        // the very drift the guard exists to catch.
+        if (prior?.schemaHash) {
+            data.schemaHash = prior.schemaHash;
+        }
+        // Aggregates are deliberately NOT carried here — see hasAggregates(): an aggregate-bearing
+        // slot is invalidated on mutation rather than maintained, so this path never runs for one.
+        if (prior?.totalRowCount != null) {
+            const delta = updatedResults.length - prior.rowCount;
+            data.totalRowCount = Math.max(updatedResults.length, prior.totalRowCount + delta);
+        }
         // Estimate size by sampling rows (eviction accounting only); the actual stored
         // value is the native object. This runs on every save/delete event per matching
         // unfiltered fingerprint, so avoiding a full serialization here matters most.
@@ -1864,16 +2291,23 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         queryId?: string,
         queryName?: string,
         parameters?: Record<string, unknown>,
-        connectionPrefix?: string
+        connectionPrefix?: string,
+        categoryPath?: string
     ): string {
         const name = queryName?.trim() || 'Unknown';
         const id = queryId || '_';
         const params = parameters ? JSON.stringify(parameters) : '_';
         const connection = connectionPrefix || '';
+        // Full CategoryPath is a DISTINGUISHING element (B46). Two queries can share a Name in
+        // different categories; without this a name-only request collides their cache slots and
+        // serves one query's rows for the other. The RESOLVED canonical path is passed by the
+        // caller (see resolveQueryCacheContext), so a request by ID, by name, or by name+category
+        // that all resolve to the same query produce the same category segment. Normalized to '_'
+        // when absent/unresolvable, so uncategorized and runtime-created queries keep a stable key.
+        const category = (categoryPath && categoryPath.trim()) ? categoryPath.trim().toLowerCase() : '_';
 
-        // Build human-readable fingerprint with pipe separators
-        // Format: QueryName|QueryID|Params|Connection
-        const parts = [name, id, params];
+        // Format: QueryName|QueryID|Category|Params[|Connection]
+        const parts = [name, id, category, params];
 
         // Only include connection if provided
         if (connection) {
@@ -1901,14 +2335,27 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         maxUpdatedAt: string,
         rowCount?: number,
         queryId?: string,
-        ttlMs?: number
+        ttlMs?: number,
+        warmedForUserID?: string
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
         const actualRowCount = rowCount ?? results.length;
-        const data = { results, maxUpdatedAt, rowCount: actualRowCount, queryId };
+        // warmedForUserID records WHO ran the (fully authorized) miss that produced this slot.
+        // The B43 permission gate uses it as the tie-breaker when the query is not resolvable
+        // from cached metadata (runtime-created queries never are — the provider's Queries cache
+        // does not refresh in-process): the warmer proved their permission by executing; anyone
+        // ELSE falls through to an authorized execution rather than being served unchecked.
+        const data = { results, maxUpdatedAt, rowCount: actualRowCount, queryId, warmedForUserID };
         // Estimate size by sampling rows (eviction accounting only).
         const sizeBytes = this.estimateResultsSize(results);
+
+        // Oversized-entry gate — same rationale as SetRunViewResult: never wipe the
+        // cache to make room for an entry that can't be retained within budget.
+        if (this.exceedsMaxEntrySize(sizeBytes)) {
+            LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for query "${queryName}" — estimated entry size ${sizeBytes} bytes exceeds per-entry cap (${this._config.maxEntryPercentOfCache}% of ${this._config.maxSizeBytes} byte budget)` });
+            return;
+        }
 
         // Check if we need to evict entries
         await this.evictIfNeeded(sizeBytes);
@@ -1949,6 +2396,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         maxUpdatedAt: string;
         rowCount: number;
         queryId?: string;
+        /** User who executed the authorized miss that produced this slot (B43 tie-breaker). */
+        warmedForUserID?: string;
     } | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
@@ -1968,6 +2417,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 maxUpdatedAt: string;
                 rowCount?: number;
                 queryId?: string;
+                warmedForUserID?: string;
             }>(fingerprint, CacheCategory.RunQueryCache);
 
             if (parsed) {
@@ -1978,7 +2428,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     results: parsed.results,
                     maxUpdatedAt: parsed.maxUpdatedAt,
                     rowCount: parsed.rowCount ?? parsed.results?.length ?? 0,
-                    queryId: parsed.queryId
+                    queryId: parsed.queryId,
+                    // Pass-through, not optional garnish: the B43 gate serves an unresolvable-
+                    // metadata slot ONLY to its warmer. Rebuilding this object without the field
+                    // (the B38 omission pattern, which this session exists to stamp out — and
+                    // which the first version of this very fix repeated) silently disabled that
+                    // tie-break and with it TTL caching for runtime-created queries.
+                    warmedForUserID: parsed.warmedForUserID
                 };
             }
         } catch (e) {
@@ -2348,6 +2804,20 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
         const avgLen = total / sampleCount;
         return Math.ceil(avgLen * rowCount) * 2;
+    }
+
+    /**
+     * Returns true when a single entry of the given estimated size exceeds the
+     * per-entry cap (maxEntryPercentOfCache of maxSizeBytes) and must not be
+     * cached. See the config property's doc comment for the full rationale —
+     * in short, an entry that large can only be stored by evicting most (or
+     * all) of the cache, and it would be evicted again on the next store, so
+     * caching it is strictly worse than skipping it.
+     */
+    private exceedsMaxEntrySize(sizeBytes: number): boolean {
+        const pct = this._config.maxEntryPercentOfCache;
+        if (pct <= 0) return false;
+        return sizeBytes > Math.floor(this._config.maxSizeBytes * pct / 100);
     }
 
     /**

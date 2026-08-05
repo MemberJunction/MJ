@@ -296,6 +296,9 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       problemType: model.problemType,
       score: prediction.score,
       class: prediction.class,
+      // Top signed per-record drivers behind THIS prediction (P1-5), when the model supports exact
+      // per-row attribution (linear models); omitted otherwise (the UI falls back to global importance).
+      drivers: prediction.contributions?.map((c) => ({ feature: c.feature, value: c.value })),
       // Stamp when the prediction was produced so write-back can persist a "last scored at"
       // column via OutputMapping (`{ "<YourColumn>": "$.scoredAt" }`). ISO-8601 UTC.
       scoredAt: new Date().toISOString(),
@@ -330,6 +333,12 @@ export interface MLInferenceResultPayload {
   score: number;
   /** Predicted class label, present for classification problems. */
   class?: string;
+  /**
+   * Top signed per-record drivers behind this prediction (P1-5), present only for models with exact
+   * per-row attribution (linear). Feature names are post-preprocessing output columns; UIs collapse/humanize
+   * them. `value > 0` pushed the score up, `< 0` down. Absent for tree/ensemble/multiclass models.
+   */
+  drivers?: Array<{ feature: string; value: number }>;
   /**
    * ISO-8601 UTC timestamp of when this prediction was produced. Lets write-back persist a
    * dedicated "last scored at" column on the target entity via `OutputMapping`

@@ -47,6 +47,8 @@ vi.mock('../install/config-manager.js', () => ({
     ToggleServerDynamicPackages: vi.fn(),
     AddEntityPackageMapping: vi.fn(),
     RemoveEntityPackageMapping: vi.fn(),
+    AddExcludeSchema: vi.fn(() => ({ Success: true })),
+    RemoveExcludeSchema: vi.fn(() => ({ Success: true })),
 }));
 vi.mock('../install/client-bootstrap-gen.js', () => ({ RegenerateClientBootstrap: vi.fn() }));
 vi.mock('../install/history-recorder.js', () => ({
@@ -55,6 +57,7 @@ vi.mock('../install/history-recorder.js', () => ({
     RecordAppDependencies: vi.fn(),
     DeleteAppDependencies: vi.fn(),
     SetAppStatus: vi.fn(),
+    SetAppStep: vi.fn(),
     FindInstalledApp: vi.fn(),
     FindDependentApps: vi.fn(),
     ListInstalledApps: vi.fn(),

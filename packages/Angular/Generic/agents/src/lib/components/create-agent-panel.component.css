@@ -56,7 +56,14 @@
     border-radius: 12px;
 }
 
-.cap-section-advanced {
+/* Advanced Configuration accordion body — layout + tint only; the
+   mj-accordion-panel now owns the outer border/header chrome (FlushBody
+   removes its body padding, so this wrapper supplies the padding + gap). */
+.cap-advanced-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
     background: var(--mj-bg-surface-card);
 }
 
@@ -205,30 +212,9 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Advanced Config Toggle
+   Advanced Config Toggle — removed: the bespoke disclosure toggle + its dashed
+   chrome were replaced by <mj-accordion-panel>, which owns the header/chevron.
    ----------------------------------------------------------------------------- */
-
-.cap-advanced-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 10px 16px;
-    background: none;
-    border: 1px dashed var(--mj-border-strong);
-    border-radius: 8px;
-    color: var(--mj-text-secondary);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.cap-advanced-toggle:hover {
-    border-color: var(--mj-brand-primary);
-    color: var(--mj-brand-primary);
-    background: color-mix(in srgb, var(--mj-brand-primary) 4%, transparent);
-}
 
 /* -----------------------------------------------------------------------------
    Linked Items

@@ -1,0 +1,77 @@
+# Cross-server Redis cache-invalidation overlay (D5.6).
+#
+# Layer this ON TOP of docker-compose.test.yml — it adds a shared Redis, points BOTH
+# MJAPI processes at it (so each hot-swaps LocalCacheManager to RedisLocalStorageProvider
+# at startup — packages/MJServer/src/index.ts reads REDIS_URL), and adds a second MJAPI
+# replica (mjapi-b) on host port 14001 sharing the same DB + Redis.
+#
+# Bring it up:
+#   docker compose -f docker/regression/docker-compose.test.yml \
+#                  -f docker/regression/docker-compose.cross-server.yml \
+#                  --profile full up -d --wait sqlserver db-setup mjapi mjapi-b
+#
+# Then run the suite (it owns the orchestration of the two endpoints):
+#   RUN_CROSS_SERVER=1 \
+#   MJAPI_A_URL=http://localhost:14000/ MJAPI_B_URL=http://localhost:14001/ \
+#   MJ_API_KEY=<system-api-key> \
+#   npx tsx packages/MJServer/integration-test-scripts/cross-server-invalidation-tests.ts
+#
+# REDIS_KEY_PREFIX defaults to "mj" on both processes, so they share one keyspace.
+
+name: mj-regression
+
+services:
+  redis:
+    profiles: ["full"]
+    image: redis:7
+    ports:
+      - "16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Process A: the existing mjapi, now pointed at the shared Redis (env + depends_on merge
+  # with the base service definition in docker-compose.test.yml).
+  mjapi:
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_URL: "redis://redis:6379"
+
+  # Process B: a second MJAPI on the SAME DB + SAME Redis, host port 14001.
+  mjapi-b:
+    profiles: ["full"]
+    build:
+      context: ../..
+      dockerfile: docker/regression/Dockerfile.api
+    depends_on:
+      db-setup:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      DB_HOST: sqlserver
+      DB_PORT: "1433"
+      DB_USERNAME: sa
+      DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+      DB_DATABASE: MemberJunction_Test
+      DB_TRUST_SERVER_CERTIFICATE: "true"
+      MJ_BASE_ENCRYPTION_KEY: "${MJ_BASE_ENCRYPTION_KEY:-}"
+      AUTH0_DOMAIN: "${AUTH0_DOMAIN:-}"
+      AUTH0_CLIENT_ID: "${AUTH0_CLIENTID:-}"
+      AUTH0_CLIENT_SECRET: "${AUTH0_CLIENT_SECRET:-}"
+      GRAPHQL_PORT: "4000"
+      NODE_ENV: test
+      REDIS_URL: "redis://redis:6379"
+    ports:
+      - "14001:4000"
+    restart: on-failure:5
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s

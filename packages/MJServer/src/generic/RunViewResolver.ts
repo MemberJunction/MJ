@@ -588,6 +588,12 @@ export class RunViewWithCacheCheckResultOutput {
 
   @Field(() => String, { nullable: true, description: 'Error message if status is error' })
   errorMessage?: string;
+
+  @Field(() => [AggregateResultOutput], {
+    nullable: true,
+    description: 'Aggregate results when status is stale and aggregates were requested (B40 — previously never marshalled, so CacheLocal callers got no aggregates at all)'
+  })
+  aggregateResults?: AggregateResultOutput[];
 }
 
 @ObjectType()
@@ -715,6 +721,7 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:run', input.ViewName, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) 
@@ -746,6 +753,7 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:run', input.ViewID, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) 
@@ -777,6 +785,7 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:run', input.EntityName, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
       if (rawData === null) return null;
@@ -806,6 +815,7 @@ export class RunViewResolver extends ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
+      await this.CheckAPIKeyScopeAuthorization('view:batch', '*', userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       // Note: RunViewsGeneric returns the core RunViewResult type, not the GraphQL type
       const rawData = await super.RunViewsGeneric(input, provider, userPayload);
@@ -1069,6 +1079,9 @@ export class RunViewResolver extends ResolverBase {
           AuditLogDescription: item.params.AuditLogDescription,
           ResultType: (item.params.ResultType || 'simple') as 'simple' | 'entity_object' | 'count_only',
           StartRow: item.params.StartRow,
+          // Forward the aggregate request to the engine (B40) — omitted here as well as in the
+          // client's input map, so aggregates never reached InternalRunView on this transport.
+          Aggregates: item.params.Aggregates,
           AfterKey: item.params.AfterKey
             ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
             : undefined,
@@ -1126,6 +1139,8 @@ export class RunViewResolver extends ResolverBase {
             maxUpdatedAt: result.maxUpdatedAt,
             rowCount: result.rowCount,
             errorMessage: result.errorMessage,
+            // Same serializer the regular RunView path uses (value → JSON string).
+            aggregateResults: this.processAggregateResults(result.aggregateResults),
           };
         }
 

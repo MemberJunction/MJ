@@ -6,9 +6,21 @@ This directory contains SQL migration scripts for MemberJunction database schema
 
 ## 🚨 IMPORTANT: Where to Create New Migrations
 
-**All new migrations MUST be created in the `migrations/v5/` directory.**
+**The folder must match the major version in the migration's own filename.** A migration named
+`V202608042204__v6.1.x__APIKey_Scope_RowFilterID.sql` targets the 6.x era, so it belongs in
+`migrations/v6/`. A `v5.x`-named file belongs in `migrations/v5/`.
 
-The `migrations/v2/`,`migrations/v3/`, and `migrations/v4/` directory are **frozen** and should not receive new migrations. They contain historical migrations for earlier MJ versions.
+Derive the folder from the name you just chose — **never from a folder number written down in a
+doc**, which goes stale the moment a new era opens. (That is exactly how two `v6.1.x` migrations
+ended up in `v5/` in Aug 2026: this file used to name a specific folder, and the name was correct
+when written and wrong by the time it was read.)
+
+In practice new work targets the newest era, so the newest `v*/` folder is where new migrations
+land — but the *rule* is the filename, which also gets you the right answer when you are patching
+an older certified line (an `lts/5` fix is a `v5.x` migration and belongs in `migrations/v5/`).
+
+Earlier-era directories are otherwise **frozen**: they hold history and should not receive new
+work targeting a later era.
 
 ```
 migrations/
@@ -18,11 +30,20 @@ migrations/
 │   └── V202601131636...   # Historical migrations through v3.4.x
 ├── v4/                    # ❌ FROZEN - Do NOT add new migrations here
 │   └── V202602121700...   # Historical migrations through v4.4.x
-├── v5/                    # ✅ CREATE NEW MIGRATIONS HERE
-│   ├── B202602151200...   # v5.0 Baseline (complete schema)
-│   └── V202602131500...   # All new v5.x migrations
+├── v5/                    # 5.x era — B202602151200 baseline + all v5.x migrations
+├── v6/                    # 6.x era — v6.1.x migrations (baseline squash still pending)
 └── R__RefreshMetadata.sql # Repeatable migration (runs after all versioned)
 ```
+
+The tree above is a snapshot, not the rule. When a `v7/` era opens, `v7.x`-named migrations go
+there without this file needing an edit.
+
+> **Why the folder matters even though Flyway ignores it.** `migrationsLocation` is
+> `filesystem:./migrations`, scanned recursively, and the version comes from the *filename* —
+> so a migration in the wrong era folder still executes in the right order. What breaks is
+> **PostgreSQL parity**: counterparts are paired per folder (`migrations/vN` ↔ `migrations-pg/vN`)
+> by `scripts/check-pg-migration-parity.mjs`. A misfiled migration strands its counterpart.
+> Two 6.1.x migrations landed in `v5/` this way in Aug 2026, following this file's stale guidance.
 
 ## Version 3.0 Baseline Migration
 
@@ -95,6 +116,7 @@ V[YYYYMMDDHHMM]__v[VERSION].x_[DESCRIPTION].sql
 3. **Schema changes only** - NO data manipulation beyond what's required for the schema change
 
 **NEVER INCLUDE IN MIGRATIONS:**
+- **Metadata-record inserts via `*__Metadata_Sync.sql` migrations** — metadata changes (new AI models, prompts, agents, etc.) ship ONLY as declarative JSON under `/metadata/` (with CLI-`uuidgen` primaryKey UUIDs, no `sync` blocks). At release time the build engineer runs `mj sync push` against a clean DB at the last released version, generating ONE consolidated metadata-sync migration per build (SS + PG) and writing back the `sync` blocks. Do not hand-author per-PR sync migrations. See `metadata/CLAUDE.md` rule 1b.
 - View creation/updates (handled by CodeGen)
 - EntityField inserts/updates — **including `ValueListType` and `EntityFieldValue` rows** (handled by CodeGen)
 - Entity metadata changes (handled by CodeGen)
@@ -102,6 +124,50 @@ V[YYYYMMDDHHMM]__v[VERSION].x_[DESCRIPTION].sql
 - Any MemberJunction metadata updates (handled by CodeGen)
 
 > 🚨 **Value lists / dropdowns / generated unions come FROM THE SCHEMA, not from hand-written metadata.** A field's `EntityFieldValue` list, its `EntityField.ValueListType`, and its generated TypeScript union are all **derived by CodeGen from the column's CHECK constraint**. To change the allowed values of such a field, **drop the old CHECK constraint and add a new one (with the changed value set) in a SINGLE migration**, then run `mj codegen` — which re-syncs the `EntityFieldValue` rows + `ValueListType` and regenerates the union automatically. **NEVER `INSERT`/`UPDATE` `EntityFieldValue`, and NEVER `UPDATE EntityField.ValueListType`, directly in a migration** — that bypasses the source of truth and silently drifts from (or is overwritten by) CodeGen. (To allow values beyond the listed set, that's a CodeGen/metadata concern — don't force it with hand-written rows.)
+
+### 🚨 Appending CodeGen Output to a Migration — Separator Convention (REQUIRED)
+
+When a schema migration's CodeGen output (the `CodeGen_Run_*.sql` file produced by `mj codegen`) is concatenated onto the bottom of the hand-written migration DDL, **never butt the two sections together**. The concat MUST be separated by:
+
+1. **At least 50 blank lines** of whitespace after the last hand-written statement, then
+2. **A solid multi-line comment block** stating that everything below was generated by the MemberJunction CodeGen tool, what it contains (EntityField inserts, regenerated views, spCreate/spUpdate/spDelete procs, permission grants, extended properties), and that it must NOT be edited by hand — if the hand DDL above changes, re-run CodeGen and replace the entire generated section.
+
+This makes the hand-DDL/generated boundary unmissable when scrolling a 9,000-line migration, and keeps reviewers from mistaking generated plumbing for reviewable hand-written schema. After appending, **delete the standalone `CodeGen_Run_*.sql` file** — the migration file is the single artifact.
+
+Reference example: `V202607020230__v5.45.x__AISkill_ActivationMode.sql`.
+
+### 🚨 CodeGen Ordering — run `mj sync push` BEFORE `mj codegen` (REQUIRED)
+
+**CodeGen reads JSONType definitions from the DATABASE, not from `metadata/`.** The TypeScript
+interface behind a JSONType field (e.g. `ContentSource.Configuration`) is stored in
+`EntityField.JSONTypeDefinition` — a database column. The files under
+`metadata/entities/JSONType-interfaces/*.ts` are the *source*, but they only reach the database
+via `mj sync push`.
+
+So a database built from **migrations alone** carries whatever JSONType definitions the baseline
+shipped with. CodeGen faithfully regenerates the TypeScript from those stale definitions and
+**silently deletes** any properties added since — the generated interface simply comes back smaller.
+
+Correct order after any migration touching an entity that has a JSONType field:
+
+```bash
+mj migrate                 # schema
+mj sync push --include=entities   # run from the metadata/ directory
+mj codegen                 # now regenerates from current definitions
+```
+
+**Why this bites:** the failure is silent. It surfaced once only because a downstream package failed
+to compile against the shrunken interface; on an entity nothing imports, the truncated types would
+have been committed unnoticed and shipped as a breaking change to consumers.
+
+Two related points:
+
+- **Revert the `sync` block write-back.** `mj sync push` stamps `lastModified` + `checksum` into the
+  `metadata/**/*.json` files it pushed. Those belong to the release-time consolidated sync (see
+  `metadata/CLAUDE.md` rule 1b) — a feature PR must not carry them. Restore those lines before committing.
+- **Regenerate on a database at the last released version**, not a fresh install, or CodeGen emits
+  unrelated regenerations (validator functions, form fields) from the fresh-install state. Exclude
+  those from the appended section and say so in the header block.
 
 **The MemberJunction CodeGen system automatically handles:**
 - Creating/updating all views based on schema changes
@@ -189,6 +255,39 @@ INSERT INTO ${flyway:defaultSchema}.AIVendor (ID, Name, Description, __mj_Create
 VALUES (@VendorID, 'Vendor Name', 'Description', GETUTCDATE(), GETUTCDATE());
 ```
 
+### 4b. Never Create Foreign Key Indexes — CodeGen Generates Them
+
+**NEVER create indexes for foreign key columns in a migration.** CodeGen creates these automatically with the naming pattern `IDX_AUTO_MJ_FKEY_<table>_<column>`. Manual FK indexes duplicate CodeGen's work and leave two competing indexes on the same column.
+
+Together with rule 4 above, this gives the full list of what **CodeGen handles automatically** and must therefore be **omitted** from `CREATE TABLE` statements:
+
+1. **Timestamp columns** — `__mj_CreatedAt` / `__mj_UpdatedAt` (CodeGen adds these with proper defaults and triggers; including them manually causes conflicts)
+2. **Foreign key indexes** — `IDX_AUTO_MJ_FKEY_<table>_<column>`
+
+```sql
+-- ✅ CORRECT - Only business columns and constraints
+CREATE TABLE ${flyway:defaultSchema}.DashboardPermission (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    DashboardID UNIQUEIDENTIFIER NOT NULL,
+    UserID UNIQUEIDENTIFIER NOT NULL,
+    CanRead BIT NOT NULL DEFAULT 1,
+    CanEdit BIT NOT NULL DEFAULT 0,
+    SharedByUserID UNIQUEIDENTIFIER NOT NULL,
+    CONSTRAINT PK_DashboardPermission PRIMARY KEY (ID),
+    CONSTRAINT FK_DashboardPermission_Dashboard FOREIGN KEY (DashboardID) REFERENCES ${flyway:defaultSchema}.Dashboard(ID),
+    CONSTRAINT FK_DashboardPermission_User FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.User(ID),
+    CONSTRAINT UQ_DashboardPermission UNIQUE (DashboardID, UserID)
+);
+
+-- ❌ WRONG - Don't include these (CodeGen handles them)
+-- __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- CREATE INDEX IDX_DashboardPermission_DashboardID ON DashboardPermission(DashboardID);
+-- CREATE INDEX IDX_DashboardPermission_UserID ON DashboardPermission(UserID);
+```
+
+Note that **primary keys and foreign keys** are also exempt from the `sp_addextendedproperty` requirement — CodeGen handles their descriptions. Every *other* new column needs one.
+
 ### 5. Use Correct Schema Placeholder
 Always use Flyway's schema placeholder without adding the schema prefix:
 
@@ -239,6 +338,11 @@ When adding AI models and vendors:
 5. **Driver Class Names**: Follow existing conventions
    - Examples: "OpenAILLM", "AnthropicLLM", "GroqLLM"
    - Not: "OpenAIAPIService", "AnthropicService", etc.
+
+6. **Capability flags**: set `SupportsEffortLevel` and `SupportsStreaming` based on what the
+   **inference provider** actually supports, not what the model is theoretically capable of.
+   Check the provider's documentation — a provider's implementation frequently differs from the
+   model's published capabilities (the same reason token limits must come from the provider).
 
 ### 8. Testing Migrations
 

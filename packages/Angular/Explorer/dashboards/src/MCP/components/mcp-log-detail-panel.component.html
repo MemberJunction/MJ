@@ -84,41 +84,35 @@
       </div>
       <!-- Error Message (if any) -->
       @if (Log.ErrorMessage) {
-        <div class="info-section error-section expandable-section">
-          <div class="section-header clickable" (click)="toggleSection(ErrorSection)">
-            <div class="section-title-row">
-              <i class="fa-solid fa-chevron-right expand-icon" [class.expanded]="ErrorSection.expanded"></i>
-              <h3 class="section-title error">
-                <i class="fa-solid fa-exclamation-triangle"></i>
-                Error
-              </h3>
-            </div>
+        <mj-accordion-panel class="mcp-log-accordion" Size="sm"
+          [Expanded]="ErrorSection.expanded" (ExpandedChange)="toggleSection(ErrorSection)">
+          <ng-template mjAccordionTitle>
+            <span class="section-title error"><i class="fa-solid fa-exclamation-triangle"></i> Error</span>
+          </ng-template>
+          <ng-template mjAccordionActions>
             <button mjButton variant="flat" size="sm" (click)="copyError(); $event.stopPropagation()" title="Copy error">
               <i class="fa-solid fa-copy"></i>
             </button>
-          </div>
+          </ng-template>
           @if (ErrorSection.expanded) {
             <mj-alert Variant="error">
               <pre class="error-message">{{ Log.ErrorMessage }}</pre>
             </mj-alert>
           }
-        </div>
+        </mj-accordion-panel>
       }
       <!-- Input Arguments -->
       @if (Log.InputArgs) {
-        <div class="info-section expandable-section">
-          <div class="section-header clickable" (click)="toggleSection(InputArgsSection)">
-            <div class="section-title-row">
-              <i class="fa-solid fa-chevron-right expand-icon" [class.expanded]="InputArgsSection.expanded"></i>
-              <h3 class="section-title">
-                <i class="fa-solid fa-arrow-right-to-bracket"></i>
-                Input Arguments
-              </h3>
-            </div>
+        <mj-accordion-panel class="mcp-log-accordion" Size="sm"
+          [Expanded]="InputArgsSection.expanded" (ExpandedChange)="toggleSection(InputArgsSection)">
+          <ng-template mjAccordionTitle>
+            <span class="section-title"><i class="fa-solid fa-arrow-right-to-bracket"></i> Input Arguments</span>
+          </ng-template>
+          <ng-template mjAccordionActions>
             <button mjButton variant="flat" size="sm" (click)="copyInputArgs(); $event.stopPropagation()" title="Copy input arguments">
               <i class="fa-solid fa-copy"></i>
             </button>
-          </div>
+          </ng-template>
           @if (InputArgsSection.expanded) {
             <div class="code-card">
               <mj-code-editor
@@ -128,23 +122,20 @@
               </mj-code-editor>
             </div>
           }
-        </div>
+        </mj-accordion-panel>
       }
       <!-- Result -->
       @if (Log.Result) {
-        <div class="info-section expandable-section">
-          <div class="section-header clickable" (click)="toggleSection(ResultSection)">
-            <div class="section-title-row">
-              <i class="fa-solid fa-chevron-right expand-icon" [class.expanded]="ResultSection.expanded"></i>
-              <h3 class="section-title">
-                <i class="fa-solid fa-arrow-right-from-bracket"></i>
-                Result
-              </h3>
-            </div>
+        <mj-accordion-panel class="mcp-log-accordion" Size="sm"
+          [Expanded]="ResultSection.expanded" (ExpandedChange)="toggleSection(ResultSection)">
+          <ng-template mjAccordionTitle>
+            <span class="section-title"><i class="fa-solid fa-arrow-right-from-bracket"></i> Result</span>
+          </ng-template>
+          <ng-template mjAccordionActions>
             <button mjButton variant="flat" size="sm" (click)="copyResult(); $event.stopPropagation()" title="Copy result">
               <i class="fa-solid fa-copy"></i>
             </button>
-          </div>
+          </ng-template>
           @if (ResultSection.expanded) {
             <div class="code-card">
               <mj-code-editor
@@ -154,7 +145,7 @@
               </mj-code-editor>
             </div>
           }
-        </div>
+        </mj-accordion-panel>
       }
       <!-- User Info -->
       @if (Log.UserName) {

@@ -11,6 +11,7 @@
 
 # Playwright Test (e2e/) run artifacts
 e2e/test-results/
+test-results/
 e2e/playwright-report/
 e2e/.last-run.json
 
@@ -90,6 +91,11 @@ Thumbs.db
 
 *.env
 .env.*
+# Template for the gitignored docker/workbench/.env.database — must stay tracked so a
+# clean checkout can create that file. (docker/workbench/.env.example predates the
+# .env.* rule above and is tracked by grandfathering; this one needs the explicit
+# negation because git only ignores files it isn't already tracking.)
+!docker/workbench/.env.database.example
 mj server info.txt
 member_junction_code_for_documentation.pdf
 member_junction_code_for_documentation.txt
@@ -102,7 +108,9 @@ packages/MJExplorer/src/environments/environment.development.ts
 packages/MJExplorer/src/environments/environment.staging.ts
 packages/MJExplorer/src/environments/environment.ts
 Schema Files/
-/docs/
+# generated TypeDoc output — but hand-written decision records are tracked
+/docs/*
+!/docs/decisions/
 SQL Scripts/generated/
 **/SQL Scripts/generated/
 *.old
@@ -180,6 +188,10 @@ packages/MJExplorer/src/app/generated/class-registrations-manifest.ts
 
 # Test coverage output
 coverage/
+
+# Stryker mutation-testing scratch (per-package, created by `npx stryker run`)
+.stryker-tmp/
+reports/mutation/
 docker/workbench/workspace/.env.database
 docker/workbench/workspace/screenshots/
 test-run-log.txt

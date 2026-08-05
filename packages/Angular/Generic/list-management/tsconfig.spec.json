@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"]
+  },
+  "include": [
+    "src/lib/components/list-delta-confirm/**/*.ts",
+    "src/lib/components/audience-source-summary/**/*.ts",
+    "src/lib/components/save-view-as-list-dialog/**/*.ts",
+    "src/lib/components/list-invitations/**/*.ts",
+    "src/lib/components/list-audit-log/**/*.ts",
+    "src/lib/components/list-management-dialog/**/*.ts",
+    "src/lib/services/list-management.service.ts",
+    "src/lib/models/list-management.models.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

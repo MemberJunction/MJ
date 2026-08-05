@@ -1,5 +1,250 @@
 # @memberjunction/integration-engine
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/integration-engine-base@6.0.0
+  - @memberjunction/integration-pk-classifier@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/integration-progress-artifacts@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/integration-engine-base@5.51.0
+  - @memberjunction/integration-pk-classifier@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/integration-progress-artifacts@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- 1e0008f: fix(integration): apply-phase correctness — identity, completeness, and record-map durability
+
+  Defects in the sync apply phase, all of which corrupt data rather than fail loudly.
+  - **Content-unchanged records skipped their tombstone repair.** A record marked deleted in MJ but alive again externally hashes identical on every subsequent sync, so it never reached the sync-state repair and stayed tombstoned permanently. The early return now runs the repair before returning.
+  - **Record-map loads stopped at the entity row cap.** `RunView` without `MaxRows` is not unbounded — it falls back to `UserViewMaxRows` (1000 by default). The orphan sweep silently stopped cleaning past row 1000, and worse, the full-push path read a missing mapping as "never pushed" and re-created records that already existed in the external system. `LoadAllRecordMaps` now walks the map with `AfterKey` keyset paging ordered by `ID` with `IgnoreMaxRows`, bounded by a `MAX_PAGES` backstop, and reports a `Complete` flag; callers that did not get the whole map refuse to act on it rather than acting on a partial one. Keyset rather than `StartRow` because OFFSET paging skips rows on PostgreSQL, where `gen_random_uuid()` primary keys are random rather than monotonic and concurrent inserts can land before the cursor.
+  - **Identity was decided by two competing rules.** The entity primary key (soft PKs included) is now the single definition of record identity for both matching and saving. `IsKeyField` remains a fallback lookup for records whose mapped data does not carry the PK, and is no longer AND-ed on as an additional constraint when a complete PK is present.
+  - **Record-map writes were three round trips per record on the hot path** — a lookup, a load, and a save, paid for every record the sync touched including the ones it decided not to change. The new `RecordMapBatch` resolves a whole chunk against the database in one `RunView` and then writes only the rows that are actually new or actually point somewhere different, so an incremental sync where mappings are stable costs one read and zero writes per chunk. Writes go through the provider's entity layer (`GetEntityObject` + `Save()`), not hand-written SQL, so they are dialect-agnostic by construction and still get field validation, timestamps, Record Changes and — the one that bites silently — the save event that invalidates `LocalCacheManager`. Per-row error attribution is structural rather than reconstructed: each mapping is its own `Save()` returning its own boolean, so a bad row names itself and its chunk-mates are unaffected. `Queue()` deliberately does not auto-flush on a full chunk — it is called from inside the apply pass's batch transaction, where a flush would write map rows that `Discard()` could no longer take back on rollback. The apply loop flushes once per batch, after commit.
+  - **Identity lookups were one query per record.** They are now prefetched per field-set group, issued as one `RunViews`. The batched path indexes external IDs both exactly and collation-folded (lowercased, trailing blanks stripped), because the single-query path let SQL Server compare — case-insensitive and trailing-blank-insensitive under a default collation — while pairing rows in JavaScript with `===` would read `AB-100 ` against a stored `ab-100` as unmapped and create a duplicate record. **The fold is applied only on SQL Server**: PostgreSQL's `=` on text is case-sensitive and pads nothing, so folding there would hand back a mapping the database itself did not return and turn a CREATE into an UPDATE of a different row. A folded key that more than one distinct mapping collapses onto is marked ambiguous and deferred to the per-record query rather than guessed at, as is an ID that was never in the batch's `IN (…)` list. Absence is only ever concluded from a read that can prove it.
+  - **A non-ASCII external ID was invisible to every record-map lookup on SQL Server.** The lookups embed the external ID as a SQL literal, and a bare `'…'` on SQL Server is a _varchar_ literal: any character outside the database's collation codepage is replaced with `?` before the comparison runs. Under the default `SQL_Latin1_General_CP1_CI_AS`, `ünïcödé-Ω-日本語` reads as `ünïcödé-O-???` and matches the stored (nvarchar) row zero times — so the record looked unmapped and was created a second time in the customer's external system on every sync. The literals are now `N`-prefixed on SQL Server (no prefix on PostgreSQL, whose literals are already Unicode), which also removes the implicit conversion that would otherwise sit on the column. Applied at all three lookup sites — the batched read, the batched read's per-record fallback, and `MatchEngine`'s per-record query — so they cannot disagree about a value.
+  - **Batch sizes are configurable and clamped.** `MJ_INTEGRATION_RECORD_MAP_CHUNK_SIZE` (default 500, ceiling 5,000 — a chunk becomes one `IN (…)` list, so the filter text grows linearly with it) and `MJ_INTEGRATION_RECORD_MAP_PAGE_SIZE` (default 10,000, ceiling 50,000). Out-of-range values are clamped with a logged warning rather than accepted.
+
+  Also: a schema pipeline whose migration already committed is never retried, so a retry cannot re-run a committed install step.
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/integration-engine-base@5.50.0
+  - @memberjunction/integration-pk-classifier@5.50.0
+  - @memberjunction/integration-progress-artifacts@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Minor Changes
+
+- 70113b1: Align the integrations framework — resolution overlay, EM/EFM lifecycle, sync locking, watermark backfill, and the U1–U5/U7/U10/U11 upstream defects.
+
+  **Engine (`integration-engine`)**
+  - U1: `IntrospectSchema`/creation-pipeline mappings propagate `undefined` PK/FK flags instead of coercing to `false` — a sample's silence can no longer wipe a declared primary key (`SourceFieldInfo.IsPrimaryKey/IsForeignKey` widened to optional).
+  - Semantic overlay (`decideSemanticOverlay`): Description / DisplayName / IncrementalWatermarkField are external-wins-when-present, curated-fallback-when-silent (per-attribute overlay precedence).
+  - Content-hash basis: the content-hash match/write covers MAPPED fields only — a newly-appearing custom key no longer forces a row rewrite. Custom-key candidates + sizing statistics are aggregated in-memory per sync (`SyncResult.CustomKeyStats`, `foldCustomKeyStats`, `inferColumnTypeFromStats`) and flow to the promotion callback regardless of row skips. **Operational note (one-time):** because the content-hash basis becomes mapped-only, the first sync after this deploys re-hashes and re-writes every overflow-carrying row exactly once — a bounded one-time load spike plus Record-Changes churn — after which stored hashes converge and steady-state (skip-unchanged) writes resume.
+  - Maintenance lock (`AcquireMaintenanceLock`/`ReleaseMaintenanceLock`/`GetMaintenanceLock`): syncs refuse while a metadata refresh / schema evolution / RSU pipeline runs for the connection.
+  - U3: live sync progress is monotonic under concurrency (`RatchetProgressSnapshot`).
+  - U11: `IntrospectSchemaOptions.OnProgress` — determinate discovery progress (scanned/total).
+
+  **Server (`server`)**
+  - `IntegrationSchemaEvolution` is now the full re-resolution refresh: re-resolution → diff → removed objects' entity/field maps disabled (data kept) → changed objects' field maps reconciled + Pull watermarks reset (U10, backfills new columns) → new objects' tables created with entity maps born DISABLED (`autoEnableNewObjects` opts in) → RSU. Extended output: NewObjects/RemovedObjects/ChangedObjects/WatermarksReset.
+  - `IntegrationApplyAll`/`ApplyAllBatch`: `UnselectedAction` ('disable' default) — objects absent from the selection get their entity + field maps disabled; re-selection re-enables both. First-ever apply defaults to a FULL sync.
+  - U7: schedule creation is unique per (connection, job kind) — update-in-place instead of duplicates.
+  - U5: boot-time assert when RSU's additionalSchemaInfo write path diverges from CodeGen's read path.
+  - DAG exposure: `IntegrationListSourceObjects` items carry `DependsOn` parent names.
+  - U11: RSU status/progress expose CurrentStepName/StepIndex/StepTotal; pipeline steps carry StepIndex/StepTotal.
+
+  **SchemaEngine / schema-builder**
+  - additionalSchemaInfo per-table REPLACE semantics for soft FKs (`ClearForeignKeysForTables`) — a refresh's resolution replaces the prior run's FK entries for its tables.
+  - `RSUPendingWork`: `UnselectedAction` + `CreateDisabled` for the post-restart consumer; U11 step-index fields.
+
+  **CodeGenLib / PostgreSQLDataProvider**
+  - U2: `spUpdateExistingEntityFieldsFromSchema` honors `IsSoftPrimaryKey` on BOTH dialects (PG emitter + SQL Server migration) — schema sync no longer wipes resolved soft PKs.
+  - U4: a keyless entity now throws a named "has no primary key" error instead of emitting malformed record-change SQL.
+
+### Patch Changes
+
+- 48fa886: Fix (U1): schema-discovery PK overlay now enforces the rsuplan "either/or" rule — a **declared** primary key wins over a **stream-discovered** one, per rsuplan line 29 ("find a primary key … only for objects where there is no primary key defined").
+
+  Previously `IntegrationSchemaSync.UpsertField` applied `decideBooleanOverlay` to `IsPrimaryKey` per field with no object-level awareness, so a streamed unique column (e.g. HubSpot `hs_object_id`) was **added on top of** the declared PK (`id`), fabricating a composite key. When the added component was nullable/unpopulated, the generated `spCreate` read-back (`SELECT … WHERE a=@a AND b=@b`) could never match (SQL `x = NULL` is never true) → `"no rows returned"` → 0 rows synced.
+
+  The overlay now computes, per object, whether a declared (non-`Discovered`) PK already exists. If it does, discovery may not promote a _different_ field to PK — its uniqueness is still recorded via `IsUniqueKey`. Streaming still runs on every object for column/width/custom-field discovery; only the PK promotion is gated. Connectors whose streamed key equals the declared PK are unaffected.
+
+- 314f667: Stop silently truncating nested-child data in REST integration sync, plus two reliability fixes.
+  - **Nested-child completeness** — `DescendTemplateVars` now drains a parent's FULL paginated child collection instead of capping it at `ctx.BatchSize`. The outer batch size bounds how many PARENTS a call processes (resumable via the parent keyset, never mid-child), so applying it to the per-parent child fetch permanently dropped every record past the first batch with no bookmark to ever revisit it. Live-verified: Wild Apricot Donation/Event/Invoice/Payment (single-parent, capped at 200 each) and a Mailchimp list's full 501-member set now land completely.
+  - **Write-verification errors** — classify a create that returns no rows (`"no rows returned from SQL"`) as a distinct, non-retryable `WRITE_VERIFICATION_ERROR` instead of the retryable `DATABASE_ERROR` catch-all; retrying an identical write only reproduces the identical miss.
+  - **Narrower DATABASE_ERROR match** — the over-broad `"sql"` substring match was routing deterministic failures through retry-with-backoff for no reason; it now keys on real transient signals (deadlock / connection lost).
+  - **StartSync run-detection window** — extend the poll for the run record (fast first 2s, longer tail) so a large connector's synchronous setup (e.g. HubSpot's 168 entity maps) isn't misreported as "no run created" while it is genuinely syncing.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [85575cf]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/integration-engine-base@5.49.0
+  - @memberjunction/integration-pk-classifier@5.49.0
+  - @memberjunction/integration-progress-artifacts@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/integration-engine-base@5.48.0
+  - @memberjunction/integration-pk-classifier@5.48.0
+  - @memberjunction/integration-progress-artifacts@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/integration-engine-base@5.47.0
+  - @memberjunction/integration-pk-classifier@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/integration-progress-artifacts@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/integration-engine-base@5.46.0
+  - @memberjunction/integration-pk-classifier@5.46.0
+  - @memberjunction/integration-progress-artifacts@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/integration-engine-base@5.45.1
+- @memberjunction/integration-pk-classifier@5.45.1
+- @memberjunction/integration-progress-artifacts@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- 81a8aa2: Custom-column promotion gate (U3) + opt-in reclaim planner (U7) — two pure decision functions in `CustomColumnPromotion.ts`; the engine PLANS, the consumer executes.
+
+  **U3 — hold promotion until a full sync (`planPromotions` + `PromotionPlanOptions.LockUntilFullSync`).** After a rediscovery, an _incremental_ sync only re-syncs changed rows, so unchanged rows still carry now-vanished keys in their overflow JSON — a coverage scan over that stale mix could **phantom-promote** a column the source already dropped. A full sync evicts every stale key per-row (`reconcileOverflowValue`, shipped in the schema-fidelity change), making the scan trustworthy. When `LockUntilFullSync` is set, `planPromotions` plans **nothing** — the engine's half of "lock column-application until the sync after a schema change." The engine supplies the lever; the consumer owns the state (it knows when a full sync completed) and pulls it. Default (undefined/false) = unlocked, so existing callers are unchanged.
+
+  **U7 — opt-in reclaim of vanished promoted columns (`planColumnReclamations`).** A promoted column the source stops sending currently lingers all-NULL (non-destructive by design). This adds a **pure, triple-gated, default-OFF** planner: it returns candidates only when the deployment opts in (`ReclaimVanishedColumns`) AND a full sync was observed (`FullSyncCompleted`), and even then only for a column that is BOTH all-NULL across that full sync AND absent from the source. Nothing is dropped by default, and a column holding data is never a candidate. Symmetric to `planPromotions`: the engine only PLANS the drop; the consumer/RSU performs the destructive DDL.
+
+  Both are pure and deterministic (sorted output), matching the existing `decideLengthOverlay` / `reconcileOverflowValue` pattern. Unit-tested (2 lock cases + 4 reclaim cases). No migration; no behavior change unless a caller passes the new options.
+
+### Patch Changes
+
+- f99cbc1: Fix: template-var **child** objects now receive sampled field metadata at discovery, and the parent's addressing key is **resolved from the fetched rows** rather than presupposed.
+
+  A second-layer object whose API path nests under a parent (`/orgs/{OrgId}/events`) resolves its parent IDs through `LoadParentIDs`, which reads the **synced** DB. At discovery nothing is synced yet, so the child yields zero records → it is sampled with no fields (no widths, no PK, no custom-column capture), silently falling back to declared-only metadata. Discovery instead **walks the same DAG sync walks** — parents before children, a child reading its parents — but adapted with a rough per-table record limit (~`maxRecords`) and reading parents from a **live sample** instead of the DB. This is a single recursive routine (`StreamRecordsForDiscovery`), **uniform to all depths**: a template-var child streams its parent by calling the _same routine_ one level up, so a grandparent is sampled identically. Because each level pulls its parent lazily and there is **no per-level cap**, the child's fill-to-N demand propagates up the _entire_ dependency chain to the parentless top — the "fill to N" completion happens at the top of the chain, not locally. A million-row ancestor is streamed and cut off early (record-constrained, unlike sync which walks every row).
+
+  Crucially, the parent's addressing-key **field name is not presupposed**. After fetching the parent it is resolved, in order: (1) a **declared PK** in metadata; else (2) the engine's **value-statistic PK classifier run over the rows fetch just returned** (`pickKeyFromStats` / soft-fallback — discovery-via-fetch, the same determination used everywhere). If neither resolves, the parent is genuinely keyless and its child **adjourns** (caught on the first real sync). No conventional identity name is ever guessed — a field name is never assumed for a field the data doesn't prove is the key.
+
+  Discovery-only and additive: it runs through a dedicated path (the REST `DiscoverySampleRecordStream` override → `StreamRecordsForDiscovery`), so the **sync path** (`FetchWithTemplateVars` → `LoadParentIDs`) is untouched — `ZERO_PARENTS` and the "sync the parent first" DAG contract are unchanged; non-template-var objects are untouched. Multi-var (composition) children are **deferred**: the sampler adjourns them (declared-only until first sync) rather than fire malformed URLs at the vendor. The parent live-sample is an HTTP fetch with no SQL, so it is dialect-agnostic — identical on SQL Server and PostgreSQL. Covered by unit tests: the pre-fix zero-record gap, a declared-PK parent, a **keyless parent whose key is resolved from the fetched rows**, the record bound, and the sync path staying unchanged.
+
+- 11d5b4e: Fix (MJ#3047): quote the primary-key identifier in the content-hash prefetch filter so an integration object whose PK column name is a SQL reserved word (e.g. Zendesk `custom_objects.key`) no longer silently loses idempotency.
+
+  `IntegrationEngine.PrefetchContentHashes` built its bulk stored-hash lookup as `WHERE key IN (…)` with the PK identifier unquoted. For a reserved-word PK the database rejects the query; because the prefetch is best-effort it swallows the error and returns nothing, so the content-hash idempotent-skip fast path can never engage — every unchanged record is re-written on each sync (inflated `RecordsUpdated`, redundant writes). The filter now quotes the PK identifier(s) **and** value literals through the provider's dialect (`DatabaseProviderBase.Dialect` → `[key]` on SQL Server, `"key"` on PostgreSQL), so it is valid on both targets without reintroducing the SS-brackets-break-Postgres problem the previous unquoted form was guarding against. Filter construction is extracted to a pure `buildContentHashPrefetchFilter` helper with unit tests covering reserved-word single + composite PKs on both dialects.
+
+- 82ca89b: Two catalog-fidelity fixes for the connector discovery/sync pipeline:
+  - **Width never shrinks on rediscovery (U2).** `IntegrationSchemaSync`'s per-field overlay assigned the rediscovered `MaxLength` directly, so a rediscovery whose sample happened to be narrower than a prior run shrank the persisted `IOF.Length`. RSU only ever widens the physical column (never shrinks it), so the catalog drifted below the column (catalog `nvarchar(128)` vs column `nvarchar(512)`) and a later apply keyed off the catalog could truncate a value the wider column still holds. The overlay is now a pure `decideLengthOverlay` that grows the persisted width but never shrinks it (a null/undefined source width is "no opinion" — the persisted value sticks).
+  - **Stale overflow keys are evicted on re-sync (U4), which also stops phantom promotion (U3).** The custom-overflow write only fired when a record had unmapped fields, so when a source column vanished the record's unmapped set emptied, the write was skipped, and the prior overflow JSON (with the now-gone key) stuck around forever — where a coverage scan could still promote it to a real column. The write now reconciles to the record's CURRENT unmapped keys on every sync (`reconcileOverflowValue`), clearing the column to null when there are none, so a vanished key is evicted the next time its row is synced. Byte-identical for customs-free rows (writing null to an already-null column is a no-op under dirty tracking).
+
+  Both are extracted as pure, unit-tested decision functions (`decideLengthOverlay`, `reconcileOverflowValue`) matching the existing `decideBooleanOverlay` pattern. Code-only, no migration.
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/integration-engine-base@5.45.0
+  - @memberjunction/integration-pk-classifier@5.45.0
+  - @memberjunction/integration-progress-artifacts@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/integration-engine-base@5.44.0
+  - @memberjunction/integration-pk-classifier@5.44.0
+  - @memberjunction/integration-progress-artifacts@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

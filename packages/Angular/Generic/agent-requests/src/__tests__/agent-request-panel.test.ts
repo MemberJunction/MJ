@@ -5,22 +5,39 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * All Angular decorators and DI mocked — we test computed getters and state transitions.
  */
 
-vi.mock('@angular/core', () => ({
-    Component: () => (target: Function) => target,
-    Input: () => () => {},
-    Output: () => () => {},
-    ChangeDetectorRef: class { markForCheck() {} detectChanges() {} },
-    ChangeDetectionStrategy: { OnPush: 1 },
-    OnInit: class {},
-    OnDestroy: class {},
-    HostListener: () => () => {},
-    ViewChild: () => () => {},
-    ElementRef: class {},
-    EventEmitter: class { emit = vi.fn(); subscribe = vi.fn(); },
-}));
+vi.mock('@angular/core', () => {
+    // `vi.mock` factories are hoisted, so this object has to be built inside the factory.
+    const core: Record<string | symbol, unknown> = {
+        Component: () => (target: Function) => target,
+        Input: () => () => {},
+        Output: () => () => {},
+        ChangeDetectorRef: class { markForCheck() {} detectChanges() {} },
+        ChangeDetectionStrategy: { OnPush: 1 },
+        OnInit: class {},
+        OnDestroy: class {},
+        HostListener: () => () => {},
+        ViewChild: () => () => {},
+        ElementRef: class {},
+        EventEmitter: class { emit = vi.fn(); subscribe = vi.fn(); },
+        // The panel now extends BaseAngularComponent (a @Directive) so it inherits the standard
+        // `Provider` input instead of binding the global provider. Angular's compiler emits several
+        // internal `ɵ*` helpers at class-definition time; enumerating them here would break again
+        // the next time it emits one more, so unknown `ɵ*` names resolve to a no-op instead.
+        Directive: () => (target: Function) => target,
+    };
+    const isIvyHelper = (prop: string | symbol) => typeof prop === 'string' && prop.startsWith('\u0275');
+    return new Proxy(core, {
+        get: (target, prop) => (prop in target ? target[prop] : isIvyHelper(prop) ? () => ({}) : undefined),
+        has: (target, prop) => prop in target || isIvyHelper(prop),
+    });
+});
 
 vi.mock('@memberjunction/core', () => ({
-    RunView: function RunView() { return { RunView: vi.fn() }; },
+    RunView: Object.assign(function RunView() { return { RunView: vi.fn() }; }, {
+        // The panel reads through the provider now, not the global default.
+        FromMetadataProvider: () => ({ RunView: vi.fn() }),
+    }),
+    Metadata: class { static get Provider() { return {}; } },
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({

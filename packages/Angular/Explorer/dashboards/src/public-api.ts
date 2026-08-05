@@ -11,6 +11,10 @@ export * from './DataExplorer';
 export * from './Communication/communication-dashboard.component';
 export * from './Credentials';
 export * from './SystemDiagnostics';
+export * from './ThemeStudio/theme-studio-dashboard.component';
+export * from './ThemeStudio/theme-studio-resource.component';
+export * from './ThemeStudio/theme-manager-dashboard.component';
+export * from './ThemeStudio/theme-manager-resource.component';
 export * from './DevTools';
 export * from './Admin';
 export * from './Lists';
@@ -73,6 +77,10 @@ export {
   AnalyticsResourceComponent,
   LoadAnalyticsResource
 } from './KnowledgeHub/components/analytics/analytics-resource.component';
+export {
+  FeaturePipelinesResourceComponent,
+  LoadFeaturePipelinesResource
+} from './KnowledgeHub/components/feature-pipelines/feature-pipelines-resource.component';
 
 // Archiving components
 export {
@@ -213,6 +221,7 @@ export * from './communication-dashboards.module';
 export * from './credentials-dashboards.module';
 export * from './data-explorer-dashboards.module';
 export * from './lists-dashboards.module';
+export * from './routines-dashboards.module';
 export * from './component-studio-dashboards.module';
 export * from './predictive-studio-dashboards.module';
 export { PredictiveStudioEngine } from './PredictiveStudio/engine/predictive-studio.engine';
@@ -220,3 +229,6 @@ export * from './DatabaseDesigner/database-designer-dashboards.module';
 export { DatabaseDesignerDashboardComponent, LoadDatabaseDesignerDashboard } from './DatabaseDesigner/components/database-designer-dashboard.component';
 export * from './shared/shared-dashboard-widgets.module';
 export * from './archiving-dashboards.module';
+
+// Routines app — schedule AI agents to run on a cron cadence
+export { UserRoutinesResourceComponent, LoadUserRoutinesResource } from './UserRoutines/user-routines-resource.component';

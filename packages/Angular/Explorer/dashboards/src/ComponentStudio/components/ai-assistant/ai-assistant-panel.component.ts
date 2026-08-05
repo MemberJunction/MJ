@@ -19,7 +19,8 @@ import type {
 } from '@memberjunction/core-entities';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { NavigationService } from '@memberjunction/ng-shared';
-import type { NavigationRequest, PendingAttachment } from '@memberjunction/ng-conversations';
+import type { NavigationRequest } from '@memberjunction/ng-conversations';
+import type { PendingAttachment } from '@memberjunction/ng-composer';
 import { ComponentStudioStateService, ComponentError } from '../../services/component-studio-state.service';
 
 /**

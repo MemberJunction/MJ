@@ -1,5 +1,82 @@
 # @memberjunction/ng-agent-client
 
+## 6.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@6.0.0
+- @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.51.0
+- @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.50.0
+- @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [9c07270]
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai-agent-client@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.48.0
+- @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.47.0
+- @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.46.0
+- @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [c1f2d3d]
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-agent-client@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+  - @memberjunction/ai-agent-client@5.44.0
+  - @memberjunction/global@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

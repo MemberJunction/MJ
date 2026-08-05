@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-import { Metadata, IMetadataProvider } from '@memberjunction/core';
+import { Metadata, IMetadataProvider, LogStatus, PermissionConstrainedError } from '@memberjunction/core';
 import { UserInfoEngine, MJWorkspaceEntity } from '@memberjunction/core-entities';
 import {
   WorkspaceConfiguration,
@@ -26,6 +26,42 @@ export class WorkspaceStateManager {
   private loading$ = new BehaviorSubject<boolean>(false);
   private tabBarVisible$ = new BehaviorSubject<boolean>(true);
   private initialized = false;
+
+  /**
+   * Optional predicate identifying tabs that belong to the MAIN layout.
+   * Tabs failing the predicate (e.g. record tabs under the records-style
+   * record-open model, which live in their own layout region) are excluded
+   * from ALL main-layout semantics: they never force the main tab bar to
+   * appear (shouldShowTabs), are never consumed as the replaceable
+   * "temporary tab" by OpenTab, and skip the keep-last-tab-alive rule in
+   * CloseTab. Null = every tab is a main-layout tab (classic behavior).
+   * Kept as a settable predicate (not an import) because this package sits
+   * below the package that owns the record-open style.
+   * NOTE: record tabs DOCKED to the workspace ("Move to Workspace")
+   * intentionally PASS this filter — they are main-layout tabs.
+   */
+  public MainLayoutTabFilter: ((tab: WorkspaceTab) => boolean) | null = null;
+
+  /** True when the tab participates in main-layout semantics (see MainLayoutTabFilter) */
+  private isMainLayoutTab(tab: WorkspaceTab): boolean {
+    return this.MainLayoutTabFilter ? this.MainLayoutTabFilter(tab) : true;
+  }
+
+  /**
+   * Optional predicate identifying tabs that may be CONSUMED as the
+   * replaceable "temporary tab" by OpenTab. Record tabs (docked or not) are
+   * deliberately unpinned yet must never be silently replaced by the next
+   * nav click — the shell sets this to exclude ALL record tabs under the
+   * records style. Null = every unpinned main-layout tab is consumable
+   * (classic behavior). Settable predicate for the same layering reason as
+   * MainLayoutTabFilter.
+   */
+  public TempTabConsumptionFilter: ((tab: WorkspaceTab) => boolean) | null = null;
+
+  /** True when the tab may be consumed as OpenTab's replaceable temp tab */
+  private isTempTabConsumable(tab: WorkspaceTab): boolean {
+    return this.TempTabConsumptionFilter ? this.TempTabConsumptionFilter(tab) : true;
+  }
 
   /**
    * Optional explicit metadata provider. When set, used instead of falling back
@@ -95,7 +131,9 @@ export class WorkspaceStateManager {
    * - Show if 2+ tabs OR any pinned tabs exist
    */
   private shouldShowTabs(config: WorkspaceConfiguration): boolean {
-    const tabs = config.tabs || [];
+    // Main-layout tabs only — tabs excluded by the filter (e.g. record tabs
+    // living in the separate records region) never force the main bar open.
+    const tabs = (config.tabs || []).filter(t => this.isMainLayoutTab(t));
 
     // Always hide if no tabs (shouldn't happen, but defensive)
     if (tabs.length === 0) {
@@ -155,6 +193,14 @@ export class WorkspaceStateManager {
     }
     // Use UserInfoEngine for centralized, cached workspace loading
     const engine = UserInfoEngine.Instance;
+
+    // Permission-denied ≠ empty — don't auto-create a workspace for denied users.
+    if (engine.IsPermissionConstrained) {
+      LogStatus('[WorkspaceStateManager] UserInfoEngine is permission-constrained, using default workspace configuration');
+      this.configuration$.next(createDefaultWorkspaceConfiguration());
+      return;
+    }
+
     const workspaces = engine.Workspaces;
 
     if (workspaces.length > 0) {
@@ -312,8 +358,10 @@ export class WorkspaceStateManager {
     };
 
     // CRITICAL: If creating a temporary tab, pin all existing temporary tabs first
-    // This ensures only ONE temporary tab exists at any time
-    const updatedTabs = !newTab.isPinned
+    // This ensures only ONE temporary tab exists at any time.
+    // PreservePinState opts out (records-style record tabs live in a separate
+    // layout region and must not disturb the nav tab's temp status).
+    const updatedTabs = !newTab.isPinned && !request.PreservePinState
       ? config.tabs.map(tab => !tab.isPinned ? { ...tab, isPinned: true } : tab)
       : config.tabs;
 
@@ -408,8 +456,11 @@ export class WorkspaceStateManager {
       return existingTab.id;
     }
 
-    // Find temporary tab (unpinned tab from ANY app) to replace
-    const tempTab = config.tabs.find(tab => !tab.isPinned);
+    // Find temporary tab (unpinned tab from ANY app) to replace.
+    // NEVER consume a non-main-layout tab (e.g. an open record under the
+    // records style — they're deliberately unpinned, and replacing one here
+    // would silently destroy an open record with zero user feedback).
+    const tempTab = config.tabs.find(tab => !tab.isPinned && this.isMainLayoutTab(tab) && this.isTempTabConsumable(tab));
 
     if (tempTab) {
       // Replace temporary tab
@@ -464,8 +515,20 @@ export class WorkspaceStateManager {
     const config = this.configuration$.value;
     if (!config) return;
 
-    // Check if this is the last tab
-    const wouldBeLastTab = config.tabs.length === 1 && config.tabs[0].id === tabId;
+    // No-op when the tab is already gone — layout-driven close events can
+    // arrive for tabs a configuration sync already removed; re-emitting an
+    // unchanged config from inside a subscription pass invites re-entrancy.
+    const closingTab = config.tabs.find(t => t.id === tabId);
+    if (!closingTab) return;
+
+    // Check if this is the last tab. The keep-alive rule (retain the tab,
+    // just unpin) exists so the MAIN region never renders an empty
+    // workspace — it must NOT apply to non-main-layout tabs (records):
+    // keeping a closed record alive makes the records region re-create the
+    // tab the user just closed, forever. Records close outright; the
+    // records host is responsible for backfilling an empty workspace.
+    const wouldBeLastTab = config.tabs.length === 1 && config.tabs[0].id === tabId
+      && this.isMainLayoutTab(closingTab);
 
     // CRITICAL: If closing the last tab, keep it in the array but mark as unpinned
     // This allows single-resource mode to work while preserving tab data for nav highlighting
@@ -621,6 +684,20 @@ export class WorkspaceStateManager {
     this.UpdateConfiguration({
       ...config,
       layout
+    });
+  }
+
+  /**
+   * Update the RECORDS region layout (the separate Golden Layout hosting
+   * record tabs under the records-style record-open model).
+   */
+  UpdateRecordsLayout(recordsLayout: WorkspaceConfiguration['recordsLayout']): void {
+    const config = this.configuration$.value;
+    if (!config) return;
+
+    this.UpdateConfiguration({
+      ...config,
+      recordsLayout
     });
   }
 

@@ -728,6 +728,18 @@ export class DashboardResource extends BaseResourceComponent {
                 this.NotifyLoadComplete();
             };
 
+            // Surface the dashboard's own load failures — but only for the INITIAL load. Wrap the
+            // completion hook to learn when the first load has settled, so a later Refresh() that
+            // fails does NOT replace an already-rendered Data Explorer with a sticky error card.
+            let initialLoadSettled = false;
+            const onComplete = instance.LoadCompleteEvent;
+            instance.LoadCompleteEvent = () => { initialLoadSettled = true; onComplete?.(); };
+            instance.Error.subscribe((err: Error) => {
+                if (initialLoadSettled) return; // post-mount refresh failure — already logged by BaseDashboard.runGuardedLoad
+                this.setError('The Data Explorer could not be loaded.', err);
+                this.cdr.markForCheck();
+            });
+
             // Initialize dashboard (no database config needed for DataExplorer)
             const config: DashboardConfig = {
                 dashboard: null as unknown as MJDashboardEntity, // No database record
@@ -773,6 +785,22 @@ export class DashboardResource extends BaseResourceComponent {
             instance.LoadCompleteEvent = () => {
                 this.NotifyLoadComplete();
             };
+
+            // Surface the dashboard's own load failures in the host's error card — but only for the
+            // INITIAL load. BaseDashboard guarantees the loading screen is released even when
+            // initDashboard()/loadData() throws (it emits Error, then NotifyLoadComplete in a
+            // finally). Wrap the completion hook to learn when the first load has settled, so a later
+            // Refresh() failure keeps the rendered dashboard instead of blanking it to a sticky error
+            // card. Wired BEFORE the first await below, so an Error during the instance's own
+            // ngOnInit isn't missed.
+            let initialLoadSettled = false;
+            const onComplete = instance.LoadCompleteEvent;
+            instance.LoadCompleteEvent = () => { initialLoadSettled = true; onComplete?.(); };
+            instance.Error.subscribe((err: Error) => {
+                if (initialLoadSettled) return; // post-mount refresh failure — already logged by BaseDashboard.runGuardedLoad
+                this.setError(`The dashboard "${dashboard.Name}" could not be loaded.`, err);
+                this.cdr.markForCheck();
+            });
 
             // Initialize with dashboard data
             const userStateEntity = await this.loadDashboardUserState(dashboard.ID);
@@ -869,9 +897,9 @@ export class DashboardResource extends BaseResourceComponent {
                 this.categories = DashboardEngine.Instance.DashboardCategories;
             }
 
-            // Set the dashboard entity directly on the viewer
-            // We provide our own external toolbar, so disable the viewer's internal toolbar
-            instance.dashboard = dashboard;
+            // Configure the viewer before assigning the dashboard. The dashboard input
+            // starts the layout lifecycle synchronously, so event handlers need to be
+            // wired first.
             instance.showToolbar = false;         // We provide external toolbar
             instance.showBreadcrumb = false;      // Already in its own tab, no breadcrumb needed
             instance.showOpenInTabButton = false; // Already in its own tab
@@ -898,11 +926,12 @@ export class DashboardResource extends BaseResourceComponent {
                 console.error('Dashboard error:', errorEvent.message, errorEvent.error);
             });
 
-            // Notify load complete after a brief delay to let Golden Layout initialize
-            setTimeout(() => {
-                this.NotifyLoadComplete();
-                this.cdr.detectChanges();
-            }, 150);
+            // Set the dashboard entity directly on the viewer and wait for Golden Layout
+            // to initialize against a real container before clearing the resource loader.
+            instance.dashboard = dashboard;
+            await instance.waitForLayoutReady();
+            this.NotifyLoadComplete();
+            this.cdr.detectChanges();
 
         } catch (error) {
             console.error('Error loading config-based dashboard:', error);

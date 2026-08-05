@@ -37,7 +37,7 @@ export class AuditLogTypeEngine extends BaseEngine<AuditLogTypeEngine> {
     }
 
     public get AuditLogTypes(): MJAuditLogTypeEntity[] {
-        return this._AuditLogTypes;
+        return this.GetConfigData<MJAuditLogTypeEntity>('_AuditLogTypes');
     }
     private _AuditLogTypes: MJAuditLogTypeEntity[] = [];
 

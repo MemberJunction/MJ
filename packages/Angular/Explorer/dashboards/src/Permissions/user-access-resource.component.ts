@@ -297,6 +297,12 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
         this.cdr.detectChanges();
     }
 
+    /** Accordion-driven handler — SETS the emitted expanded value (vs. ToggleGroup's flip). */
+    public onGroupExpandedChange(group: PermissionsDomainGroup, expanded: boolean): void {
+        group.Expanded = expanded;
+        this.cdr.detectChanges();
+    }
+
     TrackByDomain(_index: number, group: PermissionsDomainGroup): string {
         return group.DomainName;
     }

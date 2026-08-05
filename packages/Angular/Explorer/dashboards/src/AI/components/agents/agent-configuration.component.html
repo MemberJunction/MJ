@@ -279,13 +279,17 @@
           }
   </mj-page-body>
 
-  <!-- Detail Panel Overlay -->
-  @if (detailPanelVisible) {
-    <div class="detail-panel-overlay" (click)="closeDetailPanel()"></div>
-  }
 
-  <!-- Detail Panel -->
-  <div class="detail-panel" [class.visible]="detailPanelVisible">
+  <!-- Detail Panel — shared mj-slide-panel shell (backdrop, slide animation,
+       Escape/backdrop close, resize). The old bespoke shell's [class.visible]
+       collided with the global `.visible { visibility: visible !important }`
+       utility and punched through the records region's hidden main area. -->
+  <mj-slide-panel
+    [Visible]="detailPanelVisible"
+    [WidthPx]="480"
+    [MinWidthPx]="400"
+    (Closed)="closeDetailPanel()">
+    <div class="detail-panel-flow">
     @if (selectedAgent) {
       <!-- Panel Header -->
       <div class="detail-panel-header">
@@ -423,6 +427,7 @@
       </div>
     }
   </div>
+  </mj-slide-panel>
 </mj-page-layout>
 
 <!-- AI Agent Test Harness - Now handled by service with minimize support -->

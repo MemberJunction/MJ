@@ -56,72 +56,72 @@ export class QueryEngine extends BaseEngine<QueryEngine> {
 
     /** All queries in the system */
     public get Queries(): MJQueryEntityExtended[] {
-        return this._queries;
+        return this.GetConfigData<MJQueryEntityExtended>('_queries');
     }
 
     /** All query categories */
     public get Categories(): MJQueryCategoryEntity[] {
-        return this._categories;
+        return this.GetConfigData<MJQueryCategoryEntity>('_categories');
     }
 
     /** Alias for `Categories` — matches IMetadataProvider naming convention */
     public get QueryCategories(): MJQueryCategoryEntity[] {
-        return this._categories;
+        return this.GetConfigData<MJQueryCategoryEntity>('_categories');
     }
 
     /** All query field definitions */
     public get Fields(): MJQueryFieldEntity[] {
-        return this._fields;
+        return this.GetConfigData<MJQueryFieldEntity>('_fields');
     }
 
     /** Alias for `Fields` — matches IMetadataProvider naming convention */
     public get QueryFields(): MJQueryFieldEntity[] {
-        return this._fields;
+        return this.GetConfigData<MJQueryFieldEntity>('_fields');
     }
 
     /** All query parameter definitions */
     public get Parameters(): MJQueryParameterEntity[] {
-        return this._parameters;
+        return this.GetConfigData<MJQueryParameterEntity>('_parameters');
     }
 
     /** Alias for `Parameters` — matches IMetadataProvider naming convention */
     public get QueryParameters(): MJQueryParameterEntity[] {
-        return this._parameters;
+        return this.GetConfigData<MJQueryParameterEntity>('_parameters');
     }
 
     /** All query-to-entity relationship mappings */
     public get QueryEntities(): MJQueryEntityEntity[] {
-        return this._queryEntities;
+        return this.GetConfigData<MJQueryEntityEntity>('_queryEntities');
     }
 
     /** All query permission records */
     public get Permissions(): MJQueryPermissionEntity[] {
-        return this._permissions;
+        return this.GetConfigData<MJQueryPermissionEntity>('_permissions');
     }
 
     /** Alias for `Permissions` — matches IMetadataProvider naming convention */
     public get QueryPermissions(): MJQueryPermissionEntity[] {
-        return this._permissions;
+        return this.GetConfigData<MJQueryPermissionEntity>('_permissions');
     }
 
     /** All query dependency records (composition references) */
     public get Dependencies(): MJQueryDependencyEntity[] {
-        return this._dependencies;
+        return this.GetConfigData<MJQueryDependencyEntity>('_dependencies');
     }
 
     /** Alias for `Dependencies` — matches IMetadataProvider naming convention */
     public get QueryDependencies(): MJQueryDependencyEntity[] {
-        return this._dependencies;
+        return this.GetConfigData<MJQueryDependencyEntity>('_dependencies');
     }
 
     /** All query SQL dialect-specific entries */
     public get QuerySQLs(): MJQuerySQLEntity[] {
-        return this._querySQLs;
+        return this.GetConfigData<MJQuerySQLEntity>('_querySQLs');
     }
 
     /** All SQL dialect definitions */
     public get SQLDialects(): MJSQLDialectEntity[] {
-        return this._sqlDialects;
+        return this.GetConfigData<MJSQLDialectEntity>('_sqlDialects');
     }
 
     // --- Convenience helpers ---

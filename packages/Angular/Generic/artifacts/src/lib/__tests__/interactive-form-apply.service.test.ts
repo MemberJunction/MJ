@@ -80,11 +80,22 @@ vi.mock('@memberjunction/core', async () => {
         ...actual,
         Metadata: { Provider: null },
         LogError: vi.fn(),
-        RunView: class {
-            async RunView() {
-                return hoisted.runViewResponses.shift() ?? { Success: true, Results: [] };
-            }
-        },
+        // The service now resolves action IDs through the caller's provider rather than a
+        // globally-constructed RunView, so the mock answers the static factory too.
+        RunView: Object.assign(
+            class {
+                async RunView() {
+                    return hoisted.runViewResponses.shift() ?? { Success: true, Results: [] };
+                }
+            },
+            {
+                FromMetadataProvider: () => ({
+                    async RunView() {
+                        return hoisted.runViewResponses.shift() ?? { Success: true, Results: [] };
+                    },
+                }),
+            },
+        ),
     };
 });
 
@@ -199,6 +210,30 @@ describe('InteractiveFormApplyService', () => {
         expect(result.Success).toBe(true);
         expect(result.Mode).toBe('modify-new-version');
         expect(result.Version).toBe('1.1.0');
+        const calls = hoisted.actionCalls.map(c => c.id);
+        expect(calls).toEqual(['ACT-GET-ACTIVE', 'ACT-MODIFY']);
+    });
+
+    it('existing Pending override (no Active) → calls Modify Interactive Form in-place', async () => {
+        hoisted.runViewResponses.push({ Success: true, Results: [{ ID: 'ACT-GET-ACTIVE' }] });
+        hoisted.runViewResponses.push({ Success: true, Results: [{ ID: 'ACT-MODIFY' }] });
+        hoisted.actionResponses.set('ACT-GET-ACTIVE', {
+            Success: true,
+            Message: JSON.stringify({
+                Active: null,
+                Variants: [{ OverrideID: 'OVER-PENDING', ComponentID: 'COMP-PENDING', ComponentVersion: '1.0.0', Status: 'Pending' }],
+            }),
+        });
+        hoisted.actionResponses.set('ACT-MODIFY', {
+            Success: true,
+            Message: JSON.stringify({ Mode: 'in-place', ComponentID: 'COMP-PENDING', OverrideID: 'OVER-PENDING', Version: '1.0.0' }),
+        });
+
+        const svc = new InteractiveFormApplyService();
+        const result = await svc.ConfirmAndApply(spec(), 'MJ: Apps', mockProvider());
+
+        expect(result.Success).toBe(true);
+        expect(result.Mode).toBe('modify-in-place');
         const calls = hoisted.actionCalls.map(c => c.id);
         expect(calls).toEqual(['ACT-GET-ACTIVE', 'ACT-MODIFY']);
     });

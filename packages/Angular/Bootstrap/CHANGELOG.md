@@ -1,5 +1,400 @@
 # @memberjunction/ng-bootstrap
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/tag-engine-base@6.0.0
+  - @memberjunction/ai-vectors-memory@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/ng-auth-services@6.0.0
+  - @memberjunction/ng-core-entity-forms@6.0.0
+  - @memberjunction/ng-dashboards@6.0.0
+  - @memberjunction/ng-explorer-core@6.0.0
+  - @memberjunction/ng-explorer-settings@6.0.0
+  - @memberjunction/ng-shared@6.0.0
+  - @memberjunction/ng-artifacts@6.0.0
+  - @memberjunction/ng-clustering@6.0.0
+  - @memberjunction/ng-conversations@6.0.0
+  - @memberjunction/ng-dashboard-viewer@6.0.0
+  - @memberjunction/ng-entity-action-ux@6.0.0
+  - @memberjunction/ng-entity-viewer@6.0.0
+  - @memberjunction/ng-file-storage@6.0.0
+  - @memberjunction/communication-types@6.0.0
+  - @memberjunction/entity-communications-base@6.0.0
+  - @memberjunction/graphql-dataprovider@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ai-realtime-client@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- 1e048ef: Fix MJ Explorer lazy module loading: chunks are now deduped by an explicit `chunkId` instead of loader source text (which collapsed all 18 chunks into one and stopped lazy-only registrations like `FeaturePipelinesResource` from ever loading), and lookups fall back to the subclass key alone so resolution survives build-mode renames of the base class (`_BaseResourceComponent`, `BaseResourceComponent2`). Failed chunk imports now retry on the next navigation instead of caching the rejection for the rest of the session. Downstream apps must regenerate their lazy config (`mj codegen manifest --lazy-config …`) after upgrading — generated entries changed shape from a loader function to `{ chunkId, load }`, and `GetSnapshot().chunkCount` was renamed `loadedChunkCount`.
+- Updated dependencies [1e048ef]
+- Updated dependencies [a8fc549]
+  - @memberjunction/ng-dashboards@5.51.0
+  - @memberjunction/ng-explorer-core@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ng-shared@5.51.0
+  - @memberjunction/ai-engine-base@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/tag-engine-base@5.51.0
+  - @memberjunction/ai-vectors-memory@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/ng-auth-services@5.51.0
+  - @memberjunction/ng-core-entity-forms@5.51.0
+  - @memberjunction/ng-explorer-settings@5.51.0
+  - @memberjunction/ng-artifacts@5.51.0
+  - @memberjunction/ng-clustering@5.51.0
+  - @memberjunction/ng-conversations@5.51.0
+  - @memberjunction/ng-dashboard-viewer@5.51.0
+  - @memberjunction/ng-entity-action-ux@5.51.0
+  - @memberjunction/ng-entity-viewer@5.51.0
+  - @memberjunction/ng-file-storage@5.51.0
+  - @memberjunction/communication-types@5.51.0
+  - @memberjunction/entity-communications-base@5.51.0
+  - @memberjunction/graphql-dataprovider@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ai-realtime-client@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- 623dfc5: Break CodeGen FK cycle between AIAgentRun, AIPromptRun, and ConversationDetail. Move SummaryPromptRunID from ConversationDetail to a new ConversationCompactionRun audit table. Remove AgentRunID from AIPromptRun (derivable via AIAgentRunStep.TargetLogID). Remove agentRunId from AIPromptParams and all write sites across the prompt/agent stack.
+- Updated dependencies [1c991f7]
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [28c1dcd]
+- Updated dependencies [d36131a]
+- Updated dependencies [8580aef]
+- Updated dependencies [35fb5e3]
+- Updated dependencies [abab5dc]
+- Updated dependencies [ce6374c]
+- Updated dependencies [86832fa]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [03fc891]
+- Updated dependencies [fe1b8e7]
+- Updated dependencies [dd04a24]
+  - @memberjunction/ng-explorer-core@5.50.0
+  - @memberjunction/ng-explorer-settings@5.50.0
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/ng-conversations@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ng-core-entity-forms@5.50.0
+  - @memberjunction/ng-artifacts@5.50.0
+  - @memberjunction/communication-types@5.50.0
+  - @memberjunction/ng-dashboards@5.50.0
+  - @memberjunction/ng-entity-viewer@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/ng-file-storage@5.50.0
+  - @memberjunction/ai-engine-base@5.50.0
+  - @memberjunction/tag-engine-base@5.50.0
+  - @memberjunction/ng-shared@5.50.0
+  - @memberjunction/ng-clustering@5.50.0
+  - @memberjunction/ng-dashboard-viewer@5.50.0
+  - @memberjunction/ng-entity-action-ux@5.50.0
+  - @memberjunction/entity-communications-base@5.50.0
+  - @memberjunction/graphql-dataprovider@5.50.0
+  - @memberjunction/ai-vectors-memory@5.50.0
+  - @memberjunction/ng-auth-services@5.50.0
+  - @memberjunction/ai-realtime-client@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [d3f9d77]
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [88d707b]
+- Updated dependencies [02c8a15]
+- Updated dependencies [505c8b5]
+- Updated dependencies [88d707b]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [14e2117]
+- Updated dependencies [3993034]
+- Updated dependencies [9e2278c]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [c220620]
+- Updated dependencies [70c658c]
+- Updated dependencies [b5a8e3f]
+  - @memberjunction/ng-core-entity-forms@5.49.0
+  - @memberjunction/ng-dashboards@5.49.0
+  - @memberjunction/ng-explorer-core@5.49.0
+  - @memberjunction/ng-explorer-settings@5.49.0
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/ng-conversations@5.49.0
+  - @memberjunction/graphql-dataprovider@5.49.0
+  - @memberjunction/communication-types@5.49.0
+  - @memberjunction/ai-realtime-client@5.49.0
+  - @memberjunction/ng-artifacts@5.49.0
+  - @memberjunction/ng-clustering@5.49.0
+  - @memberjunction/ng-dashboard-viewer@5.49.0
+  - @memberjunction/ng-entity-viewer@5.49.0
+  - @memberjunction/ng-file-storage@5.49.0
+  - @memberjunction/ai-engine-base@5.49.0
+  - @memberjunction/tag-engine-base@5.49.0
+  - @memberjunction/ai-vectors-memory@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/ng-auth-services@5.49.0
+  - @memberjunction/ng-shared@5.49.0
+  - @memberjunction/ng-entity-action-ux@5.49.0
+  - @memberjunction/entity-communications-base@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [fbaf5fd]
+- Updated dependencies [c20723a]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+- Updated dependencies [d1e1a15]
+  - @memberjunction/ng-artifacts@5.48.0
+  - @memberjunction/ng-conversations@5.48.0
+  - @memberjunction/ng-explorer-core@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ng-dashboards@5.48.0
+  - @memberjunction/ai-realtime-client@5.48.0
+  - @memberjunction/ng-core-entity-forms@5.48.0
+  - @memberjunction/ng-shared@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ng-dashboard-viewer@5.48.0
+  - @memberjunction/ai-engine-base@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/tag-engine-base@5.48.0
+  - @memberjunction/ai-vectors-memory@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/ng-auth-services@5.48.0
+  - @memberjunction/ng-explorer-settings@5.48.0
+  - @memberjunction/ng-clustering@5.48.0
+  - @memberjunction/ng-entity-action-ux@5.48.0
+  - @memberjunction/ng-entity-viewer@5.48.0
+  - @memberjunction/ng-file-storage@5.48.0
+  - @memberjunction/communication-types@5.48.0
+  - @memberjunction/entity-communications-base@5.48.0
+  - @memberjunction/graphql-dataprovider@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [46a06ac]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ng-dashboards@5.47.0
+  - @memberjunction/ai-engine-base@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/tag-engine-base@5.47.0
+  - @memberjunction/ai-vectors-memory@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/ng-auth-services@5.47.0
+  - @memberjunction/ng-core-entity-forms@5.47.0
+  - @memberjunction/ng-explorer-core@5.47.0
+  - @memberjunction/ng-explorer-settings@5.47.0
+  - @memberjunction/ng-shared@5.47.0
+  - @memberjunction/ng-artifacts@5.47.0
+  - @memberjunction/ng-clustering@5.47.0
+  - @memberjunction/ng-conversations@5.47.0
+  - @memberjunction/ng-dashboard-viewer@5.47.0
+  - @memberjunction/ng-entity-action-ux@5.47.0
+  - @memberjunction/ng-entity-viewer@5.47.0
+  - @memberjunction/ng-file-storage@5.47.0
+  - @memberjunction/communication-types@5.47.0
+  - @memberjunction/entity-communications-base@5.47.0
+  - @memberjunction/graphql-dataprovider@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/ai-realtime-client@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ng-core-entity-forms@5.46.0
+  - @memberjunction/ai-engine-base@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/tag-engine-base@5.46.0
+  - @memberjunction/ai-vectors-memory@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/ng-auth-services@5.46.0
+  - @memberjunction/ng-dashboards@5.46.0
+  - @memberjunction/ng-explorer-core@5.46.0
+  - @memberjunction/ng-explorer-settings@5.46.0
+  - @memberjunction/ng-shared@5.46.0
+  - @memberjunction/ng-artifacts@5.46.0
+  - @memberjunction/ng-clustering@5.46.0
+  - @memberjunction/ng-conversations@5.46.0
+  - @memberjunction/ng-dashboard-viewer@5.46.0
+  - @memberjunction/ng-entity-action-ux@5.46.0
+  - @memberjunction/ng-entity-viewer@5.46.0
+  - @memberjunction/ng-file-storage@5.46.0
+  - @memberjunction/communication-types@5.46.0
+  - @memberjunction/entity-communications-base@5.46.0
+  - @memberjunction/graphql-dataprovider@5.46.0
+  - @memberjunction/ai-realtime-client@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ng-conversations@5.45.1
+  - @memberjunction/ai-engine-base@5.45.1
+  - @memberjunction/ng-core-entity-forms@5.45.1
+  - @memberjunction/ng-dashboards@5.45.1
+  - @memberjunction/ng-explorer-core@5.45.1
+  - @memberjunction/ng-shared@5.45.1
+  - @memberjunction/graphql-dataprovider@5.45.1
+  - @memberjunction/ng-clustering@5.45.1
+  - @memberjunction/ng-explorer-settings@5.45.1
+  - @memberjunction/ng-file-storage@5.45.1
+  - @memberjunction/ng-artifacts@5.45.1
+  - @memberjunction/ng-entity-action-ux@5.45.1
+  - @memberjunction/ng-entity-viewer@5.45.1
+  - @memberjunction/ng-dashboard-viewer@5.45.1
+  - @memberjunction/tag-engine-base@5.45.1
+  - @memberjunction/ai-realtime-client@5.45.1
+  - @memberjunction/ai-vectors-memory@5.45.1
+  - @memberjunction/actions-base@5.45.1
+  - @memberjunction/ng-auth-services@5.45.1
+  - @memberjunction/communication-types@5.45.1
+  - @memberjunction/entity-communications-base@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- 21e33fe: Move Skip to a client-side Open App and remove server-embedded agent; scope-gate query/view/search resolvers with API-key scope authorization; add credential-store fallback for component registry keys; support Open App in-process lifecycle hooks with interactive prompts.
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [13716e4]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [6e10f66]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/ng-dashboards@5.45.0
+  - @memberjunction/graphql-dataprovider@5.45.0
+  - @memberjunction/ng-core-entity-forms@5.45.0
+  - @memberjunction/ng-artifacts@5.45.0
+  - @memberjunction/ng-conversations@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/ng-explorer-core@5.45.0
+  - @memberjunction/ai-engine-base@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/tag-engine-base@5.45.0
+  - @memberjunction/ai-vectors-memory@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/ng-auth-services@5.45.0
+  - @memberjunction/ng-explorer-settings@5.45.0
+  - @memberjunction/ng-shared@5.45.0
+  - @memberjunction/ng-clustering@5.45.0
+  - @memberjunction/ng-dashboard-viewer@5.45.0
+  - @memberjunction/ng-entity-action-ux@5.45.0
+  - @memberjunction/ng-entity-viewer@5.45.0
+  - @memberjunction/ng-file-storage@5.45.0
+  - @memberjunction/communication-types@5.45.0
+  - @memberjunction/entity-communications-base@5.45.0
+  - @memberjunction/ai-realtime-client@5.45.0
+
+## 5.44.0
+
+### Minor Changes
+
+- 2f9b863: Add WorkOS (AuthKit) as a first-class authentication provider — end to end, server-side JWT validation and browser-side login. A deployment can now set `type: 'workos'` (server) / `AUTH_TYPE: 'workos'` (browser) and authenticate users through WorkOS just like Auth0, Okta, MSAL, Cognito, or Google.
+  - **Server** (`@memberjunction/auth-providers`): `WorkOSProvider` extends `BaseAuthProvider`, registered via `@RegisterClass(BaseAuthProvider, 'workos')`. Maps AuthKit JWT claims to `AuthUserInfo` (with graceful fallbacks) and validates `clientId`; issuer matching, JWKS caching, and retry/backoff are inherited. Wired into `AuthProviderFactory`.
+  - **Client** (`@memberjunction/ng-auth-services`): `MJWorkOSProvider` extends `MJAuthBase`, registered via `@RegisterClass(MJAuthBase, 'workos')`. Wraps the `@workos-inc/authkit-js` SDK (`createClient`/`signIn`/`signOut`/`getUser`/`getAccessToken`) behind the standardized provider contract with semantic error classification.
+  - **Core** (`@memberjunction/core`): `AUTH_PROVIDER_TYPES` gains `WORKOS: 'workos'`.
+  - **Env typing** (`@memberjunction/ng-bootstrap`): the `AUTH_TYPE` union gains `'workos'`, plus `WORKOS_CLIENTID` / `WORKOS_REDIRECT_URI` / `WORKOS_API_HOSTNAME` / `WORKOS_DEV_MODE` keys.
+
+  Includes a full end-to-end integration guide (`packages/AuthProviders/WORKOS.md`) covering the two WorkOS-specific gotchas: the required `email` JWT Template (AuthKit access tokens omit email, which MJ keys users on) and matching the enforced `aud` claim. Additive only.
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [e84c85b]
+- Updated dependencies [f8be8a0]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [914acd4]
+- Updated dependencies [18b5bf0]
+- Updated dependencies [04f7863]
+- Updated dependencies [be5ab50]
+- Updated dependencies [45df197]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [0476455]
+- Updated dependencies [9f96357]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-engine-base@5.44.0
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/ng-core-entity-forms@5.44.0
+  - @memberjunction/ng-conversations@5.44.0
+  - @memberjunction/graphql-dataprovider@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/ng-entity-viewer@5.44.0
+  - @memberjunction/ng-clustering@5.44.0
+  - @memberjunction/ng-dashboard-viewer@5.44.0
+  - @memberjunction/ng-dashboards@5.44.0
+  - @memberjunction/ng-explorer-core@5.44.0
+  - @memberjunction/ng-explorer-settings@5.44.0
+  - @memberjunction/ai-vectors-memory@5.44.0
+  - @memberjunction/ng-shared@5.44.0
+  - @memberjunction/ng-artifacts@5.44.0
+  - @memberjunction/ai-realtime-client@5.44.0
+  - @memberjunction/ng-entity-action-ux@5.44.0
+  - @memberjunction/ng-file-storage@5.44.0
+  - @memberjunction/ng-auth-services@5.44.0
+  - @memberjunction/tag-engine-base@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/communication-types@5.44.0
+  - @memberjunction/entity-communications-base@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

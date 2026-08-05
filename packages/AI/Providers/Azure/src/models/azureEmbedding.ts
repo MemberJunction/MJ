@@ -21,6 +21,11 @@ export class AzureEmbedding extends BaseEmbeddings {
         super(apiKey);
         // Client initialization is deferred until SetAdditionalSettings is called
     }
+
+    /** Native batch endpoint: Azure AI Inference embeds an array of inputs in one request. */
+    public override get SupportsBatchEmbeddings(): boolean {
+        return true;
+    }
     
     /**
      * Set additional provider-specific settings
@@ -96,7 +101,10 @@ export class AzureEmbedding extends BaseEmbeddings {
                 body: {
                     input: [params.text], // API requires array
                     model: params.model || "text-embedding-ada-002", // Default model
-                    dimensions: 1536 // Default dimensions
+                    // Only send dimensions when explicitly requested — older models
+                    // (e.g. ada-002) reject the parameter, and omitting it lets the
+                    // model produce its native dimensionality.
+                    ...(params.dimensions ? { dimensions: params.dimensions } : {})
                 }
             });
             
@@ -158,7 +166,7 @@ export class AzureEmbedding extends BaseEmbeddings {
      * @param params Embedding parameters
      * @returns Embedding result
      */
-    public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+    protected override async embedBatch(params: EmbedTextsParams): Promise<EmbedTextsResult> {
         // Ensure client is initialized
         if (!this._client) {
             throw new Error('Azure client not initialized. Call SetAdditionalSettings with an endpoint first.');
@@ -177,7 +185,10 @@ export class AzureEmbedding extends BaseEmbeddings {
                 body: {
                     input: params.texts,
                     model: params.model || "text-embedding-ada-002", // Default model
-                    dimensions: 1536 // Default dimensions
+                    // Only send dimensions when explicitly requested — older models
+                    // (e.g. ada-002) reject the parameter, and omitting it lets the
+                    // model produce its native dimensionality.
+                    ...(params.dimensions ? { dimensions: params.dimensions } : {})
                 }
             });
             
