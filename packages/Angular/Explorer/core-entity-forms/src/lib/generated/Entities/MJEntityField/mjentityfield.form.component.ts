@@ -23,7 +23,8 @@ export class MJEntityFieldFormComponent extends BaseFormComponent {
             { sectionKey: 'systemAuditMetadata', sectionName: 'System & Audit Metadata', isExpanded: false },
             { sectionKey: 'securityEncryption', sectionName: 'Security & Encryption', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJEntityFieldValues', sectionName: 'Entity Field Values', isExpanded: false }
+            { sectionKey: 'mJEntityFieldValues', sectionName: 'Entity Field Values', isExpanded: false },
+            { sectionKey: 'mJEntityFieldPermissions', sectionName: 'Entity Field Permissions', isExpanded: false }
         ]);
     }
 }

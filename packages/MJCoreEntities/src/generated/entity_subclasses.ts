@@ -17599,6 +17599,75 @@ export const MJEntityDocumentSchema = z.object({
 export type MJEntityDocumentEntityType = z.infer<typeof MJEntityDocumentSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Entity Field Permissions
+ */
+export const MJEntityFieldPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityFieldID: z.string().describe(`
+        * * Field Name: EntityFieldID
+        * * Display Name: Entity Field ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)`),
+    RoleID: z.string().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)`),
+    Type: z.union([z.literal('Allow'), z.literal('Deny')]).describe(`
+        * * Field Name: Type
+        * * Display Name: Access Type
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Allow
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+        * * Description: Allow (default) or Deny. Deny rows override matching Allow rows for the same access flag during EntityFieldInfo.GetUserFieldPermissions() aggregation, letting administrators carve out specific role exclusions without restructuring the Allow grants.`),
+    CanRead: z.boolean().describe(`
+        * * Field Name: CanRead
+        * * Display Name: Can Read
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1 on an Allow row, this role may read the field's values. When 1 on a Deny row, this role is blocked from reading it regardless of any Allow grant. Enforced at the API output boundary (result projection and GraphQL field mapping) and by predicate validation, which rejects an ExtraFilter/OrderBy referencing an unreadable field.`),
+    CanUpdate: z.boolean().describe(`
+        * * Field Name: CanUpdate
+        * * Display Name: Can Update
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1 on an Allow row, this role may modify the field's value on an existing record. When 1 on a Deny row, this role is blocked from modifying it regardless of any Allow grant. Enforced server-side before SQL generation; the client-side BaseEntity check is UX-level defense-in-depth only.`),
+    CanCreate: z.boolean().describe(`
+        * * Field Name: CanCreate
+        * * Display Name: Can Create
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Reserved for a future release: whether this role may supply the field's value on INSERT. The column ships now so the schema stays additive, but it is NOT enforced in this release — only CanRead and CanUpdate are. Enforcement is deferred until the semantics for NOT NULL columns a user cannot populate are settled.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    EntityField: z.string().describe(`
+        * * Field Name: EntityField
+        * * Display Name: Entity Field
+        * * SQL Data Type: nvarchar(255)`),
+    Role: z.string().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJEntityFieldPermissionEntityType = z.infer<typeof MJEntityFieldPermissionSchema>;
+
+/**
  * zod schema definition for the entity MJ: Entity Field Values
  */
 export const MJEntityFieldValueSchema = z.object({
@@ -80553,6 +80622,175 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     */
     get ReasoningAgent(): string | null {
         return this.Get('ReasoningAgent');
+    }
+}
+
+
+/**
+ * MJ: Entity Field Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityFieldPermission
+ * * Base View: vwEntityFieldPermissions
+ * * @description Role-based field-level (column-level) security. Maps an entity field to a role with per-field Read/Update access flags and Allow/Deny semantics, mirroring EntityPermission at entity level. Allow rows OR-aggregate across the roles a user holds; a Deny row from any matching role subtracts from that aggregate. When NO rows exist for a field, access is fully open (backwards compatible) and governed solely by entity-level permissions; when rows exist but none match the user's roles, access is denied. Primary keys and MemberJunction system audit columns are never restrictable.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Field Permissions')
+export class MJEntityFieldPermissionEntity extends BaseEntity<MJEntityFieldPermissionEntityType> {
+    /**
+    * Loads the MJ: Entity Field Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Field Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityFieldPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityFieldID
+    * * Display Name: Entity Field ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)
+    */
+    get EntityFieldID(): string {
+        return this.Get('EntityFieldID');
+    }
+    set EntityFieldID(value: string) {
+        this.Set('EntityFieldID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    */
+    get RoleID(): string {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Access Type
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Allow
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    * * Description: Allow (default) or Deny. Deny rows override matching Allow rows for the same access flag during EntityFieldInfo.GetUserFieldPermissions() aggregation, letting administrators carve out specific role exclusions without restructuring the Allow grants.
+    */
+    get Type(): 'Allow' | 'Deny' {
+        return this.Get('Type');
+    }
+    set Type(value: 'Allow' | 'Deny') {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: CanRead
+    * * Display Name: Can Read
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1 on an Allow row, this role may read the field's values. When 1 on a Deny row, this role is blocked from reading it regardless of any Allow grant. Enforced at the API output boundary (result projection and GraphQL field mapping) and by predicate validation, which rejects an ExtraFilter/OrderBy referencing an unreadable field.
+    */
+    get CanRead(): boolean {
+        return this.Get('CanRead');
+    }
+    set CanRead(value: boolean) {
+        this.Set('CanRead', value);
+    }
+
+    /**
+    * * Field Name: CanUpdate
+    * * Display Name: Can Update
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1 on an Allow row, this role may modify the field's value on an existing record. When 1 on a Deny row, this role is blocked from modifying it regardless of any Allow grant. Enforced server-side before SQL generation; the client-side BaseEntity check is UX-level defense-in-depth only.
+    */
+    get CanUpdate(): boolean {
+        return this.Get('CanUpdate');
+    }
+    set CanUpdate(value: boolean) {
+        this.Set('CanUpdate', value);
+    }
+
+    /**
+    * * Field Name: CanCreate
+    * * Display Name: Can Create
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Reserved for a future release: whether this role may supply the field's value on INSERT. The column ships now so the schema stays additive, but it is NOT enforced in this release — only CanRead and CanUpdate are. Enforcement is deferred until the semantics for NOT NULL columns a user cannot populate are settled.
+    */
+    get CanCreate(): boolean {
+        return this.Get('CanCreate');
+    }
+    set CanCreate(value: boolean) {
+        this.Set('CanCreate', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EntityField
+    * * Display Name: Entity Field
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EntityField(): string {
+        return this.Get('EntityField');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string {
+        return this.Get('Role');
     }
 }
 
