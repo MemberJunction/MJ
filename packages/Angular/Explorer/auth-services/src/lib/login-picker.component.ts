@@ -80,6 +80,22 @@ const BRAND_ICON_CLASSES: Readonly<Record<string, string>> = {
         }
       </div>
 
+      <!-- Empty catalog: the deployment is configured through config/env with nothing published,
+           so there is no provider to name. Opt-in via FallbackCtaLabel — an app that passes
+           nothing renders nothing, which is the prior behaviour. -->
+      @if (!Providers.length && FallbackCtaLabel) {
+        <button
+          mjButton
+          variant="primary"
+          size="lg"
+          class="mj-login-picker__row mj-login-picker__row--fallback"
+          type="button"
+          [disabled]="Busy"
+          (click)="FallbackSelected.emit()">
+          {{ FallbackCtaLabel }}
+        </button>
+      }
+
       @if (ShowPoweredBy) {
         <p class="mj-login-picker__attribution">Powered by MemberJunction</p>
       }
@@ -133,6 +149,12 @@ const BRAND_ICON_CLASSES: Readonly<Record<string, string>> = {
          picker's own row class rather than .mj-btn, so the directive stays authoritative. */
       .mj-login-picker__row--default {
         border-color: var(--mj-brand-primary);
+      }
+
+      /* No icon chip or chevron to align against, so this one centres. */
+      .mj-login-picker__row--fallback {
+        justify-content: center;
+        text-align: center;
       }
 
       .mj-login-picker__chip {
@@ -212,7 +234,7 @@ export class MJLoginPickerComponent {
   @Input() Providers: PublicAuthProviderInfo[] = [];
 
   /** Optional heading rendered above the list. */
-  @Input() Heading: string | null = 'Log In';
+  @Input() Heading: string | null = 'Log in';
 
   /** Optional supporting line rendered under the heading. */
   @Input() Subheading: string | null = null;
@@ -232,8 +254,21 @@ export class MJLoginPickerComponent {
    */
   @Input() ShowPoweredBy = true;
 
+  /**
+   * Label for the call to action shown when the catalog published nothing.
+   *
+   * Lets one component cover all three states — 2+ providers (a list), exactly one (a single
+   * primary CTA naming it), and none at all (this generic CTA, for deployments still configured
+   * through `mj.config.cjs` / `AUTH_TYPE`). Null renders nothing, which is the prior behaviour
+   * for hosts that handle the empty case themselves.
+   */
+  @Input() FallbackCtaLabel: string | null = null;
+
   /** Emitted with the chosen provider. The host decides what signing in means. */
   @Output() ProviderSelected = new EventEmitter<PublicAuthProviderInfo>();
+
+  /** Emitted when the empty-catalog CTA is clicked. The host starts its configured sign-in. */
+  @Output() FallbackSelected = new EventEmitter<void>();
 
   /** A single option is not a choice — it renders as one primary call to action. */
   public get IsSingleProvider(): boolean {

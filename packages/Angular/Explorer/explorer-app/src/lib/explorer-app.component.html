@@ -62,23 +62,19 @@
       </div>
     </div>
     <div class="login-btn">
-      @if (ShowProviderPicker) {
-        <!-- 2+ providers published by the server catalog: the shared, app-agnostic picker.
-             The surrounding chrome above is Explorer's; the rows themselves are identical
-             in every MJ app that embeds <mj-login-picker>. -->
-        <mj-login-picker
-          [Providers]="AuthProviderChoices"
-          [Subheading]="ProviderPickerLede"
-          [Busy]="SigningIn"
-          (ProviderSelected)="OnAuthProviderSelected($event)">
-        </mj-login-picker>
-      } @else {
-        <h3>Log In</h3>
-        <p>{{subHeaderText}}</p>
-        <button (click)="authBase.login()">
-          Log in
-        </button>
-      }
+      <!-- One component covers all three states: 2+ providers renders a list, exactly one
+           renders a single primary CTA naming it, and an empty catalog renders the generic
+           fallback CTA for deployments still configured through mj.config.cjs / AUTH_TYPE.
+           Every state is a real mjButton, so the focus ring and hit target are identical. The
+           surrounding chrome is Explorer's; the rows are the same in every MJ app that embeds it. -->
+      <mj-login-picker
+        [Providers]="AuthProviderChoices"
+        [Subheading]="ProviderPickerLede"
+        [Busy]="SigningIn"
+        FallbackCtaLabel="Log in"
+        (ProviderSelected)="OnAuthProviderSelected($event)"
+        (FallbackSelected)="authBase.login()">
+      </mj-login-picker>
     </div>
   </div>
 }

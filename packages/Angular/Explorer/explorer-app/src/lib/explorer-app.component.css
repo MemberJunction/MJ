@@ -133,46 +133,10 @@
   padding: var(--mj-space-12) clamp(var(--mj-space-8), 5vw, var(--mj-space-16));
 }
 
-.login-wrapper .login-btn h3 {
-  font-size: var(--mj-text-4xl);
-  font-weight: var(--mj-font-semibold);
-  line-height: var(--mj-leading-tight);
-  text-align: center;
-  color: var(--mj-text-primary);
-}
-
-.login-wrapper .login-btn p {
-  font-size: var(--mj-text-base);
-  font-weight: var(--mj-font-medium);
-  line-height: var(--mj-leading-normal);
-  text-align: center;
-  color: var(--mj-text-secondary);
-}
-
-.login-wrapper .login-btn button {
-  max-width: 450px;
-  width: 100%;
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-  border-radius: var(--mj-radius-lg);
-  padding: 0 var(--mj-space-6);
-  border: none;
-  font-size: var(--mj-text-base);
-  font-weight: var(--mj-font-bold);
-  line-height: var(--mj-space-12);
-  cursor: pointer;
-  text-align: center;
-  transition: background-color var(--mj-transition-base);
-}
-
-.login-wrapper .login-btn button:hover {
-  background: var(--mj-brand-primary-hover);
-}
-
-.login-wrapper .login-btn button:focus-visible {
-  outline: none;
-  box-shadow: var(--mj-focus-ring);
-}
+/* Nothing here styles the sign-in controls: <mj-login-picker> owns the heading, lede, rows and
+   the empty-catalog CTA in all three states. The bespoke `.login-btn button` block that used to
+   live here was overriding the mjButton directive, which is why that CTA never picked up the
+   standard focus ring or 44px hit target. */
 
 /* ---- Misc ---- */
 
@@ -243,14 +207,6 @@
 
   .login-wrapper .login-btn {
     padding: var(--mj-space-6) var(--mj-space-4);
-  }
-
-  .login-wrapper .login-btn h3 {
-    font-size: var(--mj-text-2xl);
-  }
-
-  .login-wrapper .login-btn button {
-    max-width: 100%;
   }
 
   .mj-logo-wordmark-login {

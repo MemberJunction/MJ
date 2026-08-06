@@ -186,17 +186,21 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     return this.authResolution?.showPicker === true;
   }
 
+
   /**
    * Lede rendered above the provider picker.
    *
-   * Matches the locked Login C (Editorial Split) direction when there is nothing to report, but
-   * yields to a real auth status message (expired session, provider error) the moment one exists —
-   * a failure the user needs to see must never be displaced by static copy.
+   * A real auth status message (expired session, provider error) always wins — a failure the user
+   * needs to see must never be displaced by static copy.
+   *
+   * Absent one, this is Login C's lede, which C marks `multi-only`: it explains that there is a
+   * choice to make, so it is suppressed when there is exactly one provider and nothing to choose.
    */
-  public get ProviderPickerLede(): string {
-    return this.subHeaderText === MJExplorerAppComponent.DefaultSubHeaderText
-      ? "Continue with one of your organization's sign-in options."
-      : this.subHeaderText;
+  public get ProviderPickerLede(): string | null {
+    if (this.subHeaderText !== MJExplorerAppComponent.DefaultSubHeaderText) {
+      return this.subHeaderText;
+    }
+    return this.ShowProviderPicker ? "Continue with one of your organization's sign-in options." : null;
   }
 
   /**
