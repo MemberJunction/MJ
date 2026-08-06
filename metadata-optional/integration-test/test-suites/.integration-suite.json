@@ -835,7 +835,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT70 - External Agent Harness",
-            "Sequence": 53,
+            "Sequence": 33,
             "Status": "Active"
           },
           "primaryKey": {
