@@ -1821,6 +1821,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // outer CacheLocal layer would otherwise write a SECOND, divergent slot with no/foreign
             // TTL (CacheLocalTTL) — a stale-forever hazard since external data can't be event-invalidated.
             && !this.IsExternalQuery(params)
+            // Materialized query results are excluded for the SAME reason: the snapshot IS the cache
+            // and its freshness is governed by the refresh cycle, not by BaseEntity events, so it can't
+            // be event-invalidated. Layering the outer CacheLocal TTL slot on top would serve rows older
+            // than the latest materialized refresh AND would risk a Live-vs-Materialized slot collision
+            // (the fingerprint carries no DataSource segment). Keeping materialized out of this layer
+            // means the only staleness is the refresh cadence the snapshot already advertises.
+            && !IsMaterializedDataSource(params.DataSource)
             && LocalCacheManager.Instance.IsInitialized;
         let queryFingerprint: string | undefined;
         if (queryCacheEngaged) {
