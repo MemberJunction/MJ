@@ -1,5 +1,17 @@
 # @memberjunction/ng-whiteboard
 
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [d26e202]
+  - @memberjunction/ng-ui-components@6.1.0-edge.0
+  - @memberjunction/ng-markdown@6.1.0-edge.0
+  - @memberjunction/ng-code-editor@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes
