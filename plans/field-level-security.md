@@ -6,20 +6,20 @@
 
 > This section is the working context for the implementation. The design sections below are
 > unchanged except where a factual error is corrected inline and marked. Branch:
-> `JF_Entity_Field_Security`. Last updated after Phase 2.
+> `JF_Entity_Field_Security`. Last updated after the Phase 2.6 research agenda was set.
 
 ### Where things stand
 
 | Phase | Status |
 |---|---|
 | Phase 1 — Schema & Metadata | **Committed** (`cdd78a2d9d`) |
-| Phase 2 — Server-Side Enforcement (§2.1–§2.4, §2.6) | **Built, tested, uncommitted** |
+| Phase 2 — Server-Side Enforcement (§2.1–§2.4, §2.6) | **Committed** (`d4b57cbc78`) |
 | Phase 2.5 — Saved queries (§2.5) | **Deferred by decision** — see below; saved queries are NOT FLS-filtered |
 | Phase 3 — Skip integration | **ON HOLD** — superseded pending the new direction below |
 | Phase 4 — Admin UI | Not started |
 
 > **A new architectural direction was set by leadership after Phase 2 landed.** Read
-> "NEW DIRECTION (post-leadership review)" below before starting anything. It moves enforcement
+> "Phase 2.6 — Database-Level Enforcement" below before starting anything. It moves enforcement
 > into the database (base views + SQL roles) and into the SELECT list, and it collides with
 > several verified decisions in the design that follows.
 
