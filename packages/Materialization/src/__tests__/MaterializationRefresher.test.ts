@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MaterializationRefresher, MATERIALIZATION_SURROGATE_COLUMN, FULL_REBUILD_EVERY_N_INCREMENTAL_REFRESHES } from '../MaterializationRefresher';
+import { MaterializationRefresher, MATERIALIZATION_SURROGATE_COLUMN, FULL_REBUILD_EVERY_N_INCREMENTAL_REFRESHES, WATERMARK_SAFETY_OVERLAP_MS } from '../MaterializationRefresher';
 
 /**
  * Sub-step R1: the SQL Server full-rebuild + atomic-swap statement builder (plan §11.2).
@@ -93,8 +93,8 @@ describe('MaterializationRefresher.buildFullRebuildStatementsPostgreSQL', () => 
             surrogateColumn: MATERIALIZATION_SURROGATE_COLUMN,
         });
 
-        it('produces the 4-statement sequence (build → interim repoint → one atomic swap batch)', () => {
-            expect(stmts).toHaveLength(4);
+        it('produces the 3-statement sequence (drop shadow → build shadow → one atomic swap batch, no interim repoint)', () => {
+            expect(stmts).toHaveLength(3);
         });
 
         it('builds the shadow with the surrogate FIRST via ROW_NUMBER (PG view-column-order strictness)', () => {
@@ -104,9 +104,11 @@ describe('MaterializationRefresher.buildFullRebuildStatementsPostgreSQL', () => 
             expect(stmts[1].indexOf(MATERIALIZATION_SURROGATE_COLUMN)).toBeLessThan(stmts[1].indexOf('src.*'));
         });
 
-        it('interim-repoints to the shadow, then drops (CASCADE) / renames / repoints back / restores the surrogate index in ONE atomic transaction', () => {
-            expect(stmts[2]).toBe('CREATE OR REPLACE VIEW __mj."materialized_vw_demo" AS SELECT * FROM __mj."materialized_demo__shadow"');
-            const swap = stmts[3];
+        it('drops (CASCADE) / renames / repoints view / restores the surrogate index in ONE atomic transaction — with NO interim repoint outside it', () => {
+            // The wrapper view is NEVER repointed at the shadow outside the swap transaction (that would break
+            // atomicity — a rolled-back swap would leave the view on the shadow). The only view statement is inside the tran.
+            expect(stmts.some((s) => s === 'CREATE OR REPLACE VIEW __mj."materialized_vw_demo" AS SELECT * FROM __mj."materialized_demo__shadow"')).toBe(false);
+            const swap = stmts[2];
             expect(swap.startsWith('BEGIN;')).toBe(true);
             expect(swap.trimEnd().endsWith('COMMIT;')).toBe(true);
             expect(swap).toContain('DROP TABLE IF EXISTS __mj."materialized_demo" CASCADE;');
@@ -132,11 +134,13 @@ describe('MaterializationRefresher.buildFullRebuildStatementsPostgreSQL', () => 
             expect(stmts[1]).not.toContain('ROW_NUMBER');
         });
 
-        it('still performs the atomic swap + rename + repoint (no surrogate index)', () => {
-            expect(stmts).toHaveLength(4);
-            expect(stmts[2]).toContain('CREATE OR REPLACE VIEW __mj."materialized_vw_demo" AS SELECT * FROM __mj."materialized_demo__shadow"');
-            expect(stmts[3]).toContain('ALTER TABLE __mj."materialized_demo__shadow" RENAME TO "materialized_demo";');
-            expect(stmts[3]).not.toContain('CREATE UNIQUE INDEX'); // base-view case has no surrogate
+        it('still performs the atomic swap + rename + repoint in one transaction (no interim repoint, no surrogate index)', () => {
+            expect(stmts).toHaveLength(3);
+            // No out-of-transaction interim repoint at the shadow.
+            expect(stmts.some((s) => s === 'CREATE OR REPLACE VIEW __mj."materialized_vw_demo" AS SELECT * FROM __mj."materialized_demo__shadow"')).toBe(false);
+            expect(stmts[2]).toContain('ALTER TABLE __mj."materialized_demo__shadow" RENAME TO "materialized_demo";');
+            expect(stmts[2]).toContain('CREATE OR REPLACE VIEW __mj."materialized_vw_demo" AS SELECT * FROM __mj."materialized_demo";');
+            expect(stmts[2]).not.toContain('CREATE UNIQUE INDEX'); // base-view case has no surrogate
         });
     });
 });
@@ -656,5 +660,105 @@ describe('MaterializationRefresher forced-full-rebuild cadence', () => {
             }
         }
         expect(forcedRebuilds).toBe(3);
+    });
+});
+
+/**
+ * ① Concurrency safety: run-unique shadow table names so two concurrent refreshes of the SAME materialization
+ * cannot collide on the shadow table (one run's DROP …__shadow yanking the other's in-flight table).
+ */
+describe('MaterializationRefresher.makeShadowTableName (concurrency-safe shadow naming)', () => {
+    it('produces a fixed-prefix, length-safe name well under both engine identifier limits', () => {
+        const name = MaterializationRefresher.makeShadowTableName();
+        expect(name.startsWith('mj_mat_shd_')).toBe(true);
+        expect(name.length).toBeLessThanOrEqual(63); // PG's 63-char limit (SQL Server's 128 is looser)
+        expect(name).toMatch(/^mj_mat_shd_[0-9a-f]{32}$/); // prefix + 32 hex (uuid, dashes stripped)
+    });
+
+    it('is unique across calls (so concurrent refreshes never share a shadow)', () => {
+        const names = new Set(Array.from({ length: 200 }, () => MaterializationRefresher.makeShadowTableName()));
+        expect(names.size).toBe(200);
+    });
+
+    it('is NOT derived from the table name — a very long materialized table name still yields a short shadow', () => {
+        const name = MaterializationRefresher.makeShadowTableName();
+        expect(name).not.toContain('materialized_');
+    });
+
+    it('threads the run-unique shadow name into the full-rebuild builders (both engines) when supplied', () => {
+        const shadowName = 'mj_mat_shd_deadbeefdeadbeefdeadbeefdeadbeef';
+        const ss = MaterializationRefresher.buildFullRebuildStatementsSQLServer({
+            schema: '__mj', tableName: 'materialized_Demo', viewName: 'materialized_vwDemo',
+            sourceSelect: 'SELECT a FROM __mj.Foo', surrogateColumn: MATERIALIZATION_SURROGATE_COLUMN, shadowName,
+        });
+        expect(ss.some((s) => s.includes(`[__mj].[${shadowName}]`))).toBe(true);
+        expect(ss.some((s) => s.includes('materialized_Demo__shadow'))).toBe(false); // legacy fixed name not used
+        // Swap still renames the run-unique shadow into the stable canonical table name.
+        expect(ss.some((s) => s.includes(`EXEC sp_rename '__mj.${shadowName}', 'materialized_Demo'`))).toBe(true);
+
+        const pg = MaterializationRefresher.buildFullRebuildStatementsPostgreSQL({
+            schema: '__mj', tableName: 'materialized_demo', viewName: 'materialized_vw_demo',
+            sourceSelect: 'SELECT a FROM __mj.foo', surrogateColumn: MATERIALIZATION_SURROGATE_COLUMN, shadowName,
+        });
+        expect(pg.some((s) => s.includes(`__mj."${shadowName}"`))).toBe(true);
+        expect(pg.some((s) => s.includes('materialized_demo__shadow'))).toBe(false);
+        expect(pg.some((s) => s.includes(`ALTER TABLE __mj."${shadowName}" RENAME TO "materialized_demo"`))).toBe(true);
+    });
+
+    it('falls back to the legacy fixed shadow name when none is supplied (backward compatible)', () => {
+        const ss = MaterializationRefresher.buildFullRebuildStatementsSQLServer({
+            schema: '__mj', tableName: 'materialized_Demo', viewName: 'materialized_vwDemo',
+            sourceSelect: 'SELECT a FROM __mj.Foo',
+        });
+        expect(ss[1]).toContain('materialized_Demo__shadow');
+    });
+});
+
+/**
+ * ② Watermark commit-skew safety: the persisted incremental watermark is MAX(__mj_UpdatedAt) minus a safety
+ * overlap, so a row committed late (timestamp < MAX but commit after the probe) is re-scanned, not skipped.
+ */
+describe('MaterializationRefresher.applyWatermarkSafetyOverlap (commit-skew safety)', () => {
+    it('subtracts the overlap so the stored watermark lags the probed MAX', () => {
+        const rawMax = new Date('2026-08-03T12:00:00.000Z');
+        const adjusted = MaterializationRefresher.applyWatermarkSafetyOverlap(rawMax);
+        expect(adjusted).not.toBeNull();
+        expect(adjusted!.getTime()).toBe(rawMax.getTime() - WATERMARK_SAFETY_OVERLAP_MS);
+        expect(adjusted!.getTime()).toBeLessThan(rawMax.getTime()); // never rounds the watermark UP past a real change
+    });
+
+    it('passes null through (no __mj_UpdatedAt source → keep full-rebuilding)', () => {
+        expect(MaterializationRefresher.applyWatermarkSafetyOverlap(null)).toBeNull();
+    });
+
+    it('uses a positive overlap (a zero/negative lag would not close the skew)', () => {
+        expect(WATERMARK_SAFETY_OVERLAP_MS).toBeGreaterThan(0);
+    });
+});
+
+/**
+ * Leak-1 runtime gate: the refresher refuses to (re)populate a local mirror of an EXTERNAL read-RLS-protected
+ * entity (its rows are read-refused live under RLS; a mirror would expose them unscoped via raw queries). Detects
+ * RLS the same way CodeGenLib does — any permission with a non-empty, non-whitespace ReadRLSFilterID.
+ */
+describe('MaterializationRefresher.entityHasReadRLS (Leak-1 runtime gate detector)', () => {
+    // Structural stub of the only EntityInfo surface the detector reads.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ent = (perms: Array<{ ReadRLSFilterID?: string | null }>): any => ({ Name: 'Ext', Permissions: perms });
+
+    it('is TRUE when any permission carries a non-empty ReadRLSFilterID', () => {
+        expect(MaterializationRefresher.entityHasReadRLS(ent([{}, { ReadRLSFilterID: 'rls-1' }]))).toBe(true);
+    });
+
+    it('is FALSE when no permission carries an RLS filter (null/absent)', () => {
+        expect(MaterializationRefresher.entityHasReadRLS(ent([{ ReadRLSFilterID: null }, {}]))).toBe(false);
+    });
+
+    it('treats a whitespace-only ReadRLSFilterID as NOT protected (trim guard)', () => {
+        expect(MaterializationRefresher.entityHasReadRLS(ent([{ ReadRLSFilterID: '   ' }]))).toBe(false);
+    });
+
+    it('is FALSE for an entity with no permissions', () => {
+        expect(MaterializationRefresher.entityHasReadRLS(ent([]))).toBe(false);
     });
 });

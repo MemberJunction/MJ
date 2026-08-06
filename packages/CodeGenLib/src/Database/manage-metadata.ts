@@ -1366,6 +1366,18 @@ export class ManageMetadataBase {
             continue;
          }
 
+         // SECURITY (Leak 1 / C2 for base views): refuse to materialize an EXTERNAL entity that is
+         // read-RLS-protected. An external entity's live reads are REFUSED under RLS (the read path throws —
+         // MJ can't enforce RLS WHERE clauses on a remote system), and for external entities the read path
+         // returns at the external-dispatch branch BEFORE any materialized-view swap — so the "base-view reads
+         // re-apply source RLS" exemption is unreachable here. Mirroring the remote rows into a local table
+         // would expose, via any raw query joining the wrapper view, data the live path refuses entirely.
+         // (A LOCAL RLS base-view is safe: its read path swaps to the mirror and re-applies the entity's RLS.)
+         if (entity.ExternalDataSourceID && this.entityHasRowLevelSecurity(entity)) {
+            logError(`    > REFUSING base-view materialization of external entity "${entity.Name}": it is read-RLS-protected and its live reads are refused under RLS, so a local mirror would leak its rows via raw queries over the wrapper view (a mirror cannot reproduce remote RLS). Skipping.`);
+            continue;
+         }
+
          // 2) Derive the snapshot column shape from the entity's base-view fields.
          const columns: MaterializedColumnSpec[] = entity.Fields.map((f) => ({
             Name: f.Name,
@@ -1771,7 +1783,8 @@ export class ManageMetadataBase {
          // they are exempt from this check.
          if (r.SourceType === 'Query' && r.SourceQueryID) {
             const qe = await this.runQueryWithParams(pool, `SELECT EntityID FROM ${this.qs(coreSchema, 'QueryEntity')} WHERE QueryID = @Q`, { Q: r.SourceQueryID as string });
-            const rlsVerdict = this.assessQuerySourceRLSSafety(md, qe.recordset.map((x: CodeGenQueryRow) => x.EntityID as string));
+            const sourceEntityIds = qe.recordset.map((x: CodeGenQueryRow) => x.EntityID as string);
+            const rlsVerdict = this.assessQuerySourceRLSSafety(md, sourceEntityIds);
             if (!rlsVerdict.safe) {
                await this.LogSQLAndExecute(
                   pool,
@@ -1784,6 +1797,45 @@ export class ManageMetadataBase {
                logError(`    > RLS DRIFT: materialization "${r.TableName}" → DriftHold + read access revoked — ${rlsVerdict.reason}`);
                heldCount++;
                continue; // already held for the leak; the shape-drift check below is moot
+            }
+            // Leak 2 (C2 ongoing): RLS is still safe, but a role may have LOST plain read on a source since mint.
+            // The intersection grant is computed once at mint and never re-narrowed by the RLS check above, so
+            // re-narrow it here to the CURRENT source-read intersection — otherwise a role that lost read on a
+            // source keeps reading the snapshot's rows it can no longer read live. Re-narrow only (never re-grant).
+            if (r.GeneratedEntityID) {
+               const sourceEntities = sourceEntityIds.map((id) => md.EntityByID(id)).filter((e): e is EntityInfo => !!e);
+               const revoked = await this.reconcileMaterializedQueryEntityReadGrants(pool, r.GeneratedEntityID as string, r.TableName as string, sourceEntities);
+               if (revoked > 0) {
+                  logStatus(`    > PERMISSION DRIFT: materialized entity "${r.TableName}" → revoked ${revoked} over-broad read grant(s) (a role can no longer read every source).`);
+               }
+            }
+         }
+
+         // SECURITY (Leak 1 drift side): an existing base-view materialization of an EXTERNAL read-RLS-protected
+         // entity leaks (the mirror is readable via raw queries, but the entity's live reads are RLS-refused and
+         // the read path never re-applies RLS to an external mirror). The mint gate refuses NEW ones; hold any
+         // that already exist (or whose entity became external/RLS after minting) so refresh stops — and flag for
+         // a human to drop the mirror. (Local base-view RLS is safe and not held.)
+         if (r.SourceType === 'EntityBaseView' && r.SourceEntityID) {
+            const bvEntity = md.EntityByID(r.SourceEntityID as string);
+            if (bvEntity && bvEntity.ExternalDataSourceID && this.entityHasRowLevelSecurity(bvEntity)) {
+               // EMPTY the mirror now — it holds remote rows the live path refuses under RLS, and DriftHold alone
+               // would only stop FUTURE refreshes while leaving the already-populated rows queryable via raw SQL
+               // over the wrapper view. Emptying (not dropping) removes the leaked data without breaking any object
+               // dependency; the wrapper view remains but returns nothing. Then DriftHold so refresh never refills it.
+               await this.LogSQLAndExecute(
+                  pool,
+                  `DELETE FROM ${this.qs(r.SchemaName as string, r.TableName as string)}`,
+                  `Empty external RLS base-view mirror "${r.TableName}" (leak guard — mirror exposed RLS-refused rows)`,
+               );
+               await this.LogSQLAndExecute(
+                  pool,
+                  `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
+                  `Flag external RLS base-view materialization "${r.TableName}" as DriftHold (leak guard)`,
+               );
+               logError(`    > RLS LEAK GUARD: base-view materialization "${r.TableName}" mirrors an EXTERNAL read-RLS-protected entity ("${bvEntity.Name}") → mirror EMPTIED + DriftHold (refresh stopped). It exposed rows the live path refuses under RLS.`);
+               heldCount++;
+               continue;
             }
          }
 
@@ -6003,6 +6055,51 @@ export class ManageMetadataBase {
    protected async revokeMaterializedEntityReadAccess(pool: CodeGenConnection, entityId: string, entityLabel: string, reason: string): Promise<void> {
       const sql = `UPDATE ${this.qs(mj_core_schema(), 'EntityPermission')} SET ${this.qi('CanRead')}=${this.boolLit(false)} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`;
       await this.LogSQLAndExecute(pool, sql, `Revoke read access on materialized entity "${entityLabel}" (${reason})`);
+   }
+
+   /**
+    * True if an entity is read-RLS-protected — any of its role permissions carries a non-empty `ReadRLSFilterID`.
+    * Same definition {@link assessQuerySourceRLSSafety} uses; extracted so the base-view leak gate can reuse it.
+    */
+   protected entityHasRowLevelSecurity(entity: EntityInfo): boolean {
+      return entity.Permissions.some((p) => !!p.ReadRLSFilterID && p.ReadRLSFilterID.trim().length > 0);
+   }
+
+   /**
+    * Leak-2 (C2 ongoing): re-narrows a minted materialized QUERY entity's read grants to the CURRENT source-read
+    * intersection. The mint-time grant ({@link addMaterializedQueryEntityPermissions}) is computed once; if a role
+    * later LOSES plain `CanRead` on a source, its grant on the snapshot must be revoked too — otherwise it keeps
+    * reading snapshot rows it can no longer read live. Called from the drift pass on every codegen run. Only ever
+    * REVOKES (the safe direction); re-granting a role that regained access is a human decision after review.
+    * Returns the number of grants revoked.
+    */
+   protected async reconcileMaterializedQueryEntityReadGrants(
+      pool: CodeGenConnection,
+      entityId: string,
+      entityLabel: string,
+      sourceEntities: EntityInfo[],
+   ): Promise<number> {
+      if (sourceEntities.length === 0) return 0; // no sources to intersect against — the RLS/empty gate handles this
+      const roleCanReadAllSources = (roleId: string): boolean =>
+         sourceEntities.every((e) => e.Permissions.some((p) => UUIDsEqual(p.RoleID, roleId) && p.CanRead));
+      const grants = await this.runQuery(
+         pool,
+         `SELECT ${this.qi('RoleID')} FROM ${this.qs(mj_core_schema(), 'EntityPermission')} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`,
+      );
+      let revoked = 0;
+      for (const g of grants.recordset) {
+         const roleId = (g as CodeGenQueryRow).RoleID as string | null;
+         if (!roleId) continue;
+         if (!roleCanReadAllSources(roleId)) {
+            await this.LogSQLAndExecute(
+               pool,
+               `UPDATE ${this.qs(mj_core_schema(), 'EntityPermission')} SET ${this.qi('CanRead')}=${this.boolLit(false)} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('RoleID')}='${roleId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`,
+               `Narrow read grant on materialized entity "${entityLabel}": role ${roleId} can no longer read every source (C2 intersection re-narrowed)`,
+            );
+            revoked++;
+         }
+      }
+      return revoked;
    }
 
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {

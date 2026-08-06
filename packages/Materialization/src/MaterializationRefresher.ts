@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { IMetadataProvider, UserInfo, LogError, EntityInfo, ExternalDataSourceReadRouter } from '@memberjunction/core';
 import { MJMaterializedResultEntity, MJQueryEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
@@ -20,6 +21,17 @@ export const MATERIALIZATION_SURROGATE_COLUMN = '__mj_MaterializedRowID';
  * this many refresh cycles without requiring the author to schedule a manual FullRebuild.
  */
 export const FULL_REBUILD_EVERY_N_INCREMENTAL_REFRESHES = 10;
+
+/**
+ * Safety lag subtracted from the probed `MAX(__mj_UpdatedAt)` before it is persisted as the incremental
+ * watermark. Closes a commit-ordering skew: a source row whose `__mj_UpdatedAt` was stamped at write-time T1
+ * but whose transaction COMMITS after the fingerprint probe (which already read a higher `MAX = T2 > T1`) would,
+ * without this lag, be permanently excluded by the strict `__mj_UpdatedAt > watermark` filter on the next pass.
+ * Storing `MAX - overlap` makes the next incremental RE-scan the last `overlap` window; the MERGE/`ON CONFLICT`
+ * upsert is idempotent so re-scanning already-applied rows is harmless. The overlap only needs to exceed the
+ * source's typical commit latency — longer skews are still backstopped by {@link FULL_REBUILD_EVERY_N_INCREMENTAL_REFRESHES}.
+ */
+export const WATERMARK_SAFETY_OVERLAP_MS = 10_000;
 
 /**
  * Minimal structural type for a runtime SQL-executing provider. Both SQLServerDataProvider and
@@ -91,9 +103,12 @@ export class MaterializationRefresher {
         sourceSelect: string;
         surrogateColumn?: string;
         hashKeyColumns?: { name: string; type: string }[];
+        /** Run-unique shadow table name (see {@link makeShadowTableName}) so two concurrent refreshes of the
+         *  same materialization never share a shadow. Defaults to the legacy fixed name when omitted. */
+        shadowName?: string;
     }): string[] {
         const { schema, tableName, viewName, sourceSelect, surrogateColumn, hashKeyColumns } = opts;
-        const shadow = `${tableName}__shadow`;
+        const shadow = opts.shadowName ?? `${tableName}__shadow`;
         const obj = (n: string) => `[${schema}].[${n}]`;
         // Surrogate: a stable HASH of the key columns (Phase 3 — keyed/aggregation materializations, the
         // match key for incremental refresh) when key columns are supplied; otherwise a synthetic IDENTITY.
@@ -162,9 +177,12 @@ export class MaterializationRefresher {
         sourceSelect: string;
         surrogateColumn?: string;
         hashKeyColumns?: { name: string; type: string }[];
+        /** Run-unique shadow table name (see {@link makeShadowTableName}) so two concurrent refreshes of the
+         *  same materialization never share a shadow. Defaults to the legacy fixed name when omitted. */
+        shadowName?: string;
     }): string[] {
         const { schema, tableName, viewName, sourceSelect, surrogateColumn, hashKeyColumns } = opts;
-        const shadow = `${tableName}__shadow`;
+        const shadow = opts.shadowName ?? `${tableName}__shadow`;
         const obj = (n: string) => `${schema}."${n}"`;
         // Surrogate: a stable HASH of the key columns (Phase 3 keyed/aggregation materializations) when
         // supplied; otherwise the synthetic ROW_NUMBER snapshot id. Kept FIRST for CREATE-OR-REPLACE-VIEW
@@ -185,18 +203,21 @@ export class MaterializationRefresher {
             ? `  CREATE UNIQUE INDEX ON ${obj(tableName)} ("${surrogateColumn}");\n`
             : '';
         return [
-            // 1) Build a fresh shadow (CASCADE clears any leftover shadow + transient view dependency).
+            // 1) Build a fresh shadow (IF EXISTS clears a same-named leftover from a crashed prior run). There is
+            //    deliberately NO interim view repoint here: the wrapper view stays pointed at the OLD canonical
+            //    table until the atomic swap below, so readers see the COMPLETE old snapshot until commit — exactly
+            //    matching the SQL Server path's atomicity. (An earlier design repointed the view at the shadow at
+            //    this step, OUTSIDE the swap transaction; that statement auto-committed independently, so a
+            //    rolled-back swap left the view pointing at the shadow, and the step-1 `DROP ... CASCADE` on a
+            //    subsequent run could then take the wrapper view down with it.)
             `DROP TABLE IF EXISTS ${obj(shadow)} CASCADE`,
             createShadow,
-            // 2) Interim repoint — readers immediately see the freshly-built shadow while we swap.
-            `CREATE OR REPLACE VIEW ${obj(viewName)} AS SELECT * FROM ${obj(shadow)}`,
-            // 3) ATOMIC swap in a SINGLE transaction (PG DDL is transactional) — drop the stale table, rename
-            //    the shadow into the canonical name (kept stable for migration-reuse detection, §12), repoint
-            //    the view back, and restore the surrogate index. Wrapping matches the SQL Server path's
-            //    crash-atomicity: a mid-swap failure (lock timeout on RENAME, disk pressure on the index)
-            //    rolls the ENTIRE swap back, leaving the OLD snapshot fully intact. Without the transaction, a
-            //    failure after the DROP would destroy the old table and leave the entity pointing at a
-            //    half-built/absent one (the exact gap the dirty-group path already guards with BEGIN/COMMIT).
+            // 2) ATOMIC swap in a SINGLE transaction (PG DDL is transactional) — drop the stale table, rename
+            //    the shadow into the canonical name (kept stable for migration-reuse detection, §12), (re)create
+            //    the wrapper view on the new table, and restore the surrogate index. The view is only ever
+            //    created/repointed INSIDE this transaction, so readers see either the whole old snapshot or the
+            //    whole new one. A mid-swap failure (lock timeout on RENAME, disk pressure on the index) rolls the
+            //    ENTIRE swap back, leaving the OLD snapshot fully intact.
             `BEGIN;\n` +
                 `  DROP TABLE IF EXISTS ${obj(tableName)} CASCADE;\n` +
                 `  ALTER TABLE ${obj(shadow)} RENAME TO "${tableName}";\n` +
@@ -226,6 +247,9 @@ export class MaterializationRefresher {
         provider: IMetadataProvider,
         options?: { nextRefreshAt?: Date | null },
     ): Promise<MaterializationRefreshResult> {
+        // Run-unique shadow-table name so two concurrent refreshes of THIS materialization never collide on the
+        // shadow (see makeShadowTableName). Declared before the try so the catch below can best-effort drop it.
+        const runShadowName = MaterializationRefresher.makeShadowTableName();
         try {
             // Refuse to refresh a row held for review or disabled — a successful refresh below sets
             // Status='Active', which would SILENTLY clear a DriftHold (§13/§17.2: a drifted materialization
@@ -258,11 +282,20 @@ export class MaterializationRefresher {
             // local source-SELECT) instead of loading it a second time in resolveSourceSelect.
             const sourceQuery = externalEntity ? null : await this.resolveSourceQuery(matResult, contextUser, provider);
             if (externalEntity) {
-                const ext = await this.rebuildFromExternalEntity(matResult, externalEntity, exec, isPostgres, contextUser, provider);
+                // SECURITY (Leak 1 runtime gate): refuse to (re)populate a local mirror of an external
+                // read-RLS-protected entity. Its rows are read-REFUSED live under RLS (MJ can't enforce RLS on a
+                // remote system), and a local mirror is readable UNSCOPED via any raw query over the wrapper view.
+                // The CodeGen mint/drift gates also cover this, but they run only per codegen pass; this runtime
+                // refusal closes the window between an entity gaining RLS and the next codegen run, during which
+                // the scheduled sweep would otherwise keep refilling the mirror with the now-protected rows.
+                if (MaterializationRefresher.entityHasReadRLS(externalEntity)) {
+                    return await this.failRefresh(matResult, options, `Refusing to refresh base-view materialization of external RLS-protected entity "${externalEntity.Name}": a local mirror would expose rows the live path refuses under RLS.`);
+                }
+                const ext = await this.rebuildFromExternalEntity(matResult, externalEntity, exec, isPostgres, contextUser, provider, runShadowName);
                 if (!ext.Success) return await this.failRefresh(matResult, options, ext.ErrorMessage ?? `External entity rebuild failed for materialization ${matResult.ID}`);
                 rowCount = ext.RowCount ?? 0;
             } else if (sourceQuery?.externalSql) {
-                const ext = await this.rebuildFromExternalQuery(matResult, sourceQuery.query, sourceQuery.externalSql, exec, isPostgres, contextUser, provider);
+                const ext = await this.rebuildFromExternalQuery(matResult, sourceQuery.query, sourceQuery.externalSql, exec, isPostgres, contextUser, provider, runShadowName);
                 if (!ext.Success) return await this.failRefresh(matResult, options, ext.ErrorMessage ?? `External query rebuild failed for materialization ${matResult.ID}`);
                 rowCount = ext.RowCount ?? 0;
             } else {
@@ -296,6 +329,7 @@ export class MaterializationRefresher {
                         sourceSelect,
                         surrogateColumn,
                         hashKeyColumns,
+                        shadowName: runShadowName,
                     };
                     const statements = isPostgres
                         ? MaterializationRefresher.buildFullRebuildStatementsPostgreSQL(buildOpts)
@@ -352,7 +386,29 @@ export class MaterializationRefresher {
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             LogError(`MaterializationRefresher.RefreshOne failed for materialization ${matResult.ID}: ${msg}`);
+            // Best-effort: drop this run's shadow so a failed rebuild leaves no orphan table. (On success the
+            // shadow is renamed INTO the canonical name, so there's nothing to drop.) Never let a cleanup error
+            // mask the original failure. `exec`/`isPostgres` are re-derived because they're scoped to the try.
+            await this.dropShadowTableBestEffort(provider, matResult.SchemaName, runShadowName);
             return await this.failRefresh(matResult, options, msg);
+        }
+    }
+
+    /**
+     * Drops a run's shadow table if it exists, swallowing any error (used only on the RefreshOne failure path so
+     * a crashed/failed rebuild leaves no orphan). Uses IF EXISTS so it's a no-op when the shadow was never
+     * created or was already renamed into the canonical table on success.
+     */
+    private async dropShadowTableBestEffort(provider: IMetadataProvider, schema: string, shadowName: string): Promise<void> {
+        try {
+            const exec = provider as unknown as ISQLExecutor;
+            const isPostgres = exec.PlatformKey === 'postgresql';
+            const sql = isPostgres
+                ? `DROP TABLE IF EXISTS ${schema}."${shadowName}" CASCADE`
+                : `IF OBJECT_ID('[${schema}].[${shadowName}]', 'U') IS NOT NULL DROP TABLE [${schema}].[${shadowName}]`;
+            await exec.ExecuteSQL(sql);
+        } catch (cleanupErr) {
+            LogError(`MaterializationRefresher: best-effort shadow cleanup for '${shadowName}' failed (ignored): ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`);
         }
     }
 
@@ -548,7 +604,11 @@ export class MaterializationRefresher {
         const col = isPostgres ? `"${updatedAtColumn}"` : `[${updatedAtColumn}]`;
         const rows = await exec.ExecuteSQL<{ w: string | Date | null; c: number }>(`SELECT MAX(${col}) AS w, COUNT(*) AS c FROM ${obj}`);
         const w = rows?.[0]?.w ?? null;
-        const watermark = w == null ? null : w instanceof Date ? w : new Date(w);
+        const rawMax = w == null ? null : w instanceof Date ? w : new Date(w);
+        // Persist MAX - overlap (see applyWatermarkSafetyOverlap / WATERMARK_SAFETY_OVERLAP_MS) so a row committed
+        // late (its __mj_UpdatedAt earlier than this MAX but its commit landing after this probe) is re-scanned by
+        // the next incremental pass rather than skipped forever.
+        const watermark = MaterializationRefresher.applyWatermarkSafetyOverlap(rawMax);
         return { watermark, count: Number(rows?.[0]?.c ?? 0) };
     }
 
@@ -564,6 +624,41 @@ export class MaterializationRefresher {
     /** A SQL datetime literal (ISO-8601 UTC) parsed by both SQL Server and PostgreSQL. */
     public static sqlDateTimeLiteral(date: Date): string {
         return `'${date.toISOString()}'`;
+    }
+
+    /**
+     * A globally-unique, length-safe shadow-table name for one refresh run. Deliberately NOT derived from the
+     * materialized table name: two refreshes of the SAME materialization (a manual "refresh now" racing the
+     * scheduled sweep, or overlapping sweeps under `ConcurrencyMode=Concurrent`) must not share a shadow, or one
+     * run's `DROP TABLE …__shadow` would yank the table the other is mid-build. A fixed short prefix + a random
+     * token keeps it well under both engines' identifier limits (PG 63 / SQL Server 128) regardless of how long
+     * the canonical table name is. The shadow is renamed INTO the canonical name on success (so it leaves no
+     * residue), and dropped by RefreshOne's failure cleanup on a caught error; only a hard process crash between
+     * shadow creation and swap can leak one — a harmless orphan table with no dependents.
+     */
+    public static makeShadowTableName(): string {
+        return `mj_mat_shd_${randomUUID().replace(/-/g, '')}`;
+    }
+
+    /**
+     * Applies the incremental-watermark safety overlap: returns `rawMax - WATERMARK_SAFETY_OVERLAP_MS` (null
+     * passes through). Persisting the reduced value makes the next incremental pass RE-scan the last `overlap`
+     * window, so a source row whose transaction commits after the fingerprint probe — but whose `__mj_UpdatedAt`
+     * predates the probed MAX — is re-processed (idempotent MERGE) instead of being skipped forever. Pure and
+     * unit-testable; extracted from probeSourceFingerprint so the skew-safety math is verifiable in isolation.
+     */
+    public static applyWatermarkSafetyOverlap(rawMax: Date | null): Date | null {
+        return rawMax == null ? null : new Date(rawMax.getTime() - WATERMARK_SAFETY_OVERLAP_MS);
+    }
+
+    /**
+     * True if an entity is read-RLS-protected — any of its role permissions carries a non-empty `ReadRLSFilterID`.
+     * Matches CodeGenLib's `entityHasRowLevelSecurity` (and MJ's `GetUserRowLevelSecurityWhereClause`, which
+     * sources the read filter solely from `EntityPermission.ReadRLSFilterID`). Used by the runtime leak gate to
+     * refuse refreshing a local mirror of an EXTERNAL RLS-protected entity — a mirror can't reproduce remote RLS.
+     */
+    public static entityHasReadRLS(entity: EntityInfo): boolean {
+        return entity.Permissions.some((p) => !!p.ReadRLSFilterID && p.ReadRLSFilterID.trim().length > 0);
     }
 
     /**
@@ -697,6 +792,7 @@ export class MaterializationRefresher {
         isPostgres: boolean,
         contextUser: UserInfo,
         provider: IMetadataProvider,
+        shadowName: string,
     ): Promise<MaterializationRefreshResult> {
         const router = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
         if (!router) {
@@ -720,7 +816,7 @@ export class MaterializationRefresher {
             return { Success: false, ErrorMessage: `External entity '${entity.Name}' has no columns to materialize.` };
         }
 
-        await MaterializationRefresher.executeExternalRebuildPlan(matResult, columns, rows, exec, isPostgres);
+        await MaterializationRefresher.executeExternalRebuildPlan(matResult, columns, rows, exec, isPostgres, undefined, shadowName);
         return { Success: true, RowCount: rows.length };
     }
 
@@ -735,10 +831,11 @@ export class MaterializationRefresher {
         exec: ISQLExecutor,
         isPostgres: boolean,
         surrogateColumn?: string,
+        shadowName?: string,
     ): Promise<void> {
         const plan = MaterializationRefresher.buildExternalRebuildPlan({
             schema: matResult.SchemaName, tableName: matResult.TableName, viewName: matResult.ViewName,
-            columns, rows, isPostgres, surrogateColumn,
+            columns, rows, isPostgres, surrogateColumn, shadowName,
         });
         for (const sql of plan.preStatements) await exec.ExecuteSQL(sql);
         for (const batch of plan.insertBatches) await exec.ExecuteSQL(batch.sql, batch.params);
@@ -781,6 +878,7 @@ export class MaterializationRefresher {
         isPostgres: boolean,
         contextUser: UserInfo,
         provider: IMetadataProvider,
+        shadowName: string,
     ): Promise<MaterializationRefreshResult> {
         if (!query.ExternalDataSourceID) {
             return { Success: false, ErrorMessage: `Query '${query.Name}' is not backed by an external data source.` };
@@ -823,7 +921,7 @@ export class MaterializationRefresher {
         const rows = rawRows.map((r, i) => ({ [surrogate]: i + 1, ...r }));
 
         // Pass the surrogate so the plan restores its UNIQUE index post-swap (the minted entity's PK).
-        await MaterializationRefresher.executeExternalRebuildPlan(matResult, columns, rows, exec, isPostgres, surrogate);
+        await MaterializationRefresher.executeExternalRebuildPlan(matResult, columns, rows, exec, isPostgres, surrogate, shadowName);
         return { Success: true, RowCount: rawRows.length };
     }
 
@@ -899,9 +997,12 @@ export class MaterializationRefresher {
         /** Query case: the synthetic surrogate column to restore a UNIQUE index on post-swap (the minted
          *  entity's PK). Omit for the base-view case (the source PK column carries its own identity). */
         surrogateColumn?: string;
+        /** Run-unique shadow table name (see {@link makeShadowTableName}) so two concurrent refreshes of the
+         *  same materialization never share a shadow. Defaults to the legacy fixed name when omitted. */
+        shadowName?: string;
     }): { preStatements: string[]; insertBatches: { sql: string; params: unknown[] }[]; postStatements: string[] } {
         const { schema, tableName, viewName, columns, rows, isPostgres, surrogateColumn } = opts;
-        const shadow = `${tableName}__shadow`;
+        const shadow = opts.shadowName ?? `${tableName}__shadow`;
         // Escape the engine's identifier delimiter so a hostile external column name (these come from the
         // remote result-set keys — untrusted) can't break out of its quoting: `]`→`]]` (SQL Server),
         // `"`→`""` (PostgreSQL). Applied to every interpolated identifier (columns especially).
@@ -938,13 +1039,13 @@ export class MaterializationRefresher {
 
         const postStatements = isPostgres
             ? [
-                  // Interim repoint — readers see the freshly-populated shadow while we swap.
-                  `CREATE OR REPLACE VIEW ${obj(viewName)} AS SELECT * FROM ${obj(shadow)}`,
                   // ATOMIC swap in a SINGLE transaction (PG DDL is transactional) — drop the stale table,
-                  // rename the shadow into the canonical name, repoint the view back, restore the surrogate
-                  // index. Parity with the SQL Server branch's crash-atomicity and buildFullRebuildStatementsPostgreSQL:
-                  // a mid-swap failure rolls the ENTIRE swap back, leaving the OLD snapshot intact rather than
-                  // destroyed. The surrogate index is restored inside the tran (unnamed → PG auto-names).
+                  // rename the shadow into the canonical name, (re)create the view on the new table, restore the
+                  // surrogate index. NO interim repoint outside the transaction (parity with
+                  // buildFullRebuildStatementsPostgreSQL): the wrapper view is only ever repointed INSIDE this
+                  // transaction, so readers see the whole old snapshot until commit and a mid-swap failure rolls
+                  // the ENTIRE swap back, leaving the OLD snapshot intact. The surrogate index is restored inside
+                  // the tran (unnamed → PG auto-names).
                   `BEGIN;\n` +
                       `  DROP TABLE IF EXISTS ${obj(tableName)} CASCADE;\n` +
                       `  ALTER TABLE ${obj(shadow)} RENAME TO "${escId(tableName)}";\n` +
