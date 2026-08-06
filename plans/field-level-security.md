@@ -15,8 +15,13 @@
 | Phase 1 — Schema & Metadata | **Committed** (`cdd78a2d9d`) |
 | Phase 2 — Server-Side Enforcement (§2.1–§2.4, §2.6) | **Built, tested, uncommitted** |
 | Phase 2.5 — Saved queries (§2.5) | **Deferred by decision** — see below; saved queries are NOT FLS-filtered |
-| Phase 3 — Skip integration | Not started |
+| Phase 3 — Skip integration | **ON HOLD** — superseded pending the new direction below |
 | Phase 4 — Admin UI | Not started |
+
+> **A new architectural direction was set by leadership after Phase 2 landed.** Read
+> "NEW DIRECTION (post-leadership review)" below before starting anything. It moves enforcement
+> into the database (base views + SQL roles) and into the SELECT list, and it collides with
+> several verified decisions in the design that follows.
 
 ### Decisions taken during implementation (do not re-litigate)
 
@@ -155,6 +160,100 @@ vector are *the same thing*. Computed/aggregate columns (`SELECT AVG(Salary) AS 
 both what defeats name-based stripping AND where `SourceFieldName` is least reliable — so a
 save-time warning built on that metadata can produce **false negatives on exactly the queries most
 likely to leak**, while reading as reassurance. See the open questions raised before building.
+
+---
+
+## NEW DIRECTION (post-leadership review) — READ BEFORE ANY FURTHER WORK
+
+Leadership reviewed FLS and set a materially different architecture. **Phase 3 is on hold.** The
+direction below supersedes parts of the design above, and collides with decisions in it that were
+made for verified reasons — those collisions are catalogued so they are resolved deliberately, not
+rediscovered.
+
+### The direction, as given
+
+1. **Check whether CodeGen creates SQL roles for custom MJ Roles.** It currently sets SQL role
+   permissions on the three standard MJ roles. If it does not iterate `MJ: Roles` and apply grants
+   to the corresponding SQL Server roles, it should. **If `Role.SQLName` is empty, CodeGen should
+   CREATE a SQL role for that MJ Role record and write the name back to the record.**
+2. **Push FLS down into the base views at the SQL-role level.** CodeGen applies entity field
+   permissions to the view's columns during its run, so a SQL user connecting *directly* to the
+   database with that role cannot see denied columns. Security stops depending on the API layer.
+3. **Filter RunView's column list BEFORE executing the SQL**, so restricted data never leaves the
+   database. The SELECT list becomes the intersection of the user's FLS-allowed columns with
+   `RunViewParams.Fields` when provided. Acknowledged: this likely breaks
+   `ResultType: 'entity_object'`; it works for `'simple'`.
+4. **Consider rerouting single-record entity loads through RunView.** Investigate how
+   `GetEntityObject()` / `BaseEntity.InnerLoad` load records today.
+5. **Research what projecting FLS fields does to entity objects** — `BaseEngine` subclasses and
+   beyond. (Expectation from the team: FLS *will* break entity objects.)
+
+### Verified findings (done — do not redo)
+
+- **`MJ: Roles` already has a `SQLName` column.**
+- **CodeGen already grants per-MJ-Role, not per-hardcoded-role.**
+  `SQLServerCodeGenProvider.ts` (~lines 703–738) iterates `EntityPermission` rows and emits
+  `GRANT SELECT ON [schema].[BaseView] TO [ep.RoleSQLName]`, plus `GRANT EXECUTE` on the CRUD
+  procs. So the per-role grant loop the direction asks for **exists**.
+- **Nothing anywhere in CodeGenLib issues `CREATE ROLE`.** And the grant emitters are guarded by
+  `if (ep.RoleSQLName && ep.RoleSQLName.length > 0)` — so a role with a null/blank `SQLName` is
+  **silently skipped**. That is precisely the gap item 1 describes: role *creation* + `SQLName`
+  backfill, not the grant loop.
+- **Single-record loads do NOT go through RunView.** `BaseEntity.InnerLoad`
+  (`baseEntity.ts` ~2942) is its own path; the generated GraphQL single-record resolver issues
+  `SELECT * FROM {baseView} WHERE {pk} {RLS}` directly. Item 4's premise is correct.
+
+### Collisions with the current implementation — resolve these deliberately
+
+**A. SELECT-list filtering vs. the RunView cache. This is the hard one.**
+The cache fingerprint is `EntityName|Filter|OrderBy|MaxRows|StartRow|AggHash[|Connection]` — it
+**does not include `Fields`**. That is not an oversight: `PreRunView` deliberately *widens* `Fields`
+to every entity column for cache-eligible queries so one cache entry is a universal superset
+serving any field subset, then projects down per caller. If the SELECT list instead varies per
+user's FLS, two users produce results under the **same fingerprint with different column sets** —
+the first warms the slot, the second gets either columns they must not see (leak) or missing
+columns (breakage). Any move to pre-execution filtering **must** either fold the effective column
+set into the fingerprint (fragmenting the cache, and forfeiting the property that permission
+changes take effect on metadata refresh with no result-cache invalidation) or disable caching for
+FLS entities. Decide this explicitly and first — it invalidates the §2.6 rationale above.
+
+**B. Entity objects loaded with missing columns will destroy data.**
+`GenericDatabaseProvider.GenerateSaveSQL()` (~1057–1089) builds UPDATEs by iterating **all**
+`IsSPParameter` fields reading `field.Value` — not just dirty ones. An entity object hydrated
+without a restricted column therefore writes that column back as a real `NULL` on the user's next
+save. This is the verified failure that caused §2.4 to reject load-time nulling, and item 3/5 walks
+straight back into it from a different angle. The team's expectation that "FLS will break entity
+objects" is correct, and this is the specific mechanism. Any projection reaching entity objects
+needs `GenerateSaveSQL` to distinguish "not loaded" from "loaded as null" — likely a per-field
+loaded/unset flag — or entity objects must keep loading every column with enforcement staying at
+the output boundary.
+
+**C. Primary keys must survive any projection.** Stripping a PK breaks entity load, `CompositeKey`,
+relationship resolution, and cache fingerprinting. Already guarded in the aggregation; a
+SELECT-list filter needs the same guard independently.
+
+**D. View-level column security changes the failure mode.** Removing a column from a base view
+makes every query referencing it fail with a SQL error rather than a permission message, and it is
+a *global* change while FLS is *per-role*. A single view cannot present different column sets to
+different roles — so this likely means per-role views, or column-level `GRANT`/`DENY` on the view
+(SQL Server supports `GRANT SELECT ON OBJECT::v (col)`; PostgreSQL supports column-level `GRANT`).
+Determine which mechanism is intended before building, and confirm the PostgreSQL equivalent since
+PG is a first-class target.
+
+**E. What Phase 2 becomes.** If enforcement moves into the database and the SELECT list, the
+output-projection layer may become redundant, or may remain as defense-in-depth for cached and
+already-materialized rows. The predicate gate (§2.1a) stays valuable regardless — a user must not
+be able to *filter* on a column they cannot read even if the column never leaves the server.
+
+### Suggested investigation order
+
+1. Decide the view mechanism (D) — per-role views vs. column-level GRANT, on both platforms.
+2. Decide the cache strategy (A) — fingerprint the column set, or disable caching for FLS entities.
+3. CodeGen: `CREATE ROLE` + `Role.SQLName` backfill (item 1) — self-contained, low risk, unblocks 2.
+4. Prototype SELECT-list filtering for `ResultType: 'simple'` only, leaving `entity_object` on the
+   current path, and measure what actually breaks.
+5. Only then evaluate rerouting single-record loads through RunView (item 4), which multiplies the
+   blast radius of (B).
 
 ### Known pre-existing failures in this tree (NOT caused by this work)
 
