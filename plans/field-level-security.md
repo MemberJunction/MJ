@@ -163,7 +163,7 @@ likely to leak**, while reading as reassurance. See the open questions raised be
 
 ---
 
-## NEW DIRECTION (post-leadership review) — READ BEFORE ANY FURTHER WORK
+## Phase 2.6 — Database-Level Enforcement (NEW DIRECTION, post-leadership review) — READ FIRST
 
 Leadership reviewed FLS and set a materially different architecture. **Phase 3 is on hold.** The
 direction below supersedes parts of the design above, and collides with decisions in it that were
@@ -245,15 +245,48 @@ output-projection layer may become redundant, or may remain as defense-in-depth 
 already-materialized rows. The predicate gate (§2.1a) stays valuable regardless — a user must not
 be able to *filter* on a column they cannot read even if the column never leaves the server.
 
-### Suggested investigation order
+### Research agenda for Phase 2.6 — answer these BEFORE writing code
 
-1. Decide the view mechanism (D) — per-role views vs. column-level GRANT, on both platforms.
-2. Decide the cache strategy (A) — fingerprint the column set, or disable caching for FLS entities.
-3. CodeGen: `CREATE ROLE` + `Role.SQLName` backfill (item 1) — self-contained, low risk, unblocks 2.
-4. Prototype SELECT-list filtering for `ResultType: 'simple'` only, leaving `entity_object` on the
-   current path, and measure what actually breaks.
-5. Only then evaluate rerouting single-record loads through RunView (item 4), which multiplies the
-   blast radius of (B).
+Agreed working order: **research → write the answers into this document as Phase 2.6 → only then
+consider implementing.** Nothing below is a coding task; each is a decision whose cost of being
+wrong is a rewrite.
+
+**R1 — View mechanism (blocks everything else).**
+A single base view cannot present different columns to different roles, so which is intended?
+- Column-level `GRANT`/`DENY` on the view — SQL Server supports `GRANT SELECT ON OBJECT::v (col)`.
+  **Verify how this interacts with ownership chaining**: when the view and table share an owner,
+  SQL Server skips permission checks on the underlying table, so denials must be expressed on the
+  view itself. Confirm `DENY` at column level actually blocks a role that has table-level `SELECT`.
+- Per-role views (`vwEmployees_RoleX`) — no ambiguity, but multiplies generated objects and every
+  consumer must resolve the right view name.
+- Confirm the **PostgreSQL** equivalent (PG has column-level `GRANT` on tables and views but no
+  `DENY`) — PG is a first-class target, so a mechanism that only works on SQL Server is not viable.
+
+**R2 — Cache strategy (blocks R4).**
+Fingerprint is `EntityName|Filter|OrderBy|MaxRows|StartRow|AggHash[|Connection]`; `Fields` is
+excluded by design. Either fold the effective column set in (fragments the cache and forfeits
+"permission changes take effect on metadata refresh with no result-cache invalidation") or disable
+caching for FLS entities. Quantify both — how many entities realistically carry FLS?
+
+**R3 — CodeGen role creation.**
+Where the base view + grants are emitted: `SQLServerCodeGenProvider.ts` ~703-738 and the
+PostgreSQL counterpart. Determine where `CREATE ROLE` belongs, whether CodeGen already writes back
+to metadata elsewhere (it must, to persist `Role.SQLName`), and whether the three standard roles
+(`cdp_UI` / `cdp_Developer` / `cdp_Integration`) are seeded with `SQLName` already.
+
+**R4 — SELECT-list filtering.**
+Find where the SELECT list is actually built (`GenericDatabaseProvider` view SQL construction).
+Establish what breaks for `ResultType: 'entity_object'` versus `'simple'`.
+
+**R5 — Entity-object survivability (the highest-risk unknown).**
+Does `EntityField` have — or can it gain — a "not loaded" state distinct from "loaded as null"?
+Without one, `GenerateSaveSQL` cannot tell them apart and any projection reaching entity objects
+destroys data (collision B). Also survey `BaseEngine` subclasses, which bulk-load `entity_object`
+collections and would receive partially-hydrated objects.
+
+**R6 — Single-record load rerouting.**
+`BaseEntity.InnerLoad` (~2942) and the generated single-record resolvers. Evaluate last: it
+multiplies the blast radius of R5.
 
 ### Known pre-existing failures in this tree (NOT caused by this work)
 
