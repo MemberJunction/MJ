@@ -18,6 +18,15 @@ import { SQLUtilityBase } from "./sql";
 import { applyIncludeSchemaScope } from "./schema-scope";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
+import {
+   applySearchableFieldsCap,
+   defaultPredicateFor,
+   entityLevelEnableBlockedReason,
+   isNarrativeFieldName,
+   normalizePredicate,
+   normalizeSmartFieldResultShape,
+   SearchPredicate,
+} from "./search-guardrails";
 import { mapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
 import { SQLParser } from "@memberjunction/sql-parser";
 import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
@@ -1366,6 +1375,18 @@ export class ManageMetadataBase {
             continue;
          }
 
+         // SECURITY (Leak 1 / C2 for base views): refuse to materialize an EXTERNAL entity that is
+         // read-RLS-protected. An external entity's live reads are REFUSED under RLS (the read path throws —
+         // MJ can't enforce RLS WHERE clauses on a remote system), and for external entities the read path
+         // returns at the external-dispatch branch BEFORE any materialized-view swap — so the "base-view reads
+         // re-apply source RLS" exemption is unreachable here. Mirroring the remote rows into a local table
+         // would expose, via any raw query joining the wrapper view, data the live path refuses entirely.
+         // (A LOCAL RLS base-view is safe: its read path swaps to the mirror and re-applies the entity's RLS.)
+         if (entity.ExternalDataSourceID && this.entityHasRowLevelSecurity(entity)) {
+            logError(`    > REFUSING base-view materialization of external entity "${entity.Name}": it is read-RLS-protected and its live reads are refused under RLS, so a local mirror would leak its rows via raw queries over the wrapper view (a mirror cannot reproduce remote RLS). Skipping.`);
+            continue;
+         }
+
          // 2) Derive the snapshot column shape from the entity's base-view fields.
          const columns: MaterializedColumnSpec[] = entity.Fields.map((f) => ({
             Name: f.Name,
@@ -1781,7 +1802,8 @@ export class ManageMetadataBase {
          // they are exempt from this check.
          if (r.SourceType === 'Query' && r.SourceQueryID) {
             const qe = await this.runQueryWithParams(pool, `SELECT EntityID FROM ${this.qs(coreSchema, 'QueryEntity')} WHERE QueryID = @Q`, { Q: r.SourceQueryID as string });
-            const rlsVerdict = this.assessQuerySourceRLSSafety(md, qe.recordset.map((x: CodeGenQueryRow) => x.EntityID as string));
+            const sourceEntityIds = qe.recordset.map((x: CodeGenQueryRow) => x.EntityID as string);
+            const rlsVerdict = this.assessQuerySourceRLSSafety(md, sourceEntityIds);
             if (!rlsVerdict.safe) {
                await this.LogSQLAndExecute(
                   pool,
@@ -1794,6 +1816,45 @@ export class ManageMetadataBase {
                logError(`    > RLS DRIFT: materialization "${r.TableName}" → DriftHold + read access revoked — ${rlsVerdict.reason}`);
                heldCount++;
                continue; // already held for the leak; the shape-drift check below is moot
+            }
+            // Leak 2 (C2 ongoing): RLS is still safe, but a role may have LOST plain read on a source since mint.
+            // The intersection grant is computed once at mint and never re-narrowed by the RLS check above, so
+            // re-narrow it here to the CURRENT source-read intersection — otherwise a role that lost read on a
+            // source keeps reading the snapshot's rows it can no longer read live. Re-narrow only (never re-grant).
+            if (r.GeneratedEntityID) {
+               const sourceEntities = sourceEntityIds.map((id) => md.EntityByID(id)).filter((e): e is EntityInfo => !!e);
+               const revoked = await this.reconcileMaterializedQueryEntityReadGrants(pool, r.GeneratedEntityID as string, r.TableName as string, sourceEntities);
+               if (revoked > 0) {
+                  logStatus(`    > PERMISSION DRIFT: materialized entity "${r.TableName}" → revoked ${revoked} over-broad read grant(s) (a role can no longer read every source).`);
+               }
+            }
+         }
+
+         // SECURITY (Leak 1 drift side): an existing base-view materialization of an EXTERNAL read-RLS-protected
+         // entity leaks (the mirror is readable via raw queries, but the entity's live reads are RLS-refused and
+         // the read path never re-applies RLS to an external mirror). The mint gate refuses NEW ones; hold any
+         // that already exist (or whose entity became external/RLS after minting) so refresh stops — and flag for
+         // a human to drop the mirror. (Local base-view RLS is safe and not held.)
+         if (r.SourceType === 'EntityBaseView' && r.SourceEntityID) {
+            const bvEntity = md.EntityByID(r.SourceEntityID as string);
+            if (bvEntity && bvEntity.ExternalDataSourceID && this.entityHasRowLevelSecurity(bvEntity)) {
+               // EMPTY the mirror now — it holds remote rows the live path refuses under RLS, and DriftHold alone
+               // would only stop FUTURE refreshes while leaving the already-populated rows queryable via raw SQL
+               // over the wrapper view. Emptying (not dropping) removes the leaked data without breaking any object
+               // dependency; the wrapper view remains but returns nothing. Then DriftHold so refresh never refills it.
+               await this.LogSQLAndExecute(
+                  pool,
+                  `DELETE FROM ${this.qs(r.SchemaName as string, r.TableName as string)}`,
+                  `Empty external RLS base-view mirror "${r.TableName}" (leak guard — mirror exposed RLS-refused rows)`,
+               );
+               await this.LogSQLAndExecute(
+                  pool,
+                  `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
+                  `Flag external RLS base-view materialization "${r.TableName}" as DriftHold (leak guard)`,
+               );
+               logError(`    > RLS LEAK GUARD: base-view materialization "${r.TableName}" mirrors an EXTERNAL read-RLS-protected entity ("${bvEntity.Name}") → mirror EMPTIED + DriftHold (refresh stopped). It exposed rows the live path refuses under RLS.`);
+               heldCount++;
+               continue;
             }
          }
 
@@ -6015,6 +6076,51 @@ export class ManageMetadataBase {
       await this.LogSQLAndExecute(pool, sql, `Revoke read access on materialized entity "${entityLabel}" (${reason})`);
    }
 
+   /**
+    * True if an entity is read-RLS-protected — any of its role permissions carries a non-empty `ReadRLSFilterID`.
+    * Same definition {@link assessQuerySourceRLSSafety} uses; extracted so the base-view leak gate can reuse it.
+    */
+   protected entityHasRowLevelSecurity(entity: EntityInfo): boolean {
+      return entity.Permissions.some((p) => !!p.ReadRLSFilterID && p.ReadRLSFilterID.trim().length > 0);
+   }
+
+   /**
+    * Leak-2 (C2 ongoing): re-narrows a minted materialized QUERY entity's read grants to the CURRENT source-read
+    * intersection. The mint-time grant ({@link addMaterializedQueryEntityPermissions}) is computed once; if a role
+    * later LOSES plain `CanRead` on a source, its grant on the snapshot must be revoked too — otherwise it keeps
+    * reading snapshot rows it can no longer read live. Called from the drift pass on every codegen run. Only ever
+    * REVOKES (the safe direction); re-granting a role that regained access is a human decision after review.
+    * Returns the number of grants revoked.
+    */
+   protected async reconcileMaterializedQueryEntityReadGrants(
+      pool: CodeGenConnection,
+      entityId: string,
+      entityLabel: string,
+      sourceEntities: EntityInfo[],
+   ): Promise<number> {
+      if (sourceEntities.length === 0) return 0; // no sources to intersect against — the RLS/empty gate handles this
+      const roleCanReadAllSources = (roleId: string): boolean =>
+         sourceEntities.every((e) => e.Permissions.some((p) => UUIDsEqual(p.RoleID, roleId) && p.CanRead));
+      const grants = await this.runQuery(
+         pool,
+         `SELECT ${this.qi('RoleID')} FROM ${this.qs(mj_core_schema(), 'EntityPermission')} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`,
+      );
+      let revoked = 0;
+      for (const g of grants.recordset) {
+         const roleId = (g as CodeGenQueryRow).RoleID as string | null;
+         if (!roleId) continue;
+         if (!roleCanReadAllSources(roleId)) {
+            await this.LogSQLAndExecute(
+               pool,
+               `UPDATE ${this.qs(mj_core_schema(), 'EntityPermission')} SET ${this.qi('CanRead')}=${this.boolLit(false)} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('RoleID')}='${roleId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`,
+               `Narrow read grant on materialized entity "${entityLabel}": role ${roleId} can no longer read every source (C2 intersection re-narrowed)`,
+            );
+            revoked++;
+         }
+      }
+      return revoked;
+   }
+
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {
       const newEntityDefaults = configInfo.newEntityDefaults;
       const newEntityDescriptionEscaped = newEntity.EntityDescription ? `'${newEntity.EntityDescription.replace(/'/g, "''")}'` : null;
@@ -6485,6 +6591,11 @@ export class ManageMetadataBase {
       fields: Array<Record<string, unknown>>,
       result: SmartFieldIdentificationResult
    ): Promise<void> {
+      // Run the guardrail pipeline once up front so every downstream applier
+      // sees the same already-normalized result. See search-guardrails.ts for
+      // the rules. Mutates result in place — see normalizeSearchFlagsInPlace.
+      this.normalizeSearchFlagsInPlace(entity, fields, result);
+
       const sqlStatements: string[] = [];
 
       this.applyNameFieldUpdates(sqlStatements, fields, result);
@@ -6505,6 +6616,107 @@ export class ManageMetadataBase {
             logError('Error executing combined smart field SQL: ', ex)
          }
       }
+   }
+
+   /**
+    * Apply the code-level search guardrails to the LLM result, mutating
+    * `result` in place so every downstream applier reads the normalized
+    * version. The pure heuristics live in `search-guardrails.ts`; this
+    * method wires them to the per-field metadata (Type, Length, IsPrimaryKey,
+    * AutoUpdate flags) we have on `fields`.
+    *
+    * Order of operations:
+    *   1. Shape cleanup (empty/contradictory states).
+    *   2. Field-level eligibility — filter through `isFieldEligibleForUserSearch`
+    *      and the narrative-field-name blocklist.
+    *   3. Per-entity cap.
+    *   4. Predicate normalization — rewrite `Contains` to a default when the
+    *      field isn't FTS-backed, fill in defaults for missing entries.
+    *   5. Telemetry — record proposed/accepted counts and any rewrites for
+    *      the end-of-run report.
+    */
+   protected normalizeSearchFlagsInPlace(
+      entity: { Name?: string; FullTextSearchEnabled?: boolean },
+      fields: Array<Record<string, unknown>>,
+      result: SmartFieldIdentificationResult
+   ): void {
+      const proposedSearchableCount = (result.searchableFields ?? []).length;
+      const proposedAllowUserSearch = result.allowUserSearch === true;
+
+      // 1. Shape cleanup (defensive — identifyFields() also runs this).
+      const cleaned = normalizeSmartFieldResultShape(result);
+      result.searchableFields = cleaned.searchableFields ?? [];
+      result.searchPredicates = cleaned.searchPredicates ?? [];
+      result.allowUserSearch = cleaned.allowUserSearch;
+
+      // 2. Eligibility filter (PK / non-text / MAX-without-FTX / narrative).
+      const ftxEnabled = !!entity.FullTextSearchEnabled;
+      const fieldByName = new Map<string, Record<string, unknown>>();
+      for (const f of fields) {
+         fieldByName.set(f.Name as string, f);
+      }
+      const eligible: string[] = [];
+      let droppedNarrativeCount = 0;
+      let droppedIneligibleCount = 0;
+      for (const name of result.searchableFields) {
+         const field = fieldByName.get(name);
+         if (!field) continue; // already logged elsewhere
+         if (!this.isFieldEligibleForUserSearch(field, ftxEnabled)) {
+            droppedIneligibleCount += 1;
+            continue;
+         }
+         if (isNarrativeFieldName(name) && !ftxEnabled) {
+            droppedNarrativeCount += 1;
+            continue;
+         }
+         eligible.push(name);
+      }
+
+      // 3. Per-entity cap.
+      const { accepted, dropped: droppedByCap } = applySearchableFieldsCap(eligible);
+      result.searchableFields = accepted;
+
+      // 4. Predicate normalization. Build a fresh searchPredicates list keyed
+      //    on the accepted fields. The LLM's proposed predicates are the input
+      //    if present; missing entries get defaults.
+      const proposedByName = new Map<string, SearchPredicate>();
+      for (const sp of result.searchPredicates ?? []) {
+         if (sp && typeof sp.field === 'string') {
+            proposedByName.set(sp.field, sp.predicate);
+         }
+      }
+      const ftsFieldSet = new Set(result.fullTextSearchFields ?? []);
+      const normalizedPredicates: Array<{ field: string; predicate: SearchPredicate }> = [];
+      let predicatesRewrittenCount = 0;
+      for (const fieldName of accepted) {
+         const { predicate, rewritten } = normalizePredicate({
+            fieldName,
+            proposed: proposedByName.get(fieldName),
+            isInFullTextSearchFields: ftsFieldSet.has(fieldName),
+            entityFullTextSearchEnabled: ftxEnabled || result.enableFullTextSearch === true,
+         });
+         if (rewritten) predicatesRewrittenCount += 1;
+         normalizedPredicates.push({ field: fieldName, predicate });
+      }
+      result.searchPredicates = normalizedPredicates;
+
+      // If the cap or guardrails left us with no searchable fields, the
+      // entity-level enable can't survive — re-run shape cleanup so
+      // applyEntitySearchConfig sees a coherent result.
+      if (accepted.length === 0 && result.allowUserSearch === true) {
+         result.allowUserSearch = false;
+      }
+
+      // 5. Telemetry.
+      const reporter = CodeGenReporter.Instance;
+      reporter.counter('search.searchableFieldsProposed', proposedSearchableCount);
+      reporter.counter('search.searchableFieldsAccepted', accepted.length);
+      reporter.counter('search.searchableFieldsDroppedIneligible', droppedIneligibleCount);
+      reporter.counter('search.searchableFieldsDroppedNarrative', droppedNarrativeCount);
+      reporter.counter('search.searchableFieldsDroppedByCap', droppedByCap.length);
+      reporter.counter('search.predicatesRewritten', predicatesRewrittenCount);
+      if (proposedAllowUserSearch) reporter.counter('search.allowUserSearchProposed', 1);
+      if (result.allowUserSearch === true) reporter.counter('search.allowUserSearchAcceptedSoFar', 1);
    }
 
    /**
@@ -6792,10 +7004,26 @@ export class ManageMetadataBase {
       }
       const newValue = result.allowUserSearch;
       const currentValue = !!entity.AllowUserSearchAPI;
-      // If the LLM is proposing to ENABLE search on a log/audit/run-history-style
-      // entity, drop the proposal. We never block a proposal to DISABLE search.
-      if (newValue && !currentValue && this.isLikelyLogOrAuditEntity(entity.Name, entity.SchemaName)) {
-         return;
+      // We never block a proposal to DISABLE search.
+      if (newValue && !currentValue) {
+         // Default-off semantics: a 0 → 1 flip requires the LLM to be highly
+         // confident, requires at least one searchable field to have survived
+         // the field-level guardrails, and refuses log/audit and detail/line-
+         // item-shaped entities. Anything blocked here gets a one-line note in
+         // the CodeGen run report so the team can audit proposals.
+         const blocked = entityLevelEnableBlockedReason({
+            entityName: entity.Name,
+            confidence: result.confidence,
+            acceptedSearchableFieldsCount: (result.searchableFields ?? []).length,
+         });
+         const reporter = CodeGenReporter.Instance;
+         if (blocked) {
+            reporter.counter('search.allowUserSearchEnableBlocked', 1);
+            reporter.note(`[search] refused AllowUserSearchAPI 0→1 on '${entity.Name}': ${blocked}`);
+            return;
+         }
+         reporter.counter('search.allowUserSearchEnableAccepted', 1);
+         reporter.note(`[search] enabled AllowUserSearchAPI on '${entity.Name}': ${result.allowUserSearchReason ?? 'no reason given'}`);
       }
       if (newValue !== currentValue) {
          sqlStatements.push(`

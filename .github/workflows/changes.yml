@@ -6,8 +6,12 @@ on:
       - next
       - main
 
+# Keyed by ref, like every other PR-scoped workflow here (test.yml, integration.yml,
+# docs-site-ci.yml). A constant group makes the group REPO-WIDE: with cancel-in-progress,
+# one PR's run cancels every other open PR's run, so `Check migrations` can only be green
+# on whichever PR pushed last — and a re-run just moves the cancellation elsewhere.
 concurrency:
-  group: "changes"
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 # `pull-requests: write` lets the migration-ID-determinism step post a sticky PR
@@ -70,13 +74,19 @@ jobs:
             echo "No migration files in this PR - skipping validation"
           fi
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up node
         if: steps.check_migrations.outputs.has_migrations == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
+          # No dependency cache here on purpose: this job never runs `pnpm install`
+          # (the gate is shell + jq over filenames), so there is no pnpm store to save.
+          # With `cache: 'pnpm'` the post-job cache-save step fails the whole check with
+          # "Path Validation Error: Path(s) specified in the action for caching do(es) not
+          # exist" — after every real validation step has already passed.
 
       - name: Get current version
         if: steps.check_migrations.outputs.has_migrations == 'true'

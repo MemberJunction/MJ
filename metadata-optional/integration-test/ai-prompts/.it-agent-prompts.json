@@ -168,6 +168,7 @@
       "PromptRole": "System",
       "PromptPosition": "First",
       "SelectionStrategy": "Specific",
+      "RequireSpecificModels": true,
       "Temperature": 0,
       "OutputType": "object",
       "OutputExample": "@file:output/it-loop-response.example.json",
@@ -232,8 +233,8 @@
       "ID": "8C330383-7278-4722-81A9-C5D91DEAE6F9"
     },
     "sync": {
-      "lastModified": "2026-07-21T13:49:40.196Z",
-      "checksum": "100721f64132bbc620277765337db24613652e89bdd5afccde0cc769610eb595"
+      "lastModified": "2026-08-05T20:26:13.982Z",
+      "checksum": "d5c6572a9227f02860521b8062989a3b2274fc50272fd5d2cec9f6ded8796654"
     }
   },
   {
@@ -257,6 +258,22 @@
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E4E77C83-69A0-49EA-A287-139342E90425"
+          },
+          "sync": {
+            "lastModified": "2026-08-05T22:59:18.862Z",
+            "checksum": "4651c0f04e4243374bec40fb48e7c04b8be1e16b36b4dbf1ca1ccbf05725a584"
+          }
+        },
         {
           "fields": {
             "PromptID": "@parent:ID",
@@ -339,6 +356,22 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "697C2125-3234-4FB3-8704-5EFFEB19191E"
+          },
+          "sync": {
+            "lastModified": "2026-08-05T22:59:18.886Z",
+            "checksum": "4651c0f04e4243374bec40fb48e7c04b8be1e16b36b4dbf1ca1ccbf05725a584"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 30,
@@ -418,6 +451,22 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "78F56021-E8FA-4F3A-ACB4-E7803075D8A9"
+          },
+          "sync": {
+            "lastModified": "2026-08-05T22:59:18.901Z",
+            "checksum": "4651c0f04e4243374bec40fb48e7c04b8be1e16b36b4dbf1ca1ccbf05725a584"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 30,
@@ -494,6 +543,22 @@
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "45365D80-9F39-4178-B3D7-100FA66CD240"
+          },
+          "sync": {
+            "lastModified": "2026-08-05T22:59:18.924Z",
+            "checksum": "4651c0f04e4243374bec40fb48e7c04b8be1e16b36b4dbf1ca1ccbf05725a584"
+          }
+        },
         {
           "fields": {
             "PromptID": "@parent:ID",
@@ -813,6 +878,22 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1678A645-06A0-4361-BD40-B3AD5E1CF26F"
+          },
+          "sync": {
+            "lastModified": "2026-08-05T22:59:18.948Z",
+            "checksum": "4651c0f04e4243374bec40fb48e7c04b8be1e16b36b4dbf1ca1ccbf05725a584"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 30,
@@ -1022,8 +1103,8 @@
       "ID": "6705D887-8DE5-42A0-89CD-9ED13887AAA2"
     },
     "sync": {
-      "lastModified": "2026-07-21T17:08:33.104Z",
-      "checksum": "0fd9d5e30c6177467a8cf04fb95a5438512df9c28289213f555372520b9c7691"
+      "lastModified": "2026-08-05T20:00:19.180Z",
+      "checksum": "59fbeb39736b6e663d9d248ece369cbafc39d838d4ee2cd8555d840644937e3d"
     }
   },
   {

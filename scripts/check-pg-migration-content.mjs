@@ -53,8 +53,10 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SS_DIR = 'migrations/v5';
-const PG_DIR = 'migrations-pg/v5';
+// Version-folder pairs under content enforcement. v2-v4 predate the PG port;
+// enforcement starts at v5 and covers each later major as its folder opens.
+// A pair is skipped when the SS side doesn't exist yet (version not opened).
+const VERSION_DIR_PAIRS = ['v5', 'v6'].map((v) => ({ ss: `migrations/${v}`, pg: `migrations-pg/${v}` }));
 
 /**
  * A source this small can legitimately FUSE to a single PG statement — e.g. the
@@ -377,9 +379,16 @@ export function staleGrandfatherWarnings(grandfatheredStems, verdictByStem) {
 }
 
 function runCheck() {
-  if (!existsSync(SS_DIR) || !existsSync(PG_DIR)) {
-    console.error(`Run from the repo root — ${SS_DIR} / ${PG_DIR} not found.`);
+  const activePairs = VERSION_DIR_PAIRS.filter(({ ss }) => existsSync(ss));
+  if (activePairs.length === 0) {
+    console.error(`Run from the repo root — no enforced migration dirs found (${VERSION_DIR_PAIRS.map(p => p.ss).join(', ')}).`);
     return 2;
+  }
+  for (const { ss, pg } of activePairs) {
+    if (!existsSync(pg)) {
+      console.error(`SS dir ${ss} exists but PG dir ${pg} does not — open both sides of a version folder together.`);
+      return 2;
+    }
   }
 
   const suspects = [];
@@ -392,13 +401,16 @@ function runCheck() {
   let documented = 0;
   let grandfathered = 0;
 
-  for (const f of readdirSync(SS_DIR).filter((f) => /^V\d{12}__.*\.sql$/.test(f)).sort()) {
+  const ssFilePairs = activePairs.flatMap(({ ss, pg }) =>
+    readdirSync(ss).filter((f) => /^V\d{12}__.*\.sql$/.test(f)).sort().map((f) => ({ f, ssDir: ss, pgDir: pg }))
+  );
+  for (const { f, ssDir, pgDir } of ssFilePairs) {
     const stem = basename(f, '.sql');
-    const pgPath = join(PG_DIR, `${stem}.pg.sql`);
+    const pgPath = join(pgDir, `${stem}.pg.sql`);
     if (!existsSync(pgPath)) continue;   // existence is check-pg-migration-parity.mjs's job
 
     checked++;
-    const ssSql = readFileSync(join(SS_DIR, f), 'utf8');
+    const ssSql = readFileSync(join(ssDir, f), 'utf8');
     const pgSql = readFileSync(pgPath, 'utf8');
     const { verdict, ssStmts, pgStmts } = classify(ssSql, pgSql);
     const { ss, pg } = deleteParity(ssSql, pgSql);

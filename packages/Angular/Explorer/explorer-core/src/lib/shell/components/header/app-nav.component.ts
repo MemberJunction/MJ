@@ -78,6 +78,7 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
 
   @ViewChild('navList') private navListRef?: ElementRef<HTMLElement>;
   @ViewChild('moreBtn') private moreBtnRef?: ElementRef<HTMLElement>;
+  @ViewChild('trailingSlot') private trailingSlotRef?: ElementRef<HTMLElement>;
 
   @Output() navItemClick = new EventEmitter<NavItemClickEvent>();
   @Output() navItemDismiss = new EventEmitter<NavItem>();
@@ -263,7 +264,13 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.moreBtnRef?.nativeElement) {
       this.moreBtnWidth = this.moreBtnRef.nativeElement.offsetWidth || this.moreBtnWidth;
     }
-    const fit = this.computeFitCount(hostWidth);
+    // Reserve the trailing slot's width (projected shell items, e.g. the
+    // Records pill) so nav items yield to More before painting under it.
+    // Measured fresh each pass — the slot appears/disappears with open records,
+    // and every such change arrives via a configuration$ emission that re-runs
+    // this fit anyway.
+    const trailingWidth = this.trailingSlotRef?.nativeElement?.offsetWidth ?? 0;
+    const fit = this.computeFitCount(hostWidth - trailingWidth);
     this.applyFit(fit.count, fit.tight);
   }
 

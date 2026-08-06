@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="identityStructure"
         SectionName="Identity & Structure"
-        Icon="fa fa-cube"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -101,6 +101,14 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="GeneratedBaseViewName"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="CodeName"
             Type="textbox"
             [EditMode]="EditMode"
@@ -153,7 +161,7 @@
     <mj-collapsible-panel
         SectionKey="userInterfaceCustomization"
         SectionName="User Interface & Customization"
-        Icon="fa fa-paint-brush"
+        Icon="fa fa-user"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -219,7 +227,7 @@
     <mj-collapsible-panel
         SectionKey="auditingLifecycle"
         SectionName="Auditing & Lifecycle"
-        Icon="fa fa-history"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -293,7 +301,7 @@
     <mj-collapsible-panel
         SectionKey="aPISearchSettings"
         SectionName="API & Search Settings"
-        Icon="fa fa-search"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -495,7 +503,7 @@
     <mj-collapsible-panel
         SectionKey="proceduresDeletion"
         SectionName="Procedures & Deletion"
-        Icon="fa fa-code"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -578,6 +586,30 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowDirectSQLInsert"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowDirectSQLUpdate"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowDirectSQLDelete"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -585,7 +617,7 @@
     <mj-collapsible-panel
         SectionKey="rowStatistics"
         SectionName="Row Statistics"
-        Icon="fa fa-chart-bar"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -615,11 +647,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Details Section -->
+    <!-- External Integration Section -->
     <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
+        SectionKey="externalIntegration"
+        SectionName="External Integration"
+        Icon="fa fa-plug"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -909,23 +941,23 @@
 
     <!-- Entity Actions Section -->
     <mj-collapsible-panel
-        SectionKey="mJEntityActions"
+        SectionKey="mJEntityActionsEntityID"
         SectionName="Entity Actions"
         Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJEntityActions')"
+        [BadgeCount]="GetSectionRowCount('mJEntityActionsEntityID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Actions','EntityID')"
                 [NewRecordValues]="NewRecordValues('MJ: Entity Actions')"
-                [AllowLoad]="IsSectionExpanded('mJEntityActions')"
+                [AllowLoad]="IsSectionExpanded('mJEntityActionsEntityID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJEntityActions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityActionsEntityID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -2457,25 +2489,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Materialized Results (Generated Entity ID) Section -->
+    <!-- Action Execution Logs Section -->
     <mj-collapsible-panel
-        SectionKey="mJMaterializedResultsGeneratedEntityID"
-        SectionName="Materialized Results (Generated Entity ID)"
-        Icon="fa fa-table"
+        SectionKey="mJActionExecutionLogs"
+        SectionName="Action Execution Logs"
+        Icon="fa fa-history"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJMaterializedResultsGeneratedEntityID')"
+        [BadgeCount]="GetSectionRowCount('mJActionExecutionLogs')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Materialized Results','GeneratedEntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Materialized Results')"
-                [AllowLoad]="IsSectionExpanded('mJMaterializedResultsGeneratedEntityID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Execution Logs','TargetEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Execution Logs')"
+                [AllowLoad]="IsSectionExpanded('mJActionExecutionLogs')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJMaterializedResultsGeneratedEntityID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJActionExecutionLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -2501,6 +2533,56 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMaterializedResultsSourceEntityID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Entity Actions (Scope Entity ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityActionsScopeEntityID"
+        SectionName="Entity Actions (Scope Entity ID)"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityActionsScopeEntityID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Actions','ScopeEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Actions')"
+                [AllowLoad]="IsSectionExpanded('mJEntityActionsScopeEntityID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityActionsScopeEntityID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Materialized Results (Generated Entity ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMaterializedResultsGeneratedEntityID"
+        SectionName="Materialized Results (Generated Entity ID)"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMaterializedResultsGeneratedEntityID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Materialized Results','GeneratedEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Materialized Results')"
+                [AllowLoad]="IsSectionExpanded('mJMaterializedResultsGeneratedEntityID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMaterializedResultsGeneratedEntityID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

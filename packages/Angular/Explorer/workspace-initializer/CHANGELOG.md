@@ -1,5 +1,45 @@
 # @memberjunction/ng-workspace-initializer
 
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [b895f92]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [ea003fc]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+- Updated dependencies [8d0d45a]
+  - @memberjunction/ng-explorer-core@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ng-shared@6.1.0-edge.0
+  - @memberjunction/ng-auth-services@6.1.0-edge.0
+  - @memberjunction/ng-shared-generic@6.1.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+  - @memberjunction/theme-engine@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ng-auth-services@6.0.0
+  - @memberjunction/ng-explorer-core@6.0.0
+  - @memberjunction/ng-shared@6.0.0
+  - @memberjunction/ng-shared-generic@6.0.0
+  - @memberjunction/graphql-dataprovider@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/theme-engine@6.0.0
+
 ## 5.51.0
 
 ### Patch Changes

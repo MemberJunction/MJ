@@ -1,5 +1,69 @@
 # @memberjunction/ng-base-forms
 
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- b895f92: Angular DOM unit-testing — Phase 4 coverage push. Dev-only (test files + test-config/CI-gate scoping); no runtime change.
+
+  Drives the Generic DOM-coverage ratchet (`scripts/dom-test-report.mjs … --max-none`) from **185 → 137** by writing DOM specs, in usage-ranked order, for every Generic Angular component appropriate for a DOM unit test. Highlights:
+  - **Highest-leverage primitives** — `MjFormFieldComponent` (the field renderer behind ~4,000 usages) across its read/edit type matrix; the `ui-components` design system (`MJEmptyStateComponent`, the `mj-page-*` chrome family, `MJDropdown`/`MJCombobox`/`MJFilterPopover` via a new CDK-overlay test helper in `ng-test-utils`, the `mj-dialog` family, tabs, filter panel, left-nav).
+  - **Form host stack** — `MjRecordFormContainer`, `MjFormToolbar`, `MjEntityFormHost`, `MjIsaRelatedPanel`, `FormPanelSlot`, `ExplorerEntityDataGrid`, `InteractiveForm`.
+  - **Viewers, grids & dialogs** — `EntityDataGrid` + `QueryDataGrid` (AG-Grid chrome), `EntityViewer`, `ArtifactViewerPanel`, the ERD component family (`ERDComposite`/`MJEntityERD`/`ERDDiagram`), plus a broad set of panels/editors/dialogs across agents, artifacts, search, composer, list-management, scheduling, record-process-studio, user-routines, entity-action-ux, actions, and testing.
+  - **`Angular/Bootstrap` onboarded** — the last untracked library tree gains a DOM test tier (`MJAuthShell`, `MJBootstrap`) and its own `--max-none=0` CI gate, so every shipped Angular library tree (Explorer, Generic, Bootstrap) is now gated.
+
+  Reusable patterns established for the harder components: drive internal state before the first render (`setup`) rather than mutating post-render (unreliable under zoneless CD); stub the heavy core (AG-Grid, React bridge, SVG layout, plugin viewers) and spy async loaders so specs exercise the component's own chrome/wiring; add each component **and its injected services** to enumerated `tsconfig.spec.json` files (or AOT drops decorator metadata → NG0202).
+
+  Deliberately **not** covered, and left at the 137 floor: five integration/e2e-tier orchestrators (`ConversationChatArea`, `MessageInput`, `RealtimeWhiteboardBoard`, `AITestHarness`, `RealtimeSessionOverlay`) — 1,800–4,600-line components with realtime/WebRTC/canvas cores or 14–30 dependencies, which belong in the browser regression suite rather than DOM units.
+
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+- Updated dependencies [5c6e36c]
+  - @memberjunction/ng-ui-components@6.1.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.0
+  - @memberjunction/ng-list-management@6.1.0-edge.0
+  - @memberjunction/ng-markdown@6.1.0-edge.0
+  - @memberjunction/ng-record-changes@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ng-react@6.1.0-edge.0
+  - @memberjunction/interactive-component-types@6.1.0-edge.0
+  - @memberjunction/ng-record-tags@6.1.0-edge.0
+  - @memberjunction/ng-base-types@6.1.0-edge.0
+  - @memberjunction/ng-code-editor@6.1.0-edge.0
+  - @memberjunction/ng-notifications@6.1.0-edge.0
+  - @memberjunction/ng-shared-generic@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-code-editor@6.0.0
+  - @memberjunction/ng-entity-viewer@6.0.0
+  - @memberjunction/ng-list-management@6.0.0
+  - @memberjunction/ng-notifications@6.0.0
+  - @memberjunction/ng-react@6.0.0
+  - @memberjunction/ng-record-changes@6.0.0
+  - @memberjunction/ng-record-tags@6.0.0
+  - @memberjunction/ng-shared-generic@6.0.0
+  - @memberjunction/interactive-component-types@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ng-markdown@6.0.0
+  - @memberjunction/ng-ui-components@6.0.0
+  - @memberjunction/global@6.0.0
+
 ## 5.51.0
 
 ### Patch Changes

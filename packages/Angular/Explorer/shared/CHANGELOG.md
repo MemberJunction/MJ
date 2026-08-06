@@ -1,5 +1,56 @@
 # Change Log - @memberjunction/ng-shared
 
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- ea003fc: fix(explorer): guarantee the loading screen is released even when a resource's load throws or hangs.
+
+  The Explorer shell's loading screen blocks on the first resource's `NotifyLoadComplete()` signal. `BaseDashboard` called it _after_ `await this.loadData()` with no `try/finally`, so if `initDashboard()` or `loadData()` threw — e.g. an in-flight query rejecting while MJAPI is restarting, or missing data — the signal never fired and the **entire** Explorer hung on the loading screen forever. This reliably reproduced on any full reload of a deep resource URL (dev-server live-reload after an edit, or a browser refresh) while the API was momentarily down.
+
+  Two-part fix:
+  - **`BaseDashboard`** now wraps `initDashboard()` + `loadData()` (in `ngOnInit`) and `loadData()` (in `Refresh`) in `try/catch/finally`. On error it logs via `LogError` and emits the existing `Error` output so the dashboard/container can show its own error state; `NotifyLoadComplete()` runs in `finally`, so the loading screen always clears.
+  - **`DashboardResource`** (the Explorer host that renders code-based dashboards and the Data Explorer) now **subscribes to the dashboard's `Error` output** and renders its existing "Unable to Load Dashboard" card. Without this the released loading screen cleared to a silent blank page — the failure was only visible in the console. `BaseAdminContainerComponent` (which embeds code dashboards in the Admin shells) does the same via its existing `LoadError` surface.
+  - **`BaseResourceComponent`**'s load-complete watchdog now **fails open**: if a resource hasn't signalled within the window it forces `NotifyLoadComplete()` (still logging a warning naming the culprit) rather than only warning. This covers every `BaseResourceComponent` subclass — including ones whose own `ngOnInit` bypasses `BaseDashboard`'s guarded lifecycle, or whose load genuinely hangs — so no single resource can brick the shell.
+
+- d26e202: Mobile records UX for MJ Explorer's records-style record-open model. Below the shell breakpoint (768px — now a canonical constant via the new ExplorerBreakpointService in ng-shared), the records region's golden-layout runs headerless (new GoldenLayoutInitOptions.HideHeaders) and the unusable-at-phone-width tab strip is replaced by a record bar (entity icon in app color, active record title, open count) that opens a bottom-sheet record switcher listing every open record — docked records included — with origin subtitles, tap-to-activate, and per-row close routed through the same path as the tab context menu. Split layouts flatten to a single stack at render time via the new FlattenLayoutToSingleStack transform (deep-cloned) with layout persistence suppressed while mobile, so desktop-made splits survive phone sessions untouched; the records-layout restore gate now requires exact tabId-set equality. Breakpoint crossings destroy and re-initialize the records golden-layout under a rebuild guard (without it, golden-layout's per-pane close events would close every open record). The nav drawer's Records pill now opens the switcher on mobile (previously a no-op while viewing a record) and its mobile badge counts docked records to match the sheet. Move to Workspace / Move to Records are hidden below the breakpoint. Ships a new generic mj-bottom-sheet primitive in ng-ui-components (scrim, grab handle, enter/exit transitions, Escape, focus restore, reduced-motion support, settled transform:none state) — the record switcher is its first consumer; migrating the existing hand-rolled sheets (filter-popover, list-management-dialog) is queued follow-up work. No schema changes.
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ng-base-application@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/ng-base-types@6.1.0-edge.0
+  - @memberjunction/ng-notifications@6.1.0-edge.0
+  - @memberjunction/ng-shared-generic@6.1.0-edge.0
+  - @memberjunction/entity-communications-base@6.1.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/ng-base-application@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-notifications@6.0.0
+  - @memberjunction/ng-shared-generic@6.0.0
+  - @memberjunction/entity-communications-base@6.0.0
+  - @memberjunction/graphql-dataprovider@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/global@6.0.0
+
 ## 5.51.0
 
 ### Patch Changes

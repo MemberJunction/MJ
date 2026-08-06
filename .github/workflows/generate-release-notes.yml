@@ -8,11 +8,22 @@ on:
 
 jobs:
   generate-release-notes:
-    # Only run for manual dispatch or genuine release PRs (next -> main). Any other
-    # PR opened to main would otherwise spin up the agent AND destructively overwrite
-    # the PR title/description with a version number. github.head_ref is empty on
-    # workflow_dispatch, so the first clause keeps manual runs working.
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'next'
+    # Only run for manual dispatch or genuine release PRs. Any other PR opened to main
+    # would otherwise spin up the agent AND destructively overwrite the PR title/description
+    # with a version number. github.head_ref is empty on workflow_dispatch, so the first
+    # clause keeps manual runs working.
+    #
+    # `release/*` is included because a release PR does not have to come from `next`: to
+    # ship a specific validated commit rather than whatever `next` holds at merge time, you
+    # push that commit to a release/* branch and open the PR from there (DEPLOYMENT.md
+    # Step 9). Without this clause, pinning silently costs you the generated PR body — which
+    # is a strong incentive to just merge the tip and hope. `release/*` is already this
+    # repo's release-branch convention (release/v5.51-prep, ...) and no ordinary PR into
+    # main uses it, so the destructive-overwrite risk above is unchanged.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.head_ref == 'next'
+      || startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
     permissions:
       contents: read

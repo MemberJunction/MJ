@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ManageMetadataBase } from '../Database/manage-metadata';
-import type { Metadata } from '@memberjunction/core';
+import type { Metadata, EntityInfo } from '@memberjunction/core';
 
 /**
  * Tests for the query-materialization RLS-safety decision (`assessQuerySourceRLSSafety`), the guard shared by
@@ -23,6 +23,11 @@ class TestableRLS extends ManageMetadataBase {
         // (the guard never calls anything else on it).
         const md = { EntityByID: (id: string): FakeEntity | undefined => entities[id] } as unknown as Metadata;
         return this.assessQuerySourceRLSSafety(md, ids);
+    }
+
+    /** Exposes the RLS detector the base-view leak gate (Leak 1) uses to refuse external RLS mirrors. */
+    public hasRLS(entity: FakeEntity): boolean {
+        return this.entityHasRowLevelSecurity(entity as unknown as EntityInfo);
     }
 }
 
@@ -64,5 +69,32 @@ describe('assessQuerySourceRLSSafety — query materialization RLS gate', () => 
     it('treats a whitespace-only ReadRLSFilterID as NOT protected (trim guard) — stays safe', () => {
         const v = mm.assess({ e1: { Name: 'Orders', Permissions: [{ ReadRLSFilterID: '   ' }] } }, ['e1']);
         expect(v.safe).toBe(true);
+    });
+});
+
+/**
+ * Tests for `entityHasRowLevelSecurity` — the RLS detector the base-view leak gate (Leak 1) uses to refuse
+ * materializing an EXTERNAL read-RLS-protected entity (whose local mirror would leak rows the live path refuses
+ * under RLS). Same detection as the query gate: RLS present iff any permission carries a non-empty, non-whitespace
+ * ReadRLSFilterID.
+ */
+describe('entityHasRowLevelSecurity — base-view leak-gate RLS detector', () => {
+    let mm: TestableRLS;
+    beforeEach(() => { mm = new TestableRLS(); });
+
+    it('is FALSE when no permission carries an RLS filter (null / absent)', () => {
+        expect(mm.hasRLS({ Name: 'Orders', Permissions: [{ ReadRLSFilterID: null }, {}] })).toBe(false);
+    });
+
+    it('is TRUE when ANY permission carries a non-empty ReadRLSFilterID', () => {
+        expect(mm.hasRLS({ Name: 'Orders', Permissions: [{}, { ReadRLSFilterID: 'rls-filter-1' }] })).toBe(true);
+    });
+
+    it('treats a whitespace-only ReadRLSFilterID as NOT protected (trim guard)', () => {
+        expect(mm.hasRLS({ Name: 'Orders', Permissions: [{ ReadRLSFilterID: '   ' }] })).toBe(false);
+    });
+
+    it('is FALSE for an entity with no permissions at all', () => {
+        expect(mm.hasRLS({ Name: 'Orders', Permissions: [] })).toBe(false);
     });
 });

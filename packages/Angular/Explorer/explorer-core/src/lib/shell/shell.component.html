@@ -48,7 +48,19 @@
         [OverflowEnabled]="true"
         (navItemClick)="onNavItemClick($event)"
         (navItemDismiss)="onNavItemDismiss($event)">
+        <!-- Records style: persistent Records pill — projected into the nav
+             row's trailing slot so it sits pipe-separated right after the
+             app's own items, styled as a nav pill. Appears only while any
+             record is open; resumes the last-viewed record on click. -->
+        @if (RecordTabsStyle) {
+          <mj-records-hub-pill></mj-records-hub-pill>
+        }
       </mj-app-nav>
+    } @else if (RecordTabsStyle) {
+      <!-- Reachability: when the app nav doesn't render (AppNav disabled per
+           deployment, or no active app), open records must STILL have a way
+           back — render the pill standalone in the header. -->
+      <mj-records-hub-pill class="desktop-nav"></mj-records-hub-pill>
     }
 
     <!-- Spacer -->
@@ -287,6 +299,15 @@
           (navItemClick)="onNavItemClick($event)"
           (navItemDismiss)="onNavItemDismiss($event)">
         </mj-app-nav>
+      </div>
+    }
+    <!-- Records style: the desktop pill lives in the (mobile-hidden) app nav,
+         so the drawer carries its own entry — without it, open records are
+         unreachable on mobile except by re-opening them. Resumes the
+         last-viewed record and closes the drawer. -->
+    @if (RecordTabsStyle) {
+      <div class="mobile-nav-records">
+        <mj-records-hub-pill (Activated)="closeMobileNav()"></mj-records-hub-pill>
       </div>
     }
     <div class="mobile-nav-footer">

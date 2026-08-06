@@ -15502,7 +15502,7 @@
     "fields": {
       "Name": "GPT 5.5 Instant",
       "PowerRank": 13,
-      "Description": "OpenAI's latest low-latency default ChatGPT model (May 5, 2026). Replaces GPT-5.3 Instant as the default in ChatGPT and is exposed in the API as `chat-latest`. Headline metric: 52.5% fewer hallucinated claims than GPT-5.3 Instant on high-stakes prompts (legal, medical, financial). Inherits the GPT-5.5 family context: 1,050,000 input tokens, 128,000 output. Supports configurable reasoning_effort. PRICING NOTE: provisional rate uses the GPT-5.5 standard $5/$30 per 1M tokens; Instant SKU may carry a lower rate once OpenAI's pricing page differentiates it.",
+      "Description": "OpenAI's latest low-latency default ChatGPT model (May 5, 2026). Replaces GPT-5.3 Instant as the default in ChatGPT. API NOTE: there is no `gpt-5.5-instant` or `gpt-5.5-chat-latest` model id — OpenAI exposes this family as `gpt-5.5` (verified against /v1/models), which is what this record's APIName uses. Headline metric: 52.5% fewer hallucinated claims than GPT-5.3 Instant on high-stakes prompts (legal, medical, financial). Inherits the GPT-5.5 family context: 1,050,000 input tokens, 128,000 output. Supports configurable reasoning_effort. PRICING NOTE: provisional rate uses the GPT-5.5 standard $5/$30 per 1M tokens; Instant SKU may carry a lower rate once OpenAI's pricing page differentiates it.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 9,
@@ -15538,7 +15538,7 @@
             "Priority": 1,
             "Status": "Active",
             "DriverClass": "OpenAILLM",
-            "APIName": "gpt-5.5-instant",
+            "APIName": "gpt-5.5",
             "MaxInputTokens": 1050000,
             "MaxOutputTokens": 128000,
             "SupportedResponseFormats": "Any, JSON",
@@ -15550,8 +15550,8 @@
             "ID": "B12DF96C-C415-4D00-A634-2EBCA428E78C"
           },
           "sync": {
-            "lastModified": "2026-05-14T02:07:54.426Z",
-            "checksum": "21a78384321764121fd637d32e377d84731a92d0965f7f4bbd61975fb3bca6bb"
+            "lastModified": "2026-08-05T21:12:14.512Z",
+            "checksum": "2d64466c727365f44ada09fb4540e5d4f5e904c74bbc778a6b3c0a2f921bf6b0"
           }
         }
       ],
@@ -15586,8 +15586,8 @@
       "ID": "7E91F18E-52CC-48C9-8457-74C810899B41"
     },
     "sync": {
-      "lastModified": "2026-05-14T02:07:54.305Z",
-      "checksum": "91bdd5baea5c7ef5700ed1299ec53cc2449b8b0c3f964e9d26f9a86d7d0cff1b"
+      "lastModified": "2026-08-05T21:12:14.437Z",
+      "checksum": "c4b71796e75f8a7807020f263cc81b431742afc4c7d2a41a79a7ebf914d2e644"
     }
   },
   {
@@ -16304,7 +16304,7 @@
       "PowerRank": 15,
       "Description": "Cohere's flagship language model released March 13, 2025. 111B parameter model with 256K token context window, optimized for RAG retrieval, agents, and tool-use. Strong multilingual support (23 languages). Premium tier in Cohere's Command family.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 7,
       "CostRank": 7,
       "InheritTypeModalities": true
@@ -16385,8 +16385,8 @@
       "ID": "C65B6878-F870-4B88-9D86-CC8B37F61B2C"
     },
     "sync": {
-      "lastModified": "2026-05-20T23:53:33.993Z",
-      "checksum": "a59804bc9f0f861c3038b0b609e1227855dbdda1c573113a34257fc68b74d160"
+      "lastModified": "2026-08-05T18:34:32.983Z",
+      "checksum": "3db9bb08344cd7375f2390793723c6a72dbe10aab17aad8980842a765d1d8d64"
     }
   },
   {
@@ -17249,7 +17249,7 @@
       "PowerRank": 17,
       "Description": "Cohere's first Mixture-of-Experts flagship released May 20, 2026. 218B sparse MoE under Apache 2.0 license with vision + text input across 48 languages. 128K input / 64K output context. Optimized for enterprise RAG, agents, and tool use. Successor to Cohere Command A.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 7,
       "CostRank": 7,
       "InheritTypeModalities": true,
@@ -17329,8 +17329,8 @@
       "ID": "E99122E8-F77B-4C94-93FE-2361B7AA46D9"
     },
     "sync": {
-      "lastModified": "2026-06-05T02:25:07.164Z",
-      "checksum": "5238dd6b2f08222f69a9bee5355518bf42873a311853cf65cf0b781e638cf83f"
+      "lastModified": "2026-08-05T18:34:33.467Z",
+      "checksum": "e19a3072e6d6b2eed3732931d06539b22b8ef9f8d194c5741351ee27890d0343"
     }
   },
   {
@@ -19382,14 +19382,38 @@
             "CacheWritePricePerUnit": null,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.6-terra pricing on OpenAI as of July 2026. $2.50/$15.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes."
+            "Comments": "GPT 5.6-terra pricing on OpenAI as of July 2026. $2.50/$15.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. SUPERSEDED 2026-07-30 by 20% price cut to $2.00/$12.00 (see next cost row)."
           },
           "primaryKey": {
             "ID": "60C58C8B-B5A4-4335-BCFD-2D2A65AD7DEA"
           },
           "sync": {
-            "lastModified": "2026-07-10T23:26:27.328Z",
-            "checksum": "44b1fde790395dc54655b036a3b39cbba0fe707f517bc2b1079b691cb2925460"
+            "lastModified": "2026-08-05T18:34:33.556Z",
+            "checksum": "cfdfe8b56cdf5ac11cf641e06becdb7cf0d88ac28b27e4489553efb5b7de2063"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-07-30T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 12,
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.6-terra price cut effective 2026-07-30: 20% reduction from $2.50/$15.00 to $2.00/$12.00 per 1M tokens (source: OpenAI 'Advancing the price-performance frontier with GPT-5.6', July 30, 2026; VentureBeat, CNBC, MLQ News coverage). Prompt-caching discount continues to apply at 10% of input price. No architecture or capability change — pricing-only update."
+          },
+          "primaryKey": {
+            "ID": "1E444DB9-773B-4B41-B1DA-F03A3EDDEA92"
+          },
+          "sync": {
+            "lastModified": "2026-08-05T18:34:33.593Z",
+            "checksum": "31013bbc92283367d887e42a3229cd5b5630177c042936507dfb5cc6251c1d31"
           }
         }
       ]
@@ -19473,14 +19497,38 @@
             "CacheWritePricePerUnit": null,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.6-luna pricing on OpenAI as of July 2026. $1.00/$6.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes."
+            "Comments": "GPT 5.6-luna pricing on OpenAI as of July 2026. $1.00/$6.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. SUPERSEDED 2026-07-30 by 80% price cut to $0.20/$1.20 (see next cost row)."
           },
           "primaryKey": {
             "ID": "5121599E-71C3-46AB-9AA5-43006565F2B7"
           },
           "sync": {
-            "lastModified": "2026-07-10T23:26:27.366Z",
-            "checksum": "192525b926019a8b136c342dcf1507fddcf574987b6480ea8fba36507e20ef4b"
+            "lastModified": "2026-08-05T18:34:33.612Z",
+            "checksum": "375caa454aef8b46578a621e73a5a25de8aa1d6c8492b062803b9bafc8eb5ea1"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-07-30T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.2,
+            "OutputPricePerUnit": 1.2,
+            "CacheReadPricePerUnit": 0.02,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.6-luna price cut effective 2026-07-30: 80% reduction from $1.00/$6.00 to $0.20/$1.20 per 1M tokens (source: OpenAI 'Advancing the price-performance frontier with GPT-5.6', July 30, 2026; VentureBeat, CNBC, MLQ News coverage; positioned to compete on cost with DeepSeek V4 Flash at $0.14/$0.28). Prompt-caching discount continues at 10% of input price. No architecture or capability change — pricing-only update."
+          },
+          "primaryKey": {
+            "ID": "95987637-46A3-4C7A-85C3-9660767001BB"
+          },
+          "sync": {
+            "lastModified": "2026-08-05T18:34:33.630Z",
+            "checksum": "95f8a17b05a4e3b52d5b85f75ab21e6fe357f9d02f46d8b18ae8a71a96d6450b"
           }
         }
       ]

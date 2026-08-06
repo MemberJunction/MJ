@@ -1,5 +1,172 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- 0acf96e: Make the SearchScope permission resolver replaceable.
+
+  `SearchEngine` authorizes every search through `SearchScopePermissionResolver`, which answers from `__mj.SearchScopePermission` rows keyed by `UserID` or by one of the user's MJ Roles. That covers MJ's own permission model completely — but it is not the only shape a permission model can take, and until now it was the only one the search path could consult.
+
+  A consumer whose entitlements are neither a user nor an MJ Role has no row that can express them. Its grants are therefore invisible to the check that actually runs, and the failure is silent in the worst way: the grant is configured, an administrator can see it, and the search simply returns nothing. The resolver was a module-level singleton imported directly by `SearchEngine`, so the only remedies were to project the consumer's model into `SearchScopePermission` as derived per-user rows — permission state that can drift from its source — or to fork the search path.
+
+  This adds the seam that was missing:
+  - **`SearchScopePermissionResolverBase`** — the abstract contract registrations bind to.
+  - **`SEARCH_SCOPE_PERMISSION_RESOLVER_KEY`** — the ClassFactory key. There is exactly one resolver per deployment (a consumer _replaces_ the policy rather than selecting among several), so a single shared key is the right shape, and it keeps the registry free of the keyless-registration warning.
+  - **`GetSearchScopePermissionResolver()`** — returns the highest-priority registration, falling back to MJ's own.
+
+  **Every path that authorizes a scope now goes through the seam**, not just `SearchEngine`. This matters more than it sounds: a seam honoured on some paths and not others is worse than no seam, because the resulting behaviour is inconsistent rather than merely absent — the same grant authorizes a search issued one way and silently denies it issued another. The five call sites are `SearchEngine.searchOneScope`, `SearchKnowledgeResolver` (both the single-scope check and the visible-scope-list filter), `SearchKnowledgeStreamResolver`, and the `__Scoped_Search` core action. The last is the agent-facing path, so an override that did not reach it would be invisible to exactly the callers most likely to need it.
+
+  Resolution happens per call rather than being cached at module load. A registration made during application startup would otherwise be missed depending on import order — a failure mode that presents as "my resolver works in tests but not in the server", which is expensive to diagnose. The class is stateless and construction is trivial, so there is nothing to gain by caching.
+
+  The intended shape for an override is to subclass the stock resolver and compose with it, **passing no priority**:
+
+  ```ts
+  @RegisterClass(
+    SearchScopePermissionResolverBase,
+    SEARCH_SCOPE_PERMISSION_RESOLVER_KEY,
+  )
+  export class MyResolver extends SearchScopePermissionResolver {
+    public override async ResolveEffectivePermission(
+      input: ResolvePermissionInput,
+    ) {
+      const stock = await super.ResolveEffectivePermission(input);
+      if (stock.Allowed) return stock; // never narrow what MJ already granted
+      return this.myOwnGrantCheck(input); // only ever widen
+    }
+  }
+  ```
+
+  Subclassing is what orders the registration, and it does so more reliably than a number can. `ClassFactory.Register` treats an omitted priority as _one higher than the highest already registered for this (base, key)_, and a subclass cannot be defined without its parent module having loaded first — so MJ's registration always runs before the consumer's, and the consumer always lands above it. The ordering is a side effect of the language rather than a convention anyone has to remember.
+
+  A hardcoded priority forfeits that. Two consumers that pick the same number collide, `Register` warns, and resolution degrades to whichever was registered last — a load-order bug wearing the costume of a configuration value. The priority argument stays for cases where subclassing is genuinely impossible.
+
+  **Nothing changes for existing consumers.** MJ's resolver registers itself as the default, so behaviour is identical when nothing else is registered. `DefaultSearchScopePermissionResolver` is retained and still exported so existing imports keep compiling; it is marked `@deprecated` because it always yields MJ's own implementation and therefore bypasses any registered override.
+
+  The failure posture is unchanged and worth restating for anyone writing an override: `SearchEngine` treats a resolver throw as **denied**, never as allowed. An override that cannot reach its own store must not accidentally open a scope.
+
+  7 tests covering the default, the fallback, an honoured registration, late registration (imperative, because `@RegisterClass` evaluates at module load and so cannot demonstrate lateness), composition with `super`, the deprecated constant, and that a subclass of the stock resolver satisfies the base contract.
+
+- 1100077: Standardize entity semantic search on `Provider.SearchEntity` (Tier 1).
+
+  Retires the bespoke in-memory "find similar by description" code paths in favor of
+  the unified Search-type `EntityDocument` + `Provider.SearchEntity` pipeline introduced
+  in #2709.
+
+  **`@memberjunction/aiengine`** — removed the ephemeral agent/action embedding machinery
+  that re-embedded every agent and action on first search:
+  - Deleted `AgentEmbeddingService` and `ActionEmbeddingService`.
+  - Removed `AIEngine.FindSimilarAgents`, `AIEngine.FindSimilarActions`,
+    `AIEngine.RefreshAgentEmbeddings`, `AIEngine.RefreshActionEmbeddings`, and the
+    `AgentVectorService` / `ActionVectorService` getters.
+  - `RegenerateEmbeddings` and the lazy `ensureEmbeddingsGenerated` path now cover only
+    the remaining local note/example pools (unchanged Pattern B). Callers needing
+    agent/action discovery should use `Provider.SearchEntity({ entityName: 'MJ: AI Agents' | 'MJ: Actions', ... })`.
+
+  **`@memberjunction/core-actions`** — the "Find Best Action", "Find Candidate Actions",
+  "Find Best Agent", "Find Candidate Agents", and "Search Query Catalog" actions are now
+  thin, backward-compatible wrappers around `Provider.SearchEntity` (semantic mode, backed
+  by the daily-synced "Actions Search" / "AI Agents Search" / "Queries Search"
+  EntityDocuments). Their input parameters and output shapes are preserved; new callers
+  should prefer the generic **Search Entity** action directly.
+
+  Also seeds the `Queries Search` EntityDocument + template, and deletes the now-obsolete
+  `scripts/backfill-query-embeddings.ts` (the daily Entity Vector Sync job populates query
+  vectors automatically).
+
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [fe7bd9d]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+- Updated dependencies [0acf96e]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [1100077]
+- Updated dependencies [5c6e36c]
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.0
+  - @memberjunction/generic-database-provider@6.1.0-edge.0
+  - @memberjunction/search-engine@6.1.0-edge.0
+  - @memberjunction/react-linter@6.1.0-edge.0
+  - @memberjunction/aiengine@6.1.0-edge.0
+  - @memberjunction/interactive-component-types@6.1.0-edge.0
+  - @memberjunction/ai-agent-manager@6.1.0-edge.0
+  - @memberjunction/ai-agents@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/clustering-engine@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/ai-mcp-client@6.1.0-edge.0
+  - @memberjunction/ai-prompts@6.1.0-edge.0
+  - @memberjunction/ai-vector-sync@6.1.0-edge.0
+  - @memberjunction/communication-types@6.1.0-edge.0
+  - @memberjunction/communication-engine@6.1.0-edge.0
+  - @memberjunction/content-autotagging@6.1.0-edge.0
+  - @memberjunction/external-change-detection@6.1.0-edge.0
+  - @memberjunction/integration-engine@6.1.0-edge.0
+  - @memberjunction/lists@6.1.0-edge.0
+  - @memberjunction/core-entities-server@6.1.0-edge.0
+  - @memberjunction/storage@6.1.0-edge.0
+  - @memberjunction/record-set-processor@6.1.0-edge.0
+  - @memberjunction/esignature@6.1.0-edge.0
+  - @memberjunction/geo-core@6.1.0-edge.0
+  - @memberjunction/code-execution@6.1.0-edge.0
+  - @memberjunction/record-set-processor-base@6.1.0-edge.0
+  - @memberjunction/ai@6.1.0-edge.0
+  - @memberjunction/ai-betty-bot@6.1.0-edge.0
+  - @memberjunction/lists-base@6.1.0-edge.0
+  - @memberjunction/export-engine@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+  - @memberjunction/sql-dialect@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agent-manager@6.0.0
+  - @memberjunction/ai-agents@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/clustering-engine@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/ai-mcp-client@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/ai-vector-sync@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/code-execution@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/communication-types@6.0.0
+  - @memberjunction/communication-engine@6.0.0
+  - @memberjunction/content-autotagging@6.0.0
+  - @memberjunction/external-change-detection@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/integration-engine@6.0.0
+  - @memberjunction/interactive-component-types@6.0.0
+  - @memberjunction/lists@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/core-entities-server@6.0.0
+  - @memberjunction/storage@6.0.0
+  - @memberjunction/react-linter@6.0.0
+  - @memberjunction/record-set-processor-base@6.0.0
+  - @memberjunction/record-set-processor@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/search-engine@6.0.0
+  - @memberjunction/esignature@6.0.0
+  - @memberjunction/geo-core@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/ai-betty-bot@6.0.0
+  - @memberjunction/lists-base@6.0.0
+  - @memberjunction/export-engine@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+
 ## 5.51.0
 
 ### Patch Changes

@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/testing-cli",
   "type": "module",
-  "version": "5.51.0",
+  "version": "6.1.0-edge.0",
   "description": "MemberJunction Testing Framework CLI - Command-line interface for test execution and management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,16 +18,17 @@
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3",
-    "@types/debug": "^4.1.12"
+    "@types/debug": "^4.1.12",
+    "@types/mssql": "^9.1.9"
   },
   "dependencies": {
-    "@memberjunction/global": "5.51.0",
-    "@memberjunction/core": "5.51.0",
-    "@memberjunction/core-entities": "5.51.0",
-    "@memberjunction/testing-engine": "5.51.0",
-    "@memberjunction/testing-engine-base": "5.51.0",
-    "@memberjunction/testing-integration": "5.51.0",
-    "@memberjunction/sqlserver-dataprovider": "5.51.0",
+    "@memberjunction/global": "6.1.0-edge.0",
+    "@memberjunction/core": "6.1.0-edge.0",
+    "@memberjunction/core-entities": "6.1.0-edge.0",
+    "@memberjunction/testing-engine": "6.1.0-edge.0",
+    "@memberjunction/testing-engine-base": "6.1.0-edge.0",
+    "@memberjunction/testing-integration": "6.1.0-edge.0",
+    "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.0",
     "@oclif/core": "^3.27.0",
     "ora-classic": "^5.4.2",
     "chalk": "^5.6.2",

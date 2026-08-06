@@ -678,6 +678,9 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     if (this.selectedAgent) {
       this.openAgentRecord(this.selectedAgent.ID);
     }
+    // Intent moved to the full record — a lingering panel paints over the
+    // records view and greets the user with stale chrome on return.
+    this.closeDetailPanel();
   }
 
   /**

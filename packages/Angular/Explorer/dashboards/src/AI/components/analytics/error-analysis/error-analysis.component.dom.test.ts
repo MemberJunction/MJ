@@ -1,9 +1,8 @@
-import { Component, Input } from '@angular/core';
 import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
 import { MJAccordionPanelComponent, MJAccordionTitleDirective, MJAccordionBodyDirective } from '@memberjunction/ng-ui-components';
-import { createFakeProvider, useFakeGlobalProvider, query, queryAll } from '@memberjunction/ng-test-utils';
+import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { AnalyticsErrorAnalysisComponent } from './error-analysis.component';
 
 /**
@@ -14,13 +13,6 @@ import { AnalyticsErrorAnalysisComponent } from './error-analysis.component';
  * directives) is imported so groups render their (collapsed) title with source + error badge. Empty
  * failed set → the "No Errors Found" success empty state. `mj-loading` / `mj-empty-state` stubbed.
  */
-
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading {}
-@Component({ standalone: true, selector: 'mj-empty-state', template: '<div class="stub-empty">{{ Title }}</div>' })
-class StubEmptyState {
-  @Input() Title = '';
-}
 
 const FAILED = [
   { ID: 'e1', Prompt: 'Summarize', PromptID: 'p1', Model: 'GPT-4o', ModelID: 'm1', ErrorMessage: 'Timeout', RunAt: '2026-01-05T09:00:00Z', ExecutionTimeMS: 3000 },
@@ -38,7 +30,7 @@ const rowsFn = (p: RunViewParams): unknown[] => {
 async function render(rows: (p: RunViewParams) => unknown[]): Promise<ComponentFixture<AnalyticsErrorAnalysisComponent>> {
   TestBed.configureTestingModule({
     declarations: [AnalyticsErrorAnalysisComponent],
-    imports: [StubLoading, StubEmptyState, MJAccordionPanelComponent, MJAccordionTitleDirective, MJAccordionBodyDirective],
+    imports: [StubLoadingComponent, StubEmptyStateComponent, MJAccordionPanelComponent, MJAccordionTitleDirective, MJAccordionBodyDirective],
   });
   const fixture = TestBed.createComponent(AnalyticsErrorAnalysisComponent);
   fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: rows }));

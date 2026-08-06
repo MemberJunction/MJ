@@ -1,5 +1,45 @@
 # @memberjunction/ng-clustering
 
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [b895f92]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+  - @memberjunction/ng-ui-components@6.1.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/ng-base-types@6.1.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.0
+  - @memberjunction/ng-entity-card@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/ai-vectors-memory@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-entity-card@6.0.0
+  - @memberjunction/ng-entity-viewer@6.0.0
+  - @memberjunction/graphql-dataprovider@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ng-ui-components@6.0.0
+  - @memberjunction/global@6.0.0
+
 ## 5.51.0
 
 ### Patch Changes

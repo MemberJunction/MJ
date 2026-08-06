@@ -18,7 +18,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject, BaseEventArgs } from '@memberjunction/interactive-component-types';
+import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject, BaseEventArgs, StyleOverrides } from '@memberjunction/interactive-component-types';
 import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
 import {
@@ -29,6 +29,7 @@ import {
   ResolvedComponents,
   SetupStyles,
   BuildStylesFromTheme,
+  ApplyStyleOverrides,
   wrapWithLibraryThemeProviders,
   ComponentRegistryService,
   resolveUserStateScope,
@@ -178,6 +179,14 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
 
       if (isDifferent) {
         this.reinitializeComponent();
+      } else if (JSON.stringify(previousComponent.styleOverrides) !== JSON.stringify(value.styleOverrides)) {
+        // Same code, new styleOverrides (a regenerated spec whose only change is the
+        // requested styling): re-render in place — no teardown needed. The resolved
+        // spec must be kept in step because the styleOverrides getter prefers it.
+        if (this.resolvedComponentSpec) {
+          this.resolvedComponentSpec.styleOverrides = value.styleOverrides;
+        }
+        this.renderComponent();
       }
     }
   }
@@ -203,7 +212,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     // Lazy initialization - only create default utilities when needed
     if (!this._utilities) {
       const runtimeUtils = createRuntimeUtilities();
-      this._utilities = runtimeUtils.buildUtilities(this.enableLogging);
+      this._utilities = runtimeUtils.buildUtilities(this.enableLogging, this.ProviderToUse);
       if (this.enableLogging) {
         console.log('MJReactComponent: Auto-initialized utilities using createRuntimeUtilities()');
       }
@@ -223,9 +232,10 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     this._styles = value;
   }
   get styles(): Partial<ComponentStyles> {
-    // An explicitly-provided styles input always wins.
+    // An explicitly-provided styles input always wins — but user-requested overrides
+    // still layer on top, since they represent an explicit request rather than a theme.
     if (this._styles) {
-      return this._styles;
+      return this.applyStyleOverridesMemoized(this._styles);
     }
     // Otherwise bridge the host's live MJ theme (--mj-* tokens) into ComponentStyles
     // so generated components inherit the active theme — including dark mode and
@@ -239,7 +249,41 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
         console.log(`MJReactComponent: Bridged styles from live theme (key="${key}")`);
       }
     }
-    return this._themeStyles;
+    // Applied outside the theme memo so the spec's overrides survive a theme flip
+    // (the memo caches the theme, not the request).
+    return this.applyStyleOverridesMemoized(this._themeStyles);
+  }
+
+  /**
+   * Explicitly user-requested styling from the spec being rendered, resolved above
+   * the theme. Reads the resolved spec when available (registry components resolve
+   * asynchronously) and falls back to the spec passed in.
+   */
+  private get styleOverrides(): StyleOverrides | undefined {
+    return this.resolvedComponentSpec?.styleOverrides ?? this._component?.styleOverrides;
+  }
+
+  // Memo for the override merge. ApplyStyleOverrides allocates a new object whenever
+  // overrides are present, and components key effects/memos on the styles identity
+  // (e.g. simple-chart tears down and rebuilds its Chart.js instance) — so the merged
+  // result must be stable across reads. Keyed by reference: a theme rebuild, a new
+  // styles input, or a restyled spec each produce a new ref, which is exactly when
+  // the merge must re-run.
+  private _mergedStylesBase?: Partial<ComponentStyles>;
+  private _mergedStylesOverrides?: StyleOverrides;
+  private _mergedStylesResult?: Partial<ComponentStyles>;
+
+  private applyStyleOverridesMemoized(base: Partial<ComponentStyles>): Partial<ComponentStyles> {
+    const overrides = this.styleOverrides;
+    if (!overrides) {
+      return base;
+    }
+    if (!this._mergedStylesResult || this._mergedStylesBase !== base || this._mergedStylesOverrides !== overrides) {
+      this._mergedStylesBase = base;
+      this._mergedStylesOverrides = overrides;
+      this._mergedStylesResult = ApplyStyleOverrides(base, overrides);
+    }
+    return this._mergedStylesResult;
   }
 
   /**

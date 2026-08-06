@@ -68,9 +68,19 @@ Additional connectors exist for **Wicket**, **Relational DB**, and **File Feed**
 
 ## How to Add a New Connector
 
+> **⚠️ 6.x: new connectors are built in [MemberJunction/Integrations](https://github.com/MemberJunction/Integrations), not here.**
+> Each connector is its own Open App (`@memberjunction/connector-<vendor>`) with its own package,
+> versioning, metadata and seed migrations. The connector *contract* below is unchanged — what differs
+> is the location and the registration key (the npm package name, not the bare class symbol). The
+> `generate-integration-actions.ts` CLI referenced in Step 2/3 was removed along with the connectors it
+> instantiated; in the Integrations repo, action metadata is authored under each Open App's `metadata/`
+> and turned into seed migrations by that repo's `scripts/build-seed-migrations.mjs`.
+> See [docs/connector-development.md](docs/connector-development.md) for the mapping table.
+
 ### Step 1: Implement the Connector
 
-Create a new class extending `BaseIntegrationConnector` in `packages/Integration/connectors/src/`:
+Create a new class extending `BaseIntegrationConnector` (in the Integrations repo, at
+`<Category>/<Vendor>/src/`):
 
 ```typescript
 import { BaseIntegrationConnector } from '@memberjunction/integration-engine';

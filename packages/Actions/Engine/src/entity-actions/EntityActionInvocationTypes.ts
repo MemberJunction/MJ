@@ -1,7 +1,7 @@
 import { MJGlobal, MJLruCache, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { MJActionParamEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { BaseEntity, Metadata, RunView } from "@memberjunction/core";
-import { ActionParam, ActionResult, EntityActionInvocationParams, EntityActionResult } from "@memberjunction/actions-base";
+import { ActionInvocationProvenance, ActionParam, ActionResult, EntityActionInvocationParams, EntityActionResult, IsEntityActionInScope, ResolveEntityActionScopeResolver } from "@memberjunction/actions-base";
 import { ActionEngineServer } from "../generic/ActionEngine";
 
 /**
@@ -30,6 +30,28 @@ export abstract class EntityActionInvocationBase {
     }
 
     /**
+     * Builds the {@link ActionInvocationProvenance} for a dispatch: which binding fired, from which
+     * lifecycle event, against which record. Stamped onto `ActionExecutionLog` so a workflow failure is
+     * diagnosable without correlating by timestamp, and used by the redaction rules — the binding's
+     * `EntityActionParam` rows are what carry `ValueType` and the per-binding `LogValue` override.
+     *
+     * @param entityObject the record the run operates on; omitted for a dispatch not yet resolved to one.
+     */
+    public BuildProvenance(params: EntityActionInvocationParams, entityObject?: BaseEntity): ActionInvocationProvenance {
+        return {
+            EntityActionID: params.EntityAction?.ID,
+            EntityActionInvocationTypeID: params.InvocationType?.ID,
+            TargetEntityID: params.EntityAction?.EntityID,
+            // ToConcatenatedString(), not ToString(): "ID|abc123" is MJ's canonical serialized
+            // record-ID format (the same one RecordChange.RecordID uses), so TargetRecordID lines
+            // up with every other persisted record pointer. ToString() is a display format.
+            TargetRecordID: entityObject?.PrimaryKey?.ToConcatenatedString(),
+            LoggingMode: params.EntityAction?.LoggingMode,
+            EntityActionParams: params.EntityAction?.Params
+        };
+    }
+
+    /**
      * This method will map the Entity Action Params to the Action Params and where needed evaluate scripts to get the run-time values that need
      * to get passed to the Action.
      * @param params 
@@ -55,6 +77,12 @@ export abstract class EntityActionInvocationBase {
                     break;
                 case 'Entity Object':
                     value = entityObject;
+                    break;
+                case 'Entity Object Data':
+                    // The record's field values as a plain object. BaseEntity fields are getters, not
+                    // enumerable own properties, so an action that spreads or JSON-serializes an
+                    // 'Entity Object' value gets `{}` — GetAll() is what actually carries the data.
+                    value = entityObject.GetAll();
                     break;
                 case 'Entity Field':
                     value = entityObject[eap.Value];
@@ -136,6 +164,15 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
     public async InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult> {
         // for this type of invocation we need to validate that the EntityObject is not null
         if (this.ValidateParams(params)) {
+            // A binding narrowed to one configuration record (ScopeEntityID/ScopeRecordID) only fires for
+            // records that fall under it. Checked HERE rather than at each dispatch site because every
+            // path — provider lifecycle hooks, List/View fan-out, direct invocation — funnels through
+            // single-record invocation, so this is the one place the check cannot be forgotten.
+            const inScope = await IsEntityActionInScope(params.EntityAction, params.EntityObject, name => ResolveEntityActionScopeResolver(name));
+            if (!inScope) {
+                return null;
+            }
+
             // now do the work
             // get the class that is derived from BaseAction for the Action Name
             await ActionEngineServer.Instance.Config(false, params.ContextUser);
@@ -152,7 +189,8 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
                 Action: action,
                 ContextUser: params.ContextUser,
                 Filters: filters,
-                Params: internalParams
+                Params: internalParams,
+                Provenance: this.BuildProvenance(params, params.EntityObject)
             });
 
             return result;
@@ -209,7 +247,11 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
                 const innerParams = {...params};
                 innerParams.EntityObject = record;
                 const result = await invocationInstance.InvokeAction(innerParams);
-                results.push(result);
+                if (result) {
+                    // null means the binding is scoped and this record falls outside it — not a failure,
+                    // so it must not drag the consolidated Success down.
+                    results.push(result);
+                }
             }
 
             const consolidatedResult: EntityActionResult = {
