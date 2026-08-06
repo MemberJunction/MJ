@@ -1413,6 +1413,78 @@ export const MJAIAgentConfigurationSchema = z.object({
 export type MJAIAgentConfigurationEntityType = z.infer<typeof MJAIAgentConfigurationSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Credentials
+ */
+export const MJAIAgentCredentialSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
+    CredentialID: z.string().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)`),
+    Purpose: z.union([z.literal('HarnessLLM'), z.literal('Integration')]).describe(`
+        * * Field Name: Purpose
+        * * Display Name: Purpose
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * HarnessLLM
+    *   * Integration
+        * * Description: What this credential is for. HarnessLLM is the API key the harness uses to reach its own model vendor; when absent, the runtime falls back to vendor-scoped AICredentialBinding rows for AIAgentHarness.AIVendorID. Integration is any other granted secret the agent needs inside the sandbox, such as a source-control or ticketing token.`),
+    EnvVariableName: z.string().nullable().describe(`
+        * * Field Name: EnvVariableName
+        * * Display Name: Environment Variable Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Environment variable the adapter sets inside the sandbox for this credential, e.g. ANTHROPIC_API_KEY or GITHUB_TOKEN. NULL lets the adapter choose, which is the normal case for HarnessLLM because the adapter knows its own vendor's variable name.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Failover ordering within a Purpose - lower runs first. Lets an agent carry a primary and a standby key for the same purpose without a schema change.`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Revoked
+        * * Description: Whether this grant is live. Revoked withdraws the credential from future sessions while preserving the record that it was once granted, which is the point of auditing a credential grant at all. Pending stages a grant that is not yet in force.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    Credential: z.string().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential Name
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJAIAgentCredentialEntityType = z.infer<typeof MJAIAgentCredentialSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Data Sources
  */
 export const MJAIAgentDataSourceSchema = z.object({
@@ -1746,6 +1818,88 @@ export const MJAIAgentExampleSchema = z.object({
 });
 
 export type MJAIAgentExampleEntityType = z.infer<typeof MJAIAgentExampleSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent Harnesses
+ */
+export const MJAIAgentHarnessSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name of the harness, e.g. Claude Code, Codex CLI, OpenCode, Pi, Cline. This is a LOOKUP KEY, not a label: an agent selects its harness by this name in AIAgent.TypeConfiguration ("harnessName"), so duplicates would make selection ambiguous at run time.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable description of the harness - what it is good at, what it requires to be installed, and any deployment caveats.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: ClassFactory registration key for the BaseHarnessAdapter subclass that drives this harness (e.g. ClaudeCodeAdapter, CodexAdapter, StdioJsonAdapter). Resolved at run time, so a customer can register a proprietary adapter without forking core - the same extension mechanism AI model vendor drivers use.`),
+    ExecutablePath: z.string().nullable().describe(`
+        * * Field Name: ExecutablePath
+        * * Display Name: Executable Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Path to the harness CLI binary or entry point when the adapter shells out. NULL when the adapter embeds a vendor SDK and therefore launches nothing.`),
+    AIVendorID: z.string().nullable().describe(`
+        * * Field Name: AIVendorID
+        * * Display Name: AI Vendor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)`),
+    AIModelID: z.string().nullable().describe(`
+        * * Field Name: AIModelID
+        * * Display Name: AI Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
+    DefaultModel: z.string().nullable().describe(`
+        * * Field Name: DefaultModel
+        * * Display Name: Default Model
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Default model passed to the harness where the harness supports being told which model to use. NULL leaves the harness on its own default.`),
+    CapabilitySettings: z.any().nullable().describe(`
+        * * Field Name: CapabilitySettings
+        * * Display Name: Capability Settings
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIAgentHarnessEntity_IHarnessCapabilitySettings
+        * * Description: Strongly-typed JSON of what this harness can do (the IHarnessCapabilitySettings interface, bound via JSONType metadata): session continuity (SessionResume), turn-protocol support (StructuredOutput), in-sandbox permission interception (PermissionHooks), and whether the harness can act as an MCP client for the read-only loopback (McpClient). The runtime gates behaviour on these - when SessionResume is false the adapter must replay prior context into a fresh invocation each turn, which costs extra tokens and has to be budgeted for. Held as JSON so a new capability needs no schema migration, just an added property on the interface. NULL/omitted = not supported.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Whether this harness may be launched. Inactive keeps the row and its history for auditing while taking the harness out of service - preferable to deleting it, which would orphan agents configured to use it.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    AIVendor: z.string().nullable().describe(`
+        * * Field Name: AIVendor
+        * * Display Name: AI Vendor
+        * * SQL Data Type: nvarchar(50)`),
+    AIModel: z.string().nullable().describe(`
+        * * Field Name: AIModel
+        * * Display Name: AI Model
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJAIAgentHarnessEntityType = z.infer<typeof MJAIAgentHarnessSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Learning Cycles
@@ -2988,7 +3142,7 @@ export type MJAIAgentRunStepEntityType = z.infer<typeof MJAIAgentRunStepSchema>;
 export const MJAIAgentRunSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
-        * * Display Name: ID
+        * * Display Name: Run ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()
         * * Description: Unique identifier for this agent run`),
@@ -3063,7 +3217,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: JSON serialization of the complete agent state, including conversation context, variables, and execution state. Enables pause/resume functionality.`),
     TotalTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalTokensUsed
-        * * Display Name: Total Tokens Used
+        * * Display Name: Total Tokens
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Total number of tokens consumed by all LLM calls during this agent run`),
@@ -3085,12 +3239,12 @@ export const MJAIAgentRunSchema = z.object({
         * * Default Value: getutcdate()`),
     TotalPromptTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalPromptTokensUsed
-        * * Display Name: Total Prompt Tokens
+        * * Display Name: Prompt Tokens
         * * SQL Data Type: int
         * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
     TotalCompletionTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalCompletionTokensUsed
-        * * Display Name: Total Completion Tokens
+        * * Display Name: Completion Tokens
         * * SQL Data Type: int
         * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
     TotalTokensUsedRollup: z.number().nullable().describe(`
@@ -3100,12 +3254,12 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.`),
     TotalPromptTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalPromptTokensUsedRollup
-        * * Display Name: Total Prompt Tokens (Rollup)
+        * * Display Name: Prompt Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.`),
     TotalCompletionTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalCompletionTokensUsedRollup
-        * * Display Name: Total Completion Tokens (Rollup)
+        * * Display Name: Completion Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.`),
     TotalCostRollup: z.number().nullable().describe(`
@@ -3121,7 +3275,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: Optional tracking of a specific conversation detail (e.g. a specific message) that spawned this agent run`),
     ConversationDetailSequence: z.number().nullable().describe(`
         * * Field Name: ConversationDetailSequence
-        * * Display Name: Conversation Detail Sequence
+        * * Display Name: Sequence
         * * SQL Data Type: int
         * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution`),
     CancellationReason: z.union([z.literal('System'), z.literal('Timeout'), z.literal('User Request')]).nullable().describe(`
@@ -3156,7 +3310,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: JSON serialization of the final Payload state at the end of the agent run`),
     Message: z.string().nullable().describe(`
         * * Field Name: Message
-        * * Display Name: Message
+        * * Display Name: Final Message
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Final message from the agent to the end user at the end of a run`),
     LastRunID: z.string().nullable().describe(`
@@ -3185,24 +3339,24 @@ each time the agent processes a prompt step.`),
         * * Description: The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.`),
     OverrideModelID: z.string().nullable().describe(`
         * * Field Name: OverrideModelID
-        * * Display Name: Override Model
+        * * Display Name: Model Override
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.`),
     OverrideVendorID: z.string().nullable().describe(`
         * * Field Name: OverrideVendorID
-        * * Display Name: Override Vendor
+        * * Display Name: Vendor Override
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
         * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.`),
     Data: z.string().nullable().describe(`
         * * Field Name: Data
-        * * Display Name: Data
+        * * Display Name: Input Data
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`),
     Verbose: z.boolean().nullable().describe(`
         * * Field Name: Verbose
-        * * Display Name: Verbose
+        * * Display Name: Verbose Logging
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.`),
@@ -3235,13 +3389,13 @@ each time the agent processes a prompt step.`),
         * * Description: Optional Foreign Key - Links this agent run to a test run if this execution was part of a test. Allows navigation from agent execution to test context.`),
     PrimaryScopeEntityID: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeEntityID
-        * * Display Name: Primary Scope Entity
+        * * Display Name: Scope Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping (e.g., Organizations, Tenants)`),
     PrimaryScopeRecordID: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeRecordID
-        * * Display Name: Primary Scope Record
+        * * Display Name: Scope Record ID
         * * SQL Data Type: nvarchar(100)
         * * Description: The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.`),
     SecondaryScopes: z.any().nullable().describe(`
@@ -3252,7 +3406,7 @@ each time the agent processes a prompt step.`),
         * * Description: JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}`),
     ExternalReferenceID: z.string().nullable().describe(`
         * * Field Name: ExternalReferenceID
-        * * Display Name: External Reference
+        * * Display Name: External Reference ID
         * * SQL Data Type: nvarchar(200)
         * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.`),
     CompanyID: z.string().nullable().describe(`
@@ -3262,12 +3416,12 @@ each time the agent processes a prompt step.`),
         * * Description: Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.`),
     TotalCacheReadTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalCacheReadTokensUsed
-        * * Display Name: Total Cache Read Tokens
+        * * Display Name: Cache Read Tokens
         * * SQL Data Type: int
         * * Description: Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.`),
     TotalCacheWriteTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalCacheWriteTokensUsed
-        * * Display Name: Total Cache Write Tokens
+        * * Display Name: Cache Write Tokens
         * * SQL Data Type: int
         * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`),
     LastHeartbeatAt: z.date().nullable().describe(`
@@ -3287,53 +3441,58 @@ each time the agent processes a prompt step.`),
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: 1 when this run executed under plan mode (whether via the per-request planMode flag or the agent's RequirePlanMode setting). Drives plan-mode indicators in the run UX and supports plan-drift auditing (comparing the approved plan against the steps that actually executed).`),
+    ExternalSessionID: z.string().nullable().describe(`
+        * * Field Name: ExternalSessionID
+        * * Display Name: External Session ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Session identifier reported by the external harness backing this run. Kept for two reasons that outlive the run: resuming the session across turns, and correlating this run with the vendor's own session logs when diagnosing behaviour INSIDE the sandbox, where MJ's audit trail necessarily stops at the turn boundary. NULL for every run not backed by a harness.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent Name
+        * * Display Name: Agent Detail
         * * SQL Data Type: nvarchar(255)`),
     ParentRun: z.string().nullable().describe(`
         * * Field Name: ParentRun
-        * * Display Name: Parent Run Name
+        * * Display Name: Parent Run Detail
         * * SQL Data Type: nvarchar(255)`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation Name
+        * * Display Name: Conversation Detail
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User Detail
         * * SQL Data Type: nvarchar(100)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Name
+        * * Display Name: Conversation Detail Record
         * * SQL Data Type: nvarchar(100)`),
     LastRun: z.string().nullable().describe(`
         * * Field Name: LastRun
-        * * Display Name: Last Run Name
+        * * Display Name: Last Run Detail
         * * SQL Data Type: nvarchar(255)`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration Name
+        * * Display Name: Configuration Detail
         * * SQL Data Type: nvarchar(100)`),
     OverrideModel: z.string().nullable().describe(`
         * * Field Name: OverrideModel
-        * * Display Name: Override Model Name
+        * * Display Name: Model Override Detail
         * * SQL Data Type: nvarchar(50)`),
     OverrideVendor: z.string().nullable().describe(`
         * * Field Name: OverrideVendor
-        * * Display Name: Override Vendor Name
+        * * Display Name: Vendor Override Detail
         * * SQL Data Type: nvarchar(50)`),
     ScheduledJobRun: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRun
-        * * Display Name: Scheduled Job Run Name
+        * * Display Name: Scheduled Job Run Detail
         * * SQL Data Type: nvarchar(200)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Name
+        * * Display Name: Test Run Detail
         * * SQL Data Type: nvarchar(255)`),
     PrimaryScopeEntity: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeEntity
-        * * Display Name: Primary Scope Entity Name
+        * * Display Name: Scope Entity Detail
         * * SQL Data Type: nvarchar(255)`),
     RootParentRunID: z.string().nullable().describe(`
         * * Field Name: RootParentRunID
@@ -12250,12 +12409,12 @@ export const MJContentItemChunkSchema = z.object({
         * * Description: Exclusive character offset where this chunk ends within the parent Content Item's extracted text. See StartOffset. NULL for media segments.`),
     StartMs: z.number().nullable().describe(`
         * * Field Name: StartMs
-        * * Display Name: Start (ms)
+        * * Display Name: Start Milliseconds
         * * SQL Data Type: int
         * * Description: Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.`),
     EndMs: z.number().nullable().describe(`
         * * Field Name: EndMs
-        * * Display Name: End (ms)
+        * * Display Name: End Milliseconds
         * * SQL Data Type: int
         * * Description: End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.`),
     PageNumber: z.number().nullable().describe(`
@@ -12291,8 +12450,12 @@ export const MJContentItemChunkSchema = z.object({
         * * Description: Optional self-reference to another chunk of the same Content Item that is the parent of this one, expressing a chapter to sub-chapter hierarchy — for example a five-minute chapter of a recording and the individual speaker turns within it, or a document section and its subsections. NULL for top-level segments.`),
     ContentItem: z.string().nullable().describe(`
         * * Field Name: ContentItem
-        * * Display Name: Content Item
+        * * Display Name: Content Item Name
         * * SQL Data Type: nvarchar(250)`),
+    ParentChunk: z.string().nullable().describe(`
+        * * Field Name: ParentChunk
+        * * Display Name: Parent Chunk Name
+        * * SQL Data Type: nvarchar(500)`),
     RootParentChunkID: z.string().nullable().describe(`
         * * Field Name: RootParentChunkID
         * * Display Name: Root Parent Chunk
@@ -16551,7 +16714,7 @@ export const MJEntitySchema = z.object({
         * * Description: When set to 1 AND TrackRecordChanges is also 1, the external change detection system will scan this entity for changes made outside the MJ framework (direct SQL, third-party tools, etc.) and replay them through Save() to create proper RecordChange audit entries. Default is 0 (opt-out) because most entities, especially __mj schema metadata tables, are managed by migrations/CodeGen and should not be scanned.`),
     ExternalDataSourceID: z.string().nullable().describe(`
         * * Field Name: ExternalDataSourceID
-        * * Display Name: External Data Source ID
+        * * Display Name: External Data Source
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: External Data Sources (vwExternalDataSources.ID)`),
     ExternalObjectName: z.string().nullable().describe(`
@@ -16559,6 +16722,29 @@ export const MJEntitySchema = z.object({
         * * Display Name: External Object Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Remote object name (table / view / collection) on the external system that backs this entity. Resolved against the data source DefaultSchema/DefaultDatabase when unqualified. Only meaningful when ExternalDataSourceID is set.`),
+    GeneratedBaseViewName: z.string().nullable().describe(`
+        * * Field Name: GeneratedBaseViewName
+        * * Display Name: Generated Base View Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: When set, CodeGen generates the entity's full base view under THIS name instead of BaseView, and the application owns BaseView — which is expected to wrap it (SELECT g.*, <extras> FROM <GeneratedBaseViewName> g). This gives an entity a custom base view WITHOUT inheriting the generated SQL: related-entity display joins, geo columns and recursive root-ID columns keep regenerating underneath, so a foreign key added later still appears. NULL (the default, and every pre-existing row) means the previous all-or-nothing behaviour: BaseViewGenerated alone decides whether CodeGen writes BaseView, and there is no second view. BaseView remains the public surface — entity field discovery, permissions and the generated CRUD procedures all target it. SQL SERVER ONLY: layering relies on sp_refreshview to re-resolve the application-owned outer view's SELECT * against a regenerated inner view. PostgreSQL freezes a view's column list at creation and has no refresh equivalent, so CodeGen rejects this column on PostgreSQL rather than let the outer view go silently stale.`),
+    AllowDirectSQLInsert: z.boolean().describe(`
+        * * Field Name: AllowDirectSQLInsert
+        * * Display Name: Allow Direct SQL Insert
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this entity may be populated by INSERT statements that do not go through BaseEntity.Save() — bulk loads, ETL/integration sync, or rows created as a side effect of a stored procedure. Default 0, meaning every insert is expected to flow through BaseEntity so that record-change tracking, entity actions, validation and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, because a direct insert produces neither an audit row nor a cache-invalidation event.`),
+    AllowDirectSQLUpdate: z.boolean().describe(`
+        * * Field Name: AllowDirectSQLUpdate
+        * * Display Name: Allow Direct SQL Update
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this entity may be modified by UPDATE statements that do not go through BaseEntity.Save() — bulk backfills, integration sync, or maintenance routines. Default 0, meaning every update is expected to flow through BaseEntity so that record-change tracking, entity actions, validation and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, because a direct update produces neither an audit row nor a cache-invalidation event.`),
+    AllowDirectSQLDelete: z.boolean().describe(`
+        * * Field Name: AllowDirectSQLDelete
+        * * Display Name: Allow Direct SQL Delete
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this entity may have rows removed by DELETE statements that do not go through BaseEntity.Delete() — purge and retention routines, or integration sync reconciling a remote source. Default 0, meaning every delete is expected to flow through BaseEntity so that record-change tracking, entity actions, cascade handling and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, and additionally requires DeleteType = 'Hard' — a direct DELETE removes the row outright rather than setting DeletedAt, which would defeat soft delete.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -32075,11 +32261,12 @@ export type MJUserViewCategoryEntityType = z.infer<typeof MJUserViewCategorySche
 export const MJUserViewRunDetailSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     UserViewRunID: z.string().describe(`
         * * Field Name: UserViewRunID
-        * * Display Name: User View Run ID
+        * * Display Name: User View Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: User View Runs (vwUserViewRuns.ID)`),
     RecordID: z.string().describe(`
@@ -32097,6 +32284,10 @@ export const MJUserViewRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    UserViewRun: z.string().describe(`
+        * * Field Name: UserViewRun
+        * * Display Name: User View Run Name
+        * * SQL Data Type: nvarchar(100)`),
     UserViewID: z.string().describe(`
         * * Field Name: UserViewID
         * * Display Name: User View
@@ -37188,6 +37379,178 @@ export class MJAIAgentConfigurationEntity extends BaseEntity<MJAIAgentConfigurat
 
 
 /**
+ * MJ: AI Agent Credentials - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentCredential
+ * * Base View: vwAIAgentCredentials
+ * * @description Credentials an agent carries into its harness sandbox, injected as environment variables at session creation. Custody of the secret itself stays in Credential/CredentialEngine - this table records only the GRANT EDGE, in the same reviewable style as AIAgentAction. Distinct from AICredentialBinding, which is inference-selection plumbing for AIPromptRunner failover when MJ itself executes a prompt.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Credentials')
+export class MJAIAgentCredentialEntity extends BaseEntity<MJAIAgentCredentialEntityType> {
+    /**
+    * Loads the MJ: AI Agent Credentials record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Credentials record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentCredentialEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    */
+    get CredentialID(): string {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: Purpose
+    * * Display Name: Purpose
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * HarnessLLM
+    *   * Integration
+    * * Description: What this credential is for. HarnessLLM is the API key the harness uses to reach its own model vendor; when absent, the runtime falls back to vendor-scoped AICredentialBinding rows for AIAgentHarness.AIVendorID. Integration is any other granted secret the agent needs inside the sandbox, such as a source-control or ticketing token.
+    */
+    get Purpose(): 'HarnessLLM' | 'Integration' {
+        return this.Get('Purpose');
+    }
+    set Purpose(value: 'HarnessLLM' | 'Integration') {
+        this.Set('Purpose', value);
+    }
+
+    /**
+    * * Field Name: EnvVariableName
+    * * Display Name: Environment Variable Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Environment variable the adapter sets inside the sandbox for this credential, e.g. ANTHROPIC_API_KEY or GITHUB_TOKEN. NULL lets the adapter choose, which is the normal case for HarnessLLM because the adapter knows its own vendor's variable name.
+    */
+    get EnvVariableName(): string | null {
+        return this.Get('EnvVariableName');
+    }
+    set EnvVariableName(value: string | null) {
+        this.Set('EnvVariableName', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Failover ordering within a Purpose - lower runs first. Lets an agent carry a primary and a standby key for the same purpose without a schema change.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Revoked
+    * * Description: Whether this grant is live. Revoked withdraws the credential from future sessions while preserving the record that it was once granted, which is the point of auditing a credential grant at all. Pending stages a grant that is not yet in force.
+    */
+    get Status(): 'Active' | 'Pending' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string {
+        return this.Get('Credential');
+    }
+}
+
+
+/**
  * MJ: AI Agent Data Sources - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentDataSource
@@ -38042,6 +38405,322 @@ export class MJAIAgentExampleEntity extends BaseEntity<MJAIAgentExampleEntityTyp
     */
     get PrimaryScopeEntity(): string | null {
         return this.Get('PrimaryScopeEntity');
+    }
+}
+
+
+/**
+ * Strongly-typed shape of `AIAgentHarness.CapabilitySettings` (the
+ * `MJ: AI Agent Harnesses` entity), bound to the column via JSONType metadata so
+ * CodeGen emits a typed accessor.
+ *
+ * An *agent harness* is an external agent runtime with its own reasoning loop and tool sandbox —
+ * Claude Code (Agent SDK or headless CLI), Codex CLI, OpenCode, Pi, Cline, Gemini CLI. MJ runs one
+ * as the reasoning substrate for an MJ agent while keeping identity, permissions, governed data
+ * access, payload contracts, HITL and cost control on the MJ side. These flags declare what each
+ * harness's adapter can actually do, so the runtime knows what it must **emulate** rather than
+ * assume.
+ *
+ * That emulation is the reason these are metadata and not a code constant. Harnesses differ in
+ * ways that change token cost and audit granularity, not merely convenience: a harness without
+ * {@link MJAIAgentHarnessEntity_IHarnessCapabilitySettings.SessionResume} needs prior context replayed into a fresh
+ * invocation on every turn, which the runtime has to budget for against `MaxTokensPerRun`.
+ *
+ * All properties are optional — an omitted flag means the capability is **not** supported, which
+ * is the safe default: the runtime falls back to emulation or refuses the feature rather than
+ * calling into an adapter that cannot honour it.
+ *
+ * Holding these as JSON (rather than dedicated BIT columns) keeps the registry table simple and
+ * lets a new harness capability be added without a schema migration — just extend this interface
+ * and re-push. Mirrors the `IBridgeProviderFeatures` / `IRemoteBrowserProviderFeatures` model.
+ *
+ * See `/plans/external-agent-harness.md`.
+ */
+export interface MJAIAgentHarnessEntity_IHarnessCapabilitySettings {
+    // ── Session lifecycle ───────────────────────────────────────────────────────
+    /**
+     * The harness can resume a prior session by ID, so turn N+1 continues the same reasoning
+     * context rather than starting cold. When false the adapter must emulate continuity by
+     * replaying accumulated context into a fresh invocation each turn — correct, but the token
+     * cost grows with turn count and must be budgeted against the run's guardrails.
+     */
+    SessionResume?: boolean;
+    /**
+     * The harness can be cancelled mid-turn and will stop promptly, so a cancellation token
+     * reaching the adapter actually interrupts in-sandbox work instead of only being honoured at
+     * the next turn boundary.
+     */
+    MidTurnCancellation?: boolean;
+
+    // ── Turn protocol ───────────────────────────────────────────────────────────
+    /**
+     * The harness has a native structured-output mode (e.g. Claude Code's `--output-format`) that
+     * can be constrained to emit the Loop next-step JSON envelope at turn end. Without it the
+     * runtime leans on `BaseAgent`'s malformed-response retry machinery to coax the envelope out,
+     * which costs extra turns on a harness prone to conversational drift.
+     */
+    StructuredOutput?: boolean;
+    /**
+     * The harness reports token usage and (where available) cost per turn. Required for the
+     * per-turn `AIPromptRun` accounting that feeds `MaxCostPerRun` / `MaxTokensPerRun`; without
+     * it a run's spend is invisible to MJ's guardrails and only wall-clock and iteration limits
+     * can interrupt it.
+     */
+    UsageReporting?: boolean;
+
+    // ── Sandbox governance ──────────────────────────────────────────────────────
+    /**
+     * The harness exposes permission hooks the adapter can intercept, so a mutating in-sandbox
+     * operation can be paused and surfaced as an `MJ: AI Agent Requests` HITL prompt. Required for
+     * the `strict` posture to be enforced adapter-side rather than only by the sandbox provider.
+     */
+    PermissionHooks?: boolean;
+    /**
+     * The harness can be pointed at an MCP server, enabling the read-only intra-turn loopback into
+     * MJ data (entity reads, RunView, queries) under a per-run scoped credential. When false the
+     * agent can still act — all authority-transferring operations go through the turn protocol
+     * regardless — but it cannot read MJ data mid-turn.
+     */
+    McpClient?: boolean;
+    /**
+     * The harness accepts a working directory it will confine file operations to, letting the
+     * sandbox provider scope a workspace per run/agent/user. When false the provider must isolate
+     * at the process or container boundary instead.
+     */
+    WorkspaceScoping?: boolean;
+
+    // ── Model selection ─────────────────────────────────────────────────────────
+    /**
+     * The harness accepts a model override at launch, so `AIAgentHarness.DefaultModel` and any
+     * per-agent override are actually honoured. When false the harness runs on whatever model its
+     * own configuration selects and MJ's model preference is advisory only.
+     */
+    ModelSelection?: boolean;
+}
+
+/**
+ * MJ: AI Agent Harnesses - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentHarness
+ * * Base View: vwAIAgentHarnesses
+ * * @description Registry of external agent harnesses this installation can launch as the reasoning substrate for an MJ agent (Claude Code, Codex CLI, OpenCode, Pi, Cline). A row makes a harness AVAILABLE; an agent opts in by naming it in AIAgent.TypeConfiguration. Empty table = no agent can run on a harness, which is the pre-migration behaviour.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Harnesses')
+export class MJAIAgentHarnessEntity extends BaseEntity<MJAIAgentHarnessEntityType> {
+    /**
+    * Loads the MJ: AI Agent Harnesses record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Harnesses record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentHarnessEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name of the harness, e.g. Claude Code, Codex CLI, OpenCode, Pi, Cline. This is a LOOKUP KEY, not a label: an agent selects its harness by this name in AIAgent.TypeConfiguration ("harnessName"), so duplicates would make selection ambiguous at run time.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable description of the harness - what it is good at, what it requires to be installed, and any deployment caveats.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: ClassFactory registration key for the BaseHarnessAdapter subclass that drives this harness (e.g. ClaudeCodeAdapter, CodexAdapter, StdioJsonAdapter). Resolved at run time, so a customer can register a proprietary adapter without forking core - the same extension mechanism AI model vendor drivers use.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: ExecutablePath
+    * * Display Name: Executable Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Path to the harness CLI binary or entry point when the adapter shells out. NULL when the adapter embeds a vendor SDK and therefore launches nothing.
+    */
+    get ExecutablePath(): string | null {
+        return this.Get('ExecutablePath');
+    }
+    set ExecutablePath(value: string | null) {
+        this.Set('ExecutablePath', value);
+    }
+
+    /**
+    * * Field Name: AIVendorID
+    * * Display Name: AI Vendor ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    */
+    get AIVendorID(): string | null {
+        return this.Get('AIVendorID');
+    }
+    set AIVendorID(value: string | null) {
+        this.Set('AIVendorID', value);
+    }
+
+    /**
+    * * Field Name: AIModelID
+    * * Display Name: AI Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    */
+    get AIModelID(): string | null {
+        return this.Get('AIModelID');
+    }
+    set AIModelID(value: string | null) {
+        this.Set('AIModelID', value);
+    }
+
+    /**
+    * * Field Name: DefaultModel
+    * * Display Name: Default Model
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Default model passed to the harness where the harness supports being told which model to use. NULL leaves the harness on its own default.
+    */
+    get DefaultModel(): string | null {
+        return this.Get('DefaultModel');
+    }
+    set DefaultModel(value: string | null) {
+        this.Set('DefaultModel', value);
+    }
+
+    /**
+    * * Field Name: CapabilitySettings
+    * * Display Name: Capability Settings
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIAgentHarnessEntity_IHarnessCapabilitySettings
+    * * Description: Strongly-typed JSON of what this harness can do (the IHarnessCapabilitySettings interface, bound via JSONType metadata): session continuity (SessionResume), turn-protocol support (StructuredOutput), in-sandbox permission interception (PermissionHooks), and whether the harness can act as an MCP client for the read-only loopback (McpClient). The runtime gates behaviour on these - when SessionResume is false the adapter must replay prior context into a fresh invocation each turn, which costs extra tokens and has to be budgeted for. Held as JSON so a new capability needs no schema migration, just an added property on the interface. NULL/omitted = not supported.
+    */
+    get CapabilitySettings(): string | null {
+        return this.Get('CapabilitySettings');
+    }
+    set CapabilitySettings(value: string | null) {
+        this.Set('CapabilitySettings', value);
+    }
+
+    private _CapabilitySettingsObject_cached: MJAIAgentHarnessEntity_IHarnessCapabilitySettings | null | undefined = undefined;
+    private _CapabilitySettingsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for CapabilitySettings — returns parsed JSON as MJAIAgentHarnessEntity_IHarnessCapabilitySettings.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get CapabilitySettingsObject(): MJAIAgentHarnessEntity_IHarnessCapabilitySettings | null {
+        const raw = this.CapabilitySettings;
+        if (raw !== this._CapabilitySettingsObject_lastRaw) {
+            this._CapabilitySettingsObject_cached = raw ? JSON.parse(raw) : null;
+            this._CapabilitySettingsObject_lastRaw = raw;
+        }
+        return this._CapabilitySettingsObject_cached!;
+    }
+    set CapabilitySettingsObject(value: MJAIAgentHarnessEntity_IHarnessCapabilitySettings | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.CapabilitySettings = raw;
+        this._CapabilitySettingsObject_cached = value;
+        this._CapabilitySettingsObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Whether this harness may be launched. Inactive keeps the row and its history for auditing while taking the harness out of service - preferable to deleting it, which would orphan agents configured to use it.
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: AIVendor
+    * * Display Name: AI Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIVendor(): string | null {
+        return this.Get('AIVendor');
+    }
+
+    /**
+    * * Field Name: AIModel
+    * * Display Name: AI Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIModel(): string | null {
+        return this.Get('AIModel');
     }
 }
 
@@ -41496,7 +42175,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: ID
-    * * Display Name: ID
+    * * Display Name: Run ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     * * Description: Unique identifier for this agent run
@@ -41668,7 +42347,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalTokensUsed
-    * * Display Name: Total Tokens Used
+    * * Display Name: Total Tokens
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Total number of tokens consumed by all LLM calls during this agent run
@@ -41716,7 +42395,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptTokensUsed
-    * * Display Name: Total Prompt Tokens
+    * * Display Name: Prompt Tokens
     * * SQL Data Type: int
     * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
     */
@@ -41729,7 +42408,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCompletionTokensUsed
-    * * Display Name: Total Completion Tokens
+    * * Display Name: Completion Tokens
     * * SQL Data Type: int
     * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
     */
@@ -41755,7 +42434,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptTokensUsedRollup
-    * * Display Name: Total Prompt Tokens (Rollup)
+    * * Display Name: Prompt Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.
     */
@@ -41768,7 +42447,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCompletionTokensUsedRollup
-    * * Display Name: Total Completion Tokens (Rollup)
+    * * Display Name: Completion Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.
     */
@@ -41808,7 +42487,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: ConversationDetailSequence
-    * * Display Name: Conversation Detail Sequence
+    * * Display Name: Sequence
     * * SQL Data Type: int
     * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution
     */
@@ -41875,7 +42554,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: Message
-    * * Display Name: Message
+    * * Display Name: Final Message
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Final message from the agent to the end user at the end of a run
     */
@@ -41944,7 +42623,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideModelID
-    * * Display Name: Override Model
+    * * Display Name: Model Override
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.
@@ -41958,7 +42637,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideVendorID
-    * * Display Name: Override Vendor
+    * * Display Name: Vendor Override
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.
@@ -41972,7 +42651,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Data
-    * * Display Name: Data
+    * * Display Name: Input Data
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.
     */
@@ -41985,7 +42664,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Verbose
-    * * Display Name: Verbose
+    * * Display Name: Verbose Logging
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.
@@ -42066,7 +42745,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeEntityID
-    * * Display Name: Primary Scope Entity
+    * * Display Name: Scope Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping (e.g., Organizations, Tenants)
@@ -42080,7 +42759,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeRecordID
-    * * Display Name: Primary Scope Record
+    * * Display Name: Scope Record ID
     * * SQL Data Type: nvarchar(100)
     * * Description: The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.
     */
@@ -42128,7 +42807,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ExternalReferenceID
-    * * Display Name: External Reference
+    * * Display Name: External Reference ID
     * * SQL Data Type: nvarchar(200)
     * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.
     */
@@ -42154,7 +42833,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TotalCacheReadTokensUsed
-    * * Display Name: Total Cache Read Tokens
+    * * Display Name: Cache Read Tokens
     * * SQL Data Type: int
     * * Description: Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.
     */
@@ -42167,7 +42846,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TotalCacheWriteTokensUsed
-    * * Display Name: Total Cache Write Tokens
+    * * Display Name: Cache Write Tokens
     * * SQL Data Type: int
     * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.
     */
@@ -42220,8 +42899,21 @@ each time the agent processes a prompt step.
     }
 
     /**
+    * * Field Name: ExternalSessionID
+    * * Display Name: External Session ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Session identifier reported by the external harness backing this run. Kept for two reasons that outlive the run: resuming the session across turns, and correlating this run with the vendor's own session logs when diagnosing behaviour INSIDE the sandbox, where MJ's audit trail necessarily stops at the turn boundary. NULL for every run not backed by a harness.
+    */
+    get ExternalSessionID(): string | null {
+        return this.Get('ExternalSessionID');
+    }
+    set ExternalSessionID(value: string | null) {
+        this.Set('ExternalSessionID', value);
+    }
+
+    /**
     * * Field Name: Agent
-    * * Display Name: Agent Name
+    * * Display Name: Agent Detail
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -42230,7 +42922,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ParentRun
-    * * Display Name: Parent Run Name
+    * * Display Name: Parent Run Detail
     * * SQL Data Type: nvarchar(255)
     */
     get ParentRun(): string | null {
@@ -42239,7 +42931,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Conversation
-    * * Display Name: Conversation Name
+    * * Display Name: Conversation Detail
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -42248,7 +42940,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User Detail
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -42257,7 +42949,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Name
+    * * Display Name: Conversation Detail Record
     * * SQL Data Type: nvarchar(100)
     */
     get ConversationDetail(): string | null {
@@ -42266,7 +42958,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: LastRun
-    * * Display Name: Last Run Name
+    * * Display Name: Last Run Detail
     * * SQL Data Type: nvarchar(255)
     */
     get LastRun(): string | null {
@@ -42275,7 +42967,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration Name
+    * * Display Name: Configuration Detail
     * * SQL Data Type: nvarchar(100)
     */
     get Configuration(): string | null {
@@ -42284,7 +42976,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideModel
-    * * Display Name: Override Model Name
+    * * Display Name: Model Override Detail
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideModel(): string | null {
@@ -42293,7 +42985,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideVendor
-    * * Display Name: Override Vendor Name
+    * * Display Name: Vendor Override Detail
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideVendor(): string | null {
@@ -42302,7 +42994,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ScheduledJobRun
-    * * Display Name: Scheduled Job Run Name
+    * * Display Name: Scheduled Job Run Detail
     * * SQL Data Type: nvarchar(200)
     */
     get ScheduledJobRun(): string | null {
@@ -42311,7 +43003,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Name
+    * * Display Name: Test Run Detail
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -42320,7 +43012,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeEntity
-    * * Display Name: Primary Scope Entity Name
+    * * Display Name: Scope Entity Detail
     * * SQL Data Type: nvarchar(255)
     */
     get PrimaryScopeEntity(): string | null {
@@ -44459,6 +45151,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     /**
     * Validate() method override for MJ: AI Agent Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * CompactionTargetPercent: The compaction target percentage must be a value between 1 and 100 percent.
+    * * CompactionTriggerPercent: The compaction trigger percentage must be a value between 1 and 100 percent.
     * * ContextWindowMaxTokens: The maximum tokens for the context window must be a positive number greater than 0.
     * * Table-Level: The compaction target percentage must be less than the compaction trigger percentage to ensure that compaction successfully reduces the resource usage below the trigger threshold.
     * @public
@@ -44468,6 +45161,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateCompactionTargetPercentRange(result);
+        this.ValidateCompactionTriggerPercentRange(result);
         this.ValidateContextWindowMaxTokensGreaterThanZero(result);
         this.ValidateCompactionTargetPercentLessThanTriggerPercent(result);
         result.Success = result.Success && (result.Errors.length === 0);
@@ -44490,6 +45184,23 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     			ValidationErrorType.Failure
     		));
     	}
+    }
+
+    /**
+    * The compaction trigger percentage must be a value between 1 and 100 percent.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactionTriggerPercentRange(result: ValidationResult) {
+        if (this.CompactionTriggerPercent < 1 || this.CompactionTriggerPercent > 100) {
+            result.Errors.push(new ValidationErrorInfo(
+                "CompactionTriggerPercent",
+                "Compaction trigger percentage must be between 1 and 100.",
+                this.CompactionTriggerPercent,
+                ValidationErrorType.Failure
+            ));
+        }
     }
 
     /**
@@ -65747,7 +66458,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: StartMs
-    * * Display Name: Start (ms)
+    * * Display Name: Start Milliseconds
     * * SQL Data Type: int
     * * Description: Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.
     */
@@ -65760,7 +66471,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: EndMs
-    * * Display Name: End (ms)
+    * * Display Name: End Milliseconds
     * * SQL Data Type: int
     * * Description: End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.
     */
@@ -65852,11 +66563,20 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: ContentItem
-    * * Display Name: Content Item
+    * * Display Name: Content Item Name
     * * SQL Data Type: nvarchar(250)
     */
     get ContentItem(): string | null {
         return this.Get('ContentItem');
+    }
+
+    /**
+    * * Field Name: ParentChunk
+    * * Display Name: Parent Chunk Name
+    * * SQL Data Type: nvarchar(500)
+    */
+    get ParentChunk(): string | null {
+        return this.Get('ParentChunk');
     }
 
     /**
@@ -76614,6 +77334,10 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     /**
     * Validate() method override for MJ: Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * Table-Level: This rule ensures that if deleting via the API is allowed and the delete type is set to 'Soft', then record merging must also be allowed. In other words, you cannot allow API deletes with a soft delete type without also allowing record merging.
+    * * Table-Level: If direct SQL deletion is allowed, the delete type must be set to 'Hard' to ensure data integrity.
+    * * Table-Level: Direct SQL operations (Insert, Update, and Delete) must be disabled if Track Record Changes or Trust Server Cache Completely is enabled, ensuring that cache integrity and change tracking are not bypassed.
+    * * Table-Level: If the base view is marked as generated, the generated base view name must be null. A generated base view name can only be set when the base view is not marked as generated.
+    * * Table-Level: If a generated base view name is specified, a base view must also be defined, and the generated base view name cannot be the same as the base view name to prevent naming conflicts.
     * @public
     * @method
     * @override
@@ -76621,6 +77345,10 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateAllowRecordMergeForSoftDeleteAPI(result);
+        this.ValidateDeleteTypeForDirectSQLDelete(result);
+        this.ValidateDirectSQLAndTrackingConstraints(result);
+        this.ValidateGeneratedBaseViewNameAndBaseViewGenerated(result);
+        this.ValidateGeneratedBaseViewNameDifferentFromBaseView(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -76635,6 +77363,83 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     public ValidateAllowRecordMergeForSoftDeleteAPI(result: ValidationResult) {
     	if (this.AllowDeleteAPI && this.DeleteType === "Soft" && !this.AllowRecordMerge) {
     		result.Errors.push(new ValidationErrorInfo("AllowRecordMerge", "When API deletes are allowed and delete type is 'Soft', record merging must be allowed.", this.AllowRecordMerge, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * If direct SQL deletion is allowed, the delete type must be set to 'Hard' to ensure data integrity.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDeleteTypeForDirectSQLDelete(result: ValidationResult) {
+    	if (this.AllowDirectSQLDelete && this.DeleteType !== "Hard") {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"DeleteType",
+    			"Delete Type must be 'Hard' if Allow Direct SQL Delete is enabled.",
+    			this.DeleteType,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Direct SQL operations (Insert, Update, and Delete) must be disabled if Track Record Changes or Trust Server Cache Completely is enabled, ensuring that cache integrity and change tracking are not bypassed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDirectSQLAndTrackingConstraints(result: ValidationResult) {
+        if ((this.AllowDirectSQLInsert || this.AllowDirectSQLUpdate || this.AllowDirectSQLDelete) && (this.TrackRecordChanges || this.TrustServerCacheCompletely)) {
+            result.Errors.push(new ValidationErrorInfo(
+                "AllowDirectSQLInsert",
+                "Direct SQL operations (Insert, Update, Delete) cannot be enabled when Track Record Changes or Trust Server Cache Completely is enabled.",
+                this.AllowDirectSQLInsert,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
+    * If the base view is marked as generated, the generated base view name must be null. A generated base view name can only be set when the base view is not marked as generated.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateGeneratedBaseViewNameAndBaseViewGenerated(result: ValidationResult) {
+        if (this.GeneratedBaseViewName != null && this.BaseViewGenerated) {
+            result.Errors.push(new ValidationErrorInfo(
+                "GeneratedBaseViewName",
+                "Generated Base View Name must be empty when Base View Generated is enabled.",
+                this.GeneratedBaseViewName,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
+    * If a generated base view name is specified, a base view must also be defined, and the generated base view name cannot be the same as the base view name to prevent naming conflicts.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateGeneratedBaseViewNameDifferentFromBaseView(result: ValidationResult) {
+    	if (this.GeneratedBaseViewName != null && this.GeneratedBaseViewName.trim() !== "") {
+    		if (this.BaseView == null || this.BaseView.trim() === "") {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"GeneratedBaseViewName",
+    				"A Base View must be specified when a Generated Base View Name is provided.",
+    				this.GeneratedBaseViewName,
+    				ValidationErrorType.Failure
+    			));
+    		} else if (this.GeneratedBaseViewName === this.BaseView) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"GeneratedBaseViewName",
+    				"The Generated Base View Name cannot be the same as the Base View name.",
+    				this.GeneratedBaseViewName,
+    				ValidationErrorType.Failure
+    			));
+    		}
     	}
     }
 
@@ -77534,7 +78339,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: ExternalDataSourceID
-    * * Display Name: External Data Source ID
+    * * Display Name: External Data Source
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: External Data Sources (vwExternalDataSources.ID)
     */
@@ -77556,6 +78361,61 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
     set ExternalObjectName(value: string | null) {
         this.Set('ExternalObjectName', value);
+    }
+
+    /**
+    * * Field Name: GeneratedBaseViewName
+    * * Display Name: Generated Base View Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: When set, CodeGen generates the entity's full base view under THIS name instead of BaseView, and the application owns BaseView — which is expected to wrap it (SELECT g.*, <extras> FROM <GeneratedBaseViewName> g). This gives an entity a custom base view WITHOUT inheriting the generated SQL: related-entity display joins, geo columns and recursive root-ID columns keep regenerating underneath, so a foreign key added later still appears. NULL (the default, and every pre-existing row) means the previous all-or-nothing behaviour: BaseViewGenerated alone decides whether CodeGen writes BaseView, and there is no second view. BaseView remains the public surface — entity field discovery, permissions and the generated CRUD procedures all target it. SQL SERVER ONLY: layering relies on sp_refreshview to re-resolve the application-owned outer view's SELECT * against a regenerated inner view. PostgreSQL freezes a view's column list at creation and has no refresh equivalent, so CodeGen rejects this column on PostgreSQL rather than let the outer view go silently stale.
+    */
+    get GeneratedBaseViewName(): string | null {
+        return this.Get('GeneratedBaseViewName');
+    }
+    set GeneratedBaseViewName(value: string | null) {
+        this.Set('GeneratedBaseViewName', value);
+    }
+
+    /**
+    * * Field Name: AllowDirectSQLInsert
+    * * Display Name: Allow Direct SQL Insert
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this entity may be populated by INSERT statements that do not go through BaseEntity.Save() — bulk loads, ETL/integration sync, or rows created as a side effect of a stored procedure. Default 0, meaning every insert is expected to flow through BaseEntity so that record-change tracking, entity actions, validation and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, because a direct insert produces neither an audit row nor a cache-invalidation event.
+    */
+    get AllowDirectSQLInsert(): boolean {
+        return this.Get('AllowDirectSQLInsert');
+    }
+    set AllowDirectSQLInsert(value: boolean) {
+        this.Set('AllowDirectSQLInsert', value);
+    }
+
+    /**
+    * * Field Name: AllowDirectSQLUpdate
+    * * Display Name: Allow Direct SQL Update
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this entity may be modified by UPDATE statements that do not go through BaseEntity.Save() — bulk backfills, integration sync, or maintenance routines. Default 0, meaning every update is expected to flow through BaseEntity so that record-change tracking, entity actions, validation and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, because a direct update produces neither an audit row nor a cache-invalidation event.
+    */
+    get AllowDirectSQLUpdate(): boolean {
+        return this.Get('AllowDirectSQLUpdate');
+    }
+    set AllowDirectSQLUpdate(value: boolean) {
+        this.Set('AllowDirectSQLUpdate', value);
+    }
+
+    /**
+    * * Field Name: AllowDirectSQLDelete
+    * * Display Name: Allow Direct SQL Delete
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this entity may have rows removed by DELETE statements that do not go through BaseEntity.Delete() — purge and retention routines, or integration sync reconciling a remote source. Default 0, meaning every delete is expected to flow through BaseEntity so that record-change tracking, entity actions, cascade handling and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, and additionally requires DeleteType = 'Hard' — a direct DELETE removes the row outright rather than setting DeletedAt, which would defeat soft delete.
+    */
+    get AllowDirectSQLDelete(): boolean {
+        return this.Get('AllowDirectSQLDelete');
+    }
+    set AllowDirectSQLDelete(value: boolean) {
+        this.Set('AllowDirectSQLDelete', value);
     }
 
     /**
@@ -78208,6 +79068,38 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Entity Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Both Scope Entity and Scope Record must be provided together, or both must be left blank. You cannot specify one without the other.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateScopeEntityAndRecordCoexistence(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Both Scope Entity and Scope Record must be provided together, or both must be left blank. You cannot specify one without the other.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeEntityAndRecordCoexistence(result: ValidationResult) {
+        if ((this.ScopeEntityID == null && this.ScopeRecordID != null) || (this.ScopeEntityID != null && this.ScopeRecordID == null)) {
+            result.Errors.push(new ValidationErrorInfo(
+                "ScopeEntityID",
+                "Scope Entity and Scope Record must either both be specified or both be empty.",
+                this.ScopeEntityID,
+                ValidationErrorType.Failure
+            ));
+        }
     }
 
     /**
@@ -117201,6 +118093,7 @@ export class MJUserViewRunDetailEntity extends BaseEntity<MJUserViewRunDetailEnt
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -117213,7 +118106,7 @@ export class MJUserViewRunDetailEntity extends BaseEntity<MJUserViewRunDetailEnt
 
     /**
     * * Field Name: UserViewRunID
-    * * Display Name: User View Run ID
+    * * Display Name: User View Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: User View Runs (vwUserViewRuns.ID)
     */
@@ -117255,6 +118148,15 @@ export class MJUserViewRunDetailEntity extends BaseEntity<MJUserViewRunDetailEnt
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: UserViewRun
+    * * Display Name: User View Run Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get UserViewRun(): string {
+        return this.Get('UserViewRun');
     }
 
     /**

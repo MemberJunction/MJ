@@ -1,5 +1,43 @@
 # @memberjunction/ng-bootstrap-lite
 
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [ea003fc]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [85a8f15]
+- Updated dependencies [27e4d09]
+- Updated dependencies [8d0d45a]
+  - @memberjunction/ng-conversations@6.1.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.0
+  - @memberjunction/ng-artifacts@6.1.0-edge.0
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.0
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.0
+  - @memberjunction/ng-explorer-core@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ng-shared@6.1.0-edge.0
+  - @memberjunction/ng-file-storage@6.1.0-edge.0
+  - @memberjunction/ng-auth-services@6.1.0-edge.0
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/communication-types@6.1.0-edge.0
+  - @memberjunction/entity-communications-base@6.1.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.0
+  - @memberjunction/ai-realtime-client@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

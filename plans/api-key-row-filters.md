@@ -21,7 +21,8 @@
 > not silently resolved either way — see §5.6.1. **No decisions remain blocking implementation.**
 >
 > **v3.0 changelog — IMPLEMENTATION (2026-08-04, per owner direction: ship with 6.1).** The migration moved from staging to
-> `migrations/v6/V202608041553__v6.1.x__APIKey_Scope_RowFilterID.sql` (+ PG counterpart via the SQLConverter pipeline); the
+> `migrations/v6/V202608042204__v6.1.x__APIKey_Scope_RowFilterID.sql` (renumbered in `9c3b261953` to sort after `next`'s
+> `V202608042200`; its PG counterpart was renamed to match in the parity-gate PR) (+ PG counterpart via the SQLConverter pipeline); the
 > PG parity/content tooling and workflow were generalized from hardcoded `v5` to version-folder pairs. CodeGen ran in CI via
 > a temporary branch-scoped workflow (this sandbox has no route to a SQL Server — mcr.microsoft.com/docker.io/
 > packages.microsoft.com all proxy-denied) and its output is folded into the migration behind the separator convention.
