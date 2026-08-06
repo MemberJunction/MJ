@@ -35,6 +35,7 @@
  */
 import { MJGlobal } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
+import type { MJAIAgentHarnessEntity_IHarnessCapabilitySettings } from '@memberjunction/core-entities';
 import { BaseAgent, BaseAgentType } from '@memberjunction/ai-agents';
 import { BaseHarnessAdapter } from '@memberjunction/ai-agent-harness';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -45,6 +46,33 @@ import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 const HARNESS_ENTITY = 'MJ: AI Agent Harnesses';
 const AGENT_TYPE_NAME = 'Harness';
 const DEMO_AGENT_NAME = 'Demo Harness Agent';
+
+/**
+ * The capability names AEH4 accepts — the runtime shadow of
+ * `MJAIAgentHarnessEntity_IHarnessCapabilitySettings`, which is a TypeScript interface and therefore
+ * erased before this check can enumerate it.
+ *
+ * Typed as `Record<keyof …, true>` **on purpose**: TypeScript then refuses to compile this file if a
+ * capability is added to the interface and not listed here, or listed here and not on the interface.
+ * That converts what would otherwise be silent drift into a build error at the moment the interface
+ * changes.
+ *
+ * This is not hypothetical — the hand-maintained list it replaces went stale the first time a
+ * capability was added (`PermissionPolicy`), and the failure surfaced as a red integration check
+ * accusing correct metadata of a typo. The check was right that something had drifted and wrong
+ * about which side.
+ */
+const KNOWN_CAPABILITIES: Record<keyof MJAIAgentHarnessEntity_IHarnessCapabilitySettings, true> = {
+    SessionResume: true,
+    MidTurnCancellation: true,
+    StructuredOutput: true,
+    UsageReporting: true,
+    PermissionPolicy: true,
+    PermissionHooks: true,
+    McpClient: true,
+    WorkspaceScoping: true,
+    ModelSelection: true,
+};
 
 interface AgentTypeRow { ID: string; Name: string; DriverClass: string | null; SystemPromptID: string | null; }
 interface AgentRow { ID: string; Name: string; TypeID: string; TypeConfiguration: string | null; MaxCostPerRun: number | null; }
@@ -166,16 +194,7 @@ export const AgentExternalHarnessChecks: NamedCheck[] = [
         Id: 'agent-external-harness.AEH4',
         Name: 'AEH4: CapabilitySettings parse and declare only known capabilities',
         Fn: async (ctx): Promise<void> => {
-            const known = new Set([
-                'SessionResume',
-                'MidTurnCancellation',
-                'StructuredOutput',
-                'UsageReporting',
-                'PermissionHooks',
-                'McpClient',
-                'WorkspaceScoping',
-                'ModelSelection',
-            ]);
+            const known = new Set(Object.keys(KNOWN_CAPABILITIES));
 
             const rows = await loadHarnessRows(ctx);
             for (const row of rows) {
