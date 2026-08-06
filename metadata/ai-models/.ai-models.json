@@ -15502,7 +15502,7 @@
     "fields": {
       "Name": "GPT 5.5 Instant",
       "PowerRank": 13,
-      "Description": "OpenAI's latest low-latency default ChatGPT model (May 5, 2026). Replaces GPT-5.3 Instant as the default in ChatGPT and is exposed in the API as `chat-latest`. Headline metric: 52.5% fewer hallucinated claims than GPT-5.3 Instant on high-stakes prompts (legal, medical, financial). Inherits the GPT-5.5 family context: 1,050,000 input tokens, 128,000 output. Supports configurable reasoning_effort. PRICING NOTE: provisional rate uses the GPT-5.5 standard $5/$30 per 1M tokens; Instant SKU may carry a lower rate once OpenAI's pricing page differentiates it.",
+      "Description": "OpenAI's latest low-latency default ChatGPT model (May 5, 2026). Replaces GPT-5.3 Instant as the default in ChatGPT. API NOTE: there is no `gpt-5.5-instant` or `gpt-5.5-chat-latest` model id — OpenAI exposes this family as `gpt-5.5` (verified against /v1/models), which is what this record's APIName uses. Headline metric: 52.5% fewer hallucinated claims than GPT-5.3 Instant on high-stakes prompts (legal, medical, financial). Inherits the GPT-5.5 family context: 1,050,000 input tokens, 128,000 output. Supports configurable reasoning_effort. PRICING NOTE: provisional rate uses the GPT-5.5 standard $5/$30 per 1M tokens; Instant SKU may carry a lower rate once OpenAI's pricing page differentiates it.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 9,
@@ -15538,7 +15538,7 @@
             "Priority": 1,
             "Status": "Active",
             "DriverClass": "OpenAILLM",
-            "APIName": "gpt-5.5-instant",
+            "APIName": "gpt-5.5",
             "MaxInputTokens": 1050000,
             "MaxOutputTokens": 128000,
             "SupportedResponseFormats": "Any, JSON",
@@ -15550,8 +15550,8 @@
             "ID": "B12DF96C-C415-4D00-A634-2EBCA428E78C"
           },
           "sync": {
-            "lastModified": "2026-05-14T02:07:54.426Z",
-            "checksum": "21a78384321764121fd637d32e377d84731a92d0965f7f4bbd61975fb3bca6bb"
+            "lastModified": "2026-08-05T21:12:14.512Z",
+            "checksum": "2d64466c727365f44ada09fb4540e5d4f5e904c74bbc778a6b3c0a2f921bf6b0"
           }
         }
       ],
@@ -15586,8 +15586,8 @@
       "ID": "7E91F18E-52CC-48C9-8457-74C810899B41"
     },
     "sync": {
-      "lastModified": "2026-05-14T02:07:54.305Z",
-      "checksum": "91bdd5baea5c7ef5700ed1299ec53cc2449b8b0c3f964e9d26f9a86d7d0cff1b"
+      "lastModified": "2026-08-05T21:12:14.437Z",
+      "checksum": "c4b71796e75f8a7807020f263cc81b431742afc4c7d2a41a79a7ebf914d2e644"
     }
   },
   {
