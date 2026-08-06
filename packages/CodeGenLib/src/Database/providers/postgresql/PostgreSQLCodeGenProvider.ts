@@ -443,8 +443,13 @@ END $vw_regen$;
      * `GENERATED ALWAYS AS IDENTITY` clause (see {@link getMaterializedSurrogateColumnType}).
      */
     override generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {
+        // MJ entity-field metadata stores CANONICAL (SQL Server-flavored) type names — e.g. 'uniqueidentifier',
+        // 'nvarchar(50)' — regardless of the physical DB dialect. Every other PG DDL path maps these via
+        // mapSQLType (see spCreate/spUpdate generation); the materialized-table DDL must do the same, or a
+        // base-view/query materialization emits `... uniqueidentifier ...` and PG fails the CREATE TABLE with
+        // `type "uniqueidentifier" does not exist`, aborting the whole codegen run.
         const colLines = columns.map(
-            (c) => `    ${pgDialect.QuoteIdentifier(c.Name)} ${c.SQLType} ${c.Nullable ? 'NULL' : 'NOT NULL'}`,
+            (c) => `    ${pgDialect.QuoteIdentifier(c.Name)} ${this.mapSQLType(c.SQLType)} ${c.Nullable ? 'NULL' : 'NOT NULL'}`,
         );
         const pkCols = columns.filter((c) => c.IsPrimaryKey).map((c) => c.Name);
         const pkClause = pkCols.length
