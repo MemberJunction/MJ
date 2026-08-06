@@ -78,7 +78,8 @@ import { QueryPagingEngine } from './queryPagingEngine.js';
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
-import { SQLDialect } from '@memberjunction/sql-dialect';
+import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
+import { SQLParser } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, useJsonArgShape } from './crudSprocFieldRules.js';
@@ -3190,6 +3191,29 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * parameter the caller did not supply (the live query would apply the param's default), a null value,
      * or an empty/non-array value for a list (`IN`/`NOT IN`) predicate. No IO — fully unit-testable.
      */
+    /**
+     * True if `sql`'s top-level SELECT carries an ORDER BY. Used to refuse a materialized RowFilterBroad read:
+     * {@link buildMaterializedReadQuery} emits no ORDER BY and the snapshot is built with the source's top-level
+     * ORDER BY stripped, so an ordered query must be served LIVE (where its ordering — and therefore its
+     * pagination under StartRow/MaxRows — is preserved) rather than from the unordered snapshot. Parse failure or
+     * an un-reasoned statement shape returns `true` (refuse-to-live: treat unknown as ordered rather than risk
+     * serving mis-ordered pages). Mirrors MaterializationRefresher.stripTopLevelOrderBy's AST detection.
+     */
+    public static queryHasTopLevelOrderBy(sql: string, platformKey: string | undefined): boolean {
+        if (!sql || sql.trim().length === 0) return false;
+        try {
+            const parsed = SQLParser.Astify(sql, GetDialect(platformKey ?? 'sqlserver'));
+            if (!parsed.astParsed || parsed.ast == null) return true; // unparseable → refuse to live
+            const stmtNode: unknown = Array.isArray(parsed.ast) ? (parsed.ast.length === 1 ? parsed.ast[0] : null) : parsed.ast;
+            if (stmtNode == null || typeof stmtNode !== 'object') return true;
+            const s = stmtNode as Record<string, unknown>;
+            if (s.type !== 'select') return true; // not a simple SELECT we can reason about → refuse to live
+            return s.orderby != null;
+        } catch {
+            return true; // parser threw → refuse to live (safe: served correctly by the live path)
+        }
+    }
+
     public static buildMaterializedReadQuery(opts: {
         outputColumns: string[];
         schemaName: string;
@@ -3255,6 +3279,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (query.ExternalDataSourceID) return null;                   // external source → materialized table is local; live
         const matId = query.MaterializedResultID;
         if (!matId) return null;                                       // query not materialized → live
+        // Ordering fidelity: buildMaterializedReadQuery emits no ORDER BY, and the snapshot was built with the
+        // source's top-level ORDER BY stripped (it has no inherent order). A query that carries a top-level ORDER
+        // BY would therefore page differently from the live query. Refuse → live (which preserves the ordering)
+        // rather than serve a divergent page order — consistent with this method's "any uncertainty → live".
+        if (GenericDatabaseProvider.queryHasTopLevelOrderBy(query.SQL ?? '', this.PlatformKey)) return null;
 
         // Load the materialization metadata. matId is our own UUID (from committed metadata), so it is safe
         // to interpolate into ExtraFilter — it never carries caller input.

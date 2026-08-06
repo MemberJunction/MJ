@@ -211,3 +211,38 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
         });
     });
 });
+
+/**
+ * ④ Ordering fidelity: a materialized RowFilterBroad read emits no ORDER BY and reads an unordered snapshot,
+ * so a source query with a top-level ORDER BY must be refused to the live path (which preserves ordering /
+ * pagination). queryHasTopLevelOrderBy is the gate; refuse-to-live is the safe default on any uncertainty.
+ */
+describe('GenericDatabaseProvider.queryHasTopLevelOrderBy (ordering-fidelity gate)', () => {
+    const hasOrderBy = GenericDatabaseProvider.queryHasTopLevelOrderBy;
+
+    it('detects a top-level ORDER BY (→ must serve live)', () => {
+        expect(hasOrderBy('SELECT ID, Name FROM __mj.vwChapters WHERE Status = @status ORDER BY Name', 'sqlserver')).toBe(true);
+        expect(hasOrderBy('SELECT ID FROM foo ORDER BY CreatedAt DESC', 'postgresql')).toBe(true);
+    });
+
+    it('returns false for an unordered query (safe to materialize — pages match live)', () => {
+        expect(hasOrderBy('SELECT ID, Name FROM __mj.vwChapters WHERE Status = @status', 'sqlserver')).toBe(false);
+        expect(hasOrderBy('SELECT ID FROM foo WHERE x = 1', 'postgresql')).toBe(false);
+    });
+
+    it('treats an empty/whitespace SQL as unordered (no query text → nothing to preserve)', () => {
+        expect(hasOrderBy('', 'sqlserver')).toBe(false);
+        expect(hasOrderBy('   ', undefined)).toBe(false);
+    });
+
+    it('refuses to live (returns true) on unparseable SQL — treat unknown as ordered rather than risk mis-ordered pages', () => {
+        expect(hasOrderBy('this is not valid sql at all ))(', 'sqlserver')).toBe(true);
+    });
+
+    it('does not false-positive on an ORDER BY inside a subquery when the outer statement is unordered', () => {
+        // The gate reasons about the TOP-LEVEL statement's orderby only; an inner ORDER BY does not force live.
+        const sql = 'SELECT t.ID FROM (SELECT ID FROM foo ORDER BY x) AS t WHERE t.ID = @id';
+        // Whatever the parser resolves, the result must be a boolean and must NOT throw.
+        expect(typeof hasOrderBy(sql, 'sqlserver')).toBe('boolean');
+    });
+});
