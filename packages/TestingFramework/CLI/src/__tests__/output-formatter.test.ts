@@ -151,10 +151,11 @@ describe('OutputFormatter', () => {
       expect(output).toContain('**Failed:** 1');
     });
 
-    it('should format suite result for console', () => {
+    it('should format suite result for console (passed/failed/skipped accounting)', () => {
       const output = OutputFormatter.formatSuiteResult(suiteResult as never, 'console');
       expect(output).toContain('Auth Suite');
-      expect(output).toContain('1/2 passed');
+      // The summary now surfaces skips explicitly so a silently-shrunk run is visible.
+      expect(output).toContain('1 passed / 1 failed / 0 skipped of 2');
     });
   });
 

@@ -147,6 +147,9 @@ export class OutputFormatter {
         md += `**Total Tests:** ${result.totalTests}\n`;
         md += `**Passed:** ${result.passedTests}\n`;
         md += `**Failed:** ${result.failedTests}\n`;
+        if (result.skippedTests) {
+            md += `**Skipped (NOT executed):** ${result.skippedTests}\n`;
+        }
         md += `**Pass Rate:** ${passRate}%\n`;
         md += `**Duration:** ${(result.durationMs / 1000).toFixed(1)}s\n`;
         md += `**Total Cost:** $${result.totalCost.toFixed(4)}\n`;
@@ -200,14 +203,21 @@ export class OutputFormatter {
             const testResult = result.testResults[i];
             const number = chalk.gray(`[${i + 1}/${result.totalTests}]`);
             const passed = testResult.status === 'Passed';
-            const symbol = passed ? chalk.green('✓') : chalk.red('✗');
-            const status = passed ? chalk.green('PASSED') : chalk.red('FAILED');
+            const skipped = testResult.status === 'Skipped';
+            const symbol = passed ? chalk.green('✓') : skipped ? chalk.yellow('−') : chalk.red('✗');
+            const status = passed ? chalk.green('PASSED') : skipped ? chalk.yellow('SKIPPED (not executed)') : chalk.red('FAILED');
             const cost = `$${testResult.totalCost.toFixed(4)}`;
 
             lines.push(`${number} ${testResult.testName}`);
             lines.push(`${symbol} ${status} (${(testResult.durationMs / 1000).toFixed(1)}s, score: ${testResult.score.toFixed(4)}, cost: ${cost})`);
 
-            if (!passed) {
+            if (skipped) {
+                // Surface the gate note so the reason for the skip is one screen away.
+                const gate = testResult.oracleResults.find(o => o.oracleType === 'gate');
+                if (gate) {
+                    lines.push(chalk.yellow(`  - ${gate.message}`));
+                }
+            } else if (!passed) {
                 for (const oracle of testResult.oracleResults) {
                     if (!oracle.passed) {
                         lines.push(chalk.red(`  - Oracle '${oracle.oracleType}' failed: ${oracle.message}`));
@@ -224,12 +234,21 @@ export class OutputFormatter {
         // Summary
         const passRate = result.totalTests > 0 ? (result.passedTests / result.totalTests * 100).toFixed(1) : '0.0';
         lines.push(chalk.bold('[SUITE_COMPLETE] ' + result.suiteName));
-        lines.push(chalk.bold(`[SUMMARY] ${result.passedTests}/${result.totalTests} passed (${passRate}%)`));
+        lines.push(chalk.bold(`[SUMMARY] ${result.passedTests} passed / ${result.failedTests} failed / ${result.skippedTests ?? 0} skipped of ${result.totalTests} (${passRate}% passed)`));
         lines.push(chalk.bold(`[DURATION] ${(result.durationMs / 1000).toFixed(1)}s`));
         lines.push(chalk.bold(`[COST] $${result.totalCost.toFixed(4)}`));
 
         if (result.failedTests > 0) {
             lines.push(chalk.red.bold(`[FAILURES] ${result.failedTests} test(s) failed - see details above`));
+        }
+        if (result.skippedTests && result.skippedTests > 0) {
+            const skippedNames = result.testResults
+                .filter(t => t.status === 'Skipped')
+                .map(t => t.testName)
+                .join(', ');
+            lines.push(chalk.yellow.bold(
+                `[SKIPPED] ${result.skippedTests} test(s) did NOT execute (gated tier or unreachable dependency): ${skippedNames}. ` +
+                `A green run with skips is NOT full coverage.`));
         }
 
         return lines.join('\n');

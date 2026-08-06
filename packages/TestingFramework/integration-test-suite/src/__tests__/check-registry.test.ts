@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
+// Side effect: evaluates EVERY checks module so the auto-derived guard at the bottom of this
+// file sees the complete registry (the explicit imports below cover only the hand-pinned
+// table's bundles — the barrel covers all of them).
+import '../index';
 import { ServerCacheChecks } from '../checks/server-cache.checks';
 import { ClientCacheChecks } from '../checks/client-cache.checks';
 import { RunQueryCacheChecks } from '../checks/runquery-cache.checks';
@@ -163,5 +167,113 @@ describe('migrated bundles (coverage-loss guard)', () => {
 
     it('runquery-cache marks nothing RequiresMutation (the whole bundle mutates by design)', () => {
         expect(RunQueryCacheChecks.some(c => c.RequiresMutation)).toBe(false);
+    });
+});
+
+describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () => {
+    // Every bundle the IT metadata selects, pinned to its exact registered check count. The
+    // hand-annotated table above documents the majors; THIS map is the complete drift guard —
+    // before it existed, only 38 of the 70 bundles had a dropped-check guard, so a silently
+    // lost check in the 2026-07 expansion (permission-engine, scope-enforcement, …) could
+    // not fail the build. When you add/remove a check DELIBERATELY, update the count here;
+    // the failure message prints a paste-ready copy of the actual registry state.
+    const EXPECTED_BUNDLE_COUNTS: Record<string, number> = {
+        'actions-pipeline': 5,
+        'agent-artifact-tools': 9,
+        'agent-carry-forward': 6,
+        'agent-compaction-e2e': 3,
+        'agent-loop-live': 7,
+        'agent-loop-standin': 6,
+        'agent-memory-guards': 5,
+        'agent-payload-guards': 9,
+        'agent-plan-mode': 6,
+        'agent-rag-search': 7,
+        'agent-runner': 1,
+        'agent-skills-live': 5,
+        'agent-wire-callback': 2,
+        'aggregates-cache': 3,
+        'ai-cost': 6,
+        'ai-embeddings': 5,
+        'ai-permissions': 6,
+        'ai-providers': 3,
+        'ai-skills': 21,
+        'api-keys': 3,
+        'app-behavioral': 3,
+        'app-wiring': 10,
+        'auth-validation': 7,
+        'cache-gauntlet': 8,
+        'class-resolution': 5,
+        'client-cache': 13,
+        'codegen-determinism': 6,
+        'communication': 5,
+        'concurrent': 2,
+        'content-vectorization': 6,
+        'conversation-compaction': 12,
+        'dataset-cache': 3,
+        'entity-server-invariants': 9,
+        'entity-writes': 9,
+        'field-rules-bulk-update': 3,
+        'layered-base-views': 6,
+        'lists': 3,
+        'metadata-consistency': 7,
+        'metadata-sync': 9,
+        'open-app-teardown': 2,
+        'permission-engine': 14,
+        'predictive-studio': 5,
+        'prompt-runner': 1,
+        'queue': 7,
+        'realtime-deterministic': 9,
+        'record-process': 12,
+        'record-process-facade': 2,
+        'remote-op-ai-authoring': 3,
+        'remote-op-wire-progress': 1,
+        'remote-operations': 7,
+        'rls-isolation': 15,
+        'rls-isolation-client': 1,
+        'runquery-cache': 12,
+        'runquery-catalog': 6,
+        'runquery-features': 16,
+        'runquery-params': 10,
+        'runview-features': 6,
+        'runview-matrix': 18,
+        'scheduled-jobs': 2,
+        'scheduling-concurrency': 3,
+        'scope-enforcement': 5,
+        'scoped-anon-elevation': 5,
+        'search': 7,
+        'server-cache': 32,
+        'shipped-agents-live': 4,
+        'startup-mode': 3,
+        'storage': 6,
+        'subscription-isolation': 2,
+        'templates': 8,
+        'transaction-groups': 5,
+        'user-routines': 16,
+        'view-execution': 12,
+        'view-security': 4,
+    };
+
+    // Registrations made by the unit tests earlier in THIS file (regtest/bundleX/bundleY),
+    // plus the framework's internal non-suite bundle. Never part of the shipped catalog.
+    const TEST_LOCAL_PREFIXES = new Set(['regtest', 'bundleX', 'bundleY', 'lifecycletest', 'self-test']);
+
+    it('every registered bundle is pinned with its exact check count (no silent drops, no unpinned additions)', () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        const actual: Record<string, number> = {};
+        for (const name of reg.GetBundleNames()) {
+            if (TEST_LOCAL_PREFIXES.has(name)) {
+                continue;
+            }
+            actual[name] = reg.GetBundle(name).length;
+        }
+        const pasteReady = Object.keys(actual)
+            .sort()
+            .map(k => `        '${k}': ${actual[k]},`)
+            .join('\n');
+        expect(actual, `Registry drifted from EXPECTED_BUNDLE_COUNTS. Current registry state (paste over the map if the change is deliberate):\n${pasteReady}`).toEqual(EXPECTED_BUNDLE_COUNTS);
+    });
+
+    it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(73);
     });
 });

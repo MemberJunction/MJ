@@ -91,8 +91,12 @@ export function formatOracleResult(result: OracleResult, indent: string = ''): s
  * @returns Formatted text output
  */
 export function formatTestSummary(result: TestRunResult, indent: string = ''): string {
-    const status = result.status === 'Passed' ? '✓' : '✗';
-    return `${indent}${status} ${result.testName}: ${(result.score * 100).toFixed(1)}% (${result.passedChecks}/${result.totalChecks})`;
+    const status = result.status === 'Passed' ? '✓' : result.status === 'Skipped' ? '−' : '✗';
+    const skipped = result.skippedChecks ? `, ${result.skippedChecks} skipped` : '';
+    if (result.status === 'Skipped') {
+        return `${indent}${status} ${result.testName}: SKIPPED (not executed)`;
+    }
+    return `${indent}${status} ${result.testName}: ${(result.score * 100).toFixed(1)}% (${result.passedChecks}/${result.totalChecks}${skipped})`;
 }
 
 /**
@@ -133,7 +137,7 @@ export function formatTestRunResultAsMarkdown(result: TestRunResult): string {
     const lines: string[] = [];
 
     lines.push(`# Test: ${result.testName}\n`);
-    lines.push(`**Status:** ${result.status === 'Passed' ? '✅ Passed' : '❌ Failed'}`);
+    lines.push(`**Status:** ${result.status === 'Passed' ? '✅ Passed' : result.status === 'Skipped' ? '⏭️ Skipped (not executed)' : `❌ ${result.status}`}`);
     lines.push(`**Score:** ${(result.score * 100).toFixed(1)}%`);
     lines.push(`**Checks:** ${result.passedChecks}/${result.totalChecks} passed`);
     lines.push(`**Duration:** ${formatDuration(result.durationMs)}`);
@@ -176,7 +180,7 @@ export function formatSuiteRunResultAsMarkdown(result: TestSuiteRunResult): stri
         lines.push('|------|--------|-------|--------|');
 
         for (const test of result.testResults) {
-            const status = test.status === 'Passed' ? '✅' : '❌';
+            const status = test.status === 'Passed' ? '✅' : test.status === 'Skipped' ? '⏭️ Skipped' : '❌';
             const score = `${(test.score * 100).toFixed(1)}%`;
             const checks = `${test.passedChecks}/${test.totalChecks}`;
             lines.push(`| ${test.testName} | ${status} | ${score} | ${checks} |`);

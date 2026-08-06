@@ -380,11 +380,15 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 await this.updateSuiteRun(suiteRun, testResults, startTime);
             }
 
-            // Calculate suite-level metrics
+            // Calculate suite-level metrics. Skipped tests are neither passed nor failed:
+            // they count separately, and the average score is computed over EXECUTED tests
+            // only (a skip must not drag the average down, nor pad it up).
             const passedTests = testResults.filter(r => r.status === 'Passed').length;
-            const failedTests = testResults.filter(r => r.status === 'Failed').length;
-            const totalScore = testResults.reduce((sum, r) => sum + r.score, 0);
-            const avgScore = testResults.length > 0 ? totalScore / testResults.length : 0;
+            const failedTests = testResults.filter(r => r.status === 'Failed' || r.status === 'Error' || r.status === 'Timeout').length;
+            const skippedTests = testResults.filter(r => r.status === 'Skipped').length;
+            const executed = testResults.filter(r => r.status !== 'Skipped');
+            const totalScore = executed.reduce((sum, r) => sum + r.score, 0);
+            const avgScore = executed.length > 0 ? totalScore / executed.length : 0;
 
             const result: TestSuiteRunResult = {
                 suiteRunId: suiteRun.ID,
@@ -393,6 +397,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 status: suiteRun.Status as 'Completed' | 'Failed' | 'Cancelled' | 'Pending' | 'Running',
                 passedTests,
                 failedTests,
+                skippedTests,
                 totalTests: testResults.length,
                 averageScore: avgScore,
                 testResults,
@@ -403,7 +408,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             };
 
             this.log(
-                `Suite completed: ${result.status} (${passedTests}/${testResults.length} passed)`,
+                `Suite completed: ${result.status} (${passedTests}/${testResults.length} passed` +
+                (skippedTests > 0 ? `, ${skippedTests} SKIPPED — not executed` : '') + `)`,
                 options.verbose
             );
             return result;
@@ -1045,11 +1051,15 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         startTime: number
     ): Promise<void> {
         const passedTests = testResults.filter(r => r.status === 'Passed').length;
+        const hardFailedTests = testResults.filter(r => r.status === 'Failed' || r.status === 'Error' || r.status === 'Timeout').length;
         const totalTests = testResults.length;
 
-        suiteRun.Status = passedTests === totalTests ? 'Completed' : 'Failed';
+        // A suite fails only on HARD failures (Failed/Error/Timeout). Skipped tests do
+        // not fail the suite — but they also no longer masquerade as passed: they are
+        // simply absent from both counts (PassedTests + FailedTests < TotalTests).
+        suiteRun.Status = hardFailedTests === 0 ? 'Completed' : 'Failed';
         suiteRun.PassedTests = passedTests;
-        suiteRun.FailedTests = totalTests - passedTests;
+        suiteRun.FailedTests = hardFailedTests;
         suiteRun.TotalTests = totalTests;
         suiteRun.TotalCostUSD = testResults.reduce((sum, r) => sum + r.totalCost, 0);
         suiteRun.TotalDurationSeconds = (Date.now() - startTime) / 1000;
@@ -1293,6 +1303,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             passedChecks: driverResult.passedChecks,
             failedChecks: driverResult.failedChecks,
             totalChecks: driverResult.totalChecks,
+            skippedChecks: driverResult.skippedChecks,
             oracleResults: driverResult.oracleResults,
             targetType: driverResult.targetType,
             targetLogEntityId: driverResult.targetLogEntityId,
