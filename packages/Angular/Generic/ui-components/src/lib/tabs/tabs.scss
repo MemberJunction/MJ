@@ -1,0 +1,239 @@
+/**
+ * MJ tab chrome — the ONE visual definition of a browser-style tab strip.
+ *
+ * Loaded globally by the application (see explorer-app's `styles.scss`), exactly like
+ * `button.scss`, so that components in DIFFERENT packages can share one look without either
+ * package depending on the other for styling. Two components consume it today:
+ *
+ *   - `mj-tabstrip`      (@memberjunction/ng-tabstrip) — tabs declared as projected children,
+ *                        addressed by positional index, bodies owned by the strip.
+ *   - `mj-workspace-tab-strip` (@memberjunction/ng-ui-components) — a data-driven strip over an
+ *                        array of draft descriptors, addressed by stable id, projecting nothing.
+ *
+ * Those two have genuinely different API contracts and keep their own state models. What they must
+ * NOT differ on is what a tab LOOKS like — hence this file. Anything here is chrome; anything a
+ * single strip alone needs (CDK drag affordances, scroll-button placement) stays in that
+ * component's own stylesheet.
+ *
+ * Design tokens only. The look is derived from the draft-workspace strip, which was the
+ * token-correct one: the older tabstrip styling used legacy `--gray-*` aliases that resolve to
+ * PRIMITIVES and therefore do not re-point in dark mode.
+ */
+
+/* Max tab width. Tabs size to their text and only grow to this cap, then ellipsize — a fixed width
+   leaves short tabs mostly empty. Overridable per strip by re-declaring the custom property. */
+.mj-tabs {
+  --mj-tab-max: 210px;
+}
+
+/* The bar = the scrolling tab list plus any pinned trailing control as siblings. The bottom rule
+   runs the full width here so it spans that control too, not just the tabs. */
+.mj-tabs__bar {
+  display: flex;
+  align-items: stretch;
+  /* Full-width baseline across the top of the surface — the consistent separator. The active tab
+     comes forward by COLOR rather than by clearing this line, because a seamless merge gets
+     clipped by the horizontal scroller. */
+  border-bottom: 1px solid var(--mj-border-default);
+  /* Breathing room above the tabs so they don't jam against a card's top edge or get cut by its
+     rounded corner — they read as tabs ON the surface, not sliced off. */
+  padding-top: 8px;
+  /* Tall enough that a horizontal scrollbar isn't cramped against the tabs. */
+  min-height: 46px;
+}
+
+.mj-tabs__list {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  /* Indented, not flush: the first tab lines up with the surface's content gutter. */
+  padding: 0 4px 0 12px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  /* MUST be explicit: a `visible` axis paired with a non-`visible` one computes to `auto`, so
+     `overflow-x: auto` alone would make the strip vertically scrollable too. (`clip` is NOT an
+     option here — paired with an `auto` axis it computes to `hidden` per the same spec rule, which
+     is why nothing may give the list vertical overhang: a `hidden` axis is still programmatically
+     scrollable, and the browser scrolls a focused tab into view. See the tab's margin note.) */
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.mj-tabs__tab {
+  /* The tab's ACCENT — one color expressing what state the tab is in, consumed by the active
+     state's border and top line so they can never disagree (a warning-bordered tab under a
+     brand-blue accent line reads as two components arguing). Brand primary for an ordinary tab;
+     the lifecycle modifiers below re-point it to their status color. */
+  --mj-tab-accent: var(--mj-brand-primary);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  /* Content-sized up to the cap; flex:none so a tab keeps its content width and the LIST scrolls on
+     overflow rather than the tabs squashing. */
+  max-width: var(--mj-tab-max, 210px);
+  flex: none;
+  min-width: 0;
+  padding: 8px 4px 8px 11px;
+  border: 1px solid var(--mj-border-default);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  /* Inactive = the PAGE background (the darkest surface tier) so unselected tabs recede, while the
+     active tab on --mj-bg-surface comes forward. Consistent ordering in light AND dark. */
+  background: var(--mj-bg-page);
+  color: var(--mj-text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  /* Regular arrow over a tab body, like browser tabs — not the clicky finger. */
+  cursor: default;
+  /* NO negative bottom margin. The classic tab trick of -1px to overlap the bar's rule buys
+     nothing here — the active tab comes forward by COLOR and a brand accent, never by clearing
+     the baseline — and it cost a real bug: 1px of vertical overhang made the list scrollable by
+     exactly 1px, so the whole row jumped every time a tab took keyboard focus. The tab's bottom
+     edge simply meets the bar's rule; the active tab's own border matches it, so the seam reads
+     as continuous anyway. */
+  box-sizing: border-box;
+}
+
+.mj-tabs__tab:hover:not(.mj-tabs__tab--active) {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+/* Focus lands on the TAB itself (it carries role="tab" and the roving tabindex), so the ring
+   belongs here rather than on anything nested. */
+.mj-tabs__tab:focus-visible,
+.mj-tabs__close:focus-visible,
+.mj-tabs__new:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: -2px;
+}
+
+/* Optional lifecycle states — only the draft strip sets these today, but a tab that can be
+   rejected or completed should look the same wherever that concept turns up. INACTIVE tabs keep
+   subtler status borders (they should recede); the full-strength status color is carried by the
+   accent variable, which the active state consumes below. */
+.mj-tabs__tab--rejected {
+  --mj-tab-accent: var(--mj-status-warning);
+  border-color: var(--mj-status-warning-border, var(--mj-status-warning));
+  background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface-card));
+}
+.mj-tabs__tab--complete {
+  --mj-tab-accent: var(--mj-status-success);
+  border-color: color-mix(in srgb, var(--mj-status-success) 40%, var(--mj-border-default));
+}
+
+/* AFTER the lifecycle modifiers, deliberately: when a tab is both active and rejected/complete,
+   the active surface and the accent-colored border must win over the modifier's inactive styling. */
+.mj-tabs__tab--active {
+  /* Base surface + a top accent line, as an INSET shadow so it adds no height and shifts nothing.
+     Border and line both draw from --mj-tab-accent, so the ACTIVE tab's chrome states its status
+     in one voice: brand primary for an ordinary tab, warning when rejected, success when complete.
+     The status icon and accessible name carry the same information for anyone who can't rely on
+     the color alone. */
+  background: var(--mj-bg-surface);
+  border-color: var(--mj-tab-accent);
+  box-shadow: inset 0 2px 0 0 var(--mj-tab-accent);
+  color: var(--mj-text-primary);
+  font-weight: 600;
+}
+
+.mj-tabs__label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mj-tabs__icon {
+  flex: none;
+  font-size: 12px;
+}
+
+.mj-tabs__status-icon {
+  flex: none;
+  font-size: 12px;
+  color: var(--mj-status-warning);
+}
+
+/* Inline dot, present only when dirty — it PUSHES the label (so the ellipsis shifts left on a
+   capped tab) rather than occupying a permanently reserved slot. */
+.mj-tabs__dirty {
+  flex: none;
+  padding-left: 3px;
+  color: var(--mj-brand-primary);
+  font-size: 18px;
+  line-height: 0;
+  pointer-events: none;
+}
+
+/* Not in the tab order: the tab itself is the focus stop, and Delete closes it (ARIA APG's pattern
+   for closeable tabs). Kept as a real button so it retains an accessible name and a pointer target. */
+.mj-tabs__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  margin-right: 6px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  flex: none;
+}
+.mj-tabs__close:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+/* Pinned trailing control (new-tab / overflow scroll buttons): flex:none keeps it at the edge of
+   the bar while the list scrolls behind it. */
+.mj-tabs__new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  flex: none;
+  border: none;
+  border-left: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-link);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  /* Fill to the top of the surface — cancel the bar's top padding for this control only, so it
+     doesn't cut off early above the tab row. */
+  align-self: stretch;
+  margin-top: -8px;
+  /* Round only the OUTER corner; the tab-side edge stays square and flush against the divider that
+     separates it from the tabs, matching how browsers draw their +. */
+  border-radius: 0 8px 0 0;
+}
+.mj-tabs__new:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+/* Overflow scroll affordances — same chrome as the pinned control, no bottom rounding. */
+.mj-tabs__scroll {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  flex: none;
+  border: none;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  align-self: stretch;
+  margin-top: -8px;
+}
+.mj-tabs__scroll:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}

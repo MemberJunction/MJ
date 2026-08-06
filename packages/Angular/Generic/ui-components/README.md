@@ -26,7 +26,7 @@ Components attach styles one of three ways, and one of them needs host cooperati
 
 1. **Inline `styles` in the component** (most components) — nothing to do.
 2. **`styleUrls` compiled into the component** (`page-header`, `slide-panel`) — nothing to do.
-3. **Global stylesheets shipped as assets** — the form controls and overlay chrome (`button`, `dialog`, `dropdown`, `combobox`, `input`, `datepicker`, `splitter`, `accordion`, `window`, `chip`, `switch`/`progress`) ship their `.scss` to `dist` and expect the **host application** to import them globally.
+3. **Global stylesheets shipped as assets** — the form controls and overlay chrome (`button`, `dialog`, `dropdown`, `combobox`, `input`, `datepicker`, `splitter`, `accordion`, `window`, `chip`, `switch`/`progress`, `tabs`) ship their `.scss` to `dist` and expect the **host application** to import them globally.
 
 **If your app runs inside MJ Explorer (`explorer-app`), category 3 is already handled** — the shell imports all of them. A standalone host must add these to its global stylesheet:
 
@@ -42,7 +42,10 @@ Components attach styles one of three ways, and one of them needs host cooperati
 @import '@memberjunction/ng-ui-components/dist/lib/splitter/splitter';
 @import '@memberjunction/ng-ui-components/dist/lib/accordion/accordion';
 @import '@memberjunction/ng-ui-components/dist/lib/window/window';
+@import '@memberjunction/ng-ui-components/dist/lib/tabs/tabs';
 ```
+
+`tabs` is the shared `.mj-tabs*` chrome consumed by BOTH `mj-workspace-tab-strip` (this package) and `mj-tabstrip` (`@memberjunction/ng-tabstrip`) — without it either strip renders as unstyled divs, so a standalone host using tab strips must include it.
 
 All colors resolve through `--mj-*` semantic tokens, so light/dark theming requires zero component-level work.
 
@@ -178,6 +181,9 @@ Collapsing a rail whose content is richer than a flat icon list:
 
 ### `mj-tab-nav` — MJTabNavComponent
 Data-driven tab strip. `Tabs: TabConfig[]` (`key`, `label`, `icon?`, `badge?`, `badgeVariant?: 'default'|'error'|'warning'|'success'`), `ActiveKey`, `(TabChange)` emits the key.
+
+### `mjTabList` — MJTabListDirective
+The ARIA tabs keyboard contract, shared by every MJ tab strip. Apply to the element holding the tabs; mark each tab `role="tab"` and keep `aria-selected` truthful. Owns `role="tablist"`, the roving `tabindex` (one stop per strip), Arrow/Home/End navigation with focus-follows-selection, Enter/Space activation, and Delete/Backspace close. Emits `(TabActivateRequested)` / `(TabCloseRequested)` with the tab's index in the full list plus the element, so index-addressed and id-addressed hosts both map it onto their own model. Skips `display:none` tabs; leaves keys alone inside editable content.
 
 ### `mj-workspace-card` / `mj-workspace-tab-strip` — MJWorkspaceCardComponent, MJWorkspaceTabStripComponent
 The **workspace** pattern: a screen where the user builds several drafts in parallel, each in a browser-style tab (open, switch, drag-reorder via CDK, close, dirty-dot, rejected/complete states). `MJWorkspaceTabStore<TState>` is the pure state machine (open-activates-existing, neighbour activation on close, reorder, lifecycle + dirty tracking — exhaustively unit-tested); `mj-workspace-tab-strip` is dumb presentation over it (renders tabs, emits intent); `mj-workspace-card` is the slotted frame — card surface, tab-strip row, `[workspaceHeader]` identity band, a single scrolling body (default slot), and an opt-in standardized footer (`ShowFooter`: primary confirm + save-as-draft + discard, only the labels vary; `[workspaceFooterNote]` caption slot). Tabs carry an opaque `State` the host owns — no app types in the framework. v1 is session-scoped (no DB persistence).

@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ng-tabstrip",
   "version": "6.0.0",
-  "description": "DEPRECATED: Simple tab strip component. Use Kendo TabStrip or mj-collapsible-panel instead.",
+  "description": "Projected-children tab strip (<mj-tabstrip>/<mj-tab>/<mj-tab-body>) sharing MJ's canonical tab chrome and mjTabList keyboard contract from @memberjunction/ng-ui-components. For data-driven tabs prefer mj-tab-nav or mj-workspace-tab-strip from ng-ui-components.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
   "files": [
@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@memberjunction/ng-container-directives": "6.0.0",
+    "@memberjunction/ng-ui-components": "6.0.0",
     "tslib": "^2.8.1"
   },
   "sideEffects": false,
