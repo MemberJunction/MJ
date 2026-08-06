@@ -305,7 +305,34 @@
     "@memberjunction/esignature-dropboxsign": "6.0.0",
     "@memberjunction/esignature-pandadoc": "6.0.0",
     "@memberjunction/geo-core": "6.0.0",
-    "@memberjunction/geo-maps": "6.0.0"
+    "@memberjunction/geo-maps": "6.0.0",
+    "@memberjunction/standards": "6.0.0"
   },
-  "changesets": []
+  "changesets": [
+    "angular-dom-phase-4-coverage",
+    "angular-dom-phase-4-gates",
+    "api-key-scope-row-filter-columns",
+    "ci-migration-gate-concurrency",
+    "codegen-introspection-view-perf",
+    "elevenlabs-per-session-voice",
+    "entity-action-workflow-extensions",
+    "entity-direct-sql-flags",
+    "fix-base-dashboard-guarantee-loadcomplete",
+    "fix-baseengine-uuid-pk-compare",
+    "fix-cache-refresh-interval-unit",
+    "fix-landing-app-decoupled-from-sequence",
+    "harden-sql-parameterization-and-filter-escaping",
+    "layered-base-views",
+    "mobile-records-ux",
+    "ng-file-storage-notifications-pin",
+    "open-6x-edge-stream",
+    "pluggable-search-scope-permission-resolver",
+    "pnpm-workspace-cutover",
+    "remove-duplicated-connector-source-6x",
+    "search-entity-standardization-tier1",
+    "status-push-session-identity",
+    "swift-ferrets-tighten",
+    "theme-aware-registry-components",
+    "ui-layers-excused-declaration"
+  ]
 }
