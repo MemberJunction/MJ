@@ -20,8 +20,8 @@ rules. This file records *why* the design landed where it did.
 
 ## Core principles (and why)
 
-1. **Reusable, so brand-neutral by design — and brandable at RUNTIME, per organization
-   (ideally per channel), not per app.** The picker ships once as a shared, app-agnostic
+1. **Reusable, so brand-neutral by design — and brandable at RUNTIME, per organization,
+   not per app.** The picker ships once as a shared, app-agnostic
    component (`<mj-login-picker>` in `@memberjunction/ng-auth-services`). The end user
    perceives they are logging into **their organization's** product (e.g. ISA's *mimo*,
    ASAE's *Stellar*) — not MemberJunction, and not "the app" — so the surfaces carry **no**
@@ -33,11 +33,13 @@ rules. This file records *why* the design landed where it did.
    - **No heavy background logos.** The oversized MJ watermark (B) and corner watermark
      (A) were removed. A single **modest foreground logo** remains — a runtime-supplied
      placeholder (we show the MJ mark only as a stand-in).
-   - **Branding is resolved at runtime, per tenant/channel — never baked into a build.**
-     Logo, product name, and brand color (token override) are resolved **per organization**,
-     and ideally **per channel** (BCSaaS), from tenant config served pre-auth (e.g. by
-     host/subdomain, alongside the public provider-catalog endpoint) — **not** a per-app
-     or per-build customization each app maintains on its own.
+   - **Branding is resolved at runtime, per scope — never baked into a build.**
+     Logo, product name, and brand color (token override) are resolved **per organization
+     (and plausibly per role)**, from config served pre-auth (e.g. by host/subdomain,
+     alongside the public provider-catalog endpoint) — **not** a per-app or per-build
+     customization each app maintains on its own. *Channel is no longer the scoping axis:
+     Betty moved off it, and what hung off a channel is now scoped by roles and
+     entitlements in BCSaaS (@dray-mc, 2026-08-06).*
 
 2. **"Powered by MemberJunction" — shown by default, removable by CONFIG (never a code
    change).** The attribution sits at the bottom of the form/card (a shared `.powered-by`),
@@ -105,14 +107,27 @@ rules. This file records *why* the design landed where it did.
 
 - ~~Which direction (A / B / C) to ship~~ — **decided: C · Editorial Split.** A/B kept
   as alternatives-considered for reference.
-- **Per-organization / per-channel branding resolution (needs design).** How the login
-  resolves *which tenant's* branding — logo, product name, brand color, and the
-  white-label (hide-"Powered by") flag — **before** the user authenticates: e.g. by
-  host/subdomain → organization, or a channel identifier (BCSaaS), served pre-auth
-  alongside the public provider-catalog endpoint. This is what makes a user feel they're
-  signing into *their org's* product (ISA's *mimo*, ASAE's *Stellar*). Includes where the
-  config lives (per-tenant metadata) and the admin surface to manage it + the white-label
-  entitlement.
+- **Scoped branding resolution (needs design).** How the login resolves *whose* branding —
+  logo, product name, brand color, and the white-label (hide-"Powered by") flag — **before**
+  the user authenticates: e.g. host/subdomain → organization, served pre-auth alongside the
+  public provider-catalog endpoint. This is what makes a user feel they're signing into
+  *their org's* product (ISA's *mimo*, ASAE's *Stellar*). Includes where the config lives
+  and the admin surface to manage it + the white-label entitlement.
+
+  **Scope by organization/role, not channel.** Betty moved off channel as a scoping axis;
+  what used to hang off it is now scoped by roles and entitlements in BCSaaS, and there's no
+  longer an intentional channel selection that would benefit from looking different
+  (@dray-mc, 2026-08-06). Dray's framing: branding should be scoped "just like all the other
+  scoped stuff" (search, skills, prompts), with **role** as the interesting axis. MJ already
+  has a domain-agnostic pattern for that — `MJ: Search Scopes` uses `PrimaryScopeEntityID` +
+  `PrimaryScopeRecordID` instead of a hardcoded `OrganizationID` — so themes adopting the
+  same pair would cover org *and* role without MJ core growing a Tenant entity.
+
+  **Theme Studio does not already cover this.** It's real and substantial, but every read
+  path is post-auth, and the only scopes that exist are "global" and "per-user" with nothing
+  in between. Extending it to pre-auth is possible; scoping is the actual prerequisite. Full
+  analysis, constraints and suggested sequencing in
+  [`../pre-auth-branding.md`](../pre-auth-branding.md).
 - **Scaling to many providers (deferred — noted, not designed).** The picker is a
   vertical list sized for a handful of IdPs (the common case). Beyond ~6 it grows tall;
   revisit then with a scrollable list (`max-height` + overflow) or a search/filter.
