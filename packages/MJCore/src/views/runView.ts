@@ -440,6 +440,10 @@ export class RunViewParams {
         if (a.ResultType !== b.ResultType) return false;
         if (a.CacheLocal !== b.CacheLocal) return false;
         if (a.CacheLocalTTL !== b.CacheLocalTTL) return false;
+        // A Live↔Materialized DataSource toggle changes the result set and MUST trigger a reload. Compared via
+        // IsMaterializedDataSource so undefined/'Live' are treated as equal (no spurious reload) while a switch to
+        // (or from) 'Materialized' is not — matching the read-routing decision everywhere else.
+        if (IsMaterializedDataSource(a.DataSource) !== IsMaterializedDataSource(b.DataSource)) return false;
 
         // Compare ViewEntity by reference (deep comparison would be expensive)
         if (a.ViewEntity !== b.ViewEntity) return false;

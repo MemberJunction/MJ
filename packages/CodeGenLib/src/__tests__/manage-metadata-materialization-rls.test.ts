@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ManageMetadataBase } from '../Database/manage-metadata';
+import { SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 import type { Metadata, EntityInfo } from '@memberjunction/core';
 
 /**
@@ -12,17 +13,29 @@ import type { Metadata, EntityInfo } from '@memberjunction/core';
  * is a faithful test seam (no DB / provider / config needed) — the same seam the sibling guard tests use.
  */
 
-/** Minimal source-entity shape the guard actually inspects. */
+/** Minimal source-entity shape the guard actually inspects. The P1 under-linking gate additionally reads
+ *  ID / SchemaName / BaseView / BaseTable when mapping a parsed table ref back to an entity. */
 type FakePermission = { ReadRLSFilterID?: string | null };
-type FakeEntity = { Name: string; Permissions: FakePermission[] };
+type FakeEntity = { Name: string; Permissions: FakePermission[]; ID?: string; SchemaName?: string; BaseView?: string; BaseTable?: string };
 
 class TestableRLS extends ManageMetadataBase {
-    /** Exposes the protected guard, taking a structural stub for the entity-by-id lookup. */
-    public assess(entities: Record<string, FakeEntity>, ids: string[]): { safe: boolean; reason?: string } {
-        // Structural stub of the only Metadata surface the guard touches. Cast once at the test seam
-        // (the guard never calls anything else on it).
-        const md = { EntityByID: (id: string): FakeEntity | undefined => entities[id] } as unknown as Metadata;
-        return this.assessQuerySourceRLSSafety(md, ids);
+    /** Override the platform dialect so the P1 SQL-parsing branch works on a bare instance (no DB provider). */
+    protected get dialect(): SQLDialect {
+        return new SQLServerDialect();
+    }
+
+    /** Exposes the protected guard, taking a structural stub for the entity-by-id lookup. The optional `sql`
+     *  drives the P1 under-linking gate; when given, the stub also exposes `md.Entities` (the P1 mapper scans it). */
+    public assess(entities: Record<string, FakeEntity>, ids: string[], sql?: string): { safe: boolean; reason?: string } {
+        // Ensure each stub entity carries its own map-key as ID (the P1 gate compares entity.ID to the linked set).
+        const withIds: Record<string, FakeEntity> = {};
+        for (const [id, e] of Object.entries(entities)) withIds[id] = { ID: id, ...e };
+        // Structural stub of the only Metadata surfaces the guard touches. Cast once at the test seam.
+        const md = {
+            EntityByID: (id: string): FakeEntity | undefined => withIds[id],
+            Entities: Object.values(withIds),
+        } as unknown as Metadata;
+        return this.assessQuerySourceRLSSafety(md, ids, sql);
     }
 
     /** Exposes the RLS detector the base-view leak gate (Leak 1) uses to refuse external RLS mirrors. */
@@ -68,6 +81,55 @@ describe('assessQuerySourceRLSSafety — query materialization RLS gate', () => 
 
     it('treats a whitespace-only ReadRLSFilterID as NOT protected (trim guard) — stays safe', () => {
         const v = mm.assess({ e1: { Name: 'Orders', Permissions: [{ ReadRLSFilterID: '   ' }] } }, ['e1']);
+        expect(v.safe).toBe(true);
+    });
+});
+
+/**
+ * P1 under-linking guard — the belt-and-suspenders defense inside `assessQuerySourceRLSSafety` that catches an
+ * RLS source the QueryEntity LINKER missed (reached via a wrapping view / CTE / function / aliased columns).
+ * The linked-only checks above can't see it; this branch parses the query SQL directly, maps each table ref to an
+ * entity, and FAILS CLOSED iff a referenced entity is read-RLS-protected but NOT in the linked set. It must be
+ * PRECISE — an unlinked NON-RLS table is not a leak and must NOT trip it (else legitimate materializations break).
+ */
+describe('assessQuerySourceRLSSafety — P1 under-linking gate', () => {
+    let mm: TestableRLS;
+    beforeEach(() => { mm = new TestableRLS(); });
+
+    // orders: linked, no RLS. salaries: RLS-protected, referenced by SQL but NOT linked. products: no RLS, unlinked.
+    const orders: FakeEntity = { Name: 'Orders', SchemaName: '__mj', BaseView: 'vwOrders', BaseTable: 'orders', Permissions: [{ ReadRLSFilterID: null }] };
+    const salaries: FakeEntity = { Name: 'Salaries', SchemaName: '__mj', BaseView: 'vwSalaries', BaseTable: 'salaries', Permissions: [{ ReadRLSFilterID: 'rls-1' }] };
+    const products: FakeEntity = { Name: 'Products', SchemaName: '__mj', BaseView: 'vwProducts', BaseTable: 'products', Permissions: [] };
+
+    it('FAILS CLOSED when the SQL references an RLS source the linker missed (names the entity + the gate)', () => {
+        // Linked set is orders ONLY; the SQL also joins __mj.salaries (RLS) — the exact under-linking leak.
+        const sql = 'SELECT o.total, s.amount FROM __mj.orders o JOIN __mj.salaries s ON o.id = s.oid';
+        const v = mm.assess({ e1: orders, e2: salaries }, ['e1'], sql);
+        expect(v.safe).toBe(false);
+        expect(v.reason).toMatch(/P1 under-linking guard/i);
+        expect(v.reason).toContain('"Salaries"');
+    });
+
+    it('stays SAFE when an unlinked referenced table is NOT RLS-protected (no over-refusal)', () => {
+        // products is referenced but unlinked — however it has no RLS, so it is not a leak and must not refuse.
+        const sql = 'SELECT o.total, p.name FROM __mj.orders o JOIN __mj.products p ON o.pid = p.id';
+        const v = mm.assess({ e1: orders, e3: products }, ['e1'], sql);
+        expect(v.safe).toBe(true);
+    });
+
+    it('stays SAFE when every referenced source is linked and RLS-free (P1 no-op)', () => {
+        const sql = 'SELECT o.total FROM __mj.orders o';
+        const v = mm.assess({ e1: orders }, ['e1'], sql);
+        expect(v.safe).toBe(true);
+    });
+
+    it('does NOT throw on unparseable SQL — the linked-only checks still stand (safe here)', () => {
+        const v = mm.assess({ e1: orders }, ['e1'], 'this is not valid SQL @@@');
+        expect(v.safe).toBe(true);
+    });
+
+    it('is a no-op when no SQL is supplied (back-compat with the mint/drift callers that omit it)', () => {
+        const v = mm.assess({ e1: orders }, ['e1']);
         expect(v.safe).toBe(true);
     });
 });

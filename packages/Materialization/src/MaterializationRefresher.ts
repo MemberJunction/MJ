@@ -566,6 +566,10 @@ export class MaterializationRefresher {
         if (matResult.SourceType !== 'Query') return null;
         const src = this.resolveSingleSourceTable(sourceSelect, exec.PlatformKey);
         if (!src) return null;
+        // The single source must be a BASE TABLE, not a VIEW. A view can expose a `__mj_UpdatedAt` column, but that
+        // value doesn't track changes in the view's UNDERLYING tables — so a watermark taken from a view would let
+        // the incremental pass MISS changed groups. Decline (→ null → keep full-rebuilding) unless it's a base table.
+        if (!(await this.sourceIsBaseTable(src.schema, src.table, exec))) return null;
         const updatedAtColumn = '__mj_UpdatedAt';
         const cols = await this.getTableColumns(src.schema, src.table, exec);
         if (!cols.some((c) => c.toLowerCase() === updatedAtColumn.toLowerCase())) return null;
@@ -586,6 +590,20 @@ export class MaterializationRefresher {
             `SELECT COLUMN_NAME AS cn FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='${esc(schema)}' AND TABLE_NAME='${esc(table)}' ORDER BY ORDINAL_POSITION`,
         );
         return (rows ?? []).map((r) => r.cn);
+    }
+
+    /**
+     * True only if (schema, table) is a BASE TABLE (not a view) per INFORMATION_SCHEMA.TABLES — used to gate
+     * incremental eligibility, since a watermark is only meaningful on a real table whose `__mj_UpdatedAt` tracks
+     * its own row changes. `TABLE_TYPE = 'BASE TABLE'` is standard on both SQL Server and PostgreSQL. Returns
+     * false when the object isn't found (fail-safe → no incremental).
+     */
+    private async sourceIsBaseTable(schema: string, table: string, exec: ISQLExecutor): Promise<boolean> {
+        const esc = (s: string) => s.replace(/'/g, "''");
+        const rows = await exec.ExecuteSQL<{ tt: string }>(
+            `SELECT TABLE_TYPE AS tt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='${esc(schema)}' AND TABLE_NAME='${esc(table)}'`,
+        );
+        return (rows?.[0]?.tt ?? '').toUpperCase() === 'BASE TABLE';
     }
 
     /**
@@ -1339,7 +1357,10 @@ export class MaterializationRefresher {
         const setList = opts.dataColumns.map((c) => `t.${q(c)} = src.${q(c)}`).join(', ');
         const selectList = [`${hashExpr} AS ${q(opts.surrogateColumn)}`, ...opts.dataColumns.map((c) => `agg.${q(c)}`)].join(', ');
         return [
-            `MERGE INTO ${matTable} AS t ` +
+            // WITH (HOLDLOCK) on the MERGE target takes a range lock so a concurrent MERGE can't slip between the
+            // MATCHED probe and the INSERT — the classic SQL Server MERGE upsert race (duplicate-key / lost update).
+            // This mirrors PostgreSQL's INSERT … ON CONFLICT, which is atomically race-safe by construction.
+            `MERGE INTO ${matTable} WITH (HOLDLOCK) AS t ` +
                 `USING (SELECT ${selectList} FROM (${opts.aggregationSelect}) AS agg ` +
                 `WHERE EXISTS (SELECT 1 FROM ${sourceTable} AS s WHERE ${changedSince} AND ${match})) AS src ` +
                 `ON t.${q(opts.surrogateColumn)} = src.${q(opts.surrogateColumn)} ` +
