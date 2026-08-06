@@ -354,6 +354,40 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/AI/AgentHarness:
+    dependencies:
+      '@memberjunction/ai':
+        specifier: 6.1.0-edge.0
+        version: link:../Core
+      '@memberjunction/ai-agents':
+        specifier: 6.1.0-edge.0
+        version: link:../Agents
+      '@memberjunction/ai-core-plus':
+        specifier: 6.1.0-edge.0
+        version: link:../CorePlus
+      '@memberjunction/core':
+        specifier: 6.1.0-edge.0
+        version: link:../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0-edge.0
+        version: link:../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.1.0-edge.0
+        version: link:../../MJGlobal
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      tsc-alias:
+        specifier: ^1.8.10
+        version: 1.8.16
+      typescript:
+        specifier: ^5.4.5
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/AI/AgentManager/actions:
     dependencies:
       '@memberjunction/actions':
@@ -14215,6 +14249,9 @@ importers:
       '@memberjunction/ai':
         specifier: 6.1.0-edge.0
         version: link:../../AI/Core
+      '@memberjunction/ai-agent-harness':
+        specifier: 6.1.0-edge.0
+        version: link:../../AI/AgentHarness
       '@memberjunction/ai-agents':
         specifier: 6.1.0-edge.0
         version: link:../../AI/Agents
