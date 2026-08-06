@@ -123,7 +123,12 @@ export interface TelemetryRunViewParams {
 export interface TelemetryRunViewsBatchParams {
     /** Number of views in the batch */
     BatchSize: number;
-    /** Entity names being queried in the batch */
+    /**
+     * Entity names being queried in the batch, one entry per view. A view identified only by
+     * `ViewEntity` (no EntityName/ViewName/ViewID) is recorded as `''` rather than dropped, so
+     * this array stays index-parallel to {@link Filters}/{@link OrderBys}/{@link StartRows}/
+     * {@link AfterKeys}. The fingerprint skips falsy entries; display sites should too.
+     */
     Entities: string[];
     /**
      * Per-view SQL WHERE clause filters, parallel to {@link Entities} (one entry per view,
@@ -764,7 +769,7 @@ class DuplicateRunViewAnalyzer implements TelemetryAnalyzer {
             const entityName = isSingleRunViewParams(params)
                 ? params.EntityName || 'Unknown'
                 : isBatchRunViewParams(params)
-                    ? params.Entities.join(', ')
+                    ? params.Entities.filter(Boolean).join(', ')
                     : 'Unknown';
 
             return {
@@ -1385,7 +1390,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         const level = this.GetLevelForCategory(event.category);
         if (this.GetLevelValue(level) < TelemetryLevelValue['verbose']) return;
         const p = event.params as { EntityName?: string; Entities?: string[]; ExemptReason?: string };
-        const target = p.EntityName ?? (Array.isArray(p.Entities) ? p.Entities.join(', ') : event.operation);
+        const target = p.EntityName ?? (Array.isArray(p.Entities) ? p.Entities.filter(Boolean).join(', ') : event.operation);
         const reason = p.ExemptReason ? ` — ${p.ExemptReason}` : '';
         // eslint-disable-next-line no-console
         console.log(`💡 [Telemetry] Analysis exempt for ${event.category} "${target}"${reason}`);
@@ -1637,13 +1642,16 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
             // Single operation. Pagination cursors (StartRow / AfterKey) are part of the key so that
             // consecutive pages of a sweep over the same entity+filter+orderBy are DISTINCT
             // fingerprints — otherwise page 2 collides with page 1 and trips the Duplicate analyzer.
+            // StartRow 0 and "no StartRow" are the same query (same rule as the batch branch above):
+            // both normalize to undefined so JSON.stringify drops the key for both and a genuinely
+            // duplicated first-page read is still detected.
             return {
                 entity: params.EntityName?.toLowerCase().trim(),
                 filter: params.ExtraFilter?.toLowerCase().trim(),
                 orderBy: params.OrderBy?.toLowerCase().trim(),
                 resultType: params.ResultType,
-                startRow: params.StartRow,
-                afterKey: params.AfterKey
+                startRow: params.StartRow || undefined,
+                afterKey: params.AfterKey?.trim() || undefined
             };
         }
     }

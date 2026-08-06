@@ -51,6 +51,14 @@ describe('TelemetryManager — pagination cursor in the RunView fingerprint', ()
         const insights = TelemetryManager.Instance.GetInsights({ entityName: 'MJ: Entities' });
         expect(insights.some(i => i.analyzerName === 'DuplicateRunViewAnalyzer')).toBe(true);
     });
+
+    it('treats StartRow 0 and an omitted StartRow as the same page (single path, parity with batch)', () => {
+        recordPage('MJ: Entities', { startRow: 0 });
+        recordPage('MJ: Entities', {});
+
+        const insights = TelemetryManager.Instance.GetInsights({ entityName: 'MJ: Entities' });
+        expect(insights.some(i => i.analyzerName === 'DuplicateRunViewAnalyzer')).toBe(true);
+    });
 });
 
 /**
@@ -124,14 +132,45 @@ describe('TelemetryManager — pagination cursor in the BATCH RunViews fingerpri
         const insights = TelemetryManager.Instance.GetInsights();
         expect(insights.some(i => i.analyzerName === 'DuplicateRunViewAnalyzer')).toBe(true);
     });
+
+    it('still flags an identical NON-zero StartRow repeat as duplicate', () => {
+        // Guards the equality half of the cursor rule: distinct non-zero pages must differ
+        // (test above) AND the same non-zero page read twice must still collide.
+        recordBatchPage('MJ: AI Agents', { startRow: 200 });
+        recordBatchPage('MJ: AI Agents', { startRow: 200 });
+
+        const insights = TelemetryManager.Instance.GetInsights();
+        expect(insights.some(i => i.analyzerName === 'DuplicateRunViewAnalyzer')).toBe(true);
+    });
+
+    it('an unnamed view ("" Entities placeholder) does not disturb a named view\'s cursor pairing', () => {
+        // PreRunViews records a view identified only by ViewEntity as '' to keep Entities
+        // index-parallel to the cursor arrays. The fingerprint must skip the '' entry while
+        // still pairing the named entity with ITS OWN cursor (index 1, not index 0).
+        const tm = TelemetryManager.Instance;
+        for (const afterKey of ['ID|aaa', 'ID|bbb']) {
+            const id = tm.StartEvent('RunView', 'ProviderBase.RunViews', {
+                BatchSize: 2,
+                Entities: ['', 'MJ: Actions'],
+                Filters: [undefined, undefined],
+                OrderBys: [undefined, 'ID'],
+                StartRows: [undefined, undefined],
+                AfterKeys: [undefined, afterKey],
+            });
+            tm.EndEvent(id);
+        }
+
+        // Different per-page cursors → distinct fingerprints → no duplicate.
+        expect(tm.GetInsights().some(i => i.analyzerName === 'DuplicateRunViewAnalyzer')).toBe(false);
+    });
 });
 
 /**
- * `RunViewParams.Telemetry.Exempt` marks an intentional repeat so it produces no warning. It was
- * threaded through the DEPRECATED batch path but not the live one — so exemption was silently
- * ineffective for every batch RunView, and (because RunView delegates to RunViews whenever
- * BypassCache or AfterKey is set) for those single reads too. A caller who correctly marked their
- * repeat got warned anyway, with nothing indicating their exemption had been dropped.
+ * Pins the TelemetryManager side of batch exemption: a batch event whose params carry
+ * `Exempt: true` produces no Duplicate warning, with the new cursor fields (StartRows/AfterKeys)
+ * present in the event shape. The PROVIDER side — that `ProviderBase.PreRunViews` actually
+ * computes and threads Exempt/ExemptReason (only when EVERY view in the batch is exempt) — is
+ * covered separately in `providerBase.batchTelemetry.test.ts`.
  */
 describe('TelemetryManager — exemption on the BATCH RunViews path', () => {
     beforeEach(() => {
