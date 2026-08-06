@@ -51,6 +51,14 @@ const FINGERPRINT = 'Test Entity|||||||';
 const PARAMS: RunViewParams = { EntityName: 'Test Entity' };
 const MAX_UPDATED = '2026-01-04T00:00:00.000Z';
 
+/** Rows shaped like cached RunView output, including a nested value the deep-freeze must reach. */
+function makeRowsWithNested(): Record<string, unknown>[] {
+    return [
+        { ID: 'row-1', Name: 'First', Settings: { Theme: 'dark' }, __mj_UpdatedAt: MAX_UPDATED },
+        { ID: 'row-2', Name: 'Second', Settings: { Theme: 'light' }, __mj_UpdatedAt: MAX_UPDATED },
+    ];
+}
+
 describe('LocalCacheManager freeze-on-write edge cases', () => {
     let cacheManager: LocalCacheManager;
     let mockStorage: MockCacheStorageProvider;
@@ -175,6 +183,92 @@ describe('LocalCacheManager freeze-on-write edge cases', () => {
             // The slot must remain readable (entry or null — but never a rejection) no matter
             // how the write path handled the failure.
             await expect(cacheManager.GetRunViewResult(FINGERPRINT)).resolves.toBeDefined();
+        });
+    });
+
+    describe('providers that do not declare SharesReferences are MEASURED, not assumed', () => {
+        // `ILocalStorageProvider.SharesReferences` is optional so that adding the contract does
+        // not break existing external implementations at compile time. That optionality must not
+        // become a silent way to lose the freeze: when the property is absent, LocalCacheManager
+        // probes the provider at init (store a sentinel, read it back, compare identity) instead
+        // of falling through a falsy default. These two providers are byte-identical apart from
+        // whether they serialize, and neither declares the property.
+
+        /** Reference-sharing, undeclared: a plain Map, exactly like the in-memory providers. */
+        class UndeclaredSharingProvider implements ILocalStorageProvider {
+            private store = new Map<string, unknown>();
+            private k(key: string, category?: string) { return `${category ?? 'default'}::${key}`; }
+            public async GetItem<T = unknown>(key: string, category?: string): Promise<T | null> {
+                const v = this.store.get(this.k(key, category));
+                return v === undefined ? null : (v as T);
+            }
+            public async GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>> {
+                const out = new Map<string, T | null>();
+                for (const key of keys) out.set(key, await this.GetItem<T>(key, category));
+                return out;
+            }
+            public async SetItem<T>(key: string, value: T, category?: string): Promise<void> {
+                this.store.set(this.k(key, category), value);
+            }
+            public async Remove(key: string, category?: string): Promise<void> {
+                this.store.delete(this.k(key, category));
+            }
+            public async ClearCategory(category: string): Promise<void> {
+                for (const k of Array.from(this.store.keys())) if (k.startsWith(`${category}::`)) this.store.delete(k);
+            }
+            public async GetCategoryKeys(category: string): Promise<string[]> {
+                return Array.from(this.store.keys()).filter(k => k.startsWith(`${category}::`));
+            }
+        }
+
+        /** Isolating, undeclared: JSON round-trip, like localStorage / Redis / MMKV. */
+        class UndeclaredSerializingProvider extends UndeclaredSharingProvider {
+            private json = new Map<string, string>();
+            public override async GetItem<T = unknown>(key: string, category?: string): Promise<T | null> {
+                const raw = this.json.get(`${category ?? 'default'}::${key}`);
+                return raw === undefined ? null : (JSON.parse(raw) as T);
+            }
+            public override async SetItem<T>(key: string, value: T, category?: string): Promise<void> {
+                this.json.set(`${category ?? 'default'}::${key}`, JSON.stringify(value));
+            }
+            public override async Remove(key: string, category?: string): Promise<void> {
+                this.json.delete(`${category ?? 'default'}::${key}`);
+            }
+        }
+
+        test('an undeclared reference-sharing provider still gets the freeze', async () => {
+            const provider = new UndeclaredSharingProvider();
+            expect(provider.SharesReferences).toBeUndefined();   // genuinely undeclared
+            const mgr = await initCache(provider);
+
+            const rows = makeRowsWithNested();
+            await mgr.SetRunViewResult(FINGERPRINT, PARAMS, rows, MAX_UPDATED);
+
+            // Probed as sharing ⇒ protection armed exactly as if it had declared true.
+            expect(Object.isFrozen(rows)).toBe(true);
+            expect(Object.isFrozen(rows[0])).toBe(true);
+            const cached = await mgr.GetRunViewResult(FINGERPRINT);
+            expect(Object.isFrozen(cached!.results)).toBe(true);
+        });
+
+        test('an undeclared serializing provider is left alone', async () => {
+            const provider = new UndeclaredSerializingProvider();
+            expect(provider.SharesReferences).toBeUndefined();
+            const mgr = await initCache(provider);
+
+            const rows = makeRowsWithNested();
+            await mgr.SetRunViewResult(FINGERPRINT, PARAMS, rows, MAX_UPDATED);
+
+            // Probed as isolating ⇒ the caller keeps ownership of its own rows.
+            expect(Object.isFrozen(rows)).toBe(false);
+            expect(Object.isFrozen(rows[0])).toBe(false);
+        });
+
+        test('the probe leaves no residue in the store', async () => {
+            const provider = new UndeclaredSharingProvider();
+            await initCache(provider);
+            const keys = await provider.GetCategoryKeys('default');
+            expect(keys.some(k => k.includes('sharesreferences_probe'))).toBe(false);
         });
     });
 

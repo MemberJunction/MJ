@@ -61,8 +61,11 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
             // Guard against a vacuous bundle: if this process's storage provider isolated its
             // data, nothing below would be frozen and every "is frozen" check would pass for
             // the wrong reason.
+            // `SharesReferences` is optional on the interface (LocalCacheManager probes providers
+            // that omit it), but this harness's chain — InstrumentedLocalStorageProvider wrapping
+            // InMemoryLocalStorageProvider — declares it, so assert the declaration explicitly.
             Assert(
-                ctx.Storage.SharesReferences,
+                ctx.Storage.SharesReferences === true,
                 'precondition: the integration storage provider must report SharesReferences=true ' +
                 '(it wraps InMemoryLocalStorageProvider), otherwise the freeze is not armed and this bundle proves nothing'
             );
@@ -510,7 +513,7 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
             // AllowCaching write gate fail-open regardless of environment config, and the ttl
             // lets the probe slots expire on their own.
             Assert(
-                ctx.Storage.SharesReferences,
+                ctx.Storage.SharesReferences === true,
                 'precondition: the freeze must be armed (reference-sharing storage provider), otherwise nothing here would be frozen and this check proves nothing'
             );
 
@@ -570,7 +573,7 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
             // dataset path. Target contract: only MJ_Metadata (whose rows the provider's own
             // metadata assembly mutates in place, by design) stays mutable.
             Assert(
-                ctx.Storage.SharesReferences,
+                ctx.Storage.SharesReferences === true,
                 'precondition: the freeze must be armed (reference-sharing storage provider)'
             );
             const md = new Metadata(); // global-provider-ok: integration test — single-provider process by design

@@ -681,7 +681,9 @@ So an in-place mutation edits **process-wide** state. This shipped as a P1: `Res
 
 #### The `SharesReferences` contract
 
-`ILocalStorageProvider` requires a `readonly SharesReferences: boolean` declaring whether it hands back live references. It is **required, not optional**, so every implementation must state its isolation semantics rather than inherit a default that may be wrong for it.
+`ILocalStorageProvider` declares an optional `readonly SharesReferences?: boolean` saying whether it hands back live references.
+
+**Always declare it** in a new provider — it documents the isolation semantics at the implementation site. It is optional only so that introducing this contract could not break existing external implementations at compile time, and omitting it is *not* an opt-out: when the property is absent, `LocalCacheManager` **measures** the provider once at initialization — it stores a sentinel object, reads it back, and compares identity. Identity preserved ⇒ live references ⇒ freeze armed. So a provider written before this contract existed still gets the correct protection instead of silently losing it to a falsy default. If the probe cannot complete (a backing store that isn't ready at init), it fails closed to `false` and logs — matching pre-freeze behavior rather than immobilizing rows for a provider it could not classify.
 
 | Provider | `SharesReferences` | Why |
 |---|---|---|
@@ -700,7 +702,7 @@ Freezing is applied at both write funnels — `SetRunViewResult` / `SetRunQueryR
 
 Serializing providers are skipped: their stored data is already isolated, and freezing would only immobilize the caller's own rows for no safety gain (this is what keeps browser code that decorates rows working unchanged).
 
-The `results` fields of `CachedRunViewData` / `CachedRunViewResult` (and `GetRunQueryResult`'s return) are typed `readonly unknown[]` so cache-adjacent code gets a compile-time signal to match the runtime freeze. `RunViewResult.Results` / `RunQueryResult.Results` remain mutable for ordinary callers; the `ProviderBase` cache-hit paths and `GenericDatabaseProvider`'s serve legs cast at that documented transport boundary.
+The **runtime freeze is the enforcement** — the cache result types (`CachedRunViewData.results`, `CachedRunViewResult.results`, `GetRunQueryResult`'s return) stay ordinary mutable arrays, documented as shared-and-frozen rather than marked `readonly`. A `readonly` marker there was tried and reverted: it forced casts at every transport boundary and would have been a compile break for existing downstream code that reads cache entries, without adding protection the freeze does not already provide.
 
 Two things are deliberately **not** frozen, because they were never shared:
 

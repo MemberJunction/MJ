@@ -17,8 +17,12 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
     /**
      * Delegated — this wrapper only counts calls; the isolation semantics are entirely
      * the inner provider's. See {@link ILocalStorageProvider.SharesReferences}.
+     *
+     * `undefined` passes through deliberately: if the inner provider does not declare its
+     * semantics, this wrapper must not invent them either, and LocalCacheManager's probe then
+     * measures straight through these delegating methods into the real store.
      */
-    public get SharesReferences(): boolean {
+    public get SharesReferences(): boolean | undefined {
         return this.inner.SharesReferences;
     }
 

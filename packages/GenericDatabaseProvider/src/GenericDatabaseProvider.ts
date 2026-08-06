@@ -2646,12 +2646,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // ProviderBase hit path. Serving unprojected rows here previously leaked
         // whatever shape happened to be cached to every subsequent caller.
         //
-        // Transport boundary: `serverCached.results` is readonly (shared, deep-frozen cache
-        // rows); the outbound `results` field is a mutable T[]. Cast here — the runtime
-        // freeze is what actually protects the cache. See ProviderBase's hit path.
+        // `serverCached.results` are the cache's shared, deep-frozen rows — the runtime freeze
+        // is what actually protects the cache. See ProviderBase's hit path.
         const results = callerFields
             ? ProjectRowsToFields(serverCached.results as Record<string, unknown>[], callerFields)
-            : (serverCached.results as unknown[]);
+            : serverCached.results;
         return {
             viewIndex,
             status: 'stale',
@@ -4582,7 +4581,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * @returns The latest date across all rows and dataset metadata
      */
     protected computeLatestUpdateDate(
-        rows: readonly unknown[],
+        rows: unknown[],
         dateFieldToCheck: string,
         item: Record<string, unknown>
     ): Date {

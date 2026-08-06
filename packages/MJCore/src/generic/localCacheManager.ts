@@ -114,13 +114,16 @@ export interface CachedRunViewData {
     /**
      * The cached result rows.
      *
-     * `readonly` because these rows are SHARED: under a reference-sharing storage provider
-     * (see `ILocalStorageProvider.SharesReferences`) they are the same objects held by every
-     * reader of this slot, and they are deep-frozen at write time. The compile-time marker
-     * and the runtime freeze exist for the same reason — mutating a cached row corrupts
-     * process-wide state. Build a new array / new rows instead.
+     * ⚠️ These rows are SHARED: under a reference-sharing storage provider (see
+     * `ILocalStorageProvider.SharesReferences`) they are the same objects held by every reader
+     * of this slot, and they are deep-frozen at write time. Mutating one corrupts process-wide
+     * state and throws a `TypeError`. Build a new array / new rows instead.
+     *
+     * Deliberately typed mutable rather than `readonly`: the runtime freeze is the enforcement,
+     * and a `readonly` marker here would be a compile break for existing downstream code that
+     * reads cache entries — without adding protection the freeze does not already provide.
      */
-    results: readonly unknown[];
+    results: unknown[];
     /** The maximum __mj_UpdatedAt timestamp from the results */
     maxUpdatedAt: string;
     /** Cached aggregate results, if aggregates were requested */
@@ -149,11 +152,11 @@ export interface CachedRunViewData {
  */
 export interface CachedRunViewResult {
     /**
-     * The cached result rows — see {@link CachedRunViewData.results} for why this is
-     * `readonly`. Callers that need to transform rows (e.g. GraphQL transport field
-     * renaming) must map onto copies: `results.map(r => ({ ...r }))`.
+     * The cached result rows — shared and deep-frozen; see {@link CachedRunViewData.results}.
+     * Callers that need to transform rows (e.g. GraphQL transport field renaming) must map
+     * onto copies: `results.map(r => ({ ...r }))`.
      */
-    results: readonly unknown[];
+    results: unknown[];
     /** The maximum __mj_UpdatedAt timestamp from the results */
     maxUpdatedAt: string;
     /** Row count - derived from results.length */
@@ -386,6 +389,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     private _storageProvider: ILocalStorageProvider | null = null;
+
+    /**
+     * Whether the active storage provider hands back live object references, resolved once at
+     * initialization — from the provider's declared {@link ILocalStorageProvider.SharesReferences}
+     * when it states one, otherwise measured empirically. Gates the defensive deep-freeze.
+     */
+    private _sharesReferences: boolean = false;
     private _registry: Map<string, CacheEntryInfo> = new Map();
     private _initialized: boolean = false;
     private _initializePromise: Promise<void> | null = null;
@@ -449,6 +459,53 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Decides whether the storage provider hands back live object references — the condition
+     * that makes the defensive deep-freeze necessary.
+     *
+     * Prefers the provider's declared {@link ILocalStorageProvider.SharesReferences}. When a
+     * provider does not state one (any implementation written before that property existed),
+     * MEASURE it rather than guessing: store a sentinel object, read it back, and compare
+     * identity. A reference-sharing store returns the very same object; anything with a
+     * serialization or structured-clone boundary returns a copy. This is what keeps the
+     * property optional — an external provider that never declares it still gets the correct
+     * protection instead of silently losing it to a falsy default.
+     *
+     * Fails closed to `false` if the probe cannot complete (a provider whose backing store is
+     * not ready at init): that matches the pre-freeze behavior rather than immobilizing rows
+     * for a provider we could not classify.
+     */
+    private async resolveSharesReferences(storageProvider: ILocalStorageProvider): Promise<boolean> {
+        if (typeof storageProvider.SharesReferences === 'boolean') {
+            return storageProvider.SharesReferences;
+        }
+
+        const probeKey = '__mj_sharesreferences_probe__';
+        const sentinel = { probe: true };
+        try {
+            await storageProvider.SetItem(probeKey, sentinel, CacheCategory.Default);
+            const readBack = await storageProvider.GetItem<typeof sentinel>(probeKey, CacheCategory.Default);
+            const shares = readBack === sentinel;
+            LogStatusVerbose(
+                `[CACHE-INIT] Storage provider "${storageProvider.constructor?.name ?? 'unknown'}" did not declare ` +
+                `SharesReferences; probed it as ${shares} (freeze-on-write ${shares ? 'ENABLED' : 'disabled'}).`
+            );
+            return shares;
+        } catch (e) {
+            LogError(
+                `LocalCacheManager: could not probe SharesReferences on the storage provider; ` +
+                `assuming it isolates (freeze-on-write disabled). Declare SharesReferences to be explicit. ${e}`
+            );
+            return false;
+        } finally {
+            try {
+                await storageProvider.Remove(probeKey, CacheCategory.Default);
+            } catch {
+                /* best-effort cleanup — a leftover probe key is harmless */
+            }
+        }
+    }
+
+    /**
      * Internal initialization logic - only called once by the first caller
      */
     private async doInitialize(
@@ -459,6 +516,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (config) {
             this._config = { ...this._config, ...config };
         }
+        this._sharesReferences = await this.resolveSharesReferences(storageProvider);
 
         await this.loadRegistry();
         this._initialized = true;
@@ -1703,7 +1761,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *                  the same reference is returned for call-site convenience.
      */
     private freezeRowDataIfProviderSharesReferences<T>(payload: T): T {
-        if (!this._storageProvider?.SharesReferences) {
+        if (!this._sharesReferences) {
             return payload;
         }
         try {
@@ -2551,11 +2609,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     public async GetRunQueryResult(fingerprint: string): Promise<{
         /**
-         * The cached result rows — `readonly` for the same reason as
-         * {@link CachedRunViewData.results}: under a reference-sharing storage provider these
-         * are the deep-frozen shared objects every reader of this slot holds.
+         * The cached result rows — shared and deep-frozen under a reference-sharing storage
+         * provider, exactly like {@link CachedRunViewData.results}. Do not mutate.
          */
-        results: readonly unknown[];
+        results: unknown[];
         maxUpdatedAt: string;
         rowCount: number;
         queryId?: string;

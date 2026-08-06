@@ -756,9 +756,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Cache miss — execute query, then post-process (stores in cache)
             LogStatusEx({ message: `  🔍 [Cache MISS] RunView "${params.EntityName || params.ViewName || 'unknown'}" — querying database`, verboseOnly: true });
             const result = await this.InternalRunView<T>(params, contextUser);
-            // Use PostRunView's return: a PostRunViewHook may REPLACE the result, and
-            // returning the pre-hook reference here silently dropped that replacement.
-            return (await this.PostRunView(result, params, preResult, contextUser)) as RunViewResult<T>;
+            // PostRunView copies any hook-supplied replacement onto `result` in place, so this
+            // reference reflects the hook chain's output.
+            await this.PostRunView(result, params, preResult, contextUser);
+            return result;
         }
 
         // Client-side: delegate to RunViews which uses the smart cache check
@@ -2296,12 +2297,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
-                // Transport boundary: `cached.results` is typed `readonly` because these rows are
-                // the cache's shared, deep-frozen objects, but `RunViewResult.Results` is a
-                // mutable `T[]` for every ordinary caller. Cast once here — the runtime freeze,
-                // not the type, is what stops a consumer from corrupting the cache. Anything
-                // that needs to transform these rows must map onto copies.
-                let results = cached.results as unknown[];
+                // These rows are the cache's shared, deep-frozen objects — the runtime freeze is
+                // what stops a consumer from corrupting the cache. Anything that needs to
+                // transform them must map onto copies.
+                let results = cached.results;
                 if (callerRequestedFields && params.ResultType !== 'entity_object') {
                     results = ProjectRowsToFields(results, callerRequestedFields);
                 }
@@ -2445,9 +2444,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 fingerprintMap.set(i, fingerprint);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
-                    // Same transport-boundary cast as the single-view hit path above — see the
-                    // comment there for why the readonly type is dropped here.
-                    let results = cached.results as unknown[];
+                    // Shared, deep-frozen cache rows — same contract as the single-view hit path.
+                    let results = cached.results;
                     if (callerFields && param.ResultType !== 'entity_object') {
                         results = ProjectRowsToFields(results, callerFields);
                     }
@@ -2915,17 +2913,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param params - The view parameters
      * @param preResult - The pre-processing result
      * @param contextUser - Optional user context
-     * @returns The result to hand to the caller — a PostRunView hook may REPLACE the result
-     *   (`PostRunViewHook` returns a `RunViewResult`), so callers must use this return value,
-     *   not the reference they passed in. The batch path already honors replacement via
-     *   `results[i] = ...`; returning it here gives the singular path the same contract.
      */
     protected async PostRunView(
         result: RunViewResult,
         params: RunViewParams,
         preResult: typeof this._preRunViewResultType,
         contextUser?: UserInfo
-    ): Promise<RunViewResult> {
+    ): Promise<void> {
         // Store in local cache BEFORE entity transformation — the cache needs
         // plain JSON-serializable objects. BaseEntity objects contain RxJS Subjects
         // with circular subscriber references that break JSON.stringify.
@@ -2976,8 +2970,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Transform the result set into BaseEntity-derived objects, if needed
         await this.TransformSimpleObjectToEntityObject(params, result, contextUser);
 
-        // Run registered PostRunView hooks (e.g., data masking, audit logging)
-        result = await this.RunPostRunViewHooks(params, result, contextUser);
+        // Run registered PostRunView hooks (e.g., data masking, audit logging).
+        //
+        // A hook may RETURN a replacement result rather than mutating the one it was handed —
+        // that is what `PostRunViewHook`'s signature promises, and it is the only option left
+        // now that cached rows are frozen. Reassigning the local `result` would drop it on the
+        // floor, because RunView returns the reference IT holds. Copy the replacement's fields
+        // onto that reference instead, so the caller observes the hook's changes without
+        // PostRunView having to change its return type (which would break external
+        // subclasses that override it).
+        const hooked = await this.RunPostRunViewHooks(params, result, contextUser);
+        if (hooked && hooked !== result) {
+            Object.assign(result, hooked);
+        }
 
         // Register OnDataChanged callback if provided and we have a fingerprint
         if (params.OnDataChanged && preResult.fingerprint) {
@@ -2996,8 +3001,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 success: result.Success
             });
         }
-
-        return result;
     }
 
     /**

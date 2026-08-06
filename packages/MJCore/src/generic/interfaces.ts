@@ -448,11 +448,15 @@ export interface ILocalStorageProvider {
      * cache for every later reader.) Serializing providers were never exposed to this,
      * so they opt out and keep handing back freely-mutable copies.
      *
-     * Required — and deliberately not optional — so that every implementation must
-     * state its isolation semantics explicitly rather than inheriting a default that
-     * may be wrong for it.
+     * **Optional, but always declare it.** Omitting it is not a way to opt out of the
+     * contract: when it is `undefined`, `LocalCacheManager` MEASURES the provider at
+     * initialization instead — it stores a sentinel object, reads it back, and compares
+     * identity. Declaring the value skips that probe and documents intent at the
+     * implementation site, which is why every in-repo provider declares it. It is
+     * optional purely so that adding this contract does not break existing external
+     * implementations at compile time.
      */
-    readonly SharesReferences: boolean;
+    readonly SharesReferences?: boolean;
 
     /**
      * Retrieves a value from storage. The implementation is responsible for any

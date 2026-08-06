@@ -23,13 +23,13 @@ the API surface said "this array is shared, do not mutate," and the exposure run
 directions (a cache *hit* returns the stored array; a cache *miss* stores the array it is about
 to return). So the cache now defends itself:
 
-- **`ILocalStorageProvider` requires `readonly SharesReferences: boolean`**, declaring whether a
-  provider hands back live references (the in-memory providers) or serialized copies
-  (IndexedDB, localStorage, Redis, MMKV). It is required rather than optional so every
-  implementation must state its isolation semantics instead of inheriting a default that may be
-  wrong for it. ⚠️ **Breaking for external `ILocalStorageProvider` implementations** — add the
-  property to compile against this version (`true` if your store shares references, `false` if
-  it serializes).
+- **`ILocalStorageProvider` gains an optional `readonly SharesReferences?: boolean`**, declaring
+  whether a provider hands back live references (the in-memory providers) or serialized copies
+  (IndexedDB, localStorage, Redis, MMKV). **Fully backward compatible**: existing implementations
+  keep compiling, and omitting the property is not an opt-out — `LocalCacheManager` measures any
+  provider that does not declare one (store a sentinel, read it back, compare identity), so a
+  provider written before this contract still gets the correct protection instead of silently
+  losing it to a falsy default.
 - **`LocalCacheManager` deep-freezes row data at write time** — rows, their nested values, and
   the array itself — but only when the provider shares references. Mutations then throw a
   `TypeError` at the offending line instead of silently corrupting shared state, and cache
@@ -64,15 +64,17 @@ Pre-existing consumer bugs surfaced by the freeze and fixed:
   replacement result** (`PostRunView` reassigned a local; `RunView` returned the pre-hook
   reference), while the client and batch paths honored it. The freeze un-masked this: with
   in-place row mutation now throwing, no signature-conformant result-modifying hook worked on
-  that path at all. `PostRunView` now returns the hook-chained result and `RunView` uses it.
-  Hook docs (`PostRunViewHook`, `BaseServerMiddleware.PostRunView`) now state that rows may be
-  frozen shared cache state: modify by mapping onto copies
-  (`results.Results = results.Results.map(r => ({ ...r, ... }))`) or return a new result —
-  never mutate rows in place.
+  that path at all. `PostRunView` now copies a hook-supplied replacement onto the result object
+  it was handed, so the change reaches the caller — its `Promise<void>` signature is unchanged,
+  so external subclasses that override it keep compiling. Hook docs (`PostRunViewHook`,
+  `BaseServerMiddleware.PostRunView`) now state that rows may be frozen shared cache state:
+  modify by mapping onto copies (`results.Results = results.Results.map(r => ({ ...r, ... }))`)
+  or return a new result — never mutate rows in place.
 
-`CachedRunViewData.results` / `CachedRunViewResult.results` (and `GetRunQueryResult`'s return)
-are typed `readonly` so cache-adjacent code gets a compile-time signal matching the runtime
-freeze. `RunViewResult.Results` remains a mutable `T[]` for ordinary callers.
+The cache result types stay ordinary mutable arrays, documented as shared-and-frozen: the runtime
+freeze is the enforcement, and a `readonly` marker would have broken existing downstream readers
+without adding protection. **This release contains no breaking changes** — every public signature
+it touches is additive or unchanged.
 
 Consumer-facing contract, documented in `guides/CACHING_AND_PUBSUB_GUIDE.md`: **treat rows from
 `RunView`/`RunViews`/`RunQuery` as read-only** unless you produced them. Copy before mutating —
