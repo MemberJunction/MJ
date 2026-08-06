@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Component, Input } from '@angular/core';
-import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { KPICardComponent, KPICardData } from './kpi-card.component';
 
 /**
@@ -13,12 +12,6 @@ import { KPICardComponent, KPICardData } from './kpi-card.component';
  * assert its presence/absence, not its internals.
  */
 
-@Component({ standalone: true, selector: 'mj-loading', template: '<span class="mj-loading-stub"></span>' })
-class LoadingStub {
-  @Input() showText = true;
-  @Input() size = 'medium';
-}
-
 const data = (over: Partial<KPICardData> = {}): KPICardData => ({
   title: 'Total Runs',
   value: 1234,
@@ -29,7 +22,7 @@ const data = (over: Partial<KPICardData> = {}): KPICardData => ({
 
 const render = (d: KPICardData) =>
   renderComponentFixture(KPICardComponent, {
-    imports: [LoadingStub],
+    imports: [StubLoadingComponent],
     declarations: [KPICardComponent],
     inputs: { data: d },
   });

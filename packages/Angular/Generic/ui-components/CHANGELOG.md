@@ -1,5 +1,25 @@
 # @memberjunction/ng-ui-components
 
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- b895f92: Angular DOM unit-testing — Phase 4 coverage push. Dev-only (test files + test-config/CI-gate scoping); no runtime change.
+
+  Drives the Generic DOM-coverage ratchet (`scripts/dom-test-report.mjs … --max-none`) from **185 → 137** by writing DOM specs, in usage-ranked order, for every Generic Angular component appropriate for a DOM unit test. Highlights:
+  - **Highest-leverage primitives** — `MjFormFieldComponent` (the field renderer behind ~4,000 usages) across its read/edit type matrix; the `ui-components` design system (`MJEmptyStateComponent`, the `mj-page-*` chrome family, `MJDropdown`/`MJCombobox`/`MJFilterPopover` via a new CDK-overlay test helper in `ng-test-utils`, the `mj-dialog` family, tabs, filter panel, left-nav).
+  - **Form host stack** — `MjRecordFormContainer`, `MjFormToolbar`, `MjEntityFormHost`, `MjIsaRelatedPanel`, `FormPanelSlot`, `ExplorerEntityDataGrid`, `InteractiveForm`.
+  - **Viewers, grids & dialogs** — `EntityDataGrid` + `QueryDataGrid` (AG-Grid chrome), `EntityViewer`, `ArtifactViewerPanel`, the ERD component family (`ERDComposite`/`MJEntityERD`/`ERDDiagram`), plus a broad set of panels/editors/dialogs across agents, artifacts, search, composer, list-management, scheduling, record-process-studio, user-routines, entity-action-ux, actions, and testing.
+  - **`Angular/Bootstrap` onboarded** — the last untracked library tree gains a DOM test tier (`MJAuthShell`, `MJBootstrap`) and its own `--max-none=0` CI gate, so every shipped Angular library tree (Explorer, Generic, Bootstrap) is now gated.
+
+  Reusable patterns established for the harder components: drive internal state before the first render (`setup`) rather than mutating post-render (unreliable under zoneless CD); stub the heavy core (AG-Grid, React bridge, SVG layout, plugin viewers) and spy async loaders so specs exercise the component's own chrome/wiring; add each component **and its injected services** to enumerated `tsconfig.spec.json` files (or AOT drops decorator metadata → NG0202).
+
+  Deliberately **not** covered, and left at the 137 floor: five integration/e2e-tier orchestrators (`ConversationChatArea`, `MessageInput`, `RealtimeWhiteboardBoard`, `AITestHarness`, `RealtimeSessionOverlay`) — 1,800–4,600-line components with realtime/WebRTC/canvas cores or 14–30 dependencies, which belong in the browser regression suite rather than DOM units.
+
+- d26e202: Mobile records UX for MJ Explorer's records-style record-open model. Below the shell breakpoint (768px — now a canonical constant via the new ExplorerBreakpointService in ng-shared), the records region's golden-layout runs headerless (new GoldenLayoutInitOptions.HideHeaders) and the unusable-at-phone-width tab strip is replaced by a record bar (entity icon in app color, active record title, open count) that opens a bottom-sheet record switcher listing every open record — docked records included — with origin subtitles, tap-to-activate, and per-row close routed through the same path as the tab context menu. Split layouts flatten to a single stack at render time via the new FlattenLayoutToSingleStack transform (deep-cloned) with layout persistence suppressed while mobile, so desktop-made splits survive phone sessions untouched; the records-layout restore gate now requires exact tabId-set equality. Breakpoint crossings destroy and re-initialize the records golden-layout under a rebuild guard (without it, golden-layout's per-pane close events would close every open record). The nav drawer's Records pill now opens the switcher on mobile (previously a no-op while viewing a record) and its mobile badge counts docked records to match the sheet. Move to Workspace / Move to Records are hidden below the breakpoint. Ships a new generic mj-bottom-sheet primitive in ng-ui-components (scrim, grab handle, enter/exit transitions, Escape, focus restore, reduced-motion support, settled transform:none state) — the record switcher is its first consumer; migrating the existing hand-rolled sheets (filter-popover, list-management-dialog) is queued follow-up work. No schema changes.
+
+## 6.0.0
+
 ## 5.51.0
 
 ## 5.50.0

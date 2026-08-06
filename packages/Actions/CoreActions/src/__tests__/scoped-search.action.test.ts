@@ -15,10 +15,24 @@ const searchSpy = vi.fn();
 const permissionResolveSpy = vi.fn();
 const logForbiddenSpy = vi.fn();
 
-// Mock the SearchEngine singleton + the SearchScopePermissionResolver class.
+// Mock the SearchEngine singleton + the SearchScope permission resolver.
 // The resolver mock returns Allowed=true by default so existing tests that
 // did not care about Phase 2A enforcement keep passing; tests that exercise
 // the denial path override the spy.
+//
+// The action obtains its resolver through the pluggable seam —
+// `GetSearchScopePermissionResolver()` — rather than by constructing the class, so the
+// mock MUST provide that accessor. Omitting it does not fail loudly: the import is
+// simply `undefined`, calling it throws a TypeError, and the action's catch-all turns
+// that into `UNEXPECTED_ERROR`. Every test that got as far as the resolver failed with
+// a result code unrelated to the thing under test, while the tests that bail out earlier
+// (missing Query, unresolvable AgentID, SearchScopeAccess=None) kept passing — which is
+// what made the cause look like a permissions regression instead of a missing double.
+//
+// Both shapes are exported here on purpose: the accessor is what the action uses, and the
+// class is still exported by the real module (deprecated) so anything importing it keeps
+// resolving. Both are backed by the SAME spy, so existing assertions on
+// `permissionResolveSpy` are unaffected.
 vi.mock('@memberjunction/search-engine', () => ({
     SearchEngine: {
         Instance: {
@@ -26,6 +40,9 @@ vi.mock('@memberjunction/search-engine', () => ({
             LogForbiddenSearch: (...args: unknown[]) => logForbiddenSpy(...args),
         }
     },
+    GetSearchScopePermissionResolver: () => ({
+        ResolveEffectivePermission: (...args: unknown[]) => permissionResolveSpy(...args),
+    }),
     SearchScopePermissionResolver: class {
         ResolveEffectivePermission = (...args: unknown[]) => permissionResolveSpy(...args);
     }

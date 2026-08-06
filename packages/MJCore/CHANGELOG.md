@@ -1,5 +1,108 @@
 # Change Log - @memberjunction/core
 
+## 6.1.0-edge.0
+
+### Minor Changes
+
+- 9699d0e: Entity: declare per-verb which entities may be written by SQL that bypasses `BaseEntity`
+
+  MJ's contract is that every mutation flows through `BaseEntity.Save()` / `.Delete()`, because that is
+  the only path where record-change tracking, cache invalidation, entity actions, validation and soft
+  delete actually run. SQL written outside that path skips all of it, and none of those failures are
+  loud — you get an audit trail that looks complete but isn't, and a server cache that serves stale
+  rows indefinitely.
+
+  Three new `Entity` columns make the exception explicit instead of tribal knowledge:
+  - `AllowDirectSQLInsert` — bulk loads, ETL/integration sync, rows created as a side effect of a proc
+  - `AllowDirectSQLUpdate` — bulk backfills, maintenance routines
+  - `AllowDirectSQLDelete` — purge/retention, integration reconciliation
+
+  All default to `0`, which is exactly today's behaviour. Split by verb because the risk differs: a
+  bulk `INSERT` on a staging-shaped entity is routine, a direct `DELETE` on a soft-delete entity
+  destroys rows the platform promised to keep.
+
+  These **declare** intent for the code paths and tooling that consult them — they enforce nothing, and
+  cannot; no constraint or trigger stops anyone executing SQL.
+
+  Two CHECK constraints enforce the invariants, since both failure modes are silent: any direct-SQL
+  flag requires `TrackRecordChanges = 0` **and** `TrustServerCacheCompletely = 0` (direct DML writes no
+  audit row and fires no invalidation event — note `TrustServerCacheCompletely` already documented
+  exactly this scenario), and `AllowDirectSQLDelete` additionally requires `DeleteType = 'Hard'`.
+
+  Surfaced on `EntityInfo` as `AllowDirectSQLInsert` / `AllowDirectSQLUpdate` / `AllowDirectSQLDelete`.
+
+- 1d88e00: Layered base views: an entity can now have BOTH a generated base view and a custom one over it
+
+  `BaseViewGenerated = 0` was all-or-nothing. To add one computed column an application inherited the
+  entire generated view — every related-entity display join, the geo join, the recursive root-ID
+  `OUTER APPLY`, the soft-delete predicate — and had to hand-maintain it from then on. Add a foreign
+  key later and its display field simply never appeared, because nothing regenerated the join: the
+  column was absent rather than wrong, so nothing errored and no test noticed. It also froze the entity
+  at whatever CodeGen produced the day the view was copied.
+
+  New `Entity.GeneratedBaseViewName`: when set, CodeGen writes its full generated view under THAT name
+  and the application owns `BaseView`, wrapping it —
+
+  ```sql
+  CREATE VIEW vwOrderHeaders AS
+  SELECT g.*, CASE WHEN ... END AS IsOverdue
+  FROM   vwOrderHeadersGenerated g;
+  ```
+
+  Everything underneath keeps regenerating, so a new foreign key appears on its own, and the custom
+  layer stays a few reviewable lines. Columns it adds become first-class virtual `EntityField` rows and
+  are returned by `spCreate`/`spUpdate`/`spDelete`, which read `BaseView`.
+
+  Additive: `NULL` — every existing entity — reproduces the previous behaviour exactly. No install
+  changes unless it opts in.
+
+  SQL Server only. CodeGen throws on a layered entity under PostgreSQL, which expands `SELECT *` at
+  view creation and freezes it, has no `sp_refreshview` equivalent, and never recreates the
+  application-owned outer view — so a late-added column would silently never reach it, the exact
+  failure this feature exists to prevent. Fully custom base views are unaffected on both dialects.
+
+  Also adds `EntityInfo.GeneratedViewName` (the single resolution of "which view does CodeGen write",
+  derived from `HasLayeredBaseView` so the two cannot disagree) and `EntityInfo.HasLayeredBaseView`;
+  orders `sp_refreshview` inner-before-outer, since the custom layer's `SELECT g.*` caches its column
+  list and refreshing the outer against a stale inner leaves new columns missing; guards the refresh
+  and grants aimed at the application-owned outer view on its existence, so the first CodeGen pass —
+  which necessarily runs before that view can exist — bootstraps instead of failing; lets a layered
+  entity's inner view self-heal through the failed-refresh regeneration path; and refuses a
+  self-referencing name via a CHECK constraint and a case-insensitive comparison.
+
+- 27e4d09: Open the 6.x Edge stream: first Edge release of line 6.1 (6.1.0-edge.0).
+
+### Patch Changes
+
+- 052b4c7: fix(core): compare UUID primary keys case-insensitively in BaseEngine cache maintenance.
+
+  `BaseEngine.findEntityIndexByPrimaryKeys` matched primary-key values with a raw `===`, so a UUID that arrived in different casing from different sources — a client-minted lowercase id from `BaseEntity.NewRecord` vs. an uppercase value loaded from SQL Server — failed to match and the event-driven "not found → add it" branch **appended a duplicate row** into the engine cache (the DB stayed correct; every consumer showed the row twice). The comparison is now driven off metadata — `EntityFieldInfo.IsUniqueIdentifier` (PG-aware) → `UUIDsEqual` for UUID columns, strict `===` for everything else — so no string-shape heuristic and non-UUID keys keep exact equality.
+
+- 841e6ea: Harden several SQL text-building paths that substituted values into query strings without parameterization or escaping.
+
+  **`@memberjunction/server`** — `ReportResolver.CreateReportFromConversationDetailID` built its `WHERE` clause via direct string interpolation of the `ConversationDetailID` argument. It now binds the value through `mssql`'s parameterized `request.input(...)` as a `UniqueIdentifier`, consistent with the parameterization pattern already used elsewhere in the package, and gets GUID-format validation as a side effect.
+
+  **`@memberjunction/generic-database-provider`** — `GenericDatabaseProvider.CheckRecordRLS` built its primary-key `WHERE` clause without escaping embedded quotes in the key value, unlike the sibling `Load()` path a few lines above, which already escapes. The RLS-check path now mirrors `Load()`'s escaping so a primary key value containing a quote can't alter the query's structure.
+
+  **`@memberjunction/core`** — `RowLevelSecurityFilterInfo.MarkupFilterText` did two things that could weaken a row-level security filter: it let `undefined` user-property values through as the literal string `"undefined"`, and it never escaped quotes in substituted values. Both are fixed — `undefined` now falls through to the existing unresolved-token handling (same as `null` and object-typed values already did), and substituted values now have embedded single quotes doubled.
+
+  Behavior note for deployments with existing role-based RLS filters: equality-style filters (`Col = '{{UserX}}'`) are unaffected. Filters written in negation form (`<>`, `NOT IN`, `NOT LIKE`) against a user property that can be `undefined` previously matched more rows than intended (a permissive gap) and will now correctly match fewer — reviewed as: users may see fewer rows than before the upgrade, which is the deliberate direction of this fix, not a new restriction to work around.
+
+  **`@memberjunction/ng-react`** — `RuntimeUtilities.provider` was initialized directly from the global `Metadata.Provider` at class-field scope. The value was always overwritten before use by `buildUtilities()`'s existing `provider ?? Metadata.Provider` fallback, so this is a no-behavior-change cleanup that stops the class body from touching the global provider directly.
+  - @memberjunction/global@6.1.0-edge.0
+  - @memberjunction/sql-dialect@6.1.0-edge.0
+
+## 6.0.0
+
+### Major Changes
+
+- a2670a9: Open the 6.x era: major-align all packages to the 6.0.0 era baseline (era split per plans/lts-process.md §3.1/§14). This version is the never-published baseline; the first published 6.x release is 6.1.0-edge.0.
+
+### Patch Changes
+
+- @memberjunction/global@6.0.0
+- @memberjunction/sql-dialect@6.0.0
+
 ## 5.51.0
 
 ### Minor Changes

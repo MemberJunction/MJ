@@ -1,5 +1,55 @@
 # Change Log - @memberjunction/a2aserver
 
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [e4a6fa3]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [fe7bd9d]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+- Updated dependencies [0acf96e]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [1100077]
+- Updated dependencies [19ca0b4]
+  - @memberjunction/api-keys@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/server@6.1.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.0
+  - @memberjunction/aiengine@6.1.0-edge.0
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.0
+  - @memberjunction/ai-agents@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/encryption@6.1.0-edge.0
+  - @memberjunction/ai@6.1.0-edge.0
+  - @memberjunction/config@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agents@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/api-keys@6.0.0
+  - @memberjunction/encryption@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/server@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/server-bootstrap-lite@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/config@6.0.0
+  - @memberjunction/global@6.0.0
+
 ## 5.51.0
 
 ### Patch Changes

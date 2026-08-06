@@ -1,5 +1,70 @@
 # Change Log - @memberjunction/aiengine
 
+## 6.1.0-edge.0
+
+### Minor Changes
+
+- 1100077: Standardize entity semantic search on `Provider.SearchEntity` (Tier 1).
+
+  Retires the bespoke in-memory "find similar by description" code paths in favor of
+  the unified Search-type `EntityDocument` + `Provider.SearchEntity` pipeline introduced
+  in #2709.
+
+  **`@memberjunction/aiengine`** — removed the ephemeral agent/action embedding machinery
+  that re-embedded every agent and action on first search:
+  - Deleted `AgentEmbeddingService` and `ActionEmbeddingService`.
+  - Removed `AIEngine.FindSimilarAgents`, `AIEngine.FindSimilarActions`,
+    `AIEngine.RefreshAgentEmbeddings`, `AIEngine.RefreshActionEmbeddings`, and the
+    `AgentVectorService` / `ActionVectorService` getters.
+  - `RegenerateEmbeddings` and the lazy `ensureEmbeddingsGenerated` path now cover only
+    the remaining local note/example pools (unchanged Pattern B). Callers needing
+    agent/action discovery should use `Provider.SearchEntity({ entityName: 'MJ: AI Agents' | 'MJ: Actions', ... })`.
+
+  **`@memberjunction/core-actions`** — the "Find Best Action", "Find Candidate Actions",
+  "Find Best Agent", "Find Candidate Agents", and "Search Query Catalog" actions are now
+  thin, backward-compatible wrappers around `Provider.SearchEntity` (semantic mode, backed
+  by the daily-synced "Actions Search" / "AI Agents Search" / "Queries Search"
+  EntityDocuments). Their input parameters and output shapes are preserved; new callers
+  should prefer the generic **Search Entity** action directly.
+
+  Also seeds the `Queries Search` EntityDocument + template, and deletes the now-obsolete
+  `scripts/backfill-query-embeddings.ts` (the daily Entity Vector Sync job populates query
+  vectors automatically).
+
+### Patch Changes
+
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/storage@6.1.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.0
+  - @memberjunction/ai@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/ai-vectors-memory@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/storage@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/global@6.0.0
+
 ## 5.51.0
 
 ### Patch Changes

@@ -18,7 +18,7 @@ import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
 import { SystemValidationService, ServerConnectivityService } from '@memberjunction/ng-explorer-core';
-import { NavigationService, AgentContextUpdate } from '@memberjunction/ng-shared';
+import { NavigationService, AgentContextUpdate, RecordSourceContext } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -404,7 +404,26 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   /** Handle "open entity record" events from the chat overlay */
   public OnOverlayOpenRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
-    this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+    // The overlay is a floating panel, NOT a workspace tab — without an
+    // explicit origin the crumb would blame whatever page sits behind it.
+    this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey, {
+      recordSource: this.chatOverlayRecordSource()
+    });
+  }
+
+  /**
+   * Origin for records opened from the floating chat overlay: labeled
+   * 'Conversation', returning to the Chat app's Conversations page when that
+   * app exists (label-only, non-clickable crumb otherwise).
+   */
+  private chatOverlayRecordSource(): RecordSourceContext {
+    const chatApp = this.ProviderToUse?.Applications?.find(a => a.Name === 'Chat');
+    return {
+      sourceLabel: 'Conversation',
+      sourceAppId: chatApp?.ID,
+      sourceAppName: chatApp?.Name,
+      sourceNavLabel: 'Conversations'
+    };
   }
 
   /** Handle "open full chat workspace" from the chat overlay — navigate to the Conversations tab with the active conversation */
@@ -700,7 +719,11 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         } else {
           pkey.KeyValuePairs = [{ FieldName: 'ID', Value: recordId }];
         }
-        this.navigationService.OpenEntityRecord(entityName, pkey);
+        // The AGENT opened this, from the chat — same origin as overlay
+        // clicks, never the page the user happens to be standing on.
+        this.navigationService.OpenEntityRecord(entityName, pkey, {
+          recordSource: this.chatOverlayRecordSource()
+        });
         return { Success: true, Data: { Navigated: true } };
       }
     });

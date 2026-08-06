@@ -216,7 +216,12 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
      */
     generateBaseView(context: BaseViewGenerationContext): string {
         const { entity } = context;
-        const viewName = this.getBaseViewName(entity);
+        this.assertLayeredBaseViewSupported(entity);
+        // The GENERATED view — `GeneratedViewName` is BaseView unless the entity layers a custom view
+        // over an inner generated one, in which case CodeGen writes the inner name. The CRUD
+        // routines keep using getBaseViewName(): they return rows from the PUBLIC view, so a
+        // column added by a custom layer comes back on create/update like any other.
+        const viewName = entity.GeneratedViewName;
         const alias = entity.BaseTableCodeName.charAt(0).toLowerCase();
         const whereClause = this.buildSoftDeleteWhereClause(entity, alias);
 
@@ -1667,9 +1672,18 @@ ORDER BY ordinal_position`;
     }
 
     /**
-     * PostgreSQL does not require view refresh after creation. Unlike SQL Server's
-     * `sp_refreshview`, PostgreSQL views automatically reflect column changes, so
-     * this always returns `false`.
+     * PostgreSQL has no view-refresh mechanism, so this always returns `false`.
+     *
+     * NOT because PG views track their source automatically — they do not. PG expands `SELECT *`
+     * into an explicit column list at creation and freezes it; a view gains a new underlying column
+     * only when the view itself is recreated. CodeGen gets away without a refresh step because it
+     * emits every generated view with an explicit column list and re-issues `CREATE OR REPLACE` on
+     * every run, so the definition it controls is always current.
+     *
+     * That holds only for views CodeGen writes. A view CodeGen does not own — such as the
+     * application-owned outer view of a layered entity — has no mechanism here to re-resolve it, and
+     * `generateViewRefreshSQL` returning empty is a genuine no-op rather than a cheap one. This is
+     * why {@link generateBaseView} refuses layered entities outright on PostgreSQL.
      */
     get NeedsViewRefresh(): boolean {
         return false;
@@ -1678,6 +1692,22 @@ ORDER BY ordinal_position`;
     /** @inheritdoc */
     generateViewRefreshSQL(_schema: string, _viewName: string): string {
         return '';
+    }
+
+    /** @inheritdoc */
+    generateIfViewExistsSQL(schema: string, viewName: string, innerSQL: string): string {
+        // Reached only if a future change enables layering on PG; today generateBaseView throws
+        // first. Implemented properly regardless, so the guard is not a lie if that day comes.
+        const escaped = innerSQL.replace(/'/g, "''");
+        const regclass = `${schema}.${viewName}`.replace(/'/g, "''");
+        return `DO $if_view_exists$
+BEGIN
+  IF to_regclass('${regclass}') IS NOT NULL THEN
+    EXECUTE '${escaped}';
+  END IF;
+END
+$if_view_exists$;
+`;
     }
 
     /** @inheritdoc */
@@ -2166,6 +2196,40 @@ WHERE p.prokind IN ('f', 'p')
     /** Gets the base view name for an entity */
     private getBaseViewName(entity: EntityInfo): string {
         return entity.BaseView || `vw_${this.toSnakeCase(entity.CodeName)}`;
+    }
+
+    /**
+     * Refuses layered base views on PostgreSQL, where the arrangement cannot deliver what it
+     * promises.
+     *
+     * Layering exists so an application can add a computed column without inheriting — and then
+     * hand-maintaining — the generated view, the payoff being that a foreign key added later still
+     * shows up on its own. That payoff depends entirely on the application-owned outer view's
+     * `SELECT g.*` being re-resolved after the inner view regenerates. SQL Server does that with
+     * `sp_refreshview`. PostgreSQL expands `*` at creation and freezes it, offers no refresh
+     * equivalent, and CodeGen does not own the outer view, so nothing recreates it.
+     *
+     * The resulting behaviour is worse than plainly broken, it is intermittent: an ADDED column (the
+     * common case) leaves the outer view stale, because `CREATE OR REPLACE` on the inner view
+     * succeeds and never touches dependents. A column RENAME or type change raises 42P16, which
+     * sends CodeGen down the capture/`DROP CASCADE`/replay path — and that incidentally recreates
+     * the outer view, so it picks the new columns up. Same feature, opposite outcomes, decided by
+     * which kind of schema change happened to land that day.
+     *
+     * That is precisely the silent-staleness failure layering was built to eliminate, so this throws
+     * rather than documenting a footgun. Fully custom base views (`BaseViewGenerated = 0` with no
+     * `GeneratedBaseViewName`) are unaffected and keep working on PostgreSQL as before.
+     */
+    private assertLayeredBaseViewSupported(entity: EntityInfo): void {
+        if (!entity.HasLayeredBaseView) return;
+        throw new Error(
+            `Entity "${entity.Name}" sets GeneratedBaseViewName = '${entity.GeneratedBaseViewName}', but layered ` +
+            `base views are not supported on PostgreSQL. PostgreSQL freezes a view's column list at creation and ` +
+            `has no sp_refreshview equivalent, so the application-owned view "${entity.BaseView}" would silently ` +
+            `stop gaining columns that the generated view underneath it picks up. Clear GeneratedBaseViewName and ` +
+            `use a fully custom base view (BaseViewGenerated = 0) instead, accepting that it must be ` +
+            `hand-maintained as the schema changes.`
+        );
     }
 
     /** Builds the WHERE clause for soft-delete filtering */

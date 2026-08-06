@@ -30,6 +30,14 @@ You write `await entity.Delete()` in TypeScript either way — the framework hid
 
 You never write the `__mj_DeletedAt` column in a migration yourself. It's in the same category as `__mj_CreatedAt` / `__mj_UpdatedAt` — CodeGen owns it.
 
+### If the entity has a layered base view
+
+With a [layered base view](../packages/CodeGenLib/README.md#base-views-generated-custom-or-layered) (`GeneratedBaseViewName` set), the soft-delete predicate lives in the **inner**, CodeGen-owned view. The application's wrapper does `SELECT g.* FROM <inner> g` and inherits the filter, so it needs no `WHERE` clause of its own — and enabling soft delete later requires no edit to the custom layer at all.
+
+Two things follow. Don't add a second `__mj_DeletedAt IS NULL` predicate to the wrapper; it's redundant and reads as though the inner filter were untrusted. And if the wrapper adds its own `JOIN`, remember that joined table isn't soft-delete filtered unless you filter it — the inner view only filters its own base table.
+
+Note that `AllowDirectSQLDelete` is refused on any soft-delete entity by a CHECK constraint: a direct `DELETE` removes the row rather than setting `__mj_DeletedAt`, defeating the whole mechanism.
+
 ---
 
 ## What CodeGen actually generates
