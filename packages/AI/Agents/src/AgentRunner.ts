@@ -114,9 +114,13 @@ export class AgentRunner {
                 throw new Error(`Failed to create agent instance for driver class: ${driverClass}`);
             }
             
+            // A conversation-linked run must see the conversation's artifacts no matter which
+            // entry point the caller used. See hydrateConversationArtifacts for why.
+            const runParams = await this.hydrateConversationArtifacts(params);
+
             // Execute the agent and return the result directly, threading the isolated provider.
             // Favor provider already in params (caller-supplied) over the instance-level provider.
-            return await agentInstance.Execute({ ...params, provider: params.provider || this._provider } as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
+            return await agentInstance.Execute({ ...runParams, provider: runParams.provider || this._provider } as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
             
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -407,7 +411,10 @@ export class AgentRunner {
                     ...params.data,
                     conversationId,
                 },
-                inputArtifacts: inputArtifacts.length > 0 ? inputArtifacts : undefined,
+                // Always set — an EMPTY array records "this conversation was scanned and has none",
+                // which is what stops RunAgent's hydrateConversationArtifacts from scanning again.
+                // (BaseAgent tests `inputArtifacts?.length`, so [] and undefined behave identically there.)
+                inputArtifacts,
                 conversationDetailId: agentResponseDetailId,
                 onProgress: wrappedOnProgress
             };
@@ -1618,6 +1625,52 @@ export class AgentRunner {
         } catch (e) {
             LogError(`[ReturningVisitor] failed to derive memory scope for conversation ${conversationId}: ${e instanceof Error ? e.message : String(e)}`);
         }
+    }
+
+    /**
+     * Hydrates `inputArtifacts` for a conversation-linked run that is not already carrying them.
+     *
+     * `RunAgentInConversation` gathers a conversation's artifacts before delegating to `RunAgent`,
+     * but every OTHER caller of `RunAgent` — anything that holds a `conversationDetailId` /
+     * `conversationId` and calls the runner directly — got an artifact-BLIND agent. BaseAgent gates
+     * both the `## Available Artifacts` manifest and the artifact tools on `params.inputArtifacts`,
+     * so with nothing set the model is never told the attachment exists and cannot call a tool
+     * against it. Nothing errors; the agent just silently answers without the artifact.
+     *
+     * Found during the 6.1 release: IT57's nine artifact-tool checks all failed this way, eight of
+     * them reporting `model-noncompliance:` for a manifest the model was never shown. The guarantee
+     * must not depend on which entry point the caller picked.
+     *
+     * Free on the `RunAgentInConversation` path: that flow always sets `inputArtifacts` (to `[]`
+     * when the conversation has none), so `undefined` here means "nobody has looked yet" and no
+     * conversation is ever scanned twice.
+     */
+    private async hydrateConversationArtifacts<C>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentParams<C>> {
+        if (params.inputArtifacts !== undefined || !params.contextUser) {
+            return params;
+        }
+        const conversationId = await this.resolveConversationId(params);
+        if (!conversationId) {
+            return params;
+        }
+        const inputArtifacts = await this.gatherConversationArtifacts(conversationId, params.contextUser);
+        return inputArtifacts.length > 0 ? { ...params, inputArtifacts } : params;
+    }
+
+    /**
+     * The conversation a run belongs to, preferring the caller-supplied ID and falling back to a
+     * single load of the conversation detail. Returns undefined when the run is not conversation-linked.
+     */
+    private async resolveConversationId<C>(params: ExecuteAgentParams<C>): Promise<string | undefined> {
+        if (params.conversationId) {
+            return params.conversationId;
+        }
+        if (!params.conversationDetailId) {
+            return undefined;
+        }
+        const md = params.provider || this._provider;
+        const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+        return (await detail.Load(params.conversationDetailId)) ? detail.ConversationID : undefined;
     }
 
     /**

@@ -140,6 +140,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Content Process Run Details"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:34:41.340Z",
+      "checksum": "388041fc1943f7978aeafae18731e0a35d0b9c7fec4f5233efade6b49cdf23e7"
     }
   },
   {
@@ -155,6 +159,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Content Process Run Prompt Runs"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:34:41.372Z",
+      "checksum": "e88011971bcc8553b396c9f5bdf6443f23fca383b4057f42f8464f0630655a47"
     }
   },
   {
@@ -364,6 +372,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Archive Run Details"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:34:41.481Z",
+      "checksum": "4d3eaebd266a1c4e8cc5807a16a4fc2dd16ab8b4e30b004667ac979e04ecaea8"
     }
   },
   {
@@ -379,6 +391,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Archive Runs"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:34:41.516Z",
+      "checksum": "13e59b90af7d9ab34fb95e56307dbff73c834ea9b1b3af8de4edece96d65cc34"
     }
   },
   {
@@ -433,6 +449,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: MCP Tool Execution Logs"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:34:41.551Z",
+      "checksum": "536e2bd1066bf65de4ddc0e912c0d7d5c19ee3ea314eb291097d13bbae0ef5f5"
     }
   },
   {
@@ -448,6 +468,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Report Snapshots"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:34:41.584Z",
+      "checksum": "45f782fe5d501db8e4e2b809d55968f8c94f72d759c940ef6c281d0013885b1b"
     }
   },
   {
@@ -478,6 +502,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Tag Audit Logs"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:34:41.658Z",
+      "checksum": "4bf6825bc19866c9a3b94be719bee6310f56e69fd5cd4229d4e4cb51d64ec60f"
     }
   },
   {
@@ -508,6 +536,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Test Run Outputs"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:34:41.688Z",
+      "checksum": "0a27aace8319d56f3cee226ca4f27fcbfeac1e2ce68ab406e3df2ffda9ea5c3c"
     }
   },
   {

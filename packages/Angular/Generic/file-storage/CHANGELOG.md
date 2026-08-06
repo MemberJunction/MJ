@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/ng-file-storage
 
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- 85a8f15: Correct the `@memberjunction/ng-notifications` pin from `5.51.0` to `6.0.0`.
+
+  The workspace package is at `6.0.0`, so a `5.51.0` spec does not match the local sibling and npm
+  resolves the **published** 5.51.0 from the registry instead of linking it. The pin dates from a
+  pre-6.0 branch state that was carried forward during the UI-layering sweep.
+
+- Updated dependencies [b895f92]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [ea003fc]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+  - @memberjunction/ng-ui-components@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ng-shared@6.1.0-edge.0
+  - @memberjunction/ng-base-types@6.1.0-edge.0
+  - @memberjunction/ng-notifications@6.1.0-edge.0
+  - @memberjunction/ng-shared-generic@6.1.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.0
+  - @memberjunction/ng-container-directives@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes
