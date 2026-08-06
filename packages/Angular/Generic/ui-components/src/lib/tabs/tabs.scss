@@ -24,6 +24,9 @@
    leaves short tabs mostly empty. Overridable per strip by re-declaring the custom property. */
 .mj-tabs {
   --mj-tab-max: 210px;
+  /* Sentinel read by `warnIfTabChromeMissing` (dev-mode guard): its absence on a rendered strip
+     means this sheet isn't loaded in the host app — the silent-unstyled failure mode. */
+  --mj-tabs-chrome-loaded: 1;
 }
 
 /* The bar = the scrolling tab list plus any pinned trailing control as siblings. The bottom rule

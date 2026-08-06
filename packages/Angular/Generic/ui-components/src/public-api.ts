@@ -32,6 +32,7 @@ export * from './lib/filter-field/filter-field.component';
 export * from './lib/filter-panel/filter-panel.component';
 export * from './lib/tab-nav/tab-nav.component';
 export * from './lib/tabs/tab-list.directive';
+export * from './lib/tabs/tab-chrome-guard';
 export * from './lib/workspace-tabs/workspace-tabs.types';
 export * from './lib/workspace-tabs/workspace-tab-store';
 export * from './lib/workspace-tabs/workspace-tab-strip.component';

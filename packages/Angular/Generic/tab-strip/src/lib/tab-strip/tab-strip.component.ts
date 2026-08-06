@@ -1,4 +1,5 @@
 import { Component, Input, EventEmitter, Output, ContentChildren, QueryList, ViewChild, HostListener, ElementRef, AfterContentInit, AfterContentChecked, AfterViewInit, ChangeDetectorRef } from '@angular/core';
+import { warnIfTabChromeMissing } from '@memberjunction/ng-ui-components';
 import { MJTabComponent } from '../tab/tab.component';
 import { MJTabBodyComponent } from '../tab-body/tab-body.component';
 
@@ -178,6 +179,9 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   private _viewInitialized: boolean = false;
   ngAfterViewInit() {
     this._viewInitialized = true;
+    // Dev-mode guard: the .mj-tabs* chrome lives in a global stylesheet a standalone host must
+    // import; a missing import renders bare divs with no error. Warn instead of staying silent.
+    warnIfTabChromeMissing(this.tabInnerContainer?.nativeElement?.closest('.mj-tabs') ?? undefined);
     this.SelectedTabIndex = this.SelectedTabIndex; // force a refresh of the tab visibility
     this.syncTabIndexes();
     this.checkTabScrollButtons();

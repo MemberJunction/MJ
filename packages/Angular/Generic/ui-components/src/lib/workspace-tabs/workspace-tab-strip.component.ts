@@ -1,9 +1,10 @@
-import { Component, ChangeDetectionStrategy, Input, Output, EventEmitter } from '@angular/core';
+import { AfterViewInit, Component, ChangeDetectionStrategy, ElementRef, EventEmitter, Input, Output, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CdkDropList, CdkDrag, CdkDragDrop } from '@angular/cdk/drag-drop';
 import { MJWorkspaceTab } from './workspace-tabs.types';
 import { MJWorkspaceTipDirective } from './workspace-tip.directive';
 import { MJTabListDirective, MJTabListRequest } from '../tabs/tab-list.directive';
+import { warnIfTabChromeMissing } from '../tabs/tab-chrome-guard';
 
 /** A drag-reorder request from the strip: move the tab at `previousIndex` to `currentIndex`. */
 export interface MJTabReorder {
@@ -97,7 +98,13 @@ export interface MJTabReorder {
   `,
   styleUrls: ['./workspace-tab-strip.component.css'],
 })
-export class MJWorkspaceTabStripComponent {
+export class MJWorkspaceTabStripComponent implements AfterViewInit {
+  private readonly elementRef = inject(ElementRef);
+
+  ngAfterViewInit(): void {
+    warnIfTabChromeMissing(this.elementRef.nativeElement);
+  }
+
   @Input() Tabs: MJWorkspaceTab[] = [];
   @Input() ActiveId: string | null = null;
   @Input() ShowNewTab = true;
