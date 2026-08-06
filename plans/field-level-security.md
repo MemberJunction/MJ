@@ -4,24 +4,30 @@
 
 ## Implementation Status (As-Built) — READ FIRST
 
-> This section is the working context for the implementation. The design sections below are
-> unchanged except where a factual error is corrected inline and marked. Branch:
-> `JF_Entity_Field_Security`. Last updated after the Phase 2.6 research agenda was set.
+> **This document is now the DECISION RECORD.** All remaining work is planned forward-only in
+> [`plans/field-level-security-implementation.md`](./field-level-security-implementation.md)
+> (Workstreams A–D + PR map) — implement from there; come here for rationale. The design
+> sections below are unchanged except where a factual error is corrected inline and marked.
+> Branch: `JF_Entity_Field_Security`. Last updated when the implementation plan was split out,
+> after the Phase 2.6 research (R1–R7) and decisions (D1–D7) were completed 2026-08-06.
 
 ### Where things stand
 
 | Phase | Status |
 |---|---|
-| Phase 1 — Schema & Metadata | **Committed** (`cdd78a2d9d`) |
-| Phase 2 — Server-Side Enforcement (§2.1–§2.4, §2.6) | **Committed** (`d4b57cbc78`) |
+| Phase 1 — Schema & Metadata | **Committed** (`260401e0d6`) |
+| Phase 2 — Server-Side Enforcement (§2.1–§2.4, §2.6) | **Committed** (`a2588c9c02`) |
 | Phase 2.5 — Saved queries (§2.5) | **Deferred by decision** — see below; saved queries are NOT FLS-filtered |
+| Phase 2.6 — Database-level enforcement | **Research complete, ALL decisions made (2026-08-06)** — R1–R7 answered, D1–D7 decided (see Decision summary). Implementation NOT started. |
 | Phase 3 — Skip integration | **ON HOLD** — superseded pending the new direction below |
 | Phase 4 — Admin UI | Not started |
 
 > **A new architectural direction was set by leadership after Phase 2 landed.** Read
 > "Phase 2.6 — Database-Level Enforcement" below before starting anything. It moves enforcement
-> into the database (base views + SQL roles) and into the SELECT list, and it collides with
-> several verified decisions in the design that follows.
+> into the database (base views + SQL roles) and into the SELECT list. The R1–R6 research on it
+> is complete: the answers, the resolved collisions, two newly discovered LIVE gaps (Aggregates
+> predicate bypass; client round-trip data loss), and the pending decision list (D1–D6) are all
+> in that section.
 
 ### Decisions taken during implementation (do not re-litigate)
 
@@ -166,9 +172,10 @@ likely to leak**, while reading as reassurance. See the open questions raised be
 ## Phase 2.6 — Database-Level Enforcement (NEW DIRECTION, post-leadership review) — READ FIRST
 
 Leadership reviewed FLS and set a materially different architecture. **Phase 3 is on hold.** The
-direction below supersedes parts of the design above, and collides with decisions in it that were
-made for verified reasons — those collisions are catalogued so they are resolved deliberately, not
-rediscovered.
+direction below supersedes parts of the design above. The research agenda (R1–R6) set after that
+review is now **complete** — the answers are written out below with the file-level evidence they
+rest on. Implementation has NOT started; the "Decision summary" at the end of this section is the
+list of calls to make before any code is written.
 
 ### The direction, as given
 
@@ -188,105 +195,548 @@ rediscovered.
 5. **Research what projecting FLS fields does to entity objects** — `BaseEngine` subclasses and
    beyond. (Expectation from the team: FLS *will* break entity objects.)
 
-### Verified findings (done — do not redo)
+### F0 — The finding that frames everything: this is two features, not one
 
-- **`MJ: Roles` already has a `SQLName` column.**
-- **CodeGen already grants per-MJ-Role, not per-hardcoded-role.**
-  `SQLServerCodeGenProvider.ts` (~lines 703–738) iterates `EntityPermission` rows and emits
-  `GRANT SELECT ON [schema].[BaseView] TO [ep.RoleSQLName]`, plus `GRANT EXECUTE` on the CRUD
-  procs. So the per-role grant loop the direction asks for **exists**.
-- **Nothing anywhere in CodeGenLib issues `CREATE ROLE`.** And the grant emitters are guarded by
-  `if (ep.RoleSQLName && ep.RoleSQLName.length > 0)` — so a role with a null/blank `SQLName` is
-  **silently skipped**. That is precisely the gap item 1 describes: role *creation* + `SQLName`
-  backfill, not the grant loop.
-- **Single-record loads do NOT go through RunView.** `BaseEntity.InnerLoad`
-  (`baseEntity.ts` ~2942) is its own path; the generated GraphQL single-record resolver issues
-  `SELECT * FROM {baseView} WHERE {pk} {RLS}` directly. Item 4's premise is correct.
+**MJAPI talks to the database as a single service login.** The pool is built once at startup from
+`dbUsername`/`dbPassword` (`MJServer/src/orm.ts:4-41`, `MJServer/src/index.ts:452`); up to three
+pools exist (read-write, optional read-only, optional CodeGen/DDL) — all fixed service
+credentials. There is no `EXECUTE AS`, `SETUSER`, `SET ROLE`, or `sp_set_session_context`
+anywhere in the repo (verified repo-wide; every hit is a comment or false positive). The MJ
+"user" is application state, never a database principal.
 
-### Collisions with the current implementation — resolve these deliberately
+Therefore per-role column security in the database **cannot bind API-mediated queries**. The
+service login is not (and must never be put) in a restricted role; every RunView, every resolver,
+every engine runs as that login and sees every column. Items 1–2 of the direction harden exactly
+one perimeter: **a SQL user connecting directly to the database** — a persona that today is
+implied but unsupported (the `cdp_*` roles are seeded in the baseline; `cdp_BI` exists as an
+empty scaffold with no metadata row and no grants; no guide documents direct access). Items 3–5
+are application-tier work protecting API users. Neither substitutes for the other, and the app
+tier remains the authoritative enforcement for everything reaching the API.
 
-**A. SELECT-list filtering vs. the RunView cache. This is the hard one.**
-The cache fingerprint is `EntityName|Filter|OrderBy|MaxRows|StartRow|AggHash[|Connection]` — it
-**does not include `Fields`**. That is not an oversight: `PreRunView` deliberately *widens* `Fields`
-to every entity column for cache-eligible queries so one cache entry is a universal superset
-serving any field subset, then projects down per caller. If the SELECT list instead varies per
-user's FLS, two users produce results under the **same fingerprint with different column sets** —
-the first warms the slot, the second gets either columns they must not see (leak) or missing
-columns (breakage). Any move to pre-execution filtering **must** either fold the effective column
-set into the fingerprint (fragmenting the cache, and forfeiting the property that permission
-changes take effect on metadata refresh with no result-cache invalidation) or disable caching for
-FLS entities. Decide this explicitly and first — it invalidates the §2.6 rationale above.
+**The stated use case is BI tools connecting directly (e.g. Power BI)** — confirmed 2026-08-06.
+That fits: Power BI import/DirectQuery connects with database credentials, so the database is the
+only enforcement point available for it. Three caveats to carry into whatever documents this
+persona:
+- **Shared gateway/service accounts defeat per-user FLS** — everyone sees that account's union.
+  Per-user enforcement needs per-user credentials or SSO/Kerberos passthrough on DirectQuery.
+- **The failure mode is an error, not a narrowed view**: Power BI's navigator enumerates a view's
+  columns, and a denied column errors the load until the modeler deselects it in Power Query.
+  Column names remain visible in metadata; values are blocked.
+- **Rows stay wide open**: MJ RLS is app-tier WHERE injection, so direct BI connections bypass it
+  entirely. DB-tier FLS gives these users column protection with NO row protection — state this
+  plainly wherever the persona is documented.
+- **BI roles must be SELECT-only.** The CRUD procs are ownership-chained: a direct user with
+  EXECUTE can call `spUpdate...` and read the full row from the proc's trailing `SELECT *`,
+  which skips the column DENY. The empty `cdp_BI` scaffold (SELECT grants, no EXECUTE) is the
+  right shape for this persona.
 
-**B. Entity objects loaded with missing columns will destroy data.**
-`GenericDatabaseProvider.GenerateSaveSQL()` (~1057–1089) builds UPDATEs by iterating **all**
-`IsSPParameter` fields reading `field.Value` — not just dirty ones. An entity object hydrated
-without a restricted column therefore writes that column back as a real `NULL` on the user's next
-save. This is the verified failure that caused §2.4 to reject load-time nulling, and item 3/5 walks
-straight back into it from a different angle. The team's expectation that "FLS will break entity
-objects" is correct, and this is the specific mechanism. Any projection reaching entity objects
-needs `GenerateSaveSQL` to distinguish "not loaded" from "loaded as null" — likely a per-field
-loaded/unset flag — or entity objects must keep loading every column with enforcement staying at
-the output boundary.
+Consistent with that: MJ's DB tier today carries *no* fine-grained security at all. Grants are
+object-level `GRANT SELECT` on base views (never on tables — role members read views purely via
+ownership chaining) plus `GRANT EXECUTE` on CRUD procs; RLS is a TypeScript WHERE-clause
+injection with no SQL Server security-policy counterpart. Phase 2.6 items 1–2 would be the
+platform's first database-tier fine-grained control.
 
-**C. Primary keys must survive any projection.** Stripping a PK breaks entity load, `CompositeKey`,
-relationship resolution, and cache fingerprinting. Already guarded in the aggregation; a
-SELECT-list filter needs the same guard independently.
+### R1 — View mechanism (ANSWERED): column-level permissions on the base view; per-role views rejected
 
-**D. View-level column security changes the failure mode.** Removing a column from a base view
-makes every query referencing it fail with a SQL error rather than a permission message, and it is
-a *global* change while FLS is *per-role*. A single view cannot present different column sets to
-different roles — so this likely means per-role views, or column-level `GRANT`/`DENY` on the view
-(SQL Server supports `GRANT SELECT ON OBJECT::v (col)`; PostgreSQL supports column-level `GRANT`).
-Determine which mechanism is intended before building, and confirm the PostgreSQL equivalent since
-PG is a first-class target.
+Both engines support column-level permissions on views, so **per-role views
+(`vwEmployees_RoleX`) are rejected** — they multiply generated objects, force every consumer to
+resolve a per-role view name, and buy nothing the column mechanism doesn't.
 
-**E. What Phase 2 becomes.** If enforcement moves into the database and the SELECT list, the
-output-projection layer may become redundant, or may remain as defense-in-depth for cached and
-already-materialized rows. The predicate gate (§2.1a) stays valuable regardless — a user must not
-be able to *filter* on a column they cannot read even if the column never leaves the server.
+**SQL Server** (verified against vendor docs):
+- Column-level `DENY` on the *view* works: `DENY` propagates through role membership and beats an
+  object-level `GRANT` on the same view. This is the faithful encoding of MJ's Deny-wins
+  aggregation for direct users.
+- Ownership chaining confirmed: when view and table share an owner, permissions on the table are
+  **never evaluated** — so a denial expressed at the table would be invisible through the view.
+  Moot in practice (MJ grants nothing on tables), but it fixes where denials must live: **on the
+  view itself**.
+- The documented trap: **a column-level GRANT overrides an object-level DENY** (backward-compat
+  quirk, called out in the DENY T-SQL docs). Emission must never mix "object-level DENY +
+  column-level GRANT"; the safe pattern is object-level GRANT + column-level DENY.
+- Failure mode: a denied user running `SELECT *` (or naming a denied column) gets a hard error
+  (Msg 230), not a narrowed result set. Adding FLS to an entity changes the direct-SQL contract
+  for restricted roles from "you see fewer columns" to "enumerate your allowed columns or the
+  query errors."
 
-### Research agenda for Phase 2.6 — answer these BEFORE writing code
+**PostgreSQL**: column-level `GRANT SELECT (col, ...)` exists on tables and views, but **there is
+no DENY of any kind** — PG privileges are purely additive and a user's effective rights are the
+UNION across all role memberships. **MJ's Deny-wins semantics therefore cannot be expressed in
+the PG database tier** (a direct PG user in both an allowed role and a denied role sees the
+column).
 
-Agreed working order: **research → write the answers into this document as Phase 2.6 → only then
-consider implementing.** Nothing below is a coding task; each is a decision whose cost of being
-wrong is a rewrite.
+**DECIDED (2026-08-06): PostgreSQL gets NO column-level permission emission.** Rather than ship
+an allow-list approximation with silently different semantics, the asymmetry is accepted and must
+be documented prominently in MJ documentation: **connecting directly to a PostgreSQL database
+does NOT get automatic FLS enforcement; SQL Server does.** This also means Phase 2.6 has zero
+PostgreSQL emission work. (For reference if ever revisited: PG views check underlying-table
+access as the view owner by default — `security_invoker`, PG 15+, flips it and is not wanted —
+and PG freezes `SELECT alias.*` expansion at CREATE time.)
 
-**R1 — View mechanism (blocks everything else).**
-A single base view cannot present different columns to different roles, so which is intended?
-- Column-level `GRANT`/`DENY` on the view — SQL Server supports `GRANT SELECT ON OBJECT::v (col)`.
-  **Verify how this interacts with ownership chaining**: when the view and table share an owner,
-  SQL Server skips permission checks on the underlying table, so denials must be expressed on the
-  view itself. Confirm `DENY` at column level actually blocks a role that has table-level `SELECT`.
-- Per-role views (`vwEmployees_RoleX`) — no ambiguity, but multiplies generated objects and every
-  consumer must resolve the right view name.
-- Confirm the **PostgreSQL** equivalent (PG has column-level `GRANT` on tables and views but no
-  `DENY`) — PG is a first-class target, so a mechanism that only works on SQL Server is not viable.
+**Explicit work item (do not lose this):** the Phase 2.6 implementation plan must include a
+documentation deliverable covering the SQL Server ↔ PostgreSQL asymmetry — that direct PG
+connections receive no automatic FLS, alongside the other direct-connection caveats from F0
+(no RLS for direct connections on either platform, SELECT-only BI roles, hard-error failure
+mode, standard roles never DB-enforced). This is a shipping requirement of the feature, not an
+afterthought.
 
-**R2 — Cache strategy (blocks R4).**
-Fingerprint is `EntityName|Filter|OrderBy|MaxRows|StartRow|AggHash[|Connection]`; `Fields` is
-excluded by design. Either fold the effective column set in (fragments the cache and forfeits
-"permission changes take effect on metadata refresh with no result-cache invalidation") or disable
-caching for FLS entities. Quantify both — how many entities realistically carry FLS?
+**DECIDED (2026-08-06): SQL Server emission policy.** Emit column-level `DENY SELECT (cols)` on
+the base view **only for `EntityFieldPermission` records with explicit `Type = 'Deny'`** — never
+synthesize denies from the absence of an Allow. This keeps object-level GRANTs + column-level
+DENYs as the only pattern (avoiding the GRANT-overrides-DENY quirk entirely) and keeps the DB
+tier a conservative subset of the app-tier aggregation rather than a reimplementation of it.
 
-**R3 — CodeGen role creation.**
-Where the base view + grants are emitted: `SQLServerCodeGenProvider.ts` ~703-738 and the
-PostgreSQL counterpart. Determine where `CREATE ROLE` belongs, whether CodeGen already writes back
-to metadata elsewhere (it must, to persist `Role.SQLName`), and whether the three standard roles
-(`cdp_UI` / `cdp_Developer` / `cdp_Integration`) are seeded with `SQLName` already.
+**⚠️ The DENY-poisons-the-service-login hazard, and the policy that resolves it (2026-08-06).**
+The baseline adds `MJ_Connect` (and `MJ_Connect_Dev`) to `cdp_Developer`, `cdp_Integration`, AND
+`cdp_UI` (baseline `B202607091514` lines 169695-169723), alongside
+`db_datareader`/`db_datawriter`. SQL Server evaluates DENY against the union of a principal's
+memberships and it beats GRANTs from all sibling roles — granting the column on every other role
+does not help; nothing outranks a column-level DENY. So a DENY emitted to any role MJ_Connect is
+a member of would strip the column from **MJ_Connect itself**: every API user loses it and
+RunView's widened SELECTs hard-error on the entity.
 
-**R4 — SELECT-list filtering.**
-Find where the SELECT list is actually built (`GenericDatabaseProvider` view SQL construction).
-Establish what breaks for `ResultType: 'entity_object'` versus `'simple'`.
+**Resolved by scoping policy, not by restructuring**: MJ_Connect keeps its `cdp_*` memberships,
+because **FLS DB-tier emission applies to custom (DBA-created) roles only — the three standard
+roles will never receive FLS DENYs**. That is how MJ_Connect retains broad access. Corollaries:
+- An `EntityFieldPermission` Deny row targeting UI/Developer/Integration is still fully enforced
+  at the **application tier** (Phase 2 as shipped) — it just gets no DB-tier mirror. Document
+  this so a DBA doesn't assume direct-connection enforcement for standard roles.
+- CodeGen still enforces the invariant mechanically as a backstop: before emitting a DENY to a
+  role, verify no service login is a member (`IS_ROLEMEMBER`) and skip + warn if one is. This
+  protects against a DBA hand-adding MJ_Connect to a custom role, not just the standard three.
 
-**R5 — Entity-object survivability (the highest-risk unknown).**
-Does `EntityField` have — or can it gain — a "not loaded" state distinct from "loaded as null"?
-Without one, `GenerateSaveSQL` cannot tell them apart and any projection reaching entity objects
-destroys data (collision B). Also survey `BaseEngine` subclasses, which bulk-load `entity_object`
-collections and would receive partially-hydrated objects.
+### R2 — Cache strategy (ANSWERED): an `fls:` fingerprint segment, modeled on `rls:`
 
-**R6 — Single-record load rerouting.**
-`BaseEntity.InnerLoad` (~2942) and the generated single-record resolvers. Evaluate last: it
-multiplies the blast radius of R5.
+Corrections to the fingerprint as remembered above: it is **seven** base segments —
+`Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch` — plus conditional
+`imr:`/`ak:`/`rls:`/`vw:` segments and the connection string
+(`localCacheManager.ts:1401-1495`). `Fields` and `ResultType` are excluded by design. The cache
+is shared across users: no user identity appears in the fingerprint except the `rls:` segment,
+the hash of the user's expanded RLS WHERE clause, appended **only when non-empty** so RLS-exempt
+users keep byte-identical fingerprints and share slots (`localCacheManager.ts:1472-1475`,
+computed at `providerBase.ts:2193-2199`).
+
+That `rls:` segment is the precedent the decision needs. Two viable strategies, both cheap:
+
+1. **`fls:` fingerprint segment** (recommended if SELECT-list filtering proceeds): hash the
+   user's effective denied-column set and append it only when `HasAnyFieldPermissions` is true
+   AND the set is non-empty. Non-FLS entities and unrestricted users keep today's shared
+   fingerprints — zero fragmentation in the common case. Fragmentation on FLS entities is
+   bounded by the number of distinct effective column sets (≈ distinct role combinations —
+   small). The forfeited property ("permission changes take effect with no cache invalidation")
+   degrades gracefully: a permission change produces a *new* hash → cache miss → fresh slot;
+   slots keyed to the old hash strand until eviction (memory, not a leak).
+2. **`AllowCaching = false` per FLS entity** — already a supported metadata switch, enforced at
+   `LocalCacheManager.IsCachingEnabledForEntity` (`localCacheManager.ts:410-419`). Bonus
+   interlock: cache eligibility also gates the Fields widening (`providerBase.ts:2409-2411`), so
+   disabling caching automatically restores narrow end-to-end Fields — it composes with
+   SELECT-list filtering with no further work.
+
+Quantification: FLS entities are expected to be few per deployment (compensation, donor,
+personnel tables), so either strategy costs little; the choice is per-entity and can even be
+left to administrators via `AllowCaching`. Note the widening for `entity_object` results is a
+**separate, unconditional** mechanism (`PreProcessRunView`, `providerBase.ts:3596-3601`) that
+runs even when caching is disabled — no cache strategy touches the entity-object problem; that
+is R5.
+
+**DECIDED (2026-08-06): strategy 1 — the `fls:` segment.** FLS on an entity should not force a
+DBA to give up caching on it. The hash is of the **denied** set (lowercased field names, sorted,
+then hashed), not the allowed set: it is exactly what `GetDeniedReadFields` already computes per
+request (no new computation); an empty denied set appends no segment, so unrestricted users and
+non-FLS entities keep byte-identical shared fingerprints (the `rls:` behavior); and it is stable
+under additive schema changes, where an allowed-set hash would churn for every user whenever any
+column is added.
+
+### R3 — CodeGen role creation (ANSWERED): gap confirmed; mechanism, insertion point, and precedent all exist
+
+- **Grant emission** (both providers, blank-`SQLName` roles silently skipped in both):
+  `providers/sqlserver/SQLServerCodeGenProvider.ts:700-743` (`generateViewPermissions`,
+  `generateCRUDPermissions`, FTS) and a full PostgreSQL counterpart at
+  `providers/postgresql/PostgreSQLCodeGenProvider.ts:1157-1196`. The PG side already isolates
+  GRANTs in their own transaction block precisely so a nonexistent role doesn't kill view
+  creation — the missing-role failure mode is already litigated there.
+- **Seeded roles**: UI/Developer/Integration carry `SQLName`
+  (`cdp_UI`/`cdp_Developer`/`cdp_Integration`); **Agent Administrator, Magic Link Baseline, and
+  Widget Guest have NULL `SQLName`** (baseline `B202607091514`, lines 49271-49276) — they are
+  the silent-skip case today and the feature's first customers. Two SQL roles (`cdp_BI`,
+  `cdp_CodeGen`) exist with no metadata row at all.
+- **Roles are created only by migrations/baselines** (idempotent
+  `DATABASE_PRINCIPAL_ID(...) IS NULL` guard, originally v2), never by code. The MJCLI baseline
+  introspector already captures custom roles + memberships into future baselines, so roles
+  CodeGen creates would persist through re-baselining.
+- **Write-back precedent**: `manage-metadata.ts` INSERTs/UPDATEs metadata rows constantly via
+  direct SQL through `LogSQLAndExecute`, which both executes live AND serializes into the
+  CodeGen migration log — so `CREATE ROLE` + `UPDATE Role SET SQLName = ...` would propagate to
+  other environments through the established channel automatically.
+- **Insertion point**: inside `ManageMetadataBase.manageMetadata` (`runCodeGen.ts:255`) — it
+  runs before the **unconditional** `provider.Refresh()` at `runCodeGen.ts:264`, which is what
+  makes the new `SQLName` visible to grant emission (`manageSQLScriptsAndExecution`, line 276)
+  with no extra plumbing.
+- **Privileges**: the SQL Server CodeGen login is `db_owner` per the baseline (which includes
+  CREATE ROLE / ALTER ANY ROLE) — fine. **PostgreSQL is weaker**: `CREATE ROLE` needs the
+  cluster-level `CREATEROLE` attribute, which nothing guarantees for the day-to-day codegen
+  user — the design needs graceful degradation (warn + skip, leaving `SQLName` NULL, which the
+  grant emitters already tolerate). PG role provisioning also needs the
+  `GRANT USAGE ON SCHEMA` + `ALTER DEFAULT PRIVILEGES` pattern from
+  `migrations-pg/v5/V202605040300` (lines 41-66), not just `CREATE ROLE`.
+**DECIDED (2026-08-06): CodeGen will NOT auto-create SQL roles.** The original item 1
+requirement ("if `Role.SQLName` is empty, CREATE a SQL role and write the name back") is
+withdrawn. A NULL `SQLName` is now a deliberate statement that a role is **application-tier
+only** — Magic Link Baseline is the canonical example: nobody should ever connect to the
+database with a Magic Link SQL role. Developers who want DB-level enforcement for a custom role
+explicitly create the SQL role and set `SQLName` themselves. Consequences:
+- The grant emitters' blank-`SQLName` skip becomes intended behavior, not a gap. One
+  improvement worth making: log the skip at INFO in codegen output, so "why doesn't my role
+  work for direct SQL?" is answerable without reading provider source.
+- The three seeded NULL-`SQLName` roles (Agent Administrator, Magic Link Baseline, Widget
+  Guest) stay app-tier-only by design.
+- The R3 findings above (write-back mechanism, insertion point, PG `CREATEROLE` weakness)
+  remain recorded in case this is ever revisited, but no role-creation code is planned.
+
+### R7 — Permission reconciliation / drift detection (ANSWERED 2026-08-06): today's model is assert-only; FLS DENYs need CodeGen's first catalog diff
+
+Asked 2026-08-06: how does CodeGen detect changes to entity permissions versus what is actually
+in SQL Server, and will FLS work the same way?
+
+**How EntityPermissions are handled today (verified):**
+- Every run, STEP 2(a) deletes all `*.permissions.generated.sql` files and regenerates them from
+  current metadata (`sql_codegen.ts:147`); STEP 4 `applyPermissions` (`sql_codegen.ts:504-556`)
+  then executes **every entity's permissions file, every run** — including entities whose SQL was
+  not regenerated, and excluded-schema entities (permissions-only generation,
+  `sql_codegen.ts:258-270`).
+- **There is no `REVOKE` anywhere in CodeGenLib and no query against
+  `sys.database_permissions`** (or any permission catalog) — verified by repo-wide search. Grants
+  are asserted idempotently from desired state; CodeGen never removes anything.
+- The only cleanup mechanism is a **side effect**: the SQL Server base-view template is
+  `DROP VIEW` + `CREATE VIEW`, and dropping an object destroys its permissions — so when a view
+  IS regenerated, its permission slate is wiped and current grants are re-asserted. But views
+  regenerate conditionally (schema/metadata change or forced), so **deleting an
+  `EntityPermission` row without a schema change leaves the old GRANT in the database
+  indefinitely**. (PG: `CREATE OR REPLACE VIEW` preserves ACLs and the CASCADE fallback
+  deliberately re-applies captured grants — but per D2, PG gets no FLS emission anyway.)
+
+**So "FLS will be identical" is half-right.** Additions and re-assertions come free by folding
+DENY emission into the same per-entity `.permissions.generated.sql` files: they execute every
+run, and a view regeneration (which wipes the slate, DENYs included) is automatically followed by
+re-assertion. What the existing model does NOT provide is **removal** — and for DENYs,
+removal-must-take-effect is not optional: a stale column DENY keeps blocking direct users after
+the admin deletes the Deny record, which is a support fire, not just drift.
+
+**Required new machinery (SQL Server only, per D2)** — at generation time, read actual
+column-level permission state and reconcile:
+
+```sql
+SELECT pr.name AS role_name, o.name AS view_name, c.name AS column_name, p.state_desc
+FROM sys.database_permissions p
+JOIN sys.database_principals pr ON pr.principal_id = p.grantee_principal_id
+JOIN sys.objects o ON o.object_id = p.major_id
+JOIN sys.columns c ON c.object_id = p.major_id AND c.column_id = p.minor_id
+WHERE p.class = 1 AND p.minor_id > 0 AND p.type = 'SL'
+```
+
+(`class = 1` object/column, `minor_id > 0` = column-level, `type = 'SL'` = SELECT.) Scope the
+managed set to **base views × roles with a non-blank `SQLName`** so DBA-managed permissions
+outside FLS's remit are never touched. Two shapes:
+
+- **(a) Wipe-and-reassert per FLS entity (recommended):** REVOKE every existing column-level
+  entry on the entity's base view for managed roles (removing a DENY is also spelled `REVOKE`),
+  then emit the current DENYs from metadata. Deterministic, no set-comparison logic, and it
+  self-heals manual drift inside the managed scope. The managed scope is tiny (FLS entities ×
+  custom roles), so the churn is negligible.
+- **(b) True delta:** catalog query → set-compare against desired state → emit only changes.
+  Less SQL churn, more code, same catalog dependency.
+
+Either way, emit the statements into the per-entity `.permissions.generated.sql` files so they
+flow through `applyPermissions` and the SQL logging pipeline like every other permission
+statement.
+
+**Pre-existing gap surfaced by this analysis** (now gap 5 below): the assert-only model means
+**entity-level** grant removal has the same drift hole today — deleting an `EntityPermission`
+row leaves the role's `GRANT SELECT` on the view until the view happens to be regenerated. For
+the direct-connection persona this is security-relevant independent of FLS.
+
+**DECIDED (2026-08-06): fix entity-level grant drift together with the FLS reconciliation.**
+The same catalog read covers both — `minor_id = 0` rows are the object-level grants,
+`minor_id > 0` the column-level entries — and the managed scope extends to the CRUD procs'
+`GRANT EXECUTE` and the FTS function grants (everything CodeGen emits for roles with a non-blank
+`SQLName`). One reconciliation step, wipe-and-reassert within that managed scope, closes gap 5
+and serves FLS DENYs with the same machinery.
+
+### R4 — SELECT-list filtering (ANSWERED): mechanically easy, three traps, must compose with R2
+
+**Where the SELECT list is built**: `GenericDatabaseProvider.InternalRunView` →
+`getRunTimeViewFieldString/Array` (`GenericDatabaseProvider.ts:1533-1538`, `1806-1859`).
+Priority: `params.Fields` > saved-view columns > wildcard. The traps for an FLS intersection:
+
+1. **Empty `Fields` emits literal `SELECT *`** (line 1808) — filtering must convert the empty
+   case into an explicit allowed-column list, not intersect a list that isn't there.
+2. **PKs are force-added** to every explicit field list (lines 1833-1834). Harmless here — PKs
+   are unrestrictable by the Phase 1 guards — but the filter must be expressed as "intersect
+   with allowed, where allowed always contains PKs", independently re-asserting collision C
+   rather than inheriting it.
+3. **Unknown fields are silently dropped with a `LogError`** (line 1839) — a denied field
+   removed by intersection is indistinguishable from a typo. Decision: silent narrowing
+   (consistent with today's output projection, where a denied field is simply absent) versus
+   rejection (consistent with the predicate gate). **Recommended: silent narrowing** — `Fields`
+   describes output shape, not a predicate; the caller learns nothing beyond what projection
+   already shows them, and rejection would break generic clients that enumerate all fields.
+
+**`entity_object` vs `simple`**: the GraphQL resolver forces `simple` server-side regardless of
+client `ResultType` (`ResolverBase.ts:819-822`), so the whole GraphQL RunView surface is safe
+for SELECT-list filtering. `entity_object` (server-internal callers, engines) is widened
+unconditionally by `PreProcessRunView` and **must remain exempt** from SELECT-list filtering
+until R5 resolves — a narrowed SELECT hydrates partial entities and destroys data on save,
+identically to the rejected load-time-nulling design.
+
+**The composition that works** (with R2): for FLS-restricted users on `simple`-path
+cache-eligible queries, widen `Fields` to *the user's allowed set* (not all columns), fingerprint
+with the `fls:` segment, and keep the existing output projection as defense-in-depth. Each
+permission class then has its own internally consistent universal-superset cache slot; restricted
+data never enters server memory for these queries; and slots warmed before a permission change
+are still projected correctly at read time. This deliberately supersedes the "SELECT-list
+filtering is not viable" doc comment at `providerBase.ts:2291-2295`, whose premise (widening to
+ALL columns) is exactly what changes.
+
+**DECIDED (2026-08-06): adopted as recommended** — silent narrowing (not rejection) for denied
+fields in `Fields`, allowed-set widening for FLS-restricted users on `simple`-path
+cache-eligible queries, `entity_object` exempt pending R5. This is also the API-side expression
+of the mindset shift R1 forces on direct SQL: enumerate what the user may see rather than
+subtract what they may not.
+
+### R5 — Entity-object survivability (ANSWERED): no "not loaded" state exists, and the hazard is LIVE today
+
+**No usable per-field "never loaded" state exists.** `EntityField` holds `_Value`, `_OldValue`,
+and a private `_NeverSet` (`baseEntity.ts:41-44`) — but `_NeverSet` means "no set since
+construction" (it exists to permit one-time writes to ReadOnly fields), is re-armed wholesale by
+`InnerLoad`, and is not exposed. After construction a field holds **its metadata default if one
+exists, else null** — indistinguishable from a loaded value. Every hydration path (`SetMany`,
+`LoadFromData` both modes, `hydrateFieldsIfNeeded`, `Hydrate`) iterates the *source object's*
+keys, so a missing column silently leaves the constructor state in place, not dirty.
+
+**The save path is subtler — and worse — than "writes NULL".** `GenerateSaveSQL`
+(`GenericDatabaseProvider.ts:1061-1093`) reads `field.Value` for ALL `IsSPParameter` fields as
+established, but the generated update procs are *tolerant*: `SET [Col] = ISNULL(@p, [Col])` for
+NOT NULL columns, and nullable columns get a `_Clear` companion parameter
+(`CASE WHEN @p_Clear = 1 THEN NULL ELSE ISNULL(@p, [Col]) END`). The provider emits
+`@Field_Clear=1` whenever the in-memory value is null (`SQLServerDataProvider.ts:1124-1127`).
+Outcomes for a never-loaded field, by column class:
+
+| Column class | Hydrates as | Save outcome |
+|---|---|---|
+| Nullable, no default | null | `_Clear=1` → **column wiped to NULL — silent loss** |
+| Nullable, with default | the default | **default overwrites real data — silent loss** |
+| NOT NULL, with default | the default | passes validation → **default overwrites real data — silent loss** |
+| NOT NULL, no default | null | `Validate()` fails → **save breaks entirely** |
+
+The escape hatch half-exists: `CoerceSaveFieldValue` has a `'skip'` kind, and an omitted SP
+parameter preserves the column (the procs default every param). A "not loaded" flag would need
+to (a) skip the field AND (b) suppress its `_Clear` companion.
+
+**The hazard is not hypothetical — it is reachable in the shipped Phase 2, today**, via the
+client round-trip:
+1. The server strips a read-denied field (RunView projection — the resolver forces `simple`; or
+   `MapFieldNamesToCodeNames`, which deletes the key). The client hydrates a partial entity.
+2. Client `Save` sends **all writable fields regardless of dirtiness**
+   (`graphQLDataProvider.ts:1769-1894`), fabricating the default / `0` / `''` for NOT NULL
+   fields it never saw.
+3. Server `UpdateRecord` (`ResolverBase.ts:1265-1347`) loads the TRUE record, detects the
+   old-value mismatch, **logs a warning and continues**, then unconditionally
+   `SetMany(clientNewValues)` — the restricted field is now genuinely dirty server-side with the
+   fabricated value.
+4. `CheckFieldLevelUpdatePermissions` (dirty-fields-only) catches the case where the user also
+   lacks CanUpdate — as a hard save failure (the user cannot save ANY edit to such records:
+   breakage). But **read-denied + update-allowed = silent data loss, now.** `CanRead` and
+   `CanUpdate` are independent flags, so this combination is configurable in Phase 1 as shipped.
+
+This must be fixed regardless of the Phase 2.6 direction. Cheapest correct fix: in
+`UpdateRecord`, compute the user's denied-read set and refuse to apply client values for those
+fields — they were never shown to the client, so any value the client sends for them is
+fabricated by construction. Whether to reject the save or skip the fields is the same
+reject-vs-narrow posture question as R4. The `baseEntity.ts:2874-2877` comment's claim ("a field
+the user cannot see was never loaded as null, so it is not dirty") is true client-side and false
+for the server-side entity in `UpdateRecord` — correct it when fixing.
+
+**Blast radius of a real per-field "loaded" flag** (the long-term enabler, if projection is ever
+to reach entity objects): 13 touch points inventoried — field construction/defaults, the Value
+setter + `ResetNeverSetFlag`, all five hydration paths, raw-mode `Get()`, `GenerateSaveSQL` +
+`_Clear` suppression (per provider), Record Changes payloads, `Dirty`, `Validate` (a not-loaded
+NOT NULL field must not fail validation), `GetAll`/serialization and its consumers, the client
+transport (all-fields send + OldValues), `UpdateRecord`/`TestAndSetClientOldValuesToDBValues`,
+entity materialization (`TransformSimpleObjectToEntityObject`), and every `BaseEngine` consumer.
+This is a sizeable cross-cutting project — schedule it as its own phase or don't do it.
+
+**BaseEngine exposure**: engines default to `ResultType: 'entity_object'`
+(`baseEngine.ts:423-425`) and load via RunView under a contextUser; ~55 subclasses exist. If
+that contextUser is ever FLS-restricted, engines receive partially hydrated objects. Engines
+verified to SAVE entities they load — the highest-risk set: `UserInfoEngine`,
+`ExternalChangeDetectorEngine` (writes arbitrary entities during reconciliation),
+`NotificationEngine`, `AIEngineBase`. Until a loaded flag exists, the rule stands: entity_object
+loads keep every column, enforcement stays at the output boundary, and an FLS-restricted
+`contextUser` driving an engine is a configuration to warn about, not support.
+
+**CONFIRMED DESIGN (2026-08-06 — Jordan's not-loaded flag; D4 decided):** a per-field
+"not loaded" marker on the `EntityField` runtime wrapper: a denied (or otherwise omitted) field
+hydrates as `Value = null` + `notLoaded = true`; saves skip the field and never emit its `_Clear`
+companion. Analysis confirms the mechanism and simplifies it in one important way — **no stored
+procedure changes are needed, for ANY column class.** The generated procs already implement
+"don't set" semantics: `SET [Col] = ISNULL(@p, [Col])` for NOT NULL columns means `@p = NULL`
+(or an omitted param — they all have defaults) preserves the current value, and for nullable
+columns `NULL + _Clear = 0` does the same. The feared NOT-NULL gap is **app-tier validation**,
+not SQL: `EntityField.Validate` rejects null for a required field before SQL is generated, so
+the fix is a validation exemption for not-loaded fields — no `don't_set` proc parameter, no
+proc regeneration across every entity. The save-path work collapses to three app-tier changes:
+1. `GenerateSaveSQL` skips not-loaded fields (the `CoerceSaveFieldValue` `'skip'` kind already
+   exists for exactly this);
+2. `RenderSaveCallBinding` suppresses the `_Clear` companion for not-loaded fields;
+3. `Validate()` (and the generated Zod schemas — second surface, audit it) exempts not-loaded
+   fields from the required/null check.
+
+Flag semantics, refined:
+- **Do not reuse `_NeverSet`** — it means "no set since construction," is deliberately re-armed
+  after `InnerLoad` for the ReadOnly one-time-write mechanism, and would conflate defaults with
+  omissions. The new flag means *"the source this entity was hydrated from omitted this field"*:
+  set by the hydration paths when a key is absent, cleared by any explicit `Set`. That also
+  handles the write-only corner (read-denied + update-ALLOWED, e.g. an SSN field): an explicit
+  blind set marks the field loaded + dirty and the normal save path sends it.
+- **New (unsaved) entities never carry the flag** — their fields legitimately hold metadata
+  defaults for INSERT (spCreate defaults handle omission there). The flag is a hydration
+  artifact, not a "never touched" marker.
+
+The remaining real work is the **client round-trip** — which is also the proper fix for gap 2:
+the flag must be derivable client-side (missing key in the GraphQL payload → not loaded), client
+`Save` must skip not-loaded fields instead of fabricating defaults/`0`/`''`
+(`graphQLDataProvider.ts:1842-1855`), and server `UpdateRecord` must not `SetMany` them onto the
+truth-loaded entity. (The denied-read-set guard in `UpdateRecord` remains the right stopgap —
+it ships without any of this.) Softer surfaces from the blast-radius inventory that still need
+decisions: `Dirty` (not-loaded ⇒ never dirty, made explicit), `GetAll`/serialization (omit vs
+include — affects Record Changes payload fidelity and spread-`GetAll` app code), and `CopyFrom`.
+
+**Creates (denied fields with defaults) — reviewed 2026-08-06, the safe case.** INSERT has no
+pre-existing value to destroy, so the hazard class doesn't exist there: a new entity carries no
+not-loaded flags, its fields hold metadata defaults, and `spCreate` inserts the default exactly
+as for an unrestricted user leaving the field blank — matching Open Question 1's recorded answer
+("on INSERT, the field uses its default value or the value provided by the system"). Defaults
+are metadata and already ship to clients, so no leak. Three corners to carry forward:
+1. **`CanCreate` is unenforced (by decision)**, so a read-denied user can seed ANY initial value
+   on create — effectively write-only (the create response strips the field). Acceptable today;
+   this is where CanCreate enforcement slots in later if wanted.
+2. **NOT NULL + no default + denied ⇒ that user cannot create records** (nobody supplies the
+   value; validation fails). Create-side twin of R6's NOT NULL constraint — same guidance
+   (FLS-restricted fields should be nullable or defaulted) and the same Phase 4 admin-UI warning
+   should cover both.
+3. **The create-response round-trip must set the flag too**: `spCreate` returns the new row with
+   denied fields stripped, and the client's post-save refresh must apply the missing-key →
+   not-loaded rule just like load hydration. Otherwise the in-memory default masquerades as a
+   confirmed value and the NEXT save (an UPDATE) resends it — silently stomping trigger/system
+   adjustments or a concurrent change. Post-save response hydration is hereby on the
+   touch-point list.
+
+### R6 — Single-record load rerouting (ANSWERED): don't
+
+**The GraphQL single-record path is already FLS-enforced.** The generated resolver
+(`graphql_server_codegen.ts:517-528`) is a third, independent path — parameterized raw SQL + RLS
++ entity-level read check — whose output passes through `MapFieldNamesToCodeNames`, the
+documented authoritative read boundary, which self-computes the denied set when not passed one.
+Client-side `Load` hits exactly this resolver. The wire is covered today.
+
+**Rerouting `InnerLoad` through RunView buys nothing for FLS as designed**: the output
+projection skips `entity_object` (R5), an `InnerLoad` produces an entity object by definition,
+and the predicate gate is moot for a platform-built PK-only WHERE. What a reroute WOULD change,
+none of it desirable now: PK loads become cache-eligible (stale after direct-SQL DML);
+relationship loading (`EntityRelationshipsToLoad`) needs a 1+N reshape and would silently start
+applying RLS to related rows (today's relationship SELECTs at
+`GenericDatabaseProvider.ts:3871,3874` apply none — a pre-existing gap worth its own issue, not
+a change to smuggle in); and fixed-width char-trimming parity would need verification.
+**Evaluate again only after R5 gives entity objects a partial-hydration story.**
+
+**One live hazard on this path**: generated GraphQL object types mark NOT NULL columns
+non-nullable (`graphql_server_codegen.ts:352`). FLS-omitting a denied NOT NULL field makes
+TypeGraphQL resolve a non-nullable field to null — and since the single-record query itself is
+nullable, **the whole record nulls out for the restricted user**. Denied nullable fields degrade
+gracefully. Until codegen learns to relax nullability for FLS-restrictable fields, restricting a
+NOT NULL column breaks single-record loads for denied users — document it as a configuration
+constraint and check it in the Phase 4 admin UI.
+
+**Residual bypass surface** (fetch paths using neither RunView nor `InnerLoad` — and, per F0,
+NOT protected by DB-level roles either, since they all run as the service login): the
+relationship SELECTs above; `GetRecordChanges` (`databaseProviderBase.ts:623-629`);
+`GetRecordDependencies`; `InternalGetEntityRecordName(s)` (name fields could themselves be
+denied); `FindISAChildEntity`; `GetRecordFavoriteID`; `MergeRecords`; deprecated `RunReport`;
+dataset retrieval (`GetDatasetByName` — cached, no RLS/FLS on item rows); saved-view run
+machinery; stored queries (the documented §2.5 gap). Most return data only to server-internal
+code or pass through the GraphQL boundary; each should be triaged once, but the one that is a
+real leak channel is Record Changes — see below.
+
+### Gaps discovered during this research (not on the agenda — triage before or alongside Phase 2.6)
+
+1. **`Aggregates` bypass the predicate gate — LIVE leak.**
+   `AssertPredicatesRespectFieldSecurity` scans only `ExtraFilter` and `OrderBy`
+   (`providerBase.ts:2251`). Aggregate expressions are validated by `SQLExpressionValidator`
+   against ALL entity fields with no FLS check (`databaseProviderBase.ts:1037-1082`), so
+   `Aggregates: [{ expression: 'MIN(Salary)' }]` plus an allowed filter returns a denied field's
+   values directly. There is no `GroupBy` param — aggregates are single-row — but MIN/MAX under
+   narrow filters reconstructs exact values. Fix: run `FindReferencedIdentifiers` over aggregate
+   expressions in the same gate. A straightforward extension of shipped Phase 2 code; it should
+   not wait for the Phase 2.6 decisions.
+2. **Client round-trip silent data loss — LIVE** (read-denied + update-allowed fields; full
+   chain in R5). Fix in `UpdateRecord`; also independent of the Phase 2.6 decisions.
+3. **Record Changes is an FLS leak channel.** `RecordChange` rows carry full old/new field
+   payloads; a user denied `Salary` but able to read `MJ: Record Changes` reads the values from
+   the audit trail. **DECIDED (2026-08-06): documented trust boundary** (the §2.5 posture).
+   Wherever FLS is described to administrators: **do not grant entity-level read on
+   `MJ: Record Changes` to roles that carry FLS denials on any entity — or to roles that
+   shouldn't read any tracked entity's data.** Admins can additionally FLS-restrict Record
+   Changes' own payload columns (`ChangesJSON` etc.) per role as a blunt per-deployment tool.
+   Payload-level redaction per the target entity's permissions (the only correct end state) is
+   explicitly OUT of this work's scope — it belongs to a future general overhaul of record-change
+   auditing.
+4. **`Load`'s relationship SELECTs apply no RLS** (`GenericDatabaseProvider.ts:3871,3874`) —
+   pre-existing and unrelated to FLS; noted here so it isn't rediscovered. Deserves its own
+   issue.
+5. **Entity-level grant removal never reaches the database** (found answering R7). CodeGen is
+   assert-only: deleting an `EntityPermission` row stops the GRANT being emitted but never
+   REVOKEs the existing one — it persists until the entity's view happens to be regenerated
+   (DROP/CREATE wipes object permissions). App-tier enforcement is unaffected; for direct DB
+   connections this is a live drift hole today, independent of FLS. The R7 reconciliation
+   machinery could close it for entity-level grants too, or it gets its own issue.
+
+### Collisions with the current implementation — resolutions
+
+The five collisions catalogued when the direction was set are all resolved by the research above:
+
+- **A. SELECT-list filtering vs. the RunView cache** → resolved by R2 + R4: `fls:` fingerprint
+  segment (the `rls:` pattern), widen restricted users to their *allowed* set, keep output
+  projection as defense-in-depth. Fragmentation is confined to FLS entities × distinct
+  permission classes.
+- **B. Entity objects loaded with missing columns destroy data** → confirmed and sharpened by
+  R5: four distinct loss/breakage modes by column class, and the hazard is already reachable
+  today via the client round-trip. Entity objects keep loading every column; the fix burden
+  moves to `UpdateRecord` now and to a per-field loaded flag later, if ever.
+- **C. Primary keys must survive any projection** → R4: the SELECT builder force-adds PKs
+  independently, and the aggregation guard already forces PK readability. Both ends hold.
+- **D. View-level column security changes the failure mode** → R1: yes — hard SQL errors for
+  denied direct users (`SELECT *` included). Column-level DENY on SQL Server, allow-list GRANT
+  on PostgreSQL (no DENY exists there), and Deny-wins is not expressible in the PG database
+  tier.
+- **E. What Phase 2 becomes** → it stays, in full. Per F0 the DB tier can never see API users,
+  so predicate gate + output projection + save guard remain the authoritative enforcement; DB
+  grants/denies are additive hardening for direct connections. The predicate gate additionally
+  needs the Aggregates extension (gap 1).
+
+### Decision summary — status as of 2026-08-06
+
+Research done; decisions reviewed with Jordan 2026-08-06. Nothing below is implemented.
+
+| # | Decision | Status |
+|---|---|---|
+| D1 | Direct-database access persona | **Confirmed**: the use case is BI tools (Power BI) connecting directly. Document the persona with the F0 caveats: SELECT-only roles (no EXECUTE — proc-output bypass), shared-gateway-account limitation, hard-error failure mode, and NO row-level protection for direct connections. |
+| D1a | Service-login vs. DENY'd roles | **Resolved by scoping policy (2026-08-06)**: no membership restructuring. FLS DB-tier emission targets **custom (DBA-created) roles only** — the three standard roles never receive DENYs, so MJ_Connect keeps its `cdp_*` memberships. Deny rows against standard roles remain app-tier-enforced only (document this). CodeGen keeps the `IS_ROLEMEMBER` skip+warn as a backstop against service logins hand-added to custom roles. |
+| D2 | DB-tier semantics per platform | **Decided**: SQL Server emits column-level DENY only for explicit `Type='Deny'` records, custom roles only; PostgreSQL emits nothing. **Explicit documentation deliverable required** for the SQL Server ↔ PG asymmetry + the F0 direct-connection caveats (see R1). |
+| D3 | SELECT-list filtering | **Decided**: adopt for `simple`-path queries — allowed-set widening + `fls:` fingerprint segment (hash of the denied set) + projection kept as defense-in-depth; silent narrowing for denied `Fields` entries; `entity_object` exempt pending R5. |
+| D3a | CodeGen role auto-creation | **Decided — withdrawn**: NULL `SQLName` = deliberately app-tier-only role; developers create SQL roles explicitly. Add an INFO log for the grant-emitter skip. |
+| D4 | Entity-object policy | **Decided (2026-08-06)**: per-field not-loaded flag (see R5 "Confirmed design") — NO stored-proc changes needed (the `ISNULL` merge already provides don't-set semantics; the NOT NULL gap is app-tier validation, exempted for not-loaded fields). Scope acknowledged: the client round-trip + ~13 touch points make this its own body of work. Interim until it ships: load-everything + output-boundary enforcement stays, with the `UpdateRecord` stopgap (gap 2) covering the live hole. |
+| D5 | Single-record rerouting | **Decided (2026-08-06): don't reroute** — per R6. The GraphQL single-record path is already FLS-enforced at `MapFieldNamesToCodeNames`; rerouting `InnerLoad` through RunView buys nothing while entity objects are projection-exempt. Revisit only if/after the D4 not-loaded flag ships. |
+| D6 | Immediate fixes independent of all of the above | **Partially decided (2026-08-06)**: (a) Aggregates gate **approved** — extend `AssertPredicatesRespectFieldSecurity` to run `FindReferencedIdentifiers` over `Aggregates[].expression`, same rejection + same ambiguous error as ExtraFilter/OrderBy (gap 1); (b) `UpdateRecord` stopgap **approved** — refuse to apply client-sent values for fields in the user's denied-read set (gap 2); (c) Record Changes leak (gap 3) **decided — documented trust boundary** with DBA guidance (don't grant `MJ: Record Changes` read to FLS-denied roles); payload redaction deferred to a future record-change-auditing overhaul; (d) NOT-NULL-denied-field item is a documentation + Phase 4 UI-warning task, not a decision. |
+| D7 | Permission reconciliation (drift) | **Decided (2026-08-06)**: CodeGen gains a catalog-driven reconciliation step — `sys.database_permissions` read at generation time, wipe-and-reassert within the managed scope (base views + CRUD procs + FTS functions × non-blank-`SQLName` roles), emitted into the per-entity permissions files (R7). **Scope includes entity-level grant drift (gap 5)**: same catalog read, `minor_id = 0` rows. |
 
 ### Known pre-existing failures in this tree (NOT caused by this work)
 
