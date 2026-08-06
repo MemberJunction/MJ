@@ -1,5 +1,190 @@
 # Change Log - @memberjunction/server
 
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- fe7bd9d: fix(server): correct the cache-refresh interval unit — the metadata cache was refreshing every ~50 hours instead of the configured 3 minutes. `databaseSettings.metadataCacheRefreshInterval` is milliseconds (default 180000 = 3 min), but MJServer passed it undivided into `SQLServerProviderConfigData`'s `checkRefreshIntervalSeconds` argument (seconds), and `SQLServerDataProvider` then scheduled `setInterval(RefreshIfNeeded, CheckRefreshIntervalSeconds * 1000)` → 180000 × 1000 ≈ 50 h, so the metadata cache effectively never auto-refreshed (the likely root cause of "stale metadata until MJAPI restart"). Fix (both required together): divide by 1000 at the two `MJServer/src/index.ts` call sites (matching the already-correct PostgreSQL siblings), and multiply `CheckRefreshIntervalSeconds` by 1000 where it is passed to `UserCache.Instance.Refresh` in `SQLServerDataProvider/src/config.ts` (that parameter is milliseconds) — otherwise fixing only the first half would make the user cache hammer the DB every 180 ms. After both, the metadata and user caches each refresh every 3 minutes, as configured.
+- 841e6ea: Harden several SQL text-building paths that substituted values into query strings without parameterization or escaping.
+
+  **`@memberjunction/server`** — `ReportResolver.CreateReportFromConversationDetailID` built its `WHERE` clause via direct string interpolation of the `ConversationDetailID` argument. It now binds the value through `mssql`'s parameterized `request.input(...)` as a `UniqueIdentifier`, consistent with the parameterization pattern already used elsewhere in the package, and gets GUID-format validation as a side effect.
+
+  **`@memberjunction/generic-database-provider`** — `GenericDatabaseProvider.CheckRecordRLS` built its primary-key `WHERE` clause without escaping embedded quotes in the key value, unlike the sibling `Load()` path a few lines above, which already escapes. The RLS-check path now mirrors `Load()`'s escaping so a primary key value containing a quote can't alter the query's structure.
+
+  **`@memberjunction/core`** — `RowLevelSecurityFilterInfo.MarkupFilterText` did two things that could weaken a row-level security filter: it let `undefined` user-property values through as the literal string `"undefined"`, and it never escaped quotes in substituted values. Both are fixed — `undefined` now falls through to the existing unresolved-token handling (same as `null` and object-typed values already did), and substituted values now have embedded single quotes doubled.
+
+  Behavior note for deployments with existing role-based RLS filters: equality-style filters (`Col = '{{UserX}}'`) are unaffected. Filters written in negation form (`<>`, `NOT IN`, `NOT LIKE`) against a user property that can be `undefined` previously matched more rows than intended (a permissive gap) and will now correctly match fewer — reviewed as: users may see fewer rows than before the upgrade, which is the deliberate direction of this fix, not a new restriction to work around.
+
+  **`@memberjunction/ng-react`** — `RuntimeUtilities.provider` was initialized directly from the global `Metadata.Provider` at class-field scope. The value was always overwritten before use by `buildUtilities()`'s existing `provider ?? Metadata.Provider` fallback, so this is a no-behavior-change cleanup that stops the class body from touching the global provider directly.
+
+- 0acf96e: Make the SearchScope permission resolver replaceable.
+
+  `SearchEngine` authorizes every search through `SearchScopePermissionResolver`, which answers from `__mj.SearchScopePermission` rows keyed by `UserID` or by one of the user's MJ Roles. That covers MJ's own permission model completely — but it is not the only shape a permission model can take, and until now it was the only one the search path could consult.
+
+  A consumer whose entitlements are neither a user nor an MJ Role has no row that can express them. Its grants are therefore invisible to the check that actually runs, and the failure is silent in the worst way: the grant is configured, an administrator can see it, and the search simply returns nothing. The resolver was a module-level singleton imported directly by `SearchEngine`, so the only remedies were to project the consumer's model into `SearchScopePermission` as derived per-user rows — permission state that can drift from its source — or to fork the search path.
+
+  This adds the seam that was missing:
+  - **`SearchScopePermissionResolverBase`** — the abstract contract registrations bind to.
+  - **`SEARCH_SCOPE_PERMISSION_RESOLVER_KEY`** — the ClassFactory key. There is exactly one resolver per deployment (a consumer _replaces_ the policy rather than selecting among several), so a single shared key is the right shape, and it keeps the registry free of the keyless-registration warning.
+  - **`GetSearchScopePermissionResolver()`** — returns the highest-priority registration, falling back to MJ's own.
+
+  **Every path that authorizes a scope now goes through the seam**, not just `SearchEngine`. This matters more than it sounds: a seam honoured on some paths and not others is worse than no seam, because the resulting behaviour is inconsistent rather than merely absent — the same grant authorizes a search issued one way and silently denies it issued another. The five call sites are `SearchEngine.searchOneScope`, `SearchKnowledgeResolver` (both the single-scope check and the visible-scope-list filter), `SearchKnowledgeStreamResolver`, and the `__Scoped_Search` core action. The last is the agent-facing path, so an override that did not reach it would be invisible to exactly the callers most likely to need it.
+
+  Resolution happens per call rather than being cached at module load. A registration made during application startup would otherwise be missed depending on import order — a failure mode that presents as "my resolver works in tests but not in the server", which is expensive to diagnose. The class is stateless and construction is trivial, so there is nothing to gain by caching.
+
+  The intended shape for an override is to subclass the stock resolver and compose with it, **passing no priority**:
+
+  ```ts
+  @RegisterClass(
+    SearchScopePermissionResolverBase,
+    SEARCH_SCOPE_PERMISSION_RESOLVER_KEY,
+  )
+  export class MyResolver extends SearchScopePermissionResolver {
+    public override async ResolveEffectivePermission(
+      input: ResolvePermissionInput,
+    ) {
+      const stock = await super.ResolveEffectivePermission(input);
+      if (stock.Allowed) return stock; // never narrow what MJ already granted
+      return this.myOwnGrantCheck(input); // only ever widen
+    }
+  }
+  ```
+
+  Subclassing is what orders the registration, and it does so more reliably than a number can. `ClassFactory.Register` treats an omitted priority as _one higher than the highest already registered for this (base, key)_, and a subclass cannot be defined without its parent module having loaded first — so MJ's registration always runs before the consumer's, and the consumer always lands above it. The ordering is a side effect of the language rather than a convention anyone has to remember.
+
+  A hardcoded priority forfeits that. Two consumers that pick the same number collide, `Register` warns, and resolution degrades to whichever was registered last — a load-order bug wearing the costume of a configuration value. The priority argument stays for cases where subclassing is genuinely impossible.
+
+  **Nothing changes for existing consumers.** MJ's resolver registers itself as the default, so behaviour is identical when nothing else is registered. `DefaultSearchScopePermissionResolver` is retained and still exported so existing imports keep compiling; it is marked `@deprecated` because it always yields MJ's own implementation and therefore bypasses any registered override.
+
+  The failure posture is unchanged and worth restating for anyone writing an override: `SearchEngine` treats a resolver throw as **denied**, never as allowed. An override that cannot reach its own store must not accidentally open a scope.
+
+  7 tests covering the default, the fallback, an honoured registration, late registration (imperative, because `@RegisterClass` evaluates at module load and so cannot demonstrate lateness), composition with `super`, the deprecated constant, and that a subclass of the stock resolver satisfies the base contract.
+
+- 8d0d45a: build: declare dependencies that npm's hoisting was silently supplying, as part of the monorepo's cutover to pnpm.
+
+  Under npm, a package could import a module it never declared and still resolve it, because npm flattens everything into the workspace-root `node_modules`. pnpm's strict, isolated linking gives a package only what it declares — so each of these was a latent bug that happened to work. They are fixed here independently of the package manager; nothing about the published API changes.
+
+  Added declarations: `@types/mssql` (codegen-lib, sqlserver-dataprovider, testing-cli, testing-integration, react-test-harness), `@types/pg` (codegen-lib), `@types/express` (messaging-adapters, server-extensions-core), `@types/fs-extra` (codegen-lib), `@types/babel__traverse` (react-linter), `ora` (ai-cli), `glob` (react-test-harness), `tslib` (ng-bootstrap, which compiles with `importHelpers`), `@auth0/auth0-spa-js` (ng-auth-services), `@memberjunction/core-entities` + `@memberjunction/global` + `@memberjunction/aiengine` (cli), and `@memberjunction/ng-react` (ng-explorer-core, reached from a generated file).
+
+  Two changes are more than a declaration:
+  - **`@memberjunction/server`**: `@types/express` moves `^4.17.25` → `^5.0.6`. The package declares `express@^5.2.1` at runtime, so it was only compiling because hoisting supplied the v5 types that six sibling packages declare. The types now match the express it actually runs.
+  - **`@memberjunction/ng-auth-services`**: `angularProviderFactory` gains an explicit `Provider[]` return type. Declaring `@auth0/auth0-spa-js` alone does not resolve TS2742 — the emitted declaration file still needed a nameable type rather than one inferred through a transitive package path.
+  - **`@memberjunction/scheduled-actions-server`**: drops `@types/axios`, a deprecated stub package that carries no type definitions; its presence made TypeScript auto-include it and then fail to find any types. axios ships its own.
+
+- 19ca0b4: Bind `statusUpdates` push-subscription delivery to the authenticated connection identity (fixes a session-hijack, B49).
+
+  The `statusUpdates` GraphQL subscription filtered only on the client-supplied `sessionId` (`payload.sessionId === args.sessionId`) and never checked it against the subscriber's authenticated identity. Because `sessionId` is a client-generated (per-tab) UUID persisted in browser storage, a subscriber who obtained another user's `sessionId` would receive their pushes (agent-run progress, MCP/test/remote-browser progress, notifications).
+
+  **Fix:** every push now carries the authenticated owner's user ID, and the subscription filter additionally requires it to match the subscriber CONNECTION's server-authenticated identity (`context.userPayload.userRecord.ID`, established once at WS connect and refreshed on token expiry). `sessionId` still routes a push to the right browser tab, but is no longer the trust anchor — knowing it is no longer sufficient. The filter fails closed (missing owner or connection identity → no delivery).
+
+  **Centralized so it can't regress:** all ~22 publish sites now route through a single `publishStatusUpdate(pubSub, { sessionId, ownerUserId, message })` helper (resolvers via the new `ResolverBase.PublishStatusUpdate` wrapper; non-resolver services/heartbeat call the helper directly). `ownerUserId` is a **required** field, so the compiler rejects any publish that omits identity — a future publisher physically cannot forget it. Also normalized three previously-malformed publishes that sent no `sessionId`. The security-critical filter is unit-tested in isolation.
+
+  `ownerUserId` is used only server-side by the filter and is deliberately not exposed on the client-facing `PushStatusNotification` (no user IDs leak to subscribers).
+
+- Updated dependencies [e4a6fa3]
+- Updated dependencies [cd520e2]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [fe7bd9d]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+- Updated dependencies [0acf96e]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [1100077]
+- Updated dependencies [e76b195]
+- Updated dependencies [5c6e36c]
+  - @memberjunction/api-keys@6.1.0-edge.0
+  - @memberjunction/codegen-lib@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.0
+  - @memberjunction/generic-database-provider@6.1.0-edge.0
+  - @memberjunction/search-engine@6.1.0-edge.0
+  - @memberjunction/core-actions@6.1.0-edge.0
+  - @memberjunction/server-extensions-core@6.1.0-edge.0
+  - @memberjunction/aiengine@6.1.0-edge.0
+  - @memberjunction/interactive-component-types@6.1.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.0
+  - @memberjunction/ai-agent-manager-actions@6.1.0-edge.0
+  - @memberjunction/ai-agent-manager@6.1.0-edge.0
+  - @memberjunction/ai-agents@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/clustering-engine@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/tag-engine@6.1.0-edge.0
+  - @memberjunction/tag-engine-base@6.1.0-edge.0
+  - @memberjunction/ai-mcp-client@6.1.0-edge.0
+  - @memberjunction/computer-use-engine@6.1.0-edge.0
+  - @memberjunction/ai-prompts@6.1.0-edge.0
+  - @memberjunction/ai-bridge-base@6.1.0-edge.0
+  - @memberjunction/ai-bridge-ringcentral@6.1.0-edge.0
+  - @memberjunction/ai-bridge-teams@6.1.0-edge.0
+  - @memberjunction/ai-bridge-twilio@6.1.0-edge.0
+  - @memberjunction/ai-bridge-vonage@6.1.0-edge.0
+  - @memberjunction/ai-bridge-server@6.1.0-edge.0
+  - @memberjunction/remote-browser-base@6.1.0-edge.0
+  - @memberjunction/remote-browser-server@6.1.0-edge.0
+  - @memberjunction/ai-vector-sync@6.1.0-edge.0
+  - @memberjunction/actions-apollo@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.0
+  - @memberjunction/communication-types@6.1.0-edge.0
+  - @memberjunction/communication-engine@6.1.0-edge.0
+  - @memberjunction/entity-communications-base@6.1.0-edge.0
+  - @memberjunction/entity-communications-server@6.1.0-edge.0
+  - @memberjunction/notifications@6.1.0-edge.0
+  - @memberjunction/communication-ms-graph@6.1.0-edge.0
+  - @memberjunction/communication-sendgrid@6.1.0-edge.0
+  - @memberjunction/credentials@6.1.0-edge.0
+  - @memberjunction/doc-utils@6.1.0-edge.0
+  - @memberjunction/encryption@6.1.0-edge.0
+  - @memberjunction/external-change-detection@6.1.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.0
+  - @memberjunction/integration-engine@6.1.0-edge.0
+  - @memberjunction/integration-engine-base@6.1.0-edge.0
+  - @memberjunction/lists@6.1.0-edge.0
+  - @memberjunction/livekit-room-server@6.1.0-edge.0
+  - @memberjunction/core-entities-server@6.1.0-edge.0
+  - @memberjunction/data-context@6.1.0-edge.0
+  - @memberjunction/queue@6.1.0-edge.0
+  - @memberjunction/storage@6.1.0-edge.0
+  - @memberjunction/record-comparison@6.1.0-edge.0
+  - @memberjunction/scheduling-actions@6.1.0-edge.0
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.0
+  - @memberjunction/scheduling-engine@6.1.0-edge.0
+  - @memberjunction/templates@6.1.0-edge.0
+  - @memberjunction/testing-engine@6.1.0-edge.0
+  - @memberjunction/testing-engine-base@6.1.0-edge.0
+  - @memberjunction/version-history@6.1.0-edge.0
+  - @memberjunction/esignature@6.1.0-edge.0
+  - @memberjunction/computer-use@6.1.0-edge.0
+  - @memberjunction/remote-browser-cdp@6.1.0-edge.0
+  - @memberjunction/remote-browser-selfhost@6.1.0-edge.0
+  - @memberjunction/ai-vectordb@6.1.0-edge.0
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.0
+  - @memberjunction/auth-providers@6.1.0-edge.0
+  - @memberjunction/component-registry-client-sdk@6.1.0-edge.0
+  - @memberjunction/integration-schema-builder@6.1.0-edge.0
+  - @memberjunction/data-context-server@6.1.0-edge.0
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.0
+  - @memberjunction/redis-provider@6.1.0-edge.0
+  - @memberjunction/schema-engine@6.1.0-edge.0
+  - @memberjunction/ai@6.1.0-edge.0
+  - @memberjunction/config@6.1.0-edge.0
+  - @memberjunction/integration-progress-artifacts@6.1.0-edge.0
+  - @memberjunction/lists-base@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+  - @memberjunction/sql-dialect@6.1.0-edge.0
+  - @memberjunction/scheduling-base-types@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

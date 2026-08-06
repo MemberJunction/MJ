@@ -1,5 +1,28 @@
 # @memberjunction/api-keys
 
+## 6.1.0-edge.0
+
+### Minor Changes
+
+- e4a6fa3: Add `RowFilterID` to `APIKeyScope` and `APIApplicationScope` — the schema for API-key-scoped row filters. Both columns are nullable FKs to the existing `RowLevelSecurityFilter` catalog used by role-based RLS; `NULL` is the current behavior, so this release is purely additive. The FK makes a filter undeletable while a live key references it, so a key cannot be silently un-filtered by deleting its filter record.
+
+  Enforcement is not in this release — it lands with the implementation described in `plans/api-key-row-filters.md` (key filters evaluated outside the role-RLS exemption, AND-composed with role RLS and the application ceiling, `full_access` + row filter rejected as an invalid configuration, and RLS-bypassing read scopes denied to filtered keys).
+
+### Patch Changes
+
+- Updated dependencies [e4a6fa3]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+  - @memberjunction/api-keys-base@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

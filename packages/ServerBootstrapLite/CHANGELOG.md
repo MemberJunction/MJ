@@ -1,5 +1,93 @@
 # @memberjunction/server-bootstrap-lite
 
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [24b22c9]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+- Updated dependencies [0acf96e]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [1100077]
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/search-engine@6.1.0-edge.0
+  - @memberjunction/core-actions@6.1.0-edge.0
+  - @memberjunction/react-linter@6.1.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.0
+  - @memberjunction/ai-agent-manager@6.1.0-edge.0
+  - @memberjunction/ai-agents@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/ai-form-builder@6.1.0-edge.0
+  - @memberjunction/tag-engine-base@6.1.0-edge.0
+  - @memberjunction/predictive-studio@6.1.0-edge.0
+  - @memberjunction/ai-prompts@6.1.0-edge.0
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.0
+  - @memberjunction/ai-reranker@6.1.0-edge.0
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.0
+  - @memberjunction/actions-apollo@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.0
+  - @memberjunction/communication-types@6.1.0-edge.0
+  - @memberjunction/content-autotagging@6.1.0-edge.0
+  - @memberjunction/doc-utils@6.1.0-edge.0
+  - @memberjunction/encryption@6.1.0-edge.0
+  - @memberjunction/core-entities-server@6.1.0-edge.0
+  - @memberjunction/queue@6.1.0-edge.0
+  - @memberjunction/storage@6.1.0-edge.0
+  - @memberjunction/record-comparison@6.1.0-edge.0
+  - @memberjunction/record-set-processor@6.1.0-edge.0
+  - @memberjunction/scheduling-actions@6.1.0-edge.0
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.0
+  - @memberjunction/scheduling-engine@6.1.0-edge.0
+  - @memberjunction/templates@6.1.0-edge.0
+  - @memberjunction/testing-engine@6.1.0-edge.0
+  - @memberjunction/geo-core@6.1.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.0
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.0
+  - @memberjunction/ai-vectors-qdrant@6.1.0-edge.0
+  - @memberjunction/ai-vectors-sqlserver@6.1.0-edge.0
+  - @memberjunction/ai-vectors-pgvector@6.1.0-edge.0
+  - @memberjunction/data-context-server@6.1.0-edge.0
+  - @memberjunction/ai-anthropic@6.1.0-edge.0
+  - @memberjunction/ai-assemblyai@6.1.0-edge.0
+  - @memberjunction/ai-azure@6.1.0-edge.0
+  - @memberjunction/ai-bedrock@6.1.0-edge.0
+  - @memberjunction/ai-betty-bot@6.1.0-edge.0
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.0
+  - @memberjunction/ai-cerebras@6.1.0-edge.0
+  - @memberjunction/ai-cohere@6.1.0-edge.0
+  - @memberjunction/ai-fireworks@6.1.0-edge.0
+  - @memberjunction/ai-gemini@6.1.0-edge.0
+  - @memberjunction/ai-groq@6.1.0-edge.0
+  - @memberjunction/ai-heygen@6.1.0-edge.0
+  - @memberjunction/ai-inception@6.1.0-edge.0
+  - @memberjunction/ai-inworld@6.1.0-edge.0
+  - @memberjunction/ai-lmstudio@6.1.0-edge.0
+  - @memberjunction/ai-llamacpp@6.1.0-edge.0
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.0
+  - @memberjunction/ai-minimax@6.1.0-edge.0
+  - @memberjunction/ai-mistral@6.1.0-edge.0
+  - @memberjunction/ai-ollama@6.1.0-edge.0
+  - @memberjunction/ai-openai@6.1.0-edge.0
+  - @memberjunction/ai-openrouter@6.1.0-edge.0
+  - @memberjunction/ai-vertex@6.1.0-edge.0
+  - @memberjunction/ai-zhipu@6.1.0-edge.0
+  - @memberjunction/ai-xai@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

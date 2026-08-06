@@ -306,3 +306,30 @@ describe('ExecutePrompt — parallel execution aggregation', () => {
     expect(result.additionalResults?.length).toBe(1); // the non-selected task
   });
 });
+
+describe('ExecutePrompt — agent attribution on the prompt run', () => {
+    // WHY: `AIPromptRun.AgentID` is documented as "If this prompt was run as part of an agent,
+    // references the agent", but nothing ever set it — found during the 6.1 release with 340
+    // prompt-run rows in the release database and ZERO non-null AgentIDs. It cannot be derived
+    // from PromptID after the fact, because agents share agent-type-level system prompts: a
+    // parent and its sub-agent both produce runs of "Loop Agent Type: System Prompt". That made
+    // "which prompt runs did this sub-agent produce?" unanswerable, which is what silently
+    // hollowed out six of IT56's live payload-guard checks.
+    it('stamps AgentID when the caller supplies agentId', async () => {
+        llmResponses = [makeChatResult('ok')];
+        const agentId = 'AAAAAAAA-1111-2222-3333-444444444444';
+        const result = await runner.ExecutePrompt(makeParams(makePrompt(), { agentId }) as never);
+        expect(result.success).toBe(true);
+        expect((result.promptRun as unknown as { AgentID: string | null }).AgentID).toBe(agentId);
+    });
+
+    it('leaves AgentID null for a non-agent prompt run', async () => {
+        // Direct prompt execution (a query, a template, a CLI call) has no owning agent. The
+        // column must stay null there rather than being back-filled with something plausible.
+        llmResponses = [makeChatResult('ok')];
+        const result = await runner.ExecutePrompt(makeParams(makePrompt()) as never);
+        expect(result.success).toBe(true);
+        const stamped = (result.promptRun as unknown as { AgentID: string | null }).AgentID;
+        expect(stamped == null).toBe(true);
+    });
+});
