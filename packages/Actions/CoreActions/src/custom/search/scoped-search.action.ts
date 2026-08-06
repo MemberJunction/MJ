@@ -6,7 +6,7 @@ import {
     SearchEngine,
     SearchResult,
     SearchResultItem,
-    SearchScopePermissionResolver
+    GetSearchScopePermissionResolver
 } from "@memberjunction/search-engine";
 import {
     SearchEngineBase,
@@ -244,7 +244,7 @@ export class ScopedSearchAction extends BaseAction {
         startTime: number,
     ): Promise<ActionResultSimple | null> {
         if (!scopeID) return null;
-        const permResolver = new SearchScopePermissionResolver();
+        const permResolver = GetSearchScopePermissionResolver();
         const verdict = await permResolver.ResolveEffectivePermission({
             User: params.ContextUser,
             SearchScopeID: scopeID,
