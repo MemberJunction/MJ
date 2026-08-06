@@ -32,25 +32,28 @@ export default defineConfig({
       'packages/AI/MCPServer',
       'packages/AI/AICLI',
       'packages/AI/Prompts',
-      'packages/AI/Providers/*',
-      'packages/AI/Vectors/*',
-      'packages/AI/Vectors/Memory/*',
-      'packages/AI/AgentManager/*',
-      'packages/AI/Recommendations/*',
+      // Vitest 4: a wildcard project entry must resolve to CONFIG FILES (a bare
+      // 'packages/X/*' glob matches READMEs etc. and errors at startup — which is
+      // why the dormant `test:coverage` script never actually ran).
+      'packages/AI/Providers/*/vitest.config.ts',
+      'packages/AI/Vectors/*/vitest.config.ts',
+      'packages/AI/Vectors/Memory/*/vitest.config.ts',
+      'packages/AI/AgentManager/*/vitest.config.ts',
+      'packages/AI/Recommendations/*/vitest.config.ts',
       'packages/AI/Reranker',
       // Actions
-      'packages/Actions/*',
+      'packages/Actions/*/vitest.config.ts',
       // Communication, Templates, Scheduling
-      'packages/Communication/*',
-      'packages/Communication/providers/*',
-      'packages/Templates/*',
-      'packages/Scheduling/*',
+      'packages/Communication/*/vitest.config.ts',
+      'packages/Communication/providers/*/vitest.config.ts',
+      'packages/Templates/*/vitest.config.ts',
+      'packages/Scheduling/*/vitest.config.ts',
       // Auth, Keys, Credentials
-      'packages/APIKeys/*',
-      'packages/Credentials/*',
+      'packages/APIKeys/*/vitest.config.ts',
+      'packages/Credentials/*/vitest.config.ts',
       // Testing, React
-      'packages/TestingFramework/*',
-      'packages/React/*',
+      'packages/TestingFramework/*/vitest.config.ts',
+      'packages/React/*/vitest.config.ts',
     ],
     coverage: {
       provider: 'v8',
@@ -70,13 +73,11 @@ export default defineConfig({
         '**/node_modules/**',
         '**/*.d.ts',
       ],
-      reporter: ['text', 'text-summary', 'json', 'html', 'lcov'],
-      thresholds: {
-        statements: 10,
-        branches: 10,
-        functions: 10,
-        lines: 10,
-      },
+      // 'json-summary' feeds the nightly coverage job's step summary (coverage-summary.json).
+      reporter: ['text', 'text-summary', 'json', 'json-summary', 'html', 'lcov'],
+      // Report-only for now — no thresholds. The nightly coverage job publishes the
+      // baseline; add per-package ratchets only once real numbers exist, otherwise the
+      // first instrumented run goes red on an arbitrary floor nobody measured.
     },
   },
 });
