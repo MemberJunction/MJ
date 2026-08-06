@@ -109,6 +109,7 @@ export class HarnessAgentBase extends BaseAgent {
             const input = await this.buildTurnInput(promptParams, isFirstTurn);
             const turn = await this.runTurn(input);
             const promptRun = await this.recordPromptRun(promptParams, turn, startTime, input);
+            this.persistExternalSessionId(turn.SessionId);
 
             return this.buildPromptResult(turn, promptRun, startTime);
         } catch (e) {
@@ -185,6 +186,7 @@ export class HarnessAgentBase extends BaseAgent {
         }
 
         turn.SessionId = adapter.SessionId;
+        turn.ReportedModel = adapter.ReportedModel;
         return turn;
     }
 
@@ -215,7 +217,7 @@ export class HarnessAgentBase extends BaseAgent {
             const run = await md.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', promptParams.contextUser);
             run.NewRecord();
             run.PromptID = ids.PromptID;
-            run.ModelID = ids.ModelID;
+            run.ModelID = (await this.resolveReportedModelId(turn.ReportedModel, promptParams)) ?? ids.ModelID;
             run.VendorID = ids.VendorID;
             run.AgentID = this._agentRunAgentId();
             run.RunAt = startTime;
@@ -226,7 +228,10 @@ export class HarnessAgentBase extends BaseAgent {
             // a matter of course; synthesizing this row by hand reproduced the ACCOUNTING fields and
             // dropped the OBSERVABILITY ones, so every harness prompt step showed blank input and
             // output while its token and cost numbers were correct.
-            run.Messages = input;
+            // JSON, not a raw string. AIPromptRun.Messages is documented as "the input messages sent
+            // to the model, typically in JSON format" and the run-detail UI parses it as such — a raw
+            // string parses to nothing, which is why the response rendered and the input did not.
+            run.Messages = JSON.stringify([{ role: 'user', content: input }]);
             run.Result = turn.RawText;
             run.TokensPrompt = turn.InputTokens;
             run.TokensCompletion = turn.OutputTokens;
@@ -281,6 +286,81 @@ export class HarnessAgentBase extends BaseAgent {
             return null;
         }
         return { PromptID: promptId, ModelID: modelId, VendorID: vendorId };
+    }
+
+    /**
+     * Resolves the model the harness REPORTED using to an MJ catalog row.
+     *
+     * Recording the model we assumed rather than the one that ran is not a cosmetic problem: a
+     * harness picks its own model unless told otherwise, and Opus and Sonnet are not the same price,
+     * so the run's cost is attributed to the wrong model. Observed live — the harness ran
+     * `claude-opus-4-6` while the run recorded Claude Sonnet 5, purely because that was the harness
+     * row's declared anchor.
+     *
+     * Returns null when the reported name matches nothing, letting the caller fall back to the
+     * declared anchor. A miss is expected for a model newer than the catalog and must not fail the
+     * run — an approximate attribution still beats no AIPromptRun at all.
+     */
+    private async resolveReportedModelId(
+        reportedModel: string | undefined,
+        promptParams: AIPromptParams,
+    ): Promise<string | null> {
+        if (!reportedModel) {
+            return null;
+        }
+        try {
+            // APIName lives on AIModelVendor, NOT AIModel — the first version of this queried
+            // AIModel.APIName, which does not exist. RunView returns Success:false for an invalid
+            // column rather than throwing, so the resolver failed SILENTLY on every turn and quietly
+            // fell back to the declared anchor. That is the failure shape this codebase keeps
+            // producing: a wrong answer that looks like a right one.
+            //
+            // Vendors report dated variants (`claude-sonnet-4-5-20250929`) where the catalog holds
+            // the base name (`claude-sonnet-4-5`), so an exact match is tried first and a prefix
+            // match second.
+            const escaped = reportedModel.replace(/'/g, "''");
+            const base = escaped.replace(/-\d{8}$/, '');
+            const rv = new RunView();
+            const result = await rv.RunView<{ ModelID: string }>(
+                {
+                    EntityName: 'MJ: AI Model Vendors',
+                    Fields: ['ModelID'],
+                    ExtraFilter: `APIName='${escaped}' OR APIName='${base}'`,
+                    ResultType: 'simple',
+                },
+                promptParams.contextUser,
+            );
+            if (!result.Success) {
+                LogError(`Reported-model lookup failed for '${reportedModel}': ${result.ErrorMessage}`);
+                return null;
+            }
+            const modelId = result.Results?.[0]?.ModelID ?? null;
+            if (!modelId) {
+                LogStatus(
+                    `Harness reported model '${reportedModel}', which is not in the catalog — ` +
+                        `attributing this turn to the harness row's declared model instead.`,
+                );
+            }
+            return modelId;
+        } catch (e) {
+            LogError(`Failed to resolve reported harness model '${reportedModel}': ${describeError(e)}`);
+            return null;
+        }
+    }
+
+    /**
+     * Records the harness session on the run.
+     *
+     * AIAgentRun.ExternalSessionID exists precisely so an MJ run can be correlated with the vendor's
+     * own session logs when diagnosing in-sandbox behaviour — the one place MJ's audit trail
+     * deliberately stops. It was added, documented, and then never populated, so answering "did this
+     * run resume its session?" meant reading the vendor's files off disk instead of the run record.
+     */
+    private persistExternalSessionId(sessionId: string | undefined): void {
+        const run = (this as unknown as { _agentRun?: { ExternalSessionID?: string | null } })._agentRun;
+        if (run && sessionId && !run.ExternalSessionID) {
+            run.ExternalSessionID = sessionId;
+        }
     }
 
     /**
@@ -507,10 +587,18 @@ export class HarnessAgentBase extends BaseAgent {
             })
             .join('\n\n');
 
-        const systemPrompt = isFirstTurn ? await this.renderSystemPrompt(promptParams) : '';
         const contract = this.buildTurnEndContract(promptParams);
-        const parts = [systemPrompt, conversation, contract].filter((p) => p.trim().length > 0);
-        return parts.join('\n\n');
+        if (isFirstTurn) {
+            // Route MJ's system prompt to the harness's SYSTEM channel where the adapter supports it.
+            // Sent as user text it competes with the harness's own system prompt and loses. The
+            // contract stays in the turn input as well, so adapters without a system channel are
+            // unaffected.
+            const systemPrompt = await this.renderSystemPrompt(promptParams);
+            if (systemPrompt.trim()) {
+                this.adapter?.SetSystemPrompt(`${systemPrompt}\n\n${contract}`);
+            }
+        }
+        return [conversation, contract].filter((p) => p.trim().length > 0).join('\n\n');
     }
 
     /**
@@ -564,7 +652,12 @@ export class HarnessAgentBase extends BaseAgent {
         }
         try {
             await TemplateEngineServer.Instance.Config(false, promptParams.contextUser);
-            const template = TemplateEngineServer.Instance.FindTemplate(prompt.TemplateID ?? '');
+            // Look the template up by ID, not name. TemplateEngineBase.FindTemplate takes a NAME —
+            // passing prompt.TemplateID matched nothing on every call, so every render fell through
+            // to the fallback and the harness never received the agent's own instructions. It failed
+            // quietly because a fallback existed, which is exactly what made it survive two rounds of
+            // fixing this same symptom.
+            const template = TemplateEngineServer.Instance.Templates.find((t) => t.ID === prompt.TemplateID);
             const content = template?.GetHighestPriorityContent();
             if (template && content) {
                 const rendered = await TemplateEngineServer.Instance.RenderTemplate(
@@ -578,6 +671,11 @@ export class HarnessAgentBase extends BaseAgent {
                     return rendered.Output;
                 }
                 LogError(`Harness system prompt render returned no output: ${rendered.Message ?? 'unknown'}`);
+            } else {
+                LogError(
+                    `Harness system prompt template not found for TemplateID '${prompt.TemplateID}' ` +
+                        `(prompt '${prompt.Name}').`,
+                );
             }
         } catch (e) {
             LogError(`Harness system prompt render failed, falling back to raw template: ${describeError(e)}`);

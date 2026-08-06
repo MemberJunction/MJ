@@ -32,6 +32,12 @@ import { HarnessProcess } from '../sandbox/SandboxExecutor.js';
 @RegisterClass(BaseHarnessAdapter, 'ClaudeCodeCliAdapter')
 export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
     private executable = 'claude';
+    private systemPrompt: string | undefined;
+
+    /** @inheritdoc */
+    public override SetSystemPrompt(systemPrompt: string): void {
+        this.systemPrompt = systemPrompt;
+    }
 
     protected get ExecutablePath(): string {
         return this.executable;
@@ -64,6 +70,13 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
 
     protected BuildTurnArgs(input: string, isFirstTurn: boolean): string[] {
         const args = ['-p', input, '--output-format', 'stream-json', '--verbose'];
+        // APPEND rather than replace: Claude Code's own system prompt carries its tool definitions
+        // and sandbox conventions, and replacing it would break the harness to enforce our envelope.
+        // Appending puts MJ's contract at system level, where it outranks the conversational habit
+        // that was costing a retry on turn one.
+        if (isFirstTurn && this.systemPrompt) {
+            args.push('--append-system-prompt', this.systemPrompt);
+        }
         if (!isFirstTurn && this.sessionId) {
             args.push('--resume', this.sessionId);
         }
@@ -81,6 +94,13 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
 
         switch (this.readString(raw, 'type')) {
             case 'assistant': {
+                // Claude reports the model it actually used on each assistant message. Capture it so
+                // accounting reflects reality rather than the model we assumed.
+                const message = this.readObject(raw, 'message');
+                const model = message ? this.readString(message, 'model') : undefined;
+                if (model) {
+                    this.reportedModel = model;
+                }
                 const text = this.extractAssistantText(raw);
                 return text ? { Type: 'assistant-text', Text: text } : null;
             }
@@ -146,6 +166,14 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
 
     /** Terminal event held back while its usage event is emitted first. */
     private pendingTerminal: HarnessTurnEvent | null = null;
+
+    /** The model Claude reported using on this turn. */
+    private reportedModel: string | undefined;
+
+    /** @inheritdoc */
+    public override get ReportedModel(): string | undefined {
+        return this.reportedModel;
+    }
 
     /**
      * Flushes the terminal event held back by {@link buildResultEvents}.

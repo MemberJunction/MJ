@@ -49,6 +49,21 @@ export abstract class BaseHarnessAdapter {
     public abstract RunTurn(input: string): AsyncIterable<HarnessTurnEvent>;
 
     /**
+     * Supplies MJ's system prompt for the session, where the harness can accept one.
+     *
+     * Harnesses ship their own system prompt defining their identity, and it dominates anything sent
+     * as user text. MJ's turn-end contract delivered as a user message therefore competes with the
+     * harness's own instructions and loses — observed directly: a harness given the contract in the
+     * user turn still answered "what can you do?" in prose, costing a retry every run.
+     *
+     * Adapters whose harness accepts a system prompt SHOULD override this. Those that cannot are no
+     * worse off than before: the contract still rides in the turn input.
+     */
+    public SetSystemPrompt(_systemPrompt: string): void {
+        // Default: unsupported, and deliberately not an error.
+    }
+
+    /**
      * Answers a `permission-request` the adapter raised.
      *
      * Only meaningful when {@link Capabilities}.PermissionHooks is true; adapters without hooks
@@ -71,6 +86,18 @@ export abstract class BaseHarnessAdapter {
 
     /** Vendor session id once known, persisted to `AIAgentRun.ExternalSessionID`. */
     public get SessionId(): string | undefined {
+        return undefined;
+    }
+
+    /**
+     * The model the harness actually used, if it reports one.
+     *
+     * Adapters that can observe this SHOULD override it. Accounting resolves `AIPromptRun.ModelID`
+     * from this first and only falls back to the harness row's declared model, because a harness left
+     * to choose its own model will — and billing a run against a model it never used is worse than
+     * having no attribution at all, since it looks authoritative.
+     */
+    public get ReportedModel(): string | undefined {
         return undefined;
     }
 }

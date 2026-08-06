@@ -88,6 +88,14 @@ export interface HarnessTurnResult {
     ErrorMessage?: string;
     /** Vendor session id, persisted to `AIAgentRun.ExternalSessionID` for resume and log correlation. */
     SessionId?: string;
+    /**
+     * The model the harness ACTUALLY used, as it reported it (e.g. `claude-opus-4-6`).
+     *
+     * Distinct from the model we asked for. A harness free to pick its own model will, and recording
+     * the one we assumed instead of the one it used makes cost attribution wrong — Opus and Sonnet
+     * are not the same price.
+     */
+    ReportedModel?: string;
 }
 
 /** Where a harness workspace lives and how long it survives. */
