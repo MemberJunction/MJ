@@ -26,6 +26,7 @@
  * like the server-cache bundle's S1→S2→S3 chain.
  */
 import { RunView, RunQuery, Metadata, LocalCacheManager } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { MJEntityEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { UniqueFilter } from '@memberjunction/testing-integration';
@@ -475,7 +476,7 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
                 if (writesDuringSettle > 0 && after.Results.length === baselineCount + 1) {
                     // The slot was maintained in place — this is the storeCachedResults funnel.
                     Assert(Object.isFrozen(after.Results), 'the maintained slot\'s array must be frozen');
-                    const upserted = (after.Results as Record<string, unknown>[]).find(r => String(r['ID']) === setting.ID);
+                    const upserted = (after.Results as Record<string, unknown>[]).find(r => UUIDsEqual(r['ID'] as string, setting.ID));
                     Assert(!!upserted, 'the upserted row must be present in the maintained slot');
                     Assert(
                         Object.isFrozen(upserted),
