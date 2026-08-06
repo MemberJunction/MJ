@@ -21495,7 +21495,7 @@ export const MJMaterializedResultSchema = z.object({
     *   * None
     *   * PerValueCache
     *   * RowFilterBroad
-        * * Description: Parameterization classification: 'None' (unparameterized), 'RowFilterBroad' (materialize broad, filter at read), 'PerValueCache' (bounded structural variant), or 'BoundFixed' (params bound to fixed values). v1 supports 'None' and 'BoundFixed'.`),
+        * * Description: Parameterization classification: 'None' (unparameterized), 'RowFilterBroad' (materialize broad, filter at read), 'PerValueCache' (bounded structural variant), or 'BoundFixed' (params bound to fixed values). v1 supports 'None' and 'RowFilterBroad'; 'PerValueCache' and 'BoundFixed' are reserved for later phases.`),
     RefreshStrategy: z.union([z.literal('DirtyGroupRecompute'), z.literal('FullRebuild'), z.literal('Incremental')]).describe(`
         * * Field Name: RefreshStrategy
         * * Display Name: Refresh Strategy
@@ -21506,7 +21506,7 @@ export const MJMaterializedResultSchema = z.object({
     *   * DirtyGroupRecompute
     *   * FullRebuild
     *   * Incremental
-        * * Description: Refresh strategy: 'FullRebuild' (rebuild the whole result), 'Incremental' (MERGE on the surrogate key), or 'DirtyGroupRecompute' (recompute groups changed since Watermark). v1 ships 'FullRebuild' only.`),
+        * * Description: Refresh strategy: 'FullRebuild' (rebuild the whole result), 'Incremental' (MERGE on the surrogate key), or 'DirtyGroupRecompute' (recompute groups changed since Watermark). v1 ships all three: 'FullRebuild' for unkeyed materializations, and 'Incremental'/'DirtyGroupRecompute' auto-selected by CodeGen for eligible keyed aggregations.`),
     RefreshSchedule: z.string().nullable().describe(`
         * * Field Name: RefreshSchedule
         * * Display Name: Refresh Schedule
@@ -21565,6 +21565,16 @@ export const MJMaterializedResultSchema = z.object({
         * * Display Name: Broad SQL
         * * SQL Data Type: nvarchar(MAX)
         * * Description: For a RowFilterBroad materialization, the broad source SELECT that the refresh engine materializes: the source query with its row-filter WHERE predicates removed, so the materialized table holds every row the query could return for any parameter value. NULL for non-parameterized materializations, which use the source query SQL directly.`),
+    KeyColumns: z.string().nullable().describe(`
+        * * Field Name: KeyColumns
+        * * Display Name: Key Columns
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Phase 3: JSON array of the key columns ({name, type}) for a keyed/aggregation materialization — the combined key hashed into the surrogate (the stable match key for incremental refresh / dirty-group recompute). NULL means not keyed, in which case a synthetic IDENTITY/ROW_NUMBER surrogate is used.`),
+    SourceRowCount: z.number().nullable().describe(`
+        * * Field Name: SourceRowCount
+        * * Display Name: Source Row Count
+        * * SQL Data Type: bigint
+        * * Description: Phase 3 (DirtyGroupRecompute): the SOURCE table row count observed at the last successful refresh. Delete-detection guard — if the current source COUNT(*) is lower than this, rows were deleted and the refresh falls back to a full rebuild (dirty-group recompute cannot localize deletes from surviving rows). NULL means no baseline yet (first run does a full rebuild and sets it). Distinct from RowCount, which counts materialized rows (groups).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -21575,22 +21585,12 @@ export const MJMaterializedResultSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    KeyColumns: z.string().nullable().describe(`
-        * * Field Name: KeyColumns
-        * * Display Name: Key Columns
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Phase 3: JSON array of the key columns ({name, type}) for a keyed/aggregation materialization — the combined key hashed into the surrogate (the stable match key for incremental refresh / dirty-group recompute). NULL means not keyed, in which case a synthetic IDENTITY/ROW_NUMBER surrogate is used.`),
-    SourceRowCount: z.number().nullable().describe(`
-        * * Field Name: SourceRowCount
-        * * Display Name: Source Row Count
-        * * SQL Data Type: int
-        * * Description: Phase 3 (DirtyGroupRecompute): the SOURCE table row count observed at the last successful refresh. Delete-detection guard — if the current source COUNT(*) is lower than this, rows were deleted and the refresh falls back to a full rebuild (dirty-group recompute cannot localize deletes from surviving rows). NULL means no baseline yet (first run does a full rebuild and sets it). Distinct from RowCount, which counts materialized rows (groups).`),
     RefreshesSinceFullRebuild: z.number().describe(`
         * * Field Name: RefreshesSinceFullRebuild
         * * Display Name: Refreshes Since Full Rebuild
         * * SQL Data Type: int
         * * Default Value: 0
-        * * Description: Count of consecutive incremental refreshes since the last full rebuild; the refresher forces a full rebuild at its threshold to reconcile balanced-delete drift. Reset to 0 on full rebuild; incremented on incremental refresh.`),
+        * * Description: Count of consecutive incremental (Incremental/DirtyGroupRecompute) refreshes since the last full rebuild. The refresher forces a full rebuild once this reaches its threshold, reconciling drift that a balanced delete+insert (net-zero source row-count change) leaves uncaught by the delete-detection guard. Reset to 0 on every full rebuild; incremented on every incremental refresh.`),
     SourceQuery: z.string().nullable().describe(`
         * * Field Name: SourceQuery
         * * Display Name: Source Query
@@ -90257,7 +90257,7 @@ export class MJMaterializedResultEntity extends BaseEntity<MJMaterializedResultE
     *   * None
     *   * PerValueCache
     *   * RowFilterBroad
-    * * Description: Parameterization classification: 'None' (unparameterized), 'RowFilterBroad' (materialize broad, filter at read), 'PerValueCache' (bounded structural variant), or 'BoundFixed' (params bound to fixed values). v1 supports 'None' and 'BoundFixed'.
+    * * Description: Parameterization classification: 'None' (unparameterized), 'RowFilterBroad' (materialize broad, filter at read), 'PerValueCache' (bounded structural variant), or 'BoundFixed' (params bound to fixed values). v1 supports 'None' and 'RowFilterBroad'; 'PerValueCache' and 'BoundFixed' are reserved for later phases.
     */
     get ParamMode(): 'BoundFixed' | 'None' | 'PerValueCache' | 'RowFilterBroad' {
         return this.Get('ParamMode');
@@ -90276,7 +90276,7 @@ export class MJMaterializedResultEntity extends BaseEntity<MJMaterializedResultE
     *   * DirtyGroupRecompute
     *   * FullRebuild
     *   * Incremental
-    * * Description: Refresh strategy: 'FullRebuild' (rebuild the whole result), 'Incremental' (MERGE on the surrogate key), or 'DirtyGroupRecompute' (recompute groups changed since Watermark). v1 ships 'FullRebuild' only.
+    * * Description: Refresh strategy: 'FullRebuild' (rebuild the whole result), 'Incremental' (MERGE on the surrogate key), or 'DirtyGroupRecompute' (recompute groups changed since Watermark). v1 ships all three: 'FullRebuild' for unkeyed materializations, and 'Incremental'/'DirtyGroupRecompute' auto-selected by CodeGen for eligible keyed aggregations.
     */
     get RefreshStrategy(): 'DirtyGroupRecompute' | 'FullRebuild' | 'Incremental' {
         return this.Get('RefreshStrategy');
@@ -90424,6 +90424,32 @@ export class MJMaterializedResultEntity extends BaseEntity<MJMaterializedResultE
     }
 
     /**
+    * * Field Name: KeyColumns
+    * * Display Name: Key Columns
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Phase 3: JSON array of the key columns ({name, type}) for a keyed/aggregation materialization — the combined key hashed into the surrogate (the stable match key for incremental refresh / dirty-group recompute). NULL means not keyed, in which case a synthetic IDENTITY/ROW_NUMBER surrogate is used.
+    */
+    get KeyColumns(): string | null {
+        return this.Get('KeyColumns');
+    }
+    set KeyColumns(value: string | null) {
+        this.Set('KeyColumns', value);
+    }
+
+    /**
+    * * Field Name: SourceRowCount
+    * * Display Name: Source Row Count
+    * * SQL Data Type: bigint
+    * * Description: Phase 3 (DirtyGroupRecompute): the SOURCE table row count observed at the last successful refresh. Delete-detection guard — if the current source COUNT(*) is lower than this, rows were deleted and the refresh falls back to a full rebuild (dirty-group recompute cannot localize deletes from surviving rows). NULL means no baseline yet (first run does a full rebuild and sets it). Distinct from RowCount, which counts materialized rows (groups).
+    */
+    get SourceRowCount(): number | null {
+        return this.Get('SourceRowCount');
+    }
+    set SourceRowCount(value: number | null) {
+        this.Set('SourceRowCount', value);
+    }
+
+    /**
     * * Field Name: __mj_CreatedAt
     * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
@@ -90444,37 +90470,11 @@ export class MJMaterializedResultEntity extends BaseEntity<MJMaterializedResultE
     }
 
     /**
-    * * Field Name: KeyColumns
-    * * Display Name: Key Columns
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Phase 3: JSON array of the key columns ({name, type}) for a keyed/aggregation materialization — the combined key hashed into the surrogate (the stable match key for incremental refresh / dirty-group recompute). NULL means not keyed, in which case a synthetic IDENTITY/ROW_NUMBER surrogate is used.
-    */
-    get KeyColumns(): string | null {
-        return this.Get('KeyColumns');
-    }
-    set KeyColumns(value: string | null) {
-        this.Set('KeyColumns', value);
-    }
-
-    /**
-    * * Field Name: SourceRowCount
-    * * Display Name: Source Row Count
-    * * SQL Data Type: int
-    * * Description: Phase 3 (DirtyGroupRecompute): the SOURCE table row count observed at the last successful refresh. Delete-detection guard — if the current source COUNT(*) is lower than this, rows were deleted and the refresh falls back to a full rebuild (dirty-group recompute cannot localize deletes from surviving rows). NULL means no baseline yet (first run does a full rebuild and sets it). Distinct from RowCount, which counts materialized rows (groups).
-    */
-    get SourceRowCount(): number | null {
-        return this.Get('SourceRowCount');
-    }
-    set SourceRowCount(value: number | null) {
-        this.Set('SourceRowCount', value);
-    }
-
-    /**
     * * Field Name: RefreshesSinceFullRebuild
     * * Display Name: Refreshes Since Full Rebuild
     * * SQL Data Type: int
     * * Default Value: 0
-    * * Description: Count of consecutive incremental refreshes since the last full rebuild; the refresher forces a full rebuild at its threshold to reconcile balanced-delete drift. Reset to 0 on full rebuild; incremented on incremental refresh.
+    * * Description: Count of consecutive incremental (Incremental/DirtyGroupRecompute) refreshes since the last full rebuild. The refresher forces a full rebuild once this reaches its threshold, reconciling drift that a balanced delete+insert (net-zero source row-count change) leaves uncaught by the delete-detection guard. Reset to 0 on every full rebuild; incremented on every incremental refresh.
     */
     get RefreshesSinceFullRebuild(): number {
         return this.Get('RefreshesSinceFullRebuild');
