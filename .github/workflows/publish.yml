@@ -206,8 +206,9 @@ jobs:
         # registry has never heard of.
         #
         # 🚨 And in pre mode, pass NO --tag at all: changesets refuses a custom tag in pre
-        # mode ("Releasing under custom tag is not allowed in pre mode") — again exiting 0 —
-        # which is how the corrected-args form STILL publishes nothing. In pre mode the
+        # mode ("Releasing under custom tag is not allowed in pre mode") — that refusal at
+        # least exits 1, so the corrected-args form still published nothing, but visibly.
+        # In pre mode the
         # dist-tag comes from .changeset/pre.json's "tag" field; assert it matches the
         # channel step's derivation instead of passing it.
         #
