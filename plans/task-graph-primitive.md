@@ -11,7 +11,25 @@
 
 **Revision history:** v3 what/when program framing + D14/D15/D16 + redaction/sweep/notification postures · v4 `TaskGraphSpec` rename, Save as Workflow (D17/§3.9), "Workflow" terminology (D18), companion program plan (`plans/unified-workflow.md`) · v5 Phase 0 (legacy retirement) + Phase 5 (Workflow UX, D19) + mockups · v6 first review applied · v7 second-review dispositions · v8 final consistency pass, build-ready · post-v8: drift review vs `next@7f18ea992` (harness note), Phase 0 scope expanded to the `Report*` family.
 
-**Living document during build:** the implementation agent updates this plan in-branch as phases land — status per phase, deviations recorded next to the decision they deviate from.
+**Living document during build — narrowly.** Per AN-BC (2026-08-06), the design above the ledger is **frozen**: the implementation agent updates the build ledger below and nothing else. Detail, blockers, and questions go in comments on [PR #3456](https://github.com/MemberJunction/MJ/pull/3456). A genuine design deviation is raised as a PR comment first and only written into the plan once ruled on — the plan does not drift silently to match the code.
+
+---
+
+## Build ledger
+
+Each phase ships as its own PR, cut fresh from `next` after the prior one merges.
+
+| # | Phase | PR | Status |
+|---|---|---|---|
+| 0 | Legacy retirement — Workflow trio, the `Report*` family, Scheduled Actions, Output Trigger Types | — | ⬜ Not started |
+| 1 | Truthful engine — Task columns + indexes + backfill, failure propagation, cycle detection, wave parallelization | — | ⬜ Not started |
+| 2 | Placement — `@memberjunction/task-graph`, dispatcher + claim protocol, server-side detection, client → observer | — | ⬜ Not started |
+| 3 | The primitive — `'Tasks'` in the Loop union, `TaskGraphSpec`, folding, continuations, opt-in metadata, prompt migration | — | ⬜ Not started |
+| 4 | Convergence — `GraphTraversalEngine`, joins + `traversalMode`, human tasks, sweep enforcement, Save as Workflow | — | ⬜ Not started |
+| 5 | Workflow UX — editor upgrade, runtime overlay, Create Workflow entry, D18 vocabulary sweep | — | ⬜ Not started |
+| R | `BaseAgent` decomposition ([#2708](https://github.com/MemberJunction/MJ/issues/2708)) — **resequenced to last** (AN-BC, 2026-08-06): run it once the engine is proven rather than ahead of Phase 3, since Phase 3's changes live in `loop-agent-type.ts` / `loop-agent-prompt-params.ts` / `ai-core-plus` and need no `base-agent.ts` change. Supersedes D13's staging. | — | ⬜ Not started |
+
+**Build conventions agreed with AN-BC (2026-08-06).** Target DB is local SQL Server `MJ_6_1_0`, freely droppable. **SQL Server only — PostgreSQL counterparts are handled separately by other developers**, so the usual `migrations/vN` ↔ `migrations-pg/vN` pairing is deliberately deferred for this program; the "+ PG counterpart" phrasing in the phases below is superseded by this. New migrations must sort after `V202608052115`. The deterministic bundle `task-graph-orchestration.checks.ts` opens in Phase 1 and grows each phase rather than being deferred to the end. Phase 3 ends with a manual Sage soak before merge, since it rewrites the flagship agent's most-exercised path.
 
 ---
 
@@ -313,7 +331,12 @@ Constraints: `BaseAgent`'s public/protected API stays stable (subclasses exist v
 ### Phase 0 — Legacy retirement (the v6 window is open now)
 
 1. Migration (+ PG counterpart) dropping the dead Skip-era workflow schema: `Workflow`, `WorkflowRun`, `WorkflowEngine` tables + their `MJ: Workflows` / `MJ: Workflow Runs` / `MJ: Workflow Engines` entities and generated forms. Nothing outside generated code reads or writes any of them; the `SubclassName`-referenced `WorkflowBase` class does not exist in the repo.
-2. **The Skip-era `Report*` family goes in the same sweep** (scope expanded 2026-08-06): `Report`, `ReportCategory`, `ReportSnapshot`, `ReportUserState`, `ReportVersion` tables + their five `MJ: Report*` entities and generated forms. Verified self-contained: every inbound `ReportID` FK is within the family (Snapshot/UserState/Version → Report); the only non-generated consumers are `MJServer`'s `ReportResolver` (delete it — removing the `RunReport` query and `CreateReportFromConversationDetailID` mutation is a **breaking external-surface change accepted under the same v6-window standard as D12**) and the `Reports` resource-type row (`metadata/resource-types/`, `DriverClass: ReportResource`) + its Explorer wiring (`shared.service.ts`) — retire both. Dropping the whole family **subsumes** the previously planned column drops (`Report.OutputWorkflowID`, `Report.OutputTriggerTypeID`).
+2. **The Skip-era `Report*` family goes in the same sweep** (scope expanded 2026-08-06): `Report`, `ReportCategory`, `ReportSnapshot`, `ReportUserState`, `ReportVersion` tables + their five `MJ: Report*` entities and generated forms. Verified self-contained: every inbound `ReportID` FK is within the family (Snapshot/UserState/Version → Report); the only non-generated consumers are `MJServer`'s `ReportResolver` (delete it — removing the `GetReportData` query and `CreateReportFromConversationDetailID` mutation is a **breaking external-surface change accepted under the same v6-window standard as D12**; the latter has no callers) and the `Reports` resource-type row (`metadata/resource-types/`, `DriverClass: ReportResource`) + its Explorer wiring (`shared.service.ts`) — retire both. Dropping the whole family **subsumes** the previously planned column drops (`Report.OutputWorkflowID`, `Report.OutputTriggerTypeID`) and avoids regenerating `spCreateReport`/`spUpdateReport` for column removal.
+
+   Additional verified surface for the implementer (2026-08-06 recon):
+   - **`ReportResource` does not exist.** The resource-type row names a `DriverClass` with no class behind it anywhere in the repo — the same dangling-driver shape as `WorkflowBase`. The renderer is already gone; what remains is wiring that resolves to nothing.
+   - **`GraphQLDataProvider.GetReportData` (`graphQLDataProvider.ts:474-492`) also goes.** This is a public method on the client data provider — the more consequential half of the external break, since consumers call it directly rather than through the resolver.
+   - **Explorer wiring beyond `shared.service.ts`:** the `/app/:appName/report/:reportId` route (`app-routing.module.ts:337-350`), `TabService.OpenReport` (`tab.service.ts:110-117`), the `'Reports'` resource-type branches in `shell.component.ts:2624` and `tab-container.component.ts:2640`, and the `Reports` branch of the dashboard add-item picker (`single-dashboard/Components/add-item/`).
 3. Same sweep: `MJ: Scheduled Actions` + `MJ: Scheduled Action Params` and `packages/Actions/ScheduledActions{,Server}` (the legacy cron due-check is mathematically always-false — `scheduler.ts:159-171`, `cronParser.next()` is strictly after `evalTime` — and nothing in-repo hosts the Express app; `MJ: Scheduled Jobs` supersedes it), plus `MJ: Output Trigger Types` (its sole referencer was `Report`, which is now gone entirely).
 4. **Not** in this sweep: Entity AI Actions — deprecated but still live in the save path; absorption belongs with the After\*-durability work (D14).
 5. CodeGen + metadata removal (entities, resource types, permissions); `mj sync` state consistent.
@@ -416,7 +439,7 @@ Remaining risks:
 
 Line references are pinned to the study baseline: `next` @ `d26e202e7` (2026-08-05). Expect drift as `next` moves — treat symbols as authoritative and line numbers as hints. Corrections from review applied: `base-agent.ts` is **14,437** lines at baseline (not "~13k"); the Entity-Action filter stub spanned `ActionEngine.ts:308-310` at baseline (since replaced by the PR #3525 hotfix — filters now evaluate, fail-closed).
 
-**Post-baseline drift review (2026-08-06, `next` @ `7f18ea992`).** Every load-bearing claim re-verified against the 124 commits since baseline. Unchanged: `TaskOrchestrator`, the Explorer client's task-graph path, `BaseMessagingAdapter`, the Scheduling drivers, `MJQueue`, `loop-agent-response-type.ts`, `flow-agent-type.ts`, the `AIAgentRunStep.StepType` CHECK (no collisions with `TaskGraph`), `createPerRequestProviders` (the `context.ts` changes in range are API-key auth only), `Report.OutputWorkflowID`, and all Phase 0 drop targets. Drifted but immaterial: `base-agent.ts` gained ~100 lines (guardrail interrupts, memory-write scope fix, harness accounting anchor) — Track R's approximate seam ranges shift accordingly. **New and material: the external agent harness (#3412) merged** — a fourth agent type whose `HarnessAgentType extends LoopAgentType`, covered by the D3 note above. Phase 0/1 migration timestamps must sort after `V202608051834`.
+**Post-baseline drift review (2026-08-06, `next` @ `7f18ea992`).** Every load-bearing claim re-verified against the 124 commits since baseline. Unchanged: `TaskOrchestrator`, the Explorer client's task-graph path, `BaseMessagingAdapter`, the Scheduling drivers, `MJQueue`, `loop-agent-response-type.ts`, `flow-agent-type.ts`, the `AIAgentRunStep.StepType` CHECK (no collisions with `TaskGraph`), `createPerRequestProviders` (the `context.ts` changes in range are API-key auth only), `Report.OutputWorkflowID`, and all Phase 0 drop targets. Drifted but immaterial: `base-agent.ts` gained ~100 lines (guardrail interrupts, memory-write scope fix, harness accounting anchor) — Track R's approximate seam ranges shift accordingly. **New and material: the external agent harness (#3412) merged** — a fourth agent type whose `HarnessAgentType extends LoopAgentType`, covered by the D3 note above. Phase 0/1 migration timestamps must sort after `V202608052115` (the highest v6 migration — `Metadata_Sync_GPT55_APIName_Fix`; an earlier revision of this note said `V202608051834`, which is one migration stale).
 
 | Concern | Location |
 |---|---|
