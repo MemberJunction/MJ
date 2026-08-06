@@ -11478,6 +11478,9 @@ importers:
       '@memberjunction/ng-bootstrap-lite':
         specifier: 6.1.0-edge.0
         version: link:../Angular/BootstrapLite
+      '@memberjunction/ng-container-directives':
+        specifier: 6.1.0-edge.0
+        version: link:../Angular/Generic/container-directives
       '@memberjunction/ng-core-entity-forms':
         specifier: 6.1.0-edge.0
         version: link:../Angular/Explorer/core-entity-forms
