@@ -5,4 +5,5 @@ export * from './lazy-module-status.component';
 export * from './settings-explorer.component';
 export * from './event-monitor.component';
 export * from './grid-width-lab.component';
+export * from './tab-strip-lab.component';
 export * from './graphql-console.component';

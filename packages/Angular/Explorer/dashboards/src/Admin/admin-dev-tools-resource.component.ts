@@ -74,6 +74,13 @@ export class AdminDevToolsResourceComponent extends BaseAdminContainerComponent 
             icon: 'fa-solid fa-arrows-left-right-to-line',
             description: 'entity-data-grid width + column contract',
             source: { kind: 'resource', driverClass: 'GridWidthLabInspector' }
+        },
+        {
+            id: 'tab-strip-lab',
+            label: 'Tab Strip Lab',
+            icon: 'fa-solid fa-folder-tree',
+            description: 'Both tab strips, one shared look',
+            source: { kind: 'resource', driverClass: 'TabStripLabInspector' }
         }
     ];
 }
