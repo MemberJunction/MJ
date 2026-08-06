@@ -1,8 +1,15 @@
 # Task Graphs as an Agent Primitive — Design Plan
 
-**Status:** Draft v7 — v7 applies the dispositions from the second review round (rkihm-BC review, AN-BC rulings): **`enableTaskGraphs` default flips to OFF** with named launch opt-ins (Sage, Query Builder, Research Agent + its sub-agents); **human tasks exempt from sweep claim-normalization**; the **continuation/reinvoke contract** specified (context shape, idempotency, cycle bound); convergence recorded as an accepted risk (R6); **dispatcher indexes** added to the Phase 1 migration; **D12 restated as a deliberate, accepted breaking change**; assignment authorization deferred to issue [#3524](https://github.com/MemberJunction/MJ/issues/3524). The `RunSingleFilter` stub ships as an immediate hotfix independent of this plan. Prior: v6 — decisions D1–D20, incorporating the first external review (MarceloT-BC): **D20 task-row integrity** (subclass guard + CAS-guarded writes + sweep normalization), **D9 folds become observable** (the `TaskGraph` run step is written even when folded, making single-node graphs promotable via D17), D12 wording tightened to *no external adoption*, a one-time Phase 1 backfill replacing the permanent `__TASK_METADATA__` fallback parse, the Phase 5 verification posture (structure/behavior + selective visual baselines, not blanket pixel diffs), and ref corrections. Prior: v5 — decisions D1–D19. v3 added the what/when program framing, durable-async succession over MJQueue (D14), the Pipeline boundary (D15), the DAG-spec contract (D16), payload-redaction posture, reconciliation-sweep scope, and the human-task notification path. v4 renamed the contract to **`TaskGraphSpec`** (aligned with `AgentSpec`), added **Save as Workflow** (§3.9/D17) and the **"Workflow" terminology** decision (D18), and the companion program plan (`plans/unified-workflow.md`). v5 adds **Phase 0 — legacy retirement** and **Phase 5 — Workflow UX** (D19: the `ng-flow-editor` upgrade, runtime overlay, creation entry point).
-**Date:** 2026-08-05
-**Origin:** Architecture study of the Sage → Workflow Planner → TaskOrchestrator pipeline (session `claude/sage-task-graph-study-4uvtrc`)
+**Status:** ✅ **v8 — Final, approved for build** (2026-08-06)
+**Date:** 2026-08-05 (study) · finalized 2026-08-06
+**Origin:** Architecture study of the Sage → Workflow Planner → TaskOrchestrator pipeline (session `claude/sage-task-graph-study-4uvtrc`), revised through a whole-repo unified-workflow review and two external review rounds
+
+**Review record.** Two external reviews, both approving the direction, all findings dispositioned by AN-BC rulings and applied:
+- **Round 1 (MarceloT-BC → v6):** D20 task-row integrity (subclass guard + CAS-guarded writes + sweep normalization); D9 folds made observable (the `TaskGraph` run step is written even when folded, so single-node graphs are promotable via D17); D12 tightened to *no external adoption*; one-time Phase 1 backfill replacing the permanent `__TASK_METADATA__` fallback parse; Phase 5 verification posture (structure/behavior + selective visual baselines, not blanket pixel diffs); source refs pinned to the study baseline.
+- **Round 2 (rkihm-BC → v7):** `enableTaskGraphs` default flips to **OFF** with named launch opt-ins (Sage, Query Builder, Research Agent + its sub-agents); human tasks exempt from sweep claim-normalization; the continuation/reinvoke contract specified (context shape, idempotency, cycle bound); convergence recorded as accepted risk R6; dispatcher indexes added to the Phase 1 migration; D12 restated as a deliberate, accepted v6 breaking change; human-task assignment authorization deferred to issue [#3524](https://github.com/MemberJunction/MJ/issues/3524).
+- **Already shipped from review:** the `RunSingleFilter` stub was pulled out as an immediate hotfix — **PR [#3525](https://github.com/MemberJunction/MJ/pull/3525), merged to `next`** (fail-closed filter evaluation, 12 new tests). LTS 5.x backport is tracked in that PR's thread.
+
+**Revision history:** v3 what/when program framing + D14/D15/D16 + redaction/sweep/notification postures · v4 `TaskGraphSpec` rename, Save as Workflow (D17/§3.9), "Workflow" terminology (D18), companion program plan (`plans/unified-workflow.md`) · v5 Phase 0 (legacy retirement) + Phase 5 (Workflow UX, D19) + mockups · v6 first review applied · v7 second-review dispositions · v8 final consistency pass, build-ready.
 
 ---
 
@@ -404,7 +411,7 @@ Remaining risks:
 
 ## Appendix — primary source index
 
-Line references are pinned to the study baseline: `next` @ `d26e202e7` (2026-08-05). Expect drift as `next` moves — treat symbols as authoritative and line numbers as hints. Corrections from review applied: `base-agent.ts` is **14,437** lines at baseline (not "~13k"); the Entity-Action filter stub spans `ActionEngine.ts:308-310` (declaration / `return true` / `// temp stub`).
+Line references are pinned to the study baseline: `next` @ `d26e202e7` (2026-08-05). Expect drift as `next` moves — treat symbols as authoritative and line numbers as hints. Corrections from review applied: `base-agent.ts` is **14,437** lines at baseline (not "~13k"); the Entity-Action filter stub spanned `ActionEngine.ts:308-310` at baseline (since replaced by the PR #3525 hotfix — filters now evaluate, fail-closed).
 
 | Concern | Location |
 |---|---|

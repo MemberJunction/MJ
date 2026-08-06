@@ -1,7 +1,7 @@
 # Unified Workflow — Program Plan
 
-**Status:** Draft v1
-**Date:** 2026-08-05
+**Status:** v2 — build-ready companion to the finalized engine plan (v8); Track A item 1 updated after the PR #3525 hotfix shipped
+**Date:** 2026-08-05 · updated 2026-08-06
 **Origin:** Whole-repo workflow study (12-subsystem recon + verified critique) following the merge of PR #3408; companion to [`plans/task-graph-primitive.md`](task-graph-primitive.md) (PR #3456)
 **Scope:** the program-level map — what exists, the doctrine, and the tracks. Each track ships as its own gated PR(s); this document is the constitution they reference, not a mega-deliverable.
 
@@ -42,7 +42,7 @@ Tracks A–C are independent and can start immediately; D–F build on C.
 
 The gaps that make the trigger substrate unsafe to promote to users. All verified in code during the study:
 
-1. **Transition filters** — `ActionEngineServer.RunSingleFilter` is `return true` (`packages/Actions/Engine/src/generic/ActionEngine.ts:308-310`); Entity Action filters never evaluate, so every AfterUpdate binding fires on every save — the highest-consequence workflow bug class. Needs the filter evaluation engine, the documented `OldValues`/`NewValues` contract (BaseEntity already tracks per-field old values), and the seeded `Field Changed` / `Field Changed To Value` filters (`metadata/action-filters/`).
+1. **Transition filters** — ⚡ *partially closed by hotfix [PR #3525](https://github.com/MemberJunction/MJ/pull/3525), merged to `next` 2026-08-06*: `RunSingleFilter` was `return true` (`ActionEngine.ts:308-310` at baseline); it now genuinely evaluates filters (ClassFactory `BaseActionFilter` subclass first, then compiled `Code`, **fail-closed** on error/non-boolean). **Remaining in this track:** the documented `OldValues`/`NewValues` + changed-fields contract in the filter context (BaseEntity already tracks per-field old values), the seeded `Field Changed` / `Field Changed To Value` filters (`metadata/action-filters/`), and the LTS 5.x backport of the hotfix (pending, tracked in the #3525 thread). Until the seeded filters exist, every AfterUpdate binding still fires on every save — the evaluation engine now exists, the declarative transition vocabulary doesn't yet.
 2. **The Validate-path hole** — `EntityActionInvocationValidate.InvokeAction` (`EntityActionInvocationTypes.ts:349-374`) bypasses scope resolution AND provenance, so Validate runs ignore `LoggingMode` and param redaction cannot see the binding's `LogValue` rows — a whole-record Validate param logs raw. Close it.
 3. **Retention** — nothing reads `ActionExecutionLog.RetentionPeriod` / `Action.RetentionPeriod`. Ship the bounded purge Scheduled Job (#3408 §5.8) with a config default.
 4. **`RunEntityAction` null contract** — `ActionResolver.RunEntityAction` (`MJServer/src/resolvers/ActionResolver.ts:367-374`) dereferences `result.Success` unguarded; an out-of-scope binding (a legitimate `null`) reports as an error over GraphQL.
@@ -60,9 +60,9 @@ The gaps that make the trigger substrate unsafe to promote to users. All verifie
 - **Not in this sweep:** Entity AI Actions — deprecated but still live in the save path; absorption belongs with the After\*-durability work (an Entity Action binding to an AI-prompt action covers the use case).
 - Mechanics: one v6 migration (+ PG counterpart), metadata removal, CodeGen, package deprecation per the Publish-No-Break philosophy where external surface is touched.
 
-### Track C — The DAG engine (PR #3456, Phases 1–4 + Track R)
+### Track C — The DAG engine (PR #3456, Phases 0–5 + Track R)
 
-Executed in order per that plan. Program-relevant outputs: the durable dispatcher (MJ's one durable-async substrate, D14), human tasks as graph nodes, `TaskGraphSpec` (D16), Save as Workflow (D17/§3.9), and the reconciliation sweep that finally enforces `AIAgentRequest.ExpiresAt` and `Task.DueAt`.
+Executed in order per that plan (finalized v8): Phase 0 legacy retirement → Phases 1–4 engine → Phase 5 Workflow UX, with Track R (BaseAgent decomposition) parallel. Program-relevant outputs: the durable dispatcher (MJ's one durable-async substrate, D14, with D20 task-row integrity), human tasks as graph nodes (self-assignment only until [#3524](https://github.com/MemberJunction/MJ/issues/3524)), `TaskGraphSpec` (D16), Save as Workflow (D17/§3.9), the Workflow viewer/editor upgrade with its committed mockups (D19, `mockups/workflow-ux/`), and the reconciliation sweep that finally enforces `AIAgentRequest.ExpiresAt` and `Task.DueAt`.
 
 ### Track D — The trigger layer (WHEN)
 
