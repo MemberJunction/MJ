@@ -60,6 +60,26 @@ describe('PostgreSQLCodeGenProvider — materialization DDL', () => {
             const sql = provider.generateMaterializedTableSQL('__mj', 'materialized_demo_summary', noPk);
             expect(sql).not.toContain('PRIMARY KEY');
         });
+
+        it('maps CANONICAL (SQL Server) type names to PG types — regression for the `type "uniqueidentifier" does not exist` codegen crash', () => {
+            // MJ entity-field metadata stores canonical SS type names (uniqueidentifier, nvarchar…) even on a
+            // PostgreSQL database, and base-view/query materialization feeds those straight into this method.
+            // If they aren't mapped, PG rejects the CREATE TABLE ("type uniqueidentifier does not exist") and
+            // aborts the ENTIRE codegen run. Every other PG DDL path maps via mapSQLType; this one must too.
+            const canonical: MaterializedColumnSpec[] = [
+                { Name: 'ID', SQLType: 'uniqueidentifier', Nullable: false, IsPrimaryKey: true },
+                { Name: 'Name', SQLType: 'nvarchar(255)', Nullable: false, IsPrimaryKey: false },
+                { Name: 'Notes', SQLType: 'nvarchar(max)', Nullable: true, IsPrimaryKey: false },
+            ];
+            const sql = provider.generateMaterializedTableSQL('__mj', 'materialized_x', canonical);
+            // canonical SS type names must NOT survive verbatim — PG has no such types
+            expect(sql.toLowerCase()).not.toContain('uniqueidentifier');
+            expect(sql.toLowerCase()).not.toContain('nvarchar');
+            // mapped to PG equivalents
+            expect(sql).toContain('"ID" UUID NOT NULL'); // uniqueidentifier -> UUID
+            expect(sql).toContain('"Name" varchar(255) NOT NULL'); // nvarchar(255) -> varchar(255)
+            expect(sql).toContain('"Notes" TEXT NULL'); // nvarchar(max) -> TEXT
+        });
     });
 
     describe('generateMaterializedWrapperViewSQL', () => {
