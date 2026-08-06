@@ -19,7 +19,7 @@ import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, Aggregat
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { buildPkString, computeFieldsList } from '../utils/record.util';
+import { buildPkString, canonicalizeColumnFields, computeFieldsList } from '../utils/record.util';
 import {
   MJUserViewEntityExtended,
   ViewInfo,
@@ -445,6 +445,9 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       this._gridState = null;
       this._gridStateFromUserDefault = false;
     }
+    // Put the host's field names into the entity's spelling before anything derives from them.
+    // No-op when `[Params]` has not resolved the entity yet — the params handler repeats it.
+    this.canonicalizeHostColumns();
     if (this._columns.length > 0) {
       this.initializeColumnStates();
       this.buildAgColumnDefs();
@@ -1770,6 +1773,13 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         }
       }
 
+      // The entity is only known now, and `[Columns]` is commonly bound BEFORE `[Params]` — so this
+      // is the first point at which a host's field names can be checked against real metadata.
+      // Idempotent, so the repeat on every params change costs nothing.
+      if (this.canonicalizeHostColumns()) {
+        this.initializeColumnStates();
+      }
+
       // Generate columns if not already set
       if (this._columns.length === 0 && this._entityInfo) {
         this.generateColumnsFromMetadata();
@@ -2441,10 +2451,40 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    * Field names from a host-supplied `[Columns]`, so the query fetches what the host chose to show.
    * Empty when the columns were generated from metadata or a view — those origins are already
    * reflected in the grid state / DefaultInView that `computeFieldsList` consults.
+   *
+   * Includes columns declared `visible: false`. Hiding a column is a DISPLAY decision, not a
+   * statement that the data isn't wanted: this grid deliberately keeps hidden columns in its column
+   * model as col defs with `hide: true` rather than omitting them (see `buildAgColumnDefsFromGridState`),
+   * precisely so a saved `[GridState]` that marks one visible can bring it back. A column that
+   * reappears with no data behind it renders every cell empty, which reads as a data bug rather
+   * than a missing SELECT. The cost of the alternative is one column in the query that the host
+   * itself asked for by name.
    */
   private hostColumnFieldNames(): string[] {
     if (!this._columnsFromHost) return [];
-    return this._columns.filter(c => c.visible !== false).map(c => c.field);
+    return this._columns.map(c => c.field);
+  }
+
+  /**
+   * Put host-supplied `[Columns]` into the entity's own field spelling — see
+   * {@link canonicalizeColumnFields} for why the spelling is load-bearing rather than cosmetic.
+   * Returns true when something actually changed, so the caller can rebuild derived state.
+   *
+   * Deliberately the ONLY place this normalisation happens. Everything downstream — the colDef's
+   * `field` and hence its `colId`, `_columnStates`, captured grid state, sort settings, the export
+   * column list, the fetched field list — reads `_columns`, so fixing it here keeps all of them
+   * speaking one vocabulary instead of each needing its own case-insensitive comparison.
+   */
+  private canonicalizeHostColumns(): boolean {
+    if (!this._columnsFromHost || !this._entityInfo || this._columns.length === 0) {
+      return false;
+    }
+    const next = canonicalizeColumnFields(this._entityInfo, this._columns);
+    const changed = next.some((col, i) => col !== this._columns[i]);
+    if (changed) {
+      this._columns = next;
+    }
+    return changed;
   }
 
   private buildFillerColumnDef(): ColDef {
@@ -4057,7 +4097,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       const col = columnState[i];
       if (col.colId === '__rowNumber') continue; // Skip row number column
 
-      const field = this._entityInfo.Fields.find(f => f.Name === col.colId);
+      // Case-insensitive: `colId` originates from a colDef's `field`, which for host-supplied
+      // columns is whatever the page wrote. `canonicalizeHostColumns()` normally settles that
+      // before we get here, but an exact-case miss silently DROPS the column from the captured
+      // state — and that state is what the grid is rebuilt from, so the column would disappear
+      // entirely the first time a user resized anything. Too quiet a failure to leave to one guard.
+      const field = this._entityInfo.Fields.find(f => f.Name.toLowerCase() === col.colId?.toLowerCase());
 
       if (field) {
         const keyLower = field.Name.toLowerCase();
@@ -4489,9 +4534,14 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return this._columns
       .filter(col => col.visible !== false)
       .map(col => {
-        const field = this._entityInfo?.Fields.find(f => f.Name === col.field);
+        // Case-insensitive, matching how col defs and auto-width resolve a host's field name.
+        // An exact-case match here silently cost the export column its data type.
+        const field = this._entityInfo?.Fields.find(f => f.Name.toLowerCase() === col.field.toLowerCase());
         return {
-          name: col.field,
+          // The entity's spelling, because `name` is the KEY the export engine reads each row by
+          // (`row[col.name]`) and rows are keyed from entity metadata. The host's spelling here
+          // exported a correctly-headed column of blank cells.
+          name: field?.Name ?? col.field,
           displayName: col.title || field?.DisplayName || col.field,
           dataType: this.mapFieldTypeToExportType(field?.Type),
           width: typeof col.width === 'number' ? col.width : undefined
