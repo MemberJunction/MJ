@@ -1,5 +1,23 @@
 # @memberjunction/integration-engine
 
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/integration-engine-base@6.1.0-edge.0
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.0
+  - @memberjunction/integration-progress-artifacts@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

@@ -168,8 +168,10 @@ jobs:
       - name: Build packages
         run: pnpm run build
 
-      # LTS process (plans/lts-process.md §4.2): no publish ever omits its explicit
-      # --tag. The channel is derived from the version grammar itself — an -edge.N
+      # LTS process (plans/lts-process.md §4.2): no publish ever completes without its
+      # channel tag asserted — derived here, cross-checked against pre.json before the
+      # publish, verified against the registry after it (pre mode forbids an explicit
+      # --tag). The channel comes from the version grammar itself — an -edge.N
       # prerelease goes to the `edge` dist-tag. Unsuffixed versions are era-gated:
       # era-5 (classic grammar, the bootstrap) publishes to `latest` — today's
       # behavior, unchanged. From era 6 on, an unsuffixed version is a candidate or
@@ -197,9 +199,70 @@ jobs:
           echo "::notice::Publishing $VERSION to npm dist-tag $NPM_TAG (prerelease: $PRERELEASE)"
 
       - name: Publish to npm
-        run: pnpm run change publish -- --tag ${{ steps.channel.outputs.NPM_TAG }}
+        # 🚨 Invoke changesets directly, NOT via `pnpm run change publish -- --tag <x>`.
+        # `"change": "changeset"`, and pnpm 10 forwards the `--` separator LITERALLY, so that
+        # form reaches changesets as `publish -- --tag edge` and dies with "Too many arguments
+        # passed to changesets". changesets exits 0 on its own CLI errors, so the step
+        # concluded `success` while v6.1.0-edge.0 was version-bumped, tagged and back-merged
+        # with ZERO packages reaching npm — a release the repo believes shipped and the
+        # registry has never heard of.
+        #
+        # 🚨 And in pre mode, pass NO --tag at all: changesets refuses a custom tag in pre
+        # mode ("Releasing under custom tag is not allowed in pre mode") — that refusal at
+        # least exits 1, so the corrected-args form still published nothing, but visibly.
+        # In pre mode the
+        # dist-tag comes from .changeset/pre.json's "tag" field; assert it matches the
+        # channel step's derivation instead of passing it.
+        #
+        # `set -o pipefail` + the publish-happened assertion make silence loud, and the
+        # registry verification step below is the gate that cannot be lied to.
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.premode.outputs.MODE }}" = "pre" ]; then
+            PRE_TAG=$(jq -r .tag .changeset/pre.json)
+            if [ "$PRE_TAG" != "${{ steps.channel.outputs.NPM_TAG }}" ]; then
+              echo "::error::Channel step derived dist-tag '${{ steps.channel.outputs.NPM_TAG }}' but pre mode publishes under pre.json's '$PRE_TAG' — refusing to publish under the wrong tag."
+              exit 1
+            fi
+            pnpm exec changeset publish 2>&1 | tee /tmp/publish.log
+          else
+            pnpm exec changeset publish --tag ${{ steps.channel.outputs.NPM_TAG }} 2>&1 | tee /tmp/publish.log
+          fi
+          if ! grep -qE 'New tag:|Packages published|already published' /tmp/publish.log; then
+            echo "::error::changeset publish produced no evidence of a publish — refusing to report success."
+            exit 1
+          fi
         env:
           NPM_TOKEN: ''
+
+      # The registry is the only signal that cannot be lied to (changesets exits 0 on
+      # its own errors, and log-grep assertions only prove what was printed). Assert
+      # the dist-tag actually reached the new version, and that a prerelease publish
+      # did not move `latest` (in pre mode changesets sends packages with no prior
+      # normal release to `latest`).
+      - name: Verify the publish reached npm
+        run: |
+          VERSION=$(jq -r .version packages/MJServer/package.json)
+          NPM_TAG='${{ steps.channel.outputs.NPM_TAG }}'
+          AT_TAG=''
+          for i in 1 2 3 4 5; do
+            AT_TAG=$(npm view "@memberjunction/core@$NPM_TAG" version 2>/dev/null || true)
+            [ "$AT_TAG" = "$VERSION" ] && break
+            echo "dist-tag '$NPM_TAG' is at '${AT_TAG:-<unset>}', want $VERSION — retry $i/5 in 15s"
+            sleep 15
+          done
+          if [ "$AT_TAG" != "$VERSION" ]; then
+            echo "::error::npm dist-tag '$NPM_TAG' never reached $VERSION — the publish did not happen (or failed before tagging). Do not trust this run's green steps."
+            exit 1
+          fi
+          if [ "${{ steps.channel.outputs.PRERELEASE }}" = "true" ]; then
+            LATEST=$(npm view @memberjunction/core dist-tags.latest)
+            if [ "$LATEST" = "$VERSION" ]; then
+              echo "::error::A prerelease publish moved 'latest' to $VERSION — investigate before anything consumes it"
+              exit 1
+            fi
+          fi
+          echo "::notice::Verified: @memberjunction/core@$VERSION is live under dist-tag '$NPM_TAG'"
 
       - name: Get version string
         if: ${{ env.BRANCH == 'main' }}
@@ -227,6 +290,10 @@ jobs:
           GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
+          if gh release view "$VERSION" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release $VERSION already exists — skipping creation (re-run of a partially completed publish)"
+            exit 0
+          fi
           EXTRA_FLAGS=""
           if [ "${{ steps.channel.outputs.PRERELEASE }}" = "true" ]; then
             EXTRA_FLAGS="--prerelease"
