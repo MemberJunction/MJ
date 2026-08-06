@@ -204,9 +204,19 @@ jobs:
         # v6.1.0-edge.0 was version-bumped, tagged and back-merged while ZERO packages reached
         # npm — a release the repo believes shipped and the registry has never heard of.
         # `set -o pipefail` + an explicit publish-happened assertion below make a repeat loud.
+        #
+        # 🚨 And in changesets PRE MODE, `--tag` must be OMITTED entirely — changesets rejects it
+        # with "Releasing under custom tag is not allowed in pre mode" and publishes under the tag
+        # from .changeset/pre.json instead (currently `edge`), which is the tag we wanted anyway.
+        # The channel step's NPM_TAG stays authoritative outside pre mode.
         run: |
           set -euo pipefail
-          pnpm exec changeset publish --tag ${{ steps.channel.outputs.NPM_TAG }} 2>&1 | tee /tmp/publish.log
+          if [ "${{ steps.premode.outputs.MODE }}" = "pre" ]; then
+            echo "::notice::changesets pre mode — publishing under the pre.json tag ($(jq -r .tag .changeset/pre.json)); --tag is not permitted"
+            pnpm exec changeset publish 2>&1 | tee /tmp/publish.log
+          else
+            pnpm exec changeset publish --tag ${{ steps.channel.outputs.NPM_TAG }} 2>&1 | tee /tmp/publish.log
+          fi
           if ! grep -qE 'New tag:|Packages published|already published' /tmp/publish.log; then
             echo "::error::changeset publish produced no evidence of a publish — refusing to report success."
             exit 1
