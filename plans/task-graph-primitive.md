@@ -9,7 +9,9 @@
 - **Round 2 (rkihm-BC → v7):** `enableTaskGraphs` default flips to **OFF** with named launch opt-ins (Sage, Query Builder, Research Agent + its sub-agents); human tasks exempt from sweep claim-normalization; the continuation/reinvoke contract specified (context shape, idempotency, cycle bound); convergence recorded as accepted risk R6; dispatcher indexes added to the Phase 1 migration; D12 restated as a deliberate, accepted v6 breaking change; human-task assignment authorization deferred to issue [#3524](https://github.com/MemberJunction/MJ/issues/3524).
 - **Already shipped from review:** the `RunSingleFilter` stub was pulled out as an immediate hotfix — **PR [#3525](https://github.com/MemberJunction/MJ/pull/3525), merged to `next`** (fail-closed filter evaluation, 12 new tests). LTS 5.x backport is tracked in that PR's thread.
 
-**Revision history:** v3 what/when program framing + D14/D15/D16 + redaction/sweep/notification postures · v4 `TaskGraphSpec` rename, Save as Workflow (D17/§3.9), "Workflow" terminology (D18), companion program plan (`plans/unified-workflow.md`) · v5 Phase 0 (legacy retirement) + Phase 5 (Workflow UX, D19) + mockups · v6 first review applied · v7 second-review dispositions · v8 final consistency pass, build-ready.
+**Revision history:** v3 what/when program framing + D14/D15/D16 + redaction/sweep/notification postures · v4 `TaskGraphSpec` rename, Save as Workflow (D17/§3.9), "Workflow" terminology (D18), companion program plan (`plans/unified-workflow.md`) · v5 Phase 0 (legacy retirement) + Phase 5 (Workflow UX, D19) + mockups · v6 first review applied · v7 second-review dispositions · v8 final consistency pass, build-ready · post-v8: drift review vs `next@7f18ea992` (harness note), Phase 0 scope expanded to the `Report*` family.
+
+**Living document during build:** the implementation agent updates this plan in-branch as phases land — status per phase, deviations recorded next to the decision they deviate from.
 
 ---
 
@@ -310,12 +312,13 @@ Constraints: `BaseAgent`'s public/protected API stays stable (subclasses exist v
 
 ### Phase 0 — Legacy retirement (the v6 window is open now)
 
-1. Migration (+ PG counterpart) dropping the dead Skip-era workflow schema: `Workflow`, `WorkflowRun`, `WorkflowEngine` tables + their `MJ: Workflows` / `MJ: Workflow Runs` / `MJ: Workflow Engines` entities and generated forms, and the one inbound FK column `Report.OutputWorkflowID`. Nothing outside generated code reads or writes any of them; the `SubclassName`-referenced `WorkflowBase` class does not exist in the repo.
-2. Same sweep: `MJ: Scheduled Actions` + `MJ: Scheduled Action Params` and `packages/Actions/ScheduledActions{,Server}` (the legacy cron due-check is mathematically always-false — `scheduler.ts:159-171`, `cronParser.next()` is strictly after `evalTime` — and nothing in-repo hosts the Express app; `MJ: Scheduled Jobs` supersedes it), plus `MJ: Output Trigger Types` + `Report.OutputTriggerTypeID` (report-era, zero non-generated consumers).
-3. **Not** in this sweep: Entity AI Actions — deprecated but still live in the save path; absorption belongs with the After\*-durability work (D14).
-4. CodeGen + metadata removal; `mj sync` state consistent.
+1. Migration (+ PG counterpart) dropping the dead Skip-era workflow schema: `Workflow`, `WorkflowRun`, `WorkflowEngine` tables + their `MJ: Workflows` / `MJ: Workflow Runs` / `MJ: Workflow Engines` entities and generated forms. Nothing outside generated code reads or writes any of them; the `SubclassName`-referenced `WorkflowBase` class does not exist in the repo.
+2. **The Skip-era `Report*` family goes in the same sweep** (scope expanded 2026-08-06): `Report`, `ReportCategory`, `ReportSnapshot`, `ReportUserState`, `ReportVersion` tables + their five `MJ: Report*` entities and generated forms. Verified self-contained: every inbound `ReportID` FK is within the family (Snapshot/UserState/Version → Report); the only non-generated consumers are `MJServer`'s `ReportResolver` (delete it — removing the `RunReport` query and `CreateReportFromConversationDetailID` mutation is a **breaking external-surface change accepted under the same v6-window standard as D12**) and the `Reports` resource-type row (`metadata/resource-types/`, `DriverClass: ReportResource`) + its Explorer wiring (`shared.service.ts`) — retire both. Dropping the whole family **subsumes** the previously planned column drops (`Report.OutputWorkflowID`, `Report.OutputTriggerTypeID`).
+3. Same sweep: `MJ: Scheduled Actions` + `MJ: Scheduled Action Params` and `packages/Actions/ScheduledActions{,Server}` (the legacy cron due-check is mathematically always-false — `scheduler.ts:159-171`, `cronParser.next()` is strictly after `evalTime` — and nothing in-repo hosts the Express app; `MJ: Scheduled Jobs` supersedes it), plus `MJ: Output Trigger Types` (its sole referencer was `Report`, which is now gone entirely).
+4. **Not** in this sweep: Entity AI Actions — deprecated but still live in the save path; absorption belongs with the After\*-durability work (D14).
+5. CodeGen + metadata removal (entities, resource types, permissions); `mj sync` state consistent.
 
-**Exit:** the legacy tables/entities/forms are gone, builds and integration tier green — and the name **Workflow** is freed for D18.
+**Exit:** the legacy tables/entities/forms/resolver are gone, builds and integration tier green — and the name **Workflow** is freed for D18.
 
 ### Phase 1 — Truthful engine
 1. Migration: `Task` columns + `AIAgentRunStep.StepType` value (+ CodeGen).
