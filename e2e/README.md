@@ -74,3 +74,29 @@ npx playwright test --config e2e/playwright.config.ts --list
   its in-app-notification bell and linked Agent-run record, then delete the
   routine through the UI (cleanup is guaranteed via try/finally). Budget ~8
   minutes for the live test.
+- **`specs/omnibar.spec.ts`** — Unified Command Palette (omnibar):
+  Ctrl/Cmd+K opens the centered palette over the shell; plain text runs the
+  cross-source global search (grouped rows + "See all results" opens the
+  Search Results tab); `#` switches to Jump-to-Record mode, `/` to Commands
+  mode (Enter on an app row switches apps), `@` lists agents (tolerantly
+  skipped when none are available); Escape closes, and the header affordance
+  opens the palette on click. Uses `omnibar-optin.ts` helpers to ensure the
+  `Shell.Omnibar.Enabled` flag state.
+- **`specs/chat-drafts.spec.ts`** — Composer draft persistence
+  (UserInfoEngine-backed, key `mj.chat.drafts.v1`): a draft typed into the
+  new-conversation composer — including a resolved agent-mention pill staged
+  via the omnibar — survives a full page reload (the pill rehydrates as a
+  pill, the typed tail is intact), and clearing the composer clears the
+  persisted draft (no ghost restore). Syncs deterministically on the
+  pipeline's `[Drafts]` console signals instead of sleeps; cleans up after
+  itself since drafts persist per-user server-side.
+
+## CI wiring
+
+`.github/workflows/release-test.yml` runs `omnibar.spec.ts` + `chat-drafts.spec.ts`
+nightly (and on dispatch with `run_e2e`) when the `E2E_PW_PROFILE_B64` secret — a
+base64'd tar.gz of a primed signed-in `.playwright-cli/profile` — is configured,
+along with the matching `E2E_TENANT_ID`/`E2E_WEB_CLIENT_ID` auth secrets. Without
+the secrets the e2e job skips **visibly** (a warning in the run summary), never
+reporting success for work it didn't do. The live `user-routines` spec and
+`predictive-studio` (needs its metadata synced) remain local-only.
