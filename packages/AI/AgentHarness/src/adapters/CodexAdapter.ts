@@ -34,6 +34,13 @@ export class CodexAdapter extends BaseCliHarnessAdapter {
             // recovered by BaseAgent's malformed-response retry when the model drifts into prose.
             StructuredOutput: false,
             UsageReporting: true,
+            // FALSE: this adapter does not translate MJ's permission policy into harness flags, so a
+            // configured posture is INERT here and the runtime warns about it. Not an oversight —
+            // Codex CLI's permission flags could not be verified against a real install, and
+            // guessing them produces the exact failure this flag exists to surface: a policy that
+            // looks applied and is not. Verify against the CLI, then implement
+            // ApplyPermissionPolicy and flip this to true.
+            PermissionPolicy: false,
             PermissionHooks: false,
             McpClient: true,
             WorkspaceScoping: true,
