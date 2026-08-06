@@ -3514,7 +3514,10 @@ export class BaseAgent {
 
         // Set up the hierarchical prompt execution
         const promptParams = new AIPromptParams();
-        
+        // Attribute the resulting AIPromptRun to this agent. Agents share agent-type-level system
+        // prompts, so without this a parent's inference and its sub-agent's are indistinguishable.
+        promptParams.agentId = params.agent.ID;
+
         // Handle case where systemPrompt is optional (e.g., Flow Agent Type)
         if (systemPrompt) {
             promptParams.prompt = systemPrompt;
@@ -4178,6 +4181,11 @@ export class BaseAgent {
         const availableSkills = AIEngine.Instance.GetAutoActivatableSkillsForAgent(params.agent, params.contextUser);
 
         const missingSkills = requested.filter(req => {
+            if (!req.name || typeof req.name !== 'string') {
+                // Malformed activation from the model (e.g. a hallucinated entry missing `name`) —
+                // treat as a missing skill so it goes through the normal retry path instead of throwing.
+                return true;
+            }
             const requestedName = req.name.trim().toLowerCase();
 
             const exactMatch = availableSkills.find(s => s.Name.trim().toLowerCase() === requestedName);
@@ -5931,6 +5939,7 @@ The context is now within limits. Please retry your request with the recovered c
                 // Keys are the summarize-range.template.md contract ({{ lens }}, {{ messages }})
                 promptParams.data = { lens, messages: rangeText };
                 promptParams.contextUser = params.contextUser;
+                promptParams.agentId = params.agent.ID;
                 const result = await this._promptRunner.ExecutePrompt<string>(promptParams);
                 const text = ExtractPromptResultText(result);
                 if (!result.success || text.length === 0) {
@@ -7903,10 +7912,19 @@ The context is now within limits. Please retry your request with the recovered c
         if (params.conversationDetailId) {
             this._agentRun.ConversationDetailID = params.conversationDetailId;
         }
-        // Use conversationId from data if available (already passed by AgentRunner)
-        // This avoids a redundant network lookup since AgentRunner already loaded this
-        if (params.data?.conversationId) {
-            this._agentRun.ConversationID = params.data.conversationId;
+        // Prefer the first-class conversationId param, then the data bag (already passed by
+        // AgentRunner in the common case, avoiding a redundant network lookup). Neither is
+        // guaranteed to survive every call path (e.g. direct BaseAgent.Execute callers, wire
+        // serialization), so fall back to loading the ConversationDetail so ConversationID is
+        // never silently left empty when conversationDetailId is present.
+        const conversationIdFromParams = params.conversationId || params.data?.conversationId;
+        if (conversationIdFromParams) {
+            this._agentRun.ConversationID = conversationIdFromParams;
+        } else if (params.conversationDetailId) {
+            const convDetail = await (params.provider || this._activeProvider).GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+            if (await convDetail.Load(params.conversationDetailId)) {
+                this._agentRun.ConversationID = convDetail.ConversationID;
+            }
         }
         // Stamp the realtime/long-lived session id (if any) so every run — including delegated
         // child runs that inherit this value — is groupable under the same MJ: AI Agent Session.
@@ -8519,6 +8537,20 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Invokes params.onProgress, isolating the caller's callback (e.g. wire/websocket delivery,
+     * which can throw on serialization or publish failures) from prompt/step execution. A callback
+     * failure must never be misclassified as an agent execution failure and poison the run's
+     * terminal Status.
+     */
+    private safeOnProgress(params: ExecuteAgentParams, progress: Parameters<NonNullable<ExecuteAgentParams['onProgress']>>[0]): void {
+        try {
+            params.onProgress?.(progress);
+        } catch (e) {
+            this.logError(`onProgress callback threw and was swallowed: ${e}`, { category: 'ProgressCallback' });
+        }
+    }
+
+    /**
      * Gets human-readable reasoning for the next step decision.
      *
      * @private
@@ -8795,7 +8827,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             const hierarchicalStepToEmit = this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts);
 
-            params.onProgress?.({
+            this.safeOnProgress(params, {
                 step: 'prompt_execution',
                 message: this.formatHierarchicalMessage(promptMessage),
                 metadata: {
@@ -8948,7 +8980,7 @@ The context is now within limits. Please retry your request with the recovered c
             }
 
             // Report decision processing progress
-            params.onProgress?.({
+            this.safeOnProgress(params, {
                 step: 'decision_processing',
                 message: this.formatHierarchicalMessage('Analyzing response and determining next steps'),
                 metadata: {
@@ -9347,7 +9379,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         // Report sub-agent execution progress with descriptive context
-        params.onProgress?.({
+        this.safeOnProgress(params, {
             step: 'subagent_execution',
             message: this.formatHierarchicalMessage(`Delegating to ${subAgentRequest.name} agent`),
             metadata: {
@@ -9386,11 +9418,22 @@ The context is now within limits. Please retry your request with the recovered c
         // lookup, then the effective set, for any legacy direct callers of this method.
         const subAgentEntity = resolvedSubAgentEntity
             ?? AIEngine.Instance.Agents.find(a => a.Name === subAgentRequest.name &&
-                                                  UUIDsEqual(a.ParentID, params.agent.ID))
+                                                  UUIDsEqual(a.ParentID, params.agent.ID) &&
+                                                  a.Status === 'Active')
             ?? this.getEffectiveSubAgentsForValidation(params.agent.ID).find(
                    a => a.Name.trim().toLowerCase() === subAgentRequest.name?.trim().toLowerCase());
         if (!subAgentEntity) {
             throw new Error(`Sub-agent '${subAgentRequest.name}' not found`);
+        }
+        // Status must be enforced no matter WHICH of the three resolutions above produced the entity.
+        // resolveSubAgentByName (the primary) already filters Status === 'Active', but the ParentID
+        // fallback did not, and getEffectiveSubAgentsForValidation returns runtime-granted
+        // _effectiveSubAgents unfiltered — so a Disabled sub-agent could be delegated to and run to
+        // completion, merging its state upstream, purely because the caller took a different path.
+        // Re-asserting it here makes the contract path-independent rather than relying on every
+        // present and future resolution site remembering to filter.
+        if (subAgentEntity.Status !== 'Active') {
+            throw new Error(`Sub-agent '${subAgentRequest.name}' is not Active (Status='${subAgentEntity.Status}')`);
         }
         const stepEntity = await this.createStepEntity({ stepType: 'Sub-Agent', stepName: `Execute Sub-Agent: ${subAgentRequest.name}`, contextUser: params.contextUser, targetId: subAgentEntity.ID, inputData, payloadAtStart: previousDecision.newPayload, parentId: parentStepId, skills: this.getSkillAttributionForSubAgent(subAgentEntity, params.agent) });
         
@@ -9884,7 +9927,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
         const { subAgentEntity, relationship } = resolved;
 
-        params.onProgress?.({
+        this.safeOnProgress(params, {
             step: 'subagent_execution',
             message: this.formatHierarchicalMessage(`Delegating to parallel sub-agent ${request.name}`),
             metadata: {
@@ -10304,7 +10347,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         // Report sub-agent execution progress
-        params.onProgress?.({
+        this.safeOnProgress(params, {
             step: 'subagent_execution',
             percentage: 60,
             message: this.formatHierarchicalMessage(`Delegating to ${subAgentRequest.name} agent`),
@@ -10861,7 +10904,7 @@ The context is now within limits. Please retry your request with the recovered c
                 }).join('\n\n');
             }
                 
-            params.onProgress?.({
+            this.safeOnProgress(params, {
                 step: 'action_execution',
                 message: this.formatHierarchicalMessage(progressMessage),
                 metadata: {
@@ -11267,7 +11310,7 @@ The context is now within limits. Please retry your request with the recovered c
         });
 
         // Report progress
-        params.onProgress?.({
+        this.safeOnProgress(params, {
             step: 'action_execution', // Reuse action_execution step type for progress reporting
             message: this.formatHierarchicalMessage(toolMessage),
             metadata: {
@@ -13642,6 +13685,16 @@ The context is now within limits. Please retry your request with the recovered c
         const params = this._executeParams;
         if (!params?.conversationId || this._depth !== 0 || !this._agentRun
             || !BaseAgent.settledRunStatuses.includes(this._agentRun.Status)) {
+            // A quiet return here is indistinguishable from "the pass ran and found nothing to do":
+            // no Compaction step and no boundary summary are written either way. Say WHY we skipped,
+            // so a missing post-turn compaction can be diagnosed without instrumenting the build.
+            this.logStatus(
+                `Post-turn compaction skipped — conversationId=${params?.conversationId ?? 'none'}, ` +
+                `depth=${this._depth}, runStatus=${this._agentRun?.Status ?? 'no run'} ` +
+                `(requires a root run with a conversation, settled as ${BaseAgent.settledRunStatuses.join('/')})`,
+                true /* verboseOnly — normal for non-conversation and sub-agent runs */,
+                params,
+            );
             return;
         }
         const config = this._agentConfig;
@@ -13953,6 +14006,7 @@ The context is now within limits. Please retry your request with the recovered c
                         turnAdded: message.metadata?.turnAdded || 0
                     };
                     promptParams.contextUser = params.contextUser;
+                    promptParams.agentId = params.agent.ID;
 
                     const runner = new AIPromptRunner();
                     const result = await runner.ExecutePrompt<{ summary: string }>(promptParams);
