@@ -38470,9 +38470,23 @@ export interface MJAIAgentHarnessEntity_IHarnessCapabilitySettings {
 
     // ── Sandbox governance ──────────────────────────────────────────────────────
     /**
+     * The adapter translates MJ's `HarnessPermissionPolicy` into flags the harness actually honours,
+     * so a configured posture and allow/deny list take effect. When false the policy is **inert** —
+     * the harness runs on its own defaults regardless of what the agent's metadata says.
+     *
+     * This is deliberately separate from {@link PermissionHooks}: a harness can enforce a *static*
+     * policy at launch (Claude Code's `--allowedTools`, Pi's `--tools`) while having no *interactive*
+     * hook to pause on. Conflating the two is what let four adapters silently ignore a `strict`
+     * posture while the runtime warned about the wrong thing.
+     *
+     * The runtime warns when a policy is configured and this is false, because an unenforced policy
+     * is worse than no policy: the operator believes something is gated.
+     */
+    PermissionPolicy?: boolean;
+    /**
      * The harness exposes permission hooks the adapter can intercept, so a mutating in-sandbox
-     * operation can be paused and surfaced as an `MJ: AI Agent Requests` HITL prompt. Required for
-     * the `strict` posture to be enforced adapter-side rather than only by the sandbox provider.
+     * operation can be paused and surfaced as an `MJ: AI Agent Requests` HITL prompt. This is about
+     * *interactive* approval mid-turn; see {@link PermissionPolicy} for static policy enforcement.
      */
     PermissionHooks?: boolean;
     /**
