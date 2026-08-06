@@ -34,14 +34,18 @@ export default defineConfig({
       editLink: { baseUrl: 'https://github.com/MemberJunction/MJ/edit/next/docs-site/' },
       lastUpdated: true,
       customCss: ['./src/styles/custom.css'],
-      components: { Footer: './src/components/Footer.astro' },
+      components: {
+        Footer: './src/components/Footer.astro',
+        // Adds the documentation-version switcher next to the theme select
+        // on versioned deploys (DOCS_VERSION/DOCS_VERSIONS set by docs.yml).
+        ThemeSelect: './src/components/ThemeSelect.astro',
+      },
       sidebar: [
         {
           label: 'Start Here',
           items: [
             { label: 'What is MemberJunction?', slug: 'overview' },
             { label: 'Getting Started', slug: 'getting-started' },
-            { label: 'Deployment', slug: 'deployment' },
             { label: 'Upgrading to v5', slug: 'upgrade-v5' },
           ],
         },
