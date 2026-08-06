@@ -1,7 +1,7 @@
 # CodeGen OpenApp-Aware Scope — Proposal
 
 **Status:** Draft — pending team review
-**Author:** Jordan Fanapour
+**Author:** JF
 **Related PRs:** #3350 (type-availability gate + includeSchemas), #3304 (original diagnosis), #3279 (external schema filter)
 **Related Issues:** #3384 (cleanup paths treat "out of scope" as "deleted"), #3273 (`mj app link`), #3457 (installer writes app schema into excludeSchemas)
 
@@ -25,7 +25,7 @@ Derive CodeGen's scope from data (`__mj.OpenApp`) rather than manual config. The
 
 ### Implementation: Derive `getExternalEntitySchemas()` from `__mj.OpenApp`
 
-The key insight from Marcelo: the filtering mechanism already exists. `getExternalEntitySchemas()` (`Config/config.ts:1168`) returns the schemas that should be excluded from local generation. Today it reads from the `entityPackageName` map. The change is to derive that list from the database instead:
+The key insight: the filtering mechanism already exists. `getExternalEntitySchemas()` (`Config/config.ts:1168`) returns the schemas that should be excluded from local generation. Today it reads from the `entityPackageName` map. The change is to derive that list from the database instead:
 
 1. During `manageMetadata()`, query `__mj.OpenApp` for all rows with `Status = 'Active'` and a non-null `SchemaName`
 2. Exclude the schema declared in the current project's `mj-app.json` (that's "mine")
@@ -50,7 +50,7 @@ Under this convention:
 
 ### Distinguishing "Mine" From "Not Mine" — Status vs. Absence
 
-Marcelo raised a valid concern: using row-absence to mean "developing" is ambiguous (could mean "not set up yet," "registration failed," etc.). He proposed adding a `Development` status to the `OpenApp.Status` union instead.
+A valid concern was raised during review: using row-absence to mean "developing" is ambiguous (could mean "not set up yet," "registration failed," etc.). An alternative is adding a `Development` status to the `OpenApp.Status` union instead.
 
 **Preferred approach: a `developingSchemas` override in `mj.config.cjs`**
 
@@ -118,6 +118,6 @@ This proposal eliminates the **configuration burden** (how does CodeGen know wha
 
 ## Open Questions
 
-1. **Should `developingSchemas` be the preferred approach, or should we add a `Development` status to OpenApp?** Marcelo favors status for dev/prod parity; Jordan favors config for explicitness and version control.
-2. **How should "unowned" schemas (third-party, no OpenApp row) be handled?** Current proposal: exclude by default, opt-in via existing config. Marcelo suggests this falls out naturally once every MJ-managed schema has an OpenApp row — unowned = residual.
-3. **Should this block on #3384 (cleanup path fixes)?** The destructive paths become more reachable with auto-derived scope. Marcelo's ordering argument: "harden before CodeGen scope narrows further."
+1. **Should `developingSchemas` be the preferred approach, or should we add a `Development` status to OpenApp?** One argument favors status for dev/prod parity; another favors config for explicitness and version control.
+2. **How should "unowned" schemas (third-party, no OpenApp row) be handled?** Current proposal: exclude by default, opt-in via existing config. An alternative: this falls out naturally once every MJ-managed schema has an OpenApp row — unowned = residual.
+3. **Should this block on #3384 (cleanup path fixes)?** The destructive paths become more reachable with auto-derived scope. The ordering argument: "harden before CodeGen scope narrows further."
