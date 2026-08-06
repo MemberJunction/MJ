@@ -52,6 +52,8 @@ export interface MJTabReorder {
           <div
             class="mj-tabs__tab"
             cdkDrag
+            [cdkDragDisabled]="!AllowReorder"
+            [cdkDragStartDelay]="DragStartDelay"
             [class.mj-tabs__tab--active]="tab.Id === ActiveId"
             [class.mj-tabs__tab--rejected]="tab.Status === 'rejected'"
             [class.mj-tabs__tab--complete]="tab.Status === 'complete'"
@@ -100,6 +102,24 @@ export class MJWorkspaceTabStripComponent {
   @Input() ActiveId: string | null = null;
   @Input() ShowNewTab = true;
   @Input() NewTabLabel = 'New';
+
+  /**
+   * Whether tabs can be drag-reordered at all. The escape hatch for hosts where even long-press
+   * dragging is wrong (a kiosk surface, a read-only review screen) — reorder simply isn't offered
+   * and every touch gesture belongs to scrolling.
+   */
+  @Input() AllowReorder = true;
+
+  /**
+   * Per-pointer-type drag threshold, resolving the touch conflict between REORDER and SCROLL: an
+   * overflowing tab list scrolls by horizontal swipe, and a swipe starts on a tab — with an
+   * immediate drag threshold, CDK claims that touch and the list becomes unscrollable on phones.
+   * A hold-to-drag delay is the platform idiom for exactly this (iOS home screen, mobile browser
+   * tabs): a moving finger within the delay window is a SCROLL and CDK lets it through natively; a
+   * still finger past it is a DRAG. Mouse stays immediate — pointer users scroll with the wheel or
+   * scrollbar, so there is no gesture to disambiguate and a delay would just feel laggy.
+   */
+  public readonly DragStartDelay = { touch: 400, mouse: 0 };
 
   @Output() TabSelected = new EventEmitter<string>();
   @Output() TabClosed = new EventEmitter<string>();

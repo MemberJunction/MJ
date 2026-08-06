@@ -38,6 +38,7 @@ import { MJButtonDirective } from '../button/button.directive';
           [Tabs]="Tabs"
           [ActiveId]="ActiveId"
           [NewTabLabel]="NewTabLabel"
+          [AllowReorder]="AllowReorder"
           (TabSelected)="TabSelected.emit($event)"
           (TabClosed)="TabClosed.emit($event)"
           (NewTabRequested)="NewTabRequested.emit()"
@@ -86,6 +87,8 @@ export class MJWorkspaceCardComponent {
   @Input() ActiveId: string | null = null;
   @Input() NewTabLabel = 'New';
   @Input() AriaLabel = 'Workspace';
+  /** Passed through to the strip — see `MJWorkspaceTabStripComponent.AllowReorder`. */
+  @Input() AllowReorder = true;
 
   // ── Standardized footer (opt-in) ────────────────────────────────────────────
   /** Render the standardized action bar (confirm / save-as-draft / discard) below the body. */
