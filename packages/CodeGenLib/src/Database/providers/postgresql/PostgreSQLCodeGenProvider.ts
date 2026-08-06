@@ -11,7 +11,7 @@ import {
     DataSourceResult,
 } from '../../codeGenDatabaseProvider';
 import { configInfo, mj_core_schema } from '../../../Config/config';
-import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
+import { logError, logStatus, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
 import { buildMetadataSupportObjectsSQL } from './metadataSupportObjects';
 import { PostgreSQLDialect, DatabasePlatform, SQLDialect, AutoQuotePostgreSQLIdentifiers, restarLayeredOuterView, buildCreateOrReplaceLayeredOuterViewSQL, LayeredOuterRestarError } from '@memberjunction/sql-dialect';
 import {
@@ -1481,7 +1481,10 @@ $$ LANGUAGE sql STABLE;
     generateCRUDPermissions(entity: EntityInfo, routineName: string, type: CRUDType): string {
         const roles: string[] = [];
         for (const ep of entity.Permissions) {
-            if (!ep.RoleSQLName || ep.RoleSQLName.length === 0) continue;
+            if (!ep.RoleSQLName || ep.RoleSQLName.length === 0) {
+                this.logAppTierOnlyRoleSkip(ep.Role);
+                continue;
+            }
             if (
                 (type === CRUDType.Create && ep.CanCreate) ||
                 (type === CRUDType.Update && ep.CanUpdate) ||
@@ -2673,9 +2676,25 @@ WHERE p.prokind IN ('f', 'p')
         for (const ep of permissions) {
             if (ep.RoleSQLName && ep.RoleSQLName.length > 0 && !roles.includes(ep.RoleSQLName)) {
                 roles.push(ep.RoleSQLName);
+            } else if (!ep.RoleSQLName || ep.RoleSQLName.length === 0) {
+                this.logAppTierOnlyRoleSkip(ep.Role);
             }
         }
         return roles;
+    }
+
+    /**
+     * B3: roles with a blank `SQLName` are app-tier-only BY DESIGN (decision D3a) — the grant
+     * emitters skip them, and this makes the skip visible: one INFO line per role per run.
+     * (PostgreSQL additionally emits NO field-security DENYs at all, per decision D2 — PG has
+     * no DENY primitive, so MJ's Deny-wins semantics cannot be expressed in its DB tier.)
+     */
+    private _appTierOnlyRolesLogged = new Set<string>();
+    private logAppTierOnlyRoleSkip(roleName: string | null | undefined): void {
+        const name = (roleName ?? '').trim();
+        if (!name || this._appTierOnlyRolesLogged.has(name)) return;
+        this._appTierOnlyRolesLogged.add(name);
+        logStatus(`   ℹ️  Role '${name}' is app-tier-only (no SQLName); no DB grants emitted.`);
     }
 
     // ─── DATABASE INTROSPECTION ──────────────────────────────────────────
