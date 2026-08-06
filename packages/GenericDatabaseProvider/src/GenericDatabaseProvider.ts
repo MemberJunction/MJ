@@ -1692,7 +1692,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // ── Field selection ──
-            const fields: string = this.getRunTimeViewFieldString(params, viewEntity);
+            const fields: string = this.getRunTimeViewFieldString(params, viewEntity, user);
 
             // ── Build SELECT and COUNT SQL ──
             // DataSource:'Materialized' routes the read to the entity's materialized wrapper view
@@ -1730,7 +1730,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (userSearchString.length > 0) {
                 if (!this.ValidateUserProvidedSQLClause(userSearchString))
                     throw new Error(`Invalid User Search SQL clause: ${userSearchString}, contains one more for forbidden keywords`);
-                const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, userSearchString);
+                const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, userSearchString, user);
                 if (sUserSearchSQL.length > 0) {
                     whereSQL = bHasWhere ? `${whereSQL} AND (${sUserSearchSQL})` : `(${sUserSearchSQL})`;
                     bHasWhere = true;
@@ -1996,8 +1996,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Builds the SQL field list string for a view query, using dialect-neutral quoting.
      * Returns '*' if no specific fields are resolved.
      */
-    protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: MJUserViewEntityExtended | null): string {
-        const fieldList = this.getRunTimeViewFieldArray(params, viewEntity);
+    protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: MJUserViewEntityExtended | null, contextUser?: UserInfo): string {
+        const fieldList = this.getRunTimeViewFieldArray(params, viewEntity, contextUser);
         if (fieldList.length === 0) return '*';
         return fieldList
             .map((f) => {
@@ -2010,8 +2010,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Resolves the list of EntityFieldInfo objects for a view query.
      * Priority: params.Fields > view columns > all entity fields (wildcard).
+     *
+     * Field-level security intersects every resolution path with the user's ALLOWED set, so a
+     * denied column never appears in the SELECT list and its values never leave the database:
+     *  - explicit `params.Fields` and saved-view columns are silently narrowed (a denied entry
+     *    is dropped without the "Field not found" error — `Fields` describes output shape, not
+     *    a predicate, and the caller learns nothing projection didn't already show them);
+     *  - an empty field list, which otherwise emits `SELECT *`, becomes the explicit
+     *    allowed-column list;
+     *  - `entity_object` requests are EXEMPT — entities must hydrate from every column (see
+     *    ApplyFieldSecurityProjection) and their enforcement stays at the output boundary;
+     *  - PKs are unrestrictable and always survive (the existing force-add).
      */
-    protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: MJUserViewEntityExtended | null): EntityFieldInfo[] {
+    protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: MJUserViewEntityExtended | null, contextUser?: UserInfo): EntityFieldInfo[] {
         const fieldList: EntityFieldInfo[] = [];
         try {
             let entityInfo: EntityInfo | null = null;
@@ -2022,11 +2033,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (!entityInfo) throw new Error(`Entity ${params.EntityName} not found in metadata`);
             }
 
+            const flsUser = contextUser ?? this.CurrentUser;
+            const denied: Set<string> = params.ResultType !== 'entity_object' && flsUser && entityInfo.HasAnyFieldPermissions
+                ? entityInfo.GetDeniedReadFields(flsUser)
+                : new Set<string>();
+
             if (params.Fields) {
                 for (const ef of entityInfo.PrimaryKeys) {
                     if (!params.Fields.find((f) => f.trim().toLowerCase() === ef.Name.toLowerCase())) fieldList.push(ef);
                 }
                 params.Fields.forEach((f) => {
+                    if (denied.has(f.trim().toLowerCase())) return; // silent narrowing — deliberately NOT the "not found" error
                     const field = entityInfo!.FieldByName(f); // O(1) index (was O(F) Fields.find → O(F²) over the loop)
                     if (field) fieldList.push(field);
                     else LogError(`Field ${f} not found in entity ${entityInfo!.Name}`);
@@ -2035,6 +2052,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 viewEntity.Columns.forEach((c: { hidden?: boolean; EntityField?: EntityFieldInfo; Name?: string }) => {
                     if (!c.hidden) {
                         if (c.EntityField) {
+                            if (denied.has(c.EntityField.Name.trim().toLowerCase())) return; // silent narrowing
                             fieldList.push(c.EntityField);
                         } else {
                             LogError(`View Field ${c.Name} doesn't match an Entity Field in entity ${entityInfo!.Name}.`);
@@ -2043,6 +2061,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 });
                 for (const ef of entityInfo.PrimaryKeys) {
                     if (!fieldList.find((f) => f.Name?.trim().toLowerCase() === ef.Name?.toLowerCase())) fieldList.push(ef);
+                }
+            } else if (denied.size > 0) {
+                // No explicit fields and no saved view would emit `SELECT *` — for a restricted
+                // user that pulls denied columns out of the database, so emit the explicit
+                // allowed-column list instead (PKs are unrestrictable and always included).
+                for (const ef of entityInfo.Fields) {
+                    if (!denied.has(ef.Name.trim().toLowerCase())) fieldList.push(ef);
                 }
             }
         } catch (e) {
@@ -2062,10 +2087,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      *   - skips fields that are not sensible text-search targets (non-text types,
      *     unbounded text columns when FTX is off).
      */
-    protected createViewUserSearchSQL(entityInfo: EntityInfo, userSearchString: string): string {
+    protected createViewUserSearchSQL(entityInfo: EntityInfo, userSearchString: string, contextUser?: UserInfo): string {
         let sUserSearchSQL = '';
         const safeUserSearchString = userSearchString.replace(/'/g, "''");
-        if (entityInfo.FullTextSearchEnabled) {
+
+        // Field-level security: never search fields the user cannot read. Matching against a
+        // denied column is a value oracle — "search for 250000 → the row comes back" probes the
+        // secret one term at a time. UserSearchString is not rejected (the term is not a
+        // caller-authored predicate; see AssertPredicatesRespectFieldSecurity) — the denied
+        // fields are simply excluded from the searched set. Computed once per call, never per
+        // field (the per-request precompute contract).
+        const user = contextUser ?? this.CurrentUser;
+        const deniedSearchFields: Set<string> = entityInfo.HasAnyFieldPermissions && user
+            ? entityInfo.GetDeniedReadFields(user)
+            : new Set<string>();
+
+        // The full-text index spans its indexed columns as one unit — a denied FTS-indexed
+        // column cannot be excluded from the index function. When (and only when) a denied
+        // field is FTS-indexed, fall back to the per-field LIKE path, which CAN exclude it.
+        const ftsCoversDeniedField = deniedSearchFields.size > 0 &&
+            entityInfo.Fields.some(f => f.FullTextSearchEnabled && deniedSearchFields.has(f.Name.trim().toLowerCase()));
+
+        if (entityInfo.FullTextSearchEnabled && !ftsCoversDeniedField) {
             let u = safeUserSearchString;
             const uUpper = u.toUpperCase();
             if (uUpper.includes(' AND ') || uUpper.includes(' OR ') || uUpper.includes(' NOT ')) {
@@ -2084,6 +2127,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const escapedTerm = this.escapeLikeTerm(safeUserSearchString);
             for (const field of entityInfo.Fields) {
                 if (!field.IncludeInUserSearchAPI) continue;
+                if (deniedSearchFields.has(field.Name.trim().toLowerCase())) continue; // field security: not searchable
                 const sParam = this.buildPerFieldSearchPredicate(field, escapedTerm, safeUserSearchString);
                 if (!sParam) continue;
                 if (sUserSearchSQL.length > 0) sUserSearchSQL += ' OR ';
@@ -2290,6 +2334,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // served cached rows unprojected — one client's shape poisoned the slot
             // for every subsequent caller.
             const callerFieldsByIndex = new Map<number, string[]>();
+            // Field-security predicate rejections, per item. This operation is directly
+            // client-invokable over GraphQL and its legs call InternalRunView / the cache
+            // directly — the AssertPredicatesRespectFieldSecurity gate that PreRunView/
+            // PreRunViews run is otherwise SKIPPED here, leaving ExtraFilter/OrderBy/
+            // Aggregates over denied fields as a live reconstruction channel on this path.
+            // Rejection is per-item (the response shape has per-item error status), with
+            // the same deliberately ambiguous message as every other rejection path.
+            const gateRejectedByIndex = new Map<number, string>();
             for (let i = 0; i < params.length; i++) {
                 // Shallow-clone: widening must never leak into the caller's objects
                 params[i] = { ...params[i], params: { ...params[i].params } };
@@ -2308,12 +2360,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 this.ResolvePlatformSQLInParams(params[i].params);
                 params[i].params = await this.RunPreRunViewHooks(params[i].params, user);
                 const p = params[i].params;
+                // Gate AFTER hooks (injected filters are scanned too), same as PreRunViews.
+                try {
+                    this.AssertPredicatesRespectFieldSecurity(p, user);
+                } catch (gateError: unknown) {
+                    gateRejectedByIndex.set(i, gateError instanceof Error ? gateError.message : String(gateError));
+                    continue;
+                }
                 const widenEntity = p.EntityName ? this.EntityByName(p.EntityName) : null;
-                if (widenEntity && this.runViewCacheEligible(p)) {
+                if (widenEntity && this.runViewCacheEligible(p, user)) {
                     const requested = p.Fields && p.Fields.length > 0
                         ? p.Fields.map(f => f.trim().toLowerCase())
                         : null;
-                    p.Fields = widenEntity.Fields.map(f => f.Name);
+                    // ALL fields for unrestricted users; the user's field-security ALLOWED
+                    // set when restricted — pairs with the fls: fingerprint segment so each
+                    // permission class stores/serves its own internally consistent superset.
+                    p.Fields = this.ComputeRunViewFetchFields(widenEntity, user);
                     if (requested) {
                         callerFieldsByIndex.set(i, ProviderBase.UnionFieldsWithPrimaryKeys(requested, widenEntity));
                     }
@@ -2334,6 +2396,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             for (let i = 0; i < params.length; i++) {
                 const item = params[i];
+                // Field-security gate rejections short-circuit every leg for this item —
+                // no cache consult, no currency check, no execution.
+                const gateRejection = gateRejectedByIndex.get(i);
+                if (gateRejection !== undefined) {
+                    errorResults.push({ viewIndex: i, status: 'error', errorMessage: gateRejection });
+                    continue;
+                }
                 // Keyset queries bypass the cache entirely (per the AfterKey API contract):
                 // each call uses a different seek key, so cached entries would never be
                 // reusable. Route directly to standard execution path.
@@ -2445,7 +2514,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             for (const entry of itemsWithoutCacheCheck) {
                 if (LocalCacheManager.Instance.IsInitialized) {
                     const rlsWhereClause = this.ComputeRunViewRLSWhereClause(entry.item.params, contextUser);
-                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(entry.item.params, this.InstanceConnectionString, rlsWhereClause);
+                    const flsDeniedKey = this.ComputeRunViewFLSDeniedKey(entry.item.params, contextUser);
+                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(entry.item.params, this.InstanceConnectionString, rlsWhereClause, undefined, flsDeniedKey);
                     const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                     if (cached) {
                         const entityLabel = entry.item.params.EntityName || 'unknown';
@@ -2500,6 +2570,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // cache, which was masked when an earlier 'stale'/'differential'
             // response populated it. Uses params[viewIndex] — the same hooked
             // params object the Pre hooks produced.
+            // ── Field-level security projection (OUTPUT boundary of this path) ──
+            // Every row-bearing leg above (serve-from-cache, full query, differential)
+            // returns rows WITHOUT traversing PostRunView, so the projection that guards
+            // the standard pipeline never runs here — and unrestricted users' slots and
+            // full-width DB reads can carry denied columns. Strip them per item, for BOTH
+            // full results and differential updatedRows, before the Post hooks run.
+            for (const item of allResults) {
+                const flsBearing = item as { viewIndex: number; results?: T[]; differentialData?: { updatedRows?: unknown[] } };
+                const flsParams = params[flsBearing.viewIndex]?.params;
+                if (!flsParams) {
+                    continue;
+                }
+                if (Array.isArray(flsBearing.results)) {
+                    flsBearing.results = this.ApplyFieldSecurityProjection(flsBearing.results, flsParams, user);
+                }
+                if (Array.isArray(flsBearing.differentialData?.updatedRows)) {
+                    flsBearing.differentialData.updatedRows =
+                        this.ApplyFieldSecurityProjection(flsBearing.differentialData.updatedRows, flsParams, user);
+                }
+            }
+
             for (const item of allResults) {
                 const rowBearing = item as { viewIndex: number; results?: T[]; rowCount?: number };
                 if (!Array.isArray(rowBearing.results)) {
@@ -2561,7 +2652,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (params.UserSearchString && params.UserSearchString.length > 0) {
             if (!this.ValidateUserProvidedSQLClause(params.UserSearchString))
                 throw new Error(`Invalid User Search SQL clause: ${params.UserSearchString}`);
-            const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, params.UserSearchString);
+            const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, params.UserSearchString, user);
             if (sUserSearchSQL.length > 0) {
                 whereSQL = bHasWhere ? `${whereSQL} AND (${sUserSearchSQL})` : `(${sUserSearchSQL})`;
                 bHasWhere = true;
@@ -2655,14 +2746,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // for eligible items) so subsequent calls can serve any field subset. The
             // eligibility gate matters: BypassCache/AfterKey/count_only results were
             // never widened and must NOT be written under the superset fingerprint.
-            if (this.runViewCacheEligible(params) && LocalCacheManager.Instance.IsInitialized) {
+            if (this.runViewCacheEligible(params, contextUser) && LocalCacheManager.Instance.IsInitialized) {
                 // External entities cache with a TTL (no BaseEntity events to invalidate them);
                 // MJ-DB entities get undefined (event-invalidated as before). A 0 means the
                 // external source has caching disabled — skip the write to avoid stale data.
                 const ttlMs = await this.resolveExternalCacheTTLMs(params, contextUser);
                 if (ttlMs !== 0) {
                     const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
-                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
+                    const flsDeniedKey = this.ComputeRunViewFLSDeniedKey(params, contextUser);
+                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause, undefined, flsDeniedKey);
                     const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
                     // Pass the aggregates (B38-family omission #4). This slot is ALSO written by
                     // InternalRunView's normal PostRunView path WITH aggregates — two writers,
@@ -2821,7 +2913,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
 
         const rlsWhereClause = this.ComputeRunViewRLSWhereClause(item.params, contextUser);
-        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString, rlsWhereClause);
+        const flsDeniedKey = this.ComputeRunViewFLSDeniedKey(item.params, contextUser);
+        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString, rlsWhereClause, undefined, flsDeniedKey);
         const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
         if (!cached) return null;
 

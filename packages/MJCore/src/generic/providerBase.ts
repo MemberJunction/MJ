@@ -1351,13 +1351,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      *   keeps the short-lived dedup/linger layer from cross-serving Live vs Materialized in-flight reads.)
      * - entities where server caching is disallowed
      */
-    protected runViewCacheEligible(param: RunViewParams): boolean {
+    protected runViewCacheEligible(param: RunViewParams, contextUser?: UserInfo): boolean {
         return !param.BypassCache &&
             !param.AfterKey &&
             !IsMaterializedDataSource(param.DataSource) &&
             param.ResultType !== 'count_only' &&
             (param.CacheLocal === true || this.TrustLocalCacheCompletely) &&
-            this.IsServerCacheAllowedForEntity(param);
+            this.IsServerCacheAllowedForEntity(param) &&
+            // Field security: a restricted user's entity_object request neither reads nor
+            // writes the cache — see flsCacheExemptEntityObjectRequest for both hazard
+            // directions. Every caller passes contextUser so store and read legs agree.
+            !this.flsCacheExemptEntityObjectRequest(param, contextUser);
     }
 
     /** True when the entity is a CodeGen materialized-query wrapper (materialized_vw*) whose snapshot is
@@ -2362,6 +2366,62 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Canonical key of the user's field-security denied-READ set for this request's entity:
+     * lowercased field names, sorted, comma-joined — empty string when the entity has no field
+     * security, the user is denied nothing, or there is no resolvable user/entity. This is the
+     * `fls:` fingerprint input (the column counterpart of {@link ComputeRunViewRLSWhereClause})
+     * and the "is this request field-restricted?" predicate the cache pipeline keys off.
+     */
+    protected ComputeRunViewFLSDeniedKey(params: RunViewParams, contextUser?: UserInfo): string {
+        const user = contextUser ?? this.CurrentUser;
+        if (!user || !params.EntityName) return '';
+        const entity = this.EntityByName(params.EntityName);
+        if (!entity?.HasAnyFieldPermissions) return ''; // one boolean for nearly every entity
+        const denied = entity.GetDeniedReadFields(user);
+        if (denied.size === 0) return '';
+        return [...denied].sort().join(',');
+    }
+
+    /**
+     * The fetch-widening field list for a cache-eligible request: ALL entity fields for
+     * unrestricted users (the long-standing universal-superset contract), or the user's ALLOWED
+     * set (all fields minus their denied-read set) when field security restricts them. PKs and
+     * `__mj_` columns are unrestrictable, so the allowed set always contains them. Restricted
+     * data then never enters server memory for these queries, and each permission class warms
+     * its own internally consistent superset slot under its `fls:` fingerprint segment.
+     */
+    protected ComputeRunViewFetchFields(entity: EntityInfo, contextUser?: UserInfo): string[] {
+        const user = contextUser ?? this.CurrentUser;
+        if (user && entity.HasAnyFieldPermissions) {
+            const denied = entity.GetDeniedReadFields(user);
+            if (denied.size > 0) {
+                return entity.Fields.filter(f => !denied.has(f.Name.trim().toLowerCase())).map(f => f.Name);
+            }
+        }
+        return entity.Fields.map(f => f.Name);
+    }
+
+    /**
+     * True when this request must be exempted from the RunView cache entirely: an
+     * `entity_object` request by a user with a non-empty denied-read set on the entity.
+     *
+     * Why a full bypass rather than a narrower fix: entity objects must hydrate from EVERY
+     * column (a partially hydrated entity destroys data on save — see
+     * {@link ApplyFieldSecurityProjection}), but a restricted user's cache slots hold
+     * allowed-width rows. Serving such a slot to an entity_object request would hydrate partial
+     * entities; storing the full-width entity_object fetch under the same fingerprint would put
+     * denied columns into a slot the projection must then guard forever. Exempting the (rare)
+     * restricted-user entity_object request from the cache removes both directions of the
+     * hazard: its data path is a direct full-width fetch, nothing is stored, nothing is served.
+     * An FLS-restricted contextUser driving server-internal engines is warn-don't-support
+     * territory; losing caching there is an accepted cost.
+     */
+    protected flsCacheExemptEntityObjectRequest(params: RunViewParams, contextUser?: UserInfo): boolean {
+        if (params.ResultType !== 'entity_object') return false;
+        return this.ComputeRunViewFLSDeniedKey(params, contextUser).length > 0;
+    }
+
+    /**
      * Pre-processing hook for RunView.
      * Handles telemetry, validation, entity status check, and cache lookup.
      * @param params - The view parameters
@@ -2462,11 +2522,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Strips fields the user cannot read from plain-object result rows.
      *
-     * This is THE read boundary for list results, and it runs on BOTH cache hits and cache
-     * misses. Filtering the SQL SELECT list is not a viable substitute: {@link PreRunView}
-     * deliberately widens `params.Fields` to every entity field whenever a query is
-     * cache-eligible, so restricted columns reach server memory regardless of what the caller
-     * asked for. Projection at the output boundary is the enforcement.
+     * This is the read boundary for list results, and it runs on BOTH cache hits and cache
+     * misses. It COMPOSES with (not substitutes for) the fetch-side controls: for restricted
+     * users, cache-eligibility widening goes to the user's ALLOWED set rather than all columns
+     * ({@link ComputeRunViewFetchFields}), the SELECT builder intersects any field list with
+     * that set, and the `fls:` fingerprint segment keys each permission class to its own cache
+     * slots — so on the simple path restricted data never enters server memory at all. This
+     * projection remains as defense-in-depth: it guards slots warmed before a permission
+     * change, full-width slots warmed by unrestricted users or by system paths without a
+     * context user, and any code path that misses the SELECT-side filter. (An earlier version
+     * of this comment declared SELECT-list filtering "not viable" — its premise was that
+     * widening always went to ALL columns, which the allowed-set widening changed.)
      *
      * NEVER applied to `entity_object` results. Those become `BaseEntity` instances whose
      * fields round-trip through `GenerateSaveSQL`, which iterates ALL `IsSPParameter` fields
@@ -2576,13 +2642,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             ? params.Fields.map(f => f.trim().toLowerCase())
             : null; // null = caller wants all fields
 
-        // Only override Fields to all entity fields when caching will actually happen
+        // Only override Fields to the widened fetch set when caching will actually happen
         // for this call. For non-cached calls we respect the caller's narrow Fields
-        // end-to-end — there's no cache-coherence concern to preserve.
+        // end-to-end — there's no cache-coherence concern to preserve. The widened set is
+        // ALL entity fields for unrestricted users, or the user's field-security ALLOWED
+        // set for restricted ones (ComputeRunViewFetchFields) — each permission class
+        // warms its own superset slot under its fls: fingerprint segment.
         const entity = params.EntityName ? this.EntityByName(params.EntityName) : null;
-        const willCache = this.runViewCacheEligible(params);
+        const willCache = this.runViewCacheEligible(params, contextUser);
         if (entity && willCache) {
-            params.Fields = entity.Fields.map(f => f.Name);
+            params.Fields = this.ComputeRunViewFetchFields(entity, contextUser);
             // Platform contract: explicit Fields always include the primary key(s) —
             // project back down to requested ∪ PK, matching the direct SQL path.
             if (callerRequestedFields) {
@@ -2612,7 +2681,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         if (willCache && !cacheReadDenied && LocalCacheManager.Instance.IsInitialized) {
             const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
-            fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
+            const flsDeniedKey = this.ComputeRunViewFLSDeniedKey(params, contextUser);
+            fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause, undefined, flsDeniedKey);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
                 // These rows are the cache's shared, deep-frozen objects — the runtime freeze is
@@ -2764,13 +2834,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 ? param.Fields.map(f => f.trim().toLowerCase())
                 : null;
 
-            // Only override Fields to all entity fields when caching will actually happen
+            // Only override Fields to the widened fetch set when caching will actually happen
             // for this call. For non-cached calls we respect the caller's narrow Fields
-            // end-to-end — there's no cache-coherence concern to preserve.
+            // end-to-end — there's no cache-coherence concern to preserve. Widened = ALL
+            // fields, or the user's field-security ALLOWED set when restricted (see PreRunView).
             const batchEntity = param.EntityName ? this.EntityByName(param.EntityName) : null;
-            const batchWillCache = this.runViewCacheEligible(param);
+            const batchWillCache = this.runViewCacheEligible(param, contextUser);
             if (batchEntity && batchWillCache) {
-                param.Fields = batchEntity.Fields.map(f => f.Name);
+                param.Fields = this.ComputeRunViewFetchFields(batchEntity, contextUser);
                 // Platform contract: explicit Fields always include the primary key(s)
                 if (callerFields) {
                     callerFields = ProviderBase.UnionFieldsWithPrimaryKeys(callerFields, batchEntity);
@@ -2793,7 +2864,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             if (batchWillCache && !batchCacheReadDenied && LocalCacheManager.Instance.IsInitialized) {
                 const rlsWhereClause = this.ComputeRunViewRLSWhereClause(param, contextUser);
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString, rlsWhereClause);
+                const flsDeniedKey = this.ComputeRunViewFLSDeniedKey(param, contextUser);
+                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString, rlsWhereClause, undefined, flsDeniedKey);
                 fingerprintMap.set(i, fingerprint);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
@@ -3295,7 +3367,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // runViewCacheEligible is the same predicate PreRunView used to decide whether to
         // widen Fields — only widened (superset) results may be written to the cache.
         // preResult.fingerprint doubles as a guard (only computed when eligible).
-        if (this.runViewCacheEligible(params) && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
+        if (this.runViewCacheEligible(params, contextUser) && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
             const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
             await LocalCacheManager.Instance.SetRunViewResult(
                 preResult.fingerprint,
@@ -3306,11 +3378,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 result.TotalRowCount,
                 this
             );
-        } else if (this.shouldAutoCache(params, result)) {
+        } else if (this.shouldAutoCache(params, result, contextUser)) {
             // Server-side auto-cache: small, unfiltered, unsorted results are
             // automatically cached even without explicit CacheLocal. These are
             // safe for in-place upsert on entity changes (no filter to evaluate).
-            const fingerprint = preResult.fingerprint || LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, this.ComputeRunViewRLSWhereClause(params, contextUser));
+            const fingerprint = preResult.fingerprint || LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, this.ComputeRunViewRLSWhereClause(params, contextUser), undefined, this.ComputeRunViewFLSDeniedKey(params, contextUser));
             const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
             await LocalCacheManager.Instance.SetRunViewResult(
                 fingerprint,
@@ -3410,12 +3482,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // per item. Compute lazily only for indexes PreRunViews skipped (cache
             // was disabled for them but auto-cache/OnDataChanged may still need it).
             const fingerprint = preResult.fingerprintMap?.get(i)
-                ?? LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString, this.ComputeRunViewRLSWhereClause(params[i], contextUser));
+                ?? LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString, this.ComputeRunViewRLSWhereClause(params[i], contextUser), undefined, this.ComputeRunViewFLSDeniedKey(params[i], contextUser));
             // CRITICAL: must be the SAME eligibility predicate PreRunViews used to decide
             // whether to widen Fields. Writing a non-widened (narrow or keyset-paged)
             // result here poisons the Fields-agnostic superset slot — this exact gate
             // previously omitted BypassCache/AfterKey and cached narrow BypassCache rows.
-            if (this.runViewCacheEligible(params[i]) && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
+            if (this.runViewCacheEligible(params[i], contextUser) && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
                 cachePromises.push(LocalCacheManager.Instance.SetRunViewResult(
                     fingerprint,
@@ -3426,7 +3498,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     results[i].TotalRowCount,
                     this
                 ));
-            } else if (this.shouldAutoCache(params[i], results[i])) {
+            } else if (this.shouldAutoCache(params[i], results[i], contextUser)) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
                 cachePromises.push(LocalCacheManager.Instance.SetRunViewResult(
                     fingerprint,
@@ -3709,14 +3781,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         return entity.TrustServerCacheCompletely !== false;
     }
 
-    protected shouldAutoCache(params: RunViewParams, result: RunViewResult): boolean {
+    protected shouldAutoCache(params: RunViewParams, result: RunViewResult, contextUser?: UserInfo): boolean {
         if (!this.TrustLocalCacheCompletely) return false;
         if (params.CacheLocal) return false; // already handled
         // Same eligibility predicate as the main cache path — covers BypassCache,
-        // AfterKey (keyset pages), count_only, and cache-disallowed entities. An
-        // auto-cached keyset page or count_only result would poison the
-        // entity+filter slot just like the main-path variants of those bugs.
-        if (!this.runViewCacheEligible(params)) return false;
+        // AfterKey (keyset pages), count_only, cache-disallowed entities, and the
+        // field-security entity_object exemption. An auto-cached keyset page or
+        // count_only result would poison the entity+filter slot just like the
+        // main-path variants of those bugs.
+        if (!this.runViewCacheEligible(params, contextUser)) return false;
         if (!LocalCacheManager.Instance.IsInitialized) return false;
         if (!result.Success) return false;
         if (ProviderBase.ServerAutoCacheMaxRows <= 0) return false;
