@@ -34,6 +34,7 @@ const GENERATED_PATHS = [
   'overview.md',
   'deployment.md',
   'upgrade-v5.md',
+  'upgrade-v6.md',
   'metadata.md',
   'ecosystem.md',
   'ai-and-agents/skills.md',
@@ -47,6 +48,7 @@ const GENERATED_PATHS = [
  */
 const ROOT_DOCS = [
   { src: 'README.md', slug: 'overview', out: 'overview.md', fallbackTitle: 'What is MemberJunction?' },
+  { src: 'UPGRADE-v6.0.md', slug: 'upgrade-v6', out: 'upgrade-v6.md', fallbackTitle: 'Upgrading to v6' },
   { src: 'UPGRADE-v5.0.md', slug: 'upgrade-v5', out: 'upgrade-v5.md', fallbackTitle: 'Upgrading to v5' },
   { src: 'CONTRIBUTING.md', slug: 'community/contributing', out: 'community/contributing.md', fallbackTitle: 'Contributing' },
   { src: 'metadata/README.md', slug: 'metadata', out: 'metadata.md', fallbackTitle: 'Metadata System' },
