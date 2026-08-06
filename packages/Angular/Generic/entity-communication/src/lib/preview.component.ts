@@ -1,4 +1,5 @@
 import { Component, Output, EventEmitter, Input, OnInit } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { CommunicationEngineBase, Message, ProcessedMessage } from '@memberjunction/communication-types';
 import { EntityInfo, RunView, RunViewParams } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -16,7 +17,7 @@ import { TemplateEngineBase } from '@memberjunction/templates-base-types';
   templateUrl: './preview.component.html',
   styleUrls: ['./preview.component.css']
 })
-export class EntityCommunicationsPreviewComponent implements OnInit  {
+export class EntityCommunicationsPreviewComponent extends BaseAngularComponent implements OnInit  {
   @Input() templateFilter: string | undefined;
   @Input() entityInfo: EntityInfo | undefined;
   @Input() runViewParams: RunViewParams | undefined;
@@ -30,7 +31,8 @@ export class EntityCommunicationsPreviewComponent implements OnInit  {
   currentMessageIndex: number = 0;
   public loading: boolean = false;
 
-  constructor() {}
+  constructor() {
+        super();}
 
   async ngOnInit() {
     if (!this.entityInfo || !this.runViewParams)
@@ -41,7 +43,7 @@ export class EntityCommunicationsPreviewComponent implements OnInit  {
 
   async loadTemplates() {
     // load up all template metadata
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     // Dialect-neutral "active now" cutoff: GETDATE() does not exist on PostgreSQL,
     // so inject a JS-computed ISO-8601 literal instead.
     const nowIso = new Date().toISOString();

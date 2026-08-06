@@ -16,7 +16,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { transformRepoMarkdown, buildFrontmatter } from './lib/markdown.mjs';
-import { guideSlug, labelFromSlug, packageSlug, relativeSiteLink } from './lib/site-map.mjs';
+import { compareReleasesDesc, guideSlug, labelFromSlug, packageSlug, relativeSiteLink, releaseSlug, releaseVersion } from './lib/site-map.mjs';
 import { fetchEcosystem } from './lib/ecosystem.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -29,6 +29,7 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', '.turbo', '.angular', 'covera
 const GENERATED_PATHS = [
   'guides',
   'packages',
+  'releases',
   'community',
   'overview.md',
   'deployment.md',
@@ -55,11 +56,13 @@ async function main() {
   const sha = resolveBuildSha(warn);
 
   cleanGeneratedPaths();
-  const entries = [...rootDocEntries(), ...guideEntries(), ...packageEntries(warn)];
+  const entries = [...rootDocEntries(), ...guideEntries(), ...packageEntries(warn), ...releaseEntries(warn)];
   const siteMap = new Map(entries.map((e) => [e.src, e.slug]));
 
-  for (const entry of entries) writeEntry(entry, siteMap, sha, warn);
+  const written = new Map();
+  for (const entry of entries) written.set(entry.slug, writeEntry(entry, siteMap, sha, warn));
   writePackagesIndex(entries.filter((e) => e.package));
+  writeReleasesIndex(entries.filter((e) => e.release), written);
   writeSkillsPage(sha, warn);
   await writeEcosystemPage(warn);
 
@@ -141,6 +144,33 @@ function* walkPackageDirs(dirRel) {
   }
 }
 
+/**
+ * Release notes: one markdown file per version in releases/ at the repo root
+ * (written by the /notes release-coordinator skill). Files are named
+ * v<major>.<minor>.<patch>.md; newest versions sort first in the sidebar.
+ */
+function releaseEntries(warn) {
+  const releasesDir = path.join(REPO_ROOT, 'releases');
+  if (!existsSync(releasesDir)) return [];
+  const files = readdirSync(releasesDir).filter((name) => name.endsWith('.md') && name !== 'README.md');
+  for (const name of files) {
+    if (releaseVersion(name) === null) warn(`releases: cannot parse a version from "${name}"; it will sort last`);
+  }
+  return files.sort(compareReleasesDesc).map((name, index) => {
+    const version = name.replace(/\.md$/i, '');
+    return {
+      src: `releases/${name}`,
+      slug: `releases/${releaseSlug(name)}`,
+      out: `releases/${releaseSlug(name)}.md`,
+      fallbackTitle: version,
+      titlePrefix: version,
+      sidebarLabel: version,
+      sidebarOrder: index + 1,
+      release: { version },
+    };
+  });
+}
+
 function readPackageMeta(dirRel) {
   const manifestPath = path.join(REPO_ROOT, dirRel, 'package.json');
   if (!existsSync(manifestPath)) return { name: null, description: '', isPrivate: true };
@@ -156,14 +186,24 @@ function writeEntry(entry, siteMap, sha, warn) {
   const source = readFileSync(path.join(REPO_ROOT, entry.src), 'utf8');
   const ctx = { srcRepoPath: entry.src, currentSlug: entry.slug, siteMap, sha, fileKind: repoFileKind, warn };
   const { title, description, body } = transformRepoMarkdown(source, ctx);
+  const pageTitle = composeTitle(entry, title);
   const frontmatter = buildFrontmatter({
-    title: title || entry.fallbackTitle,
+    title: pageTitle,
     description,
     editUrl: EDIT_BASE + entry.src,
     sidebarLabel: entry.sidebarLabel,
     sidebarOrder: entry.sidebarOrder,
   });
   writePage(entry.out, frontmatter + body);
+  return { title: pageTitle, summary: title, description };
+}
+
+/** Releases title as "v5.51.0: <the file's H1 summary>"; everything else uses the H1 (or fallback). */
+function composeTitle(entry, extractedTitle) {
+  if (entry.titlePrefix) {
+    return extractedTitle ? `${entry.titlePrefix}: ${extractedTitle}` : entry.titlePrefix;
+  }
+  return extractedTitle || entry.fallbackTitle;
 }
 
 function repoFileKind(repoPath) {
@@ -202,6 +242,23 @@ function writePackagesIndex(packageEntries) {
 
 function mdCell(text) {
   return (text ?? '').replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
+}
+
+function writeReleasesIndex(releaseEntries, written) {
+  const lines = [
+    buildFrontmatter({ title: 'Release Notes', description: 'What changed in each MemberJunction release.', sidebarLabel: 'All Releases', sidebarOrder: 0 }),
+    'Release notes live as markdown in [`releases/`](https://github.com/MemberJunction/MJ/tree/next/releases) in the MJ repo — one file per version, published here automatically with each deploy.',
+    '',
+  ];
+  if (releaseEntries.length === 0) {
+    lines.push('_Notes will appear here starting with the next release._');
+  }
+  for (const entry of releaseEntries) {
+    const info = written.get(entry.slug);
+    const summary = info?.summary ? `: ${info.summary}` : '';
+    lines.push(`- **[${entry.release.version}](${relativeSiteLink('releases', entry.slug)})**${summary}`);
+  }
+  writePage('releases/index.md', lines.join('\n'));
 }
 
 function writeSkillsPage(sha, warn) {

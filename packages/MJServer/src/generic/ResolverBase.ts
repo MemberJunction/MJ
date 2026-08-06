@@ -32,7 +32,7 @@ import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './Run
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
 import { EncryptionEngine } from '@memberjunction/encryption';
-import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
+import { PUSH_STATUS_UPDATES_TOPIC, publishStatusUpdate } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
@@ -691,7 +691,11 @@ export class ResolverBase {
       return;
     }
 
-    // Check specific scope
+    // Check specific scope. The acting context stamped on the session user (set
+    // server-side in context.ts, never client-supplied) rides along so filtered
+    // rules with {{Acting*}} tokens can validate their required values — without
+    // it, a filtered rule fails closed even for a session carrying valid context.
+    const sessionUser = this.GetUserFromPayload(userPayload);
     const result = await apiKeyEngine.Authorize(
       userPayload.apiKeyHash,
       'MJAPI',
@@ -701,6 +705,9 @@ export class ResolverBase {
       {
         endpoint: '/graphql',
         method: 'POST'
+      },
+      {
+        actingContext: sessionUser?.APIKeyActingContext
       }
     );
 
@@ -999,7 +1006,7 @@ export class ResolverBase {
       ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
     if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
 
-    return entityInfo.GetUserRowLevelSecurityWhereClause(user, type, returnPrefix);
+    return entityInfo.GetEffectiveRowFilterWhereClause(user, type, returnPrefix);
   }
 
   protected async createAuditLogRecord(
@@ -1101,6 +1108,22 @@ export class ResolverBase {
     });
   }
 
+  /**
+   * Publishes a push-status update to the client on {@link PUSH_STATUS_UPDATES_TOPIC}, stamping the
+   * authenticated owner's user ID from `userPayload` so the subscription filter can bind delivery
+   * to identity (see B49 / `statusUpdatesFilter`). The ergonomic wrapper every resolver should use
+   * instead of calling `pubSub.publish` on the topic directly — it makes omitting identity
+   * impossible. Non-resolver publishers (services, the liveness heartbeat) call the shared
+   * `publishStatusUpdate()` function directly with an explicit `ownerUserId`.
+   */
+  protected PublishStatusUpdate(pubSub: PubSubEngine, sessionId: string, message: string | undefined, userPayload: UserPayload): void {
+    publishStatusUpdate(pubSub, {
+      sessionId,
+      ownerUserId: userPayload?.userRecord?.ID ?? '',
+      message,
+    });
+  }
+
   protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
     // The unique key is set up for each entity object via it's primary key to ensure that we only have one listener at most for each unique
     // entity in the system. This is important because we don't want to have multiple listeners for the same entity as it could
@@ -1130,16 +1153,13 @@ export class ResolverBase {
             const baseEntityEvent = event.args as BaseEntityEvent;
             // message from our entity object, relay it to the client
             LogDebug('ResolverBase.ListenForEntityMessages: About to publish PUSH_STATUS_UPDATES_TOPIC');
-            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-              message: JSON.stringify({
-                status: 'OK',
-                type: 'EntityObjectStatusMessage',
-                entityName: baseEntityEvent.baseEntity.EntityInfo.Name,
-                primaryKey: baseEntityEvent.baseEntity.PrimaryKey,
-                message: event.args.payload,
-              }),
-              sessionId: userPayload.sessionId,
-            });
+            this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+              status: 'OK',
+              type: 'EntityObjectStatusMessage',
+              entityName: baseEntityEvent.baseEntity.EntityInfo.Name,
+              primaryKey: baseEntityEvent.baseEntity.PrimaryKey,
+              message: event.args.payload,
+            }), userPayload);
           }
         }
       });

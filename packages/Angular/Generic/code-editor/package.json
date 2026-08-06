@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-code-editor",
-  "version": "5.51.0",
+  "version": "6.0.0",
   "description": "MemberJunction: Angular Code Editor",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
     "build": "ngc",
     "test:watch": "vitest"
   },
@@ -19,7 +20,8 @@
     "@angular/compiler": "21.1.3",
     "@angular/compiler-cli": "21.1.3",
     "sass": "^1.97.3",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "@memberjunction/ng-test-utils": "6.0.0"
   },
   "peerDependencies": {
     "@angular/common": "21.1.3",
@@ -27,22 +29,22 @@
   },
   "dependencies": {
     "@angular/forms": "21.1.3",
-    "@codemirror/commands": "latest",
+    "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-javascript": "^6.2.4",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/lang-python": "^6.2.1",
     "@codemirror/lang-sql": "^6.10.0",
-    "@codemirror/language": "latest",
+    "@codemirror/language": "^6.12.4",
     "@codemirror/language-data": "^6.5.2",
     "@codemirror/merge": "^6.11.2",
-    "@codemirror/state": "latest",
-    "@codemirror/view": "latest",
-    "@lezer/highlight": "latest",
-    "@memberjunction/core": "5.51.0",
-    "@memberjunction/core-entities": "5.51.0",
-    "@memberjunction/global": "5.51.0",
-    "@memberjunction/ng-base-types": "5.51.0",
-    "@memberjunction/ng-container-directives": "5.51.0",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.8",
+    "@lezer/highlight": "^1.2.3",
+    "@memberjunction/core": "6.0.0",
+    "@memberjunction/core-entities": "6.0.0",
+    "@memberjunction/global": "6.0.0",
+    "@memberjunction/ng-base-types": "6.0.0",
+    "@memberjunction/ng-container-directives": "6.0.0",
     "codemirror": "^6.0.2",
     "tslib": "^2.8.1"
   },
@@ -50,5 +52,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
-  }
+  },
+  "mjUILayer": "widgets"
 }

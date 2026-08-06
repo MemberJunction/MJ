@@ -18,6 +18,7 @@ export * from './lib/accordion/accordion.component';
 export * from './lib/alert/alert.component';
 export * from './lib/window/window.component';
 export * from './lib/slide-panel/slide-panel.component';
+export * from './lib/bottom-sheet/bottom-sheet.component';
 export * from './lib/combobox/combobox.component';
 export * from './lib/page-header/page-header.component';
 export * from './lib/page-layout/page-layout.component';

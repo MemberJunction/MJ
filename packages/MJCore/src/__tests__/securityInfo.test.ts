@@ -230,6 +230,42 @@ describe('RowLevelSecurityFilterInfo', () => {
             // Date is typeof 'object', so it should be skipped
             expect(result).toBe("X = '{{User__mj_CreatedAt}}'");
         });
+
+        it('should skip undefined values leaving token unresolved, not stringify as "undefined"', () => {
+            const filter = new RowLevelSecurityFilterInfo({
+                FilterText: "X = '{{UserEmployeeID}}'"
+            });
+            const user = new UserInfo(null, { EmployeeID: undefined });
+
+            const result = filter.MarkupFilterText(user);
+
+            expect(result).toBe("X = '{{UserEmployeeID}}'");
+            expect(result).not.toContain('undefined');
+        });
+
+        it('should not become permissive on negation-shaped filters when a value is undefined', () => {
+            const filter = new RowLevelSecurityFilterInfo({
+                FilterText: "Status <> '{{UserEmployeeID}}'"
+            });
+            const user = new UserInfo(null, { EmployeeID: undefined });
+
+            const result = filter.MarkupFilterText(user);
+
+            // Previously this substituted the literal string 'undefined', which a <> comparison
+            // would satisfy for virtually every row. It must stay unresolved instead.
+            expect(result).toBe("Status <> '{{UserEmployeeID}}'");
+        });
+
+        it('should escape embedded single quotes in substituted values', () => {
+            const filter = new RowLevelSecurityFilterInfo({
+                FilterText: "LastName = '{{UserLastName}}'"
+            });
+            const user = new UserInfo(null, { LastName: "O'Brien'; DROP TABLE Users; --" });
+
+            const result = filter.MarkupFilterText(user);
+
+            expect(result).toBe("LastName = 'O''Brien''; DROP TABLE Users; --'");
+        });
     });
 });
 

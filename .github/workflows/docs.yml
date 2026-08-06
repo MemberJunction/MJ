@@ -7,9 +7,11 @@ on:
     types:
       - completed
 
-  # Docs content changes that land on main outside a release cycle
+  # Docs content changes that land on main or the LTS line outside a release
+  # cycle. The lts/5 trigger is what makes line release notes self-deploying:
+  # the notes commit pushed to lts/5 touches releases/** and fires this.
   push:
-    branches: [main]
+    branches: [main, lts/5]
     paths:
       - 'docs-site/**'
       - 'guides/**'
@@ -19,8 +21,14 @@ on:
       - 'CONTRIBUTING.md'
       - 'metadata/README.md'
       - '.claude/skills/**'
+      - 'releases/**'
 
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to build the site from (defaults to the certified LTS line)'
+        required: false
+        default: 'lts/5'
 
 permissions:
   contents: read
@@ -44,10 +52,38 @@ jobs:
             exit 1
           fi
 
+      # The public site documents the LTS line, whatever branch fired the
+      # trigger. Without an explicit ref, workflow_run events check out the
+      # repo DEFAULT branch (next) — verified from past run history — which
+      # after the 6.x era opens would publish Edge dev content on every
+      # release. Pinned until versioned docs (/v5, /v6) land; update this ref
+      # when a new line certifies.
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.inputs.ref || 'lts/5' }}
+
+      # lts/5 is the last npm line; 6.x and every later LTS line use pnpm. The
+      # lockfile committed on the checked-out ref is the signal, so this needs
+      # no edit when a new line is cut.
+      - name: Detect package manager
+        id: pm
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            PM=pnpm
+          elif [ -f package-lock.json ]; then
+            PM=npm
+          else
+            echo "::error::No lockfile found on ${{ github.ref_name }}"
+            exit 1
+          fi
+          echo "PM=$PM" >> "$GITHUB_OUTPUT"
+          echo "::notice::Package manager for this ref: $PM"
+
+      - name: Set up pnpm
+        if: steps.pm.outputs.PM == 'pnpm'
+        uses: pnpm/action-setup@v4
 
       - name: Set up node
         uses: actions/setup-node@v6
@@ -59,10 +95,10 @@ jobs:
             docs-site/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: ${{ steps.pm.outputs.PM == 'pnpm' && 'pnpm install --frozen-lockfile' || 'npm ci' }}
 
       - name: Build packages
-        run: npm run build
+        run: ${{ steps.pm.outputs.PM }} run build
 
       - name: Generate API reference (TypeDoc)
         run: npx typedoc
