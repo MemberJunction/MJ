@@ -34,6 +34,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
 import { VersionsModule } from '@memberjunction/ng-versions';
@@ -64,6 +65,7 @@ import { LazyModuleStatusComponent } from './DevTools/lazy-module-status.compone
 import { SettingsExplorerComponent } from './DevTools/settings-explorer.component';
 import { EventMonitorComponent } from './DevTools/event-monitor.component';
 import { GraphQLConsoleComponent } from './DevTools/graphql-console.component';
+import { GridWidthLabComponent } from './DevTools/grid-width-lab.component';
 // Admin Containers
 import { AdminDevToolsResourceComponent } from './Admin/admin-dev-tools-resource.component';
 import { AdminIdentityAccessComponent } from './Admin/admin-identity-access.component';
@@ -125,6 +127,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     SettingsExplorerComponent,
     EventMonitorComponent,
     GraphQLConsoleComponent,
+    GridWidthLabComponent,
     AdminDevToolsResourceComponent,
     AdminIdentityAccessComponent,
     AdminDataSchemaComponent,
@@ -158,6 +161,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
+    EntityViewerModule,
     MJButtonDirective,
     MJClickableDirective,
     MJDatepickerComponent,
@@ -219,6 +223,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     SettingsExplorerComponent,
     EventMonitorComponent,
     GraphQLConsoleComponent,
+    GridWidthLabComponent,
     AdminDevToolsResourceComponent,
     AdminIdentityAccessComponent,
     AdminDataSchemaComponent,
