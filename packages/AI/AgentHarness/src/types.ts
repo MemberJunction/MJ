@@ -45,6 +45,16 @@ export interface HarnessSessionConfig {
     McpServerUrl?: string;
     /** Per-run, read-only, scope-limited MCP credential. Revoked at teardown on every exit path. */
     McpCredential?: string;
+    /**
+     * A prior session this run MAY continue, when one exists for the same agent and conversation.
+     *
+     * Offered, not imposed. Only adapters whose harness can genuinely resume should act on it, and
+     * they must report the outcome through {@link BaseHarnessAdapter.DidResumeSession} — because the
+     * caller sends a DIFFERENT turn input depending on whether the resume took. Guessing wrong in
+     * either direction is costly: assume resumed when it was not and the harness has no context;
+     * assume fresh when it did resume and it receives the conversation twice.
+     */
+    ResumeSessionId?: string;
     /** Model to request, when the harness honours one (`CapabilitySettings.ModelSelection`). */
     Model?: string;
     /** Aborts in-flight work; honoured mid-turn only when `CapabilitySettings.MidTurnCancellation`. */

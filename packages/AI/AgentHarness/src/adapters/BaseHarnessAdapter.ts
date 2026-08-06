@@ -90,6 +90,22 @@ export abstract class BaseHarnessAdapter {
     }
 
     /**
+     * Whether this session actually continued {@link HarnessSessionConfig.ResumeSessionId}.
+     *
+     * Default false: a harness that cannot resume, or one offered no prior session, starts cold and
+     * must be sent the full conversation. Adapters that DO resume MUST override this and report
+     * truthfully — the caller sends only the newest message when it returns true, so a false
+     * positive leaves the harness answering a question it never saw the context for.
+     *
+     * Deliberately separate from `CapabilitySettings.SessionResume`. That flag says the adapter CAN
+     * resume in principle; this says it DID, this time. A stale or pruned session id makes the two
+     * disagree, and only the second one is safe to branch the turn input on.
+     */
+    public get DidResumeSession(): boolean {
+        return false;
+    }
+
+    /**
      * The model the harness actually used, if it reports one.
      *
      * Adapters that can observe this SHOULD override it. Accounting resolves `AIPromptRun.ModelID`

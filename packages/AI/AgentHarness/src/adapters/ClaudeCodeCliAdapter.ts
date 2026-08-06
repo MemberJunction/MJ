@@ -33,6 +33,12 @@ import { HarnessProcess } from '../sandbox/SandboxExecutor.js';
 export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
     private executable = 'claude';
     private systemPrompt: string | undefined;
+    private didResume = false;
+
+    /** @inheritdoc */
+    public override get DidResumeSession(): boolean {
+        return this.didResume;
+    }
 
     /** @inheritdoc */
     public override SetSystemPrompt(systemPrompt: string): void {
@@ -70,6 +76,14 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
 
     protected BuildTurnArgs(input: string, isFirstTurn: boolean): string[] {
         const args = ['-p', input, '--output-format', 'stream-json', '--verbose'];
+        // Claude Code persists sessions to its own on-disk store, so resuming needs no live process
+        // — which is why this works at all despite the process dying after every turn. If the store
+        // has pruned the session the CLI starts fresh rather than failing, so an optimistic resume
+        // degrades to a cold session instead of breaking the run.
+        if (isFirstTurn && this.config?.ResumeSessionId) {
+            this.sessionId = this.config.ResumeSessionId;
+            this.didResume = true;
+        }
         // APPEND rather than replace: Claude Code's own system prompt carries its tool definitions
         // and sandbox conventions, and replacing it would break the harness to enforce our envelope.
         // Appending puts MJ's contract at system level, where it outranks the conversational habit

@@ -146,7 +146,10 @@ export class HarnessAgentBase extends BaseAgent {
 
         const environment = await this.resolveGrantedEnvironment(contextUser);
 
+        const resumeSessionId = await this.findResumableSession(harness, key.Scope, contextUser);
+
         await this.adapter.StartSession({
+            ResumeSessionId: resumeSessionId,
             Executor: this.sandboxHandle.Executor,
             WorkspacePath: this.sandboxHandle.WorkspacePath,
             Environment: environment,
@@ -155,6 +158,73 @@ export class HarnessAgentBase extends BaseAgent {
         });
 
         LogStatus(`Harness session started for '${harness.Name}' (${harness.DriverClass})`);
+    }
+
+    /**
+     * Finds a prior harness session this run can continue, if the adapter can use one.
+     *
+     * ## Why this is worth doing
+     *
+     * Without it, every message in a conversation opens a COLD session and MJ replays the whole
+     * history into it. Measured on two consecutive messages in one conversation: the second cost
+     * $0.0448 against the first's $0.0155 — nearly 3x, spent entirely on re-reading context the
+     * harness had already been told once.
+     *
+     * ## Three gates, each guarding a different way this goes wrong
+     *
+     * 1. `SessionResume` capability — a harness that cannot resume must keep replaying. Offering a
+     *    session id to an adapter that ignores it is harmless; ASSUMING it resumed is not, which is
+     *    why the outcome is reported back rather than inferred.
+     * 2. Workspace scope must be durable. Harnesses key their session store by working directory, so
+     *    a `run`-scoped workspace is a new directory every time and the session would never be
+     *    found. Gating here keeps the failure at "no resume" rather than a silent miss.
+     * 3. Same conversation. That is the continuity boundary users already understand — a time-based
+     *    cache would expire while someone is at lunch and, worse, leak stale context into an
+     *    unrelated new conversation.
+     */
+    private async findResumableSession(
+        harness: MJAIAgentHarnessEntity,
+        scope: HarnessWorkspaceScope,
+        contextUser?: UserInfo,
+    ): Promise<string | undefined> {
+        if (!this.adapter?.Capabilities?.SessionResume) {
+            return undefined;
+        }
+        if (scope === 'run') {
+            return undefined;
+        }
+        const conversationId = this._agentRunConversationId();
+        if (!conversationId) {
+            return undefined;
+        }
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<{ ExternalSessionID: string }>(
+                {
+                    EntityName: 'MJ: AI Agent Runs',
+                    Fields: ['ExternalSessionID'],
+                    ExtraFilter:
+                        `AgentID='${this._agentRunAgentId()}' AND ConversationID='${conversationId}' ` +
+                        `AND ExternalSessionID IS NOT NULL`,
+                    OrderBy: '__mj_CreatedAt DESC',
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            if (!result.Success) {
+                LogError(`Failed to look up a resumable harness session: ${result.ErrorMessage}`);
+                return undefined;
+            }
+            const sessionId = result.Results?.[0]?.ExternalSessionID;
+            if (sessionId) {
+                LogStatus(`Resuming harness session ${sessionId} for '${harness.Name}'.`);
+            }
+            return sessionId;
+        } catch (e) {
+            LogError(`Failed to look up a resumable harness session: ${describeError(e)}`);
+            return undefined;
+        }
     }
 
     /** Accumulates one turn's event stream into a single result. */
@@ -580,7 +650,13 @@ export class HarnessAgentBase extends BaseAgent {
      * `SessionResume` is true, still has it in session context.
      */
     private async buildTurnInput(promptParams: AIPromptParams, isFirstTurn: boolean): Promise<string> {
-        const conversation = (promptParams.conversationMessages ?? [])
+        // When the adapter genuinely resumed, the harness already holds the conversation — send only
+        // the newest message, exactly as a user typing the next line would. Replaying history on top
+        // of a resumed session hands it everything twice. Keyed off DidResumeSession (what happened)
+        // rather than the capability flag (what is possible): a pruned session makes those disagree.
+        const resumed = isFirstTurn && this.adapter?.DidResumeSession === true;
+        const allMessages = promptParams.conversationMessages ?? [];
+        const conversation = (resumed ? allMessages.slice(-1) : allMessages)
             .map((m) => {
                 const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '');
                 return `[${m.role}]\n${content}`;
@@ -766,6 +842,10 @@ export class HarnessAgentBase extends BaseAgent {
      * reaching for `.agent` there silently yields undefined and every run fails with "does not name
      * a harness" no matter how it is configured.
      */
+    private _agentRunConversationId(): string | null {
+        return (this as unknown as { _agentRun?: { ConversationID?: string | null } })._agentRun?.ConversationID ?? null;
+    }
+
     private _agentTypeConfiguration(): string | null {
         return this._executeAgentParams()?.agent?.TypeConfiguration ?? null;
     }
