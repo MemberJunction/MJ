@@ -239,6 +239,45 @@ export interface CascadeDeleteContext {
 }
 
 /**
+ * One live permission entry from the database catalog within the managed scope, captured at
+ * generation time for the reconciliation preamble (see the Field-Level Security DB-tier work).
+ */
+export interface CatalogPermissionEntry {
+    /** The grantee database role name (always one of the managed role SQLNames). */
+    RoleName: string;
+    /** e.g. 'SELECT' | 'EXECUTE' */
+    PermissionName: string;
+    /** 'GRANT' | 'DENY' | 'GRANT_WITH_GRANT_OPTION' */
+    StateDesc: string;
+    /** Non-null for column-level entries (minor_id > 0); null for object-level. */
+    ColumnName: string | null;
+}
+
+/**
+ * Once-per-run context for field-level-security DB-tier emission and permission
+ * reconciliation, computed by the orchestrator (async catalog reads) and handed to the
+ * provider whose emitters are synchronous string builders.
+ */
+export interface FieldSecurityRunContext {
+    /**
+     * SQLNames (lowercased) of roles that a protected principal — the API service login(s)
+     * and the CodeGen login — is a MEMBER of. A column DENY emitted to such a role would
+     * strip the column from the service login itself (DENY beats every sibling GRANT), so
+     * emission SKIPS these roles with a prominent warning instead.
+     */
+    ServiceProtectedRoleSQLNames: Set<string>;
+    /**
+     * Live catalog permission state within the managed scope, keyed
+     * `<schema>.<object>` (lowercased) → entries. Only rows granted to managed roles are
+     * captured; DBA-owned grants to anything else are invisible here and therefore never
+     * touched.
+     */
+    CatalogPermissions: Map<string, CatalogPermissionEntry[]>;
+    /** RoleID → SQLName for resolving EntityFieldPermission rows (which carry only RoleID). */
+    RoleSQLNameByID: Map<string, string>;
+}
+
+/**
  * Abstract base class for database-specific code generation providers.
  *
  * Each database platform (SQL Server, PostgreSQL, etc.) implements this class
@@ -265,6 +304,16 @@ export interface MaterializedColumnSpec {
 }
 
 export abstract class CodeGenDatabaseProvider {
+    /**
+     * Field-security run context (catalog snapshot + protected-role set), set once per run by
+     * the orchestrator before entity generation begins. Null when the platform emits no
+     * DB-tier field security (PostgreSQL, per decision D2) or on runs that could not read the
+     * catalog — emitters must degrade to grants-only emission in that case.
+     */
+    protected _fieldSecurityRunContext: FieldSecurityRunContext | null = null;
+    public SetFieldSecurityRunContext(context: FieldSecurityRunContext | null): void {
+        this._fieldSecurityRunContext = context;
+    }
     /**
      * The SQL dialect instance for this provider.
      */
