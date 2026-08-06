@@ -46,6 +46,11 @@ export class StdioJsonAdapter extends BaseCliHarnessAdapter {
                 SessionResume: false,
                 StructuredOutput: false,
                 UsageReporting: true,
+                // FALSE by definition: this is the generic escape hatch for a harness with no
+                // first-class adapter, so there is no known flag vocabulary to translate a policy
+                // into. A subclass that knows its CLI should override ApplyPermissionPolicy and
+                // report true.
+                PermissionPolicy: false,
                 PermissionHooks: false,
                 McpClient: false,
                 WorkspaceScoping: true,

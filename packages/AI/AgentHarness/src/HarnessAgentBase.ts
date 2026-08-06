@@ -160,13 +160,7 @@ export class HarnessAgentBase extends BaseAgent {
         // a single run without editing the agent.
         const policy = this.resolvePermissionPolicy(config);
         this.adapter.ApplyPermissionPolicy(policy);
-        if (policy.Posture === 'strict' && !this.adapter.Capabilities?.PermissionHooks) {
-            LogStatus(
-                `Harness '${harness.Name}' is set to STRICT posture but its adapter reports no ` +
-                    `permission hooks. The harness's own prompts have nowhere to go headlessly, so ` +
-                    `mutating tool calls will simply be denied rather than routed for approval.`,
-            );
-        }
+        this.warnOnUnenforceablePolicy(harness.Name, policy);
 
         const resumeSessionId = await this.findResumableSession(harness, key.Scope, contextUser);
 
@@ -196,6 +190,49 @@ export class HarnessAgentBase extends BaseAgent {
             AllowedTools: config.permissions?.allowedTools,
             DisallowedTools: config.permissions?.disallowedTools,
         };
+    }
+
+    /**
+     * Says out loud when a configured policy will not actually be enforced.
+     *
+     * Two distinct gaps, previously conflated behind one `PermissionHooks` check — which is why four
+     * adapters could ignore a policy entirely while the runtime warned about something else:
+     *
+     * 1. **`PermissionPolicy: false`** — the adapter never translated the policy into harness flags.
+     *    The posture and allow/deny lists are inert; the harness runs on its own defaults. This is
+     *    the serious one, because the agent's metadata reads as though something is gated.
+     * 2. **`PermissionHooks: false` under `strict`** — the policy applies, but there is no channel to
+     *    route an approval through, so anything requiring one is denied rather than escalated.
+     *
+     * Warn, don't fail. Refusing the run would take every adapter without a verified flag vocabulary
+     * offline, and an unenforced policy on a properly-provisioned sandbox is still contained by the
+     * sandbox. What is not acceptable is the operator not knowing which situation they are in.
+     */
+    private warnOnUnenforceablePolicy(harnessName: string, policy: HarnessPermissionPolicy): void {
+        const capabilities = this.adapter?.Capabilities;
+        const policyWasConfigured =
+            policy.Posture !== 'strict' ||
+            (policy.AllowedTools?.length ?? 0) > 0 ||
+            (policy.DisallowedTools?.length ?? 0) > 0;
+
+        if (!capabilities?.PermissionPolicy) {
+            LogError(
+                `Harness '${harnessName}': its adapter does not apply MJ permission policies ` +
+                    `(CapabilitySettings.PermissionPolicy is not true), so the ` +
+                    `'${policy.Posture}' posture and any allow/deny lists are NOT enforced. The ` +
+                    `harness runs on its own defaults — rely on the sandbox provider for containment.` +
+                    (policyWasConfigured ? ' A policy IS configured on this agent and is being ignored.' : ''),
+            );
+            return;
+        }
+
+        if (policy.Posture === 'strict' && !capabilities.PermissionHooks) {
+            LogStatus(
+                `Harness '${harnessName}' is set to STRICT posture but its adapter reports no ` +
+                    `permission hooks. The harness's own prompts have nowhere to go headlessly, so ` +
+                    `mutating tool calls will simply be denied rather than routed for approval.`,
+            );
+        }
     }
 
     /**

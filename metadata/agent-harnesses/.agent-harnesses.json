@@ -10,9 +10,19 @@
       "Flip a row to Active once its binary is present.",
       "",
       "CapabilitySettings declares what each ADAPTER implements, not what the vendor advertises — the",
-      "runtime emulates what is missing, so an over-claim becomes a silent behavioural gap. Every row",
-      "reports PermissionHooks false because MJ's MCP permission-prompt tool does not exist yet; the",
-      "strict posture depends on it."
+      "runtime emulates what is missing, so an over-claim becomes a silent behavioural gap.",
+      "",
+      "PermissionPolicy vs PermissionHooks are different questions and were once conflated:",
+      "  · PermissionPolicy — the adapter translates MJ's posture and allow/deny lists into flags the",
+      "    harness honours. FALSE means a configured policy is INERT and the runtime logs an error.",
+      "    True only for Claude Code and Pi, whose flags were verified against real installs; the",
+      "    others stay false until someone verifies theirs rather than guessing.",
+      "  · PermissionHooks — the adapter can intercept a permission prompt mid-turn and route it to a",
+      "    human. False everywhere: MJ's MCP permission-prompt tool does not exist yet.",
+      "",
+      "Note on Claude Code's Bash patterns: they are PREFIX-LITERAL, so `Bash(git commit:*)` does not",
+      "match `git -C <path> commit`. Deny whole tool names; do not try to carve subcommands out of a",
+      "broad allow. Real containment comes from the sandbox provider."
     ],
     "fields": {
       "Name": "Claude Code",
@@ -24,6 +34,7 @@
         "MidTurnCancellation": true,
         "StructuredOutput": false,
         "UsageReporting": true,
+        "PermissionPolicy": true,
         "PermissionHooks": false,
         "McpClient": true,
         "WorkspaceScoping": true,
@@ -37,8 +48,8 @@
       "ID": "454E8374-BF0F-447F-99A5-125FDE37DE7A"
     },
     "sync": {
-      "lastModified": "2026-08-06T19:52:25.674Z",
-      "checksum": "0b982b611139e81070441deab574c8b98060e730072484beb90b4ef9556527a9"
+      "lastModified": "2026-08-06T21:10:01.195Z",
+      "checksum": "a8d2e96fd21b904eff2c8db4cd3b887053f3443800ef5032b8cb11d8976f37ba"
     }
   },
   {
@@ -51,6 +62,7 @@
         "SessionResume": true,
         "StructuredOutput": false,
         "UsageReporting": true,
+        "PermissionPolicy": false,
         "PermissionHooks": false,
         "McpClient": true,
         "WorkspaceScoping": true,
@@ -62,8 +74,8 @@
       "ID": "4BD7C8C4-7603-4C12-983D-8A57DA28389D"
     },
     "sync": {
-      "lastModified": "2026-08-05T18:51:27.859Z",
-      "checksum": "08fae8398246bdd8f0b9472e52154c1f45ba57fabc9c3fff1a44837415f6b7cd"
+      "lastModified": "2026-08-06T21:10:01.171Z",
+      "checksum": "1a81d0a2b742be24dcb6234539386c3471f28267db0eadeb8cffec095ed43b7c"
     }
   },
   {
@@ -75,6 +87,7 @@
         "SessionResume": true,
         "StructuredOutput": false,
         "UsageReporting": true,
+        "PermissionPolicy": false,
         "PermissionHooks": false,
         "McpClient": true,
         "WorkspaceScoping": true,
@@ -86,8 +99,8 @@
       "ID": "622975D7-CB3A-4944-B76F-53C96D105C34"
     },
     "sync": {
-      "lastModified": "2026-08-05T18:51:27.808Z",
-      "checksum": "99dc1c838ac2592f7ded69f280b5e8e29d9d4713e7169950715716d36e487600"
+      "lastModified": "2026-08-06T21:10:01.144Z",
+      "checksum": "2bf32e4b1154c431456695e64180a553494202bc119493896d69ffb5c3b9c2fe"
     }
   },
   {
@@ -100,6 +113,7 @@
         "SessionResume": false,
         "StructuredOutput": false,
         "UsageReporting": true,
+        "PermissionPolicy": false,
         "PermissionHooks": false,
         "McpClient": true,
         "WorkspaceScoping": true,
@@ -111,8 +125,8 @@
       "ID": "DA433068-6608-4ADB-BE26-8AF0D9D6F456"
     },
     "sync": {
-      "lastModified": "2026-08-05T18:51:27.873Z",
-      "checksum": "b813b0d65421c601d6e37033d2b2adc48f9ce9d3599d79285fac08dce1e84ca2"
+      "lastModified": "2026-08-06T21:10:01.184Z",
+      "checksum": "e7c6399dfdd3bce699c8d0d898d7757e21624d4c9be692aaa687e946f585a244"
     }
   },
   {
@@ -125,6 +139,7 @@
         "MidTurnCancellation": true,
         "StructuredOutput": false,
         "UsageReporting": true,
+        "PermissionPolicy": true,
         "PermissionHooks": false,
         "McpClient": false,
         "WorkspaceScoping": true,
@@ -136,8 +151,8 @@
       "ID": "8B333510-B1ED-475C-B721-1F2315C53568"
     },
     "sync": {
-      "lastModified": "2026-08-05T20:39:46.379Z",
-      "checksum": "03e6d077cca0a5ead787cdb786a985f62ed4444236ef1ecadaf762f86b4acfbf"
+      "lastModified": "2026-08-06T21:10:01.157Z",
+      "checksum": "8cc18c694906c87b5982030bc3551d4d56a2563cb821fb3e921c137c255daecd"
     }
   }
 ]

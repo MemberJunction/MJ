@@ -54,6 +54,18 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
      *
      * Allow/deny patterns pass through in Claude Code's own syntax, deny applied last so it wins:
      * an overlapping policy must fail closed.
+     *
+     * ## Bash patterns are PREFIX-LITERAL — they are hygiene, not a boundary
+     *
+     * `Bash(git commit:*)` matches only commands that *begin* with `git commit`. Proven live: a
+     * `Bash(git:*)` allow paired with a `Bash(git commit:*)` deny let `git -C <path> commit` through,
+     * because any flag before the subcommand defeats the prefix. The run failed only because nothing
+     * happened to be staged.
+     *
+     * The consequence is a rule, not a caveat: **do not use a broad `Bash(<tool>:*)` allow and try to
+     * carve dangerous subcommands back out with denies.** Deny whole tool names (`Bash` — an exact
+     * name match, no prefix involved) or allow only fully-specified commands. Real containment comes
+     * from the sandbox provider; with the LOCAL provider there is none, so the policy is all there is.
      */
     public override ApplyPermissionPolicy(policy: HarnessPermissionPolicy): void {
         const args: string[] = [];
@@ -104,6 +116,8 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
             // feedback taught it the Loop vocabulary. Same distinction PiAdapter already documents.
             StructuredOutput: false,
             UsageReporting: true,
+            // ApplyPermissionPolicy below translates posture + allow/deny into real launch flags.
+            PermissionPolicy: true,
             // Claude Code CAN intercept permissions, but only through an MCP permission-prompt tool
             // that MJ has not stood up yet. Reported false until that exists: claiming interception
             // the adapter does not implement would let mutating operations through unreviewed while
