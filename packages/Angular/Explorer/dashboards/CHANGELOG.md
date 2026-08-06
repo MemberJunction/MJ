@@ -1,5 +1,112 @@
 # @memberjunction/ng-dashboards
 
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- b895f92: Angular DOM unit-testing — Phase 4 (gates, guardrails & spec hygiene). Dev-only; no runtime change.
+  - **`test:types` spec type-check gate**: each DOM-testing package gains a
+    `"test:types": "tsc --noEmit -p tsconfig.spec.json"` script, run as a cached turbo task in CI
+    before the vitest suite (both the affected and full-suite paths). Closes the Phase-3 hole where
+    vitest/esbuild's transpile-only path let real spec type errors (broken `import type` paths,
+    `Subject`-vs-`EventEmitter`) ride green until the `ngc` build failed.
+  - **DOM-spec placement guard** (`scripts/check-dom-spec-placement.mjs`, fast pre-build CI step):
+    fails when a `*.dom.test.ts` sits inside `__tests__/`, where a dual-preset package silently runs
+    it in neither vitest project. Its one real finding — `ng-markdown`'s service DOM spec — was
+    relocated next to its source (test-file move only).
+  - Fixes the pre-existing latent 2-args-of-3 `MCPDashboardComponent` constructor call in the
+    dashboards node test (the gate's prerequisite).
+  - **Anti-pattern lint** (`scripts/check-spec-antipatterns.mjs`, CI): bans vacuous assertions,
+    skipped specs, blanket schemas, and `any`/`as never` casts in `*.dom.test.ts`. Enabling it drove
+    the spec-hygiene cleanup across `ng-agent-requests` / `ng-query-viewer` / `ng-scheduling` /
+    `ng-agents` / `ng-record-changes` (blanket schemas → explicit child stubs; `as never` → typed
+    doubles) and the Explorer specs (real DOM clicks instead of handler calls, SVG prototype-patch
+    teardown, typed context doubles).
+  - **Explorer DOM coverage gate**: `classify-explorer-components.mjs --min 85` in CI — a testable
+    Explorer component shipped without a DOM spec now fails the PR.
+
+- ea003fc: fix(explorer): guarantee the loading screen is released even when a resource's load throws or hangs.
+
+  The Explorer shell's loading screen blocks on the first resource's `NotifyLoadComplete()` signal. `BaseDashboard` called it _after_ `await this.loadData()` with no `try/finally`, so if `initDashboard()` or `loadData()` threw — e.g. an in-flight query rejecting while MJAPI is restarting, or missing data — the signal never fired and the **entire** Explorer hung on the loading screen forever. This reliably reproduced on any full reload of a deep resource URL (dev-server live-reload after an edit, or a browser refresh) while the API was momentarily down.
+
+  Two-part fix:
+  - **`BaseDashboard`** now wraps `initDashboard()` + `loadData()` (in `ngOnInit`) and `loadData()` (in `Refresh`) in `try/catch/finally`. On error it logs via `LogError` and emits the existing `Error` output so the dashboard/container can show its own error state; `NotifyLoadComplete()` runs in `finally`, so the loading screen always clears.
+  - **`DashboardResource`** (the Explorer host that renders code-based dashboards and the Data Explorer) now **subscribes to the dashboard's `Error` output** and renders its existing "Unable to Load Dashboard" card. Without this the released loading screen cleared to a silent blank page — the failure was only visible in the console. `BaseAdminContainerComponent` (which embeds code dashboards in the Admin shells) does the same via its existing `LoadError` surface.
+  - **`BaseResourceComponent`**'s load-complete watchdog now **fails open**: if a resource hasn't signalled within the window it forces `NotifyLoadComplete()` (still logging a warning naming the culprit) rather than only warning. This covers every `BaseResourceComponent` subclass — including ones whose own `ngOnInit` bypasses `BaseDashboard`'s guarded lifecycle, or whose load genuinely hangs — so no single resource can brick the shell.
+
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [e4a6fa3]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [ea003fc]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+- Updated dependencies [5c6e36c]
+  - @memberjunction/ng-base-forms@6.1.0-edge.0
+  - @memberjunction/ng-conversations@6.1.0-edge.0
+  - @memberjunction/ng-ui-components@6.1.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.0
+  - @memberjunction/ng-agents@6.1.0-edge.0
+  - @memberjunction/ng-search@6.1.0-edge.0
+  - @memberjunction/ng-composer@6.1.0-edge.0
+  - @memberjunction/ng-record-process-studio@6.1.0-edge.0
+  - @memberjunction/ng-user-routines@6.1.0-edge.0
+  - @memberjunction/ng-list-management@6.1.0-edge.0
+  - @memberjunction/ng-query-viewer@6.1.0-edge.0
+  - @memberjunction/ng-scheduling@6.1.0-edge.0
+  - @memberjunction/ng-entity-relationship-diagram@6.1.0-edge.0
+  - @memberjunction/ng-actions@6.1.0-edge.0
+  - @memberjunction/ng-testing@6.1.0-edge.0
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.0
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.0
+  - @memberjunction/ng-markdown@6.1.0-edge.0
+  - @memberjunction/ng-agent-requests@6.1.0-edge.0
+  - @memberjunction/api-keys-base@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ng-shared@6.1.0-edge.0
+  - @memberjunction/ng-base-application@6.1.0-edge.0
+  - @memberjunction/ng-react@6.1.0-edge.0
+  - @memberjunction/interactive-component-types@6.1.0-edge.0
+  - @memberjunction/ng-action-gallery@6.1.0-edge.0
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.0
+  - @memberjunction/ng-archive-manager@6.1.0-edge.0
+  - @memberjunction/ng-clustering@6.1.0-edge.0
+  - @memberjunction/ng-credentials@6.1.0-edge.0
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.0
+  - @memberjunction/ng-filter-builder@6.1.0-edge.0
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.0
+  - @memberjunction/ng-trees@6.1.0-edge.0
+  - @memberjunction/ng-versions@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/tag-engine-base@6.1.0-edge.0
+  - @memberjunction/ng-base-types@6.1.0-edge.0
+  - @memberjunction/ng-code-editor@6.1.0-edge.0
+  - @memberjunction/ng-map-view@6.1.0-edge.0
+  - @memberjunction/ng-notifications@6.1.0-edge.0
+  - @memberjunction/ng-shared-generic@6.1.0-edge.0
+  - @memberjunction/credentials@6.1.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.0
+  - @memberjunction/integration-engine-base@6.1.0-edge.0
+  - @memberjunction/templates-base-types@6.1.0-edge.0
+  - @memberjunction/testing-engine-base@6.1.0-edge.0
+  - @memberjunction/ng-container-directives@6.1.0-edge.0
+  - @memberjunction/ng-media-player@6.1.0-edge.0
+  - @memberjunction/ng-export-service@6.1.0-edge.0
+  - @memberjunction/ng-word-cloud@6.1.0-edge.0
+  - @memberjunction/predictive-studio-core@6.1.0-edge.0
+  - @memberjunction/lists-base@6.1.0-edge.0
+  - @memberjunction/export-engine@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+  - @memberjunction/theme-engine@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes
