@@ -1,6 +1,6 @@
 # Task Graphs as an Agent Primitive — Design Plan
 
-**Status:** Draft v5 — decisions now D1–D19. v3 added the what/when program framing, durable-async succession over MJQueue (D14), the Pipeline boundary (D15), the DAG-spec contract (D16), payload-redaction posture, reconciliation-sweep scope, and the human-task notification path. v4 renamed the contract to **`TaskGraphSpec`** (aligned with `AgentSpec`), added **Save as Workflow** (§3.9/D17) and the **"Workflow" terminology** decision (D18), and the companion program plan (`plans/unified-workflow.md`). v5 adds **Phase 0 — legacy retirement** and **Phase 5 — Workflow UX** (D19: the `ng-flow-editor` upgrade, runtime overlay, creation entry point).
+**Status:** Draft v6 — decisions now D1–D20. v6 incorporates the first external review (MarceloT-BC): **D20 task-row integrity** (subclass guard + CAS-guarded writes + sweep normalization), **D9 folds become observable** (the `TaskGraph` run step is written even when folded, making single-node graphs promotable via D17), D12 wording tightened to *no external adoption*, a one-time Phase 1 backfill replacing the permanent `__TASK_METADATA__` fallback parse, the Phase 5 verification posture (structure/behavior + selective visual baselines, not blanket pixel diffs), and ref corrections. Prior: v5 — decisions D1–D19. v3 added the what/when program framing, durable-async succession over MJQueue (D14), the Pipeline boundary (D15), the DAG-spec contract (D16), payload-redaction posture, reconciliation-sweep scope, and the human-task notification path. v4 renamed the contract to **`TaskGraphSpec`** (aligned with `AgentSpec`), added **Save as Workflow** (§3.9/D17) and the **"Workflow" terminology** decision (D18), and the companion program plan (`plans/unified-workflow.md`). v5 adds **Phase 0 — legacy retirement** and **Phase 5 — Workflow UX** (D19: the `ng-flow-editor` upgrade, runtime overlay, creation entry point).
 **Date:** 2026-08-05
 **Origin:** Architecture study of the Sage → Workflow Planner → TaskOrchestrator pipeline (session `claude/sage-task-graph-study-4uvtrc`)
 
@@ -18,7 +18,7 @@ This plan makes task graphs a first-class capability of the platform:
 2. **`Tasks` becomes a Loop-agent primitive** side-by-side with `ForEach`/`While`, gated by an `enableTaskGraphs` setting in the agent-type params bag (`AIAgent.AgentTypePromptParams`), **default on**, with prompt documentation injected/stripped via the existing include-docs + auto-alignment mechanism.
 3. **The Flow traversal engine becomes the one graph executor.** A runtime LLM-emitted graph is converted into an *ephemeral flow* and run by the same engine that runs design-time flows. Flow gains parallel DAG execution (it is strictly single-threaded today); task graphs gain Flow's conditional paths and recovery branches. Single-node graphs are *constant-folded* into direct in-run execution.
 4. **Human-in-the-loop is native**: `MJ: AI Agent Requests` is the pause/resume mechanism for approvals, and the Task schema's existing `UserID`-xor-`AgentID` design makes *human tasks* first-class graph nodes that block downstream agent work.
-5. **`BaseAgent.ts` is decomposed** from a ~13k-line monolith into composed helper classes as a parallel track, landing before/alongside the primitive work that touches it.
+5. **`BaseAgent.ts` is decomposed** from a ~14.4k-line monolith into composed helper classes as a parallel track, landing before/alongside the primitive work that touches it.
 
 ### Where this sits in the workflow program — *what* vs. *when*
 
@@ -43,10 +43,10 @@ Companion tracks in the broader program — trigger-vocabulary normalization, a 
 | D6 | The Flow graph executor is the executor that is kept. Dynamic instructions are converted into an **ephemeral flow** and executed by the shared traversal engine. Useful pieces of the current `TaskOrchestrator` (wave computation, transactional persistence, artifact creation, PubSub frames) carry over. |
 | D7 | Flow gains **parallel DAG execution** — verified today it is single-threaded (single `currentStepId`; only `paths[0]` followed). Frontier-set traversal + join semantics + concurrency cap are added. Design-time flows opt in via their params bag (`traversalMode`); ephemeral flows built from task graphs are always parallel. |
 | D8 | **Task rows are NOT written for in-run Flow execution.** `AIAgentRunStep` already records intra-run execution. The boundary: **run steps = intra-run forensics; Task rows = cross-run durable work items** (dispatcher state, human tasks, UI). Neither replaces the other; nothing is double-written. |
-| D9 | **Single-node graphs are flattened** ("constant folding"): a one-task, zero-edge, agent-assigned graph with default continuation semantics is compiled by `LoopAgentType` into the underlying primitive (a `Sub-Agent` step) and executed in-run — no Task row, no dispatcher hop. Flattening is skipped for human tasks, non-default continuations, or when durability is explicitly requested. |
+| D9 | **Single-node graphs are flattened** ("constant folding"): a one-task, zero-edge, agent-assigned graph with default continuation semantics is compiled by `LoopAgentType` into the underlying primitive (a `Sub-Agent` step) and executed in-run — no Task row, no dispatcher hop. Flattening is skipped for human tasks, non-default continuations, or when durability is explicitly requested. **The fold is observable, never silent**: the `TaskGraph` run step (D10) is written for every emitted graph — folded or dispatched — carrying the full spec, a `folded` flag, and the reason, so run forensics show the decision and Save as Workflow (D17) attaches to folded graphs too. |
 | D10 | The run-step type for graph submission is **`TaskGraph`** (clearer than `Tasks`); type-union recompiles are a non-issue. |
 | D11 | Package naming is **not** AI-prefixed (`@memberjunction/task-graph`): the submission API is producer-agnostic — an LLM, deterministic code, or a human UI can all construct and submit a DAG. |
-| D12 | `ExecuteTaskGraph` mutation and the client-driven execution path are **removed immediately** in Phase 2 — no adoption exists, so no compat window. (The server-side payload-sniff shim still bridges prompts until Phase 3 migrates them.) |
+| D12 | `ExecuteTaskGraph` mutation and the client-driven execution path are **removed immediately** in Phase 2 — no **external** adoption exists; the Explorer conversation client is the mutation's sole caller and §3.8 removes it in the same phase, so caller and mutation leave together. Publish-Then-No-Breaking-Changes governs external surface and is not implicated. (The server-side payload-sniff shim still bridges prompts until Phase 3 migrates them.) |
 | D13 | `BaseAgent.ts` is refactored into composed helper classes as part of this program (parallel track R), behavior-preserving, staged ahead of the Phase 3 changes that touch it. |
 | D14 | **The dispatcher's claim protocol is MJ's durable-async substrate going forward.** `MJQueue`'s durability is illusory today (rows written, never read back; no restart reclaim, no cross-process pickup) and it is not extended. New durable work targets `TaskGraphService` submission — a single-node durable graph is exactly "run this action durably with retry" — including the #3408 plan's After\*-entity-action routing (its runbook step 9), which re-targets here instead of `QueueManager`. MJQueue is absorbed/retired on its own track. |
 | D15 | **Pipelines and task graphs stay separate primitives.** A Pipeline (`plans/tool-pipelines.md`) is a single-turn, in-run *data* program — one value out, no durable state. A task graph is durable, multi-run *work* orchestration. Neither grows toward the other; an agent that needs both emits both. |
@@ -54,6 +54,7 @@ Companion tracks in the broader program — trigger-vocabulary normalization, a 
 | D17 | **"Save as Workflow" — an ephemeral graph can be promoted to a design-time flow.** Because a runtime `TaskGraphSpec` and a design-time flow are the same logical shape (§3.1), a converter (`TaskGraphSpec` → `AgentSpec` with Flow type + Steps/Paths → `AgentSpecSync.Persist`) turns a Loop agent's dynamic approach into a reusable, schedulable flow agent. Surfaced wherever a run's graph is visible: the Agent Run admin UI (via the new `TaskGraph` run-step node) and ng-conversations (detect 1+ graphs on a completed run → offer "Save as Workflow"). See §3.9. |
 | D18 | **"Workflow" is the user-facing noun; "Flow Agent" stays the implementation term.** UI surfaces (navigation, save-as affordance, authoring entry points, docs for business users) say *Workflow* — a deterministic pathway that can include AI steps. No schema/entity/agent-type rename; this is vocabulary, applied at the UX layer. The v6 retirement of the dead legacy `Workflow` tables frees the name. **The rule extends past the noun**: end-user surfaces never say *graph*, *DAG*, *node*, or *traversal* — they say *workflow*, *step*, *plan*, *path* (chat cards say "View", not "View graph"; run views say "Planned by Sage", not "Ephemeral graph"). Technical terms stay in dev docs and metadata. |
 | D19 | **Workflow UX is in-scope for this program (Phase 5), and the existing `@memberjunction/ng-flow-editor` is upgraded, not replaced.** The Foblex-Flow canvas + `FlowAgentEditorComponent` become THE workflow viewer/editor: every capability this program adds (parallel traversal + joins, `traversalMode`, human tasks, runtime task graphs, Save as Workflow) must be visible and editable there, one visualizer serves both provenances (design-time workflow and runtime graph), and the editor gets a first-class creation entry point instead of being buried inside a saved AI Agent record form. |
+| D20 | **Task rows are shared-writable, so dispatcher integrity is enforced, not assumed.** The six machine-state columns land on an entity with ordinary generated CRUD — entity forms, Data Explorer, GraphQL, and any agent holding an update-record action can write `Status` or `ClaimedBy` directly, so the claim protocol must survive human-vs-dispatcher writes, not just dispatcher-vs-dispatcher races. Three layers (§3.4): a server-side `MJTaskEntity` subclass guard on dispatcher-owned columns and claimed-row `Status` transitions; CAS-guarded dispatcher writes so a tampered row fails a stale executor's write cleanly instead of double-completing; and sweep detection/normalization of anomalous states. Legitimate human verbs (Cancel; Complete on a human-assigned task) flow through the first-class mutations. |
 
 ---
 
@@ -176,6 +177,8 @@ interface TaskGraphSpec {
 
 **Single-node constant folding (D9):** during `DetermineNextStep`, a graph with exactly one node, no edges, an `agentName` assignment, and default continuation is rewritten into a `Sub-Agent` step and executed in-run — the compiler-flattening analogy: don't spin up loop machinery for a loop of one. Tradeoff accepted: no Task row (matches today's single-task fast path). Folding is skipped when the node is a human task, `continuation` is non-default, or the graph explicitly requests durability (a `durable: true` escape hatch on `TaskGraphSpec` — final name at implementation).
 
+**The fold is recorded, not silent** (review): the `TaskGraph` run step is written for every emitted graph — folded or dispatched — carrying the full `TaskGraphSpec`, a `folded` flag, and the reason. Three consequences: run forensics show why a graph did or didn't reach the dispatcher; a user who edits a two-node graph down to one sees the durability/observability change on the run record instead of inferring it; and Save as Workflow attaches to the recorded spec, so the single-node case — the most common shape a user would want to promote — is promotable like any other graph. Wanting single-node *durability* stays explicit via `durable: true`.
+
 **Opt-in via the params bag (D3):**
 - `enableTaskGraphs?: boolean` added to `LoopAgentTypePromptParams` (+ `DEFAULT_LOOP_AGENT_PROMPT_PARAMS`, default **true**) and to the Loop row's `PromptParamsSchema` in `metadata/agent-types/.agent-types.json`.
 - Per-agent override in `AIAgent.AgentTypePromptParams` JSON, per-run override via runtime params — the existing three-level merge.
@@ -199,6 +202,11 @@ interface TaskGraphSpec {
 - Claim = compare-and-swap: `UPDATE Task SET Status='In Progress', ClaimedBy=@instance, ClaimExpiresAt=@t, StartedAt=... WHERE ID=@id AND Status='Pending'` — rowcount 1 wins, 0 means another instance took it. No distributed lock manager.
 - Long tasks heartbeat-extend `ClaimExpiresAt`; reconciliation (startup + periodic) treats expired claims as orphaned → reset to `Pending`.
 - This one protocol covers horizontal scale-out **and** crash/restart recovery, and is near-free to include from day one even though v1 runs single-instance.
+
+**Task-row integrity under shared writability (D20).** `MJ: Tasks` stays a user-facing entity with generated CRUD while becoming the dispatcher's state store — the §3.4 claim protocol handles dispatcher-vs-dispatcher contention, and this layer handles human-vs-dispatcher writes (a user or an update-record-wielding agent flipping a claimed row's `Status` back to `Pending`, or clearing `ClaimedBy`, would otherwise hand the same work to a second executor while the first still runs). Three defenses, cheapest-first:
+1. **Server-side entity-subclass guard** (`MJTaskEntity` server subclass — the `BASE_ENTITY_SERVER_PATTERNS` shape): non-dispatcher writers cannot set `ClaimedBy`/`ClaimExpiresAt`, and `Status` on a claimed row accepts only the legitimate human verbs — `Cancelled` (any task, via the cancel mutation so propagation runs) and `Complete` (human-assigned tasks only). Everything else is a validation failure with a message pointing at the mutations.
+2. **CAS-guarded dispatcher writes**: every dispatcher state transition — not just the initial claim — carries `WHERE Status=@expected AND ClaimedBy=@me` + rowcount check, so even a row tampered past the guard makes the stale executor's completion write fail cleanly rather than double-complete; the dispatcher then re-reads and defers to the sweep.
+3. **Sweep normalization**: the reconciliation sweep flags and normalizes anomalous states (`Pending` with a live claim, `In Progress` with no claim, terminal with dependents still `Blocked`), logging loudly. Record Changes already gives the tamper audit trail for free.
 
 **Durable-async succession (D14).** This dispatcher is the durable executor MJ has been missing, and it must not become a *third* async substrate next to MJQueue and fire-and-forget promises. The posture: MJQueue is frozen (its one consumer, after-save Entity AI Actions, migrates or retires on its own track); the #3408 After\*-entity-action durability work (runbook step 9) targets `TaskGraphService` submission instead of `QueueManager.AddTask`; and any future "run X durably" need is a single-node graph, not a new queue. The claim protocol's design deliberately carries the litigated lessons from `plans/scheduled-job-engine-decoupling.md` (the wedged-scheduler post-mortem): bounded-parallel dispatch, never a serial await chain; token-checked state transitions; sweep-driven orphan recovery.
 
@@ -236,7 +244,7 @@ Task graphs inherit conditional edges, recovery branches, and structured output 
 | `Task` | `+ InputPayload NVARCHAR(MAX) NULL`, `+ OutputPayload NVARCHAR(MAX) NULL`, `+ AgentRunID UNIQUEIDENTIFIER NULL` (FK → `AIAgentRun`), `+ ErrorMessage NVARCHAR(MAX) NULL`, `+ ClaimedBy NVARCHAR(100) NULL`, `+ ClaimExpiresAt DATETIMEOFFSET NULL` |
 | `AIAgentRunStep` | `StepType` CHECK gains **`TaskGraph`** (D10) |
 
-No `AIAgent` changes (D3 moved the setting into the params bag). No new tables. `Status`/`DependencyType` CHECKs already carry the needed values — this plan starts honoring `Blocked`/`Cancelled`/`Failed` and (Phase 4) `Optional`/`Corequisite`. `Description` smuggling ends; readers keep a fallback parse for pre-migration rows. Standard flow: migration → CodeGen → typed properties.
+No `AIAgent` changes (D3 moved the setting into the params bag). No new tables. `Status`/`DependencyType` CHECKs already carry the needed values — this plan starts honoring `Blocked`/`Cancelled`/`Failed` and (Phase 4) `Optional`/`Corequisite`. `Description` smuggling ends via a **one-time backfill in the Phase 1 migration** (SQL Server + PG flavors): existing `__TASK_METADATA__`/`__TASK_OUTPUT__` marker rows are parsed into the new columns and the markers stripped from `Description` — no permanent code fallback (review: a fallback parse with no backfill never dies). Standard flow: migration → CodeGen → typed properties.
 
 Metadata (not migration): Loop agent type's `PromptParamsSchema` gains `enableTaskGraphs`; Flow agent type's gains `traversalMode`.
 
@@ -249,7 +257,7 @@ Metadata (not migration): Loop agent type's `PromptParamsSchema` gains `enableTa
 
 ### 3.8 Client changes
 
-- Delete `handleTaskGraphExecution` / `handleSingleTaskExecution` and the `ExecuteTaskGraph` call (D12 — no adoption, no compat window); render workflow state from lifecycle + progress frames.
+- Delete `handleTaskGraphExecution` / `handleSingleTaskExecution` and the `ExecuteTaskGraph` call (D12 — the client is the mutation's only caller; both leave in this phase); render workflow state from lifecycle + progress frames.
 - **Re-attach on load**: query active parent tasks for the conversation and subscribe — fixes the unfixable reload-mid-workflow gap.
 - Fix `agentRunMap` to use `Task.AgentRunID`; render `Blocked`/`Cancelled`; add cancel/retry affordances.
 
@@ -259,8 +267,8 @@ The convergence runs both directions. Phase 4 converts runtime graphs *into* eph
 
 - **Converter**: `TaskGraphSpec` → `AgentSpec` (Flow type; nodes → `Steps` with Sub-Agent/Action assignments, edges → `Step Paths`; `inputPayload` mappings → step input mappings) → `AgentSpecSync.Persist`. No new persistence machinery — AgentSpecSync already owns atomic multi-entity agent writes and the mutation audit.
 - **Surfaces**:
-  - *Agent Run admin UI* — the `TaskGraph` run-step node (D10) renders the submitted graph; a "Save as Workflow" action sits on it.
-  - *ng-conversations* — when a completed agent run carries 1+ task graphs, surface a lightweight affordance on the message/plan card ("Save this approach as a Workflow"). The UX challenge is worth design attention: this is the moment a one-off agent plan becomes reusable organizational automation.
+  - *Agent Run admin UI* — the `TaskGraph` run-step node (D10) renders the submitted graph; a "Save as Workflow" action sits on it. Written for folded single-node graphs too (D9), so they are equally promotable.
+  - *ng-conversations* — when a completed agent run carries 1+ recorded task graphs (dispatched **or** folded), surface a lightweight affordance on the message/plan card ("Save this approach as a Workflow"). The UX challenge is worth design attention: this is the moment a one-off agent plan becomes reusable organizational automation.
 - **Naming per D18**: the affordance says *Workflow*, the persisted artifact is a Flow-type agent.
 - **Fidelity note**: human-task nodes persist as human-assigned steps once Phase 4 lands them; `continuation` semantics don't persist (a saved workflow is invoked, not continued). The converter states what it drops.
 - **Phase**: after Phase 4's engine convergence (the graph→flow mapping must be settled first); the converter + both surfaces are a bounded follow-on deliverable listed there.
@@ -271,7 +279,7 @@ The convergence runs both directions. Phase 4 converts runtime graphs *into* eph
 
 ### Track R (parallel) — `BaseAgent.ts` decomposition (D13)
 
-`base-agent.ts` is a ~13k-line monolith. Staged, behavior-preserving extraction into composed helper classes, ordered lowest-risk first, with test parity at each stage — landing **before Phase 3** touches the same code. Candidate seams (each already a coherent cluster):
+`base-agent.ts` is a ~14.4k-line monolith. Staged, behavior-preserving extraction into composed helper classes, ordered lowest-risk first, with test parity at each stage — landing **before Phase 3** touches the same code. Candidate seams (each already a coherent cluster):
 
 | Helper | Today (approx.) |
 |---|---|
@@ -296,7 +304,7 @@ Constraints: `BaseAgent`'s public/protected API stays stable (subclasses exist v
 
 ### Phase 1 — Truthful engine
 1. Migration: `Task` columns + `AIAgentRunStep.StepType` value (+ CodeGen).
-2. `TaskOrchestrator`: structured payload columns (Description fallback read only); failure propagation; cycle detection; unknown-agent hard error; wave parallelization with cap *(the eligibility logic carries into the dispatcher unchanged)*.
+2. `TaskOrchestrator`: structured payload columns (the migration's one-time backfill converts legacy marker rows — no fallback parse in code); failure propagation; cycle detection; unknown-agent hard error; wave parallelization with cap *(the eligibility logic carries into the dispatcher unchanged)*.
 3. UI: `AgentRunID` links; `Blocked`/`Failed` rendering.
 
 **Exit:** parallel branches parallelize; failures block dependents and fail the parent honestly; payloads are columns; Gantt links correct runs.
@@ -342,7 +350,7 @@ An intentional UX effort, not a trailing cleanup — it addresses the authoring/
    - The D18 vocabulary sweep across the touched surfaces: *Workflow* in nav, buttons, empty states; *Flow Agent* remains in metadata/dev docs.
 4. **Read-only ≠ invisible**: the viewer (not editor) embeds anywhere a graph is referenced — ng-conversations plan cards, the Tasks view, run history — via the existing `ReadOnly` mode.
 
-5. **Design source — the mockups are the contract.** The approved direction lives at [`mockups/workflow-ux/phase5-overview-v1.html`](../mockups/workflow-ux/phase5-overview-v1.html) — four views: (A) the editor canvas with parallel fan-out, AND-join badge, human-task node, recovery path, traversal toggle + concurrency cap, live validation; (B) the runtime overlay on the same canvas with per-step status, activity feed, and Save as Workflow on an agent-planned run; (C) the chat plan cards (running + completed, with the Save as Workflow moment); (D) the "Create Workflow" front door (Blank / Describe it / From a past run). As each screen's design is locked through iteration, the full-resolution per-screen mockup is added to `mockups/workflow-ux/` and **implemented pixel-perfect, end to end, within this phase** — mockup → component → Playwright verification against the mockup, one screen at a time. The mockups already apply the D18 vocabulary rule (no "graph"/"DAG"/"node" on end-user surfaces); implementations must not regress it.
+5. **Design source — the mockups are the contract.** The approved direction lives at [`mockups/workflow-ux/phase5-overview-v1.html`](../mockups/workflow-ux/phase5-overview-v1.html) — four views: (A) the editor canvas with parallel fan-out, AND-join badge, human-task node, recovery path, traversal toggle + concurrency cap, live validation; (B) the runtime overlay on the same canvas with per-step status, activity feed, and Save as Workflow on an agent-planned run; (C) the chat plan cards (running + completed, with the Save as Workflow moment); (D) the "Create Workflow" front door (Blank / Describe it / From a past run). As each screen's design is locked through iteration, the full-resolution per-screen mockup is added to `mockups/workflow-ux/` and **implemented end to end within this phase** — mockup → component → Playwright verification, one screen at a time. Verification posture (review): Playwright asserts **structure and behavior** — nodes/joins/toggles present, validation states, status transitions, vocabulary rule — plus a *small deliberate set* of visual baselines for each screen's identity-defining shots; blanket pixel-diffing against the mockup is explicitly not the bar, because it's the most brittle test class there is. The mockup remains the design contract; the suite verifies the contract's substance. The mockups already apply the D18 vocabulary rule (no "graph"/"DAG"/"node" on end-user surfaces); implementations must not regress it.
 
 Scope boundary: the broader authoring front doors (the "Automations" wizard, unified run inbox, agent-facing draft-then-confirm tools) remain program Track F (`plans/unified-workflow.md`) — Phase 5 is specifically the workflow viewer/editor and its entry points, shipped with the engine so the new abilities are never invisible.
 
@@ -363,7 +371,7 @@ Resolved this review round:
 | O5 everything-is-a-graph overhead | Single-node constant folding in `LoopAgentType` (D9). |
 | O6 step type name | `TaskGraph` (D10). |
 | O7 package naming | Not AI-prefixed — producer-agnostic DAGs (D11). |
-| O8 `ExecuteTaskGraph` compat | Removed immediately in Phase 2; no adoption exists (D12). |
+| O8 `ExecuteTaskGraph` compat | Removed immediately in Phase 2; no external adoption — the sole (internal) caller is removed in the same phase (D12). |
 
 Remaining risks:
 
@@ -386,6 +394,8 @@ Remaining risks:
 ---
 
 ## Appendix — primary source index
+
+Line references are pinned to the study baseline: `next` @ `d26e202e7` (2026-08-05). Expect drift as `next` moves — treat symbols as authoritative and line numbers as hints. Corrections from review applied: `base-agent.ts` is **14,437** lines at baseline (not "~13k"); the Entity-Action filter stub spans `ActionEngine.ts:308-310` (declaration / `return true` / `// temp stub`).
 
 | Concern | Location |
 |---|---|
