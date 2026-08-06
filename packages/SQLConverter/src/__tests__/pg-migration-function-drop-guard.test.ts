@@ -334,6 +334,8 @@ function findViolations(): Violation[] {
 // failure class — partial-commit migrations that fail on re-apply.
 //
 // Kept here as a starting point for that future signature-aware version.
+// KNOWN LIMITATION: disabled until the param-by-param signature comparison above is built;
+// the idempotency check in pg-migrations.yml covers the real failure class meanwhile.
 describe.skip(
     'PG migration: CREATE OR REPLACE FUNCTION with changed signature must DROP prior overload first',
     () => {

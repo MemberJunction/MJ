@@ -385,8 +385,8 @@ describe('SchedulingEngine', () => {
         // reaches it for the sake of one branch test.
         const callInitialize = async (jobs: Array<Record<string, unknown>>): Promise<void> => {
             (mockBase as Record<string, unknown>).ScheduledJobs = jobs;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (engine as any).initializeNextRunTimes({ ID: 'user-1' });
+            const seam = engine as unknown as { initializeNextRunTimes(user: { ID: string }): Promise<void> };
+            await seam.initializeNextRunTimes({ ID: 'user-1' });
         };
 
         it('sets NextRunAt to the next cron tick when the flag is off', async () => {

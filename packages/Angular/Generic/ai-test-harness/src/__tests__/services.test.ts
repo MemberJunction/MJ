@@ -16,15 +16,9 @@ vi.mock('@memberjunction/core', () => ({
 vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/global', () => ({ MJGlobal: { Instance: { ClassFactory: { CreateInstance: vi.fn() } } } }));
 
+// NOTE: real constructibility of TestHarnessWindowService & co. is covered by the
+// public-entry smoke test in index.test.ts; these specs cover the tracking patterns.
 describe('AI Test Harness Services', () => {
-  describe('TestHarnessWindowService pattern', () => {
-    it('should define service interface for opening windows', () => {
-      // The service uses Kendo WindowService to open test harness windows
-      // We verify the service can be constructed
-      expect(true).toBe(true);
-    });
-  });
-
   describe('TestHarnessWindowManagerService pattern', () => {
     it('should manage multiple window instances', () => {
       // Manager tracks open windows by ID

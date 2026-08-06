@@ -9,7 +9,9 @@
     "copy-assets": "cpy 'src/lib/styles/**' dist/styles --flat && cpy 'src/lib/assets/**' dist/assets && cpy src/lib/styles.scss dist --flat",
     "watch": "ngc --watch",
     "clean": "rimraf dist",
-    "build:clean": "npm run clean && npm run build"
+    "build:clean": "npm run clean && npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "memberjunction",
@@ -49,7 +51,8 @@
     "@angular/core": "^21.1.3",
     "@angular/compiler": "^21.1.3",
     "@angular/compiler-cli": "^21.1.3",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.18"
   },
   "files": [
     "dist/**/*"
