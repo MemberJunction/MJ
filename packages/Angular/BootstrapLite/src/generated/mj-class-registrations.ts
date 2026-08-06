@@ -27,7 +27,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (411 classes)
+// @memberjunction/core-entities (412 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -45,9 +45,11 @@ import {
     MJAIAgentClientToolEntity,
     MJAIAgentCoAgentEntity,
     MJAIAgentConfigurationEntity,
+    MJAIAgentCredentialEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
     MJAIAgentExampleEntity,
+    MJAIAgentHarnessEntity,
     MJAIAgentLearningCycleEntity,
     MJAIAgentModalityEntity,
     MJAIAgentModelEntity,
@@ -300,7 +302,6 @@ import {
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
-    MJMaterializedResultEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -619,9 +620,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentClientToolEntity,
     MJAIAgentCoAgentEntity,
     MJAIAgentConfigurationEntity,
+    MJAIAgentCredentialEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
     MJAIAgentExampleEntity,
+    MJAIAgentHarnessEntity,
     MJAIAgentLearningCycleEntity,
     MJAIAgentModalityEntity,
     MJAIAgentModelEntity,
@@ -874,7 +877,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
-    MJMaterializedResultEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -1111,7 +1113,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 510;
+export const CLASS_REGISTRATIONS_COUNT = 511;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
