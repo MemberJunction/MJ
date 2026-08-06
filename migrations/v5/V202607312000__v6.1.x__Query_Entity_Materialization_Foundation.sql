@@ -1,6 +1,6 @@
 /* ============================================================================
    Query & Entity Materialization — Phase 1 Foundation (Metadata)
-   v5.52.x
+   v6.1.x
 
    Companion plan: /plans/query-entity-materialization.md (design)
 
