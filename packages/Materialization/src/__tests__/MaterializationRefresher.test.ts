@@ -580,7 +580,8 @@ describe('MaterializationRefresher.buildDirtyGroupRecomputeStatements* (Phase 3)
     it('Incremental (SQL Server): single MERGE upserting recomputed dirty groups on the surrogate', () => {
         const [merge, ...rest] = MaterializationRefresher.buildIncrementalMergeStatementsSQLServer(base);
         expect(rest).toHaveLength(0); // one atomic statement
-        expect(merge).toContain('MERGE INTO [__mj].[materialized_Sales] AS t');
+        // WITH (HOLDLOCK) makes the MERGE serializable — closes the SS insert/insert race (mirrors PG's ON CONFLICT).
+        expect(merge).toContain('MERGE INTO [__mj].[materialized_Sales] WITH (HOLDLOCK) AS t');
         expect(merge).toContain('ON t.[__mj_MaterializedRowID] = src.[__mj_MaterializedRowID]');
         expect(merge).toContain('WHEN MATCHED THEN UPDATE SET t.[region] = src.[region], t.[yr] = src.[yr], t.[total] = src.[total]');
         expect(merge).toContain('WHEN NOT MATCHED THEN INSERT ([__mj_MaterializedRowID], [region], [yr], [total])');

@@ -161,14 +161,18 @@ ${whereClause}GO`;
      * `includeBatchSeparator: true` so the migration *file* still gets a `GO` after it.
      */
     generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {
-        const colLines = columns.map((c) => `        [${c.Name}] ${c.SQLType} ${c.Nullable ? 'NULL' : 'NOT NULL'}`);
+        // Escape the closing bracket in every interpolated identifier (`]`→`]]`) so a column name from an
+        // untrusted source (e.g. an external entity's remote field names) can't break out of its quoting — the
+        // same hardening the refresh path applies via escId. SQLType is metadata-controlled (not an identifier).
+        const esc = (n: string) => n.replace(/\]/g, ']]');
+        const colLines = columns.map((c) => `        [${esc(c.Name)}] ${c.SQLType} ${c.Nullable ? 'NULL' : 'NOT NULL'}`);
         const pkCols = columns.filter((c) => c.IsPrimaryKey).map((c) => c.Name);
         const pkClause = pkCols.length
-            ? `,\n        CONSTRAINT [PK_${tableName}] PRIMARY KEY (${pkCols.map((n) => `[${n}]`).join(', ')})`
+            ? `,\n        CONSTRAINT [PK_${esc(tableName)}] PRIMARY KEY (${pkCols.map((n) => `[${esc(n)}]`).join(', ')})`
             : '';
-        return `IF OBJECT_ID('[${schema}].[${tableName}]', 'U') IS NULL
+        return `IF OBJECT_ID('[${esc(schema)}].[${esc(tableName)}]', 'U') IS NULL
 BEGIN
-    CREATE TABLE [${schema}].[${tableName}] (
+    CREATE TABLE [${esc(schema)}].[${esc(tableName)}] (
 ${colLines.join(',\n')}${pkClause}
     );
 END`;
@@ -183,9 +187,10 @@ END`;
      * batch separator. `CREATE OR ALTER VIEW` is valid as the sole statement in its batch.
      */
     generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
-        return `CREATE OR ALTER VIEW [${schema}].[${viewName}]
+        const esc = (n: string) => n.replace(/\]/g, ']]');
+        return `CREATE OR ALTER VIEW [${esc(schema)}].[${esc(viewName)}]
 AS
-SELECT * FROM [${schema}].[${tableName}];`;
+SELECT * FROM [${esc(schema)}].[${esc(tableName)}];`;
     }
 
     /** SQL Server synthetic surrogate key: an auto-incrementing IDENTITY column. */

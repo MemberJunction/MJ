@@ -1661,7 +1661,7 @@ export class ManageMetadataBase {
          // CodeGen pass by detectMaterializationDrift, so a source that LATER gains RLS holds the existing
          // materialization AND revokes its read access rather than leaking (see assessQuerySourceRLSSafety).
          const sourceLinks = await this.runQueryWithParams(pool, `SELECT EntityID FROM ${this.qs(coreSchema, 'vwQueryEntities')} WHERE QueryID = @QID`, { QID: queryId });
-         const rlsVerdict = this.assessQuerySourceRLSSafety(md, sourceLinks.recordset.map((r: CodeGenQueryRow) => r.EntityID as string));
+         const rlsVerdict = this.assessQuerySourceRLSSafety(md, sourceLinks.recordset.map((r: CodeGenQueryRow) => r.EntityID as string), detectSQL);
          if (!rlsVerdict.safe) {
             logError(
                `    > REFUSING to materialize query "${queryName}": ${rlsVerdict.reason}. Run query analysis so its source entities are linked, or use a base-view materialization (which inherits source RLS). Skipping to avoid a silent privilege escalation.`,
@@ -1803,17 +1803,26 @@ export class ManageMetadataBase {
          if (r.SourceType === 'Query' && r.SourceQueryID) {
             const qe = await this.runQueryWithParams(pool, `SELECT EntityID FROM ${this.qs(coreSchema, 'QueryEntity')} WHERE QueryID = @Q`, { Q: r.SourceQueryID as string });
             const sourceEntityIds = qe.recordset.map((x: CodeGenQueryRow) => x.EntityID as string);
-            const rlsVerdict = this.assessQuerySourceRLSSafety(md, sourceEntityIds);
+            // Load the query text so the P1 under-linking guard can parse it for source tables the QueryEntity
+            // links may have missed (see assessQuerySourceRLSSafety). Best-effort: if the read fails, the
+            // linked-source checks still run — only a POSITIVE unlinked-RLS detection changes the verdict.
+            const qSqlRes = await this.runQueryWithParams(pool, `SELECT SQL FROM ${this.qs(coreSchema, 'Query')} WHERE ID = @Q`, { Q: r.SourceQueryID as string });
+            const driftSQL = (qSqlRes.recordset?.[0] as CodeGenQueryRow)?.SQL as string | undefined;
+            const rlsVerdict = this.assessQuerySourceRLSSafety(md, sourceEntityIds, driftSQL);
             if (!rlsVerdict.safe) {
+               // Revoke read FIRST, then flag DriftHold. The revoke is the security-critical action (closes the
+               // leak — the snapshot serving unscoped source rows); DriftHold only stops future refreshes. Doing
+               // revoke first means that if the second statement fails, the readable window is already closed
+               // (fail-safe) — whereas DriftHold-then-revoke would leave read OPEN if the revoke failed.
+               if (r.GeneratedEntityID) {
+                  await this.revokeMaterializedEntityReadAccess(pool, r.GeneratedEntityID as string, r.TableName as string, rlsVerdict.reason ?? 'source RLS drift');
+               }
                await this.LogSQLAndExecute(
                   pool,
                   `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
                   `Flag materialization "${r.TableName}" as DriftHold (source RLS drift)`,
                );
-               if (r.GeneratedEntityID) {
-                  await this.revokeMaterializedEntityReadAccess(pool, r.GeneratedEntityID as string, r.TableName as string, rlsVerdict.reason ?? 'source RLS drift');
-               }
-               logError(`    > RLS DRIFT: materialization "${r.TableName}" → DriftHold + read access revoked — ${rlsVerdict.reason}`);
+               logError(`    > RLS DRIFT: materialization "${r.TableName}" → read access revoked + DriftHold — ${rlsVerdict.reason}`);
                heldCount++;
                continue; // already held for the leak; the shape-drift check below is moot
             }
@@ -5999,7 +6008,7 @@ export class ManageMetadataBase {
     * Over-restriction here is harmless (the query stays live-only, or an existing materialization is held); the
     * reverse — serving a protected source's rows unscoped — is the leak this guard exists to prevent.
     */
-   protected assessQuerySourceRLSSafety(md: Metadata, sourceEntityIds: string[]): { safe: boolean; reason?: string } {
+   protected assessQuerySourceRLSSafety(md: Metadata, sourceEntityIds: string[], sql?: string): { safe: boolean; reason?: string } {
       if (sourceEntityIds.length === 0) {
          return { safe: false, reason: 'no source-entity provenance is recorded (its QueryEntity links are empty), so RLS-safety cannot be verified' };
       }
@@ -6015,7 +6024,39 @@ export class ManageMetadataBase {
          const names = rlsProtected.map((e) => `"${e.Name}"`).join(', ');
          return { safe: false, reason: `source entit${rlsProtected.length === 1 ? 'y' : 'ies'} ${names} ${rlsProtected.length === 1 ? 'is' : 'are'} read-RLS-protected, and a materialized query entity does NOT inherit source RLS (plan §6.2)` };
       }
+      // P1 hardening — catch RLS sources the LINKER MISSED. The checks above inspect only the LINKED sources
+      // (vwQueryEntities); a source reached via a wrapping view / CTE / function / aliased columns that
+      // query-analysis under-linked would be invisible to them. Parse the query SQL directly, map each table ref
+      // to an entity, and fail closed if a referenced entity is read-RLS-protected but NOT in the linked set —
+      // the precise leak (an unverified RLS source). An unlinked NON-RLS table is not a leak, so it doesn't trip
+      // this (avoids over-refusing legitimate materializations). Parse failure is ignored (the linked-only checks
+      // above still stand); only a POSITIVE detection of an unlinked RLS source refuses.
+      if (sql && sql.trim().length > 0) {
+         const linkedSet = new Set(sourceEntityIds.map((id) => id.trim().toLowerCase()));
+         let refs: { SchemaName?: string; TableName?: string }[] = [];
+         try { refs = SQLParser.ExtractTableRefs(sql, this.dialect) ?? []; } catch { refs = []; }
+         for (const ref of refs) {
+            if (!ref.TableName) continue;
+            const entity = this.findEntityByBaseObject(md, ref.SchemaName, ref.TableName);
+            if (entity && this.entityHasRowLevelSecurity(entity) && !linkedSet.has(entity.ID.trim().toLowerCase())) {
+               return { safe: false, reason: `query references read-RLS-protected source "${entity.Name}" (${ref.SchemaName ?? ''}.${ref.TableName}) that query-analysis did NOT link — an unscoped snapshot can't honor its RLS (P1 under-linking guard)` };
+            }
+         }
+      }
       return { safe: true };
+   }
+
+   /** Maps a physical (schema, table/view) reference to the MJ entity backed by it — by BaseView or BaseTable,
+    *  case/whitespace-insensitive, schema-scoped when a schema is given. Used by the P1 under-linking guard. */
+   protected findEntityByBaseObject(md: Metadata, schema: string | undefined, table: string): EntityInfo | undefined {
+      const t = table.trim().toLowerCase();
+      const s = (schema ?? '').trim().toLowerCase();
+      return md.Entities.find((e) => {
+         const schemaOk = !s || (e.SchemaName ?? '').trim().toLowerCase() === s;
+         const bv = (e.BaseView ?? '').trim().toLowerCase();
+         const bt = (e.BaseTable ?? '').trim().toLowerCase();
+         return schemaOk && (bv === t || bt === t);
+      });
    }
 
    /**
