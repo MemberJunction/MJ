@@ -62009,6 +62009,9 @@ export class MJMaterializedResult_ {
     @Field(() => Int, {description: `Count of consecutive incremental (Incremental/DirtyGroupRecompute) refreshes since the last full rebuild. The refresher forces a full rebuild once this reaches its threshold, reconciling drift that a balanced delete+insert (net-zero source row-count change) leaves uncaught by the delete-detection guard. Reset to 0 on every full rebuild; incremented on every incremental refresh.`}) 
     RefreshesSinceFullRebuild: number;
         
+    @Field({nullable: true, description: `For a RowFilterBroad materialization, a JSON array of read-time filter predicates — each { column, operator, paramName, kind } — that the runtime provider injects against the broad materialized table when a caller runs the query with DataSource=Materialized. operator is one of the read-time-safe set (=, !=, <>, <, >, <=, >=, IN, NOT IN); kind is scalar or list. Values are always bound as SQL parameters, never interpolated. NULL for non-row-filter materializations.`}) 
+    ReadFilterSpec?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     SourceQuery?: string;
@@ -62100,6 +62103,9 @@ export class CreateMJMaterializedResultInput {
     @Field(() => Int, { nullable: true })
     RefreshesSinceFullRebuild?: number;
 
+    @Field({ nullable: true })
+    ReadFilterSpec: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -62178,6 +62184,9 @@ export class UpdateMJMaterializedResultInput {
 
     @Field(() => Int, { nullable: true })
     RefreshesSinceFullRebuild?: number;
+
+    @Field({ nullable: true })
+    ReadFilterSpec?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
