@@ -8,8 +8,9 @@ import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, MJLruCache } from "@memberjunction/global";
+import { FindReferencedIdentifiers } from "@memberjunction/sql-dialect";
 import { TelemetryManager } from "./telemetryManager";
-import { LogError, LogStatus, LogStatusEx } from "./logging";
+import { LogDebug, LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { LibraryInfo } from "./libraryInfo";
@@ -2228,6 +2229,147 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param contextUser - Optional user context
      * @returns Pre-processing result with cache status and optional cached result
      */
+    // ========================================================================
+    // FIELD-LEVEL SECURITY
+    // ========================================================================
+
+    /**
+     * Rejects a RunView whose `ExtraFilter`, `OrderBy`, or `UserSearchString` references a field
+     * the user cannot read.
+     *
+     * Output projection alone is security theater. A user denied `Salary` can send
+     * `ExtraFilter: "Salary > 200000"` or `OrderBy: "Salary DESC"` and reconstruct the values
+     * from which rows come back and in what order — the column never appears in a result, so
+     * every output-stripping point reports "secure." Predicate validation is a first-class
+     * enforcement point, not a belt-and-braces afterthought.
+     *
+     * Lives at the provider layer rather than in the GraphQL resolver (where the plan first
+     * placed it) because every RunView funnels through here — the batch path, server-internal
+     * agents and actions running under a restricted `contextUser`, and the resolver alike. One
+     * gate, no path left uncovered.
+     *
+     * The error deliberately does not say whether the field is missing or merely forbidden —
+     * see {@link ProviderBase.FieldSecurityDenialMessage}.
+     */
+    protected AssertPredicatesRespectFieldSecurity(params: RunViewParams, contextUser?: UserInfo): void {
+        if (!contextUser || !params.EntityName) {
+            return;
+        }
+        const entity = this.EntityByName(params.EntityName);
+        if (!entity?.HasAnyFieldPermissions) {
+            return; // the overwhelmingly common case — one boolean, no allocation
+        }
+        const denied = entity.GetDeniedReadFields(contextUser);
+        if (denied.size === 0) {
+            return;
+        }
+
+        // Map lowercased denied names back to their real casing for the message.
+        const deniedByName = new Map<string, string>();
+        for (const field of entity.Fields) {
+            if (denied.has(field.Name.trim().toLowerCase())) {
+                deniedByName.set(field.Name.trim().toLowerCase(), field.Name);
+            }
+        }
+
+        for (const clause of [params.ExtraFilter, params.OrderBy]) {
+            if (typeof clause !== 'string' || clause.length === 0) {
+                continue;
+            }
+            const hits = FindReferencedIdentifiers(clause, deniedByName.values());
+            if (hits.length > 0) {
+                LogDebug(
+                    `[FieldSecurity] Rejected RunView on '${entity.Name}' for user ${contextUser.Email}: ` +
+                    `predicate references denied field(s) ${hits.join(', ')}`
+                );
+                throw new Error(ProviderBase.FieldSecurityDenialMessage(hits[0], entity.Name));
+            }
+        }
+
+        // UserSearchString is not a predicate the caller authored — it is a search term the
+        // platform expands across IncludeInUserSearchAPI fields. There is nothing to reject;
+        // the correct handling is to not search the denied fields, which the SQL builder does
+        // by consulting the same denied set. Rejecting here would make the search box fail
+        // for a term that merely happens to match a restricted field's name.
+    }
+
+    /**
+     * The single wording for "you cannot use this field," modeled on SQL Server's posture of
+     * never disclosing whether an object is missing or merely inaccessible.
+     *
+     * Naming the field is safe — the caller supplied it, so it tells them nothing they did not
+     * already know. Naming the REASON is not: confirming "this field exists and is restricted"
+     * turns any predicate into an oracle for probing which columns a deployment considers
+     * sensitive. The ambiguity also keeps this message correct after
+     * [#3485](https://github.com/MemberJunction/MJ/issues/3485) tiers metadata and restricted
+     * fields stop shipping to clients at all, at which point "does not exist" becomes literally
+     * true from the client's vantage point.
+     */
+    public static FieldSecurityDenialMessage(fieldName: string, entityName: string): string {
+        return `Field '${fieldName}' does not exist on entity '${entityName}' or you do not have access to it.`;
+    }
+
+    /**
+     * Strips fields the user cannot read from plain-object result rows.
+     *
+     * This is THE read boundary for list results, and it runs on BOTH cache hits and cache
+     * misses. Filtering the SQL SELECT list is not a viable substitute: {@link PreRunView}
+     * deliberately widens `params.Fields` to every entity field whenever a query is
+     * cache-eligible, so restricted columns reach server memory regardless of what the caller
+     * asked for. Projection at the output boundary is the enforcement.
+     *
+     * NEVER applied to `entity_object` results. Those become `BaseEntity` instances whose
+     * fields round-trip through `GenerateSaveSQL`, which iterates ALL `IsSPParameter` fields
+     * reading `field.Value` — not just dirty ones. A stripped field would therefore be written
+     * back as a real NULL on the user's next save: silent data loss. Entity objects keep their
+     * values in server memory exactly as encrypted fields do; the trust boundary is the API
+     * output, which the GraphQL layer enforces separately.
+     */
+    protected ApplyFieldSecurityProjection<T>(rows: T[], params: RunViewParams, contextUser?: UserInfo): T[] {
+        if (!rows?.length || !contextUser || !params.EntityName || params.ResultType === 'entity_object') {
+            return rows;
+        }
+        const entity = this.EntityByName(params.EntityName);
+        if (!entity?.HasAnyFieldPermissions) {
+            return rows;
+        }
+        const denied = entity.GetDeniedReadFields(contextUser);
+        if (denied.size === 0) {
+            return rows;
+        }
+        return ProviderBase.OmitFieldsFromRows(rows, denied);
+    }
+
+    /**
+     * Row-loop half of {@link ApplyFieldSecurityProjection}, split out so the policy above reads
+     * as policy. Mirrors {@link ProjectRowsToFields}' matching semantics (trim + lowercase) and
+     * its no-op probe: when the first row carries none of the denied keys, the whole result is
+     * returned untouched rather than rebuilt row by row.
+     *
+     * @param deniedLowercase field names to omit, already lowercased
+     */
+    private static OmitFieldsFromRows<T>(rows: T[], deniedLowercase: Set<string>): T[] {
+        const probe = rows[0] as Record<string, unknown>;
+        if (!probe || typeof probe !== 'object') {
+            return rows;
+        }
+        const keysToOmit = Object.keys(probe).filter(k => deniedLowercase.has(k.trim().toLowerCase()));
+        if (keysToOmit.length === 0) {
+            return rows;
+        }
+        const omit = new Set(keysToOmit);
+        return rows.map((row) => {
+            const source = row as Record<string, unknown>;
+            const filtered: Record<string, unknown> = {};
+            for (const key of Object.keys(source)) {
+                if (!omit.has(key)) {
+                    filtered[key] = source[key];
+                }
+            }
+            return filtered as T;
+        });
+    }
+
     protected async PreRunView(params: RunViewParams, contextUser?: UserInfo): Promise<typeof this._preRunViewResultType> {
         const preViewStart = performance.now();
 
@@ -2238,6 +2380,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Hooks run after PlatformSQL resolution so they see plain-string filters,
         // and before cache fingerprinting so injected filters affect the cache key.
         params = await this.RunPreRunViewHooks(params, contextUser);
+
+        // Field-level security: reject predicates referencing unreadable fields. Runs AFTER
+        // hooks so injected filters are scanned too, and BEFORE the cache lookup so a rejected
+        // request never consults (or warms) a cache slot.
+        this.AssertPredicatesRespectFieldSecurity(params, contextUser);
 
         // Start telemetry tracking
         const telemetryStart = performance.now();
@@ -2324,6 +2471,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     results = ProjectRowsToFields(results, callerRequestedFields);
                 }
 
+                // Field-level security MUST be applied here, not only in PostRunView: this path
+                // RETURNS (see RunView) without ever calling PostRunView, and it is the exact
+                // path the cross-user leak runs through — an unrestricted user warms the cache
+                // with every column, then a restricted user hits that same slot. The cache is
+                // column-agnostic by design (one entry serves every field subset), so the
+                // caller's Fields list is unrelated to security and cannot be relied on.
+                results = this.ApplyFieldSecurityProjection(results, params, contextUser);
+
                 // Reconstruct RunViewResult from cached data
                 cachedResult = {
                     Success: true,
@@ -2379,6 +2534,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Run registered PreRunView hooks on each param in the batch
         for (let i = 0; i < params.length; i++) {
             params[i] = await this.RunPreRunViewHooks(params[i], contextUser);
+            // Field-level security predicate gate, same contract as the single-view path.
+            // One bad view rejects the whole batch — a batch is one caller request, and
+            // silently returning partial results would hide the denial.
+            this.AssertPredicatesRespectFieldSecurity(params[i], contextUser);
         }
 
         // Start telemetry tracking for batch operation
@@ -2491,6 +2650,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     if (callerFields && param.ResultType !== 'entity_object') {
                         results = ProjectRowsToFields(results, callerFields);
                     }
+
+                    // Field-level security on the batch cache-hit path — same reasoning as the
+                    // single-view path in PreRunView: this result is returned without
+                    // PostRunViews projecting it, and the cached superset is column-agnostic.
+                    results = this.ApplyFieldSecurityProjection(results, param, contextUser);
 
                     const cachedViewResult: RunViewResult = {
                         Success: true,
@@ -3009,6 +3173,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             result.Results = ProjectRowsToFields(result.Results, preResult.callerRequestedFields);
         }
 
+        // Field-level security on the cache-MISS path (the hit path is enforced in PreRunView,
+        // which returns before this hook ever runs). Must come AFTER the cache write above so
+        // the cache keeps the universal superset — permission changes then take effect on the
+        // next metadata refresh with no result-cache invalidation, because visibility is a pure
+        // read-time projection rather than something baked into the cached rows.
+        if (result.Success) {
+            result.Results = this.ApplyFieldSecurityProjection(result.Results, params, contextUser);
+        }
+
         // Transform the result set into BaseEntity-derived objects, if needed
         await this.TransformSimpleObjectToEntityObject(params, result, contextUser);
 
@@ -3122,6 +3295,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     results[i].Results = ProjectRowsToFields(results[i].Results, callerFields);
                 }
             }
+        }
+
+        // Field-level security on the batch cache-MISS results. Deliberately a separate loop
+        // from the projection above rather than folded into it: that one is gated on
+        // callerFieldsMap (present only when Fields were actually widened), while this must run
+        // for every uncached result regardless of whether the caller narrowed Fields. Cache hits
+        // are skipped because PreRunViews already projected them.
+        for (let i = 0; i < results.length; i++) {
+            if (preResult.cacheStatusMap?.get(i)?.status === 'hit' || !results[i].Success) {
+                continue;
+            }
+            results[i].Results = this.ApplyFieldSecurityProjection(results[i].Results, params[i], contextUser);
         }
 
         // Transform results to entity objects AFTER caching plain objects.

@@ -3216,6 +3216,7 @@ export abstract class BaseEntity<T = unknown> {
             const type: EntityPermissionType = this.IsSaved ? EntityPermissionType.Update : EntityPermissionType.Create;
             const saveSubType = this.IsSaved ? 'update' : 'create';
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
+            this.CheckFieldLevelUpdatePermissions() // field-level security — throws if a dirty field is not updatable by this user
 
             // IS-A disjoint subtype enforcement: on CREATE, ensure parent record
             // isn't already claimed by another child type (e.g., can't create Meeting
@@ -3582,6 +3583,57 @@ export abstract class BaseEntity<T = unknown> {
         }
         else
             return bAllowed
+    }
+
+    /**
+     * Field-level security on the write path: rejects a save that modifies a field this user
+     * has no update permission on.
+     *
+     * ENFORCEMENT LAYER — read this before treating it as the security boundary. `BaseEntity`
+     * also runs in the browser, where this guard is trivially bypassable. The AUTHORITATIVE
+     * check is the server-side execution of this same code: the MJServer mutation resolver
+     * re-instantiates the entity and re-runs Save on the server, where the client cannot reach
+     * it. The client-side occurrence is UX and defense-in-depth — fail fast with a clear
+     * message before a network round-trip — and must never be relied on alone.
+     *
+     * Only UPDATE is enforced. `CanCreate` ships in the schema but is deliberately not enforced
+     * in this release (see `EntityFieldPermissionInfo.CanCreate`) — the semantics for a NOT NULL
+     * column a user cannot populate are unsettled, and guessing would break inserts.
+     *
+     * Note this checks DIRTY fields only, which is correct precisely because nothing ever nulls
+     * a restricted value in memory: a field the user cannot see was never loaded as null, so it
+     * is not dirty, so an unrelated edit saves cleanly and the restricted column keeps its
+     * stored value.
+     */
+    protected CheckFieldLevelUpdatePermissions(): void {
+        if (!this.IsSaved) {
+            return; // INSERT — CanCreate is not enforced in this release
+        }
+        if (!this.EntityInfo.HasAnyFieldPermissions) {
+            return; // one boolean for the overwhelming majority of entities
+        }
+        const u: UserInfo = this.ActiveUser;
+        if (!u) {
+            return; // CheckPermissions has already thrown for a missing user
+        }
+
+        const denied = this.EntityInfo.GetDeniedUpdateFields(u);
+        if (denied.size === 0) {
+            return;
+        }
+        for (const field of this.Fields) {
+            if (field.Dirty && denied.has(field.Name.trim().toLowerCase())) {
+                LogDebug(
+                    `[FieldSecurity] Rejected save on '${this.EntityInfo.Name}' for user ${u.Email}: ` +
+                    `field '${field.Name}' is not updatable by this user`
+                );
+                // Same deliberately ambiguous wording as the read path — never disclose whether
+                // a field is missing or merely forbidden.
+                throw new Error(
+                    `Field '${field.Name}' does not exist on entity '${this.EntityInfo.Name}' or you do not have access to it.`
+                );
+            }
+        }
     }
 
     protected ThrowPermissionError(u: UserInfo, type: EntityPermissionType, additionalInfoMessage: string) {
