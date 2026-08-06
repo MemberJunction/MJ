@@ -14,7 +14,13 @@ import { BaseHarnessAdapter } from './adapters/BaseHarnessAdapter.js';
 import { ISandboxProvider, SandboxHandle, WorkspaceKey } from './sandbox/ISandboxProvider.js';
 import { LocalDirectorySandboxProvider } from './sandbox/LocalDirectorySandboxProvider.js';
 import { DockerSandboxProvider } from './sandbox/DockerSandboxProvider.js';
-import { HarnessTurnResult, HarnessWorkspaceScope, HarnessNetworkPolicy } from './types.js';
+import {
+    HarnessTurnResult,
+    HarnessWorkspaceScope,
+    HarnessNetworkPolicy,
+    HarnessPosture,
+    HarnessPermissionPolicy,
+} from './types.js';
 
 /**
  * Conventional environment variable each harness reads its own credential from.
@@ -54,6 +60,8 @@ interface HarnessAgentConfig {
         workspaceScope?: HarnessWorkspaceScope;
         networkPolicy?: HarnessNetworkPolicy;
     };
+    posture?: HarnessPosture;
+    permissions?: { allowedTools?: string[]; disallowedTools?: string[] };
     limits?: { maxWallClockSeconds?: number };
 }
 
@@ -146,10 +154,25 @@ export class HarnessAgentBase extends BaseAgent {
 
         const environment = await this.resolveGrantedEnvironment(contextUser);
 
+        // Permissions are declared in agent metadata and applied BEFORE the session starts, so
+        // adapters can fold them into launch flags. Runtime overrides arrive through the same
+        // TypeConfiguration merge as every other harness setting, so a caller can loosen or tighten
+        // a single run without editing the agent.
+        const policy = this.resolvePermissionPolicy(config);
+        this.adapter.ApplyPermissionPolicy(policy);
+        if (policy.Posture === 'strict' && !this.adapter.Capabilities?.PermissionHooks) {
+            LogStatus(
+                `Harness '${harness.Name}' is set to STRICT posture but its adapter reports no ` +
+                    `permission hooks. The harness's own prompts have nowhere to go headlessly, so ` +
+                    `mutating tool calls will simply be denied rather than routed for approval.`,
+            );
+        }
+
         const resumeSessionId = await this.findResumableSession(harness, key.Scope, contextUser);
 
         await this.adapter.StartSession({
             ResumeSessionId: resumeSessionId,
+            PermissionPolicy: policy,
             Executor: this.sandboxHandle.Executor,
             WorkspacePath: this.sandboxHandle.WorkspacePath,
             Environment: environment,
@@ -158,6 +181,21 @@ export class HarnessAgentBase extends BaseAgent {
         });
 
         LogStatus(`Harness session started for '${harness.Name}' (${harness.DriverClass})`);
+    }
+
+    /**
+     * Resolves what the agent may do inside its sandbox.
+     *
+     * Defaults to `strict` when unset — the safe direction. An agent that has never been given a
+     * posture should be unable to mutate anything, rather than inheriting whatever the harness does
+     * by default, which for a coding agent is a great deal.
+     */
+    private resolvePermissionPolicy(config: HarnessAgentConfig): HarnessPermissionPolicy {
+        return {
+            Posture: config.posture ?? 'strict',
+            AllowedTools: config.permissions?.allowedTools,
+            DisallowedTools: config.permissions?.disallowedTools,
+        };
     }
 
     /**

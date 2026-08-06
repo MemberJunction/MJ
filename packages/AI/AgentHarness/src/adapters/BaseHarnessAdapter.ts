@@ -1,4 +1,4 @@
-import { HarnessCapabilities, HarnessSessionConfig, HarnessTurnEvent } from '../types.js';
+import { HarnessCapabilities, HarnessPermissionPolicy, HarnessSessionConfig, HarnessTurnEvent } from '../types.js';
 
 /**
  * The contract every external agent harness is driven through.
@@ -87,6 +87,21 @@ export abstract class BaseHarnessAdapter {
     /** Vendor session id once known, persisted to `AIAgentRun.ExternalSessionID`. */
     public get SessionId(): string | undefined {
         return undefined;
+    }
+
+    /**
+     * Translates MJ's permission policy into whatever this harness understands.
+     *
+     * Overridable and default no-op, matching the other capability seams. An adapter that cannot
+     * enforce permissions should leave this alone AND report `PermissionHooks: false`, so the
+     * runtime knows the policy is advisory rather than enforced. Silently accepting a policy you
+     * cannot apply is the worst option: the operator believes `strict` is gating something.
+     *
+     * Called once, before {@link StartSession}, so adapters can fold the result into launch flags.
+     */
+    public ApplyPermissionPolicy(_policy: HarnessPermissionPolicy): void {
+        // Default: unsupported. See the note above on why this is silent but paired with a false
+        // PermissionHooks capability rather than throwing.
     }
 
     /**

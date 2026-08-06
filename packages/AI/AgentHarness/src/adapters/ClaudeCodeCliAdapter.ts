@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseCliHarnessAdapter, HarnessCliRawEvent } from './BaseCliHarnessAdapter.js';
 import { BaseHarnessAdapter } from './BaseHarnessAdapter.js';
-import { HarnessCapabilities, HarnessTurnEvent } from '../types.js';
+import { HarnessCapabilities, HarnessPermissionPolicy, HarnessTurnEvent } from '../types.js';
 import { HarnessProcess } from '../sandbox/SandboxExecutor.js';
 
 /**
@@ -34,6 +34,48 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
     private executable = 'claude';
     private systemPrompt: string | undefined;
     private didResume = false;
+    private permissionArgs: string[] = [];
+
+    /**
+     * Maps MJ's posture onto Claude Code's permission vocabulary.
+     *
+     * Conservative at both ends, deliberately:
+     *
+     * - `strict` adds NOTHING, leaving Claude Code's default prompting in place. Headless, those
+     *   prompts have nowhere to go and every call denies — the correct outcome for a posture whose
+     *   contract is "no mutation without a human" when MJ has no approval channel yet. Observably
+     *   useless beats quietly permissive.
+     * - `auto` uses `acceptEdits`, NOT `bypassPermissions`. Edits inside the workspace proceed while
+     *   genuinely dangerous operations still gate; using bypass here would make `auto` and
+     *   `dangerous` the same setting under two names.
+     * - `dangerous` passes `--dangerously-skip-permissions`, which Claude Code's own help restricts
+     *   to sandboxes with no internet access. Pairing it with the LOCAL provider is a
+     *   misconfiguration — that provider does not contain the process at all.
+     *
+     * Allow/deny patterns pass through in Claude Code's own syntax, deny applied last so it wins:
+     * an overlapping policy must fail closed.
+     */
+    public override ApplyPermissionPolicy(policy: HarnessPermissionPolicy): void {
+        const args: string[] = [];
+        switch (policy.Posture) {
+            case 'auto':
+                args.push('--permission-mode', 'acceptEdits');
+                break;
+            case 'dangerous':
+                args.push('--dangerously-skip-permissions');
+                break;
+            case 'strict':
+            default:
+                break;
+        }
+        if (policy.AllowedTools?.length) {
+            args.push('--allowedTools', ...policy.AllowedTools);
+        }
+        if (policy.DisallowedTools?.length) {
+            args.push('--disallowedTools', ...policy.DisallowedTools);
+        }
+        this.permissionArgs = args;
+    }
 
     /** @inheritdoc */
     public override get DidResumeSession(): boolean {
@@ -102,6 +144,9 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
         if (this.config?.Model) {
             args.push('--model', this.config.Model);
         }
+        // Per-invocation, not per-session: the process is new every turn, so a policy applied only
+        // at session start would silently lapse from turn 2 onward.
+        args.push(...this.permissionArgs);
         return args;
     }
 
