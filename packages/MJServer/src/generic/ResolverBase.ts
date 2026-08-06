@@ -78,7 +78,13 @@ export class ResolverBase {
    * @param contextUser - Optional user context for decryption (required for encrypted fields)
    * @returns A new object in transport shape, or null when there is nothing to map
    */
-  protected async MapFieldNamesToCodeNames(entityName: string, dataObject: any, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<any> {
+  protected async MapFieldNamesToCodeNames(
+    entityName: string,
+    dataObject: any,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+    deniedReadFields?: Set<string>
+  ): Promise<any> {
     // Return null for empty objects (e.g. when no rows found due to RLS filtering)
     if (!dataObject || Object.keys(dataObject).length === 0) {
       return null;
@@ -96,11 +102,35 @@ export class ResolverBase {
       const entityInfo = md.EntityByName(entityName);
       if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
       // const fields = entityInfo.Fields.filter((f) => f.Name !== f.CodeName || f.Name.startsWith('__mj_'));
+      // FIELD-LEVEL SECURITY — this is the authoritative read boundary for every GraphQL
+      // return path (single-record resolvers, external-data-source loads, and anything else
+      // routed through here), sitting exactly where encryption masking already lives.
+      //
+      // The denied set is normally computed ONCE per (entity, user) by the caller and passed
+      // in: this method runs once per ROW, so resolving it here would cost fields x rows
+      // aggregations. We fall back to computing it when a caller doesn't supply it (the
+      // single-record resolvers, where "once per row" and "once per request" are the same
+      // thing) rather than failing open — a missing argument must never mean missing security.
+      const denied = deniedReadFields ?? (
+        entityInfo.HasAnyFieldPermissions && contextUser
+          ? entityInfo.GetDeniedReadFields(contextUser)
+          : null
+      );
+
       const mapper = new FieldMapper();
       entityInfo.Fields.forEach((f) => {
         if (dataObject.hasOwnProperty(f.Name)) {
           // GraphQL doesn't allow us to pass back fields with __ so we are mapping our special field cases that start with __mj_ to _mj__ for transport - they are converted back on the other side automatically
           const mappedFieldName = mapper.MapFieldName(f.CodeName);
+          if (denied?.has(f.Name.trim().toLowerCase())) {
+            // Omit entirely rather than nulling — a null is indistinguishable from a real
+            // null value, and the client should see the field as absent, not as empty.
+            // Both key shapes are removed because callers reach this method with rows keyed
+            // either way depending on whether mapping has already run.
+            delete dataObject[f.Name];
+            delete dataObject[mappedFieldName];
+            return;
+          }
           if (mappedFieldName !== f.Name) {
             dataObject[mappedFieldName] = dataObject[f.Name];
             delete dataObject[f.Name];
@@ -207,9 +237,19 @@ export class ResolverBase {
     if (!dataObjectArray || dataObjectArray.length === 0) {
       return dataObjectArray;
     }
+    // Resolve the field-security denied set ONCE for the whole array and pass it into the
+    // per-row mapper. MapFieldNamesToCodeNames runs once per row, so computing this inside
+    // the loop would be fields x rows aggregations — 40,000 for a 1,000-row x 40-column
+    // result, each re-scanning the user's roles and allocating. Gated on the entity-level
+    // flag so non-FLS entities (nearly all of them) don't even resolve the entity twice.
+    const md = provider ?? new Metadata();
+    const entityInfo = md.EntityByName(entityName);
+    const deniedReadFields = entityInfo?.HasAnyFieldPermissions && contextUser
+      ? entityInfo.GetDeniedReadFields(contextUser)
+      : undefined;
     const mapped: any[] = [];
     for (const element of dataObjectArray) {
-      mapped.push(await this.MapFieldNamesToCodeNames(entityName, element, contextUser, provider));
+      mapped.push(await this.MapFieldNamesToCodeNames(entityName, element, contextUser, provider, deniedReadFields));
     }
     return mapped;
   }

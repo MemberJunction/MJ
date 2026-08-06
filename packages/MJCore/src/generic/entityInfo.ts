@@ -2610,6 +2610,58 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * The set of field names this user may NOT READ on this entity — the per-request primitive
+     * every field-security enforcement point is built on.
+     *
+     * Compute this ONCE per (entity, user) per request and pass the Set into any row loop.
+     * `GetUserFieldPermissions` is the per-FIELD primitive; calling it per row costs
+     * `fields x rows` aggregations (40,000 for a 1,000-row x 40-column result), each of which
+     * re-scans `user.UserRoles` and allocates. A Set lookup costs neither.
+     *
+     * Names are lowercased so callers can match case-insensitively, consistent with
+     * {@link ProjectRowsToFields}. Returns an EMPTY set — never null — both when the entity has
+     * no field security configured and when the user is denied nothing, so callers can treat
+     * `size === 0` as the single "nothing to do" condition.
+     */
+    public GetDeniedReadFields(user: UserInfo): Set<string> {
+        return this.getDeniedFields(user, (p) => !p.CanRead);
+    }
+
+    /**
+     * The set of field names this user may NOT UPDATE on this entity. Same per-request
+     * precompute contract as {@link GetDeniedReadFields}.
+     *
+     * Note a field can be readable but not updatable (or the reverse) — the flags aggregate
+     * independently, so never substitute one set for the other.
+     */
+    public GetDeniedUpdateFields(user: UserInfo): Set<string> {
+        return this.getDeniedFields(user, (p) => !p.CanUpdate);
+    }
+
+    /**
+     * Shared walk behind {@link GetDeniedReadFields} / {@link GetDeniedUpdateFields}.
+     *
+     * Two short-circuits, in cost order: the entity-level gate (one boolean, and false for
+     * nearly every entity in nearly every deployment), then the per-field gate — so only
+     * fields that actually carry permission records are ever aggregated.
+     */
+    private getDeniedFields(user: UserInfo, isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean): Set<string> {
+        const denied = new Set<string>();
+        if (!this.HasAnyFieldPermissions) {
+            return denied;
+        }
+        for (const field of this._Fields) {
+            if (!field.HasFieldPermissions) {
+                continue;
+            }
+            if (isDenied(field.GetUserFieldPermissions(user))) {
+                denied.add(field.Name.trim().toLowerCase());
+            }
+        }
+        return denied;
+    }
+
+    /**
      * O(1) case-insensitive field lookup by name. Use this instead of `Fields.find(f => f.Name === name)`
      * on hot paths — it builds a lowercased+trimmed `Map` once (lazily) and reuses it.
      *
