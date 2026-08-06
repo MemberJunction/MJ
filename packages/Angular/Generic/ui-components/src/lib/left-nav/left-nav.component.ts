@@ -1,5 +1,19 @@
-import { Component, EventEmitter, HostBinding, HostListener, Input, Output } from '@angular/core';
+import {
+  ChangeDetectorRef,
+  Component,
+  EventEmitter,
+  HostBinding,
+  HostListener,
+  Input,
+  NgZone,
+  OnDestroy,
+  Output,
+  inject,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
+
+/** Source of per-instance DOM ids — see {@link MJLeftNavComponent.NavRegionId}. */
+let navRegionSeq = 0;
 
 /**
  * A single item in an `<mj-left-nav>`.
@@ -116,9 +130,37 @@ export interface MJLeftNavSection {
 
     <aside
       class="mj-left-nav"
-      [style.width.px]="Width"
+      [id]="NavRegionId"
+      [style.width.px]="EffectiveWidth"
       role="navigation"
       [attr.aria-modal]="MobileNavOpen ? true : null">
+      <!-- Desktop collapse toggle (opt-in via [Collapsible]) — a compact double-angle chip, NOT a
+           hamburger (a lone hamburger row reads as a broken nav item) and NOT a nav-row lookalike.
+           The chip is LOCKED in one spot — centred in the collapsed band — in BOTH modes: only the
+           glyph flips on toggle, so the user never re-aims (a control that relocates when clicked
+           makes the user chase it). « = collapse toward the left edge, » = expand. Hidden ≤700px:
+           the mobile drawer is its own affordance and collapsing a drawer is meaningless. -->
+      @if (Collapsible) {
+        <button
+          type="button"
+          class="mj-left-nav__collapse-toggle"
+          [style.margin-left.px]="CollapseToggleMarginPx"
+          [attr.aria-label]="Collapsed ? 'Expand navigation' : 'Collapse navigation'"
+          [attr.aria-expanded]="!Collapsed"
+          [attr.aria-controls]="NavRegionId"
+          [title]="Collapsed ? 'Expand navigation' : 'Collapse navigation'"
+          (click)="ToggleCollapsed()">
+          <i
+            class="fa-solid mj-left-nav__collapse-icon"
+            [class.fa-angles-right]="Collapsed"
+            [class.fa-angles-left]="!Collapsed"
+            aria-hidden="true"></i>
+        </button>
+        <!-- Wordless hairline between the toggle and the nav content: without a boundary the chip
+             reads as a destination. Same height in both modes, so items never shift on toggle. -->
+        <div class="mj-left-nav__collapse-divider" aria-hidden="true"></div>
+      }
+
       <!-- Drawer header — only visible on mobile when the rail is a drawer. -->
       <div class="mj-left-nav__drawer-header">
         <span class="mj-left-nav__drawer-title">{{ MobileTitle }}</span>
@@ -138,8 +180,10 @@ export interface MJLeftNavSection {
           <div class="mj-left-nav__section-label">{{ section.label }}</div>
         }
         @for (item of section.items; track item.id) {
+          <!-- hasExpandable goes false while icons-only, collapsing each section to its TOP-LEVEL
+               items only — see ShowTreeStructure for why a tree can't survive a 60px rail. -->
           <ng-container
-            *ngTemplateOutlet="itemTpl; context: { item: item, depth: 0, hasExpandable: HasExpandableItems(section.items) }">
+            *ngTemplateOutlet="itemTpl; context: { item: item, depth: 0, hasExpandable: ShowTreeStructure && HasExpandableItems(section.items) }">
           </ng-container>
         }
       }
@@ -201,13 +245,21 @@ export interface MJLeftNavSection {
       <button
         type="button"
         class="mj-left-nav__item"
-        [class.mj-left-nav__item--active]="item.id === ActiveId"
+        [class.mj-left-nav__item--active]="IsItemActive(item)"
         [class.mj-left-nav__item--disabled]="item.disabled"
         [disabled]="item.disabled"
-        [attr.aria-current]="item.id === ActiveId ? 'page' : null"
+        [attr.aria-current]="AriaCurrentFor(item)"
+        [attr.title]="EffectiveIconOnly ? ItemTooltip(item) : null"
+        [attr.aria-label]="EffectiveIconOnly ? ItemTooltip(item) : null"
         (click)="OnItemClick(item)">
         @if (item.icon) {
           <i class="mj-left-nav__icon" [class]="item.icon" aria-hidden="true"></i>
+        } @else if (EffectiveIconOnly) {
+          <!-- An icon-less item collapses to a button with NOTHING visible in it (the label is the
+               only content and it is clipped away) — an invisible-but-clickable row. The icon is
+               optional on MJLeftNavItem, so the rail cannot require one; a monogram keeps every item
+               identifiable and hittable. Only rendered icons-only: expanded rails are unchanged. -->
+          <span class="mj-left-nav__initial" aria-hidden="true">{{ ItemInitial(item) }}</span>
         }
         <span class="mj-left-nav__text">
           <span class="mj-left-nav__label">{{ item.label }}</span>
@@ -292,6 +344,21 @@ export interface MJLeftNavSection {
       margin-top: 1px;
       flex-shrink: 0;
       color: inherit;
+    }
+
+    /* Stand-in glyph for an icon-less item while the rail is icons-only. Same 18px box as
+       .mj-left-nav__icon so it sits on the identical optical column — the rail reads as one
+       consistent strip whether an item brought an icon or not. */
+    .mj-left-nav__initial {
+      width: 18px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.2;
+      margin-top: 1px;
+      flex-shrink: 0;
+      color: inherit;
+      text-transform: uppercase;
     }
 
     .mj-left-nav__text {
@@ -379,6 +446,137 @@ export interface MJLeftNavSection {
       flex-shrink: 0;
       width: 20px;
       display: inline-block;
+    }
+
+    /* ── Desktop collapse (opt-in via [Collapsible]) ──────────────────────────
+       The toggle chip + the icons-only collapsed presentation. DESKTOP ONLY: below 701px the rail
+       is the off-canvas drawer, which is already dismissable — collapsing it would be nonsense —
+       so the toggle hides and the collapsed rules never apply there. Hover-to-peek is deliberately
+       NOT part of this feature (removed by ruling 2026-07-30: a rail that expands when the pointer
+       grazes it moves the target the user was aiming at). */
+
+    .mj-left-nav__collapse-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: fit-content;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--mj-text-muted);
+      font-family: inherit;
+      cursor: pointer;
+      box-sizing: border-box;
+      transition: background-color 0.12s ease, color 0.12s ease;
+      margin-bottom: 2px;
+    }
+
+    .mj-left-nav__collapse-toggle:hover {
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-primary);
+    }
+
+    .mj-left-nav__collapse-toggle:focus-visible {
+      outline: 2px solid var(--mj-border-focus);
+      outline-offset: -2px;
+    }
+
+    /* 18px box = the same footprint as .mj-left-nav__icon, so the chip sits on the items' optical
+       icon column when centred in the collapsed band. Slightly smaller glyph than the nav icons —
+       this is a chrome control, not a destination. */
+    .mj-left-nav__collapse-icon {
+      width: 18px;
+      text-align: center;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
+    .mj-left-nav__collapse-divider {
+      height: 1px;
+      margin: 4px 0;
+      background: var(--mj-border-default);
+    }
+
+    @media (max-width: 700px) {
+      .mj-left-nav__collapse-toggle,
+      .mj-left-nav__collapse-divider {
+        display: none;
+      }
+    }
+
+    @media (min-width: 701px) {
+      /* ITEM labels are HIDDEN VISUALLY, NOT REMOVED. display:none would drop them from the
+         accessibility tree too, leaving every rail button unnamed — an icon-only rail a screen
+         reader cannot read. This keeps the name and only takes the pixels. (The tooltips/aria the
+         items grow while collapsed come from EffectiveIconOnly.) */
+      :host(.mj-left-nav-host--collapsed) .mj-left-nav__text {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      /* With the text out of flow the icon is the only thing left; centre it in the narrow rail. */
+      :host(.mj-left-nav-host--collapsed) .mj-left-nav__item {
+        justify-content: center;
+        gap: 0;
+        margin-inline: auto;
+        position: relative;
+      }
+
+      /* SECTION labels become a small centred divider line, keeping the label's OWN box (padding +
+         height) so the vertical rhythm is IDENTICAL to the expanded rail — the words come back in
+         the exact same place on expand. color: transparent hides the glyphs without removing them
+         from the a11y tree or changing the box height; overflow clips the transparent glyphs so
+         they can never make the narrow rail horizontally scrollable. */
+      :host(.mj-left-nav-host--collapsed) .mj-left-nav__section-label {
+        position: relative;
+        color: transparent;
+        overflow: hidden;
+      }
+      :host(.mj-left-nav-host--collapsed) .mj-left-nav__section-label::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 20px;
+        height: 1px;
+        background: var(--mj-border-default);
+      }
+
+      /* No row edge exists in the narrow rail, so the badge docks on the icon's top-right corner
+         (the activity-bar idiom) as a compact attention count — presence = action needed. The
+         centred icon itself never moves. */
+      :host(.mj-left-nav-host--collapsed) .mj-left-nav__badge {
+        margin-left: 0;
+        align-self: auto;
+        position: absolute;
+        left: calc(50% + 4px);
+        top: 4px;
+        min-width: 15px;
+        height: 15px;
+        padding: 0 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        line-height: 1;
+        white-space: nowrap;
+        background: var(--mj-brand-primary);
+        color: var(--mj-text-inverse);
+      }
+
+      /* Belt-and-braces: a collapsed rail never scrolls sideways. */
+      :host(.mj-left-nav-host--collapsed) .mj-left-nav {
+        overflow-x: hidden;
+      }
     }
 
     /* ── Mobile drawer pattern (≤700px) ──────────────────────────────────────
@@ -535,7 +733,13 @@ export interface MJLeftNavSection {
     }
   `]
 })
-export class MJLeftNavComponent {
+export class MJLeftNavComponent implements OnDestroy {
+  /**
+   * DOM id of the `<aside>`, so the collapse toggle's `aria-expanded` can name the region it
+   * expands via `aria-controls`. Per-instance because a page may host more than one rail.
+   */
+  public readonly NavRegionId: string = `mj-left-nav-${++navRegionSeq}`;
+
   /**
    * The sections + items that make up the rail. Sections render top-to-bottom
    * in array order; items inside each section render in array order.
@@ -554,6 +758,212 @@ export class MJLeftNavComponent {
    * the rail becomes a fixed-width off-canvas drawer.
    */
   @Input() Width: number = 240;
+
+  /**
+   * Set by a consumer that has visually collapsed the rail to an icons-only strip (via `Width` plus
+   * its own CSS hiding the labels). When true, each item gains a native `title` tooltip AND an
+   * `aria-label` carrying its full text.
+   *
+   * Why it is opt-in rather than always-on:
+   *  - **Tooltip**: with labels visible, a tooltip that just repeats the label is redundant noise on
+   *    every hover. Icon-only rails everywhere (VS Code's activity bar, Slack, Linear, Jira, Figma)
+   *    show one; expanded rails do not.
+   *  - **aria-label**: when the label IS visible it already names the button, and adding an identical
+   *    aria-label is at best a no-op. When the consumer's CSS hides `.mj-left-nav__text`, the button's
+   *    accessible name goes EMPTY — a screen reader announces "button" with no destination. That is
+   *    the hole this closes.
+   *
+   * Leaving it false reproduces the previous markup exactly, so existing consumers are unaffected.
+   */
+  @Input() IconOnly: boolean = false;
+
+  /**
+   * Opt-in desktop collapse: renders a compact double-angle toggle chip at the top of the rail and,
+   * when {@link Collapsed}, presents the rail as an icons-only strip ({@link CollapsedWidth} wide) —
+   * labels visually hidden but kept in the a11y tree, section labels folded to divider lines,
+   * badges docked on the icon corner, and per-item tooltips/aria auto-enabled.
+   *
+   * The component owns the PRESENTATION only — the consumer owns the STATE (bind `[(Collapsed)]`
+   * and persist it however the app persists preferences), the same split as `ExpandedIds`.
+   * Desktop-only: ≤700px the rail is the off-canvas drawer and the toggle hides.
+   *
+   * Two things to know when the rail's content is richer than a flat icon list:
+   *  - **Tree sections fold to their top level while collapsed** (see {@link ShowTreeStructure});
+   *    a top-level item stands in as active for an active descendant, and the tree returns intact
+   *    on expand. Items with no `icon` render a monogram so they stay visible and hittable.
+   *  - **The `[header]` / `[footer]` slots are yours.** The rail can't restyle projected content,
+   *    so a wide header (logo lockup + wordmark, a filter box) will overflow a `CollapsedWidth`
+   *    strip. Bind the same collapsed flag in the consumer and project a compact variant.
+   *
+   * Deliberately NOT included: hover-to-peek (auto-expand on pointer hover) — removed by ruling
+   * (2026-07-30): a rail that expands when the pointer grazes it moves the target the user was
+   * aiming at. Deliberate toggling beats clever hovering.
+   */
+  @Input() Collapsible: boolean = false;
+
+  /** Whether the rail is currently collapsed to icons. Two-way bindable via `[(Collapsed)]`. */
+  @Input() Collapsed: boolean = false;
+
+  /** Emitted when the user clicks the collapse toggle. Consumer updates + persists the state. */
+  @Output() CollapsedChange = new EventEmitter<boolean>();
+
+  /**
+   * Width of the collapsed icons-only strip. The default 60 is derived from the rail's own
+   * numbers — 8+8 container padding, 12+12 item padding, 18px icon, 1px border — so icons stay
+   * centred; retune it if those change.
+   */
+  @Input() CollapsedWidth: number = 60;
+
+  /**
+   * True below the 701px breakpoint, where the rail stops being a rail and becomes the off-canvas
+   * drawer. Tracked in TS — not just CSS — because collapse is more than styling: it also decides
+   * whether tree sections fold and whether items are named by tooltip. The collapsed STYLES are
+   * gated to ≥701px, so without this the drawer would keep the collapsed BEHAVIOR while showing
+   * full labels: a flattened tree, and a monogram beside the very label it stands in for.
+   *
+   * Mirrors the matchMedia pattern in `mj-filter-popover` (same package).
+   */
+  private isMobileViewport: boolean = false;
+
+  private readonly zone = inject(NgZone);
+  private readonly cdr = inject(ChangeDetectorRef);
+
+  private readonly mediaQuery: MediaQueryList | null =
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 700px)')
+      : null;
+
+  // matchMedia 'change' fires OUTSIDE Angular's zone, so re-enter before flipping state the
+  // template reads.
+  private readonly onMediaChange = (e: MediaQueryListEvent): void => {
+    this.zone.run(() => {
+      this.isMobileViewport = e.matches;
+      this.cdr.markForCheck();
+    });
+  };
+
+  constructor() {
+    if (this.mediaQuery) {
+      this.isMobileViewport = this.mediaQuery.matches;
+      this.mediaQuery.addEventListener('change', this.onMediaChange);
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.mediaQuery?.removeEventListener('change', this.onMediaChange);
+  }
+
+  /**
+   * Whether the rail is collapsed *and* in a viewport where collapse means anything. Below 701px
+   * the rail is the off-canvas drawer — already dismissable, already showing full labels — so a
+   * persisted `Collapsed = true` must not follow the user down there.
+   */
+  public get IsNativelyCollapsed(): boolean {
+    return this.Collapsible && this.Collapsed && !this.isMobileViewport;
+  }
+
+  /** The width the rail actually renders at, honoring the collapse state. */
+  public get EffectiveWidth(): number {
+    return this.IsNativelyCollapsed ? this.CollapsedWidth : this.Width;
+  }
+
+  /**
+   * Icon-only presentation is on when the consumer forces it OR the rail is natively collapsed.
+   *
+   * `IconOnly` is deliberately NOT viewport-gated: that flag means the CONSUMER's own CSS has
+   * narrowed the rail, and we can't know which breakpoints they gated it to. Withdrawing the
+   * accessible names on their behalf could leave a genuinely icons-only rail unnamed — the exact
+   * hole `IconOnly` exists to close. Native collapse is ours to gate; theirs is theirs.
+   */
+  public get EffectiveIconOnly(): boolean {
+    return this.IconOnly || this.IsNativelyCollapsed;
+  }
+
+  /**
+   * Whether tree structure (chevrons, depth indentation, expanded children) renders at all.
+   *
+   * An icons-only rail is ~60px wide and shows nothing but a centred glyph per row, which leaves a
+   * tree with no way to express itself: the chevron would eat a third of the width and shove the
+   * icon off-centre, each depth level would push its icon 14px further right until the rail clipped
+   * it, and a child's icon (optional, and usually absent on tree leaves) would say nothing about
+   * which branch it belongs to. So while icons-only, each section renders its TOP-LEVEL items only —
+   * the same choice every icon rail makes (VS Code's activity bar shows one icon per container and
+   * defers the tree to the expanded pane).
+   *
+   * Nothing is lost on the way back: `ExpandedIds` is consumer-owned and untouched here, so the tree
+   * returns exactly as the user left it the moment the rail expands.
+   */
+  public get ShowTreeStructure(): boolean {
+    return !this.EffectiveIconOnly;
+  }
+
+  /**
+   * Whether an item paints as active. Normally an exact {@link ActiveId} match — but while the tree
+   * is suppressed (see {@link ShowTreeStructure}) the active item may be a child that isn't rendered,
+   * which would leave the collapsed rail with NOTHING highlighted and no sense of place. In that
+   * state a top-level item stands in for its active descendant.
+   */
+  public IsItemActive(item: MJLeftNavItem): boolean {
+    if (item.id === this.ActiveId) return true;
+    return this.EffectiveIconOnly && this.hasActiveDescendant(item);
+  }
+
+  /**
+   * `'page'` for the active item itself; `'true'` for a stand-in ancestor, which is current in the
+   * set but is not the page the user is on. Distinguishing them keeps the announcement honest.
+   */
+  public AriaCurrentFor(item: MJLeftNavItem): 'page' | 'true' | null {
+    if (item.id === this.ActiveId) return 'page';
+    return this.IsItemActive(item) ? 'true' : null;
+  }
+
+  private hasActiveDescendant(item: MJLeftNavItem): boolean {
+    if (!this.ActiveId || !item.children?.length) return false;
+    return this.findItemById(item.children, this.ActiveId) !== undefined;
+  }
+
+  /**
+   * Monogram for an icon-less item in an icons-only rail. `Array.from` rather than `charAt` so a
+   * label starting with an emoji or an astral character yields that whole character instead of half
+   * a surrogate pair. Falls back to a bullet for a blank label so the button is never empty.
+   */
+  public ItemInitial(item: MJLeftNavItem): string {
+    return Array.from(item.label?.trim() ?? '')[0] ?? '•';
+  }
+
+  /**
+   * Left margin that pins the toggle chip at the collapsed band's centre in BOTH modes, so the
+   * chip never relocates on toggle (the user never re-aims). Derived, not magic:
+   * (CollapsedWidth − 38px chip)/2 from the rail edge, minus the rail's 8px container padding.
+   * 38 = the 18px icon box + 2×10px chip padding.
+   */
+  public get CollapseToggleMarginPx(): number {
+    return Math.max(0, Math.round((this.CollapsedWidth - 38) / 2 - 8));
+  }
+
+  /** Reflects the collapsed state onto the host so the collapsed CSS can scope to it. */
+  @HostBinding('class.mj-left-nav-host--collapsed')
+  get isCollapsedHost(): boolean {
+    return this.IsNativelyCollapsed;
+  }
+
+  /** Flip + announce. The consumer receives the new value and persists it. */
+  public ToggleCollapsed(): void {
+    this.Collapsed = !this.Collapsed;
+    this.CollapsedChange.emit(this.Collapsed);
+  }
+
+  /**
+   * The text surfaced as an icon-only item's tooltip / accessible name. Folds in the description and
+   * badge because collapsing the rail hides both: the badge survives as an unlabeled corner count,
+   * so "Batch approvals (2)" is the only place a hovering user learns what the 2 counts.
+   */
+  public ItemTooltip(item: MJLeftNavItem): string {
+    const parts = [item.label];
+    if (item.description) parts.push(`— ${item.description}`);
+    if (item.badge != null) parts.push(`(${item.badge})`);
+    return parts.join(' ');
+  }
 
   /**
    * Label shown on the mobile drawer header and used as the switcher fallback
