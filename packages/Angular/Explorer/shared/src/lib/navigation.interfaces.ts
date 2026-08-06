@@ -1,7 +1,22 @@
+import { RecordSourceContext } from './record-open-style';
+
 /**
  * Options for controlling navigation behavior
  */
 export interface NavigationOptions {
+  /**
+   * Origin override for record opens (records-style origin crumb).
+   * - omitted: NavigationService snapshots the active app/tab — correct for
+   *   in-tab surfaces, WRONG for overlays/dialogs (it blames the page behind
+   *   them).
+   * - a RecordSourceContext: used verbatim. Overlay surfaces set at least
+   *   `sourceLabel` ('Conversation', 'Search', ...), plus app/nav-label when
+   *   there is a real place to return to.
+   * - 'none': the open has no meaningful origin (e.g. recreating a closed
+   *   tab from browser history) — no crumb is rendered.
+   */
+  recordSource?: RecordSourceContext | 'none';
+
   /**
    * Force creation of a new tab instead of replacing temporary tabs
    * If not specified, the NavigationService will use global shift-key detection

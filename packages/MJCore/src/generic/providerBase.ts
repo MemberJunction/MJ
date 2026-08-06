@@ -2196,7 +2196,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!user || !params.EntityName) return '';
         const entity = this.EntityByName(params.EntityName);
         if (!entity) return '';
-        return entity.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+        return entity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
     }
 
     /**

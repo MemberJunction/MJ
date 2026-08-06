@@ -1,0 +1,26 @@
+@if (IsRendered) {
+  <div
+    class="mj-bottom-sheet-scrim"
+    [class.mj-bottom-sheet-scrim--open]="IsOpen"
+    (click)="Close()"
+    aria-hidden="true"></div>
+  <div
+    #sheet
+    class="mj-bottom-sheet"
+    [class.mj-bottom-sheet--open]="IsOpen"
+    [class.mj-bottom-sheet--settled]="IsSettled"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="AriaLabel || Title || null"
+    tabindex="-1"
+    (keydown)="OnSheetKeydown($event)"
+    (transitionend)="OnTransitionEnd($event)">
+    <div class="mj-bottom-sheet-grab" aria-hidden="true"></div>
+    @if (Title) {
+      <div class="mj-bottom-sheet-header">{{ Title }}</div>
+    }
+    <div class="mj-bottom-sheet-content">
+      <ng-content></ng-content>
+    </div>
+  </div>
+}

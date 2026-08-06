@@ -819,8 +819,19 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT69 - Cache Immutability (freeze-on-write)",
+            "TestID": "@lookup:MJ: Tests.Name=IT69 - Layered Base Views",
             "Sequence": 52,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3C334350-5AA5-4F9C-94DD-CACCF140D830"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT70 - Cache Immutability (freeze-on-write)",
+            "Sequence": 53,
             "Status": "Active"
           },
           "primaryKey": {

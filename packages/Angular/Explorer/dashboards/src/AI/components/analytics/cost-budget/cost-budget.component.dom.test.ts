@@ -1,8 +1,8 @@
-import { Component, Input } from '@angular/core';
+import { Input } from '@angular/core';
 import { describe, it, expect, vi } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
-import { createFakeProvider, useFakeGlobalProvider, query, queryAll } from '@memberjunction/ng-test-utils';
+import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { AnalyticsCostBudgetComponent } from './cost-budget.component';
 
 /**
@@ -14,13 +14,6 @@ import { AnalyticsCostBudgetComponent } from './cost-budget.component';
  * populated set renders daily bars + treemap cells + model rows. `mj-loading` / `mj-empty-state` stubbed.
  */
 
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading {}
-@Component({ standalone: true, selector: 'mj-empty-state', template: '<div class="stub-empty">{{ Title }}</div>' })
-class StubEmptyState {
-  @Input() Title = '';
-}
-
 const RUNS = [
   { RunAt: '2026-01-05T09:00:00Z', ModelID: 'm1', Model: 'GPT-4o', VendorID: 'v1', Vendor: 'OpenAI', Cost: 0.02, TokensPrompt: 500, TokensCompletion: 200, TokensUsed: 700 },
   { RunAt: '2026-01-06T10:00:00Z', ModelID: 'm1', Model: 'GPT-4o', VendorID: 'v1', Vendor: 'OpenAI', Cost: 0.03, TokensPrompt: 600, TokensCompletion: 300, TokensUsed: 900 },
@@ -31,7 +24,7 @@ const RUNS = [
 const rowsFn = (p: RunViewParams): unknown[] => (p.EntityName === 'MJ: AI Prompt Runs' && p.OrderBy === 'RunAt ASC' ? RUNS : []);
 
 async function render(rows: (p: RunViewParams) => unknown[]): Promise<ComponentFixture<AnalyticsCostBudgetComponent>> {
-  TestBed.configureTestingModule({ declarations: [AnalyticsCostBudgetComponent], imports: [StubLoading, StubEmptyState] });
+  TestBed.configureTestingModule({ declarations: [AnalyticsCostBudgetComponent], imports: [StubLoadingComponent, StubEmptyStateComponent] });
   const fixture = TestBed.createComponent(AnalyticsCostBudgetComponent);
   fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: rows }));
   fixture.detectChanges(false);

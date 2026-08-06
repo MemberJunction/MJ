@@ -18,6 +18,7 @@ export class MJActionParamFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'actionAssociation', sectionName: 'Action Association', isExpanded: true },
             { sectionKey: 'parameterDefinition', sectionName: 'Parameter Definition', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJEntityActionParams', sectionName: 'Entity Action Params', isExpanded: false },
             { sectionKey: 'mJScheduledActionParams', sectionName: 'Scheduled Action Params', isExpanded: false }

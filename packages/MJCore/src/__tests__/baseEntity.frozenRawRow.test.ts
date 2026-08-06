@@ -10,7 +10,7 @@
  * rtrimmed fixed-width string). On a frozen row that write throws, so merely READING such a
  * field turned into a `TypeError` — which is exactly how `Cannot assign to read only property
  * 'Currency'` broke AI cost calculation (`Currency` is a fixed-width column). Found by the live
- * IT69 integration run, not by any unit test, so it gets one here.
+ * IT70 integration run, not by any unit test, so it gets one here.
  *
  * The memo is an optimization, never a correctness requirement: skipping it costs a re-parse per
  * read and nothing else. These tests assert the read still returns the right converted value.
