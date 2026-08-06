@@ -71,4 +71,57 @@ describe('BaseAgentType.stripWrappingCodeFence', () => {
         expect(strip('``````')).toBe('``````');
         expect(strip('')).toBe('');
     });
+
+    // ── Adversarial cases: the shapes most likely to corrupt a payload ──────────────────────────
+    // The cut is POSITIONAL — always the first line and the final three characters, never a search
+    // for a delimiter. These pin that property, because a searching implementation would pass the
+    // simple tests above and fail here.
+
+    it('handles a payload whose own closing fence abuts the wrapper', () => {
+        // The nastiest shape: the message's own ``` sits immediately before the wrapper's ```.
+        // A delimiter-searching strip has no way to tell which pair is the wrapper.
+        const payload = JSON.stringify({ message: 'see:\n```haskell\nfact 0 = 1\n```' });
+        const out = strip('```json\n' + payload + '\n```');
+        expect(out).toBe(payload);
+        expect(JSON.parse(out).message).toContain('```haskell');
+    });
+
+    it('handles no newline before the closing fence', () => {
+        expect(strip('```json\n{"a":1}```')).toBe('{"a":1}');
+    });
+
+    it('handles fences nested three deep inside one string value', () => {
+        const payload = JSON.stringify({ m: '```a\n```b\n```c\n```' });
+        const out = strip('```json\n' + payload + '\n```');
+        expect(JSON.parse(out).m).toBe('```a\n```b\n```c\n```');
+    });
+
+    it('does NOT rescue prose-wrapped JSON — reverts rather than guessing', () => {
+        // Deliberate limitation. Extracting a fence from surrounding prose requires SEARCHING for
+        // delimiters, which reintroduces the ambiguity the cases above depend on avoiding. The
+        // retry machinery already handles this; a wrong guess here would corrupt a recoverable
+        // response, so "help or do nothing" is the safer contract.
+        const raw = 'Here you go:\n```json\n{"a":1}\n```\nHope that helps!';
+        expect(strip(raw)).toBe(raw);
+    });
+
+    it('does not strip a fenced block whose content is valid JSON but not an object', () => {
+        // Still unwrapped — parseability is the only gate, and the caller validates shape.
+        expect(strip('```json\n[1,2,3]\n```')).toBe('[1,2,3]');
+    });
+
+    it('leaves a response containing ONLY interior fences and no wrapper alone', () => {
+        const payload = JSON.stringify({ m: '```js\nx\n```' });
+        expect(strip(payload)).toBe(payload);
+    });
+
+    it('reverts when the fence wraps JSON-looking text that is actually malformed', () => {
+        const raw = '```json\n{"a":1,}\n```';
+        expect(strip(raw)).toBe(raw);
+    });
+
+    it('is idempotent — stripping an already-stripped payload changes nothing', () => {
+        const payload = '{"taskComplete":true}';
+        expect(strip(strip('```json\n' + payload + '\n```'))).toBe(payload);
+    });
 });
