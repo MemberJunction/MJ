@@ -1,5 +1,19 @@
-import { Component, EventEmitter, HostBinding, HostListener, Input, Output } from '@angular/core';
+import {
+  ChangeDetectorRef,
+  Component,
+  EventEmitter,
+  HostBinding,
+  HostListener,
+  Input,
+  NgZone,
+  OnDestroy,
+  Output,
+  inject,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
+
+/** Source of per-instance DOM ids — see {@link MJLeftNavComponent.NavRegionId}. */
+let navRegionSeq = 0;
 
 /**
  * A single item in an `<mj-left-nav>`.
@@ -116,6 +130,7 @@ export interface MJLeftNavSection {
 
     <aside
       class="mj-left-nav"
+      [id]="NavRegionId"
       [style.width.px]="EffectiveWidth"
       role="navigation"
       [attr.aria-modal]="MobileNavOpen ? true : null">
@@ -132,6 +147,7 @@ export interface MJLeftNavSection {
           [style.margin-left.px]="CollapseToggleMarginPx"
           [attr.aria-label]="Collapsed ? 'Expand navigation' : 'Collapse navigation'"
           [attr.aria-expanded]="!Collapsed"
+          [attr.aria-controls]="NavRegionId"
           [title]="Collapsed ? 'Expand navigation' : 'Collapse navigation'"
           (click)="ToggleCollapsed()">
           <i
@@ -164,8 +180,10 @@ export interface MJLeftNavSection {
           <div class="mj-left-nav__section-label">{{ section.label }}</div>
         }
         @for (item of section.items; track item.id) {
+          <!-- hasExpandable goes false while icons-only, collapsing each section to its TOP-LEVEL
+               items only — see ShowTreeStructure for why a tree can't survive a 60px rail. -->
           <ng-container
-            *ngTemplateOutlet="itemTpl; context: { item: item, depth: 0, hasExpandable: HasExpandableItems(section.items) }">
+            *ngTemplateOutlet="itemTpl; context: { item: item, depth: 0, hasExpandable: ShowTreeStructure && HasExpandableItems(section.items) }">
           </ng-container>
         }
       }
@@ -227,15 +245,21 @@ export interface MJLeftNavSection {
       <button
         type="button"
         class="mj-left-nav__item"
-        [class.mj-left-nav__item--active]="item.id === ActiveId"
+        [class.mj-left-nav__item--active]="IsItemActive(item)"
         [class.mj-left-nav__item--disabled]="item.disabled"
         [disabled]="item.disabled"
-        [attr.aria-current]="item.id === ActiveId ? 'page' : null"
+        [attr.aria-current]="AriaCurrentFor(item)"
         [attr.title]="EffectiveIconOnly ? ItemTooltip(item) : null"
         [attr.aria-label]="EffectiveIconOnly ? ItemTooltip(item) : null"
         (click)="OnItemClick(item)">
         @if (item.icon) {
           <i class="mj-left-nav__icon" [class]="item.icon" aria-hidden="true"></i>
+        } @else if (EffectiveIconOnly) {
+          <!-- An icon-less item collapses to a button with NOTHING visible in it (the label is the
+               only content and it is clipped away) — an invisible-but-clickable row. The icon is
+               optional on MJLeftNavItem, so the rail cannot require one; a monogram keeps every item
+               identifiable and hittable. Only rendered icons-only: expanded rails are unchanged. -->
+          <span class="mj-left-nav__initial" aria-hidden="true">{{ ItemInitial(item) }}</span>
         }
         <span class="mj-left-nav__text">
           <span class="mj-left-nav__label">{{ item.label }}</span>
@@ -320,6 +344,21 @@ export interface MJLeftNavSection {
       margin-top: 1px;
       flex-shrink: 0;
       color: inherit;
+    }
+
+    /* Stand-in glyph for an icon-less item while the rail is icons-only. Same 18px box as
+       .mj-left-nav__icon so it sits on the identical optical column — the rail reads as one
+       consistent strip whether an item brought an icon or not. */
+    .mj-left-nav__initial {
+      width: 18px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.2;
+      margin-top: 1px;
+      flex-shrink: 0;
+      color: inherit;
+      text-transform: uppercase;
     }
 
     .mj-left-nav__text {
@@ -694,7 +733,13 @@ export interface MJLeftNavSection {
     }
   `]
 })
-export class MJLeftNavComponent {
+export class MJLeftNavComponent implements OnDestroy {
+  /**
+   * DOM id of the `<aside>`, so the collapse toggle's `aria-expanded` can name the region it
+   * expands via `aria-controls`. Per-instance because a page may host more than one rail.
+   */
+  public readonly NavRegionId: string = `mj-left-nav-${++navRegionSeq}`;
+
   /**
    * The sections + items that make up the rail. Sections render top-to-bottom
    * in array order; items inside each section render in array order.
@@ -742,6 +787,14 @@ export class MJLeftNavComponent {
    * and persist it however the app persists preferences), the same split as `ExpandedIds`.
    * Desktop-only: ≤700px the rail is the off-canvas drawer and the toggle hides.
    *
+   * Two things to know when the rail's content is richer than a flat icon list:
+   *  - **Tree sections fold to their top level while collapsed** (see {@link ShowTreeStructure});
+   *    a top-level item stands in as active for an active descendant, and the tree returns intact
+   *    on expand. Items with no `icon` render a monogram so they stay visible and hittable.
+   *  - **The `[header]` / `[footer]` slots are yours.** The rail can't restyle projected content,
+   *    so a wide header (logo lockup + wordmark, a filter box) will overflow a `CollapsedWidth`
+   *    strip. Bind the same collapsed flag in the consumer and project a compact variant.
+   *
    * Deliberately NOT included: hover-to-peek (auto-expand on pointer hover) — removed by ruling
    * (2026-07-30): a rail that expands when the pointer grazes it moves the target the user was
    * aiming at. Deliberate toggling beats clever hovering.
@@ -761,14 +814,121 @@ export class MJLeftNavComponent {
    */
   @Input() CollapsedWidth: number = 60;
 
-  /** The width the rail actually renders at, honoring the collapse state. */
-  public get EffectiveWidth(): number {
-    return this.Collapsible && this.Collapsed ? this.CollapsedWidth : this.Width;
+  /**
+   * True below the 701px breakpoint, where the rail stops being a rail and becomes the off-canvas
+   * drawer. Tracked in TS — not just CSS — because collapse is more than styling: it also decides
+   * whether tree sections fold and whether items are named by tooltip. The collapsed STYLES are
+   * gated to ≥701px, so without this the drawer would keep the collapsed BEHAVIOR while showing
+   * full labels: a flattened tree, and a monogram beside the very label it stands in for.
+   *
+   * Mirrors the matchMedia pattern in `mj-filter-popover` (same package).
+   */
+  private isMobileViewport: boolean = false;
+
+  private readonly zone = inject(NgZone);
+  private readonly cdr = inject(ChangeDetectorRef);
+
+  private readonly mediaQuery: MediaQueryList | null =
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 700px)')
+      : null;
+
+  // matchMedia 'change' fires OUTSIDE Angular's zone, so re-enter before flipping state the
+  // template reads.
+  private readonly onMediaChange = (e: MediaQueryListEvent): void => {
+    this.zone.run(() => {
+      this.isMobileViewport = e.matches;
+      this.cdr.markForCheck();
+    });
+  };
+
+  constructor() {
+    if (this.mediaQuery) {
+      this.isMobileViewport = this.mediaQuery.matches;
+      this.mediaQuery.addEventListener('change', this.onMediaChange);
+    }
   }
 
-  /** Icon-only presentation is on when the consumer forces it OR the rail is natively collapsed. */
+  ngOnDestroy(): void {
+    this.mediaQuery?.removeEventListener('change', this.onMediaChange);
+  }
+
+  /**
+   * Whether the rail is collapsed *and* in a viewport where collapse means anything. Below 701px
+   * the rail is the off-canvas drawer — already dismissable, already showing full labels — so a
+   * persisted `Collapsed = true` must not follow the user down there.
+   */
+  public get IsNativelyCollapsed(): boolean {
+    return this.Collapsible && this.Collapsed && !this.isMobileViewport;
+  }
+
+  /** The width the rail actually renders at, honoring the collapse state. */
+  public get EffectiveWidth(): number {
+    return this.IsNativelyCollapsed ? this.CollapsedWidth : this.Width;
+  }
+
+  /**
+   * Icon-only presentation is on when the consumer forces it OR the rail is natively collapsed.
+   *
+   * `IconOnly` is deliberately NOT viewport-gated: that flag means the CONSUMER's own CSS has
+   * narrowed the rail, and we can't know which breakpoints they gated it to. Withdrawing the
+   * accessible names on their behalf could leave a genuinely icons-only rail unnamed — the exact
+   * hole `IconOnly` exists to close. Native collapse is ours to gate; theirs is theirs.
+   */
   public get EffectiveIconOnly(): boolean {
-    return this.IconOnly || (this.Collapsible && this.Collapsed);
+    return this.IconOnly || this.IsNativelyCollapsed;
+  }
+
+  /**
+   * Whether tree structure (chevrons, depth indentation, expanded children) renders at all.
+   *
+   * An icons-only rail is ~60px wide and shows nothing but a centred glyph per row, which leaves a
+   * tree with no way to express itself: the chevron would eat a third of the width and shove the
+   * icon off-centre, each depth level would push its icon 14px further right until the rail clipped
+   * it, and a child's icon (optional, and usually absent on tree leaves) would say nothing about
+   * which branch it belongs to. So while icons-only, each section renders its TOP-LEVEL items only —
+   * the same choice every icon rail makes (VS Code's activity bar shows one icon per container and
+   * defers the tree to the expanded pane).
+   *
+   * Nothing is lost on the way back: `ExpandedIds` is consumer-owned and untouched here, so the tree
+   * returns exactly as the user left it the moment the rail expands.
+   */
+  public get ShowTreeStructure(): boolean {
+    return !this.EffectiveIconOnly;
+  }
+
+  /**
+   * Whether an item paints as active. Normally an exact {@link ActiveId} match — but while the tree
+   * is suppressed (see {@link ShowTreeStructure}) the active item may be a child that isn't rendered,
+   * which would leave the collapsed rail with NOTHING highlighted and no sense of place. In that
+   * state a top-level item stands in for its active descendant.
+   */
+  public IsItemActive(item: MJLeftNavItem): boolean {
+    if (item.id === this.ActiveId) return true;
+    return this.EffectiveIconOnly && this.hasActiveDescendant(item);
+  }
+
+  /**
+   * `'page'` for the active item itself; `'true'` for a stand-in ancestor, which is current in the
+   * set but is not the page the user is on. Distinguishing them keeps the announcement honest.
+   */
+  public AriaCurrentFor(item: MJLeftNavItem): 'page' | 'true' | null {
+    if (item.id === this.ActiveId) return 'page';
+    return this.IsItemActive(item) ? 'true' : null;
+  }
+
+  private hasActiveDescendant(item: MJLeftNavItem): boolean {
+    if (!this.ActiveId || !item.children?.length) return false;
+    return this.findItemById(item.children, this.ActiveId) !== undefined;
+  }
+
+  /**
+   * Monogram for an icon-less item in an icons-only rail. `Array.from` rather than `charAt` so a
+   * label starting with an emoji or an astral character yields that whole character instead of half
+   * a surrogate pair. Falls back to a bullet for a blank label so the button is never empty.
+   */
+  public ItemInitial(item: MJLeftNavItem): string {
+    return Array.from(item.label?.trim() ?? '')[0] ?? '•';
   }
 
   /**
@@ -784,7 +944,7 @@ export class MJLeftNavComponent {
   /** Reflects the collapsed state onto the host so the collapsed CSS can scope to it. */
   @HostBinding('class.mj-left-nav-host--collapsed')
   get isCollapsedHost(): boolean {
-    return this.Collapsible && this.Collapsed;
+    return this.IsNativelyCollapsed;
   }
 
   /** Flip + announce. The consumer receives the new value and persists it. */

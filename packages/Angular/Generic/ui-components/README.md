@@ -168,6 +168,14 @@ Canonical left rail: sections, flat + tree items (badges, descriptions, disabled
              [(Collapsed)]="railCollapsed" (CollapsedChange)="persist($event)" />
 ```
 
+Collapsing a rail whose content is richer than a flat icon list:
+
+| Content | Collapsed behavior |
+|---|---|
+| **Tree sections** (`item.children`) | Fold to top-level items only — no chevrons, no indentation, children hidden. A top-level item paints active (`aria-current="true"`) when the active item is one of its descendants, so the rail still shows where you are. `ExpandedIds` is untouched, so the tree returns exactly as the user left it on expand. |
+| **Items with no `icon`** | Render an uppercase monogram from the label, so an item never collapses to a blank-but-clickable button. |
+| **`[header]` / `[footer]` slots** | **Yours to handle.** The rail can't restyle projected content, so a wide header overflows a 60px strip — bind the same collapsed flag in your consumer and project a compact variant. |
+
 ### `mj-tab-nav` — MJTabNavComponent
 Data-driven tab strip. `Tabs: TabConfig[]` (`key`, `label`, `icon?`, `badge?`, `badgeVariant?: 'default'|'error'|'warning'|'success'`), `ActiveKey`, `(TabChange)` emits the key.
 
