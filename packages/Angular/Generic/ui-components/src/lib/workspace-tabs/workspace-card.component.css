@@ -1,0 +1,79 @@
+/* The reusable workspace card frame — design tokens only. The height chain (host fills parent → card
+   fills host → body is the flex:1 scroller) is load-bearing: it's what lets the BODY scroll in place
+   while the tab strip + identity band stay pinned. */
+
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* One object against the page: --mj-bg-surface, rounded, with the body's scroll contained inside. */
+.ws-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 12px;
+  overflow: hidden;
+  /* SIZING CONTAINER (design rule, Marcelo 2026-07-21): the card is a query container, so content
+     inside sizes with CONTAINER units (cqh/cqw/cqi) — relative to THIS card (a window/pane), never the
+     viewport (vh/vw). vh would size to the whole screen regardless of the pane the card sits in. The
+     card's own size comes from the flex chain (parent-driven), so size containment is safe here. */
+  container-type: size;
+  container-name: workspace;
+}
+
+.ws-card__head {
+  flex: none;
+}
+
+/* Identity band below the tab row (never in line with the tabs) — the slot the workshop projects into. */
+.ws-card__headmeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+}
+/* Collapse the band entirely when the workshop projects nothing into it (no empty padded strip). */
+.ws-card__headmeta:empty {
+  display: none;
+}
+
+/* The single scrollable body. Standard gutters + a stacked-column default (the compact-workspace
+   layout); a workshop's projected content flows here. */
+.ws-card__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* The standardized action bar — pinned below the scrolling body, so the verbs stay reachable without
+   scrolling to the end of a long form. NO top border (Marcelo 2026-07-21): the buttons should read as
+   part of the sheet, not a boxed-off strip — the card's own frame is the only border we want. */
+.ws-card__foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 4px 14px 12px;
+}
+/* Per-workshop caption beside the verbs (projected). Collapses when nothing is slotted. */
+.ws-card__footnote {
+  margin-left: auto;
+  max-width: 46ch;
+  font-size: 12px;
+  color: var(--mj-text-muted);
+}
+.ws-card__footnote:empty {
+  display: none;
+}
