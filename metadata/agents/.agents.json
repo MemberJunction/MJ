@@ -1125,7 +1125,7 @@
       "",
       "Status is Pending because it depends on an external binary. Activate it after flipping the",
       "'Claude Code' row in MJ: AI Agent Harnesses to Active and making the `claude` binary",
-      "reachable \u2014 otherwise a fresh install would advertise an agent that cannot run.",
+      "reachable — otherwise a fresh install would advertise an agent that cannot run.",
       "",
       "Sandbox defaults to the LOCAL provider, which scopes a workspace directory but does NOT",
       "contain the process. That is a development posture. Switch to 'docker' for anything shared."
@@ -1146,6 +1146,20 @@
           "provider": "local",
           "workspaceScope": "agent-user",
           "networkPolicy": "mcp-only"
+        },
+        "posture": "auto",
+        "permissions": {
+          "allowedTools": [
+            "Read",
+            "Grep",
+            "Glob"
+          ],
+          "disallowedTools": [
+            "Bash",
+            "Write",
+            "Edit",
+            "NotebookEdit"
+          ]
         }
       },
       "MaxCostPerRun": 1,
@@ -1158,8 +1172,8 @@
       "ID": "265E1D42-966E-41CD-BEA6-748C73482C20"
     },
     "sync": {
-      "lastModified": "2026-08-05T20:25:55.346Z",
-      "checksum": "c0b86d912ca091b120cb6a0349a0f73df5a48c0cb174e06017962eb0d509cf62"
+      "lastModified": "2026-08-06T20:58:34.058Z",
+      "checksum": "578856dc8be0002249a3530a1a1a344f136bf0342a060a2de5172f011be84b50"
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
