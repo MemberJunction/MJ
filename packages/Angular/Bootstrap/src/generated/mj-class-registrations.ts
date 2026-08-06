@@ -27,7 +27,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (411 classes)
+// @memberjunction/core-entities (413 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -45,9 +45,11 @@ import {
     MJAIAgentClientToolEntity,
     MJAIAgentCoAgentEntity,
     MJAIAgentConfigurationEntity,
+    MJAIAgentCredentialEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
     MJAIAgentExampleEntity,
+    MJAIAgentHarnessEntity,
     MJAIAgentLearningCycleEntity,
     MJAIAgentModalityEntity,
     MJAIAgentModelEntity,
@@ -592,7 +594,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (101 classes)
+// @memberjunction/ng-dashboards (102 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -640,6 +642,7 @@ import {
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
     EventMonitorComponent,
+    FeaturePipelinesResourceComponent,
     FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     HomeApplication,
@@ -744,9 +747,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentClientToolEntity,
     MJAIAgentCoAgentEntity,
     MJAIAgentConfigurationEntity,
+    MJAIAgentCredentialEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
     MJAIAgentExampleEntity,
+    MJAIAgentHarnessEntity,
     MJAIAgentLearningCycleEntity,
     MJAIAgentModalityEntity,
     MJAIAgentModelEntity,
@@ -1271,6 +1276,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
     EventMonitorComponent,
+    FeaturePipelinesResourceComponent,
     FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     HomeApplication,
@@ -1345,7 +1351,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 619;
+export const CLASS_REGISTRATIONS_COUNT = 622;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
