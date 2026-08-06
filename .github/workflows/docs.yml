@@ -1,5 +1,20 @@
 name: Update package documentation
 
+# Versioned docs deploy: one Starlight build per release line, assembled into a
+# single GitHub Pages site.
+#
+#   /v5/…  ← content at lts/5 (one set per lts/* branch — the branch IS the
+#            line's certification artifact, so no ref is hardcoded here)
+#   /v6/…  ← content at next (the Edge line; major from the newest v*-edge tag)
+#   /      ← redirect to the newest LTS set
+#   404    ← forwards legacy pre-versioning URLs into the newest LTS set
+#
+# Every build uses the docs-site/ TOOLING from next (overlaid onto the content
+# checkout), so ingest/site fixes apply to all versions without cherry-picks.
+# Because this file lives on the default branch (next), the workflow_run
+# trigger fires from here regardless of what main or lts/* carry; pushes to
+# lts/* are forwarded by the thin dispatcher workflow on those branches.
+
 on:
   workflow_run:
     workflows: [Build and publish new package versions]
@@ -7,28 +22,22 @@ on:
     types:
       - completed
 
-  # Docs content changes that land on main or the LTS line outside a release
-  # cycle. The lts/5 trigger is what makes line release notes self-deploying:
-  # the notes commit pushed to lts/5 touches releases/** and fires this.
+  # Docs content or tooling changes on next: Edge content and the shared
+  # tooling both live here, so any of these paths can change the built site.
   push:
-    branches: [main, lts/5]
+    branches: [next]
     paths:
       - 'docs-site/**'
       - 'guides/**'
       - 'README.md'
-      - 'DEPLOYMENT.md'
       - 'UPGRADE-v5.0.md'
       - 'CONTRIBUTING.md'
       - 'metadata/README.md'
       - '.claude/skills/**'
       - 'releases/**'
+      - '.github/workflows/docs.yml'
 
-  workflow_dispatch:
-    inputs:
-      ref:
-        description: 'Git ref to build the site from (defaults to the certified LTS line)'
-        required: false
-        default: 'lts/5'
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -40,10 +49,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  docs:
-    name: Generate and deploy documentation site
-    timeout-minutes: 45
+  resolve:
+    name: Resolve release lines to build
+    timeout-minutes: 5
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.lines.outputs.MATRIX }}
+      versions: ${{ steps.lines.outputs.VERSIONS }}
+      default: ${{ steps.lines.outputs.DEFAULT }}
     steps:
       - name: Error out if the trigger did not succeed
         run: |
@@ -52,19 +65,85 @@ jobs:
             exit 1
           fi
 
-      # The public site documents the LTS line, whatever branch fired the
-      # trigger. Without an explicit ref, workflow_run events check out the
-      # repo DEFAULT branch (next) — verified from past run history — which
-      # after the 6.x era opens would publish Edge dev content on every
-      # release. Pinned until versioned docs (/v5, /v6) land; update this ref
-      # when a new line certifies.
+      # github.sha is the commit this run was triggered for: the pushed next
+      # commit, the default-branch head for workflow_run, or the chosen ref's
+      # head for a manual dispatch (which is what lets a feature branch test
+      # the full pipeline before merging).
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          ref: ${{ github.event.inputs.ref || 'lts/5' }}
+          ref: ${{ github.sha }}
+          fetch-depth: 1
 
-      # lts/5 is the last npm line; 6.x and every later LTS line use pnpm. The
+      - name: Enumerate release lines
+        id: lines
+        run: |
+          set -euo pipefail
+          # LTS sets: one per lts/N branch. The branch is created by the LTS
+          # process at line cut, so its existence is the source of truth for
+          # "this line has public docs".
+          mapfile -t LTS < <(git ls-remote --heads origin 'lts/*' | sed -E 's#.*refs/heads/lts/##' | grep -E '^[0-9]+$' | sort -n)
+          # Edge set: built from next; its major comes from the newest edge tag.
+          EDGE_MAJOR=$(git ls-remote --tags origin 'v*-edge.*' | sed -E 's#.*refs/tags/v##; s#\^\{\}$##' | sort -uV | tail -1 | cut -d. -f1)
+
+          MATRIX='[]'
+          VERSIONS='[]'
+          for major in ${LTS[@]+"${LTS[@]}"}; do
+            MATRIX=$(jq -c --arg id "v$major" --arg ref "lts/$major" '. + [{id: $id, ref: $ref}]' <<<"$MATRIX")
+            VERSIONS=$(jq -c --arg id "v$major" --arg label "v$major (LTS)" '. + [{id: $id, label: $label}]' <<<"$VERSIONS")
+          done
+          if [ -n "$EDGE_MAJOR" ] && ! printf '%s\n' ${LTS[@]+"${LTS[@]}"} | grep -qx "$EDGE_MAJOR"; then
+            MATRIX=$(jq -c --arg id "v$EDGE_MAJOR" '. + [{id: $id, ref: "next"}]' <<<"$MATRIX")
+            VERSIONS=$(jq -c --arg id "v$EDGE_MAJOR" --arg label "v$EDGE_MAJOR (Edge)" '. + [{id: $id, label: $label}]' <<<"$VERSIONS")
+          else
+            echo "::warning::No distinct Edge line to publish (edge major: '$EDGE_MAJOR', LTS lines: ${LTS[*]:-none}) — an lts/N branch supersedes the Edge set for the same major."
+          fi
+
+          if [ "$(jq length <<<"$MATRIX")" -eq 0 ]; then
+            echo "::error::No release lines found (no lts/* branches and no v*-edge.* tags)"
+            exit 1
+          fi
+          # The site default (root redirect target) is the newest LTS line —
+          # the certified public face. Before any line exists, fall back to Edge.
+          if [ "${#LTS[@]}" -gt 0 ]; then DEFAULT="v${LTS[-1]}"; else DEFAULT="v$EDGE_MAJOR"; fi
+
+          {
+            echo "MATRIX=$MATRIX"
+            echo "VERSIONS=$VERSIONS"
+            echo "DEFAULT=$DEFAULT"
+          } >> "$GITHUB_OUTPUT"
+          echo "::notice::Building versions: $VERSIONS (default: $DEFAULT)"
+
+  build:
+    name: Build ${{ matrix.id }} (${{ matrix.ref }})
+    needs: resolve
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.resolve.outputs.matrix) }}
+    steps:
+      # fetch-depth 0 serves two needs: Starlight's lastUpdated reads per-file
+      # git history, and the full fetch brings origin/next for the tooling
+      # overlay below.
+      - name: Checkout content ref
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ matrix.ref }}
+
+      # The site tooling (ingest, Astro config, hand-authored pages) always
+      # comes from the commit that triggered this run — next in normal
+      # operation — whatever ref the content is at. This is what makes tooling
+      # fixes (e.g. the internal-page exclusions) apply to every version
+      # without cherry-picking to lts/* branches.
+      - name: Overlay docs-site tooling from the triggering commit
+        run: |
+          set -euo pipefail
+          rm -rf docs-site
+          git checkout ${{ github.sha }} -- docs-site
+
+      # lts/5 is the last npm line; 6.x and every later line use pnpm. The
       # lockfile committed on the checked-out ref is the signal, so this needs
       # no edit when a new line is cut.
       - name: Detect package manager
@@ -75,11 +154,11 @@ jobs:
           elif [ -f package-lock.json ]; then
             PM=npm
           else
-            echo "::error::No lockfile found on ${{ github.ref_name }}"
+            echo "::error::No lockfile found on ${{ matrix.ref }}"
             exit 1
           fi
           echo "PM=$PM" >> "$GITHUB_OUTPUT"
-          echo "::notice::Package manager for this ref: $PM"
+          echo "::notice::Package manager for ${{ matrix.ref }}: $PM"
 
       - name: Set up pnpm
         if: steps.pm.outputs.PM == 'pnpm'
@@ -90,9 +169,9 @@ jobs:
         with:
           node-version: 24
           cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            docs-site/package-lock.json
+          # Root-install caching would need era-aware lockfile paths; only the
+          # docs-site install (always npm, tooling from next) is cached.
+          cache-dependency-path: docs-site/package-lock.json
 
       - name: Install dependencies
         run: ${{ steps.pm.outputs.PM == 'pnpm' && 'pnpm install --frozen-lockfile' || 'npm ci' }}
@@ -101,7 +180,7 @@ jobs:
         run: ${{ steps.pm.outputs.PM }} run build
 
       - name: Generate API reference (TypeDoc)
-        run: npx typedoc
+        run: ${{ steps.pm.outputs.PM == 'pnpm' && 'pnpm exec typedoc' || 'npx typedoc' }}
 
       - name: Install docs site dependencies
         run: npm ci
@@ -115,10 +194,12 @@ jobs:
         run: npm run build
         working-directory: docs-site
         env:
-          # Custom domain (docs.memberjunction.org) serves the site at the
-          # domain ROOT — no /MJ/ repo prefix. github.io/MJ/ 301s here.
-          DOCS_BASE: /
+          # Each version is served under its /vN prefix on the custom domain
+          # (docs.memberjunction.org — no /MJ/ project prefix, github.io 301s).
+          DOCS_BASE: /${{ matrix.id }}
           DOCS_SITE: https://docs.memberjunction.org
+          DOCS_VERSION: ${{ matrix.id }}
+          DOCS_VERSIONS: ${{ needs.resolve.outputs.versions }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Attach API reference under /api
@@ -126,13 +207,99 @@ jobs:
           mkdir -p docs-site/dist/api
           cp -R docs/. docs-site/dist/api/
 
+      - name: Upload version artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-${{ matrix.id }}
+          path: docs-site/dist
+          retention-days: 3
+
+  deploy:
+    name: Assemble and deploy
+    needs: [resolve, build]
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download version artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: site-*
+          path: dist
+
+      - name: Assemble versioned site
+        env:
+          VERSIONS: ${{ needs.resolve.outputs.versions }}
+          DEFAULT: ${{ needs.resolve.outputs.default }}
+        run: |
+          set -euo pipefail
+          # dist/site-v5 -> dist/v5, matching each build's /vN base path.
+          for d in dist/site-*; do
+            mv "$d" "dist/${d#dist/site-}"
+          done
+          ls dist
+
+          IDS_JS=$(jq -c '[.[].id]' <<<"$VERSIONS")
+          LINKS_MD=$(jq -r 'map("<li><a href=\"/\(.id)/\">\(.label)</a></li>") | join("")' <<<"$VERSIONS")
+
+          # Root redirect: the site's front door is the newest LTS set.
+          cat > dist/index.html <<EOF
+          <!doctype html>
+          <html lang="en">
+          <head>
+          <meta charset="utf-8">
+          <meta http-equiv="refresh" content="0; url=/$DEFAULT/">
+          <link rel="canonical" href="https://docs.memberjunction.org/$DEFAULT/">
+          <title>MemberJunction Documentation</title>
+          </head>
+          <body><a href="/$DEFAULT/">MemberJunction documentation</a></body>
+          </html>
+          EOF
+
+          # Sitewide 404 (GitHub Pages serves only the root one). Forwards
+          # legacy pre-versioning URLs (/guides/x/, /api/…, old root TypeDoc
+          # deep links) into the default set; a path already carrying a /vN
+          # prefix is never re-forwarded, so every request redirects at most
+          # twice (legacy -> /vN -> /vN/api for old TypeDoc paths).
+          cat > dist/404.html <<EOF
+          <!doctype html>
+          <html lang="en">
+          <head>
+          <meta charset="utf-8">
+          <title>Page not found — MemberJunction Documentation</title>
+          <script>
+          (function () {
+            var versions = $IDS_JS;
+            var fallback = '/$DEFAULT';
+            var path = location.pathname;
+            var prefixed = versions.some(function (v) {
+              return path === '/' + v || path.indexOf('/' + v + '/') === 0;
+            });
+            if (!prefixed) {
+              location.replace(fallback + path + location.search + location.hash);
+              return;
+            }
+            var deep = path.match(/^(\/v\d+)\/(classes|interfaces|enums|functions|modules|variables|types|documents|media|hierarchy)\/(.+)\$/);
+            if (deep) {
+              location.replace(deep[1] + '/api/' + deep[2] + '/' + deep[3] + location.search + location.hash);
+            }
+          })();
+          </script>
+          </head>
+          <body>
+          <h1>Page not found</h1>
+          <p>That page doesn't exist in this version of the documentation. Try one of the documentation sets:</p>
+          <ul>$LINKS_MD</ul>
+          </body>
+          </html>
+          EOF
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'docs-site/dist'
+          path: 'dist'
 
       - name: Deploy to GitHub Pages
         id: deployment
