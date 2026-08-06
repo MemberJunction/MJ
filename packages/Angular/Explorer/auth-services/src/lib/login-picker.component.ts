@@ -57,6 +57,7 @@ const BRAND_ICON_CLASSES: Readonly<Record<string, string>> = {
             [variant]="IsSingleProvider ? 'primary' : 'secondary'"
             size="lg"
             class="mj-login-picker__row"
+            [class.mj-login-picker__row--default]="provider.isDefault && !IsSingleProvider"
             type="button"
             [disabled]="Busy"
             [ariaLabel]="LabelFor(provider)"
@@ -72,6 +73,9 @@ const BRAND_ICON_CLASSES: Readonly<Record<string, string>> = {
             @if (provider.isDefault && !IsSingleProvider) {
               <span class="mj-login-picker__pill">Default</span>
             }
+            <span class="mj-login-picker__chevron" aria-hidden="true">
+              <i class="fa-solid fa-arrow-right"></i>
+            </span>
           </button>
         }
       </div>
@@ -88,22 +92,24 @@ const BRAND_ICON_CLASSES: Readonly<Record<string, string>> = {
         flex-direction: column;
         gap: var(--mj-space-3, 0.75rem);
         width: 100%;
-        max-width: 420px;
+        max-width: 400px;
       }
 
+      /* Left-aligned per the locked Login C direction — the heading, lede and rows share
+         one leading edge; only the attribution centers. */
       .mj-login-picker__heading {
         margin: 0;
         font-size: var(--mj-text-2xl, 1.5rem);
-        font-weight: 600;
+        font-weight: var(--mj-font-bold, 700);
         color: var(--mj-text-primary);
-        text-align: center;
+        text-align: left;
       }
 
       .mj-login-picker__subheading {
-        margin: 0 0 var(--mj-space-2, 0.5rem);
+        margin: 0 0 var(--mj-space-5, 1.25rem);
         font-size: var(--mj-text-base, 1rem);
-        color: var(--mj-text-muted);
-        text-align: center;
+        color: var(--mj-text-secondary);
+        text-align: left;
       }
 
       .mj-login-picker__list {
@@ -120,6 +126,13 @@ const BRAND_ICON_CLASSES: Readonly<Record<string, string>> = {
         gap: var(--mj-space-3, 0.75rem);
         width: 100%;
         text-align: left;
+      }
+
+      /* The default provider reads as the recommended path. Border only — fill, radius, focus
+         ring and hit target all still come from the mjButton directive, and this targets the
+         picker's own row class rather than .mj-btn, so the directive stays authoritative. */
+      .mj-login-picker__row--default {
+        border-color: var(--mj-brand-primary);
       }
 
       .mj-login-picker__chip {
@@ -146,11 +159,43 @@ const BRAND_ICON_CLASSES: Readonly<Record<string, string>> = {
         flex: 0 0 auto;
         padding: 0.125rem var(--mj-space-2, 0.5rem);
         border-radius: var(--mj-radius-full, 999px);
-        background: color-mix(in srgb, currentColor 14%, transparent);
+        /* Brand-tinted rather than currentColor — the default provider is the one call to
+           action on the surface, and Login C gives it the brand accent. */
+        color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
         font-size: var(--mj-text-xs, 0.75rem);
-        font-weight: 600;
+        font-weight: var(--mj-font-bold, 700);
         text-transform: uppercase;
         letter-spacing: 0.04em;
+      }
+
+      /* Trailing affordance from the locked login mockup — signals that a row navigates
+         away rather than toggling in place. Decorative, so it is aria-hidden and the row's
+         accessible name still comes from the directive's ariaLabel. */
+      .mj-login-picker__chevron {
+        display: inline-flex;
+        align-items: center;
+        flex: 0 0 auto;
+        font-size: var(--mj-text-sm, 0.875rem);
+        color: var(--mj-text-muted);
+        transition: color 120ms ease, transform 120ms ease;
+      }
+
+      .mj-login-picker__row:hover .mj-login-picker__chevron,
+      .mj-login-picker__row:focus-visible .mj-login-picker__chevron {
+        color: var(--mj-brand-primary);
+        transform: translateX(2px);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .mj-login-picker__chevron {
+          transition: none;
+        }
+
+        .mj-login-picker__row:hover .mj-login-picker__chevron,
+        .mj-login-picker__row:focus-visible .mj-login-picker__chevron {
+          transform: none;
+        }
       }
 
       .mj-login-picker__attribution {

@@ -56,7 +56,12 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   public initialPath = '/';
   public HasError = false;
   public ErrorMessage: string = '';
-  public subHeaderText: string = "Welcome back! Please log in to your account.";
+  /**
+   * The neutral greeting shown when there is no auth status to report. Kept as a constant so
+   * {@link ProviderPickerLede} can tell "nothing happened yet" apart from a real status message.
+   */
+  private static readonly DefaultSubHeaderText = 'Welcome back! Please log in to your account.';
+  public subHeaderText: string = MJExplorerAppComponent.DefaultSubHeaderText;
   public showValidationOnly = false;
   /** True when the current URL is the OAuth callback route - used for conditional rendering */
   public isOAuthCallback = false;
@@ -179,6 +184,19 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    */
   public get ShowProviderPicker(): boolean {
     return this.authResolution?.showPicker === true;
+  }
+
+  /**
+   * Lede rendered above the provider picker.
+   *
+   * Matches the locked Login C (Editorial Split) direction when there is nothing to report, but
+   * yields to a real auth status message (expired session, provider error) the moment one exists —
+   * a failure the user needs to see must never be displaced by static copy.
+   */
+  public get ProviderPickerLede(): string {
+    return this.subHeaderText === MJExplorerAppComponent.DefaultSubHeaderText
+      ? "Continue with one of your organization's sign-in options."
+      : this.subHeaderText;
   }
 
   /**
@@ -364,14 +382,14 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
           switch (authError.type) {
             case AuthErrorType.NO_ACTIVE_SESSION:
-              this.subHeaderText = "Welcome back! Please log in to your account.";
+              this.subHeaderText = MJExplorerAppComponent.DefaultSubHeaderText;
               break;
             case AuthErrorType.INTERACTION_REQUIRED:
             case AuthErrorType.TOKEN_EXPIRED:
               this.subHeaderText = "Your session has expired. Please log in to your account.";
               break;
             default:
-              this.subHeaderText = authError.userMessage || "Welcome back! Please log in to your account.";
+              this.subHeaderText = authError.userMessage || MJExplorerAppComponent.DefaultSubHeaderText;
           }
 
           // Auth state is managed by the provider itself via observables
