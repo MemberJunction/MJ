@@ -13470,6 +13470,9 @@ importers:
       '@memberjunction/actions-content-autotag':
         specifier: 6.1.0-edge.0
         version: link:../Actions/ContentAutotag
+      '@memberjunction/ai-agent-harness':
+        specifier: 6.1.0-edge.0
+        version: link:../AI/AgentHarness
       '@memberjunction/ai-agent-manager':
         specifier: 6.1.0-edge.0
         version: link:../AI/AgentManager/core
@@ -13810,6 +13813,9 @@ importers:
       '@memberjunction/actions-bizapps-social':
         specifier: 6.1.0-edge.0
         version: link:../Actions/BizApps/Social
+      '@memberjunction/ai-agent-harness':
+        specifier: 6.1.0-edge.0
+        version: link:../AI/AgentHarness
       '@memberjunction/ai-agent-manager':
         specifier: 6.1.0-edge.0
         version: link:../AI/AgentManager/core
