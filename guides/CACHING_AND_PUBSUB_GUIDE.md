@@ -700,18 +700,26 @@ Freezing is applied at both write funnels — `SetRunViewResult` / `SetRunQueryR
 
 Serializing providers are skipped: their stored data is already isolated, and freezing would only immobilize the caller's own rows for no safety gain (this is what keeps browser code that decorates rows working unchanged).
 
-The `results` fields of `CachedRunViewData` / `CachedRunViewResult` are typed `readonly unknown[]` so cache-adjacent code gets a compile-time signal to match the runtime freeze. `RunViewResult.Results` remains a mutable `T[]` for ordinary callers; the two `ProviderBase` cache-hit paths and `GenericDatabaseProvider.serveFromServerCache` cast at that documented transport boundary.
+The `results` fields of `CachedRunViewData` / `CachedRunViewResult` (and `GetRunQueryResult`'s return) are typed `readonly unknown[]` so cache-adjacent code gets a compile-time signal to match the runtime freeze. `RunViewResult.Results` / `RunQueryResult.Results` remain mutable for ordinary callers; the `ProviderBase` cache-hit paths and `GenericDatabaseProvider`'s serve legs cast at that documented transport boundary.
 
 Two things are deliberately **not** frozen, because they were never shared:
 
 - **Narrow-`Fields` requests.** A request for a field subset is served by projecting the cached full-width superset down to the caller's shape, which builds fresh per-caller row objects. Those belong to the caller and stay mutable.
 - **`ProviderInternalScaffolding` slots.** Pass `{ ProviderInternalScaffolding: true }` as `SetRunViewResult`'s `options` to declare a slot whose only consumer is the provider that wrote it. The freeze protects *consumers* from corrupting rows they were handed; it buys nothing for single-owner rows, and it breaks owners that legitimately use them as scratch space.
 
-  The one current use is **metadata bootstrap**: `GetDatasetByName` caches each dataset item through this cache, and `PostProcessEntityMetadata` then hydrates a graph by sorting that row array *in place* and attaching child collections (`EntityFields`, `EntityPermissions`, `EntityFieldValues`, …) onto each row. With the rows frozen, `GetAllMetadata()` throws `Cannot assign to read only property '0'` and the process boots with **no metadata at all** — every entity lookup fails. The flag is persisted on the cache entry and carried forward through in-place slot maintenance, so a later save event cannot silently re-freeze the slot.
+  The one current use is **metadata bootstrap**, and it is scoped to the **`MJ_Metadata` dataset only** at the single dataset-item write site: the provider's own metadata assembly mutates those rows in place by design — `PostProcessEntityMetadata` sorts the entity array and attaches child collections (`EntityFields`, `EntityPermissions`, `EntityFieldValues`, …) onto each row, and `GetAllMetadata`'s Applications assembly writes onto Application rows. With those rows frozen, `GetAllMetadata()` throws `Cannot assign to read only property '0'` and the process boots with **no metadata at all**. The flag is persisted on the cache entry and carried forward through in-place slot maintenance, so a later save event cannot silently re-freeze the slot.
+
+  **Every other dataset's cached rows ARE frozen** — `GetDatasetByName` is a public API (`BaseEngine.Load` hands `item.Results`, the live cached arrays, to every engine subclass), so those slots are ordinary shared state. If an engine needs to sort or decorate dataset rows, it must copy first, like any other cache consumer.
 
   **Do not reach for this flag to avoid fixing a mutation.** If the rows reach anything but the writing provider, the mutator must copy first.
 
-**If you hit `TypeError: Cannot assign to read only property` on a RunView row**, you have found a real pre-existing corruption bug, not a regression — fix it by copying before mutating, as `ResolverBase` does.
+Three accepted residuals the freeze cannot cover:
+
+- **Binary payloads** (`Buffer` / TypedArray / `ArrayBuffer` — e.g. `varbinary` columns): the JS spec makes `Object.freeze` **throw** on a non-empty view, so the deep-freeze skips them — and a freeze failure of any kind degrades to a logged, unfrozen store rather than failing the write path.
+- **`Date` internal slots**: a frozen `Date` still accepts `setHours()` and friends.
+- **Sloppy-mode consumers**: the `TypeError` is strict-mode behavior; non-strict code gets a silent no-op write instead. The cache is protected either way — only the loudness differs.
+
+**If you hit `TypeError: Cannot assign to read only property` on a RunView row**, you have found a real pre-existing corruption bug, not a regression — fix it by copying before mutating, as `ResolverBase` does. This applies inside **`PostRunView` data hooks / middleware** too: on the server they receive the frozen rows on every cache miss, so modify by reassigning onto copies (`results.Results = results.Results.map(r => ({ ...r, ... }))`) or by returning a new result — never by writing into rows.
 
 ### Batched reads (`GetItems`)
 
