@@ -146,7 +146,8 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.11",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@memberjunction/global": "6.0.0"
   },
   "files": [
     "dist/**/*"

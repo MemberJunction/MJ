@@ -21,6 +21,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
+    "@memberjunction/ai": "6.0.0",
     "@memberjunction/global": "6.0.0"
   },
   "repository": {
