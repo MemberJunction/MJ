@@ -454,9 +454,18 @@ export const ArtifactToolsChecks: NamedCheck[] = [
             Assert(matches.length === 1, 'AT9: the tool did not reach into the large (tools-only) artifact content');
 
             // The 60k body must NOT have been inlined into the prompt (tools-only delivery for large artifacts).
+            //
+            // 🚨 Assert on the BODY, not on the sentinel. An artifact tool result is appended to the
+            // conversation as a user turn ("Artifact tool result: ..."), so the very grep this check
+            // instructs necessarily echoes the matched line — sentinel and all — into the NEXT turn's
+            // prompt. A `!allMessages.includes(deepSentinel)` oracle therefore fires on its own
+            // success and reports a context blow-up that never happened. What actually distinguishes
+            // inlining from tools-only delivery is whether the 65k filler body travelled with the
+            // prompt, so that is what we test.
             const prompts = await readPromptRunsForAgent(ctx.Provider, ctx.User, [runId], fx.ReaderID);
             const allMessages = prompts.map((p) => p.Messages ?? '').join('\n');
-            Assert(!allMessages.includes(deepSentinel), 'AT9: large artifact CONTENT was inlined into the prompt (context blow-up)');
+            const bodyProbe = 'x'.repeat(10_000); // a slab only the inlined 60k body could contain
+            Assert(!allMessages.includes(bodyProbe), 'AT9: large artifact CONTENT was inlined into the prompt (context blow-up)');
         }
     }
 ];
