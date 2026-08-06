@@ -197,7 +197,20 @@ jobs:
           echo "::notice::Publishing $VERSION to npm dist-tag $NPM_TAG (prerelease: $PRERELEASE)"
 
       - name: Publish to npm
-        run: pnpm run change publish -- --tag ${{ steps.channel.outputs.NPM_TAG }}
+        # 🚨 Invoke changesets directly, NOT via `pnpm run change publish -- --tag <x>`.
+        # `"change": "changeset"`, and pnpm 10 forwards the `--` separator LITERALLY, so that
+        # form reaches changesets as `publish -- --tag edge` and dies with "Too many arguments
+        # passed to changesets". It exits non-zero but the step still concluded `success`, so
+        # v6.1.0-edge.0 was version-bumped, tagged and back-merged while ZERO packages reached
+        # npm — a release the repo believes shipped and the registry has never heard of.
+        # `set -o pipefail` + an explicit publish-happened assertion below make a repeat loud.
+        run: |
+          set -euo pipefail
+          pnpm exec changeset publish --tag ${{ steps.channel.outputs.NPM_TAG }} 2>&1 | tee /tmp/publish.log
+          if ! grep -qE 'New tag:|Packages published|already published' /tmp/publish.log; then
+            echo "::error::changeset publish produced no evidence of a publish — refusing to report success."
+            exit 1
+          fi
         env:
           NPM_TOKEN: ''
 
