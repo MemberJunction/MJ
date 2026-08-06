@@ -168,8 +168,10 @@ jobs:
       - name: Build packages
         run: pnpm run build
 
-      # LTS process (plans/lts-process.md §4.2): no publish ever omits its explicit
-      # --tag. The channel is derived from the version grammar itself — an -edge.N
+      # LTS process (plans/lts-process.md §4.2): no publish ever completes without its
+      # channel tag asserted — derived here, cross-checked against pre.json before the
+      # publish, verified against the registry after it (pre mode forbids an explicit
+      # --tag). The channel comes from the version grammar itself — an -edge.N
       # prerelease goes to the `edge` dist-tag. Unsuffixed versions are era-gated:
       # era-5 (classic grammar, the bootstrap) publishes to `latest` — today's
       # behavior, unchanged. From era 6 on, an unsuffixed version is a candidate or
