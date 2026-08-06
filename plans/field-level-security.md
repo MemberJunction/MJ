@@ -1,5 +1,170 @@
 # Field-Level Security for MemberJunction
 
+---
+
+## Implementation Status (As-Built) — READ FIRST
+
+> This section is the working context for the implementation. The design sections below are
+> unchanged except where a factual error is corrected inline and marked. Branch:
+> `JF_Entity_Field_Security`. Last updated after Phase 2.
+
+### Where things stand
+
+| Phase | Status |
+|---|---|
+| Phase 1 — Schema & Metadata | **Committed** (`cdd78a2d9d`) |
+| Phase 2 — Server-Side Enforcement (§2.1–§2.4, §2.6) | **Built, tested, uncommitted** |
+| Phase 2.5 — Saved queries (§2.5) | **Deferred by decision** — see below; saved queries are NOT FLS-filtered |
+| Phase 3 — Skip integration | Not started |
+| Phase 4 — Admin UI | Not started |
+
+### Decisions taken during implementation (do not re-litigate)
+
+1. **NO per-user exemption.** §1.5 called for an admin/Owner exemption; it was dropped. Its stated
+   justification — "an admin locks themselves out of the admin UI" — is wrong: that UI edits
+   `EntityFieldPermission` rows, not the secured field's *values*, so denying yourself `Salary`
+   never blocks administering permissions. What IS a real lockout is self-referential
+   configuration, so the guard is on **which targets are restrictable**, not which users are
+   bound. Nothing overrides a Deny — a feature selling compensation/donor confidentiality cannot
+   ship with a role that quietly reads everything.
+
+2. **Unrestrictable targets** (guarded at BOTH save time and in the aggregation):
+   primary keys (hard + soft), `__mj_` system columns, and the security-configuration + identity
+   entities (`MJ: Entities`, `Entity Fields`, `Entity Permissions`, `Entity Field Permissions`,
+   `Roles`, `Users`, `User Roles`).
+
+3. **Error wording is deliberately ambiguous**, SQL Server style:
+   `Field 'X' does not exist on entity 'Y' or you do not have access to it.` — never disclosing
+   whether the field is missing or forbidden. Echoing back an identifier the caller supplied
+   discloses nothing; naming the *reason* turns any predicate into a probe for which columns a
+   deployment considers sensitive. This also stays correct after
+   [#3485](https://github.com/MemberJunction/MJ/issues/3485) tiers metadata and restricted fields
+   stop shipping to clients at all. Used on both the read and write paths.
+
+4. **FLS applies to virtual entities** — uniformly, no special-casing.
+
+5. **Logging**: rejections only (predicate + save), at `LogDebug`. Output-projection stripping is
+   NOT logged — it happens per request on every restricted entity and would flood logs with no
+   added signal.
+
+### Corrections to the design below
+
+- **§1.1 migration path is WRONG as written.** It says `migrations/v5/…__v5.x.x__…`. Per
+  `migrations/CLAUDE.md` the folder must match the major version in the migration's own filename,
+  and new work targets the newest era. The migration shipped as
+  `migrations/v6/V202608051141__v6.1.x__Entity_Field_Permissions.sql`. The section also never
+  mentions the **required PostgreSQL counterpart** (`migrations-pg/v6/`), which
+  `scripts/check-pg-migration-parity.mjs` enforces as a CI gate via
+  `.github/workflows/pg-migrations.yml`. *(A counterpart was generated, then deleted on
+  instruction because PG generation is handled at build time — note this leaves the parity gate
+  failing until that build-time path is what CI runs.)*
+
+- **§2.6 placement is WRONG as written.** It says to apply cache-read projection in
+  `PostRunView`. On a cache HIT, `ProviderBase.RunView` returns directly out of `PreRunView` and
+  **`PostRunView` never runs** — so that placement would miss exactly the cross-user cache leak
+  §2.6 exists to close. As built, projection runs on **both** paths (`PreRunView` cache-hit return
+  and `PostRunView` cache-miss), single and batch.
+
+- **§2.1 places predicate validation in `ResolverBase`.** As built it sits at the **provider
+  layer** (`ProviderBase.PreRunView` / `PreRunViews`) instead, because every RunView funnels
+  through there — batch path, server-internal agents/actions under a restricted `contextUser`,
+  and the GraphQL resolver alike. One gate, no uncovered path.
+
+### As-built map
+
+| Concern | Location |
+|---|---|
+| Permission records + aggregation | `MJCore/src/generic/entityInfo.ts` — `EntityFieldPermissionInfo`, `EntityFieldInfo.GetUserFieldPermissions`, `IsUnrestrictableField`, `IsOnUnrestrictableEntity` |
+| Entity-level short-circuit | `EntityInfo.HasAnyFieldPermissions` (memoized; **every** enforcement point gates on this first) |
+| Per-request precompute | `EntityInfo.GetDeniedReadFields` / `GetDeniedUpdateFields` → `Set<string>` (lowercased). **Never call the per-field primitive inside a row loop** |
+| Predicate validation | `ProviderBase.AssertPredicatesRespectFieldSecurity` |
+| Identifier detection | `@memberjunction/sql-dialect` → `FindReferencedIdentifiers` |
+| Output projection | `ProviderBase.ApplyFieldSecurityProjection` (skips `entity_object` — see §2.4) |
+| GraphQL read boundary | `MJServer/src/generic/ResolverBase.ts` → `MapFieldNamesToCodeNames` |
+| Save guard | `BaseEntity.CheckFieldLevelUpdatePermissions` (UPDATE only; `CanCreate` unenforced) |
+| Save-time target guard | `MJCoreEntitiesServer/src/custom/MJEntityFieldPermissionEntityServer.server.ts` |
+| Tests | `MJCore/src/__tests__/fieldSecurity.enforcement.test.ts` (29), `SQLDialect/src/__tests__/identifierReferences.test.ts` (38), `MJCore/src/__tests__/entityFieldInfo.fieldPermissions.test.ts` (39) |
+
+### Identifier detection: why a regex, and why no dialect parameter
+
+`FindReferencedIdentifiers` lives in `sql-dialect` (zero-dep, already a dependency of every
+consumer, co-located with the `SQLDialect` drivers) — **not** MJGlobal, which has no SQL surface.
+
+- **Not a SQL parser.** `@memberjunction/sqlglot-ts` spawns a Python subprocess (unusable: MJCore
+  is browser-bundled, and this gate is synchronous on every RunView). `@memberjunction/sql-parser`
+  (node-sql-parser) *is* viable and more precise, but is dialect-*specific*, adds ~500KB+ to every
+  browser bundle (23MB `build/`, no subpath exports), and must fail open on input it cannot parse
+  — a parser-differential bypass. Verified empirically: `[Base Salary] > 100` parses under
+  `transactsql` and throws under `postgresql`.
+- **Direction matters.** It searches for each denied NAME in the fragment; it does NOT tokenize
+  the fragment and look tokens up. Tokenizing forces an identifier character class, and every
+  field name outside it silently becomes unmatchable — `Base Salary`, `Salary%`, `Salário` all
+  leaked through an earlier tokenizing version.
+- **No dialect parameter, deliberately.** Delimiters (`[x]` / `"x"` / `` `x` ``) are handled
+  without knowing the dialect because they aren't word characters; case-insensitive matching is a
+  strict superset of Postgres lower-folding, Oracle upper-folding, and SQL Server collations, so
+  it can never *miss*. An enum parameter is what would obstruct adding Oracle. If dialect-specific
+  handling is ever needed the seam belongs on the `SQLDialect` driver, with the caller (which
+  already knows its `PlatformKey`) passing a normalized form in.
+
+### Phase 2.5 (saved queries / RunQuery) — DEFERRED BY DECISION
+
+**Status: postponed deliberately, pending real-world FLS usage.** Do not implement §2.5 without
+revisiting this. Three findings drove the deferral:
+
+1. **The metadata a warning would rest on is heuristic.** `MJ: Query Fields` carries
+   `DetectionMethod` / `AutoDetectConfidenceScore` / `IsComputed`, and extraction is LLM-assisted
+   and best-effort (`extractAndSyncDataAsync` swallows failures and sets `UsesTemplate = false`).
+2. **Its weakness and the leak vector are the same thing.** Computed/aggregate columns
+   (`SELECT AVG(Salary) AS TeamMetric`) are both what defeats name-based stripping AND where
+   `SourceFieldName` is least reliable — so a warning can be silent on exactly the queries most
+   likely to leak, while reading to an admin as reassurance.
+3. **§2.5's "save-time warning" does not fit the actual save flow.** `MJQueryEntityServer.Save`
+   calls `super.Save()` FIRST and runs the extraction pipeline afterward, so Query Fields do not
+   exist yet at save time for a new or SQL-changed query. Any warning is necessarily
+   post-extraction, on an already-persisted record, and needs a delivery channel that outlives the
+   save call. There is no synchronous validation seam here.
+
+**What must remain true while deferred:** saved-query results are NOT FLS-filtered. This is a
+known, bounded gap — it must be stated plainly wherever FLS is described to administrators
+(release notes, Phase 4 admin UI), never implied to be covered. `RunQuery` performs no field-level
+filtering today.
+
+**Cheapest way to de-risk the eventual decision** (optional, decides no policy): build the Tier 2
+standing audit first — read-only, reports `(User, Query, Field)` overlaps, breaks nothing, and
+generates the evidence needed to choose between "documented trust boundary" and "execution gate"
+once real deployments have configured FLS.
+
+### Verified mechanics (for whoever picks this up)
+
+Confirmed against the generated ORM rather than assumed:
+
+- **`RunQuery` performs NO field-level filtering today.** Saved-query results are entirely
+  unfiltered by FLS. This is the largest remaining hole in the feature.
+- **`MJ: Query Fields`** carries `SourceEntityID` + `SourceFieldName` (not a direct `EntityFieldID`
+  FK), so the metadata join §2.5 assumes is possible — via `(EntityID, FieldName)` → `EntityField`
+  → its `FieldPermissions`.
+- **But that mapping is heuristic**: the same rows carry `DetectionMethod` and
+  `AutoDetectConfidenceScore`, plus `IsComputed` / `ComputationDescription`. So the resolution
+  driving any warning (or gate) is AI/heuristic-derived, not guaranteed.
+- **`MJ: Query Permissions`** is `QueryID` + `RoleID` — role granularity, matching §2.5's
+  "for each role granting run access" framing.
+
+The uncomfortable consequence, which §2.5 does not address: the heuristic weakness and the leak
+vector are *the same thing*. Computed/aggregate columns (`SELECT AVG(Salary) AS TeamMetric`) are
+both what defeats name-based stripping AND where `SourceFieldName` is least reliable — so a
+save-time warning built on that metadata can produce **false negatives on exactly the queries most
+likely to leak**, while reading as reassurance. See the open questions raised before building.
+
+### Known pre-existing failures in this tree (NOT caused by this work)
+
+- Integration `ai-providers.AIP1` — 2 Active LLM models have `DriverClass = 'CohereLLM'` but no
+  such `BaseLLM` class exists; the Cohere package registers `CohereReranker` under
+  `@RegisterClass(BaseReranker, 'CohereLLM')`, which looks like a copy-paste bug. Survives a full
+  clean install + rebuild.
+
+---
+
 ## Background
 
 A client asked how MJ and Skip handle row-level and column-level security, specifically for keeping sensitive data (e.g. compensation, donor giving, personnel records) from being broadly reportable. MJ currently supports entity-level CRUD permissions and row-level security (RLS) via SQL filter templates, but has **no field-level access control**. The only field-level feature today is encryption-at-rest (Encrypt/AllowDecryptInAPI), which obfuscates data but doesn't control visibility per role.
