@@ -12,4 +12,9 @@ Fixed by folding per-view pagination cursors into the batch fingerprint. This is
 
 **Also fixes `RunViewParams.Telemetry.Exempt` being silently ineffective for batch reads.** Exemption was threaded through the deprecated batch path but not the live one, so a caller who correctly marked an intentional repeat got warned anyway — with nothing to indicate their exemption had been dropped. Because of the delegation above, this also broke exemption for `BypassCache`/`AfterKey` single reads. A batch is exempt only when *every* view in it is exempt, since one telemetry event covers them all.
 
+Two hardening fixes that fell out of review:
+
+- The batch telemetry `Entities` array now records `''` for a view identified only by `ViewEntity` instead of dropping the entry, keeping it index-parallel with the per-view `Filters`/`OrderBys`/`StartRows`/`AfterKeys` arrays — previously such a view shifted every subsequent view's filter and cursor onto the wrong entity in the fingerprint.
+- The single-view fingerprint now applies the same `StartRow` normalization as the batch fingerprint (explicit `0` ≡ omitted), so a genuinely duplicated first-page read is detected regardless of how the caller spelled page 1.
+
 No data path changes — telemetry fingerprint construction and exemption plumbing only.
