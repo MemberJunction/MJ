@@ -374,6 +374,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.1.0-edge.0
         version: link:../../MJGlobal
+      '@memberjunction/templates':
+        specifier: 6.1.0-edge.0
+        version: link:../../Templates/engine
     devDependencies:
       '@types/node':
         specifier: 24.10.11

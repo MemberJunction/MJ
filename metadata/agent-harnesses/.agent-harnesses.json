@@ -22,7 +22,7 @@
       "CapabilitySettings": {
         "SessionResume": true,
         "MidTurnCancellation": true,
-        "StructuredOutput": true,
+        "StructuredOutput": false,
         "UsageReporting": true,
         "PermissionHooks": false,
         "McpClient": true,

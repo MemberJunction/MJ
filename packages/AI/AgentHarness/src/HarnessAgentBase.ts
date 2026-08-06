@@ -1,6 +1,7 @@
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
+import { TemplateEngineServer } from '@memberjunction/templates';
 import { AIPromptParams, AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { ChatResult, ModelUsage } from '@memberjunction/ai';
 import {
@@ -104,9 +105,10 @@ export class HarnessAgentBase extends BaseAgent {
             }
             this.turnIndex++;
 
-            const input = this.buildTurnInput(promptParams);
+            const isFirstTurn = this.turnIndex === 1;
+            const input = await this.buildTurnInput(promptParams, isFirstTurn);
             const turn = await this.runTurn(input);
-            const promptRun = await this.recordPromptRun(promptParams, turn, startTime);
+            const promptRun = await this.recordPromptRun(promptParams, turn, startTime, input);
 
             return this.buildPromptResult(turn, promptRun, startTime);
         } catch (e) {
@@ -196,6 +198,7 @@ export class HarnessAgentBase extends BaseAgent {
         promptParams: AIPromptParams,
         turn: HarnessTurnResult,
         startTime: Date,
+        input: string,
     ): Promise<MJAIPromptRunEntity | undefined> {
         try {
             const ids = await this.resolveAccountingIds(promptParams);
@@ -219,9 +222,23 @@ export class HarnessAgentBase extends BaseAgent {
             run.CompletedAt = new Date();
             run.Success = !turn.ErrorMessage;
             run.Status = turn.ErrorMessage ? 'Failed' : 'Completed';
+            // Messages/Result are what the run-detail UI renders. AIPromptRunner populates them as
+            // a matter of course; synthesizing this row by hand reproduced the ACCOUNTING fields and
+            // dropped the OBSERVABILITY ones, so every harness prompt step showed blank input and
+            // output while its token and cost numbers were correct.
+            run.Messages = input;
+            run.Result = turn.RawText;
             run.TokensPrompt = turn.InputTokens;
             run.TokensCompletion = turn.OutputTokens;
             run.TokensUsed = turn.InputTokens + turn.OutputTokens;
+            // The ROLLUP columns are what BaseAgent.calculateTokenStats actually sums — the non-rollup
+            // ones are ignored by it entirely. Setting only TokensUsed left every harness run
+            // reporting zero tokens while its cost was correct, which is a confusing half-truth: it
+            // looks like a free run rather than an unaccounted one. A harness turn has no nested
+            // child prompt runs, so the rollup equals the turn's own usage.
+            run.TokensPromptRollup = turn.InputTokens;
+            run.TokensCompletionRollup = turn.OutputTokens;
+            run.TokensUsedRollup = turn.InputTokens + turn.OutputTokens;
             if (turn.CostUsd !== undefined) {
                 run.TotalCost = turn.CostUsd;
             }
@@ -465,26 +482,115 @@ export class HarnessAgentBase extends BaseAgent {
     /**
      * The text handed to the harness for this turn.
      *
-     * Sends the WHOLE conversation, not just the latest message. The system message carries the
-     * turn-end JSON contract, so a harness given only the last user turn never learns it has to end
-     * with an envelope — it reasons correctly, does the work, and replies in prose, which
-     * `parseJSONResponse` then rejects. That failure looks like a confused model and is actually a
-     * truncated prompt, so it is worth being explicit about.
+     * ## Turn 1 carries the RENDERED system prompt — this is not optional
      *
-     * The contract is also restated at the end of every turn. Harnesses are conversational by
-     * disposition and drift back to prose over a multi-turn run; the Loop path has the same problem
-     * and solves it with retry feedback, which costs a turn each time. Restating is cheaper.
+     * The agent-type system prompt template holds the turn-end contract AND, critically, the
+     * `_OUTPUT_EXAMPLE` placeholder that shows the harness the exact JSON envelope shape. In the
+     * normal Loop path `AIPromptRunner` renders that template; a harness turn bypasses
+     * AIPromptRunner, so without rendering it here the harness never sees the schema at all.
+     *
+     * The failure that caused is worth recording, because it did not look like a missing prompt.
+     * The harness emitted well-formed JSON and simply GUESSED the vocabulary — `nextStep.type` came
+     * back as `complete`, then `respond`, then `undefined`, none of which are Loop step names. Five
+     * turns were burned while BaseAgent's retry feedback taught it the contract one rejection at a
+     * time, turning a one-turn question into a two-minute run. A model inventing plausible values
+     * for a schema it was never shown reads as a sloppy model; it is actually a missing prompt.
+     *
+     * Later turns send only the conversation: the harness has the contract from turn 1 and, where
+     * `SessionResume` is true, still has it in session context.
      */
-    private buildTurnInput(promptParams: AIPromptParams): string {
-        const messages = promptParams.conversationMessages ?? [];
-        const rendered = messages
+    private async buildTurnInput(promptParams: AIPromptParams, isFirstTurn: boolean): Promise<string> {
+        const conversation = (promptParams.conversationMessages ?? [])
             .map((m) => {
                 const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '');
                 return `[${m.role}]\n${content}`;
             })
             .join('\n\n');
 
-        return `${rendered}\n\n${TURN_END_CONTRACT}`;
+        const systemPrompt = isFirstTurn ? await this.renderSystemPrompt(promptParams) : '';
+        const contract = this.buildTurnEndContract(promptParams);
+        const parts = [systemPrompt, conversation, contract].filter((p) => p.trim().length > 0);
+        return parts.join('\n\n');
+    }
+
+    /**
+     * The turn-end contract, carrying the ACTUAL envelope schema.
+     *
+     * Deliberately does not depend on template rendering succeeding. The schema reaches the harness
+     * from `AIPrompt.OutputExample` directly, because the first attempt at this relied on the
+     * agent-type template rendering `_OUTPUT_EXAMPLE` — and when that silently fell back to raw
+     * template text, the harness received the literal string `{{ _OUTPUT_EXAMPLE }}` and was no
+     * better off than before. It then invented step names (`complete`, `result`, `undefined`) across
+     * five wasted turns.
+     *
+     * The step vocabulary is listed explicitly too. A harness that knows the SHAPE but guesses the
+     * VALUES still fails validation, and that is precisely the failure mode observed: well-formed
+     * JSON, invented `nextStep.type`.
+     */
+    private buildTurnEndContract(promptParams: AIPromptParams): string {
+        const example = promptParams.prompt?.OutputExample?.trim();
+        const lines = [
+            '---',
+            'END OF TURN REQUIREMENT (this overrides any inclination to reply conversationally):',
+            'Respond with ONLY a single raw JSON object. No prose, no markdown fences, no narration',
+            'before or after.',
+            '',
+            'To FINISH and return a final answer:',
+            '  {"taskComplete": true, "message": "<your answer>", "reasoning": "<why you are done>"}',
+            '',
+            'To CONTINUE, set taskComplete false and supply nextStep. The field is nextStep.TYPE',
+            '(not "step"), and it must be exactly one of:',
+            '  Actions | Sub-Agent | Chat | Retry | ClientTools | ForEach | While | Pipeline | Skill | Plan',
+            'There is no "Success" or "complete" type — completion is taskComplete: true, above.',
+        ];
+        if (example) {
+            lines.push('', 'Full response shape:', example);
+        }
+        return lines.join('\n');
+    }
+
+    /**
+     * Renders the agent type's system prompt through the same template engine AIPromptRunner uses,
+     * so the harness receives exactly what a Loop model would — including the output example.
+     *
+     * Falls back to the raw template text if rendering fails. A partially-substituted prompt still
+     * carries the envelope shape and lets the run proceed; throwing here would fail a run over a
+     * template warning, which is the worse trade.
+     */
+    private async renderSystemPrompt(promptParams: AIPromptParams): Promise<string> {
+        const prompt = promptParams.prompt;
+        if (!prompt) {
+            return '';
+        }
+        try {
+            await TemplateEngineServer.Instance.Config(false, promptParams.contextUser);
+            const template = TemplateEngineServer.Instance.FindTemplate(prompt.TemplateID ?? '');
+            const content = template?.GetHighestPriorityContent();
+            if (template && content) {
+                const rendered = await TemplateEngineServer.Instance.RenderTemplate(
+                    template,
+                    content,
+                    { ...(promptParams.data ?? {}), ...(promptParams.templateData ?? {}) },
+                    true,
+                    true,
+                );
+                if (rendered.Success && rendered.Output?.trim()) {
+                    return rendered.Output;
+                }
+                LogError(`Harness system prompt render returned no output: ${rendered.Message ?? 'unknown'}`);
+            }
+        } catch (e) {
+            LogError(`Harness system prompt render failed, falling back to raw template: ${describeError(e)}`);
+        }
+        // Returning the RAW template would hand the harness literal `{{ placeholder }}` strings,
+        // which is worse than sending nothing: it looks like a prompt, reads as noise, and the
+        // turn-end contract below is then the only thing carrying real information. Return empty
+        // and let the explicit contract do the work.
+        LogError(
+            'Harness system prompt could not be rendered; proceeding with the explicit turn-end ' +
+                'contract only. The harness will not see agent-specific instructions this run.',
+        );
+        return '';
     }
 
     /** Shapes a harness turn as the prompt result the rest of BaseAgent expects. */

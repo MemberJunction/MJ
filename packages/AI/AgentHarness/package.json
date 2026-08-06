@@ -21,7 +21,8 @@
     "@memberjunction/ai-core-plus": "6.1.0-edge.0",
     "@memberjunction/core": "6.1.0-edge.0",
     "@memberjunction/core-entities": "6.1.0-edge.0",
-    "@memberjunction/global": "6.1.0-edge.0"
+    "@memberjunction/global": "6.1.0-edge.0",
+    "@memberjunction/templates": "6.1.0-edge.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

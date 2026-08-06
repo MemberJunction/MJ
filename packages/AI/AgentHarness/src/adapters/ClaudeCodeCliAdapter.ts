@@ -43,7 +43,12 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
             SessionResume: true,
             // Killing the process ends the turn immediately — the executor owns the process handle.
             MidTurnCancellation: true,
-            StructuredOutput: true,
+            // FALSE, deliberately. `--output-format stream-json` structures the TRANSPORT, not the
+            // model's content — nothing constrains what Claude actually writes inside a turn. Claiming
+            // true here told the runtime it need not compensate, and the harness spent five turns
+            // inventing step names (`complete`, `respond`, `undefined`) before BaseAgent's retry
+            // feedback taught it the Loop vocabulary. Same distinction PiAdapter already documents.
+            StructuredOutput: false,
             UsageReporting: true,
             // Claude Code CAN intercept permissions, but only through an MCP permission-prompt tool
             // that MJ has not stood up yet. Reported false until that exists: claiming interception
