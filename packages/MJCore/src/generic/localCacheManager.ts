@@ -1579,9 +1579,23 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *   same entity+filter, so they must never share a cache entry. When empty/undefined (the
      *   common case — users with no RLS filter), the fingerprint is byte-for-byte identical to the
      *   pre-RLS format so normal cache sharing is preserved and no existing entries are invalidated.
+     * @param flsDeniedFieldsKey - Canonical key of the user's field-security denied-READ set on this
+     *   entity (lowercased field names, sorted, comma-joined — what
+     *   `ProviderBase.ComputeRunViewFLSDeniedKey` produces). Must participate for the same reason as
+     *   `rlsWhereClause`, but for COLUMNS instead of rows: a field-restricted user's queries are
+     *   widened to their ALLOWED column set (not all columns), so their cached rows are narrower
+     *   than an unrestricted user's — the two must never share a slot in either direction. Keyed by
+     *   the DENIED set (not the allowed set) deliberately: it is precomputed per request, an empty
+     *   set appends no segment (unrestricted users and non-FLS entities keep byte-identical shared
+     *   fingerprints), and it is stable under additive schema change where an allowed-set key would
+     *   churn for every user whenever any column is added. A permission change produces a new hash →
+     *   fresh slot; slots keyed to the old hash strand until eviction (memory cost, not a leak).
+     * @param datasetSegment - Namespace for dataset-item slots (see the `ds:` append below): keeps
+     *   `GetDatasetByName` item caching from colliding with a plain unfiltered read of the same
+     *   entity. Appended only when supplied, so ordinary reads keep their pre-existing key.
      * @returns A unique, human-readable fingerprint string
      */
-    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string, datasetSegment?: string): string {
+    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string, datasetSegment?: string, flsDeniedFieldsKey?: string): string {
         const entity = params.EntityName?.trim() || 'Unknown';
         const rawFilter = params.ExtraFilter;
         const filter = (typeof rawFilter === 'string' ? rawFilter : rawFilter ? JSON.stringify(rawFilter) : '').trim();
@@ -1665,6 +1679,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const rls = (rlsWhereClause ?? '').trim();
         if (rls.length > 0) {
             parts.push(`rls:${this.simpleHash(rls)}`);
+        }
+
+        // Field-Level-Security segment — the column counterpart of `rls:`. A field-restricted
+        // user's cache-eligible queries fetch only their ALLOWED columns, so their slots hold
+        // narrower rows than an unrestricted user's; sharing a slot in either direction would
+        // serve someone rows with missing columns (or, without the read-time projection, extra
+        // ones). Appended ONLY when the denied set is non-empty, so unrestricted users and
+        // non-FLS entities keep byte-identical fingerprints and shared slots (the rls: rule).
+        const fls = (flsDeniedFieldsKey ?? '').trim();
+        if (fls.length > 0) {
+            parts.push(`fls:${this.simpleHash(fls)}`);
         }
 
         // Stored-view identity. A saved view's WhereClause/OrderBy live on the view, not in
