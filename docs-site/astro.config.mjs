@@ -1,4 +1,7 @@
 // @ts-check
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import { remarkMermaidToHtml } from './scripts/lib/remark-mermaid.mjs';
@@ -14,6 +17,21 @@ import { remarkMermaidToHtml } from './scripts/lib/remark-mermaid.mjs';
 const base = normalizeBase(process.env.DOCS_BASE ?? '/');
 const site = process.env.DOCS_SITE ?? 'https://memberjunction.github.io';
 const apiHref = base === '/' ? '/api/' : `${base}/api/`;
+
+/**
+ * Upgrade guides are era-specific: each sidebar entry appears only when its
+ * source doc exists at the CONTENT root this build ingests (the repo the
+ * docs-site tooling is overlaid into). lts/5 has no UPGRADE-v6.0.md, so the
+ * v5 site gets only "Upgrading to v5" — hardcoding the slugs would break its
+ * build on the missing page. Newest first.
+ */
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const upgradeItems = [
+  { label: 'Upgrading to v6', slug: 'upgrade-v6', src: 'UPGRADE-v6.0.md' },
+  { label: 'Upgrading to v5', slug: 'upgrade-v5', src: 'UPGRADE-v5.0.md' },
+]
+  .filter((doc) => existsSync(path.join(REPO_ROOT, doc.src)))
+  .map(({ label, slug }) => ({ label, slug }));
 
 export default defineConfig({
   site,
@@ -46,7 +64,7 @@ export default defineConfig({
           items: [
             { label: 'What is MemberJunction?', slug: 'overview' },
             { label: 'Getting Started', slug: 'getting-started' },
-            { label: 'Upgrading to v5', slug: 'upgrade-v5' },
+            ...upgradeItems,
           ],
         },
         { label: 'Release Notes', collapsed: true, autogenerate: { directory: 'releases', collapsed: true } },
