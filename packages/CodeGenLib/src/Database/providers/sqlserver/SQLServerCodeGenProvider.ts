@@ -12,7 +12,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
 import { configInfo, dbDatabase, mj_core_schema } from '../../../Config/config';
 import { MSSQLConnection, getSqlConfig } from '../../../Config/db-connection';
-import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
+import { logError, logStatus, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
 import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerCodeGenConnection } from './SQLServerCodeGenConnection';
@@ -692,21 +692,120 @@ GO
 
     // ─── PERMISSIONS ─────────────────────────────────────────────────────
 
+    /**
+     * B3: roles with a blank `SQLName` are app-tier-only BY DESIGN (decision D3a) — the grant
+     * emitters skip them, and this makes the skip visible: one INFO line per role per run, so
+     * "why doesn't my role work for direct SQL?" is answerable without reading provider source.
+     */
+    private _appTierOnlyRolesLogged = new Set<string>();
+    private logAppTierOnlyRoleSkip(roleName: string | null | undefined): void {
+        const name = (roleName ?? '').trim();
+        if (!name || this._appTierOnlyRolesLogged.has(name)) return;
+        this._appTierOnlyRolesLogged.add(name);
+        logStatus(`   ℹ️  Role '${name}' is app-tier-only (no SQLName); no DB grants emitted.`);
+    }
+
+    /** Service-protected DENY skips are warned once per role per run (see generateFieldSecurityDenies). */
+    private _serviceProtectedDenySkipsWarned = new Set<string>();
+
+    /**
+     * Reconciliation preamble (decision D7): REVOKE every live catalog permission entry on
+     * this object held by a MANAGED role, so the GRANTs/DENYs that follow re-assert exactly
+     * the current desired state. This is what makes REMOVAL take effect — deleting an
+     * `EntityPermission` or `EntityFieldPermission` row stops the assert, and the standing
+     * REVOKE clears the stale grant/deny on the next run (the assert-only model never revoked
+     * anything; a deleted Deny row would otherwise block direct users forever). Removing a
+     * DENY is also spelled REVOKE. Grants to principals outside the managed scope are not in
+     * the snapshot and are never touched. Empty when no run context (e.g. catalog unreadable)
+     * — emission degrades to the historical assert-only behavior.
+     */
+    private generateManagedPermissionRevokes(schemaName: string, objectName: string): string {
+        const context = this._fieldSecurityRunContext;
+        if (!context) return '';
+        const entries = context.CatalogPermissions.get(`${schemaName}.${objectName}`.toLowerCase());
+        if (!entries || entries.length === 0) return '';
+        let sOutput = '';
+        for (const entry of entries) {
+            const column = entry.ColumnName ? ` ([${entry.ColumnName}])` : '';
+            sOutput += `\nREVOKE ${entry.PermissionName}${column} ON [${schemaName}].[${objectName}] FROM [${entry.RoleName}]`;
+        }
+        return sOutput;
+    }
+
+    /**
+     * Field-level security column DENYs (decisions D1a/D2): for each role holding an explicit
+     * `Type='Deny'` + `CanRead` row on this entity's fields, emit
+     * `DENY SELECT ([col], ...) ON [schema].[BaseView] TO [role]` so a SQL user connecting
+     * DIRECTLY with that role cannot read the denied columns. Constraints, all decided:
+     *  - **Explicit Deny rows only** — never synthesized from absent Allows. The emitted
+     *    pattern stays object-level GRANT + column-level DENY, avoiding SQL Server's
+     *    column-GRANT-overrides-object-DENY quirk entirely.
+     *  - **Custom roles only** — the orchestrator's run context excludes the standard
+     *    UI/Developer/Integration roles from `RoleSQLNameByID`, so Deny rows against them are
+     *    app-tier-enforced only (MJ_Connect keeps its cdp_* memberships).
+     *  - **Service-login backstop**: a role any protected principal is a member of is skipped
+     *    with a prominent warning — a DENY there would strip the column from the API service
+     *    login itself (DENY beats every sibling role's GRANT).
+     *  - **Unrestrictable targets** (PKs, `__mj_` columns, the security/identity entities) are
+     *    filtered defensively even though save-time guards should make such rows impossible.
+     */
+    private generateFieldSecurityDenies(entity: EntityInfo): string {
+        const context = this._fieldSecurityRunContext;
+        if (!context) return '';
+        const deniedColumnsByRole = new Map<string, string[]>();
+        for (const field of entity.Fields) {
+            if (!field.HasFieldPermissions) continue;
+            if (field.IsUnrestrictableField || field.IsOnUnrestrictableEntity) continue; // defensive — save-time guards should prevent these rows
+            for (const fp of field.FieldPermissions) {
+                if ((fp.Type || 'Allow').trim().toLowerCase() !== 'deny' || !fp.CanRead) continue;
+                const sqlName = context.RoleSQLNameByID.get((fp.RoleID ?? '').trim().toLowerCase());
+                if (!sqlName) continue; // blank SQLName (app-tier-only) or standard role (never DB-mirrored)
+                if (context.ServiceProtectedRoleSQLNames.has(sqlName.trim().toLowerCase())) {
+                    if (!this._serviceProtectedDenySkipsWarned.has(sqlName)) {
+                        this._serviceProtectedDenySkipsWarned.add(sqlName);
+                        logWarning(
+                            `   ⚠️  SKIPPED field-security DENY to role '${sqlName}': a protected service login is a member of this role. ` +
+                            `A column DENY here would strip the column from the service login itself (DENY beats every sibling GRANT) and break the API for all users. ` +
+                            `Remove the service login from the role to enable DB-tier enforcement; app-tier enforcement is unaffected.`
+                        );
+                    }
+                    continue;
+                }
+                const columns = deniedColumnsByRole.get(sqlName) ?? [];
+                if (!columns.includes(field.Name)) columns.push(field.Name);
+                deniedColumnsByRole.set(sqlName, columns);
+            }
+        }
+        let sOutput = '';
+        for (const [sqlName, columns] of [...deniedColumnsByRole.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+            sOutput += `\nDENY SELECT (${columns.map(c => `[${c}]`).join(', ')}) ON [${entity.SchemaName}].[${entity.BaseView}] TO [${sqlName}]`;
+        }
+        return sOutput;
+    }
+
     /** @inheritdoc */
     generateViewPermissions(entity: EntityInfo): string {
         let sOutput = '';
         for (const ep of entity.Permissions) {
             if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
                 sOutput += (sOutput === '' ? `GRANT SELECT ON [${entity.SchemaName}].[${entity.BaseView}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
+            } else {
+                this.logAppTierOnlyRoleSkip(ep.Role);
             }
         }
-        return (sOutput === '' ? '' : '\n') + sOutput;
+        // Order matters: wipe (REVOKE within the managed scope) → assert grants → assert
+        // field-security DENYs. The whole body executes every run via applyPermissions.
+        const revokes = this.generateManagedPermissionRevokes(entity.SchemaName, entity.BaseView);
+        const grants = (sOutput === '' ? '' : '\n') + sOutput;
+        const denies = this.generateFieldSecurityDenies(entity);
+        return revokes + grants + denies;
     }
 
     /**
      * Generates `GRANT EXECUTE` SQL for a CRUD stored procedure, granting permission only
      * to roles whose `EntityPermission` record allows the specified CRUD operation type.
-     * Produces a single comma-separated `GRANT EXECUTE ON ... TO [role1], [role2]` statement.
+     * Produces a single comma-separated `GRANT EXECUTE ON ... TO [role1], [role2]` statement,
+     * preceded by the managed-scope reconciliation REVOKEs (see generateManagedPermissionRevokes).
      */
     generateCRUDPermissions(entity: EntityInfo, routineName: string, type: CRUDType): string {
         let sOutput = '';
@@ -720,9 +819,12 @@ GO
                 if (hasPermission) {
                     sOutput += (sOutput === '' ? `GRANT EXECUTE ON [${entity.SchemaName}].[${routineName}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
                 }
+            } else {
+                this.logAppTierOnlyRoleSkip(ep.Role);
             }
         }
-        return (sOutput === '' ? '' : '\n') + sOutput;
+        const revokes = this.generateManagedPermissionRevokes(entity.SchemaName, routineName);
+        return revokes + (sOutput === '' ? '' : '\n') + sOutput;
     }
 
     /** @inheritdoc */
@@ -732,10 +834,13 @@ GO
             if (ep.CanRead) {
                 if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
                     sOutput += (sOutput === '' ? `GRANT SELECT ON [${entity.SchemaName}].[${functionName}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
+                } else {
+                    this.logAppTierOnlyRoleSkip(ep.Role);
                 }
             }
         }
-        return (sOutput === '' ? '' : '\n') + sOutput;
+        const revokes = this.generateManagedPermissionRevokes(entity.SchemaName, functionName);
+        return revokes + (sOutput === '' ? '' : '\n') + sOutput;
     }
 
     // ─── CASCADE DELETES ─────────────────────────────────────────────────
