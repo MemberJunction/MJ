@@ -2234,14 +2234,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     // ========================================================================
 
     /**
-     * Rejects a RunView whose `ExtraFilter`, `OrderBy`, or `UserSearchString` references a field
-     * the user cannot read.
+     * Rejects a RunView whose `ExtraFilter`, `OrderBy`, or `Aggregates` expressions reference a
+     * field the user cannot read.
      *
      * Output projection alone is security theater. A user denied `Salary` can send
      * `ExtraFilter: "Salary > 200000"` or `OrderBy: "Salary DESC"` and reconstruct the values
      * from which rows come back and in what order — the column never appears in a result, so
-     * every output-stripping point reports "secure." Predicate validation is a first-class
-     * enforcement point, not a belt-and-braces afterthought.
+     * every output-stripping point reports "secure." Aggregates are the same channel in a purer
+     * form: `Aggregates: [{expression: 'MIN(Salary)'}]` under a narrow filter returns a denied
+     * field's exact values directly. Predicate validation is a first-class enforcement point,
+     * not a belt-and-braces afterthought. Together these cover every caller-authored expression
+     * surface (`UserSearchString` is handled by excluding denied fields from the searched set,
+     * not by rejection — see below).
      *
      * Lives at the provider layer rather than in the GraphQL resolver (where the plan first
      * placed it) because every RunView funnels through here — the batch path, server-internal
@@ -2272,7 +2276,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         }
 
-        for (const clause of [params.ExtraFilter, params.OrderBy]) {
+        // Aliases are deliberately not scanned — an alias names the output column, no data
+        // flows through it.
+        const clauses = [
+            params.ExtraFilter,
+            params.OrderBy,
+            ...(params.Aggregates ?? []).map(a => a?.expression),
+        ];
+        for (const clause of clauses) {
             if (typeof clause !== 'string' || clause.length === 0) {
                 continue;
             }

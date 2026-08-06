@@ -276,6 +276,100 @@ describe('Predicate validation (ExtraFilter / OrderBy)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 2b. Predicate validation — Aggregates
+//
+// Aggregate expressions are caller-authored SQL just like ExtraFilter/OrderBy;
+// `MIN(Salary)` under a narrow filter returns a denied field's exact values
+// directly, so the same gate covers them.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Predicate validation (Aggregates)', () => {
+    it('rejects a bare denied-field reference in an aggregate expression', () => {
+        const provider = setupProvider();
+        expect(() => provider.assertPredicates(
+            viewParams({ Aggregates: [{ expression: 'Salary' }] }),
+            buildUser([INTERN_ROLE_ID])
+        )).toThrow(/does not exist on entity 'Employees' or you do not have access to it/);
+    });
+
+    it('rejects a bracketed denied-field reference', () => {
+        const provider = setupProvider();
+        expect(() => provider.assertPredicates(
+            viewParams({ Aggregates: [{ expression: 'MIN([Salary])' }] }),
+            buildUser([INTERN_ROLE_ID])
+        )).toThrow(/Salary/);
+    });
+
+    it('rejects a function-wrapped denied-field reference — the MIN/MAX reconstruction hole', () => {
+        const provider = setupProvider();
+        expect(() => provider.assertPredicates(
+            viewParams({ Aggregates: [{ expression: 'MIN(Salary)' }] }),
+            buildUser([INTERN_ROLE_ID])
+        )).toThrow(/Salary/);
+    });
+
+    it('rejects a denied field even when the expression is aliased to an innocuous name', () => {
+        const provider = setupProvider();
+        expect(() => provider.assertPredicates(
+            viewParams({ Aggregates: [{ expression: 'AVG(Salary)', alias: 'TeamMetric' }] }),
+            buildUser([INTERN_ROLE_ID])
+        )).toThrow(/Salary/);
+    });
+
+    it('rejects when ANY aggregate in the list references a denied field', () => {
+        const provider = setupProvider();
+        expect(() => provider.assertPredicates(
+            viewParams({ Aggregates: [{ expression: 'COUNT(*)' }, { expression: 'MAX(Salary)' }] }),
+            buildUser([INTERN_ROLE_ID])
+        )).toThrow(/Salary/);
+    });
+
+    it('uses the same ambiguous wording as the filter gate', () => {
+        const provider = setupProvider();
+        let message = '';
+        try {
+            provider.assertPredicates(viewParams({ Aggregates: [{ expression: 'MIN(Salary)' }] }), buildUser([INTERN_ROLE_ID]));
+        } catch (e: unknown) {
+            message = e instanceof Error ? e.message : String(e);
+        }
+        expect(message).toContain('or you do not have access to it');
+        expect(message).not.toMatch(/restricted|denied|permission|forbidden/i);
+    });
+
+    it('allows aggregates that reference no denied field', () => {
+        const provider = setupProvider();
+        expect(() => provider.assertPredicates(
+            viewParams({ Aggregates: [{ expression: 'COUNT(*)' }, { expression: 'MAX(Name)' }] }),
+            buildUser([INTERN_ROLE_ID])
+        )).not.toThrow();
+    });
+
+    it('allows a user who HOLDS the granting role to aggregate the secured field', () => {
+        const provider = setupProvider();
+        expect(() => provider.assertPredicates(
+            viewParams({ Aggregates: [{ expression: 'AVG(Salary)' }] }),
+            buildUser([HR_ROLE_ID])
+        )).not.toThrow();
+    });
+
+    it('is a no-op when the entity has no field security configured', () => {
+        const provider = setupProvider([]);
+        expect(() => provider.assertPredicates(
+            viewParams({ Aggregates: [{ expression: 'MIN(Salary)' }] }),
+            buildUser([INTERN_ROLE_ID])
+        )).not.toThrow();
+    });
+
+    it('does not reject an aggregate over a field whose name merely contains the denied name', () => {
+        const provider = setupProvider();
+        expect(() => provider.assertPredicates(
+            viewParams({ Aggregates: [{ expression: 'MAX(SalaryBand)' }] }),
+            buildUser([INTERN_ROLE_ID])
+        )).not.toThrow();
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 3. Output projection
 // ═══════════════════════════════════════════════════════════════════════════
 

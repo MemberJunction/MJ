@@ -3600,10 +3600,15 @@ export abstract class BaseEntity<T = unknown> {
      * in this release (see `EntityFieldPermissionInfo.CanCreate`) — the semantics for a NOT NULL
      * column a user cannot populate are unsettled, and guessing would break inserts.
      *
-     * Note this checks DIRTY fields only, which is correct precisely because nothing ever nulls
-     * a restricted value in memory: a field the user cannot see was never loaded as null, so it
-     * is not dirty, so an unrelated edit saves cleanly and the restricted column keeps its
-     * stored value.
+     * Note this checks DIRTY fields only. CLIENT-side that is safe on its own: nothing ever
+     * nulls a restricted value in memory, so a field the user cannot see was never loaded as
+     * null, is not dirty, and an unrelated edit saves cleanly with the restricted column
+     * keeping its stored value. SERVER-side it is safe only in combination with the resolver's
+     * denied-read strip: `ResolverBase.UpdateRecord` applies client-sent values via `SetMany`,
+     * which WOULD make a read-denied field genuinely dirty with a client-fabricated value —
+     * so the resolver strips denied-read fields from the client payload before applying it
+     * (`StripDeniedReadFieldsFromClientInput`), restoring the "never dirty" premise this
+     * dirty-fields-only check rests on.
      */
     protected CheckFieldLevelUpdatePermissions(): void {
         if (!this.IsSaved) {

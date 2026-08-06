@@ -1283,8 +1283,17 @@ export class ResolverBase {
         }
       });
 
-      if (entityInfo.TrackRecordChanges || !input.OldValues___) {
-        // We get here because EITHER the entity tracks record changes OR the client did not provide OldValues, so we need to load the old values from the DB
+      // Field-level security: any value the client sends for a field it cannot READ is
+      // fabricated by construction (the field was stripped from every payload the client ever
+      // received), so strip such values before anything applies them. When any field is
+      // denied we also force the truth-load branch below — client OldValues for denied fields
+      // are equally fabricated, so hydrating from them (the no-DB-load path) would write
+      // fabricated state into the denied columns on save.
+      const hasDeniedReadFields = this.StripDeniedReadFieldsFromClientInput(entityInfo, userInfo, input, clientNewValues);
+
+      if (entityInfo.TrackRecordChanges || !input.OldValues___ || hasDeniedReadFields) {
+        // We get here because the entity tracks record changes, OR the client did not provide OldValues,
+        // OR field-level security denies this user read on some field — in every case we need the true old values from the DB
         const cKey = new CompositeKey(
           entityInfo.PrimaryKeys.map((pk) => {
             return {
@@ -1347,6 +1356,68 @@ export class ResolverBase {
       });
   }
   
+  /**
+   * Field-level security guard for the update path: removes client-sent values for fields the
+   * user cannot READ, from both the new values and the OldValues___ blob.
+   *
+   * A read-denied field is stripped from every payload the client ever receives (RunView
+   * projection, MapFieldNamesToCodeNames), so whatever the client sends back for it is a
+   * fabrication — the transport's default / 0 / '' / null — never a value the user saw.
+   * Applying it via SetMany would either overwrite real data silently (read-denied +
+   * update-allowed) or make the field spuriously dirty and fail the save-time update guard on
+   * edits to UNRELATED fields (read-denied + update-denied). Stripping is silent narrowing,
+   * consistent with the output projection the client already experiences; rejection would
+   * leak nothing useful and break generic clients that round-trip whole records.
+   *
+   * Returns true when the user has a non-empty denied-read set on this entity. The caller
+   * must then hydrate the entity from the DATABASE (never from client OldValues), so denied
+   * fields hold true values that the stripped SetMany leaves untouched.
+   */
+  protected StripDeniedReadFieldsFromClientInput(
+    entityInfo: EntityInfo,
+    userInfo: UserInfo,
+    input: { OldValues___?: Array<{ Key: string; Value: unknown }> } & Record<string, unknown>,
+    clientNewValues: Record<string, unknown>
+  ): boolean {
+    if (!entityInfo.HasAnyFieldPermissions || !userInfo) {
+      return false;
+    }
+    const deniedNames = entityInfo.GetDeniedReadFields(userInfo);
+    if (deniedNames.size === 0) {
+      return false;
+    }
+
+    // Input keys are entity CodeNames (post ReverseMapInputFieldNames); the denied set holds
+    // lowercased field Names — bridge via the field metadata once.
+    const deniedCodeNames = new Set<string>();
+    for (const field of entityInfo.Fields) {
+      if (deniedNames.has(field.Name.trim().toLowerCase())) {
+        deniedCodeNames.add(field.CodeName.trim().toLowerCase());
+      }
+    }
+
+    const stripped: string[] = [];
+    for (const key of Object.keys(clientNewValues)) {
+      if (deniedCodeNames.has(key.trim().toLowerCase())) {
+        delete clientNewValues[key];
+        delete input[key];
+        stripped.push(key);
+      }
+    }
+    if (Array.isArray(input.OldValues___)) {
+      input.OldValues___ = input.OldValues___.filter(
+        (item) => !deniedCodeNames.has(String(item.Key).trim().toLowerCase())
+      );
+    }
+    if (stripped.length > 0) {
+      LogDebug(
+        `[FieldSecurity] UpdateRecord on '${entityInfo.Name}' for user ${userInfo.Email}: ` +
+          `stripped client-sent value(s) for denied-read field(s) ${stripped.join(', ')}`
+      );
+    }
+    return true;
+  }
+
   /**
    * This routine compares the OldValues property in the input object to the values in the DB that we just loaded. If there are differences, we need to check to see if the client
    * is trying to update any of those fields (e.g. overlap). If there is overlap, we throw an error. If there is no overlap, we can proceed with the update even if the DB Values
