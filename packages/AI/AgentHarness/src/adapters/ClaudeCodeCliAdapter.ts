@@ -91,7 +91,12 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
         if (isFirstTurn && this.systemPrompt) {
             args.push('--append-system-prompt', this.systemPrompt);
         }
-        if (!isFirstTurn && this.sessionId) {
+        // Pass --resume when continuing WITHIN a run (turn 2+) OR when continuing a PRIOR run's
+        // session on turn 1. Gating on `!isFirstTurn` alone silently defeated cross-run resume: the
+        // session id was looked up and assigned, the log said "Resuming...", and the flag was never
+        // actually passed — so Claude started cold and MapEvent overwrote the id with the new one.
+        // The run then recorded a different session than the one it claimed to resume.
+        if (this.sessionId && (!isFirstTurn || this.didResume)) {
             args.push('--resume', this.sessionId);
         }
         if (this.config?.Model) {

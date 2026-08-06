@@ -31,14 +31,14 @@
       },
       "Status": "Inactive",
       "AIModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5",
-      "DefaultModel": "claude-sonnet-4-5"
+      "DefaultModel": "claude-sonnet-5"
     },
     "primaryKey": {
       "ID": "454E8374-BF0F-447F-99A5-125FDE37DE7A"
     },
     "sync": {
-      "lastModified": "2026-08-06T15:47:49.319Z",
-      "checksum": "9f1893979a4f9e7e4ce7e0758dafae77fc376dd52d61b50e30572e77b82cab3f"
+      "lastModified": "2026-08-06T19:52:25.674Z",
+      "checksum": "0b982b611139e81070441deab574c8b98060e730072484beb90b4ef9556527a9"
     }
   },
   {
