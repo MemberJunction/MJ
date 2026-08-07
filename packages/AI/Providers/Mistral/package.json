@@ -24,6 +24,7 @@
     "@memberjunction/ai": "6.1.0-edge.0",
     "@memberjunction/global": "6.1.0-edge.0",
     "@mistralai/mistralai": "^1.14.0",
+    "axios": "^1.13.4",
     "axios-retry": "4.5.0"
   },
   "repository": {
