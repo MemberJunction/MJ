@@ -210,6 +210,110 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
             }
         });
     });
+
+    // Type-faithful binding: a scalar value is bound AS ITS DECLARED TYPE so the materialized read matches the
+    // live path's typed literal, instead of a raw string the DB implicitly coerces (which can error on PG or
+    // silently match different rows on SQL Server). Unconvertible values fail closed → live.
+    describe('type-faithful scalar binding (paramTypes)', () => {
+        it('number: a (trimmed) string binds as a JS number, not the raw string', () => {
+            const plan = build({
+                ...base,
+                spec: [{ column: 'ChapterID', operator: '=', paramName: 'chapterId', kind: 'scalar' }],
+                paramValues: { chapterId: ' 42 ' },
+                paramTypes: { chapterId: 'number' },
+                isPostgres: false,
+            });
+            expect(plan).not.toBeNull();
+            expect(plan!.parameters).toEqual([42]);
+        });
+
+        it('number: a non-numeric value → null (live, never a wrong-rows read)', () => {
+            expect(build({
+                ...base,
+                spec: [{ column: 'ChapterID', operator: '=', paramName: 'chapterId', kind: 'scalar' }],
+                paramValues: { chapterId: 'not-a-number' },
+                paramTypes: { chapterId: 'number' },
+                isPostgres: false,
+            })).toBeNull();
+        });
+
+        it('boolean (SQL Server): live truthiness — ONLY "true" is truthy; binds BIT 1/0; never refuses', () => {
+            // Must match the live path (queryprocessor validateParameters): String(v).toLowerCase() === 'true'.
+            // Critically, "1" is NOT truthy to live → binds 0. (Guards against the earlier inverted '1'→true bug.)
+            for (const [v, expected] of [['true', 1], ['TRUE', 1], ['false', 0], ['1', 0], ['0', 0], ['maybe', 0]] as const) {
+                const plan = build({
+                    ...base,
+                    spec: [{ column: 'Status', operator: '=', paramName: 'flag', kind: 'scalar' }],
+                    paramValues: { flag: v },
+                    paramTypes: { flag: 'boolean' },
+                    isPostgres: false,
+                });
+                expect(plan!.parameters).toEqual([expected]);
+            }
+        });
+
+        it('boolean (PostgreSQL): binds a native boolean; "1" is false (matches live, not truthy)', () => {
+            const mk = (flag: string, isPostgres: boolean) => build({ ...base, spec: [{ column: 'Status', operator: '=', paramName: 'flag', kind: 'scalar' }], paramValues: { flag }, paramTypes: { flag: 'boolean' }, isPostgres });
+            expect(mk('true', true)!.parameters).toEqual([true]);
+            expect(mk('1', true)!.parameters).toEqual([false]);
+        });
+
+        it('date: binds the UTC ISO string (live\'s new Date(v).toISOString()), NOT the naive input', () => {
+            // Explicit-offset input → deterministic UTC shift regardless of the test runner\'s timezone. Binding the
+            // naive input would fail this — which is the divergence bug this locks out.
+            const plan = build({
+                ...base,
+                spec: [{ column: 'Status', operator: '>=', paramName: 'since', kind: 'scalar' }],
+                paramValues: { since: '2026-01-15T00:00:00+05:00' },
+                paramTypes: { since: 'date' },
+                isPostgres: false,
+            });
+            expect(plan!.parameters).toEqual(['2026-01-14T19:00:00.000Z']);
+            expect(typeof plan!.parameters[0]).toBe('string');
+        });
+
+        it('date: an unparseable value → null (live)', () => {
+            expect(build({
+                ...base,
+                spec: [{ column: 'Status', operator: '>=', paramName: 'since', kind: 'scalar' }],
+                paramValues: { since: 'not-a-date' },
+                paramTypes: { since: 'date' },
+                isPostgres: false,
+            })).toBeNull();
+        });
+
+        it('string / no declared type: bound verbatim — exact match, NOT trimmed', () => {
+            const plan = build({
+                ...base,
+                spec: [{ column: 'Status', operator: '=', paramName: 'status', kind: 'scalar' }],
+                paramValues: { status: ' Active ' },
+                paramTypes: { status: 'string' },
+                isPostgres: false,
+            });
+            expect(plan!.parameters).toEqual([' Active ']);
+        });
+
+        it('IN-list elements bind as-is regardless of paramTypes (array element type is not declared)', () => {
+            const plan = build({
+                ...base,
+                spec: [{ column: 'Status', operator: 'IN', paramName: 'statuses', kind: 'list' }],
+                paramValues: { statuses: ['A', 'B'] },
+                paramTypes: { statuses: 'array' },
+                isPostgres: false,
+            });
+            expect(plan!.parameters).toEqual(['A', 'B']);
+        });
+
+        it('back-compat: with NO paramTypes supplied, values bind verbatim (existing callers unaffected)', () => {
+            const plan = build({
+                ...base,
+                spec: [{ column: 'ChapterID', operator: '=', paramName: 'chapterId', kind: 'scalar' }],
+                paramValues: { chapterId: '42' },
+                isPostgres: false,
+            });
+            expect(plan!.parameters).toEqual(['42']);
+        });
+    });
 });
 
 /**

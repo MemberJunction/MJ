@@ -3233,9 +3233,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         viewName: string;
         spec: Array<{ column: string; operator: string; paramName: string; kind: 'scalar' | 'list' }>;
         paramValues: Record<string, unknown> | undefined;
+        /** Declared parameter type per paramName (from MJ: Query Parameters). Drives type-faithful binding so a
+         *  scalar value matches the live path's typed literal instead of a raw string the DB implicitly coerces. */
+        paramTypes?: Record<string, string>;
         isPostgres: boolean;
     }): { sql: string; parameters: unknown[] } | null {
-        const { outputColumns, schemaName, viewName, spec, paramValues, isPostgres } = opts;
+        const { outputColumns, schemaName, viewName, spec, paramValues, paramTypes, isPostgres } = opts;
         if (!outputColumns || outputColumns.length === 0) return null;
         if (!spec || spec.length === 0) return null;
 
@@ -3260,13 +3263,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (!Array.isArray(val) || val.length === 0) return null; // empty/non-array IN → live
                 const phs = val.map((item) => {
                     const ph = nextPlaceholder();
-                    parameters.push(item);
+                    parameters.push(item); // list elements bound as-is (array element type is not declared)
                     return ph;
                 });
                 predicates.push(`${col} ${e.operator} (${phs.join(', ')})`);
             } else {
+                // Bind the value AS ITS DECLARED TYPE. The live path renders params as typed SQL literals via the
+                // Nunjucks pipeline; binding the raw string here would instead make the DB implicitly coerce it,
+                // which can (a) error on PostgreSQL (text vs numeric/date) and (b) silently match DIFFERENT rows
+                // than live on SQL Server for format/whitespace-sensitive values. Coercing to the declared type
+                // aligns the two; an unconvertible value fails closed → live (never a wrong-rows materialized read).
+                const coerced = GenericDatabaseProvider.coerceMaterializedScalarValue(val, paramTypes?.[e.paramName], isPostgres);
+                if (!coerced.ok) return null;
                 const ph = nextPlaceholder();
-                parameters.push(val);
+                parameters.push(coerced.value);
                 predicates.push(`${col} ${e.operator} ${ph}`);
             }
         }
@@ -3274,6 +3284,41 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const cols = outputColumns.map((c) => q(c)).join(', ');
         const sql = `SELECT ${cols} FROM ${q(schemaName)}.${q(viewName)} WHERE ${predicates.join(' AND ')}`;
         return { sql, parameters };
+    }
+
+    /**
+     * Coerces a scalar row-filter value to its declared `MJ: Query Parameters`.Type for type-faithful binding
+     * (see {@link buildMaterializedReadQuery}). This MUST MIRROR the live path's parameter conversion in
+     * `@memberjunction/queryprocessor` `QueryParameterProcessor.validateParameters` EXACTLY — the materialized
+     * read has to bind the same value the live query renders, or the two silently diverge. Keep in sync with that
+     * switch. Returns `{ok:false}` only where live would ALSO reject the value (→ caller falls back to live).
+     *   - `number`  → `Number(value)` (JS trims); non-finite → refuse (live pushes a validation error → live).
+     *   - `boolean` → live truthiness: ONLY 'true' (case-insensitive) or a real boolean `true` is true; everything
+     *                 else is false (live never refuses a boolean). SQL Server binds BIT 1/0; PostgreSQL binds bool.
+     *   - `date`    → `new Date(value).toISOString()` — the UTC ISO string, exactly what live stores/renders. NOT
+     *                 the naive input string: live applies the local→UTC shift, so binding the raw string would
+     *                 diverge for any timed value. Invalid date → refuse.
+     *   - `string`  → `String(value)` (matches live); `array`-element / unspecified → bound as-is.
+     */
+    private static coerceMaterializedScalarValue(value: unknown, type: string | undefined, isPostgres: boolean): { ok: true; value: unknown } | { ok: false } {
+        switch (type) {
+            case 'number': {
+                const n = Number(typeof value === 'string' ? value.trim() : value);
+                return Number.isFinite(n) ? { ok: true, value: n } : { ok: false };
+            }
+            case 'boolean': {
+                const b = typeof value === 'boolean' ? value : String(value).toLowerCase() === 'true';
+                return { ok: true, value: isPostgres ? b : b ? 1 : 0 };
+            }
+            case 'date': {
+                const d = value instanceof Date ? value : new Date(String(value));
+                return Number.isNaN(d.getTime()) ? { ok: false } : { ok: true, value: d.toISOString() };
+            }
+            case 'string':
+                return { ok: true, value: String(value) };
+            default: // 'array' (element-wise, no declared element type) or unknown → bind verbatim
+                return { ok: true, value };
+        }
     }
 
     /**
@@ -3296,7 +3341,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // source's top-level ORDER BY stripped (it has no inherent order). A query that carries a top-level ORDER
         // BY would therefore page differently from the live query. Refuse → live (which preserves the ordering)
         // rather than serve a divergent page order — consistent with this method's "any uncertainty → live".
-        if (GenericDatabaseProvider.queryHasTopLevelOrderBy(query.SQL ?? '', this.PlatformKey)) return null;
+        // Check the PLATFORM-resolved SQL (the exact SQL the live path executes — GetPlatformSQL, line ~3642),
+        // not the base query.SQL: a per-platform QuerySQL variant (e.g. a PostgreSQL variant) may add a top-level
+        // ORDER BY the base SQL lacks, and parsing the base SQL would miss it and serve mis-ordered snapshot pages.
+        if (GenericDatabaseProvider.queryHasTopLevelOrderBy(query.GetPlatformSQL(this.PlatformKey) ?? '', this.PlatformKey)) return null;
 
         // Load the materialization metadata. matId is our own UUID (from committed metadata), so it is safe
         // to interpolate into ExtraFilter — it never carries caller input.
@@ -3331,15 +3379,24 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
         if (!Array.isArray(spec) || spec.length === 0) return null;
 
-        // Coverage invariant: a RowFilterBroad query's parameters are ALL row-filters (a mix refuses at
-        // classify time), so every query parameter MUST be represented in the spec. If any isn't, our
-        // metadata is inconsistent with this query → refuse to the live path rather than under-filter.
+        // Coverage invariant (BOTH directions): a RowFilterBroad query's parameters are ALL row-filters (a mix
+        // refuses at classify time), so the query's parameter set and the persisted spec's parameter set MUST be
+        // identical. A query param missing from the spec → we would UNDER-filter; a spec param the query no longer
+        // has (stale metadata after an out-of-band edit — the same window H6 guards against) → we would OVER-filter
+        // vs. live, silently returning fewer rows. Either mismatch means the spec is inconsistent → refuse to live.
         const specNames = new Set(spec.map((s) => s.paramName));
         const queryParamNames = (query.QueryParameters ?? []).map((p) => p.Name);
-        if (queryParamNames.some((n) => !specNames.has(n))) return null;
+        const queryParamNameSet = new Set(queryParamNames);
+        if (queryParamNames.some((n) => !specNames.has(n))) return null;        // query param not in spec → under-filter
+        if (spec.some((s) => !queryParamNameSet.has(s.paramName))) return null;  // spec param not in query → over-filter
 
         const outputColumns = (query.QueryFields ?? []).map((f) => f.Name).filter((n): n is string => !!n);
         if (outputColumns.length === 0) return null;
+
+        // Declared parameter types (name → Type) so the row-filter values bind type-faithfully (see
+        // buildMaterializedReadQuery / coerceMaterializedScalarValue), matching the live path's typed literals.
+        const paramTypes: Record<string, string> = {};
+        for (const p of query.QueryParameters ?? []) paramTypes[p.Name] = p.Type;
 
         return GenericDatabaseProvider.buildMaterializedReadQuery({
             outputColumns,
@@ -3347,6 +3404,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             viewName: mat.ViewName,
             spec,
             paramValues: params.Parameters,
+            paramTypes,
             isPostgres: this.PlatformKey === 'postgresql',
         });
     }
