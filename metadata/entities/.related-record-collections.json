@@ -29,7 +29,7 @@
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Action Params&RelatedEntityJoinField=ActionID"
           },
           "sync": {
-            "lastModified": "2026-08-07T23:46:05.577Z",
+            "lastModified": "2026-08-07T23:58:29.966Z",
             "checksum": "e247a48c2cda0205c803d70da558bfb2b6b32d9b8d2631d22c47c697f69e4323"
           }
         },
@@ -46,7 +46,7 @@
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Action Result Codes&RelatedEntityJoinField=ActionID"
           },
           "sync": {
-            "lastModified": "2026-08-07T23:46:05.613Z",
+            "lastModified": "2026-08-07T23:58:30.041Z",
             "checksum": "4d6151598c55d1e996bb91b86813a57b91c80e71ff864bcf06612d63bb8d78d3"
           }
         },
@@ -62,7 +62,7 @@
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Action Libraries&RelatedEntityJoinField=ActionID"
           },
           "sync": {
-            "lastModified": "2026-08-07T23:46:05.596Z",
+            "lastModified": "2026-08-07T23:58:30.058Z",
             "checksum": "8bfdba3906a2e514c65bdeb316dba3745d7223121283a3f9557ca4e80fa22f58"
           }
         }
@@ -109,7 +109,7 @@
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Actions&RelatedEntityJoinField=AgentID"
           },
           "sync": {
-            "lastModified": "2026-08-07T23:46:05.629Z",
+            "lastModified": "2026-08-07T23:58:29.985Z",
             "checksum": "f3fc07fe5585228c6e23e6728b8891ac85b0ea17c53f8d3d7ec227691f2f1a06"
           }
         },
@@ -130,7 +130,7 @@
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Prompts&RelatedEntityJoinField=AgentID"
           },
           "sync": {
-            "lastModified": "2026-08-07T23:46:05.646Z",
+            "lastModified": "2026-08-07T23:58:30.003Z",
             "checksum": "d2aac8859b3d2de3481352549fd3c3793eb5c7e3e38164064fd308e3e1ba784d"
           }
         },
@@ -138,8 +138,8 @@
           "fields": {
             "RelatedRecordCollection": {
               "Name": "SubAgents",
-              "Load": "explicit",
-              "OnRemove": "orphan",
+              "Source": "cache",
+              "Load": "lazy",
               "OrderBy": "ExecutionOrder ASC"
             }
           },
@@ -147,8 +147,8 @@
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityJoinField=ParentID"
           },
           "sync": {
-            "lastModified": "2026-08-07T23:46:05.665Z",
-            "checksum": "2619b9933b559ea4d6219d141169a746660415be87002976f97ac5cca86b439d"
+            "lastModified": "2026-08-07T23:58:30.021Z",
+            "checksum": "1023366396e30dbc9d611ccb7fcd4c7eac194166731afaf1c803a59efc4449f0"
           }
         }
       ]
@@ -175,8 +175,8 @@
           "fields": {
             "RelatedRecordCollection": {
               "Name": "Models",
-              "Load": "explicit",
-              "OnRemove": "delete",
+              "Source": "cache",
+              "Load": "lazy",
               "OrderBy": "Priority ASC"
             }
           },
@@ -184,8 +184,8 @@
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Prompts&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Prompt Models&RelatedEntityJoinField=PromptID"
           },
           "sync": {
-            "lastModified": "2026-08-07T23:46:05.682Z",
-            "checksum": "84cf64ee8be5cc9430fcb8de37cea1b899d176da0d2f3a828eb224407359fbcd"
+            "lastModified": "2026-08-07T23:58:30.075Z",
+            "checksum": "3d4f6ff93239cdce922c6e7394b3ef3a2306f4476fd67d94abe6ef4563fb1cc6"
           }
         }
       ]
@@ -215,8 +215,8 @@
           "fields": {
             "RelatedRecordCollection": {
               "Name": "Scopes",
-              "Load": "explicit",
-              "OnRemove": "delete",
+              "Source": "cache",
+              "Load": "lazy",
               "OrderBy": "Priority ASC"
             }
           },
@@ -224,8 +224,8 @@
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: API Keys&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: API Key Scopes&RelatedEntityJoinField=APIKeyID"
           },
           "sync": {
-            "lastModified": "2026-08-07T23:46:05.696Z",
-            "checksum": "3f217465f9b1b551d3b94107b32b2d0c137fe4a90f9ab91048d80c83e3c8025b"
+            "lastModified": "2026-08-07T23:58:30.089Z",
+            "checksum": "35f6ec4f75651a49f88af7e358fe9c5bc6b36749dbe31eabbfc6ab0ecac751e0"
           }
         }
       ]
