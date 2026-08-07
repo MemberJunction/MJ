@@ -138,6 +138,41 @@ describe('Source: cache — populating from a loaded engine', () => {
     });
 });
 
+describe('Load modes — immediate vs explicit', () => {
+    beforeEach(() => {
+        BaseEngineRegistry.Instance.RegisterEngine(makeEngine(true, [makeRecord('p1', 'A1')]));
+    });
+
+    it("'immediate' populates through LoadEager — the hook BaseEntity.Load() calls", async () => {
+        const collection = makeCollection({ Load: 'immediate' });
+        expect(collection.IsLoaded).toBe(false);
+
+        await collection.LoadEager();
+
+        expect(collection.IsLoaded).toBe(true);
+        expect(collection.Count).toBe(1);
+    });
+
+    it("'explicit' ignores LoadEager — nothing loads until the caller asks", async () => {
+        const collection = makeCollection({ Load: 'explicit' });
+        await collection.LoadEager();
+        expect(collection.IsLoaded).toBe(false);
+    });
+
+    it("'never' refuses even a direct Load() — it is a write-only staging buffer", async () => {
+        const collection = makeCollection({ Load: 'never' });
+        await collection.Load();
+        expect(collection.IsLoaded).toBe(false);
+    });
+
+    it("'explicit' DOES populate on a direct Load(), from the cache", async () => {
+        const collection = makeCollection({ Load: 'explicit' });
+        await collection.Load();
+        expect(collection.IsLoaded).toBe(true);
+        expect(collection.Count).toBe(1);
+    });
+});
+
 describe('Source: cache — a lazy miss throws, and says which kind of miss it is', () => {
     it('throws when NO registered engine caches the entity, and names the fix', () => {
         const collection = makeCollection({ Load: 'lazy' });

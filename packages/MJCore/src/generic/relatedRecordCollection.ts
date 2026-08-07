@@ -667,7 +667,15 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         for (const source of records) {
             const copy = await provider?.GetEntityObject<T>(this.RelatedEntityName, this.Owner.ContextCurrentUser);
             if (!copy) {
-                return records; // no factory available — sharing beats dropping the records
+                // Silently sharing here would defeat the entire reason this collection is writable:
+                // the caller asked for records it can modify WITHOUT touching the engine's cache,
+                // and handing back shared instances would let it corrupt that cache invisibly.
+                throw new Error(
+                    `RelatedRecordCollection '${this.Name}': cannot materialise copies of ` +
+                        `'${this.RelatedEntityName}' because no entity factory is available on the provider. ` +
+                        `A writable cache-sourced collection must copy; declare ReadOnly: true to share the ` +
+                        `engine's instances instead, or Source: 'database' to load fresh ones.`,
+                );
             }
             copy.LoadFromData(source.GetAll(), true);
             copies.push(copy);
