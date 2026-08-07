@@ -9,7 +9,7 @@ import { TransactionGroupBase } from './transactionGroup';
 import { LogDebug, LogError, LogStatus } from './logging';
 import { CompositeKey, FieldValueCollection } from './compositeKey';
 import { RelatedRecordCollection, RelatedRecordCollectionOptions } from './relatedRecordCollection';
-import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionPayload } from './entityCompanion';
+import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload } from './entityCompanion';
 import { EntitySavePlan, ExecuteEntitySavePlan } from './entitySavePlan';
 import { EntityTransactionScope } from './entityTransactionScope';
 import { BaseRemotableOperation } from './baseRemotableOperation';
@@ -1431,8 +1431,13 @@ export abstract class BaseEntity<T = unknown> {
      * logged so it is still visible.
      *
      * @param payloads - Companion payloads received from the other tier.
+     * @param mode - Whether these payloads are an inbound request (the default) or authoritative
+     *               post-save results. See {@link EntityCompanionDeserializeMode}.
      */
-    public async DeserializeCompanions(payloads: EntityCompanionPayload[]): Promise<void> {
+    public async DeserializeCompanions(
+        payloads: EntityCompanionPayload[],
+        mode: EntityCompanionDeserializeMode = 'request',
+    ): Promise<void> {
         if (!payloads || payloads.length === 0) {
             return;
         }
@@ -1445,7 +1450,7 @@ export abstract class BaseEntity<T = unknown> {
                 );
                 continue;
             }
-            await companion.Deserialize(payload.Data);
+            await companion.Deserialize(payload.Data, mode);
         }
     }
 
@@ -1520,8 +1525,10 @@ export abstract class BaseEntity<T = unknown> {
         this._recordLoaded = true;
         this._everSaved = true;
 
-        // Children: adopt server-assigned primary keys and computed values.
-        await this.DeserializeCompanions(output.Companions ?? []);
+        // Children: adopt server-assigned primary keys and computed values. 'result' mode adopts the
+        // returned state verbatim — these rows were just persisted by the sender, so re-loading them
+        // would be one wasted round trip per record for data we already hold.
+        await this.DeserializeCompanions(output.Companions ?? [], 'result');
         this.acceptCompanionChanges();
 
         const result = new BaseEntityResult();
@@ -1680,7 +1687,7 @@ export abstract class BaseEntity<T = unknown> {
      */
     private async deleteGraph(plan: EntitySavePlan, options?: EntityDeleteOptions): Promise<boolean> {
         this.RaiseEvent('graph_save_started', { NodeCount: plan.NodeCount, Operation: 'Delete' });
-        return this.executeGraphLocal(plan, undefined, options);
+        return this.executeGraphLocal(plan, undefined, options, 'delete');
     }
 
     /**
@@ -1699,13 +1706,16 @@ export abstract class BaseEntity<T = unknown> {
         plan: EntitySavePlan,
         saveOptions?: EntitySaveOptions,
         deleteOptions?: EntityDeleteOptions,
+        operationKind: 'save' | 'delete' = 'save',
     ): Promise<boolean> {
         const provider = this.ProviderToUse;
         const scope =
             provider?.SupportsEntityTransactions === true && provider.BeginEntityTransaction
                 ? await provider.BeginEntityTransaction()
                 : null;
-        const operation: 'save' | 'delete' = deleteOptions !== undefined ? 'delete' : 'save';
+        // Passed explicitly rather than inferred from which options object is set: `Delete()` is
+        // routinely called with no arguments, so an inference would mislabel every such failure.
+        const operation = operationKind;
 
         try {
             const result = await ExecuteEntitySavePlan(plan, {

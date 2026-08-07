@@ -69,6 +69,20 @@ export type EntityCompanionPayload = {
 export const COMPANION_PAYLOAD_KEY = 'Companions___';
 
 /**
+ * Which direction a companion payload is travelling, which changes what the receiver must do with
+ * it.
+ *
+ * - `'request'` — the payload is a **caller's intent**, arriving at the tier that will persist it.
+ *   Records that already exist must be loaded from the database first, so dirty tracking and
+ *   old-value comparisons are computed against real stored values. Skipping that load makes an
+ *   edited record look clean (old == new), its save is skipped, and the edit is silently lost.
+ * - `'result'` — the payload is **authoritative post-save state** coming back from the tier that
+ *   just persisted it. It is adopted as-is: no queries, and the records land clean. Re-loading here
+ *   would be one wasted round trip per record for data the sender already has.
+ */
+export type EntityCompanionDeserializeMode = 'request' | 'result';
+
+/**
  * Base class for all entity companions.
  *
  * Subclass this only when you need a genuinely new *kind* of companion. For the common case of a
@@ -134,8 +148,10 @@ export abstract class EntityCompanion<TWire = unknown> {
      * a companion is a wire contract, and rolling deploys mean both versions run at once.
      *
      * @param data - The payload previously produced by {@link Serialize}.
+     * @param mode - Whether this payload is an inbound request or an authoritative result. See
+     *               {@link EntityCompanionDeserializeMode}; the distinction is load-bearing.
      */
-    public abstract Deserialize(data: TWire): Promise<void>;
+    public abstract Deserialize(data: TWire, mode: EntityCompanionDeserializeMode): Promise<void>;
 
     /**
      * Whether this companion holds unsaved changes.
