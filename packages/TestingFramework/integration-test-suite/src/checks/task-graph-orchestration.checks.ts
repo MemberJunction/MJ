@@ -26,9 +26,10 @@
  * Deterministic — no model calls. TG2 creates one task and the bundle Teardown removes it.
  */
 import { BaseRemotableOperation, Metadata, RunView } from '@memberjunction/core';
+import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
-import { LoadTaskGraphOperations, TaskGraphService, type TaskGraphSpec } from '@memberjunction/task-graph';
+import { LoadTaskGraphOperations, TaskGraphService } from '@memberjunction/task-graph';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -49,6 +50,21 @@ const TASK_GRAPH_OPERATION_KEYS = [
     'TaskGraph.Cancel',
     'TaskGraph.RetryTask',
     'TaskGraph.GetStatus',
+] as const;
+
+/**
+ * The D3 launch opt-ins. Workflow Planner is on this list although the plan's own opt-in list omits
+ * it — emitting task graphs is that agent's entire job, so leaving it gated would break it outright.
+ */
+const OPTED_IN_AGENTS = [
+    'Sage',
+    'Workflow Planner',
+    'Query Builder',
+    'Research Agent',
+    'Research Report Writer',
+    'Database Research Agent',
+    'File Research Agent',
+    'Web Research Agent',
 ] as const;
 
 const TASK_NAME = 'mj-integration-test-task-graph-columns (safe to delete)';
@@ -317,7 +333,55 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
                     `so every call would succeed at the transport and do nothing`,
                 );
             }
-            console.log(`      \u2192 ${TASK_GRAPH_OPERATION_KEYS.length} task-graph operations published and implemented`);
+            console.log(`      → ${TASK_GRAPH_OPERATION_KEYS.length} task-graph operations published and implemented`);
+        }
+    },
+    {
+        Id: 'task-graph-orchestration.TG8',
+        Name: 'TG8: the launch opt-in agents carry enableTaskGraphs, and the Loop default stays OFF',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // The gate is metadata-driven, so it can be wrong in two directions and the build
+            // catches neither. Opting an agent in but never pushing the metadata leaves it unable to
+            // delegate at all (Sage's entire delegation path runs through 'Tasks'); leaving the Loop
+            // TYPE default on would hand durable reach to every Loop agent in the install at once.
+            const agents = await new RunView().RunView<{ Name: string; AgentTypePromptParams: string | null }>(
+                {
+                    EntityName: 'MJ: AI Agents',
+                    ExtraFilter: `Name IN (${OPTED_IN_AGENTS.map((n) => `'${n.replace(/'/g, "''")}'`).join(',')})`,
+                    Fields: ['Name', 'AgentTypePromptParams'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            Assert(agents.Success, `could not read MJ: AI Agents: ${agents.ErrorMessage}`);
+
+            const byName = new Map((agents.Results ?? []).map((a) => [a.Name, a.AgentTypePromptParams]));
+            for (const name of OPTED_IN_AGENTS) {
+                Assert(byName.has(name), `agent '${name}' not found — was the metadata pushed?`);
+                const raw = byName.get(name);
+                Assert(!!raw, `agent '${name}' has no AgentTypePromptParams`);
+                const params = JSON.parse(raw!) as { enableTaskGraphs?: unknown };
+                AssertEqual(params.enableTaskGraphs, true, `agent '${name}' is not opted into task graphs`);
+            }
+
+            // And the type-level default must remain false, so opting in stays a deliberate act.
+            const types = await new RunView().RunView<{ PromptParamsSchema: string | null }>(
+                {
+                    EntityName: 'MJ: AI Agent Types',
+                    ExtraFilter: `Name='Loop'`,
+                    Fields: ['PromptParamsSchema'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            const schemaRaw = types.Results?.[0]?.PromptParamsSchema;
+            Assert(!!schemaRaw, 'the Loop agent type has no PromptParamsSchema');
+            const schema = JSON.parse(schemaRaw!) as { properties?: { enableTaskGraphs?: { default?: unknown } } };
+            const declared = schema.properties?.enableTaskGraphs;
+            Assert(!!declared, 'PromptParamsSchema does not declare enableTaskGraphs');
+            AssertEqual(declared!.default, false, 'the Loop enableTaskGraphs default must stay FALSE');
+
+            console.log(`      → ${OPTED_IN_AGENTS.length} agents opted in; Loop type default is off`);
         }
     },
 ];
