@@ -62,16 +62,28 @@ export class ResolverBase {
    * - AllowDecryptInAPI=false + SendEncryptedValue=true: Keep encrypted ciphertext
    * - AllowDecryptInAPI=false + SendEncryptedValue=false: Replace with sentinel
    *
+   * Returns a COPY — `dataObject` is never written to. Callers routinely pass rows straight
+   * from `findBy`/`RunView`, which are the server cache's own objects held by reference, and
+   * `LocalCacheManager` deep-freezes them. Renaming in place therefore threw
+   * `Cannot add property _mj__CreatedAt, object is not extensible` on every `UserByEmail` /
+   * `UserByID` / `UserByEmployeeID` call and on every generated single-record resolver whose
+   * entity has caching enabled. (Before the freeze it did something worse but quieter: it
+   * rewrote the cached row's keys, so later readers were served transport-shaped rows that
+   * `BaseEntity.SetMany` rejects.) Copying here fixes every call site at once and makes the
+   * hazard unreachable for future ones.
+   *
    * @param entityName - The entity name
-   * @param dataObject - The data object with field values
+   * @param dataObject - The data object with field values. Not modified.
    * @param contextUser - Optional user context for decryption (required for encrypted fields)
-   * @returns The processed data object
+   * @returns A new object in transport shape, or null when there is nothing to map
    */
   protected async MapFieldNamesToCodeNames(entityName: string, dataObject: any, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<any> {
     // Return null for empty objects (e.g. when no rows found due to RLS filtering)
     if (!dataObject || Object.keys(dataObject).length === 0) {
       return null;
     }
+    // Shallow copy up front so every write below lands on our object, never the caller's.
+    dataObject = { ...dataObject };
 
     // for the given entity name provided, check to see if there are any fields
     // where the code name is different from the field name, and for just those
@@ -184,14 +196,21 @@ export class ResolverBase {
     return true;
   }
 
-  protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo): Promise<any[]> {
-    // iterate through the array and call MapFieldNamesToCodeNames for each element
-    if (dataObjectArray && dataObjectArray.length > 0) {
-      for (const element of dataObjectArray) {
-        await this.MapFieldNamesToCodeNames(entityName, element, contextUser);
-      }
+  /**
+   * Array form of {@link MapFieldNamesToCodeNames}. Returns a NEW array of NEW objects; neither
+   * the input array nor its rows are modified. Both matter: the cache freezes the array as well
+   * as the rows it contains, so collecting the mapped copies (rather than mapping in place and
+   * returning the original) is what makes this safe on cache-served input.
+   */
+  protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo, provider?: IMetadataProvider): Promise<any[]> {
+    if (!dataObjectArray || dataObjectArray.length === 0) {
+      return dataObjectArray;
     }
-    return dataObjectArray;
+    const mapped: any[] = [];
+    for (const element of dataObjectArray) {
+      mapped.push(await this.MapFieldNamesToCodeNames(entityName, element, contextUser, provider));
+    }
+    return mapped;
   }
 
   /**

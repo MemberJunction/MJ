@@ -502,7 +502,7 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
         Id: 'cache-immutability.F13',
         Name: 'F13: cache write funnels tolerate binary payloads (varbinary rows arrive as Buffers) without throwing',
         Fn: async (ctx): Promise<void> => {
-            // PR #3425 review, finding C1 — RED until the deep-freeze guards binary values.
+            // PR #3425 review, finding C1, now fixed — the deep-freeze skips binary values.
             // `Object.freeze` on a non-empty TypedArray THROWS ("Cannot freeze array buffer
             // views with elements"); the mssql driver returns varbinary columns as Buffer, and
             // `MJ: AI Result Cache.PromptEmbedding` is exactly that on a stock install with
@@ -518,7 +518,7 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
             );
 
             const stamp = Date.now();
-            const fingerprint = `IT70-F13-binary-probe|${stamp}`;
+            const fingerprint = `IT71-F13-binary-probe|${stamp}`;
             const nowIso = new Date().toISOString();
             const rows: Record<string, unknown>[] = [
                 { ID: 'f13-1', Name: 'binary probe', PromptEmbedding: new Uint8Array([1, 2, 3]), __mj_UpdatedAt: nowIso },
@@ -528,7 +528,7 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
             try {
                 await LocalCacheManager.Instance.SetRunViewResult(
                     fingerprint,
-                    { EntityName: 'IT70 F13 Probe Entity' },
+                    { EntityName: 'IT71 F13 Probe Entity' },
                     rows,
                     nowIso,
                     undefined, undefined, undefined,
@@ -549,8 +549,8 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
             let queryThrew: unknown = null;
             try {
                 await LocalCacheManager.Instance.SetRunQueryResult(
-                    `IT70-F13-binary-query|${stamp}`,
-                    'IT70 F13 binary probe query',
+                    `IT71-F13-binary-query|${stamp}`,
+                    'IT71 F13 binary probe query',
                     [{ ID: 'q1', Vector: new Uint8Array([4, 5]) }],
                     nowIso,
                     1, undefined, 60_000
@@ -565,9 +565,8 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
         Id: 'cache-immutability.F14',
         Name: 'F14: non-metadata dataset rows are frozen shared state; MJ_Metadata keeps its scaffolding exemption',
         Fn: async (ctx): Promise<void> => {
-            // PR #3425 review, finding C2 — RED until the ProviderInternalScaffolding exemption
-            // is scoped to the MJ_Metadata dataset. Today the single dataset-item write funnel
-            // exempts EVERY dataset, but GetDatasetByName is a public API: BaseEngine.Load hands
+            // PR #3425 review, finding C2, now fixed — the ProviderInternalScaffolding exemption
+            // is scoped to the MJ_Metadata dataset. It previously exempted EVERY dataset, but GetDatasetByName is a public API: BaseEngine.Load hands
             // `item.Results` — the live cached arrays — to every engine subclass in the process,
             // so unfrozen dataset rows re-open the original corruption class for the whole
             // dataset path. Target contract: only MJ_Metadata (whose rows the provider's own
@@ -622,6 +621,65 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
                 );
             }
             Assert(md.Entities.length > 0, 'metadata must remain loaded and healthy after the dataset fetches');
+        }
+    },
+    {
+        Id: 'cache-immutability.F15',
+        Name: 'F15: a plain unfiltered RunView of a metadata entity is frozen — the dataset slot must not cross-serve it',
+        Fn: async (ctx): Promise<void> => {
+            // PR #3425 review, finding M3. F14 above proves MJ_Metadata KEEPS its scaffolding
+            // exemption; this proves the exemption does not LEAK. Those are different claims, and
+            // the gap between them is what the original verification missed.
+            //
+            // The dataset write funnel keys its slot with the same fingerprint builder ordinary
+            // reads use, passing only { EntityName, ExtraFilter }. Every shipped dataset item has
+            // a NULL WhereClause, so the dataset write emitted byte-for-byte the fingerprint of an
+            // unfiltered RunView of that entity — and an ordinary caller was handed the
+            // deliberately-unfrozen scaffolding rows for the most-read entities in the process.
+            //
+            // This check exists because the earlier live soak used only FILTERED and row-limited
+            // queries, which generate different keys, so it never touched the colliding slot at
+            // all. An unfiltered read is the whole point — do not add a filter or MaxRows here.
+            Assert(
+                ctx.Storage.SharesReferences === true,
+                'precondition: the freeze must be armed (reference-sharing storage provider)'
+            );
+            const md = new Metadata(); // global-provider-ok: integration test — single-provider process by design
+            const rv = new RunView();
+
+            // Warm the metadata dataset first, so its (exempt, unfrozen) slot is definitely
+            // present. If the keys still collided, the read below would be served from it.
+            const meta = await md.GetAndCacheDatasetByName('MJ_Metadata', undefined, ctx.User);
+            Assert(!!meta?.Success, `MJ_Metadata dataset must load: ${meta?.Status ?? 'no result'}`);
+
+            for (const entityName of [ENTITY, 'MJ: Entity Fields']) {
+                const result = await rv.RunView({ EntityName: entityName, ResultType: 'simple' }, ctx.User);
+                Assert(result.Success, `unfiltered read of '${entityName}' failed: ${result.ErrorMessage}`);
+                if (result.Results.length === 0) {
+                    continue;
+                }
+                Assert(
+                    Object.isFrozen(result.Results),
+                    `an unfiltered RunView of '${entityName}' returned an UNFROZEN array — it is being served the MJ_Metadata dataset's scaffolding slot, so the freeze does not protect the hottest entities in the process`
+                );
+                Assert(
+                    Object.isFrozen(result.Results[0]),
+                    `an unfiltered RunView of '${entityName}' returned unfrozen rows — same scaffolding-slot collision`
+                );
+            }
+
+            // ...and the metadata dataset still holds its own, exempt slot afterwards. This is the
+            // reverse direction of the same collision: an ordinary read repopulating a shared slot
+            // would store it FROZEN, and the next metadata refresh would throw while rearranging it.
+            const metaAfter = await md.GetAndCacheDatasetByName('MJ_Metadata', undefined, ctx.User);
+            if (metaAfter?.Success && metaAfter.Results?.length) {
+                const entitiesItem = metaAfter.Results.find(i => i.Code === 'Entities') ?? metaAfter.Results[0];
+                Assert(
+                    !Object.isFrozen(entitiesItem.Results),
+                    `MJ_Metadata item '${entitiesItem.Code}' lost its exemption after an ordinary read — the two are still sharing a cache slot`
+                );
+            }
+            Assert(md.Entities.length > 0, 'metadata must remain loaded and healthy');
         }
     }
 ];

@@ -575,11 +575,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._initialized) {
             // Not yet initialized — just set the provider and return
             this._storageProvider = newProvider;
+            this._sharesReferences = await this.resolveSharesReferences(newProvider);
             return;
         }
 
         const oldProvider = this._storageProvider;
         this._storageProvider = newProvider;
+        // The freeze decision belongs to the ACTIVE provider, not to whichever one happened to be
+        // installed at Initialize. MJAPI initializes on the in-memory provider during engine
+        // loading and swaps to Redis afterward, so these two have OPPOSITE reference semantics on
+        // every Redis deployment — carrying the old answer forward means freezing rows Redis has
+        // already isolated (all of the hazard, none of the protection), or, on the reverse swap,
+        // silently dropping the protection.
+        this._sharesReferences = await this.resolveSharesReferences(newProvider);
 
         // Migrate existing cached data from old provider to new provider
         const entries = this.GetAllEntries();
@@ -1541,7 +1549,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *   pre-RLS format so normal cache sharing is preserved and no existing entries are invalidated.
      * @returns A unique, human-readable fingerprint string
      */
-    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string): string {
+    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string, datasetSegment?: string): string {
         const entity = params.EntityName?.trim() || 'Unknown';
         const rawFilter = params.ExtraFilter;
         const filter = (typeof rawFilter === 'string' ? rawFilter : rawFilter ? JSON.stringify(rawFilter) : '').trim();
@@ -1627,6 +1635,26 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const viewKey = (params.ViewID || params.ViewName || params.ViewEntity?.PrimaryKey?.ToConcatenatedString() || '').trim();
         if (viewKey.length > 0) {
             parts.push(`vw:${viewKey}`);
+        }
+
+        // Dataset namespace. `GetDatasetByName` caches each dataset ITEM's rows through this same
+        // builder, supplying only entity + the item's WhereClause — and every shipped item has a
+        // NULL WhereClause, so without this segment a dataset item emits the identical fingerprint
+        // to a plain unfiltered read of the same entity and the two silently share one slot. That
+        // is not merely a stale-data risk: the MJ_Metadata dataset writes its rows with
+        // `ProviderInternalScaffolding` (deliberately UNFROZEN, because bootstrap rearranges them
+        // in place), so the shared slot hands ordinary callers unprotected rows for the hottest
+        // entities in the process — and, in the other direction, an ordinary read repopulating an
+        // evicted slot stores it FROZEN and the next metadata refresh throws.
+        //
+        // Dataset items may also project columns (`DatasetItem.Columns`), where a RunView slot is
+        // always the full field set — so the two are not interchangeable in shape either.
+        //
+        // Appended ONLY when supplied, so ordinary reads keep their exact pre-existing key and no
+        // existing cache entry is invalidated by this change.
+        const dataset = (datasetSegment ?? '').trim();
+        if (dataset.length > 0) {
+            parts.push(`ds:${dataset}`);
         }
 
         // Only include connection if provided
@@ -1760,8 +1788,26 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param payload - The envelope being handed to the storage provider. Frozen in place;
      *                  the same reference is returned for call-site convenience.
      */
+    /**
+     * Whether the CURRENTLY-INSTALLED provider hands back live references.
+     *
+     * Prefers the active provider's own declaration, read live on each call — a property read,
+     * so it costs nothing on the write path, and it stays correct no matter how many times the
+     * provider is swapped or which code path does the swapping. `_sharesReferences` (resolved at
+     * `Initialize`/`SetStorageProvider`) is the fallback for providers that declare nothing, where
+     * the answer can only come from the async probe and therefore cannot be recomputed here.
+     *
+     * Belt-and-braces with the re-resolution in {@link SetStorageProvider}: that keeps the probed
+     * value correct across swaps, and this keeps DECLARED providers correct even if some future
+     * swap site forgets to re-resolve.
+     */
+    private activeProviderSharesReferences(): boolean {
+        const declared = this._storageProvider?.SharesReferences;
+        return typeof declared === 'boolean' ? declared : this._sharesReferences;
+    }
+
     private freezeRowDataIfProviderSharesReferences<T>(payload: T): T {
-        if (!this._sharesReferences) {
+        if (!this.activeProviderSharesReferences()) {
             return payload;
         }
         try {
@@ -1897,19 +1943,26 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return;
         }
 
-        // Per-entity memory limit: evict oldest entries for this entity if over budget
-        const entityName = params.EntityName || 'Unknown';
-        await this.enforcePerEntityMemoryLimit(entityName, sizeBytes);
-
-        // Check if we need to evict entries (global budget)
-        await this.evictIfNeeded(sizeBytes);
-
-        // All write gates have passed, so this row set is definitely becoming shared state —
-        // freeze it now (no-op on serializing providers). Deliberately AFTER the gates: a
-        // result we decline to cache stays fully owned (and mutable) by its caller.
+        // The oversized gate above is the ONLY step that can decline this write, and it is
+        // synchronous — so by here the row set is definitely becoming shared state, and it is
+        // frozen with no intervening yield point. That ordering is load-bearing: the eviction
+        // steps below are awaited, and callers hold this very array while they run (the
+        // smart-cache stale leg does not await this method at all). Freezing after them leaves
+        // a window in which shared rows are handed out still mutable — and `BaseEntity`
+        // samples `Object.isFrozen` once at load, so a freeze arriving mid-construction makes
+        // a later field READ throw. Declining writes still leave the caller's rows mutable,
+        // because the decline happens before this point.
         if (!options?.ProviderInternalScaffolding) {
             this.freezeRowDataIfProviderSharesReferences(data);
         }
+
+        // Per-entity memory limit: evict oldest entries for this entity if over budget.
+        // Evicts OTHER entries only — it cannot cancel this write.
+        const entityName = params.EntityName || 'Unknown';
+        await this.enforcePerEntityMemoryLimit(entityName, sizeBytes);
+
+        // Check if we need to evict entries (global budget). Also eviction-only.
+        await this.evictIfNeeded(sizeBytes);
 
         try {
             // Native object storage — IDB structured-clones, localStorage / Redis serialize internally.
@@ -2568,16 +2621,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return;
         }
 
-        // Check if we need to evict entries
+        // Same reference-sharing exposure as the RunView path (GetRunQueryResult hands
+        // `results` straight back out) — closed here rather than waiting for a mutator to
+        // find it. Placed immediately after the only declining gate and BEFORE the awaited
+        // eviction below, for the same reason as SetRunViewResult: callers of this method do
+        // not always await it, so any yield point before the freeze is a window in which the
+        // caller can still mutate the rows the cache is about to store.
+        this.freezeRowDataIfProviderSharesReferences(data);
+
+        // Check if we need to evict entries. Evicts OTHER entries only — cannot cancel this write.
         await this.evictIfNeeded(sizeBytes);
 
         const now = Date.now();
         const expiresAt = ttlMs ? now + ttlMs : undefined;
-
-        // Same reference-sharing exposure as the RunView path (GetRunQueryResult hands
-        // `results` straight back out) — closed here rather than waiting for a mutator to
-        // find it.
-        this.freezeRowDataIfProviderSharesReferences(data);
 
         try {
             // Native object storage — no JSON.stringify on the hot path.

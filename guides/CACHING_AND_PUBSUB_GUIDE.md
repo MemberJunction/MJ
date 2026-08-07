@@ -683,7 +683,9 @@ So an in-place mutation edits **process-wide** state. This shipped as a P1: `Res
 
 `ILocalStorageProvider` declares an optional `readonly SharesReferences?: boolean` saying whether it hands back live references.
 
-**Always declare it** in a new provider — it documents the isolation semantics at the implementation site. It is optional only so that introducing this contract could not break existing external implementations at compile time, and omitting it is *not* an opt-out: when the property is absent, `LocalCacheManager` **measures** the provider once at initialization — it stores a sentinel object, reads it back, and compares identity. Identity preserved ⇒ live references ⇒ freeze armed. So a provider written before this contract existed still gets the correct protection instead of silently losing it to a falsy default. If the probe cannot complete (a backing store that isn't ready at init), it fails closed to `false` and logs — matching pre-freeze behavior rather than immobilizing rows for a provider it could not classify.
+**Always declare it** in a new provider — it documents the isolation semantics at the implementation site. It is optional only so that introducing this contract could not break existing external implementations at compile time, and omitting it is *not* an opt-out: when the property is absent, `LocalCacheManager` **measures** the provider once at initialization — it stores a sentinel object, reads it back, and compares identity. Identity preserved ⇒ live references ⇒ freeze armed. So a provider written before this contract existed still gets the correct protection instead of silently losing it to a falsy default. If the probe cannot complete (a backing store that isn't ready at init), it defaults to `false` and logs — i.e. it fails **open**, leaving the freeze disarmed. That matches pre-freeze behavior rather than immobilizing rows for a provider it could not classify, but be clear about the trade: an unclassifiable provider gets no protection, so declare the property rather than relying on the probe.
+
+The decision follows the provider across a swap. MJAPI initializes the cache on the in-memory provider during engine loading and calls `SetStorageProvider(redis)` later, once Redis connects — two providers with opposite semantics in one process — so the answer is re-resolved on every swap, and a provider that *declares* the property is re-read live on each write.
 
 | Provider | `SharesReferences` | Why |
 |---|---|---|
@@ -1050,6 +1052,10 @@ The processing order in `PostRunView` / `PostRunViews` is:
 3. **Run post-hooks** via `RunPostRunViewHooks()`
 
 On cache read, `TransformSimpleObjectToEntityObject()` is called to restore BaseEntity instances from the cached plain objects when `ResultType === 'entity_object'`.
+
+**Cache hits run the post-hooks too.** `PostRunView` is the OUTPUT half of the data-hook enforcement seam (masking / audit), and hooks receive `contextUser` — so masking is *per-user* while a cache slot is *shared across users*. Applying it once at write time, on behalf of a reader who has not arrived yet, is not possible; a hit that skips the chain returns rows the miss path would have masked. Every path that serves view rows therefore runs it: the miss path, both cache-hit paths, the mixed batch, and the client smart-cache path.
+
+Note the ordering consequence for hook authors: because step 1 caches *before* step 3 runs, a hook that mutated rows in place used to write through into the cached objects. That is what made cached reads *appear* masked, and it wrote one user's masking decision into a slot shared with everyone else. Freeze-on-write stops it — which is why hooks must modify by mapping onto copies (`results.Results = results.Results.map(r => ({ ...r, ... }))`) or by returning a new result. On a cache hit the result *wrapper* is freshly built per read, so reassigning `.Results` on it never reaches the cache.
 
 ### Real-Time Array Updates (Event Handling)
 

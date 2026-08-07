@@ -739,6 +739,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // Cache hit — transform and return directly
                 LogStatusEx({ message: `  ✅ [Cache HIT] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${preResult.cachedResult.Results?.length ?? 0} rows from cache, no DB query`, verboseOnly: true });
                 await this.TransformSimpleObjectToEntityObject(params, preResult.cachedResult, contextUser);
+                await this.ApplyPostRunViewHooksToCacheHit(params, preResult.cachedResult, contextUser);
                 TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
                     cacheHit: true,
                     cacheStatus: preResult.cacheStatus,
@@ -900,6 +901,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 batchSize: params.length,
                 totalResultCount: totalResults
             });
+            // allCached ⇒ every param produced a hit and was pushed in order (PreRunViews only
+            // pushes a null placeholder on the path that clears allCached), so index i of
+            // cachedResults corresponds to params[i].
+            for (let i = 0; i < preResult.cachedResults.length; i++) {
+                await this.ApplyPostRunViewHooksToCacheHit(params[i], preResult.cachedResults[i], contextUser);
+            }
             return preResult.cachedResults as RunViewResult<T>[];
         }
 
@@ -3193,6 +3200,44 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             result = await hook(params, result, contextUser);
         }
         return result;
+    }
+
+    /**
+     * Applies the PostRunView hook chain to a result that was served from cache, mutating
+     * `result` in place so the caller's reference reflects the chain's output.
+     *
+     * ## Why cache hits must run the hooks
+     * PostRunView is the OUTPUT half of the enforcement seam (data masking / audit). Hooks
+     * receive `contextUser`, so masking is PER-USER, while the cache slot is shared across
+     * users — there is no correct way to apply masking once at write time on behalf of a
+     * reader who has not arrived yet. A hit that skips the chain therefore returns rows the
+     * miss path would have masked.
+     *
+     * This previously appeared to work by accident: PostRunView writes the cache BEFORE
+     * running the hooks, so a hook that masked rows in place was writing through into the
+     * cached objects — which both made later hits look masked and baked one user's masking
+     * decision into a shared slot. Freeze-on-write removes that write-through, which is what
+     * makes running the chain here necessary rather than merely tidier.
+     *
+     * ## Why mutating `result` in place is safe
+     * Cache-hit results are FRESH wrapper objects built per hit by PreRunView/PreRunViews —
+     * only `.Results` points at shared cache state. A hook that returns a replacement (the
+     * required pattern now that rows are frozen) is copied onto that per-hit wrapper, so it
+     * can never write back into the cache.
+     *
+     * ## Why the guard
+     * `GetDataHooks` is a memoized store read (~30ns), but `await`-ing the async chain costs
+     * a microtask (~750ns) — comparable to the entire cache lookup this rides on. The
+     * overwhelmingly common case is zero registered hooks, so check first and skip the await.
+     */
+    protected async ApplyPostRunViewHooksToCacheHit(params: RunViewParams, result: RunViewResult, contextUser?: UserInfo): Promise<void> {
+        if (GetDataHooks<PostRunViewHook>('PostRunView').length === 0) {
+            return;
+        }
+        const hooked = await this.RunPostRunViewHooks(params, result, contextUser);
+        if (hooked && hooked !== result) {
+            Object.assign(result, hooked);
+        }
     }
 
     /**

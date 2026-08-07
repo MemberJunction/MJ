@@ -786,17 +786,20 @@ export abstract class BaseEntity<T = unknown> {
     private _raw: Record<string, unknown> | null = null;
 
     /**
-     * Whether `_raw` is frozen, meaning the read-side memoizations in `Get()` must be skipped.
+     * Per-instance memo for values `Get()` derives from `_raw` — a parsed `Date`, an rtrimmed
+     * fixed-width string. Lazily created; only converted fields ever get an entry.
      *
-     * `LoadFromData`'s fast path keeps the caller's row BY REFERENCE, and that row is frequently
-     * a LocalCacheManager cache entry — which the cache deep-freezes on reference-sharing storage
-     * providers so consumers cannot corrupt shared state. `Get()` writes back into `_raw` purely
-     * to memoize a converted Date / rtrimmed fixed-width string, so on a frozen row that write
-     * throws and turns a plain field READ into an error.
+     * This deliberately does NOT write back into `_raw`. `LoadFromData`'s fast path keeps the
+     * caller's row BY REFERENCE, and that row is frequently a LocalCacheManager entry, which the
+     * cache deep-freezes on reference-sharing providers. Memoizing into the row therefore made a
+     * plain field READ throw — and gating that write on a once-sampled `Object.isFrozen` could
+     * not be made correct, because the freeze is asynchronous relative to the consumer (cache
+     * writes are not always awaited), so the sample can be stale by the first read.
      *
-     * Computed once at load (cheap) instead of calling `Object.isFrozen` on every field read.
+     * Keeping the memo here makes freeze timing irrelevant AND restores the optimization on
+     * frozen rows, which the isFrozen-guard version had to give up.
      */
-    private _rawIsFrozen: boolean = false;
+    private _rawConverted: Map<string, unknown> | null = null;
 
     /**
      * Whether a database record has been loaded into this instance (via `Load`, `NewRecord`,
@@ -1796,6 +1799,11 @@ export abstract class BaseEntity<T = unknown> {
      * @param FieldName
      * @returns
      */
+    /** Records a value derived from `_raw` so later reads skip the conversion. See {@link _rawConverted}. */
+    private memoizeRawConversion(fieldName: string, value: unknown): void {
+        (this._rawConverted ??= new Map<string, unknown>()).set(fieldName, value);
+    }
+
     public Get(FieldName: string): any {
         // IS-A routing: return the authoritative value from the parent entity
         if (this._parentEntity && this._parentEntityFieldNames?.has(FieldName)) {
@@ -1817,26 +1825,24 @@ export abstract class BaseEntity<T = unknown> {
         if (!this._fieldsHydrated && this._raw) {
             let value = this._raw[FieldName];
             if (value === undefined) return null;
-            // Date conversion mirrors the hydrated path. Memoizing the converted Date back into
-            // _raw avoids reparsing on every read — but the memo is an OPTIONAL optimization, so
-            // it is skipped when _raw is frozen (a shared cache row). Writing it there would
-            // throw in strict mode and turn this read into an error; see _rawIsFrozen.
+            // Conversions mirror the hydrated path, and memoize into `_rawConverted` rather than
+            // back into `_raw` — the row may be shared, frozen cache state. Fields needing no
+            // conversion (the vast majority) never touch the memo at all, so the fast path stays
+            // a single property read.
             const fi = this._EntityInfo?.FieldByName(FieldName);
             if (fi?.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
+                const memo = this._rawConverted?.get(FieldName);
+                if (memo !== undefined) return memo;
                 const d = new Date(value);
-                if (!this._rawIsFrozen) {
-                    this._raw[FieldName] = d;
-                }
+                this.memoizeRawConversion(FieldName, d);
                 return d;
             }
-            // Mirror the EntityField.Value setter: rtrim padding for fixed-
-            // width string columns. Memoize back into _raw (same frozen-row
-            // caveat as the Date branch) so we don't re-trim on every read.
+            // Mirror the EntityField.Value setter: rtrim padding for fixed-width string columns.
             if (typeof value === 'string' && fi?.FixedWidthColumn) {
+                const memo = this._rawConverted?.get(FieldName);
+                if (memo !== undefined) return memo;
                 value = value.replace(/ +$/, '');
-                if (!this._rawIsFrozen) {
-                    this._raw[FieldName] = value;
-                }
+                this.memoizeRawConversion(FieldName, value);
             }
             return value;
         }
@@ -2118,7 +2124,7 @@ export abstract class BaseEntity<T = unknown> {
         this._Fields = [];
         this._fieldsHydrated = false;
         this._raw = null;
-        this._rawIsFrozen = false;
+        this._rawConverted = null;
         this._fieldCache = null;
         this._codeNameCache = null;
         // Field construction is deferred to hydrateFieldsIfNeeded(). Constructor / init() stays
@@ -2179,7 +2185,7 @@ export abstract class BaseEntity<T = unknown> {
             // duplicate state. Fields hold their own copies, so a frozen source no longer
             // constrains anything from here on.
             this._raw = null;
-            this._rawIsFrozen = false;
+            this._rawConverted = null;
         }
     }
 
@@ -3074,9 +3080,10 @@ export abstract class BaseEntity<T = unknown> {
 
         if (canTakeFastPath) {
             this._raw = data as Record<string, unknown>;
-            // Cache-served rows arrive deep-frozen; probe once here so per-field reads don't pay
-            // for Object.isFrozen and don't attempt a memo write that would throw.
-            this._rawIsFrozen = Object.isFrozen(this._raw);
+            // Drop any conversions memoized from a previously-loaded row — they describe the old
+            // `_raw`, not this one. No isFrozen probe is needed: `Get()` never writes to `_raw`,
+            // so whether the row is frozen (now, or at any point later) does not affect reads.
+            this._rawConverted = null;
 
             // Mirror the "are PKs present?" check that the hydrated path does, but read straight
             // from the raw data so we don't trigger hydration.

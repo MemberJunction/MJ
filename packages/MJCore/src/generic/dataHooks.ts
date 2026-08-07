@@ -9,7 +9,7 @@
  * Execution order follows ClassFactory registration order (dependency-graph order).
  */
 
-import { GetGlobalObjectStore } from '@memberjunction/global';
+import { GetGlobalObjectStore, GlobalObjectStore } from '@memberjunction/global';
 import type { RunViewResult } from './interfaces';
 import type { RunViewParams } from '../views/runView';
 import type { UserInfo } from './securityInfo';
@@ -56,6 +56,32 @@ export type HookName = 'PreRunView' | 'PostRunView' | 'PreSave';
 const DATA_HOOKS_KEY = '__mj_dataHooks';
 
 /**
+ * Memoized result of {@link GetGlobalObjectStore}. `undefined` means "not resolved yet";
+ * `null` is a legitimate resolved value (neither `window` nor `global` available).
+ */
+let _globalStore: GlobalObjectStore | null | undefined = undefined;
+
+/**
+ * Resolves the global object store once and reuses it.
+ *
+ * `GetGlobalObjectStore()` probes a bare `window` identifier, which in Node throws a
+ * ReferenceError that is then caught — measured at ~1.4µs per call, ~45x the cost of the
+ * property reads it guards. `GetDataHooks` sits on the RunView hot path (every cache hit
+ * consults the PostRunView slot), so paying that per call is not viable.
+ *
+ * Memoizing is safe because the global object is fixed for the life of the process. This
+ * caches the STORE, not the hooks, so the cross-duplicate contract is unchanged: every
+ * copy of this module still reads and writes the same global slot, and hooks registered
+ * through one copy remain visible to all of them.
+ */
+function globalStore(): GlobalObjectStore | null {
+    if (_globalStore === undefined) {
+        _globalStore = GetGlobalObjectStore();
+    }
+    return _globalStore;
+}
+
+/**
  * Registers a hook function into a named slot. Called by serve() after
  * middleware discovery and deduplication. Hooks are stored in insertion order
  * (serve() inserts them in ClassFactory registration order -- MJ first,
@@ -66,7 +92,7 @@ const DATA_HOOKS_KEY = '__mj_dataHooks';
  * via ClassFactory.
  */
 export function RegisterDataHook(hookName: HookName | string, hook: unknown): void {
-    const gos = GetGlobalObjectStore();
+    const gos = globalStore();
     if (!gos) return;
     if (!gos[DATA_HOOKS_KEY]) gos[DATA_HOOKS_KEY] = {};
     const store = gos[DATA_HOOKS_KEY] as Record<string, unknown[]>;
@@ -81,7 +107,7 @@ export function RegisterDataHook(hookName: HookName | string, hook: unknown): vo
  * Used by ProviderBase.RunPreRunViewHooks() and BaseEntity.RunPreSaveHooks().
  */
 export function GetDataHooks<T>(hookName: HookName | string): T[] {
-    const gos = GetGlobalObjectStore();
+    const gos = globalStore();
     if (!gos) return [];
     const store = gos[DATA_HOOKS_KEY] as Record<string, unknown[]> | undefined;
     return (store?.[hookName] ?? []) as T[];
@@ -91,7 +117,7 @@ export function GetDataHooks<T>(hookName: HookName | string): T[] {
  * Removes all hooks from all slots. For testing only.
  */
 export function ClearAllDataHooks(): void {
-    const gos = GetGlobalObjectStore();
+    const gos = globalStore();
     if (gos) {
         gos[DATA_HOOKS_KEY] = {};
     }

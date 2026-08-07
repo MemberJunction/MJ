@@ -6,14 +6,16 @@
  * LocalCacheManager cache entry. Since the cache deep-freezes rows on reference-sharing storage
  * providers, `_raw` is frequently frozen.
  *
- * The trap this pins: `Get()` writes back into `_raw` to MEMOIZE a converted Date (and an
+ * The trap this pins: `Get()` used to write back into `_raw` to MEMOIZE a converted Date (and an
  * rtrimmed fixed-width string). On a frozen row that write throws, so merely READING such a
  * field turned into a `TypeError` — which is exactly how `Cannot assign to read only property
  * 'Currency'` broke AI cost calculation (`Currency` is a fixed-width column). Found by the live
- * IT70 integration run, not by any unit test, so it gets one here.
+ * IT71 integration run, not by any unit test, so it gets one here.
  *
- * The memo is an optimization, never a correctness requirement: skipping it costs a re-parse per
- * read and nothing else. These tests assert the read still returns the right converted value.
+ * `Get()` now memoizes into a per-instance side table instead of the row, so the source row is
+ * never written to at all — frozen or not. See `baseEntity.rawConversionMemo.test.ts` for why the
+ * earlier "sample Object.isFrozen once at load and skip the memo" mitigation could not be made
+ * correct (the freeze is asynchronous relative to the consumer, so the sample goes stale).
  *
  * NOTE on the fixture: the raw-mode fast path requires a plain-object load into a fresh instance
  * of a NON-parent-type entity with primary keys (`canTakeFastPath`). The shared MockEntityData
@@ -87,8 +89,9 @@ class MJCachedRowEntity extends BaseEntity {
         const s = this as unknown as { _raw: unknown; _fieldsHydrated: boolean };
         return s._raw !== null && !s._fieldsHydrated;
     }
-    public get RawIsFrozen(): boolean {
-        return (this as unknown as { _rawIsFrozen: boolean })._rawIsFrozen;
+    /** Number of conversions memoized into the per-instance side table (0 when none yet). */
+    public get MemoizedConversionCount(): number {
+        return (this as unknown as { _rawConverted: Map<string, unknown> | null })._rawConverted?.size ?? 0;
     }
 }
 
@@ -115,13 +118,13 @@ function frozenRow(): Record<string, unknown> {
 }
 
 describe('BaseEntity raw-mode read of a frozen cache row', () => {
-    it('takes the raw-mode fast path and records the source row as frozen', async () => {
-        // Guard against a vacuous suite: if this fails, the tests below prove nothing.
+    it('takes the raw-mode fast path (guard against a vacuous suite)', async () => {
+        // If this fails, the tests below prove nothing — they would be exercising the hydrated
+        // path, which copies values into EntityField instances and never touches the source row.
         const entity = new MJCachedRowEntity(entityInfo);
         await entity.LoadFromData(frozenRow());
 
         expect(entity.RawModeActive).toBe(true);
-        expect(entity.RawIsFrozen).toBe(true);
     });
 
     it('converts a string date field without throwing on the frozen source', async () => {
@@ -167,7 +170,9 @@ describe('BaseEntity raw-mode read of a frozen cache row', () => {
         expect(row['Currency']).toBe('USD  ');
     });
 
-    it('still memoizes when the source row is NOT frozen (optimization preserved)', async () => {
+    it('memoizes into the side table and leaves an UNFROZEN source row alone too', async () => {
+        // Non-mutation is unconditional, not a frozen-row special case: the row may be shared
+        // whether or not the freeze has landed on it yet.
         const entity = new MJCachedRowEntity(entityInfo);
         const row: Record<string, unknown> = {
             ID: 'cr-1',
@@ -175,14 +180,26 @@ describe('BaseEntity raw-mode read of a frozen cache row', () => {
             Currency: 'USD  ',
         };
         await entity.LoadFromData(row);
-        expect(entity.RawIsFrozen).toBe(false);
+        expect(entity.MemoizedConversionCount).toBe(0);
 
         entity.Get('StartTime');
         entity.Get('Currency');
 
-        // Unfrozen rows keep the write-back memo — the fast path is unchanged for them.
-        expect(row['StartTime']).toBeInstanceOf(Date);
-        expect(row['Currency']).toBe('USD');
+        // Both conversions cached on the instance...
+        expect(entity.MemoizedConversionCount).toBe(2);
+        // ...and the caller's row is untouched.
+        expect(row['StartTime']).toBe('2026-01-15T10:30:00.000Z');
+        expect(row['Currency']).toBe('USD  ');
+    });
+
+    it('memoizes on a FROZEN row as well — the optimization is no longer given up', async () => {
+        const entity = new MJCachedRowEntity(entityInfo);
+        await entity.LoadFromData(frozenRow());
+
+        const first = entity.Get('StartTime');
+        expect(entity.MemoizedConversionCount).toBe(1);
+        // Same instance back, rather than a fresh re-parse per read.
+        expect(entity.Get('StartTime')).toBe(first);
     });
 
     it('a frozen row does not block writing fields on the entity itself', async () => {

@@ -4187,7 +4187,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (cacheAvailable) {
                 const fingerprint = cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString
+                    this.InstanceConnectionString,
+                    undefined,
+                    this.datasetCacheSegment(datasetName, code)
                 );
                 const cached = await cache.GetRunViewResult(fingerprint);
                 if (cached) {
@@ -4229,7 +4231,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const fp = cacheAvailable
                 ? cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString
+                    this.InstanceConnectionString,
+                    undefined,
+                    this.datasetCacheSegment(datasetName, code)
                 )
                 : '';
             uncachedFingerprints.push(fp);
@@ -4421,7 +4425,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (cacheAvailable) {
                 const fingerprint = cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString
+                    this.InstanceConnectionString,
+                    undefined,
+                    this.datasetCacheSegment(datasetName, code)
                 );
                 const cached = await cache.GetRunViewResult(fingerprint);
                 if (cached) {
@@ -4570,6 +4576,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
     // Dataset Cache Helpers
     /**************************************************************************/
+
+    /**
+     * Key namespace for a dataset item's cached rows.
+     *
+     * Dataset items are cached through the same fingerprint builder ordinary RunViews use, with
+     * only `{ EntityName, ExtraFilter }` — and every shipped item has a NULL `WhereClause`, so
+     * without this segment a dataset item and a plain unfiltered read of the same entity produce
+     * an IDENTICAL key and share one slot. That leaks the `MJ_Metadata` scaffolding exemption
+     * (deliberately unfrozen rows) to ordinary callers of `MJ: Entities` / `MJ: Entity Fields`,
+     * and lets an ordinary read repopulate an evicted slot FROZEN, which then breaks the next
+     * metadata refresh.
+     *
+     * Keyed by dataset + item code so two items over the same entity also stay distinct.
+     * Callers must use this on the read, the write-through, and the status paths alike — the
+     * three must agree or dataset reads stop finding dataset writes.
+     */
+    protected datasetCacheSegment(datasetName: string, itemCode: string): string {
+        return `${datasetName}/${itemCode}`;
+    }
 
     /**
      * Computes the latest update date for a dataset item from its result rows and dataset metadata.

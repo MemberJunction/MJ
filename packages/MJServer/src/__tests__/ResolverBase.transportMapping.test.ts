@@ -194,3 +194,96 @@ describe('transport mapping against FROZEN cache rows', () => {
         expect(() => mapper.MapFields(cachedRow)).toThrow(TypeError);
     });
 });
+
+/**
+ * The BATCH path (`RunViewsGenericInternal`), which the single-view tests above do not reach
+ * (PR #3425 review, finding M8).
+ *
+ * This is the path multi-view clients actually take — MJExplorer batches its view loads — so
+ * leaving it uncovered meant the original corruption bug could be reintroduced on the more
+ * heavily used of the two legs with CI still green.
+ */
+class BatchProbe extends ResolverBase {
+    public filteredRows: Record<string, unknown>[] | null = null;
+
+    protected override async ArrayFilterEncryptedFieldsForAPI(
+        _entityName: string,
+        dataObjectArray: Record<string, unknown>[]
+    ): Promise<Record<string, unknown>[]> {
+        this.filteredRows = dataObjectArray;
+        return dataObjectArray;
+    }
+
+    public RunBatch(provider: DatabaseProviderBase, viewInfos: MJUserViewEntityExtended[], userPayload: UserPayload) {
+        return this.RunViewsGenericInternal(
+            viewInfos.map(viewInfo => ({ provider, viewInfo, userPayload, resultType: 'simple' })) as never
+        );
+    }
+}
+
+/** Batch provider: `RunViews` returns one result per param, in order. */
+function fakeBatchProvider(rowsPerView: CachedRow[][]): DatabaseProviderBase {
+    return {
+        Entities: [{ Name: ENTITY_NAME, PrimaryKeys: [{ Name: 'ID' }] }],
+        EntityByName: (name: string) => (name === ENTITY_NAME ? { Name: ENTITY_NAME } : undefined),
+        RunViews: async (params: RunViewParams[]): Promise<RunViewResult[]> =>
+            params.map((_p, i) => {
+                const rows = rowsPerView[i] ?? [];
+                return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ErrorMessage: '' } as RunViewResult;
+            }),
+    } as unknown as DatabaseProviderBase;
+}
+
+describe('ResolverBase.RunViewsGenericInternal (batch) — cache safety', () => {
+    it('leaves every view\'s cache-held rows untouched while returning transport keys', async () => {
+        const viewARow: CachedRow = { ID: 'a1', Name: 'Cat', __mj_CreatedAt: 'T0', __mj_UpdatedAt: 'T1' };
+        const viewBRow: CachedRow = { ID: 'b1', Name: 'Dog', __mj_CreatedAt: 'T2', __mj_UpdatedAt: 'T3' };
+        const probe = new BatchProbe();
+
+        const results = await probe.RunBatch(
+            fakeBatchProvider([[viewARow], [viewBRow]]),
+            [fakeViewInfo(), fakeViewInfo()],
+            fakePayload()
+        );
+
+        // Both source rows keep entity field names — the assertion that fails on a revert
+        // to in-place mapping in the batch loop.
+        expect(viewARow.__mj_CreatedAt).toBe('T0');
+        expect(viewARow._mj__CreatedAt).toBeUndefined();
+        expect(viewBRow.__mj_CreatedAt).toBe('T2');
+        expect(viewBRow._mj__CreatedAt).toBeUndefined();
+
+        // ...and both outgoing views carry the aliases, on objects that are not the cached ones.
+        const wireA = results[0].Results as Record<string, unknown>[];
+        const wireB = results[1].Results as Record<string, unknown>[];
+        expect(wireA[0]._mj__CreatedAt).toBe('T0');
+        expect(wireB[0]._mj__CreatedAt).toBe('T2');
+        expect(wireA[0]).not.toBe(viewARow);
+        expect(wireB[0]).not.toBe(viewBRow);
+    });
+
+    it('maps FROZEN cache rows rather than throwing on them', async () => {
+        // The shape the cache actually hands out on a hit.
+        const frozenRow = Object.freeze({ ID: 'a1', Name: 'Cat', __mj_CreatedAt: 'T0' }) as CachedRow;
+        const probe = new BatchProbe();
+
+        const results = await probe.RunBatch(
+            fakeBatchProvider([[frozenRow]]),
+            [fakeViewInfo()],
+            fakePayload()
+        );
+
+        expect((results[0].Results as Record<string, unknown>[])[0]._mj__CreatedAt).toBe('T0');
+        expect(frozenRow.__mj_CreatedAt).toBe('T0');
+    });
+
+    it('hands the encrypted-field filter copies, not the cached rows', async () => {
+        const cachedRow: CachedRow = { ID: 'a1', Secret: 'plaintext', __mj_CreatedAt: 'T0' };
+        const probe = new BatchProbe();
+
+        await probe.RunBatch(fakeBatchProvider([[cachedRow]]), [fakeViewInfo()], fakePayload());
+
+        expect(probe.filteredRows).not.toBeNull();
+        expect(probe.filteredRows![0]).not.toBe(cachedRow);
+    });
+});

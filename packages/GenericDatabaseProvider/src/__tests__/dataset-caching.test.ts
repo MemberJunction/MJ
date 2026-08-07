@@ -224,7 +224,7 @@ describe('Dataset Caching in GetDatasetByName', () => {
     });
 
     it('does NOT mark a non-metadata dataset write as provider-internal scaffolding', async () => {
-        // Target contract (PR #3425 review, finding C2 — RED until the scoping fix): the
+        // Target contract (PR #3425 review, finding C2, now fixed): the
         // scaffolding exemption exists for MJ_Metadata, whose rows only the provider's own
         // assembly steps mutate. Every OTHER dataset is served to arbitrary consumers
         // (BaseEngine.Load hands `item.Results` — the live cached arrays — to every engine
@@ -340,19 +340,54 @@ describe('Dataset Caching in GetDatasetByName', () => {
                 ExtraFilter: "SchemaName = '__mj' AND (Status = 'Active')",
             }),
             // InstanceConnectionString is undefined in test context
-            undefined
+            undefined,
+            // No RLS clause is supplied on the dataset path...
+            undefined,
+            // ...but the dataset namespace segment is, so this item cannot share a cache slot
+            // with a plain RunView of the same entity (PR #3425 review, finding M3).
+            'MJ_Metadata/Entities'
         );
+    });
+
+    it('namespaces the dataset slot so it cannot collide with a plain RunView key', async () => {
+        // The collision this closes is exact: every shipped dataset item has a NULL WhereClause,
+        // so without the segment the dataset write emits byte-for-byte the fingerprint of an
+        // unfiltered `RunView` of the same entity — handing ordinary callers the deliberately
+        // UNFROZEN scaffolding rows for MJ: Entities and friends.
+        provider.setTrustLocalCache(true);
+        vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(true);
+        cacheGetSpy.mockResolvedValue(null);
+
+        provider.setExecuteSQLResults([
+            [buildDatasetItemRow({ Code: 'Entities' })],
+            [{ ID: '1' }],
+        ]);
+
+        await provider.GetDatasetByName('MJ_Metadata', undefined, mockUser);
+
+        expect(cacheFingerprintSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ EntityName: 'MJ: Entities' }),
+            undefined,
+            undefined,
+            'MJ_Metadata/Entities'
+        );
+        // And every fingerprint call on this path carries a segment — read and write-through
+        // alike, since a mismatch would mean dataset reads never find dataset writes.
+        for (const call of cacheFingerprintSpy.mock.calls) {
+            expect(call[3]).toBe('MJ_Metadata/Entities');
+        }
     });
 });
 
 describe('Dataset Caching in GetDatasetStatusByName', () => {
     let provider: TestProvider;
     let cacheGetSpy: ReturnType<typeof vi.spyOn>;
+    let datasetFingerprintSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
         provider = new TestProvider();
         cacheGetSpy = vi.spyOn(LocalCacheManager.Instance, 'GetRunViewResult');
-        vi.spyOn(LocalCacheManager.Instance, 'GenerateRunViewFingerprint')
+        datasetFingerprintSpy = vi.spyOn(LocalCacheManager.Instance, 'GenerateRunViewFingerprint')
             .mockImplementation((params: RunViewParams) => {
                 const entity = params.EntityName?.trim() || 'Unknown';
                 const filter = (typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '').trim();
@@ -392,6 +427,17 @@ describe('Dataset Caching in GetDatasetStatusByName', () => {
         expect(result.EntityUpdateDates[0].EntityName).toBe('MJ: Entities');
         // Only 1 SQL call (metadata), no status queries
         expect(provider.executeSQLCalls).toHaveLength(1);
+
+        // The status path must key its lookup with the SAME dataset namespace the write-through
+        // uses (PR #3425 review, finding M3). If these ever drift apart, status silently stops
+        // finding the slot GetDatasetByName wrote and falls back to SQL on every call — a
+        // regression with no failing assertion anywhere else.
+        expect(datasetFingerprintSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ EntityName: 'MJ: Entities' }),
+            undefined,
+            undefined,
+            'MJ_Metadata/Entities'
+        );
     });
 
     it('falls back to SQL for cache misses in status check', async () => {

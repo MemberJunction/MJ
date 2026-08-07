@@ -35,11 +35,29 @@ to return). So the cache now defends itself:
   `TypeError` at the offending line instead of silently corrupting shared state, and cache
   **hits cost nothing extra** (the freeze is a one-time per-write cost). Applied at both write
   funnels: `SetRunViewResult` / `SetRunQueryResult` and `storeCachedResults`, the in-place
-  slot-maintenance path that bypasses the first. Serializing providers are untouched, so
-  client behavior is unchanged. The deep-freeze skips **binary payloads**
+  slot-maintenance path that bypasses the first. The freeze lands immediately after the only
+  gate that can decline a write (the synchronous oversized-entry check) and **before** the
+  awaited eviction steps — callers do not always await these methods, so any yield point
+  before the freeze is a window in which shared rows are handed out still mutable. Browser
+  clients are untouched (IndexedDB / localStorage serialize), but **Node-side clients — the
+  CLI, MetadataSync, and anything else on an in-memory provider — do get the freeze**, so
+  "client behavior is unchanged" holds only for the browser. The freeze decision also follows
+  the provider across `SetStorageProvider`: MJAPI initializes on the in-memory provider during
+  engine loading and swaps to Redis afterward, two providers with opposite semantics in one
+  process. The deep-freeze skips **binary payloads**
   (`Buffer`/TypedArray/`ArrayBuffer`, e.g. `varbinary` columns — `Object.freeze` throws on
   non-empty views by spec), freezes parent-first so cycles terminate, and a freeze failure of
   any kind degrades to a logged, unfrozen store — it can never fail a `RunView`/`RunQuery`.
+- **Dataset cache slots get their own key namespace.** `GetDatasetByName` keyed its
+  write-through cache with the same fingerprint builder ordinary reads use, passing only
+  `{ EntityName, ExtraFilter }` — and every shipped dataset item has a NULL `WhereClause`, so a
+  dataset item and a plain unfiltered `RunView` of the same entity produced an IDENTICAL key and
+  silently shared one slot. That leaked the `MJ_Metadata` scaffolding exemption below to ordinary
+  callers of `MJ: Entities` / `MJ: Entity Fields` (the most-read entities in the process, served
+  unfrozen), and in the other direction let an ordinary read repopulate an evicted slot FROZEN so
+  the next metadata refresh threw. `GenerateRunViewFingerprint` now takes an optional dataset
+  segment, appended only when supplied — ordinary reads keep their exact pre-existing key, so no
+  existing cache entry is invalidated.
 - **`CacheWriteOptions.ProviderInternalScaffolding`** exempts slots whose only consumer is the
   provider that wrote them — scoped to the **`MJ_Metadata` dataset only** at its single write
   site. Metadata bootstrap needs this: the provider's own assembly (`PostProcessEntityMetadata`,
@@ -54,9 +72,19 @@ Pre-existing consumer bugs surfaced by the freeze and fixed:
 - **`BaseEntity.Get()` wrote to its own source row.** The raw-mode fast path keeps the caller's
   row by reference and `Get()` wrote back into it to memoize a converted `Date` or an rtrimmed
   fixed-width string — so on a cache-served row, *reading* a `datetime` or `CHAR(n)` field threw.
-  This broke AI cost calculation on `MJ: AI Model Costs.Currency`. The memo is now skipped when
-  the source row is frozen; the conversion still returns the correct value, and unfrozen rows
-  keep the optimization.
+  This broke AI cost calculation on `MJ: AI Model Costs.Currency`. `Get()` now memoizes into a
+  per-instance side table and never writes to the row at all. Gating the write on a once-sampled
+  `Object.isFrozen` was not sufficient: the freeze is asynchronous relative to the consumer (cache
+  writes are not always awaited), so the sample could be stale by the first read and the write
+  still threw. Keeping the memo off the row makes freeze timing irrelevant AND restores the
+  optimization for frozen rows, which the isFrozen-guard version had given up.
+- **`ResolverBase.MapFieldNamesToCodeNames` renamed fields on its argument.** Callers pass rows
+  straight from `findBy`/`RunView` — the cache's own objects — so with the freeze in place
+  `UserByEmail`, `UserByID`, `UserByEmployeeID` and every CodeGen-generated single-record resolver
+  over a cached entity threw `Cannot add property _mj__CreatedAt, object is not extensible`
+  (reproduced live against a running MJAPI). Before the freeze it did something quieter and worse:
+  it rewrote the cached row's keys. It now returns a copy, which fixes every call site at once;
+  `ArrayMapFieldNamesToCodeNames` likewise returns a new array of new objects.
 - **`GenericDatabaseProvider.serveFromServerCache` and the smart-cache legs** duplicated
   `CachedRunViewResult` as four inline structural types, which had already caused one silent
   field drop; they now share the canonical type.
@@ -70,6 +98,22 @@ Pre-existing consumer bugs surfaced by the freeze and fixed:
   `BaseServerMiddleware.PostRunView`) now state that rows may be frozen shared cache state:
   modify by mapping onto copies (`results.Results = results.Results.map(r => ({ ...r, ... }))`)
   or return a new result — never mutate rows in place.
+
+- **Cache-served reads skipped the `PostRunView` hook chain entirely.** `PostRunView` is the
+  OUTPUT half of the data-hook enforcement seam (masking / audit) and hooks receive
+  `contextUser`, so masking is per-user while a cache slot is shared — there is no correct way
+  to apply it once at write time for a reader who has not arrived yet. Three of the four server
+  paths already ran the chain (miss, mixed batch, client smart-cache); the singular cache hit and
+  the all-cached batch returned early, so masking depended on whether a *sibling* view in the same
+  batch happened to miss. This looked correct before only by accident: the cache write precedes
+  the hooks, so an in-place masking hook wrote through into the cached rows — which both made
+  later hits appear masked and baked one user's masking decision into a shared slot. Both hit
+  paths now run the chain against the per-hit result wrapper, so a hook's replacement reaches the
+  caller and can never write back into the cache. The zero-hook path (the default — no shipped
+  middleware overrides `PostRunView`) costs ~80ns, down from ~2.4µs: `GetDataHooks` now memoizes
+  the resolved global object store, whose `GetGlobalObjectStore()` probe throws and catches a
+  `ReferenceError` on every call under Node (~1.4µs), and the hit paths check for registered hooks
+  before awaiting the chain.
 
 The cache result types stay ordinary mutable arrays, documented as shared-and-frozen: the runtime
 freeze is the enforcement, and a `readonly` marker would have broken existing downstream readers
