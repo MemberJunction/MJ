@@ -243,7 +243,16 @@ export class WorkflowSpecSync {
 
         const entityAction = await this.upsertEntityAction(entity.ID, action.ID, context);
         await this.upsertInvocation(entityAction.ID, invocationType.ID, context);
-        await this.upsertAgentParam(entityAction.ID, action.ID, agentID, context);
+
+        // Which agent to run — fixed for the life of the binding.
+        await this.upsertActionParam(entityAction.ID, action.ID, 'AgentID', 'Static', agentID, context);
+
+        // WHICH RECORD changed. Without this the trigger fires and the agent has no idea what it is
+        // looking at — a workflow that runs on every invoice update knowing nothing about any
+        // invoice. `Entity Object Data` rather than `Entity Object` is not a preference: a
+        // BaseEntity serializes to `{}` because its fields are getters, not enumerable own
+        // properties, so the live instance would arrive empty. `GetAll()` is what survives the wire.
+        await this.upsertActionParam(entityAction.ID, action.ID, 'Data', 'Entity Object Data', null, context);
     }
 
     /** Finds or creates the Entity Action binding this workflow needs. */
@@ -314,31 +323,32 @@ export class WorkflowSpecSync {
     }
 
     /**
-     * Points the binding at this workflow's agent.
+     * Finds or creates one Entity Action Param binding.
      *
-     * A static value rather than a script: the agent is fixed for the life of the binding, and a
-     * script would be an expression evaluated on every save of every matching record for no gain.
+     * `value` is null for value types the platform derives at invocation time (`Entity Object Data`,
+     * `Entity Object`, `Entity Field`) — for those the ValueType *is* the instruction.
      */
-    private async upsertAgentParam(
+    private async upsertActionParam(
         entityActionID: string,
         actionID: string,
-        agentID: string,
+        paramName: string,
+        valueType: MJEntityActionParamEntity['ValueType'],
+        value: string | null,
         context: WorkflowSyncContext,
     ): Promise<void> {
         const rv = RunView.FromMetadataProvider(context.Provider);
         const paramResult = await rv.RunView<MJActionParamEntity>(
             {
                 EntityName: 'MJ: Action Params',
-                ExtraFilter: `ActionID='${actionID}' AND Name='AgentID'`,
+                ExtraFilter: `ActionID='${actionID}' AND Name='${paramName}'`,
                 ResultType: 'entity_object',
             },
             context.ContextUser,
         );
         const actionParam = paramResult.Results?.[0];
         if (!actionParam) {
-            // Not fatal on its own — the binding still fires — but the agent would be unresolvable,
-            // so it is surfaced rather than left as a trigger that runs and does nothing.
-            throw new Error(`the '${EXECUTE_AGENT_ACTION}' action has no AgentID parameter to bind`);
+            // Surfaced rather than left as a trigger that fires and does nothing useful.
+            throw new Error(`the '${EXECUTE_AGENT_ACTION}' action has no ${paramName} parameter to bind`);
         }
 
         const existingResult = await rv.RunView<MJEntityActionParamEntity>(
@@ -355,10 +365,10 @@ export class WorkflowSpecSync {
 
         row.EntityActionID = entityActionID;
         row.ActionParamID = actionParam.ID;
-        row.ValueType = 'Static';
-        row.Value = agentID;
+        row.ValueType = valueType;
+        row.Value = value;
         if (!(await row.Save())) {
-            throw new Error(`could not bind the agent to the trigger: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            throw new Error(`could not bind ${paramName} to the trigger: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
     }
 
