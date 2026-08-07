@@ -689,6 +689,24 @@ main:has(.mjd-landing) footer {
   display: block;
 }
 
+/* ─── Themed content images ───────────────────────────────────────────────
+ * Pairs emitted by scripts/lib/theme-picture.mjs, which unrolls the READMEs'
+ * prefers-color-scheme <picture> blocks (right for GitHub, wrong here — they
+ * key off the OS, not the site's theme toggle). Same swap doctrine as the
+ * brand bar above: `data-theme`, never a media query.
+ */
+.mjd-themed-img--on-dark {
+  display: none;
+}
+
+:root[data-theme='dark'] .mjd-themed-img--on-light {
+  display: none;
+}
+
+:root[data-theme='dark'] .mjd-themed-img--on-dark {
+  display: inline-block;
+}
+
 .mjd-brandbar__legal {
   margin: 0;
   font-size: 0.8125rem;
