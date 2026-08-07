@@ -150,6 +150,7 @@ export * from './resolvers/DatasetResolver.js';
 export * from './resolvers/EntityRecordNameResolver.js';
 export * from './resolvers/MergeRecordsResolver.js';
 export * from './resolvers/QueryResolver.js';
+export * from './services/TaskOrchestrator.js';
 export * from './resolvers/TestQuerySQLResolver.js';
 export * from './resolvers/SqlLoggingConfigResolver.js';
 export * from './resolvers/SyncRolesUsersResolver.js';
