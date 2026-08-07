@@ -1,5 +1,5 @@
-import { MJGlobal, RegisterClass } from '@memberjunction/global';
-import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { AIPromptParams, AIPromptRunResult } from '@memberjunction/ai-core-plus';
@@ -358,7 +358,7 @@ export class HarnessAgentBase extends BaseAgent {
                 return undefined;
             }
 
-            const md = promptParams.contextUser ? new Metadata() : new Metadata();
+            const md = this.ProviderToUse;
             const run = await md.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', promptParams.contextUser);
             run.NewRecord();
             run.PromptID = ids.PromptID;
@@ -625,7 +625,7 @@ export class HarnessAgentBase extends BaseAgent {
      */
     private async loadCredentialValue(credentialId: string, contextUser?: UserInfo): Promise<string | null> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
             if (!(await credential.Load(credentialId))) {
                 return null;
@@ -808,7 +808,7 @@ export class HarnessAgentBase extends BaseAgent {
             // to the fallback and the harness never received the agent's own instructions. It failed
             // quietly because a fallback existed, which is exactly what made it survive two rounds of
             // fixing this same symptom.
-            const template = TemplateEngineServer.Instance.Templates.find((t) => t.ID === prompt.TemplateID);
+            const template = TemplateEngineServer.Instance.Templates.find((t) => UUIDsEqual(t.ID, prompt.TemplateID));
             const content = template?.GetHighestPriorityContent();
             if (template && content) {
                 const rendered = await TemplateEngineServer.Instance.RenderTemplate(
