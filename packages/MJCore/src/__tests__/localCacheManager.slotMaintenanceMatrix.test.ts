@@ -193,6 +193,7 @@ describe('LocalCacheManager — slot maintenance matrix (slot type x mutation)',
             expect(hasNarrowing([...base, 'imr:1'])).toBe(false);                    // widens the set
             expect(hasNarrowing([...base, 'rls:abc123'])).toBe(true);                // narrows (H3)
             expect(hasNarrowing([...base, 'vw:some-view-id'])).toBe(true);           // narrows (H1)
+            expect(hasNarrowing([...base, 'fls:9f8e7d'])).toBe(true);                // narrows COLUMNS (field security)
             expect(hasNarrowing([...base, 'futureSegment:whatever'])).toBe(true);    // UNKNOWN → deny
         });
 
@@ -252,6 +253,75 @@ describe('LocalCacheManager — slot maintenance matrix (slot type x mutation)',
             const parts = fp.split('|');
             expect(parts[3]).toBe('7');
             expect(parts[4]).toBe('3');
+        });
+
+        // ── The fls: segment (field-level security) ──────────────────────────
+        //
+        // A field-restricted user's slot holds NARROWER COLUMNS than an unrestricted user's,
+        // so it must behave exactly like rls: does for rows: distinct slot identity, never
+        // maintained in place, and — critically — still reachable by the entity→fingerprint
+        // reverse index so a mutation actually invalidates it. The third property is the one
+        // a new segment could silently break, and stale-forever is worse than a refill.
+        describe('fls: segment (field security)', () => {
+            const fpWithFls = (flsKey: string): string =>
+                (cache as unknown as {
+                    GenerateRunViewFingerprint(p: RunViewParams, conn?: string, rls?: string, fls?: string): string;
+                }).GenerateRunViewFingerprint({ EntityName: ENTITY }, 'mssql://localhost:1433/', '', flsKey);
+
+            it('appends in the SUFFIX region — every positional base index is unmoved', () => {
+                // The whole reason segment-indexing bugs recur here: a new segment inserted
+                // before the base ones silently shifts filter/orderBy/agg/userSearch.
+                const parts = (cache as unknown as {
+                    GenerateRunViewFingerprint(p: RunViewParams, conn?: string, rls?: string, fls?: string): string;
+                }).GenerateRunViewFingerprint(
+                    { EntityName: ENTITY, ExtraFilter: "Status='Active'", OrderBy: 'Name ASC', MaxRows: 7, StartRow: 3, UserSearchString: 'gala' },
+                    'mssql://localhost:1433/', '', 'salary'
+                ).split('|');
+
+                expect(parts[0]).toBe(ENTITY);
+                expect(parts[1]).toBe("Status='Active'");
+                expect(parts[2]).toBe('Name ASC');
+                expect(parts[3]).toBe('7');
+                expect(parts[4]).toBe('3');
+                expect(parts[6]).toBe('gala');
+                expect(parts.some(s => s.startsWith('fls:'))).toBe(true);
+            });
+
+            it('leaves the base-segment classifiers correct when an fls: segment is present', () => {
+                const c = cache as unknown as {
+                    hasUserSearch(p: string[]): boolean;
+                    hasAggregates(p: string[]): boolean;
+                    isSubsetFingerprint(f: string): boolean;
+                };
+                const base = ['E', '_', '_', '-1', '0', '_', '_'];
+                expect(c.hasUserSearch([...base, 'fls:abc'])).toBe(false);
+                expect(c.hasAggregates([...base, 'fls:abc'])).toBe(false);
+                expect(c.isSubsetFingerprint(['E', '_', '_', '5', '0', '_', '_', 'fls:abc'].join('|'))).toBe(true);
+                expect(c.isSubsetFingerprint(['E', '_', '_', '-1', '0', '_', '_', 'fls:abc'].join('|'))).toBe(false);
+            });
+
+            it('an fls:-keyed slot is still DISCOVERABLE by the entity index (so it gets invalidated, not stranded)', async () => {
+                const fp = fpWithFls('salary');
+                const params: RunViewParams = { EntityName: ENTITY };
+                await cache.SetRunViewResult(fp, params, rows(2), '2024-06-15T00:00:00.000Z', undefined, 2);
+
+                expect(cache.GetFingerprintsForEntity(ENTITY).has(fp)).toBe(true);
+
+                await cache.InvalidateEntityCaches(ENTITY);
+                expect(await cache.GetRunViewResult(fp)).toBeNull();
+            });
+
+            it('restricted and unrestricted slots are DISTINCT, and equal denied sets share one', () => {
+                const unrestricted = fpWithFls('');
+                const restricted = fpWithFls('salary');
+                const otherClass = fpWithFls('bonus,salary');
+
+                expect(restricted).not.toBe(unrestricted);
+                expect(restricted).not.toBe(otherClass);
+                expect(restricted).toBe(fpWithFls('salary'));
+                // An unrestricted user's fingerprint is byte-identical to the pre-FLS format.
+                expect(unrestricted).not.toContain('fls:');
+            });
         });
     });
 

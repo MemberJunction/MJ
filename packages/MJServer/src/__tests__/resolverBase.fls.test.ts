@@ -287,3 +287,57 @@ describe('ResolverBase.StripDeniedReadFieldsFromClientInput', () => {
         expect(clientNewValues).not.toHaveProperty('SALARY');
     });
 });
+
+// ─── Write-only fields (denied-read + update-ALLOWED) — D-2 refinement ────
+//
+// Under the not-loaded contract the client OMITS fields it was never shown, so a value
+// that IS present for a denied-read field is a deliberate write. Only fields that are
+// ALSO denied-update get stripped; write-only values flow to the normal save guard.
+
+describe('write-only fields pass through the strip', () => {
+    const resolver = new TestResolver();
+
+    /** Salary: HR full access; intern denied READ but ALLOWED update (the SSN-capture shape). */
+    function writeOnlyEntity(): EntityInfo {
+        const init = employeeEntityInit(true);
+        const fields = init['Fields'] as Array<Record<string, unknown>>;
+        const salary = fields.find(f => f['Name'] === 'Salary')!;
+        salary['EntityFieldPermissions'] = [
+            { ID: 'p1', EntityFieldID: 'f-salary', RoleID: HR_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: true },
+            { ID: 'p2', EntityFieldID: 'f-salary', RoleID: INTERN_ROLE_ID, Type: 'Allow', CanRead: false, CanUpdate: true },
+        ];
+        return new EntityInfo(init);
+    }
+
+    it('a deliberate write to a denied-read + update-allowed field is NOT stripped', () => {
+        const entity = writeOnlyEntity();
+        const { input, clientNewValues } = makeClientPayload({ ID: '1', Salary: 123456 });
+        const result = resolver.TestStrip(entity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
+
+        expect(result).toBe(true); // truth-load still forced — the denied-read set is non-empty
+        expect(clientNewValues['Salary']).toBe(123456);
+        expect(input['Salary']).toBe(123456);
+    });
+
+    it('the write-only field\'s OldValues entry is still removed (the client cannot know a true old value)', () => {
+        const entity = writeOnlyEntity();
+        const { input, clientNewValues } = makeClientPayload(
+            { ID: '1', Salary: 123456 },
+            [{ Key: 'ID', Value: '1' }, { Key: 'Salary', Value: '99' }]
+        );
+        resolver.TestStrip(entity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
+
+        expect(input.OldValues___).toEqual([{ Key: 'ID', Value: '1' }]);
+        expect(clientNewValues['Salary']).toBe(123456);
+    });
+
+    it('a read+update-denied field on the SAME entity is still stripped while the write-only one passes', () => {
+        // Base Salary stays HR-only (denied read AND update for the intern); Salary is write-only.
+        const entity = writeOnlyEntity();
+        const { input, clientNewValues } = makeClientPayload({ ID: '1', Salary: 123456, Base_Salary: 7 });
+        resolver.TestStrip(entity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
+
+        expect(clientNewValues['Salary']).toBe(123456);
+        expect(clientNewValues).not.toHaveProperty('Base_Salary');
+    });
+});
