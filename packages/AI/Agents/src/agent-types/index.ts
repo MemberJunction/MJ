@@ -13,4 +13,6 @@
 export * from './base-agent-type';
 export * from './loop-agent-type';
 export * from './flow-agent-type';
+export * from './flow-agent-prompt-params';
+export * from './flow-graph-adapters';
 export * from './realtime-agent-type';

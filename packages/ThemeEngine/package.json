@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/theme-engine",
   "type": "module",
-  "version": "6.0.0",
+  "version": "6.1.0-edge.0",
   "description": "MemberJunction: Theme Engine - framework-agnostic derivation of the full --mj-* token contract from a small set of brand seeds (OKLCH ramps, state families, dark re-point, viz palette, shadows, a11y contrast report). Shared by the Angular theme builder and future server overlay endpoint.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

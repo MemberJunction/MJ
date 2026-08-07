@@ -429,5 +429,101 @@
       "lastModified": "2026-07-01T17:33:49.233Z",
       "checksum": "78dddb644c91a4a7ded6c5a6dce59ee727f9537911165d8df1f9c22610432e88"
     }
+  },
+  {
+    "fields": {
+      "Name": "Submit Task Graph",
+      "OperationKey": "TaskGraph.Submit",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Control",
+      "Description": "Validate and durably persist a dependency-ordered task graph, returning as soon as it is safe. Does NOT wait for execution: the durable dispatcher runs the graph independently, so a submitted graph outlives the submitting request, agent run, and server. Producer-agnostic — an agent, deterministic code, or a UI can all submit. Implemented by TaskGraphSubmitOperation in @memberjunction/task-graph.",
+      "GenerationType": "Manual",
+      "ExecutionMode": "Sync",
+      "RequiredScope": "taskgraph:execute",
+      "RequiresSystemUser": false,
+      "Status": "Active",
+      "InputTypeName": "TaskGraphSubmitInput",
+      "InputTypeDefinition": "/** Input for `TaskGraph.Submit`. */\nexport interface TaskGraphSubmitInput {\n    /** The graph to submit, as a `TaskGraphSpec`. */\n    spec: {\n        workflowName: string;\n        reasoning?: string;\n        tasks: Array<{\n            tempId: string;\n            name: string;\n            description: string;\n            agentName?: string;\n            assignToUser?: boolean;\n            dependsOn: string[];\n            inputPayload?: Record<string, unknown>;\n        }>;\n        continuation?: 'message' | 'reinvoke' | 'none';\n        durable?: boolean;\n    };\n    /** Environment the tasks belong to. */\n    environmentID: string;\n    /** Conversation this graph answers, when submitted from a conversational channel. */\n    conversationDetailID?: string;\n}",
+      "OutputTypeName": "TaskGraphSubmitOutput",
+      "OutputTypeDefinition": "/** Output of `TaskGraph.Submit`. */\nexport interface TaskGraphSubmitOutput {\n    /** True when the graph was validated and persisted. */\n    success: boolean;\n    /** Parent task representing the whole graph — the handle for status, cancel and retry. */\n    parentTaskID?: string;\n    /** Every validation failure, not just the first, when the graph was rejected. */\n    errorMessage?: string;\n}"
+    },
+    "primaryKey": {
+      "ID": "9A3CAF75-D794-4223-9AEE-A40AE8A0A012"
+    },
+    "sync": {
+      "lastModified": "2026-08-07T06:16:02.966Z",
+      "checksum": "5c706e323d64108c07f34914a1029076e60669ed6d653d5b3f02541d668252af"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cancel Task Graph",
+      "OperationKey": "TaskGraph.Cancel",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Control",
+      "Description": "Cancel a task graph and every task in it that has not already settled. Children are cancelled before the parent so the dispatcher cannot pick up pending work mid-cancel. Terminal tasks are left untouched. Implemented by TaskGraphCancelOperation in @memberjunction/task-graph.",
+      "GenerationType": "Manual",
+      "ExecutionMode": "Sync",
+      "RequiredScope": "taskgraph:execute",
+      "RequiresSystemUser": false,
+      "Status": "Active",
+      "InputTypeName": "TaskGraphControlInput",
+      "InputTypeDefinition": "/** Input for the task-graph control operations. */\nexport interface TaskGraphControlInput {\n    /** Parent task ID identifying the graph. */\n    parentTaskID: string;\n}",
+      "OutputTypeName": "TaskGraphControlOutput",
+      "OutputTypeDefinition": "/** Output of the task-graph control operations — the graph's status after the action. */\nexport interface TaskGraphControlOutput {\n    success: boolean;\n    /** The parent task's status after the action. */\n    status?: string;\n    errorMessage?: string;\n}"
+    },
+    "primaryKey": {
+      "ID": "4B4F21F7-7C47-471C-A573-B39275EF23BB"
+    },
+    "sync": {
+      "lastModified": "2026-08-07T06:16:02.992Z",
+      "checksum": "16a65ee1663d8826d6a7566c6b1116c018bd8d3eb5a1e09806ca74f545014e4a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Retry Task",
+      "OperationKey": "TaskGraph.RetryTask",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Control",
+      "Description": "Return a failed task to Pending so the dispatcher runs it again, and clear any dependents it had Blocked. Unblocking is not optional: retrying a task while its dependents stay Blocked leaves the graph exactly as stuck as before. Implemented by TaskGraphRetryTaskOperation in @memberjunction/task-graph.",
+      "GenerationType": "Manual",
+      "ExecutionMode": "Sync",
+      "RequiredScope": "taskgraph:execute",
+      "RequiresSystemUser": false,
+      "Status": "Active",
+      "InputTypeName": "TaskGraphRetryInput",
+      "InputTypeDefinition": "/** Input for `TaskGraph.RetryTask`. */\nexport interface TaskGraphRetryInput {\n    /** The failed task to retry. */\n    taskID: string;\n}",
+      "OutputTypeName": "TaskGraphControlOutput",
+      "OutputTypeDefinition": null
+    },
+    "primaryKey": {
+      "ID": "4EB01F8A-B68E-4F59-AC0C-4A5D470A4808"
+    },
+    "sync": {
+      "lastModified": "2026-08-07T06:16:03.014Z",
+      "checksum": "a511cd2319d56bbd059cb425bc535a83b901a5b024b9412946aed50b89d8efea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Task Graph Status",
+      "OperationKey": "TaskGraph.GetStatus",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Control",
+      "Description": "Return a snapshot of a task graph's progress — the parent's rolled-up status and per-task states — without waiting for anything. This is how a client, an agent, or an external caller observes a running graph now that execution is durable and nobody holds a request open. Implemented by TaskGraphGetStatusOperation in @memberjunction/task-graph.",
+      "GenerationType": "Manual",
+      "ExecutionMode": "Sync",
+      "RequiredScope": "taskgraph:read",
+      "RequiresSystemUser": false,
+      "Status": "Active",
+      "InputTypeName": "TaskGraphControlInput",
+      "InputTypeDefinition": null,
+      "OutputTypeName": "TaskGraphStatusOutput",
+      "OutputTypeDefinition": "/** Output of `TaskGraph.GetStatus`. */\nexport interface TaskGraphStatusOutput {\n    success: boolean;\n    /** Rolled-up parent status: In Progress | Complete | Failed | Blocked | Cancelled. */\n    status?: string;\n    /** Percent complete, counting only tasks that actually completed. */\n    percentComplete?: number;\n    /** Per-task snapshot. */\n    tasks?: Array<{\n        taskID: string;\n        name: string;\n        status: string;\n        agentRunID?: string;\n        errorMessage?: string;\n    }>;\n    errorMessage?: string;\n}"
+    },
+    "primaryKey": {
+      "ID": "3A126CFF-363D-4272-B905-D35BE0F9956F"
+    },
+    "sync": {
+      "lastModified": "2026-08-07T06:16:03.030Z",
+      "checksum": "ba6016d3d02a397c562a4d3ca14e3cfb48c52c0d9929342e60e57a8669a8886c"
+    }
   }
 ]

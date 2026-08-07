@@ -159,7 +159,7 @@ jobs:
         run: node scripts/classify-explorer-components.mjs --min 85
 
       - name: Generic DOM coverage ratchet
-        run: node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=137
+        run: node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=135
 
       - name: Bootstrap DOM coverage ratchet
         run: node scripts/dom-test-report.mjs packages/Angular/Bootstrap --max-none=0

@@ -2637,7 +2637,6 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     if (rt === 'Dashboards' || config['dashboardId']) return 'Dashboards';
     if (rt === 'User Views' || rt === 'MJ: User Views' || config['viewId']) return 'User Views';
     if (rt === 'Queries' || config['queryId']) return 'Queries';
-    if (rt === 'Reports' || config['reportId']) return 'Reports';
     if (rt === 'Records' || (config['entity'] && config['recordId'])) return 'Records';
     if (rt === 'Custom' || config['navItemName']) return 'Custom';
     return rt || 'Custom';

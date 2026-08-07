@@ -50,6 +50,11 @@
                 "type": "boolean",
                 "default": true,
                 "description": "Include While in nextStep.type union. Auto-aligns with includeWhileDocs."
+              },
+              "tasks": {
+                "type": "boolean",
+                "default": false,
+                "description": "Include Tasks in nextStep.type union and the tasks property. Auto-aligns with enableTaskGraphs. Defaults to FALSE, unlike its siblings — an agent that has not opted into task graphs must not see the type at all, or the model will reach for it."
               }
             }
           },
@@ -93,6 +98,11 @@
             "default": true,
             "description": "Include current date, time, and day of week in the prompt. Provides the LLM with accurate temporal context so it doesn't hallucinate dates or claim it doesn't know the current time. Disable for agents where temporal context is irrelevant."
           },
+          "enableTaskGraphs": {
+            "type": "boolean",
+            "default": false,
+            "description": "Allow this agent to emit durable task graphs (nextStep.type == 'Tasks'). DEFAULTS TO FALSE, unlike every other flag here, and is ENFORCED rather than advisory. The other flags only shape the prompt: turning one off saves tokens, and an agent that emits the feature anyway still works. This one is a capability gate — a task graph creates durable Task rows that outlive the run, execute on a server-side dispatcher under the submitting user, and can spawn further agent runs, so acquiring that reach through prompt drift rather than deliberate configuration is a real problem, not a token-budget one. LoopAgentType rejects a 'Tasks' step from a disabled agent with a corrective, on top of omitting the type from the prompt."
+          },
           "maxSubAgentsInPrompt": {
             "type": "integer",
             "default": -1,
@@ -111,8 +121,8 @@
       "ID": "F7926101-5099-4FA5-836A-479D9707C818"
     },
     "sync": {
-      "lastModified": "2026-04-06T15:23:58.685Z",
-      "checksum": "fdf18fb82031607624100c1b743d4441d0772bc669a0ea4828152e5de30441e2"
+      "lastModified": "2026-08-07T16:03:57.700Z",
+      "checksum": "c2840f215fab40ff80cc04ea7fef0809a7b4b0f2f2366a159f043287fedac9a8"
     }
   },
   {
@@ -156,6 +166,23 @@
     "sync": {
       "lastModified": "2026-07-01T17:33:47.098Z",
       "checksum": "3ecab85d4d256f74ad6561ce8b7442c28b78af1e575af7e534712018d5a002ad"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Harness",
+      "Description": "Agent whose reasoning is supplied by an EXTERNAL agent harness (Claude Code, Codex CLI, OpenCode, Gemini CLI, Pi) running in a sandbox, while MJ keeps identity, permissions, governed data access, payload contracts, HITL, cost control and run-level audit. A harness turn is protocol-identical to a Loop iteration: the harness ends each turn by emitting the Loop next-step JSON envelope, and MJ executes any actions, sub-agents or skills through its own validated machinery before resuming the session. DriverClass resolves in BOTH ClassFactory registries - HarnessAgentType (protocol) under BaseAgentType and HarnessAgentBase (execution driver) under BaseAgent - so one value selects both halves.",
+      "DriverClass": "HarnessAgentType",
+      "SystemPromptID": "@lookup:MJ: AI Prompts.Name=Harness Agent Type: System Prompt",
+      "IsActive": true,
+      "AgentPromptPlaceholder": "agentSpecificPrompt"
+    },
+    "primaryKey": {
+      "ID": "B5B89CBE-E1DD-4C28-A242-199C3DA6A534"
+    },
+    "sync": {
+      "lastModified": "2026-08-07T05:49:48.468Z",
+      "checksum": "05920f6890aabc77d65e764525a2a8306c44000aebb95daa156186c8063668c2"
     }
   }
 ]

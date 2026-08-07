@@ -1116,5 +1116,83 @@
       "lastModified": "2026-07-07T15:18:38.755Z",
       "checksum": "661de8f6196eb2b93108bd41f31ecf28c60b811b611ba3c01666751b61b3cbf6"
     }
+  },
+  {
+    "_comments": [
+      "Third demo agent alongside Demo Loop Agent and Demo Flow Agent, showing the Harness agent",
+      "type: reasoning supplied by an EXTERNAL harness in a sandbox, with MJ keeping identity,",
+      "permissions, payload contracts, HITL and cost control.",
+      "",
+      "Status is Pending because it depends on an external binary. Activate it after flipping the",
+      "'Claude Code' row in MJ: AI Agent Harnesses to Active and making the `claude` binary",
+      "reachable — otherwise a fresh install would advertise an agent that cannot run.",
+      "",
+      "Sandbox defaults to the LOCAL provider, which scopes a workspace directory but does NOT",
+      "contain the process. That is a development posture. Switch to 'docker' for anything shared."
+    ],
+    "fields": {
+      "Name": "Demo Harness Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Demo",
+      "Description": "Simple demo agent showcasing the Harness agent type. Its reasoning runs inside an external agent harness (Claude Code by default) with a sandboxed filesystem and shell, while MemberJunction keeps identity, permissions, governed data access, payload contracts, HITL and cost control. Ends each turn with the same next-step JSON envelope a Loop agent emits, so actions and sub-agents execute through MJ's existing validated machinery.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Harness",
+      "Status": "Pending",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": false,
+      "AgentTypePromptParams": {},
+      "IconClass": "fa-solid fa-toolbox",
+      "TypeConfiguration": {
+        "harnessName": "Claude Code",
+        "sandbox": {
+          "provider": "local",
+          "workspaceScope": "agent-user",
+          "networkPolicy": "mcp-only"
+        },
+        "posture": "auto",
+        "permissions": {
+          "allowedTools": [
+            "Read",
+            "Grep",
+            "Glob"
+          ],
+          "disallowedTools": [
+            "Bash",
+            "Write",
+            "Edit",
+            "NotebookEdit"
+          ]
+        }
+      },
+      "MaxCostPerRun": 1,
+      "MaxIterationsPerRun": 10,
+      "MaxTimePerRun": 600000,
+      "InjectNotes": false,
+      "InjectExamples": false
+    },
+    "primaryKey": {
+      "ID": "265E1D42-966E-41CD-BEA6-748C73482C20"
+    },
+    "sync": {
+      "lastModified": "2026-08-07T05:49:48.586Z",
+      "checksum": "578856dc8be0002249a3530a1a1a344f136bf0342a060a2de5172f011be84b50"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Demo Harness Agent - Main Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C8D5B3E9-4F27-4E81-9A63-2D1F8C5B7A04"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T05:49:48.653Z",
+            "checksum": "f3909f82ad0c6241466dc00bd5bff922af9bef1e89f19e23934df7b853086294"
+          }
+        }
+      ]
+    }
   }
 ]

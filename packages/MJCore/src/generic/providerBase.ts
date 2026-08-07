@@ -16,7 +16,7 @@ import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
 import { Metadata } from "./metadata";
-import { RunView, RunViewParams } from "../views/runView";
+import { RunView, RunViewParams, IsMaterializedDataSource } from "../views/runView";
 import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
 import { TransformSimpleObjectToEntityObject } from "./util";
@@ -760,8 +760,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return result;
         }
 
-        // Client-side: delegate to RunViews which uses the smart cache check
-        // (lightweight maxUpdatedAt + rowCount validation against the server)
+        // Delegate to RunViews, which uses the smart cache check (lightweight maxUpdatedAt +
+        // rowCount validation against the server).
+        //
+        // NOT client-only: the guard above also sends SERVER reads down here whenever BypassCache
+        // or AfterKey is set — so every page of a keyset sweep arrives as a size-1 batch. Any
+        // "single vs batch RunView" reasoning must treat this branch as carrying single RunViews
+        // too: in particular, batch telemetry fingerprints must include per-view pagination
+        // cursors, or every page of a sweep collapses onto one fingerprint and falsely fires the
+        // Duplicate analyzer.
         const results = await this.RunViews<T>([params], contextUser);
         return results[0];
     }
@@ -1226,11 +1233,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      *   the seek key, so caching a page would poison the entity+filter slot
      * - `ResultType 'count_only'` — returns no rows; caching its empty Results under
      *   a fingerprint that excludes ResultType would poison row queries
+     * - `DataSource: 'Materialized'` — the snapshot is rebuilt OUT-OF-BAND by the scheduled refresh
+     *   (direct SQL, no BaseEntity save), so the entity's normal event-driven cache invalidation never
+     *   fires for it; a cached materialized result would be served indefinitely stale after a refresh.
+     *   Bypass caching entirely for materialized reads. (The `ds:materialized` fingerprint segment still
+     *   keeps the short-lived dedup/linger layer from cross-serving Live vs Materialized in-flight reads.)
      * - entities where server caching is disallowed
      */
     protected runViewCacheEligible(param: RunViewParams): boolean {
         return !param.BypassCache &&
             !param.AfterKey &&
+            !IsMaterializedDataSource(param.DataSource) &&
             param.ResultType !== 'count_only' &&
             (param.CacheLocal === true || this.TrustLocalCacheCompletely) &&
             this.IsServerCacheAllowedForEntity(param);
@@ -2362,11 +2375,34 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             'ProviderBase.RunViews',
             {
                 BatchSize: params.length,
-                Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID).filter(Boolean),
+                // '' placeholder (NOT .filter(Boolean)) for a view identified only by ViewEntity:
+                // Entities must stay index-parallel to Filters/OrderBys/StartRows/AfterKeys or the
+                // fingerprint attributes one view's filter/cursor to the next named entity.
+                // generateRunViewFingerprint skips falsy entries without disturbing the indexes.
+                Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID || ''),
                 // Per-view filter/orderBy parallel to Entities so the telemetry fingerprint can
                 // tell apart two batches over the same entity set but with different filters.
                 Filters: params.map(p => p.ExtraFilter as string | undefined),
                 OrderBys: params.map(p => p.OrderBy as string | undefined),
+                // Per-view pagination cursors, also parallel to Entities. Every page of a sweep
+                // shares the same entity+filter+orderBy and differs only here, so without these
+                // the pages collapse onto one fingerprint and the Duplicate analyzer fires from
+                // page 2 on. This path carries single RunViews too: RunView() delegates to
+                // RunViews([params]) whenever BypassCache or AfterKey is set (and always on the
+                // client), which is exactly what a keyset sweep does on every page.
+                StartRows: params.map(p => p.StartRow),
+                AfterKeys: params.map(p => p.AfterKey?.ToConcatenatedString()),
+                // Exemption was threaded through the DEPRECATED batch twin but not this one, so
+                // RunViewParams.Telemetry.Exempt was silently ineffective for every batch RunView —
+                // and, because RunView() delegates here whenever BypassCache or AfterKey is set,
+                // for those single reads too. A caller marking an intentional repeat got warned
+                // anyway, with no indication their exemption had been dropped.
+                //
+                // Exempt only when EVERY view in the batch is exempt: a batch is one telemetry
+                // event, so exempting it on the strength of one member would silently suppress
+                // findings about the others.
+                Exempt: params.length > 0 && params.every(p => p.Telemetry?.Exempt),
+                ExemptReason: params.find(p => p.Telemetry?.Reason)?.Telemetry?.Reason,
                 _fromEngine: fromEngine
             },
             contextUser?.ID
@@ -2528,7 +2564,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 param.Fields = entity.Fields.map(f => f.Name);
             }
 
-            if (param.CacheLocal && LocalCacheManager.Instance.IsInitialized) {
+            // Gate on runViewCacheEligible (NOT raw param.CacheLocal): the smart-cache-check path is a
+            // second, independent cache transport, and gating it on CacheLocal alone re-admits the exact
+            // params runViewCacheEligible excludes — DataSource:'Materialized' (out-of-band refreshed, no
+            // BaseEntity event), count_only, AfterKey, BypassCache, cache-disallowed entities. On a client
+            // (!TrustLocalCacheCompletely) runViewCacheEligible already implies CacheLocal===true, so this is
+            // strictly a tightening — normal cacheable slots are unaffected.
+            if (this.runViewCacheEligible(param) && LocalCacheManager.Instance.IsInitialized) {
                 cacheable.push({ paramIndex: i, fingerprint: this.clientCacheFingerprint(param) });
             }
         }
@@ -2730,8 +2772,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const entity = this.EntityByName(param.EntityName);
             const primaryKeyFieldName = entity?.FirstPrimaryKey?.Name || 'ID';
 
-            // Apply differential update to cache
-            if (param.CacheLocal && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
+            // Apply differential update to cache (runViewCacheEligible, not raw CacheLocal — see the
+            // cacheable-gate note in prepareSmartCacheCheckParams; keeps Materialized/count_only/etc. out).
+            if (this.runViewCacheEligible(param) && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
                 const merged = await LocalCacheManager.Instance.ApplyDifferentialUpdate(
                     fingerprint,
                     param,
@@ -2795,8 +2838,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 AggregateResults: checkResult.aggregateResults // Include fresh aggregate results
             };
 
-            // Update the local cache with fresh data (don't await - fire and forget for performance)
-            if (param.CacheLocal && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
+            // Update the local cache with fresh data (don't await - fire and forget for performance).
+            // runViewCacheEligible, not raw CacheLocal — see the cacheable-gate note; a first-time
+            // Materialized read reaches this 'stale' branch with fresh data and would otherwise be cached.
+            if (this.runViewCacheEligible(param) && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
                 const fingerprint = this.clientCacheFingerprint(param);
                 // Note: We don't await here to avoid blocking the response
                 // Cache update happens in background
@@ -3252,6 +3297,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // set to true, we still skip caching for this entity.
         if (entity.Name === 'MJ: Record Changes') return false;
 
+        // Same rationale for MATERIALIZED QUERY entities: their wrapper view (materialized_vw<CodeName>) is
+        // rebuilt OUT-OF-BAND by the scheduled materialization refresh (a direct-SQL atomic table swap),
+        // which fires no BaseEntity.Save event for this entity — so a cached read would be served the
+        // pre-refresh snapshot indefinitely. Identify them by BOTH the CodeGen wrapper-view naming convention
+        // AND the VirtualEntity flag (CodeGen mints these as virtual entities) — the conjunction avoids
+        // over-matching a real, event-invalidated entity that merely happens to be named materialized_vw*.
+        // (Base-view materializations reuse the SOURCE entity and are handled by the DataSource:'Materialized'
+        // bypass in runViewCacheEligible; this covers the query-materialization Live-read path.)
+        if (entity.VirtualEntity && entity.BaseView && entity.BaseView.toLowerCase().startsWith('materialized_vw')) return false;
+
         return entity.TrustServerCacheCompletely !== false;
     }
 
@@ -3451,11 +3506,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             'ProviderBase.RunViews',
             {
                 BatchSize: params.length,
-                Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID).filter(Boolean),
+                // '' placeholder (NOT .filter(Boolean)) — see PreRunViews: Entities must stay
+                // index-parallel to Filters/OrderBys/StartRows/AfterKeys.
+                Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID || ''),
                 // Per-view filter/orderBy parallel to Entities so the telemetry fingerprint can
                 // tell apart two batches over the same entity set but with different filters.
                 Filters: params.map(p => p.ExtraFilter as string | undefined),
                 OrderBys: params.map(p => p.OrderBy as string | undefined),
+                // Per-view pagination cursors — see PreRunViews: keeps each page of a sweep a
+                // distinct fingerprint instead of a false Duplicate RunView from page 2 onward.
+                StartRows: params.map(p => p.StartRow),
+                AfterKeys: params.map(p => p.AfterKey?.ToConcatenatedString()),
                 _fromEngine: fromEngine,
                 Exempt: batchExempt,
                 ExemptReason: params.find(p => p.Telemetry?.Reason)?.Telemetry?.Reason

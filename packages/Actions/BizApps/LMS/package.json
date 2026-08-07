@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/actions-bizapps-lms",
   "type": "module",
-  "version": "6.0.0",
+  "version": "6.1.0-edge.0",
   "description": "LMS system integration actions for MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -26,11 +26,11 @@
   "author": "MemberJunction",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "6.0.0",
-    "@memberjunction/global": "6.0.0",
-    "@memberjunction/actions-base": "6.0.0",
-    "@memberjunction/actions": "6.0.0",
-    "@memberjunction/core-entities": "6.0.0"
+    "@memberjunction/core": "6.1.0-edge.0",
+    "@memberjunction/global": "6.1.0-edge.0",
+    "@memberjunction/actions-base": "6.1.0-edge.0",
+    "@memberjunction/actions": "6.1.0-edge.0",
+    "@memberjunction/core-entities": "6.1.0-edge.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

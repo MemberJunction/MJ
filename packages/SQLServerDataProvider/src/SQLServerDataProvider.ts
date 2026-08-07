@@ -37,7 +37,6 @@ import {
   LogError,
   EntityRecordNameInput,
   EntityRecordNameResult,
-  IRunReportProvider,
   RecordDependency,
   EntityDependency,
   LogStatus,
@@ -262,7 +261,7 @@ async function executeSQLCore(
  */
 export class SQLServerDataProvider
   extends GenericDatabaseProvider
-  implements IEntityDataProvider, IMetadataProvider, IRunReportProvider, IColocatedVectorHost
+  implements IEntityDataProvider, IMetadataProvider, IColocatedVectorHost
 {
   /**************************************************************************/
   // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
@@ -304,6 +303,12 @@ export class SQLServerDataProvider
   // Instance transaction properties
   private _transaction: sql.Transaction;
   private _transactionDepth: number = 0;
+  /**
+   * Set while an OUTERMOST `BeginTransaction` is awaiting `sql.Transaction.begin()`. Concurrent
+   * `BeginTransaction` callers await this first so they cannot take the nested-savepoint branch
+   * before `_transaction` exists. Null whenever no begin is in flight.
+   */
+  private _beginInFlight: Promise<void> | null = null;
   private _savepointCounter: number = 0;
   private _savepointStack: string[] = [];
 
@@ -727,8 +732,18 @@ export class SQLServerDataProvider
 
     // Build array of SQL statements for batch execution
     const sqlStatements: string[] = [];
-    for (const { entityInfo, whereSQL } of items) {
-      const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+    for (const { entityInfo, whereSQL, item } of items) {
+      // The freshness probe MUST target the same physical view the read targets. For a
+      // DataSource:'Materialized' read that's the materialized_vw<CodeName> wrapper (a full SELECT *
+      // snapshot of the base view, so it carries __mj_UpdatedAt) — NOT the live base view. Probing the
+      // live view would compare the client's snapshot cache against an unrelated source's rowCount/
+      // maxUpdatedAt, yielding a meaningless current/stale verdict. (Materialized reads are normally kept
+      // out of the client cache by runViewCacheEligible, so this is defense-in-depth for any caller that
+      // still supplies a materialized cacheStatus.) Use the status-gated resolveEffectiveBaseView (not the
+      // unconditional GetEffectiveBaseView) so a Building/DriftHold/Disabled/never-minted snapshot probes the
+      // LIVE base view — mirroring the read path — instead of a held or missing materialized_vw wrapper.
+      const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
+      const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${effectiveView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
       sqlStatements.push(statusSQL);
     }
 
@@ -765,20 +780,23 @@ export class SQLServerDataProvider
 
   protected override async executeSQLForUserViewRunLogging(
     viewId: number,
-    entityBaseView: string,
+    entityInfo: EntityInfo,
+    effectiveBaseView: string,
     whereSQL: string,
     orderBySQL: string,
     user: UserInfo,
   ): Promise<{ executeViewSQL: string; runID: string }> {
-    const entityInfo = this.Entities.find((e) => e.BaseView.trim().toLowerCase() === entityBaseView.trim().toLowerCase());
+    // entityInfo + effectiveBaseView are passed in (no reverse-lookup by base-view name) so the logged
+    // read honors DataSource:'Materialized' — effectiveBaseView is the materialized wrapper view then,
+    // and the entity's live base view otherwise.
     const sSQL = `
             DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
-            INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE (${whereSQL}))
+            INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
     const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
-    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
+    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ` ORDER BY ${orderBySQL}` : ''}`;
     return { executeViewSQL: sRetSQL, runID };
@@ -2305,16 +2323,48 @@ IF ${varName} IS NOT NULL
   }
 
   public async BeginTransaction() {
+    // Serialize against an outermost begin that is still in flight. Without this, a second caller
+    // arriving during that window takes the depth-2 savepoint branch and issues
+    // `SAVE TRANSACTION` while `this._transaction` is still null — which silently runs it on the
+    // POOL, outside the transaction it is supposed to be marking. Swallow the in-flight begin's
+    // own rejection: if it failed, the depth is back to 0 and this caller must try its own begin.
+    while (this._beginInFlight) {
+      await this._beginInFlight.catch(() => undefined);
+    }
     try {
       this._transactionDepth++;
 
       if (this._transactionDepth === 1) {
-        // First transaction - actually begin using mssql Transaction object
-        this._transaction = new sql.Transaction(this._pool);
-        await this._transaction.begin();
-        
-        // Emit transaction state change
-        this._transactionState$.next(true);
+        // First transaction - actually begin using mssql Transaction object.
+        //
+        // 🚨 BEGIN LOCALLY, PUBLISH AFTER. `this._transaction` is a SHARED provider field that
+        // every ExecuteSQL call with no explicit connectionSource picks up (see ~1768). Assigning
+        // it before `begin()` resolves publishes an UN-BEGUN transaction to the whole process, and
+        // any concurrent query in that window dies with mssql's
+        //   "Transaction has not begun. Call begin() first."
+        // Worse, if `begin()` THROWS, the old code's catch block restored the depth but left the
+        // un-begun object assigned — poisoning the provider PERMANENTLY, so every later save on it
+        // failed with that same message until the process restarted.
+        //
+        // Found during the 6.1 release: it silently destroyed AI agent run persistence. Agent-run,
+        // step, prompt-run and heartbeat saves all failed ("Failed to create agent run record",
+        // "N step record save(s) failed"), leaving IT56/IT57's live checks with no steps to read.
+        // They therefore reported `model-noncompliance:` — byte-identically across every run and
+        // every model tier — for a defect that had nothing to do with the model.
+        const begun = (async () => {
+          const transaction = new sql.Transaction(this._pool);
+          await transaction.begin();
+          this._transaction = transaction;
+
+          // Emit transaction state change
+          this._transactionState$.next(true);
+        })();
+        this._beginInFlight = begun;
+        try {
+          await begun;
+        } finally {
+          this._beginInFlight = null;
+        }
       } else {
         // Nested transaction - create a savepoint
         const savepointName = `SavePoint_${++this._savepointCounter}`;
@@ -2328,6 +2378,14 @@ IF ${varName} IS NOT NULL
       }
     } catch (e) {
       this._transactionDepth--; // Restore depth on error
+      // Never leave a transaction object published once the depth is back to 0 — a non-null
+      // `_transaction` with no live transaction behind it poisons every subsequent ExecuteSQL on
+      // this provider. The publish-after-begin above already prevents the common case; this is the
+      // backstop that keeps the invariant true no matter how the begin failed.
+      if (this._transactionDepth === 0) {
+        this._transaction = null;
+        this._transactionState$.next(false);
+      }
       LogError(e);
       throw e; // force caller to handle
     }

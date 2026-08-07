@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
@@ -99,7 +99,8 @@ import {
     AgentRunStepSaveQueue,
     AgentSkillActivationRequest,
     AgentSkillInvocation,
-    ExtractPromptResultText
+    ExtractPromptResultText,
+    GetTaskGraphSubmitter
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -3514,7 +3515,10 @@ export class BaseAgent {
 
         // Set up the hierarchical prompt execution
         const promptParams = new AIPromptParams();
-        
+        // Attribute the resulting AIPromptRun to this agent. Agents share agent-type-level system
+        // prompts, so without this a parent's inference and its sub-agent's are indistinguishable.
+        promptParams.agentId = params.agent.ID;
+
         // Handle case where systemPrompt is optional (e.g., Flow Agent Type)
         if (systemPrompt) {
             promptParams.prompt = systemPrompt;
@@ -3836,6 +3840,12 @@ export class BaseAgent {
                 return this.validatePlanNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'ClientTools' as typeof nextStep.step:
                 // Client tools are valid - execution handled by executeClientToolsStep
+                return nextStep;
+            // Type assertion required because 'Tasks' is not part of the BaseAgentNextStep step
+            // union (submit-and-detach — the terminal step it produces is 'Success'). The graph was
+            // already validated against TaskGraphSpec by the agent type, so there is nothing left
+            // to check here; submission is handled by executeTasksStep.
+            case 'Tasks' as typeof nextStep.step:
                 return nextStep;
             default:
                 // if we get here, the next step is not recognized, we can return a retry step
@@ -4178,6 +4188,11 @@ export class BaseAgent {
         const availableSkills = AIEngine.Instance.GetAutoActivatableSkillsForAgent(params.agent, params.contextUser);
 
         const missingSkills = requested.filter(req => {
+            if (!req.name || typeof req.name !== 'string') {
+                // Malformed activation from the model (e.g. a hallucinated entry missing `name`) —
+                // treat as a missing skill so it goes through the normal retry path instead of throwing.
+                return true;
+            }
             const requestedName = req.name.trim().toLowerCase();
 
             const exactMatch = availableSkills.find(s => s.Name.trim().toLowerCase() === requestedName);
@@ -4667,6 +4682,30 @@ export class BaseAgent {
         reason?: string;
     }> {
         const agent = params.agent;
+
+        // Refresh the run's accumulated cost/token actuals before comparing them to the agent's
+        // static limits.
+        //
+        // The LIMITS are static — MaxCostPerRun and MaxTokensPerRun live on the agent and never
+        // change during a run. What was missing is the other side of the comparison: TotalCost and
+        // TotalTokensUsed are DERIVED from the run's steps by calculateTokenStats(), and the only
+        // writer (applyTokenStatsToRun) previously ran on terminal paths alone —
+        // createFailureResult / createCancelledResult / finalizeAgentRun — plus the post-compaction
+        // top-up, which only fires if compaction happens to trigger.
+        //
+        // So mid-run both fields sat at 0, and because the checks below are guarded on
+        // `agent.MaxCostPerRun && agentRun.TotalCost`, a falsy 0 short-circuited them entirely. The
+        // cost and token ceilings were evaluated only at the moment a run ENDED, which is too late
+        // to stop anything: they became reporting, not guardrails. Only the iteration and time
+        // limits actually interrupted a run, because TotalPromptIterations is incremented in the
+        // loop.
+        //
+        // Recomputing here rather than at the call site means every caller — including subclasses
+        // that override the loop — gets a truthful comparison, and the recompute is cheap: it walks
+        // the in-memory step array, with no database round trip.
+        if (this._agentRun === agentRun) {
+            this.applyTokenStatsToRun(agentRun, this.calculateTokenStats());
+        }
 
         // Check absolute maximum iterations (safety net to prevent infinite loops)
         const DEFAULT_ABSOLUTE_MAX_ITERATIONS = 5000;
@@ -5907,6 +5946,7 @@ The context is now within limits. Please retry your request with the recovered c
                 // Keys are the summarize-range.template.md contract ({{ lens }}, {{ messages }})
                 promptParams.data = { lens, messages: rangeText };
                 promptParams.contextUser = params.contextUser;
+                promptParams.agentId = params.agent.ID;
                 const result = await this._promptRunner.ExecutePrompt<string>(promptParams);
                 const text = ExtractPromptResultText(result);
                 if (!result.success || text.length === 0) {
@@ -6799,6 +6839,22 @@ The context is now within limits. Please retry your request with the recovered c
             // Otherwise default to true if not set
             else if (responseType[responseTypeKey] === undefined) {
                 responseType[responseTypeKey] = true;
+            }
+        }
+
+        // Capability gates align the OTHER way: default OFF, and the section appears only when the
+        // gate is explicitly on. Running these through the loop above would invert their meaning —
+        // that loop's `else` branch defaults an unset key to true, which is exactly what a gated
+        // capability must never do.
+        const gateMappings: Array<{ gateFlag: string; responseTypeKey: string }> = [
+            { gateFlag: 'enableTaskGraphs', responseTypeKey: 'tasks' }
+        ];
+
+        for (const { gateFlag, responseTypeKey } of gateMappings) {
+            const wasExplicitlySet = explicitResponseType &&
+                Object.prototype.hasOwnProperty.call(explicitResponseType, responseTypeKey);
+            if (!wasExplicitlySet) {
+                responseType[responseTypeKey] = params[gateFlag] === true;
             }
         }
     }
@@ -7879,10 +7935,19 @@ The context is now within limits. Please retry your request with the recovered c
         if (params.conversationDetailId) {
             this._agentRun.ConversationDetailID = params.conversationDetailId;
         }
-        // Use conversationId from data if available (already passed by AgentRunner)
-        // This avoids a redundant network lookup since AgentRunner already loaded this
-        if (params.data?.conversationId) {
-            this._agentRun.ConversationID = params.data.conversationId;
+        // Prefer the first-class conversationId param, then the data bag (already passed by
+        // AgentRunner in the common case, avoiding a redundant network lookup). Neither is
+        // guaranteed to survive every call path (e.g. direct BaseAgent.Execute callers, wire
+        // serialization), so fall back to loading the ConversationDetail so ConversationID is
+        // never silently left empty when conversationDetailId is present.
+        const conversationIdFromParams = params.conversationId || params.data?.conversationId;
+        if (conversationIdFromParams) {
+            this._agentRun.ConversationID = conversationIdFromParams;
+        } else if (params.conversationDetailId) {
+            const convDetail = await (params.provider || this._activeProvider).GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+            if (await convDetail.Load(params.conversationDetailId)) {
+                this._agentRun.ConversationID = convDetail.ConversationID;
+            }
         }
         // Stamp the realtime/long-lived session id (if any) so every run — including delegated
         // child runs that inherit this value — is groupable under the same MJ: AI Agent Session.
@@ -8495,6 +8560,20 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Invokes params.onProgress, isolating the caller's callback (e.g. wire/websocket delivery,
+     * which can throw on serialization or publish failures) from prompt/step execution. A callback
+     * failure must never be misclassified as an agent execution failure and poison the run's
+     * terminal Status.
+     */
+    private safeOnProgress(params: ExecuteAgentParams, progress: Parameters<NonNullable<ExecuteAgentParams['onProgress']>>[0]): void {
+        try {
+            params.onProgress?.(progress);
+        } catch (e) {
+            this.logError(`onProgress callback threw and was swallowed: ${e}`, { category: 'ProgressCallback' });
+        }
+    }
+
+    /**
      * Gets human-readable reasoning for the next step decision.
      *
      * @private
@@ -8576,6 +8655,10 @@ The context is now within limits. Please retry your request with the recovered c
                 }
                 return await this.executePromptStep(params, config, previousDecision, stepCount);
             case 'Sub-Agent':
+                // A Sub-Agent step carrying a task graph is a FOLDED graph (D9): the agent type
+                // rewrote a one-node graph into an ordinary in-run call. Record it before running,
+                // so the run shows what was emitted even if the sub-agent then fails.
+                await this.recordFoldedTaskGraph(params, previousDecision);
                 return await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
             case 'Actions':
                 return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount);
@@ -8589,6 +8672,11 @@ The context is now within limits. Please retry your request with the recovered c
             // (Plan Mode). executePlanStep's terminal return is 'Chat'-shaped (see its doc comment).
             case 'Plan' as typeof previousDecision.step:
                 return await this.executePlanStep(params, previousDecision);
+            // Type assertion required because 'Tasks' is not part of the BaseAgentNextStep step
+            // union — LoopAgentType.DetermineNextStep() emits it when an opted-in agent submits a
+            // durable task graph. executeTasksStep detaches (see its doc comment).
+            case 'Tasks' as typeof previousDecision.step:
+                return await this.executeTasksStep(params, previousDecision);
             // Type assertion required because 'ClientTools' is not part of the BaseAgentNextStep
             // step union — LoopAgentType.DetermineNextStep() emits it when the LLM chooses client tools.
             case 'ClientTools' as typeof previousDecision.step:
@@ -8771,7 +8859,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             const hierarchicalStepToEmit = this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts);
 
-            params.onProgress?.({
+            this.safeOnProgress(params, {
                 step: 'prompt_execution',
                 message: this.formatHierarchicalMessage(promptMessage),
                 metadata: {
@@ -8924,7 +9012,7 @@ The context is now within limits. Please retry your request with the recovered c
             }
 
             // Report decision processing progress
-            params.onProgress?.({
+            this.safeOnProgress(params, {
                 step: 'decision_processing',
                 message: this.formatHierarchicalMessage('Analyzing response and determining next steps'),
                 metadata: {
@@ -9323,7 +9411,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         // Report sub-agent execution progress with descriptive context
-        params.onProgress?.({
+        this.safeOnProgress(params, {
             step: 'subagent_execution',
             message: this.formatHierarchicalMessage(`Delegating to ${subAgentRequest.name} agent`),
             metadata: {
@@ -9362,11 +9450,22 @@ The context is now within limits. Please retry your request with the recovered c
         // lookup, then the effective set, for any legacy direct callers of this method.
         const subAgentEntity = resolvedSubAgentEntity
             ?? AIEngine.Instance.Agents.find(a => a.Name === subAgentRequest.name &&
-                                                  UUIDsEqual(a.ParentID, params.agent.ID))
+                                                  UUIDsEqual(a.ParentID, params.agent.ID) &&
+                                                  a.Status === 'Active')
             ?? this.getEffectiveSubAgentsForValidation(params.agent.ID).find(
                    a => a.Name.trim().toLowerCase() === subAgentRequest.name?.trim().toLowerCase());
         if (!subAgentEntity) {
             throw new Error(`Sub-agent '${subAgentRequest.name}' not found`);
+        }
+        // Status must be enforced no matter WHICH of the three resolutions above produced the entity.
+        // resolveSubAgentByName (the primary) already filters Status === 'Active', but the ParentID
+        // fallback did not, and getEffectiveSubAgentsForValidation returns runtime-granted
+        // _effectiveSubAgents unfiltered — so a Disabled sub-agent could be delegated to and run to
+        // completion, merging its state upstream, purely because the caller took a different path.
+        // Re-asserting it here makes the contract path-independent rather than relying on every
+        // present and future resolution site remembering to filter.
+        if (subAgentEntity.Status !== 'Active') {
+            throw new Error(`Sub-agent '${subAgentRequest.name}' is not Active (Status='${subAgentEntity.Status}')`);
         }
         const stepEntity = await this.createStepEntity({ stepType: 'Sub-Agent', stepName: `Execute Sub-Agent: ${subAgentRequest.name}`, contextUser: params.contextUser, targetId: subAgentEntity.ID, inputData, payloadAtStart: previousDecision.newPayload, parentId: parentStepId, skills: this.getSkillAttributionForSubAgent(subAgentEntity, params.agent) });
         
@@ -9860,7 +9959,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
         const { subAgentEntity, relationship } = resolved;
 
-        params.onProgress?.({
+        this.safeOnProgress(params, {
             step: 'subagent_execution',
             message: this.formatHierarchicalMessage(`Delegating to parallel sub-agent ${request.name}`),
             metadata: {
@@ -10280,7 +10379,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         // Report sub-agent execution progress
-        params.onProgress?.({
+        this.safeOnProgress(params, {
             step: 'subagent_execution',
             percentage: 60,
             message: this.formatHierarchicalMessage(`Delegating to ${subAgentRequest.name} agent`),
@@ -10837,7 +10936,7 @@ The context is now within limits. Please retry your request with the recovered c
                 }).join('\n\n');
             }
                 
-            params.onProgress?.({
+            this.safeOnProgress(params, {
                 step: 'action_execution',
                 message: this.formatHierarchicalMessage(progressMessage),
                 metadata: {
@@ -11243,7 +11342,7 @@ The context is now within limits. Please retry your request with the recovered c
         });
 
         // Report progress
-        params.onProgress?.({
+        this.safeOnProgress(params, {
             step: 'action_execution', // Reuse action_execution step type for progress reporting
             message: this.formatHierarchicalMessage(toolMessage),
             metadata: {
@@ -11751,6 +11850,139 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @protected
      */
+    /**
+     * Submits a durable task graph and ends the turn (submit-and-detach).
+     *
+     * **Why detaching is the whole point.** The alternative — holding the run open until the graph
+     * finishes — is exactly what the old client-driven path did, and it is what made a page reload
+     * lose the work, a server restart orphan it, and every non-Explorer channel unable to reach it
+     * at all. Once submission returns, the graph lives in Task rows and a server-side dispatcher
+     * owns it; the run has no reason to stay alive, so it doesn't.
+     *
+     * **The run step is written whether or not submission succeeds.** A rejected graph is the case
+     * where forensics matter most — the operator needs to see what the model emitted and why it was
+     * refused, and a step written only on the happy path would erase precisely that.
+     *
+     * **A missing submitter is reported, never swallowed.** In a host with no durable-execution
+     * package loaded there is nobody to run the graph. Returning a failure the model can read is
+     * the honest outcome; silently continuing would leave the agent believing it had scheduled work
+     * that does not exist.
+     *
+     * @protected
+     */
+    protected async executeTasksStep(
+        params: ExecuteAgentParams,
+        previousDecision: BaseAgentNextStep
+    ): Promise<BaseAgentNextStep> {
+        const graph = previousDecision.taskGraph;
+        const spec = graph?.spec;
+        if (!spec) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: 'A Tasks step reached execution with no task graph attached.',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+
+        const stepEntity = await this.createStepEntity({
+            stepType: 'TaskGraph',
+            stepName: `Task Graph: ${spec.workflowName}`,
+            contextUser: params.contextUser,
+            inputData: { spec, folded: false }
+        });
+
+        const submitter = GetTaskGraphSubmitter();
+        if (!submitter) {
+            const errorMessage =
+                'No task-graph submitter is registered on this host, so the graph could not be made durable. ' +
+                'Task graphs require the durable-execution package to be loaded.';
+            await this.finalizeStepEntity(stepEntity, false, errorMessage, { spec, submitted: false });
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage,
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+
+        const outcome = await submitter.Submit({
+            Spec: spec,
+            EnvironmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
+            ConversationDetailID: params.conversationDetailId ?? null,
+            AgentRunID: this._agentRun?.ID ?? null,
+            ContextUser: params.contextUser,
+            Provider: this.ProviderToUse
+        });
+
+        await this.finalizeStepEntity(
+            stepEntity,
+            outcome.Success,
+            outcome.ErrorMessage,
+            { spec, submitted: outcome.Success, parentTaskID: outcome.ParentTaskID }
+        );
+
+        if (!outcome.Success) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: outcome.ErrorMessage || 'Task graph submission failed.',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+
+        // Success means "this graph is durable and will run", NOT "this graph has run". Saying
+        // otherwise here is the exact lie the old await-everything path told when it returned early.
+        return {
+            step: 'Success',
+            terminate: true,
+            message:
+                previousDecision.message ||
+                `Started **${spec.workflowName}** — ${spec.tasks.length} task(s) running. ` +
+                `I'll follow up when it finishes.`,
+            reasoning: previousDecision.reasoning,
+            confidence: previousDecision.confidence,
+            previousPayload: previousDecision.previousPayload,
+            newPayload: previousDecision.newPayload || previousDecision.previousPayload
+        };
+    }
+
+    /**
+     * Records a constant-folded task graph (D9) without submitting it.
+     *
+     * Folding rewrites a one-node graph into an ordinary in-run sub-agent call, which means no Task
+     * row and no dispatcher hop. Writing the step anyway is what keeps that decision legible: run
+     * forensics show why a graph did not reach the dispatcher, a user who edits a two-node graph
+     * down to one can read the durability change off the run record instead of inferring it, and
+     * Save as Workflow (D17) can attach to the recorded spec — so the single-node case, the shape
+     * most likely worth promoting, is promotable like any other.
+     *
+     * @protected
+     */
+    protected async recordFoldedTaskGraph(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep
+    ): Promise<void> {
+        const graph = nextStep.taskGraph;
+        if (!graph?.folded) return;
+
+        const stepEntity = await this.createStepEntity({
+            stepType: 'TaskGraph',
+            stepName: `Task Graph (folded): ${graph.spec.workflowName}`,
+            contextUser: params.contextUser,
+            inputData: { spec: graph.spec, folded: true, foldReason: graph.foldReason }
+        });
+        await this.finalizeStepEntity(stepEntity, true, undefined, {
+            spec: graph.spec,
+            folded: true,
+            foldReason: graph.foldReason,
+            submitted: false
+        });
+    }
+
     protected async executePlanStep(
         params: ExecuteAgentParams,
         previousDecision: BaseAgentNextStep
@@ -13618,6 +13850,16 @@ The context is now within limits. Please retry your request with the recovered c
         const params = this._executeParams;
         if (!params?.conversationId || this._depth !== 0 || !this._agentRun
             || !BaseAgent.settledRunStatuses.includes(this._agentRun.Status)) {
+            // A quiet return here is indistinguishable from "the pass ran and found nothing to do":
+            // no Compaction step and no boundary summary are written either way. Say WHY we skipped,
+            // so a missing post-turn compaction can be diagnosed without instrumenting the build.
+            this.logStatus(
+                `Post-turn compaction skipped — conversationId=${params?.conversationId ?? 'none'}, ` +
+                `depth=${this._depth}, runStatus=${this._agentRun?.Status ?? 'no run'} ` +
+                `(requires a root run with a conversation, settled as ${BaseAgent.settledRunStatuses.join('/')})`,
+                true /* verboseOnly — normal for non-conversation and sub-agent runs */,
+                params,
+            );
             return;
         }
         const config = this._agentConfig;
@@ -13929,6 +14171,7 @@ The context is now within limits. Please retry your request with the recovered c
                         turnAdded: message.metadata?.turnAdded || 0
                     };
                     promptParams.contextUser = params.contextUser;
+                    promptParams.agentId = params.agent.ID;
 
                     const runner = new AIPromptRunner();
                     const result = await runner.ExecutePrompt<{ summary: string }>(promptParams);

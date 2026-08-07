@@ -27,7 +27,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (410 classes)
+// @memberjunction/core-entities (401 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -45,9 +45,11 @@ import {
     MJAIAgentClientToolEntity,
     MJAIAgentCoAgentEntity,
     MJAIAgentConfigurationEntity,
+    MJAIAgentCredentialEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
     MJAIAgentExampleEntity,
+    MJAIAgentHarnessEntity,
     MJAIAgentLearningCycleEntity,
     MJAIAgentModalityEntity,
     MJAIAgentModelEntity,
@@ -300,6 +302,7 @@ import {
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
+    MJMaterializedResultEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -309,7 +312,6 @@ import {
     MJOpenAppInstallHistoryEntity,
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
-    MJOutputTriggerTypeEntity,
     MJPermissionDomainEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
@@ -342,11 +344,6 @@ import {
     MJRecordProcessWatermarkEntity,
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
-    MJReportCategoryEntity,
-    MJReportEntity,
-    MJReportSnapshotEntity,
-    MJReportUserStateEntity,
-    MJReportVersionEntity,
     MJResourceLinkEntity,
     MJResourcePermissionEntity,
     MJResourcePermissionEntityExtended,
@@ -354,9 +351,6 @@ import {
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
     MJSQLDialectEntity,
-    MJScheduledActionEntity,
-    MJScheduledActionEntityExtended,
-    MJScheduledActionParamEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
@@ -432,9 +426,6 @@ import {
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
-    MJWorkflowEngineEntity,
-    MJWorkflowEntity,
-    MJWorkflowRunEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -591,7 +582,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (102 classes)
+// @memberjunction/ng-dashboards (103 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -642,6 +633,7 @@ import {
     FeaturePipelinesResourceComponent,
     FormBuilderResourceComponent,
     GraphQLConsoleComponent,
+    GridWidthLabComponent,
     HomeApplication,
     HomeDashboardComponent,
     KnowledgeConfigResourceComponent,
@@ -667,7 +659,6 @@ import {
     PromptManagementComponent,
     QueryBrowserResourceComponent,
     RealtimeRecordingsDashboardComponent,
-    ScheduledActionsComponent,
     SchedulesComponent,
     SchedulingActivityResourceComponent,
     SchedulingDashboardComponent,
@@ -677,6 +668,7 @@ import {
     SettingsExplorerComponent,
     SystemConfigurationComponent,
     SystemDiagnosticsComponent,
+    TabStripLabComponent,
     TagsResourceComponent,
     TestingAnalyticsResourceComponent,
     TestingDashboardComponent,
@@ -744,9 +736,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentClientToolEntity,
     MJAIAgentCoAgentEntity,
     MJAIAgentConfigurationEntity,
+    MJAIAgentCredentialEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
     MJAIAgentExampleEntity,
+    MJAIAgentHarnessEntity,
     MJAIAgentLearningCycleEntity,
     MJAIAgentModalityEntity,
     MJAIAgentModelEntity,
@@ -999,6 +993,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
+    MJMaterializedResultEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -1008,7 +1003,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJOpenAppInstallHistoryEntity,
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
-    MJOutputTriggerTypeEntity,
     MJPermissionDomainEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
@@ -1041,11 +1035,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJRecordProcessWatermarkEntity,
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
-    MJReportCategoryEntity,
-    MJReportEntity,
-    MJReportSnapshotEntity,
-    MJReportUserStateEntity,
-    MJReportVersionEntity,
     MJResourceLinkEntity,
     MJResourcePermissionEntity,
     MJResourcePermissionEntityExtended,
@@ -1053,9 +1042,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
     MJSQLDialectEntity,
-    MJScheduledActionEntity,
-    MJScheduledActionEntityExtended,
-    MJScheduledActionParamEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
@@ -1131,9 +1117,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
-    MJWorkflowEngineEntity,
-    MJWorkflowEntity,
-    MJWorkflowRunEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -1273,6 +1256,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     FeaturePipelinesResourceComponent,
     FormBuilderResourceComponent,
     GraphQLConsoleComponent,
+    GridWidthLabComponent,
     HomeApplication,
     HomeDashboardComponent,
     KnowledgeConfigResourceComponent,
@@ -1298,7 +1282,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     PromptManagementComponent,
     QueryBrowserResourceComponent,
     RealtimeRecordingsDashboardComponent,
-    ScheduledActionsComponent,
     SchedulesComponent,
     SchedulingActivityResourceComponent,
     SchedulingDashboardComponent,
@@ -1308,6 +1291,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     SettingsExplorerComponent,
     SystemConfigurationComponent,
     SystemDiagnosticsComponent,
+    TabStripLabComponent,
     TagsResourceComponent,
     TestingAnalyticsResourceComponent,
     TestingDashboardComponent,
@@ -1345,7 +1329,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 619;
+export const CLASS_REGISTRATIONS_COUNT = 611;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

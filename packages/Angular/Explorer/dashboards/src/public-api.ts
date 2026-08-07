@@ -95,7 +95,6 @@ export {
 // Export Actions components as resources (BaseResourceComponent-based)
 export {
   ActionsOverviewComponent,
-  ScheduledActionsComponent,
   CodeManagementComponent,
   EntityIntegrationComponent,
   SecurityPermissionsComponent,

@@ -1,0 +1,41 @@
+[
+  {
+    "_comments": [
+      "Binds JSONType metadata to AIAgentHarness.CapabilitySettings so CodeGen emits a typed",
+      "accessor conforming to IHarnessCapabilitySettings. Apply AFTER the v6.1",
+      "AI_Agent_Harness_Foundation migration + CodeGen have created the 'MJ: AI Agent Harnesses'",
+      "entity and its fields — the @lookup below resolves against them.",
+      "Ordering matters: CodeGen reads JSONType definitions from the DATABASE, so this must be",
+      "pushed BEFORE the CodeGen pass that is expected to emit the typed accessor."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Harnesses"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IHarnessCapabilitySettings",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IHarnessCapabilitySettings.ts"
+          },
+          "_comments": [
+            "CapabilitySettings field — what the harness adapter can actually do, so the runtime",
+            "knows what it must emulate (session replay, retry-coaxed structured output) rather",
+            "than assume."
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Harnesses&Name=CapabilitySettings"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T05:49:49.917Z",
+            "checksum": "d5c63ce6fafbd4f2a26930ebabb7dc8a5f5697a4f942505f4588f32759a36c32"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Harnesses"
+    }
+  }
+]

@@ -48,7 +48,7 @@ interface LoopAgentResponse {
     /** Next action. Required when taskComplete=false */
     nextStep?: {
         /** Operation type */
-        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if skillCount > 0 %} | 'Skill'{% endif %}{% if planModeActive and not planApproved %} | 'Plan'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %};
+        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if skillCount > 0 %} | 'Skill'{% endif %}{% if planModeActive and not planApproved %} | 'Plan'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.tasks %} | 'Tasks'{% endif %};
         /** Actions to execute — server-side tools (when type='Actions') */
         actions?: Array<{ name: string; params: Record<string, unknown> }>;
 {% if skillCount > 0 %}
@@ -62,6 +62,24 @@ interface LoopAgentResponse {
 {% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %}
         /** Run a server-side dataflow (when type='Pipeline'); only the final stage's value returns to you (see Agent Pipelines below). Processed inline, zero turn cost. */
         pipeline?: { steps: Array<Record<string, unknown>> };
+{% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.tasks %}
+        /** Durable task graph to submit (when type='Tasks') — see Durable Task Graphs below. Ends your turn. */
+        tasks?: {
+            workflowName: string;
+            reasoning?: string;
+            tasks: Array<{
+                tempId: string;
+                name: string;
+                description: string;
+                agentName?: string;
+                assignToUser?: boolean;
+                dependsOn: string[];
+                inputPayload?: Record<string, unknown>;
+            }>;
+            continuation?: 'message' | 'reinvoke' | 'none';
+            durable?: boolean;
+        };
 {% endif %}
 {% if clientToolDetails %}
         /** Client tools to execute — browser-side UI tools (when type='ClientTools') */
@@ -710,6 +728,51 @@ Memory Manager.
 
 {% if __agentTypePromptParams.includePipelineDocs != false and _PIPELINE_TOOLS %}
 {{ _PIPELINE_TOOLS | safe }}
+{% endif %}
+
+{% if __agentTypePromptParams.includeResponseTypeDefinition.tasks %}
+## Durable Task Graphs (`nextStep.type = 'Tasks'`)
+
+You can hand off a dependency-ordered set of tasks to run **outside this conversation turn**.
+
+**The distinction from `subAgents[]` is durability, not parallelism.** Both fan out. But
+`subAgents[]` is *ephemeral*: it blocks this run, and if the run ends — the user reloads, the
+server restarts — the work is gone. A task graph is *durable*: it becomes real Task rows that a
+server-side dispatcher owns, visible in the Tasks UI, resumable after a restart, and able to wait
+on a human.
+
+**Reach for `Tasks` when** the work is long-running, has real dependencies between steps, should
+survive the user closing the tab, or needs a person to approve or complete a step.
+
+**Stay with `subAgents[]` when** you need the results *in this turn* to keep reasoning. Submitting a
+graph ends your turn — you cannot read its output before replying.
+
+### How to write one
+
+- Give every task a `tempId` unique within the graph. Express dependencies with `dependsOn`, using
+  those `tempId`s — you cannot know real IDs at authoring time.
+- The graph must be **acyclic**. A cycle can never execute, because nothing would ever become
+  eligible to start, so it is rejected outright.
+- Every task needs exactly one assignee: an `agentName` (must be a real agent) **or**
+  `assignToUser: true` for a human step. Never both, never neither.
+- Put structured inputs in `inputPayload`. Describe intent in `description` — that is what the
+  assigned agent reads.
+- Maximum 50 tasks per graph.
+
+### What happens after you submit
+
+Your turn ends. You do **not** wait, and you must not claim the work is finished — say it has
+*started*. When the graph completes, `continuation` decides what happens:
+
+- `'message'` (default) — the results are posted into the conversation.
+- `'reinvoke'` — you get a fresh turn with the outcome, so you can synthesize a final answer.
+- `'none'` — nothing further happens.
+
+A one-task graph with no dependencies is automatically run in-line instead, since a graph of one
+needs no dispatcher. Set `durable: true` if you specifically want the Task row anyway.
+
+If your graph is malformed you will get every problem back at once — fix them all and re-emit the
+**complete** graph, not a patch.
 {% endif %}
 
 {# ── Volatile blocks intentionally placed LAST ──────────────────────────────

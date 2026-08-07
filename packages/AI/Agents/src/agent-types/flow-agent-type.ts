@@ -12,6 +12,8 @@
  */
 
 import { RegisterClass, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
+import { SelectOutgoingEdges, type IConditionEvaluator } from '@memberjunction/ai-core-plus';
+import { AIEngineGraphRepository, SafeConditionEvaluator } from './flow-graph-adapters';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
@@ -158,6 +160,8 @@ export interface FlowAgentExecuteParams {
 @RegisterClass(BaseAgentType, "FlowAgentType")
 export class FlowAgentType extends BaseAgentType {
     private _evaluator = new SafeExpressionEvaluator();
+    /** The engine-facing evaluator; wraps the same SafeExpressionEvaluator semantics. */
+    private _conditionEvaluator: IConditionEvaluator = new SafeConditionEvaluator();
     private _payloadManager = new PayloadManager();
          
     /**
@@ -392,69 +396,81 @@ export class FlowAgentType extends BaseAgentType {
      *
      * @private
      */
+    /**
+     * Returns the followable outgoing paths from a step, highest priority first.
+     *
+     * The selection rules — priority ordering, unconditional edges, condition evaluation, and
+     * skipping edges into missing or inactive destinations — now live in the shared
+     * `GraphTraversalEngine`, so the durable dispatcher and this in-run executor cannot disagree
+     * about which edge a graph follows. What stays here is the flow-specific *context* a condition
+     * sees, and the translation back to path entities the rest of this class works with.
+     *
+     * Callers still receive an ordered list and (in `sequential` mode) take the first element, which
+     * preserves existing behavior. The engine now also reports why each rejected edge was rejected;
+     * that detail is logged rather than discarded, because a graph that stalls on a malformed
+     * condition previously looked identical to one that finished normally.
+     */
     private async getValidPaths<P>(
         stepId: string,
         payload: unknown,
         flowState: FlowExecutionState,
         params: ExecuteAgentParams<unknown, P>
     ): Promise<MJAIAgentStepPathEntity[]> {
-        // Load all paths from this step
-        const allPaths = AIEngine.Instance.GetPathsFromStep(stepId)
-            .sort((a, b) => b.Priority - a.Priority);
-        const validPaths: MJAIAgentStepPathEntity[] = [];
+        const repo = new AIEngineGraphRepository(flowState.agentId);
+        const selection = SelectOutgoingEdges(
+            stepId,
+            repo,
+            this._conditionEvaluator,
+            this.buildConditionContext(payload, flowState, params)
+        );
 
-        // Evaluate each path's condition
-        for (const path of allPaths) {
-            // If no condition, path is always valid
-            if (!path.Condition) {
-                validPaths.push(path);
-                continue;
-            }
-
-            try {
-                // Create enhanced evaluation context
-                // Phase 1: Read-only access to data and context for path conditions
-                const context = {
-                    // Existing context properties
-                    payload,
-                    stepResult: this.getLastStepResult(flowState),
-                    flowContext: {
-                        currentStepId: flowState.currentStepId,
-                        completedSteps: Array.from(flowState.completedStepIds),
-                        executionPath: flowState.executionPath,
-                        stepCount: flowState.completedStepIds.size
-                    },
-                    // NEW: Map params.data and params.context directly
-                    // These enable deterministic routing based on runtime state
-                    // without polluting the persistent payload
-                    data: params.data || {},
-                    context: params.context || {}
-                };
-
-
-                const evalResult = this._evaluator.evaluate(path.Condition, context);
-
-                if (evalResult.success && evalResult.value) {
-                    validPaths.push(path);
-                }
-                else if (!evalResult.success) {
-                    // Only log errors when evaluation failed, not when condition is simply false
-                    LogError(`Path condition failed: ${path.Condition}\n${evalResult.error}`);
-                }
-            } catch (error) {
-                LogError(`Failed to evaluate path condition: ${error.message}`);
-            }
+        for (const rejection of selection.Rejected) {
+            // ConditionFalse is the normal case and stays quiet. The other three are all "this graph
+            // is not shaped the way its author thinks", and each previously vanished: a broken
+            // expression was logged as if it were a false one, and a dangling edge failed the run
+            // with a message that named the missing ID but not the edge that pointed at it.
+            if (rejection.Reason === 'ConditionFalse') continue;
+            LogError(
+                `Flow path ${rejection.EdgeId} from step ${stepId} not followed (${rejection.Reason})` +
+                `${rejection.Detail ? `: ${rejection.Detail}` : ''}`
+            );
         }
 
-        // If no valid paths with conditions, include paths with priority <= 0 (defaults)
-        if (validPaths.length === 0) {
-            return allPaths.filter(p => p.Priority <= 0 && !p.Condition);
-        }
-
-        // Sort by priority (already sorted by query, but re-sort valid subset)
-        return validPaths.sort((a, b) => b.Priority - a.Priority);
+        const byId = new Map(AIEngine.Instance.GetPathsFromStep(stepId).map(p => [p.ID, p]));
+        return selection.Edges
+            .map(e => byId.get(e.id))
+            .filter((p): p is MJAIAgentStepPathEntity => !!p);
     }
-    
+
+    /**
+     * The variables a path condition can reference.
+     *
+     * `stepResult` is the result of the step that just ran, addressed by ID rather than by reading
+     * the tail of the execution path. The positional lookup this replaces returned a *different*
+     * step's result whenever the path had been deduped by a revisit — a condition on a loop-back
+     * edge was reading the wrong step's output, silently.
+     */
+    private buildConditionContext<P>(
+        payload: unknown,
+        flowState: FlowExecutionState,
+        params: ExecuteAgentParams<unknown, P>
+    ): Record<string, unknown> {
+        return {
+            payload,
+            stepResult: flowState.currentStepId
+                ? flowState.stepResults.get(flowState.currentStepId) ?? null
+                : null,
+            flowContext: {
+                currentStepId: flowState.currentStepId,
+                completedSteps: Array.from(flowState.completedStepIds),
+                executionPath: flowState.executionPath,
+                stepCount: flowState.completedStepIds.size
+            },
+            data: params.data || {},
+            context: params.context || {}
+        };
+    }
+
     /**
      * Gets the last step result from the flow context
      * 

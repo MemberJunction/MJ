@@ -79,10 +79,10 @@ Bundles live in [`integration-test-suite/src/checks/`](../integration-test-suite
 | queue | 7 | det | server |
 | auth-validation | 7 | det | server |
 
-**~510 checks / 73 registered bundles today** (IT01–IT73; the table above lists the majors — run `mj test list` or read `integration-test-suite/src/checks/` for the full set): 58 members land in the **deterministic** suite, 15 in **live-model**. The 2026-07 expansion added the IT31–IT52 client-first bundles; IT64–IT70 followed (view-security, ai-providers, app-behavioral, content-vectorization, scoped-anon-elevation, layered-base-views, startup-mode — the last renumbered from a duplicate IT31). The older bundles are `bootstrapIntegrationServer` (in-process) — migrating them to client transport where a client path exists is tracked in the plan (Workstream M); the 2026-07 bundles are client-first where a client surface exists.
+**~522 checks / 75 registered bundles today** (IT01–IT75; the table above lists the majors — run `mj test list` or read `integration-test-suite/src/checks/` for the full set): 60 members land in the **deterministic** suite, 15 in **live-model**. The 2026-07 expansion added the IT31–IT52 client-first bundles; IT64–IT75 followed (view-security, ai-providers, app-behavioral, content-vectorization, scoped-anon-elevation, layered-base-views, agent-external-harness, task-graph-orchestration, startup-mode — renumbered from a duplicate IT31 — storage, queue, auth-validation). The older bundles are `bootstrapIntegrationServer` (in-process) — migrating them to client transport where a client path exists is tracked in the plan (Workstream M); the 2026-07 bundles are client-first where a client surface exists.
 
 > **Suite ordering invariant**: ALL server-transport members are sequenced before ALL
-> client-transport members (deterministic suite: servers 1–39, clients 40–58). The first client
+> client-transport members (deterministic suite: servers 1–41, clients 42–60). The first client
 > bundle rebinds the process-global provider to GraphQL (issue #3251), so a server member
 > sequenced after any client member hard-errors. Keep the invariant when joining new members.
 
