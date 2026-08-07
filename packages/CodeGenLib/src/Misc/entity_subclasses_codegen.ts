@@ -64,7 +64,9 @@ export type RelatedRecordCollectionConfig = {
   /** Generated property name on the entity subclass, e.g. `Lines`. Must be a valid TS identifier. */
   Name: string;
   /** When the collection populates itself. Defaults to `'explicit'`. */
-  Load?: 'explicit' | 'eager' | 'never';
+  Load?: 'explicit' | 'immediate' | 'lazy' | 'never';
+  Source?: 'database' | 'cache';
+  ReadOnly?: boolean;
   /** What removal means. Defaults to `'delete'`. */
   OnRemove?: 'delete' | 'orphan' | 'refuse';
   /** `OrderBy` clause applied when loading. */
@@ -651,10 +653,42 @@ ${fields}
       return null;
     }
 
-    const loadModes = ['explicit', 'eager', 'never'];
+    const loadModes = ['explicit', 'immediate', 'lazy', 'never'];
     if (config.Load && !loadModes.includes(config.Load)) {
       logError(`[RelatedRecordCollection] ${label}: invalid Load '${config.Load}'; skipping.`);
       return null;
+    }
+    const sources = ['database', 'cache'];
+    if (config.Source && !sources.includes(config.Source)) {
+      logError(`[RelatedRecordCollection] ${label}: invalid Source '${config.Source}'; skipping.`);
+      return null;
+    }
+    if (config.ReadOnly !== undefined && typeof config.ReadOnly !== 'boolean') {
+      logError(`[RelatedRecordCollection] ${label}: ReadOnly must be a boolean; skipping.`);
+      return null;
+    }
+
+    // `lazy` fills on a property read, and a getter cannot await. Only a cache lookup is
+    // synchronous, and only SHARING the engine's instances is synchronous — copying needs
+    // GetEntityObject. So lazy requires both cache and read-only. Rejecting here beats emitting a
+    // declaration that compiles and then never fills.
+    const source = config.Source ?? 'database';
+    const readOnly = config.ReadOnly ?? source === 'cache';
+    if (config.Load === 'lazy') {
+      if (source !== 'cache') {
+        logError(
+          `[RelatedRecordCollection] ${label}: Load 'lazy' requires Source 'cache' (a property getter ` +
+          `cannot await a database load); skipping.`,
+        );
+        return null;
+      }
+      if (!readOnly) {
+        logError(
+          `[RelatedRecordCollection] ${label}: Load 'lazy' requires ReadOnly (a writable cache-backed ` +
+          `collection must copy records, which is async); skipping.`,
+        );
+        return null;
+      }
     }
     const removalModes = ['delete', 'orphan', 'refuse'];
     if (config.OnRemove && !removalModes.includes(config.OnRemove)) {
@@ -694,6 +728,43 @@ ${fields}
     // untyped is a worse developer experience, but a build break is worse still.
     const relatedClass = relatedBase ? `${relatedBase}Entity` : 'BaseEntity';
 
+    // Source and mutability are invisible at the call site otherwise, and both change what the
+    // caller may safely do with the records — so they are spelled out rather than left to the
+    // metadata row nobody reading this file has open.
+    const source = config.Source ?? 'database';
+    const readOnly = config.ReadOnly ?? source === 'cache';
+    const docLines: string[] = [];
+    if (source === 'cache') {
+      docLines.push(
+        ` **Source: cache.** Records come from whichever loaded BaseEngine already caches`,
+        ` '${relationship.RelatedEntity}', discovered via BaseEngineRegistry — zero queries. Falls back to a`,
+        ` database load when no loaded engine offers it.`,
+      );
+      docLines.push(
+        readOnly
+          ? ` **These are the engine's own entity instances, not copies.** Do not modify them: you would be`
+          : ` Writable, so records are COPIED out of the cache on load — the engine's instances are never`,
+      );
+      docLines.push(
+        readOnly
+          ? ` mutating shared cached state that other holders can see.`
+          : ` mutated in place.`,
+      );
+    }
+    if (readOnly) {
+      docLines.push(
+        ` **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,`,
+        ` and it never reports Dirty.`,
+      );
+    }
+    if (config.Load === 'lazy') {
+      docLines.push(
+        ` **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no`,
+        ` loaded engine caches '${relationship.RelatedEntity}', reading it THROWS rather than returning an`,
+        ` empty array — a lazy declaration asserts that such an engine exists.`,
+      );
+    }
+
     const lines: string[] = [
       `Name: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(name)}'`,
       `RelatedEntity: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(relationship.RelatedEntity)}'`,
@@ -707,6 +778,12 @@ ${fields}
     }
     if (config.OnRemove) {
       lines.push(`OnRemove: '${config.OnRemove}'`);
+    }
+    if (config.Source) {
+      lines.push(`Source: '${config.Source}'`);
+    }
+    if (config.ReadOnly !== undefined) {
+      lines.push(`ReadOnly: ${config.ReadOnly}`);
     }
     if (config.Sequence) {
       const from = typeof config.Sequence.From === 'number' ? config.Sequence.From : 1;
@@ -725,6 +802,7 @@ ${fields}
   * Loads, validates and persists as one unit with this ${entity.Name} record — see
   * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
   * the '${entity.Name} → ${relationship.RelatedEntity}' relationship; edit that row, not this file.
+  *${docLines.join('\n  *')}
   */
   public readonly ${name} = this.DeclareRelatedRecords<${relatedClass}>({
       ${lines.join(',\n        ')},

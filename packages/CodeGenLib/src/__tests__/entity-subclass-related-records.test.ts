@@ -100,6 +100,46 @@ describe('GenerateRelatedRecordCollections — opt-in', () => {
     });
 });
 
+describe('RelatedRecordCollection — Source / ReadOnly / lazy', () => {
+    it("refuses Load 'lazy' with Source 'database' — a getter cannot await a query", () => {
+        const relationship = withConfig({ Name: 'Lines', Load: 'lazy', Source: 'database' });
+        expect(EntitySubClassGeneratorBase.ParseRelatedRecordCollectionConfig(makeEntity([relationship]), relationship)).toBeNull();
+    });
+
+    it("refuses Load 'lazy' when writable — copying records out of the cache is async", () => {
+        const relationship = withConfig({ Name: 'Lines', Load: 'lazy', Source: 'cache', ReadOnly: false });
+        expect(EntitySubClassGeneratorBase.ParseRelatedRecordCollectionConfig(makeEntity([relationship]), relationship)).toBeNull();
+    });
+
+    it("accepts Load 'lazy' with cache + the read-only default", () => {
+        const relationship = withConfig({ Name: 'Lines', Load: 'lazy', Source: 'cache' });
+        const out = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(makeEntity([relationship]));
+        expect(out).toContain("Load: 'lazy'");
+        expect(out).toContain("Source: 'cache'");
+    });
+
+    it('rejects an invalid Source', () => {
+        const relationship = withConfig({ Name: 'Lines', Source: 'redis' as unknown as 'cache' });
+        expect(EntitySubClassGeneratorBase.ParseRelatedRecordCollectionConfig(makeEntity([relationship]), relationship)).toBeNull();
+    });
+
+    it('documents cache sourcing, shared instances and the lazy side effect in the emitted JSDoc', () => {
+        const relationship = withConfig({ Name: 'Lines', Load: 'lazy', Source: 'cache' });
+        const out = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(makeEntity([relationship]));
+        expect(out).toContain('Source: cache');
+        expect(out).toContain("engine's own entity instances, not copies");
+        expect(out).toContain('POPULATES the collection as a side effect');
+        expect(out).toContain('THROWS rather than returning an');
+    });
+
+    it('documents that a writable cache collection copies rather than shares', () => {
+        const relationship = withConfig({ Name: 'Lines', Source: 'cache', ReadOnly: false });
+        const out = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(makeEntity([relationship]));
+        expect(out).toContain('records are COPIED out of the cache');
+        expect(out).toContain('ReadOnly: false');
+    });
+});
+
 describe('GenerateRelatedRecordCollections — emission', () => {
     it('emits a typed readonly declaration using the related entity class name', () => {
         const out = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(makeEntity([makeRelationship()]));
@@ -151,7 +191,7 @@ describe('GenerateRelatedRecordCollections — emission', () => {
         const relationship = withConfig({
             Name: 'Lines',
             OrderBy: 'LineNumber ASC',
-            Load: 'eager',
+            Load: 'immediate',
             OnRemove: 'orphan',
             Sequence: { Field: 'LineNumber', From: 5 },
             ClearAfterSave: true,
@@ -159,7 +199,7 @@ describe('GenerateRelatedRecordCollections — emission', () => {
         const out = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(makeEntity([relationship]));
 
         expect(out).toContain("OrderBy: 'LineNumber ASC'");
-        expect(out).toContain("Load: 'eager'");
+        expect(out).toContain("Load: 'immediate'");
         expect(out).toContain("OnRemove: 'orphan'");
         expect(out).toContain("Sequence: { Field: 'LineNumber', From: 5 }");
         expect(out).toContain('ClearAfterSave: true');
@@ -317,8 +357,8 @@ describe('ParseRelatedRecordCollectionConfig', () => {
         expect(config).toEqual({ Name: 'Lines', Load: 'never' });
     });
 
-    it('accepts all three Load modes and all three OnRemove modes', () => {
-        for (const Load of ['explicit', 'eager', 'never'] as const) {
+    it('accepts every Load mode and every OnRemove mode', () => {
+        for (const Load of ['explicit', 'immediate', 'never'] as const) {
             expect(
                 EntitySubClassGeneratorBase.ParseRelatedRecordCollectionConfig(
                     makeEntity([]), withConfig({ Name: 'Lines', Load }),

@@ -281,7 +281,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         // for cache-sourced collections, where filling is synchronous. A database-sourced lazy
         // collection cannot exist — CodeGen refuses the combination — because a getter cannot await.
         if (!this.loaded && this.LoadMode === 'lazy') {
-            this.populateFromCache();
+            this.populateLazyOrThrow();
         }
         return this.items;
     }
@@ -532,6 +532,48 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      *
      * @returns True when the collection was populated from a cache.
      */
+    /**
+     * Populates a `'lazy'` collection from cache, or throws explaining why it could not.
+     *
+     * **A lazy declaration is an assertion.** Writing `Load: 'lazy'` says "an engine caches this
+     * entity"; there is no async fallback available from a getter, so if the assertion is wrong the
+     * only alternatives are a hard error or a silently empty array. Silence is how
+     * `MJAIAgentEntityExtended.Actions` returned `[]` to three call sites indefinitely without
+     * anyone noticing — exactly the failure this mechanism exists to end.
+     *
+     * A donor holding **zero rows** is a perfectly good answer and does not throw; the collection is
+     * simply empty. Only the absence of a donor is an error, and the message distinguishes the two
+     * ways that happens, because they need opposite fixes.
+     */
+    private populateLazyOrThrow(): void {
+        if (this.populateFromCache()) {
+            return;
+        }
+        if (!this.Owner.IsSaved) {
+            return; // an unsaved parent owns no persisted related records; not an error
+        }
+
+        const declaringEngines = BaseEngineRegistry.Instance.FindEnginesDeclaringEntity(this.RelatedEntityName);
+        const prefix = `RelatedRecordCollection '${this.Name}' on ${this.Owner.EntityInfo?.Name} is declared Load: 'lazy'`;
+
+        if (declaringEngines.length > 0) {
+            // The cache exists — it just has not been populated yet. An ordering problem, and the
+            // caller can fix it by configuring the engine before reading the collection.
+            throw new Error(
+                `${prefix}, but ${declaringEngines.join(' / ')} — which caches '${this.RelatedEntityName}' — ` +
+                    `is not loaded yet. Await that engine's Config() before reading '${this.Name}', or declare ` +
+                    `Load: 'explicit' and call LoadRelatedRecords() so it can fall back to the database.`,
+            );
+        }
+
+        // Nothing anywhere caches this entity, so lazy can never work for it. A design error.
+        throw new Error(
+            `${prefix}, but no registered BaseEngine caches '${this.RelatedEntityName}'. Lazy loading reads ` +
+                `exclusively from engine caches. Declare Source: 'database' with Load: 'explicit', or add an ` +
+                `entity config for '${this.RelatedEntityName}' to an engine.`,
+        );
+    }
+
     private populateFromCache(): boolean {
         // Sharing is the only synchronous option: copying needs `GetEntityObject`, which is async.
         // So the sync path is read-only-only, and a writable cache-backed collection must go through
