@@ -433,21 +433,6 @@ END $vw_regen$;
     // ─── MATERIALIZATION ─────────────────────────────────────────────────
 
     /**
-     * Escape + quote a PostgreSQL identifier for mint-time DDL: double any embedded `"` (`"`→`""`) so an
-     * identifier from an untrusted source — e.g. an external entity's remote column names, which arrive via
-     * remote-schema introspection — cannot break out of its quoting during a CodeGen-privileged CREATE TABLE /
-     * CREATE VIEW. This is the mint-side counterpart to {@link MaterializationRefresher}'s `escId`/`q`/`obj`
-     * (`n.replace(/"/g, '""')`), closing the mint↔refresh escaping asymmetry; the SQL Server provider applies
-     * the analogous `]`→`]]` hardening in its `generateMaterializedTableSQL`.
-     *
-     * The schema is interpolated bare (unescaped) by callers to match the refresh path's `obj` helper — the
-     * materialization schema is always the trusted core schema, never an untrusted value.
-     */
-    private quoteMintIdentifier(name: string): string {
-        return `"${name.replace(/"/g, '""')}"`;
-    }
-
-    /**
      * PostgreSQL materialized-table DDL. The create is **conditional** (`CREATE TABLE IF NOT
      * EXISTS`) so a migration-provided `materialized_<name>` table with bespoke indexing is
      * detected and reused rather than clobbered (plan §12). Emits the single-column surrogate
@@ -464,15 +449,15 @@ END $vw_regen$;
         // base-view/query materialization emits `... uniqueidentifier ...` and PG fails the CREATE TABLE with
         // `type "uniqueidentifier" does not exist`, aborting the whole codegen run.
         const colLines = columns.map(
-            (c) => `    ${this.quoteMintIdentifier(c.Name)} ${this.mapSQLType(c.SQLType)} ${c.Nullable ? 'NULL' : 'NOT NULL'}`,
+            (c) => `    ${pgDialect.QuoteIdentifier(c.Name)} ${this.mapSQLType(c.SQLType)} ${c.Nullable ? 'NULL' : 'NOT NULL'}`,
         );
         const pkCols = columns.filter((c) => c.IsPrimaryKey).map((c) => c.Name);
         const pkClause = pkCols.length
-            ? `,\n    CONSTRAINT ${this.quoteMintIdentifier(`PK_${tableName}`)} PRIMARY KEY (${pkCols
-                  .map((n) => this.quoteMintIdentifier(n))
+            ? `,\n    CONSTRAINT ${pgDialect.QuoteIdentifier(`PK_${tableName}`)} PRIMARY KEY (${pkCols
+                  .map((n) => pgDialect.QuoteIdentifier(n))
                   .join(', ')})`
             : '';
-        return `CREATE TABLE IF NOT EXISTS ${schema}.${this.quoteMintIdentifier(tableName)} (
+        return `CREATE TABLE IF NOT EXISTS ${pgDialect.QuoteSchema(schema, tableName)} (
 ${colLines.join(',\n')}${pkClause}
 );`;
     }
@@ -485,9 +470,9 @@ ${colLines.join(',\n')}${pkClause}
      * `CREATE OR REPLACE` column-compatibility rule is satisfied on the swap.
      */
     override generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
-        return `CREATE OR REPLACE VIEW ${schema}.${this.quoteMintIdentifier(viewName)}
+        return `CREATE OR REPLACE VIEW ${pgDialect.QuoteSchema(schema, viewName)}
 AS
-SELECT * FROM ${schema}.${this.quoteMintIdentifier(tableName)};`;
+SELECT * FROM ${pgDialect.QuoteSchema(schema, tableName)};`;
     }
 
     /**

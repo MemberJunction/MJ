@@ -26,11 +26,20 @@ describe('PostgreSQLDialect', () => {
         it('should handle identifiers with spaces', () => {
             expect(dialect.QuoteIdentifier('First Name')).toBe('"First Name"');
         });
+
+        it('should double an embedded double-quote so an untrusted identifier cannot break out of quoting', () => {
+            expect(dialect.QuoteIdentifier('ev"il')).toBe('"ev""il"');
+            expect(dialect.QuoteIdentifier('a"b"c')).toBe('"a""b""c"');
+        });
     });
 
     describe('QuoteSchema', () => {
-        it('should produce schema-qualified reference with double quotes on object', () => {
-            expect(dialect.QuoteSchema('__mj', 'vw_users')).toBe('__mj."vw_users"');
+        it('should produce a schema-qualified reference with BOTH parts double-quoted', () => {
+            expect(dialect.QuoteSchema('__mj', 'vw_users')).toBe('"__mj"."vw_users"');
+        });
+
+        it('should double embedded double-quotes in both the schema and object parts', () => {
+            expect(dialect.QuoteSchema('sch"ema', 'obj"ect')).toBe('"sch""ema"."obj""ect"');
         });
     });
 

@@ -168,11 +168,17 @@ export class PostgreSQLDialect extends SQLDialect {
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {
-        return `"${name}"`;
+        // Double any embedded double-quote (`"`→`""`) so an identifier from an untrusted source — e.g. an
+        // external entity's remote column/table names, which arrive via remote-schema introspection — cannot
+        // break out of its quoting in generated DDL/DML. A no-op for normal identifiers (they contain no `"`).
+        return `"${name.replace(/"/g, '""')}"`;
     }
 
     QuoteSchema(schema: string, object: string): string {
-        return `${schema}."${object}"`;
+        // Quote BOTH parts (schema was previously interpolated bare). PG folds an unquoted identifier to
+        // lowercase, so quoting the schema also preserves case for any non-lowercase schema; for the
+        // all-lowercase core schema it is behavior-neutral. Escaping comes from QuoteIdentifier.
+        return `${this.QuoteIdentifier(schema)}.${this.QuoteIdentifier(object)}`;
     }
 
     /**
