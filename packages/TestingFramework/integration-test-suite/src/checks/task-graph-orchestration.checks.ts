@@ -29,7 +29,7 @@ import { BaseRemotableOperation, RunView } from '@memberjunction/core';
 import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
-import { LoadTaskGraphOperations, TaskGraphService } from '@memberjunction/task-graph';
+import { LoadTaskGraphOperations, LoadWorkflowOperations, RUN_WORKFLOW_JOB_TYPE, TaskGraphService } from '@memberjunction/task-graph';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -66,6 +66,9 @@ const OPTED_IN_AGENTS = [
     'File Research Agent',
     'Web Research Agent',
 ] as const;
+
+/** The workflow-authoring control plane, as Remote Operation keys. */
+const WORKFLOW_OPERATION_KEYS = ['Workflow.Save', 'Workflow.Validate'] as const;
 
 /** Must match HUMAN_TASK_NOTIFICATION_TYPE in TaskGraphDispatcher. */
 const HUMAN_TASK_NOTIFICATION_TYPE = 'Task Assignment';
@@ -465,6 +468,71 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
                 `notification type '${HUMAN_TASK_NOTIFICATION_TYPE}' is not seeded — human tasks would stall unannounced`,
             );
             console.log(`      → '${HUMAN_TASK_NOTIFICATION_TYPE}' notification type is seeded`);
+        }
+    },
+    {
+        Id: 'task-graph-orchestration.TG11',
+        Name: 'TG11: the workflow-authoring Remote Operations are published and implemented',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // Closes the "agents cannot schedule anything" hole: an agent can now author a workflow —
+            // steps AND triggers — in one typed call. Same two failure modes TG7 guards for the
+            // task-graph operations: a metadata row that was never pushed (unreachable), and a
+            // subclass that never registers (routing resolves to the contract-only base and every
+            // call succeeds at the transport while doing nothing).
+            const rows = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ OperationKey: string; Status: string }>(
+                {
+                    EntityName: 'MJ: Remote Operations',
+                    ExtraFilter: `OperationKey LIKE 'Workflow.%'`,
+                    Fields: ['OperationKey', 'Status'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            Assert(rows.Success, `could not read MJ: Remote Operations: ${rows.ErrorMessage}`);
+            const published = new Map((rows.Results ?? []).map((r) => [r.OperationKey, r.Status]));
+
+            LoadWorkflowOperations();
+
+            for (const key of WORKFLOW_OPERATION_KEYS) {
+                Assert(published.has(key), `Remote Operation '${key}' has no metadata row — it is unreachable`);
+                AssertEqual(published.get(key), 'Active', `Remote Operation '${key}' is not Active`);
+
+                const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRemotableOperation>(
+                    BaseRemotableOperation, key,
+                );
+                Assert(!!instance, `no class resolved for Remote Operation '${key}'`);
+                AssertEqual(instance!.OperationKey, key, `resolved class reports the wrong OperationKey for '${key}'`);
+                Assert(
+                    instance!.constructor.name.endsWith('ServerOperation'),
+                    `'${key}' resolved to '${instance!.constructor.name}' — the generated contract-only base won`,
+                );
+            }
+            console.log(`      → ${WORKFLOW_OPERATION_KEYS.length} workflow operations published and implemented`);
+        }
+    },
+    {
+        Id: 'task-graph-orchestration.TG12',
+        Name: 'TG12: the Scheduled Job Type a workflow schedule reconciles against is seeded',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // WorkflowSpecSync creates NO new storage — a workflow's schedule is an ordinary
+            // Scheduled Job of this type. Without the seed, saving a scheduled workflow throws at the
+            // one moment the user is least able to interpret it.
+            const rows = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Name: string }>(
+                {
+                    EntityName: 'MJ: Scheduled Job Types',
+                    ExtraFilter: `Name='${RUN_WORKFLOW_JOB_TYPE}'`,
+                    Fields: ['Name'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            Assert(rows.Success, `could not read MJ: Scheduled Job Types: ${rows.ErrorMessage}`);
+            AssertEqual(
+                rows.Results?.length ?? 0,
+                1,
+                `Scheduled Job Type '${RUN_WORKFLOW_JOB_TYPE}' is not seeded — scheduled workflows cannot be saved`,
+            );
+            console.log(`      → '${RUN_WORKFLOW_JOB_TYPE}' scheduled job type is seeded`);
         }
     },
 ];
