@@ -25,7 +25,7 @@
  *
  * Deterministic — no model calls. TG2 creates one task and the bundle Teardown removes it.
  */
-import { BaseRemotableOperation, Metadata, RunView } from '@memberjunction/core';
+import { BaseRemotableOperation, RunView } from '@memberjunction/core';
 import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
