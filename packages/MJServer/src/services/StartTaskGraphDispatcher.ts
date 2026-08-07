@@ -5,6 +5,9 @@
  * graph persisted correctly and then sat in `Pending` forever. Submission being durable is only
  * half the promise — something has to *pick the work up*.
  *
+ * The continuation deliverer is supplied here for the same reason the agent runner is: posting into
+ * a conversation is a host concern the package deliberately refuses to know about.
+ *
  * Registration of the package's Remote Operations is a separate concern handled by the generated
  * class-registration manifests (`ServerBootstrap` / `ServerBootstrapLite`), which import the
  * subclasses so their `@RegisterClass` decorators run. `LoadTaskGraphOperations` is called here
@@ -18,6 +21,7 @@ import { LoadTaskGraphOperations, TaskGraphDispatcher } from '@memberjunction/ta
 import sql from 'mssql';
 import { CreateTaskGraphProviderFactory } from './TaskGraphProviderFactory.js';
 import { TaskGraphAgentRunner } from './TaskGraphAgentRunner.js';
+import { TaskGraphContinuationDeliverer } from './TaskGraphContinuationDeliverer.js';
 
 /**
  * Starts one dispatcher for this process and returns it.
@@ -36,11 +40,15 @@ export async function StartTaskGraphDispatcher(
 ): Promise<TaskGraphDispatcher> {
     LoadTaskGraphOperations();
 
+    const providerFactory = CreateTaskGraphProviderFactory(pool);
     const dispatcher = new TaskGraphDispatcher(
-        CreateTaskGraphProviderFactory(pool),
+        providerFactory,
         new TaskGraphAgentRunner(),
         contextUser,
         { InstanceID: instanceID ?? `${process.env.HOSTNAME ?? 'mjapi'}-${process.pid}` },
+        // Without this the dispatcher had nowhere to deliver: a finished graph logged its outcome,
+        // marked itself delivered, and said nothing to the conversation that asked for it.
+        new TaskGraphContinuationDeliverer(providerFactory, contextUser),
     );
     await dispatcher.Start();
     return dispatcher;

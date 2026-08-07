@@ -397,6 +397,21 @@ export class EntitySaveOptions {
      * really just two requests touching the same record at once.
      */
     GraphVisited?: Set<string>;
+    /**
+     * IDs of the Entity Actions that caused this save — set by code writing back on behalf of one.
+     * Those actions will not be re-fired by this save's after-save hooks.
+     *
+     * This is the loop-breaker for enrich-and-write-back automations: an action running on
+     * `AfterUpdate` that stores its result on the same record would otherwise re-trigger itself
+     * forever. In-process that is detected automatically (the dispatch guard tracks origin through
+     * the async call tree), so this exists for work that has **detached** — a task graph executed
+     * later by the durable dispatcher, a queued job — where the ambient origin is long gone and the
+     * write-back is otherwise indistinguishable from a user's edit.
+     *
+     * Only after-save invocations are skipped. `Validate` and `Before*` still run: whether a record
+     * is legal does not depend on who is saving it.
+     */
+    OriginatingEntityActionIDs?: string[];
 }
 
 /**
@@ -442,6 +457,13 @@ export class EntityDeleteOptions {
      * {@link EntitySaveOptions.GraphVisited}; see that member for why it is carried on the options.
      */
     GraphVisited?: Set<string>;
+    /**
+     * IDs of the Entity Actions that caused this delete — set by code deleting on behalf of one, so
+     * those actions are not re-fired by this delete's after-delete hooks.
+     *
+     * @see EntitySaveOptions.OriginatingEntityActionIDs for the full rationale.
+     */
+    OriginatingEntityActionIDs?: string[];
 }
 
 /**

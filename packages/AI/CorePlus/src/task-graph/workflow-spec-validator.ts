@@ -13,8 +13,12 @@
  */
 import { FormatValidationErrors, ValidateTaskGraphSpec } from './task-graph-validator';
 import {
+    ENTITY_INVOCATION_TYPES,
+    IsAfterInvocationType,
+    NormalizeInvocationType,
     NormalizeTriggers,
     TriggerKey,
+    WORKFLOW_TRIGGER_INVOCATION_TYPES,
     type WorkflowSpec,
     type WorkflowSpecValidationError,
     type WorkflowSpecValidationResult,
@@ -66,6 +70,44 @@ export function ValidateWorkflowSpec(spec: WorkflowSpec): WorkflowSpecValidation
                     errors.push({
                         Code: 'MissingInvocationType',
                         Message: 'An entity-change trigger needs to say which change fires it (Create, Update, or Delete).',
+                        TriggerIndex: index,
+                    });
+                } else {
+                    const resolved = NormalizeInvocationType(trigger.invocationType);
+                    if (!resolved) {
+                        // Caught here rather than at save: a trigger bound to a nonexistent invocation
+                        // type persists happily and then never fires, which is undebuggable from the UI.
+                        errors.push({
+                            Code: 'UnknownInvocationType',
+                            Message:
+                                `"${trigger.invocationType}" is not a change this platform fires. Use Create, Update or Delete — ` +
+                                `or name one exactly: ${ENTITY_INVOCATION_TYPES.join(', ')}.`,
+                            TriggerIndex: index,
+                        });
+                    } else if (!IsAfterInvocationType(resolved)) {
+                        // Refused, not merely discouraged. `Validate` and `Before*` run inside the save
+                        // — synchronously, in the held transaction, able to abort it — so a workflow
+                        // bound there puts an unbounded agent run in the middle of a user's save.
+                        errors.push({
+                            Code: 'UnsupportedInvocationType',
+                            Message:
+                                `A workflow cannot run during "${resolved}" — that runs inside the save itself and would ` +
+                                `hold it open. Use one of: ${WORKFLOW_TRIGGER_INVOCATION_TYPES.join(', ')}.`,
+                            TriggerIndex: index,
+                        });
+                    }
+                }
+                if (trigger.filter?.trim()) {
+                    // Rejected rather than saved-and-ignored. Narrowing by predicate needs the
+                    // before/after values of the change, a contract that does not exist yet;
+                    // accepting the field would give the author a workflow firing on every save while
+                    // they believed it was narrowed. Accepting it later is additive — the reverse
+                    // would break specs already published against it.
+                    errors.push({
+                        Code: 'UnsupportedFilter',
+                        Message:
+                            'Narrowing an entity-change trigger by predicate is not supported yet, and a filter would be ' +
+                            'silently ignored. Remove it, or narrow with scopeEntityName/scopeRecordID.',
                         TriggerIndex: index,
                     });
                 }

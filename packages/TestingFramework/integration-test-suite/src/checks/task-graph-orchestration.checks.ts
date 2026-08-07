@@ -26,10 +26,10 @@
  * Deterministic — no model calls. TG2 creates one task and the bundle Teardown removes it.
  */
 import { BaseRemotableOperation, RunView } from '@memberjunction/core';
-import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
+import type { TaskGraphSpec, WorkflowSpec } from '@memberjunction/ai-core-plus';
 import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
-import { EXECUTE_AGENT_ACTION, LoadTaskGraphOperations, LoadWorkflowOperations, RUN_WORKFLOW_JOB_TYPE, TaskGraphService } from '@memberjunction/task-graph';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { EXECUTE_AGENT_ACTION, LoadTaskGraphOperations, LoadWorkflowOperations, RUN_WORKFLOW_JOB_TYPE, TaskGraphService, WorkflowSpecSync, type WorkflowAgentWriter } from '@memberjunction/task-graph';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -78,6 +78,23 @@ const CREATED_TASK_IDS: string[] = [];
 const CREATED_TASK_TYPE_IDS: string[] = [];
 /** Parent tasks created by the submission checks; torn down FK-safe (edges -> children -> parent). */
 const CREATED_PARENT_IDS: string[] = [];
+/** Agents and entity-action rows created by the workflow check; torn down FK-safe. */
+const CREATED_WORKFLOW_AGENT_IDS: string[] = [];
+const CREATED_ENTITY_ACTION_IDS: string[] = [];
+
+/**
+ * Stands in for the host's `AgentSpecSync`-backed writer.
+ *
+ * The check is about the TRIGGER binding, not about agent persistence — which AgentSpecSync already
+ * covers. Using a stub keeps the assertion pointed at the thing that broke, and keeps the check from
+ * creating a full agent record it would then have to unwind.
+ */
+class IntegrationAgentWriter implements WorkflowAgentWriter {
+    constructor(private readonly fixedID: string = '11111111-2222-3333-4444-555555555555') {}
+    public async PersistFlowAgent(): Promise<string> {
+        return this.fixedID;
+    }
+}
 
 /** Resolves a TaskType, creating a disposable one if the install has none. */
 async function resolveTaskTypeID(ctx: IntegrationCheckContext): Promise<string> {
@@ -588,6 +605,269 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
             console.log('      → Execute Agent exposes AgentID + Data, and both ValueTypes are legal');
         }
     },
+    {
+        Id: 'task-graph-orchestration.TG14',
+        Name: 'TG14: saving a workflow with an entity-change trigger writes the whole binding',
+        // Mutation-class: this one actually SAVES, so it only fires under RUN_MUTATION_TESTS.
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // The debt Phase 6 owed. TG13 asserts the binding's PREREQUISITES; nothing drove the
+            // save-to-binding round trip, which is precisely how Phase 6 shipped a binding that set
+            // which agent to run but never which record changed. The unit tests could not catch it —
+            // they mock reconcileTriggers, so the path had never executed at all.
+            const agentName = await resolveAgentName(ctx);
+            const watched = 'MJ: Tasks'; // any real entity; Tasks is already in this bundle's world
+
+            const spec: WorkflowSpec = {
+                name: 'mj-integration-test-workflow (safe to delete)',
+                status: 'Draft',
+                graph: {
+                    workflowName: 'mj-integration-test-workflow (safe to delete)',
+                    tasks: [{ tempId: 'a', name: 'Handle change', description: 'handle it', agentName, dependsOn: [] }],
+                },
+                triggers: [{ type: 'EntityEvent', entityName: watched, invocationType: 'Update' }],
+            };
+
+            const result = await new WorkflowSpecSync(new IntegrationAgentWriter()).Persist(spec, {
+                ContextUser: ctx.User,
+                Provider: ctx.Provider,
+            });
+            Assert(result.Success, `workflow save failed: ${result.ErrorMessage}`);
+            Assert(
+                result.Unreconciled.length === 0,
+                `the entity-change trigger did not bind: ${result.Unreconciled.join('; ')}`,
+            );
+            CREATED_WORKFLOW_AGENT_IDS.push(result.AgentID!);
+
+            // 1. The EntityAction binding — which entity, which action.
+            const entity = ctx.Provider.EntityByName(watched);
+            const actionRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+                { EntityName: 'MJ: Actions', ExtraFilter: `Name='${EXECUTE_AGENT_ACTION}'`, Fields: ['ID'], ResultType: 'simple' },
+                ctx.User,
+            );
+            const actionID = actionRes.Results?.[0]?.ID;
+            const eaRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string; Status: string }>(
+                {
+                    EntityName: 'MJ: Entity Actions',
+                    // Unscoped binding — ScopeEntityID/ScopeRecordID stay null when the spec names
+                    // no scope, which TG15 is the counterpart to.
+                    ExtraFilter: `EntityID='${entity!.ID}' AND ActionID='${actionID}' AND ScopeEntityID IS NULL AND ScopeRecordID IS NULL`,
+                    Fields: ['ID', 'Status'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            AssertEqual(eaRes.Results?.length ?? 0, 1, 'the EntityAction binding was written exactly once');
+            AssertEqual(eaRes.Results![0].Status, 'Active', 'the EntityAction binding is Active');
+            const entityActionID = eaRes.Results![0].ID;
+            CREATED_ENTITY_ACTION_IDS.push(entityActionID);
+
+            // 2. The invocation row — WHICH change fires it.
+            const invRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Status: string }>(
+                {
+                    EntityName: 'MJ: Entity Action Invocations',
+                    ExtraFilter: `EntityActionID='${entityActionID}'`,
+                    Fields: ['Status'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            AssertEqual(invRes.Results?.length ?? 0, 1, 'the invocation binding was written');
+
+            // 3. BOTH params. This is the assertion that would have caught the Phase 6 bug: the
+            //    agent binding alone looks correct, and a triggered workflow would still run knowing
+            //    nothing about the record that fired it.
+            const paramRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ValueType: string; Value: string | null; ActionParam: string }>(
+                {
+                    EntityName: 'MJ: Entity Action Params',
+                    ExtraFilter: `EntityActionID='${entityActionID}'`,
+                    Fields: ['ValueType', 'Value', 'ActionParam'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            const byName = new Map((paramRes.Results ?? []).map((p) => [p.ActionParam, p]));
+
+            const agentParam = byName.get('AgentID');
+            Assert(!!agentParam, 'the AgentID parameter was not bound — the trigger could not resolve an agent');
+            AssertEqual(agentParam!.ValueType, 'Static', 'AgentID binds as a Static value');
+            AssertEqual(agentParam!.Value, result.AgentID, 'AgentID points at the workflow’s agent');
+
+            const dataParam = byName.get('Data');
+            Assert(!!dataParam, 'the Data parameter was not bound — a triggered agent would receive NO record');
+            AssertEqual(
+                dataParam!.ValueType,
+                'Entity Object Data',
+                'Data must bind as Entity Object Data — a BaseEntity serializes to {} because its fields are getters',
+            );
+
+            // 4. Idempotent: saving again must not duplicate or detach a live trigger.
+            const again = await new WorkflowSpecSync(new IntegrationAgentWriter(result.AgentID)).Persist(spec, {
+                ContextUser: ctx.User,
+                Provider: ctx.Provider,
+            });
+            Assert(again.Success, `second save failed: ${again.ErrorMessage}`);
+            const eaAfter = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: Entity Actions',
+                    ExtraFilter: `EntityID='${entity!.ID}' AND ActionID='${actionID}' AND ScopeEntityID IS NULL AND ScopeRecordID IS NULL`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            AssertEqual(eaAfter.Results?.length ?? 0, 1, 're-saving a workflow must not duplicate its binding');
+
+            console.log('      → entity-change trigger bound: EntityAction + invocation + AgentID/Static + Data/Entity Object Data');
+        }
+    },
+
+    {
+        Id: 'task-graph-orchestration.TG15',
+        Name: 'TG15: a scoped entity-change trigger actually narrows the binding',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // Phase 6 accepted scopeEntityName/scopeRecordID and then referenced neither, so a
+            // workflow the author scoped to ONE record fired on EVERY record of the entity — the
+            // same species as the "which record changed" bug, and equally invisible from the UI.
+            // The columns and the engine's scope resolver already existed; only the wiring did not.
+            //
+            // A different entity from TG14 on purpose: one binding per (entity, action) is a
+            // database constraint, so sharing an entity would make this a test of TG16's rule.
+            const agentName = await resolveAgentName(ctx);
+            const watched = 'MJ: Task Types';
+            const scopedRecordID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+
+            const spec: WorkflowSpec = {
+                name: 'mj-integration-test-scoped-workflow (safe to delete)',
+                status: 'Draft',
+                graph: {
+                    workflowName: 'mj-integration-test-scoped-workflow (safe to delete)',
+                    tasks: [{ tempId: 'a', name: 'Handle change', description: 'handle it', agentName, dependsOn: [] }],
+                },
+                triggers: [{
+                    type: 'EntityEvent',
+                    entityName: watched,
+                    invocationType: 'Update',
+                    scopeEntityName: watched,
+                    scopeRecordID: scopedRecordID,
+                }],
+            };
+
+            const result = await new WorkflowSpecSync(new IntegrationAgentWriter('22222222-3333-4444-5555-666666666666'))
+                .Persist(spec, { ContextUser: ctx.User, Provider: ctx.Provider });
+            Assert(result.Success, `scoped workflow save failed: ${result.ErrorMessage}`);
+            Assert(result.Unreconciled.length === 0, `the scoped trigger did not bind: ${result.Unreconciled.join('; ')}`);
+            CREATED_WORKFLOW_AGENT_IDS.push(result.AgentID!);
+
+            const entity = ctx.Provider.EntityByName(watched);
+            const eaRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string; ScopeEntityID: string | null; ScopeRecordID: string | null }>(
+                {
+                    EntityName: 'MJ: Entity Actions',
+                    ExtraFilter: `EntityID='${entity!.ID}'`,
+                    Fields: ['ID', 'ScopeEntityID', 'ScopeRecordID'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            AssertEqual(eaRes.Results?.length ?? 0, 1, 'the scoped binding was written');
+            CREATED_ENTITY_ACTION_IDS.push(eaRes.Results![0].ID);
+            AssertEqual(
+                (eaRes.Results![0].ScopeRecordID ?? '').toLowerCase(),
+                scopedRecordID,
+                'ScopeRecordID must be written — otherwise the binding watches every record of the entity',
+            );
+            Assert(
+                UUIDsEqual(eaRes.Results![0].ScopeEntityID ?? '', entity!.ID),
+                'ScopeEntityID must be set — without it the record ID alone is unresolvable',
+            );
+
+            console.log('      → scoped trigger bound to one record via ScopeEntityID/ScopeRecordID');
+        }
+    },
+
+    {
+        Id: 'task-graph-orchestration.TG16',
+        Name: 'TG16: two workflows watching one entity keep their own bindings',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // 'Execute Agent' is ONE shared action, so every workflow watching a given entity would
+            // land on the same (EntityID, ActionID) pair. Reusing that row means rewriting its
+            // AgentID — silently repointing workflow A's trigger at workflow B's agent, leaving A
+            // looking configured, still showing its trigger, and never running again.
+            //
+            // Writing a second row was briefly impossible: UQ_EntityAction_ActionID_EntityID, added
+            // by the v5.37.x junction sweep, allowed one binding per (entity, action) — applied
+            // outside that sweep's own stated scope of "pure junction tables with no other meaningful
+            // data columns". V202608080100 drops it. This check is what proves the drop took effect
+            // AND that ownership is matched on the agent rather than on entity + action alone.
+            const agentName = await resolveAgentName(ctx);
+            const watched = 'MJ: Task Dependencies'; // distinct from TG14/TG15 so the checks stay independent
+
+            const build = (label: string): WorkflowSpec => ({
+                name: `mj-integration-test-shared-entity-${label} (safe to delete)`,
+                status: 'Draft',
+                graph: {
+                    workflowName: `mj-integration-test-shared-entity-${label} (safe to delete)`,
+                    tasks: [{ tempId: 'a', name: 'Handle change', description: 'handle it', agentName, dependsOn: [] }],
+                },
+                triggers: [{ type: 'EntityEvent', entityName: watched, invocationType: 'Update' }],
+            });
+
+            const agentA = '33333333-4444-5555-6666-777777777777';
+            const agentB = '44444444-5555-6666-7777-888888888888';
+
+            for (const [label, agent] of [['a', agentA], ['b', agentB]] as const) {
+                const saved = await new WorkflowSpecSync(new IntegrationAgentWriter(agent))
+                    .Persist(build(label), { ContextUser: ctx.User, Provider: ctx.Provider });
+                Assert(saved.Success, `workflow ${label} save failed: ${saved.ErrorMessage}`);
+                Assert(saved.Unreconciled.length === 0, `workflow ${label} did not bind: ${saved.Unreconciled.join('; ')}`);
+                CREATED_WORKFLOW_AGENT_IDS.push(saved.AgentID!);
+            }
+
+            const entity = ctx.Provider.EntityByName(watched);
+            const eaRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: Entity Actions',
+                    ExtraFilter: `EntityID='${entity!.ID}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            const bindings = eaRes.Results ?? [];
+            for (const b of bindings) CREATED_ENTITY_ACTION_IDS.push(b.ID);
+            AssertEqual(bindings.length, 2, 'each workflow must own its own binding');
+
+            // The decisive assertion: two bindings pointing at two DIFFERENT agents. One binding, or
+            // two carrying the same agent, both mean the second save stole the first one's trigger.
+            const paramRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Value: string | null }>(
+                {
+                    EntityName: 'MJ: Entity Action Params',
+                    ExtraFilter: `ActionParam='AgentID' AND EntityActionID IN (${bindings.map((b) => `'${b.ID}'`).join(',')})`,
+                    Fields: ['Value'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            const agents = (paramRes.Results ?? []).map((p) => (p.Value ?? '').toLowerCase()).sort();
+            AssertEqual(agents.length, 2, 'both bindings carry an AgentID');
+            Assert(agents[0] !== agents[1], 'the two bindings run the same agent — the second workflow overwrote the first');
+
+            // Re-saving must still be idempotent now that duplicates are legal: the ownership lookup
+            // has to find the workflow's OWN row rather than creating a third.
+            const again = await new WorkflowSpecSync(new IntegrationAgentWriter(agentA))
+                .Persist(build('a'), { ContextUser: ctx.User, Provider: ctx.Provider });
+            Assert(again.Success, `re-save failed: ${again.ErrorMessage}`);
+            const afterRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+                { EntityName: 'MJ: Entity Actions', ExtraFilter: `EntityID='${entity!.ID}'`, Fields: ['ID'], ResultType: 'simple' },
+                ctx.User,
+            );
+            AssertEqual(afterRes.Results?.length ?? 0, 2, 're-saving a workflow must find its own binding, not add another');
+
+            console.log('      → two workflows on one entity kept separate bindings and separate agents');
+        }
+    },
 ];
 
 for (const check of TaskGraphOrchestrationChecks) {
@@ -641,5 +921,36 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('task-graph-orchestration', 
             if (row) await row.Delete();
         }
         CREATED_TASK_TYPE_IDS.length = 0;
+
+        // Entity-action bindings from TG14, FK-safe: params and invocations reference the
+        // EntityAction, so they go first.
+        for (const entityActionID of CREATED_ENTITY_ACTION_IDS) {
+            for (const child of ['MJ: Entity Action Params', 'MJ: Entity Action Invocations']) {
+                const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Delete: () => Promise<boolean> }>(
+                    { EntityName: child, ExtraFilter: `EntityActionID='${entityActionID}'`, ResultType: 'entity_object' },
+                    ctx.User,
+                );
+                for (const row of res.Results ?? []) await row.Delete();
+            }
+            const eaRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Delete: () => Promise<boolean> }>(
+                { EntityName: 'MJ: Entity Actions', ExtraFilter: `ID='${entityActionID}'`, ResultType: 'entity_object' },
+                ctx.User,
+            );
+            for (const row of eaRes.Results ?? []) await row.Delete();
+        }
+        CREATED_ENTITY_ACTION_IDS.length = 0;
+
+        // Scheduled Jobs the workflow save may have created, matched by the same ownership marker
+        // the reconciler writes — never by name, for the same reason the reconciler doesn't.
+        for (const agentID of CREATED_WORKFLOW_AGENT_IDS) {
+            const jobs = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Configuration: string | null; Delete: () => Promise<boolean> }>(
+                { EntityName: 'MJ: Scheduled Jobs', ResultType: 'entity_object' },
+                ctx.User,
+            );
+            for (const job of jobs.Results ?? []) {
+                if (job.Configuration?.includes(agentID)) await job.Delete();
+            }
+        }
+        CREATED_WORKFLOW_AGENT_IDS.length = 0;
     },
 });

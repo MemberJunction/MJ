@@ -1791,13 +1791,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @param baseType The operation type
      * @param before True for before-hooks, false for after-hooks
      * @param user The acting user
+     * @param originatingEntityActionIDs Entity Actions that caused this save/delete, from
+     *        `EntitySaveOptions.OriginatingEntityActionIDs`. After-hooks skip them, so an action
+     *        writing back on the record that triggered it does not re-fire itself.
      * @returns Array of action results (empty by default)
      */
     protected async HandleEntityActions(
         _entity: BaseEntity,
         _baseType: 'save' | 'delete' | 'validate',
         _before: boolean,
-        _user: UserInfo
+        _user: UserInfo,
+        _originatingEntityActionIDs?: string[]
     ): Promise<{ Success: boolean; Message?: string }[]> {
         return [];
     }
