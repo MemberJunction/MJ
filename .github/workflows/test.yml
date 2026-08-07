@@ -414,8 +414,17 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      # Report-first: this lane's deliverable is the coverage NUMBERS, not a pass/fail verdict —
+      # the `test` job above is what gates on test failures. So run with reportOnFailure (v8
+      # emits the report even when some tests fail) and never let a test failure red THIS job.
+      # A real failure still shows red in the `test` job; here it becomes a warning so the
+      # coverage report is always produced and uploaded. (First surfaced by CodeGenLib's
+      # pre-existing pg-connection.test.ts, which passes under a plain run but breaks under v8
+      # coverage instrumentation — a report lane must not be hostage to that.)
       - name: Run tests with coverage
-        run: pnpm run test:coverage
+        run: |
+          set -o pipefail
+          npx vitest run --coverage --coverage.reportOnFailure 2>&1 | tee /tmp/coverage.log || echo "COVERAGE_TESTS_FAILED=1" >> "$GITHUB_ENV"
 
       - name: Coverage summary
         if: always()
@@ -432,6 +441,11 @@ jobs:
             ' >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No coverage-summary.json produced — see the coverage run logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "${COVERAGE_TESTS_FAILED:-0}" = "1" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "> ⚠️ Some tests failed during the coverage run (coverage still reported). The blocking \`test\` job is the source of truth for pass/fail — check it." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Coverage run had test failures (report still produced). See the 'test' job for the gating result."
           fi
 
       - name: Upload coverage report
