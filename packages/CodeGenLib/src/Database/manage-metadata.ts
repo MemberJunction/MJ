@@ -6028,8 +6028,18 @@ export class ManageMetadataBase {
          for (const ref of refs) {
             if (!ref.TableName) continue;
             const entity = this.findEntityByBaseObject(md, ref.SchemaName, ref.TableName);
-            if (entity && this.entityHasRowLevelSecurity(entity) && !linkedSet.has(entity.ID.trim().toLowerCase())) {
-               return { safe: false, reason: `query references read-RLS-protected source "${entity.Name}" (${ref.SchemaName ?? ''}.${ref.TableName}) that query-analysis did NOT link — an unscoped snapshot can't honor its RLS (P1 under-linking guard)` };
+            // Refuse ANY under-linked entity source, not only RLS-protected ones. Both the RLS-safety check above
+            // AND the read-grant role intersection (addMaterializedQueryEntityPermissions) are computed over the
+            // LINKED set only, so a source query-analysis did NOT link is invisible to both: an RLS source would
+            // leak its rows unscoped, and a merely CanRead-restricted (non-RLS) source would let the minted
+            // entity's read grant exceed "can read every source" — a privilege escalation. A parsed ref only maps
+            // to an entity when it IS that entity's base view/table (CTEs/functions/aliases map to nothing and are
+            // skipped), so a mapped-but-unlinked source is genuine under-linking (analysis is incomplete) and
+            // refusing is correct; over-refusal is harmless (the query stays live-only — link the source via full
+            // query analysis, or use a base-view materialization which inherits source read access).
+            if (entity && !linkedSet.has(entity.ID.trim().toLowerCase())) {
+               const rlsNote = this.entityHasRowLevelSecurity(entity) ? ' read-RLS-protected' : ' read-restricted';
+               return { safe: false, reason: `query references${rlsNote} source "${entity.Name}" (${ref.SchemaName ?? ''}.${ref.TableName}) that query-analysis did NOT link — an unscoped snapshot cannot prove its per-source read access is honored (P1 under-linking guard)` };
             }
          }
       }

@@ -56,18 +56,30 @@ export interface QueryParamClassification {
 }
 
 /**
- * Generates ≥2 distinct probe values for a parameter type. Booleans only have two, every other
- * type gets three so structural branching has a chance to reveal itself. Values are deliberately
- * unusual so they cannot collide with held values of other parameters.
+ * Generates ≥2 distinct probe values for a parameter type. Booleans have `[true, false]`. String/number/date
+ * get truthy variants PLUS a falsy one (`''`, `0`, `''`) so a CONDITIONAL predicate (`{% if param %}WHERE …
+ * {% endif %}`) reveals itself: the falsy value renders the FALSE branch (no WHERE), which the AST oracle diffs
+ * as a structural change vs. the truthy renders → the parameter is refused as `Structural` instead of being
+ * mis-classified as an unconditional row filter (which would materialize broad and then WRONGLY apply the
+ * predicate at read time when the param is empty/omitted, diverging from the live query). For these types an
+ * unconditional row filter (`WHERE col = {{param}}`) renders the falsy value as a plain LITERAL (`= ''`/`= 0`),
+ * same SQL shape → stays `RowFilter`, so it isn't over-refused.
+ *
+ * Arrays deliberately get NO empty probe: an empty array renders `IN ()`, which changes the SQL SHAPE even for
+ * an UNCONDITIONAL `WHERE x IN {{arr}}` row filter — the oracle can't distinguish that from a conditional, so
+ * an empty probe would over-refuse the legitimate (and supported) varying-length IN-list row filter. The rare
+ * conditional-array param (`{% if arr %}… IN {{arr}} …{% endif %}`) is therefore a documented residual, not
+ * covered by this structural probe. A falsy value that breaks the template render fails safe (→ Unbounded →
+ * refused). Truthy values are kept FIRST so the held baseline is unaffected (holdValue is independent).
  */
 export function probeValues(type: QueryParamType): unknown[] {
     switch (type) {
         case 'string':
-            return ['__mj_probe_alpha', '__mj_probe_beta', '__mj_probe_gamma'];
+            return ['__mj_probe_alpha', '__mj_probe_beta', '__mj_probe_gamma', ''];
         case 'number':
-            return [101, 202, 303];
+            return [101, 202, 303, 0];
         case 'date':
-            return ['2020-01-15', '2021-06-15', '2022-12-31'];
+            return ['2020-01-15', '2021-06-15', '2022-12-31', ''];
         case 'boolean':
             return [true, false];
         case 'array':

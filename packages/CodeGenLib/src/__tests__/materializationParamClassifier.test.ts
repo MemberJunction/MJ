@@ -77,6 +77,23 @@ describe('classifyQueryParameters', () => {
         expect(r.qualification.rowFilterColumns).toEqual(['Status']);
     });
 
+    it('CONDITIONAL predicate (WHERE only when the param is non-empty) → refused Structural, NOT RowFilterBroad', () => {
+        // Simulates `{% if region %}WHERE Region = {{region}}{% endif %}`. The falsy '' probe renders the FALSE
+        // branch (no WHERE), so the parameter changes the SQL SHAPE — it must NOT be treated as an unconditional
+        // row filter. If it were, the broad materialization would apply `Region = ''` at read when the param is
+        // empty/omitted, whereas the LIVE query returns ALL rows — a silent wrong-results divergence (the H4
+        // finding). Regression guard for the falsy/empty probe value.
+        const params: QueryParamDef[] = [{ Name: 'region', Type: 'string' }];
+        const render: VariantRenderer = (v) => {
+            const region = v['region'];
+            return `SELECT ID, Region FROM Orders${region ? ` WHERE Region = ${lit(region)}` : ''}`;
+        };
+        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Region'], dialect: tsql, render, allowRowFilterBroad: true });
+        expect(r.perParam[0].verdict.role).toBe('Structural');
+        expect(r.qualification.qualifies).toBe(false);
+        expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
+    });
+
     it('two clean row-filters; varying one holds the other constant → both columns', () => {
         const params: QueryParamDef[] = [
             { Name: 'status', Type: 'string' },

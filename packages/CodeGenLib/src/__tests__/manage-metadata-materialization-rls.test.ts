@@ -86,11 +86,13 @@ describe('assessQuerySourceRLSSafety — query materialization RLS gate', () => 
 });
 
 /**
- * P1 under-linking guard — the belt-and-suspenders defense inside `assessQuerySourceRLSSafety` that catches an
- * RLS source the QueryEntity LINKER missed (reached via a wrapping view / CTE / function / aliased columns).
- * The linked-only checks above can't see it; this branch parses the query SQL directly, maps each table ref to an
- * entity, and FAILS CLOSED iff a referenced entity is read-RLS-protected but NOT in the linked set. It must be
- * PRECISE — an unlinked NON-RLS table is not a leak and must NOT trip it (else legitimate materializations break).
+ * P1 under-linking guard — the belt-and-suspenders defense inside `assessQuerySourceRLSSafety` that catches a
+ * source the QueryEntity LINKER missed (reached via a wrapping view / CTE / function / aliased columns). The
+ * linked-only checks above can't see it; this branch parses the query SQL directly, maps each table ref to an
+ * entity, and FAILS CLOSED iff a referenced entity maps to a real entity NOT in the linked set — whether it is
+ * read-RLS-protected (rows would leak unscoped) OR merely CanRead-restricted (the read-grant intersection,
+ * computed over the linked set, would over-grant = privilege escalation). Refs that map to no entity
+ * (CTEs/functions/aliases) are skipped, so only genuine under-linking of an entity source trips it.
  */
 describe('assessQuerySourceRLSSafety — P1 under-linking gate', () => {
     let mm: TestableRLS;
@@ -110,10 +112,21 @@ describe('assessQuerySourceRLSSafety — P1 under-linking gate', () => {
         expect(v.reason).toContain('"Salaries"');
     });
 
-    it('stays SAFE when an unlinked referenced table is NOT RLS-protected (no over-refusal)', () => {
-        // products is referenced but unlinked — however it has no RLS, so it is not a leak and must not refuse.
+    it('FAILS CLOSED when the SQL references a non-RLS but under-linked entity source (permission-intersection blind spot)', () => {
+        // products is referenced but NOT linked. Even with no RLS, the read-grant intersection is computed over
+        // the linked set only, so an under-linked (possibly CanRead-restricted) source would let the minted
+        // entity's grant exceed "can read every source" — refuse (fail closed).
         const sql = 'SELECT o.total, p.name FROM __mj.orders o JOIN __mj.products p ON o.pid = p.id';
         const v = mm.assess({ e1: orders, e3: products }, ['e1'], sql);
+        expect(v.safe).toBe(false);
+        expect(v.reason).toMatch(/P1 under-linking guard/i);
+        expect(v.reason).toContain('"Products"');
+    });
+
+    it('does NOT refuse a ref that maps to no entity (CTE/function/alias) — only genuine entity under-linking trips it', () => {
+        // `agg` is a derived-table alias that maps to no entity; the only real source (orders) is linked → safe.
+        const sql = 'SELECT agg.total FROM (SELECT SUM(amount) AS total FROM __mj.orders) agg';
+        const v = mm.assess({ e1: orders }, ['e1'], sql);
         expect(v.safe).toBe(true);
     });
 

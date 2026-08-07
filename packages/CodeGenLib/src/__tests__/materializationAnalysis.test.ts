@@ -137,6 +137,14 @@ describe('detectAdditiveMeasures (Phase 4)', () => {
     it('false for COUNT(DISTINCT ...) (not delta-combinable)', () => {
         expect(detectAdditiveMeasures('SELECT region, COUNT(DISTINCT customer) AS c FROM sales GROUP BY region')).toBe(false);
     });
+    it('false for SUM(DISTINCT ...) (M4: distinct-sum is NOT additive — deltas can double-count/lose values)', () => {
+        // A plain SUM is additive (partial sums combine by addition), but SUM(DISTINCT x) depends on the set of
+        // distinct values across the WHOLE group — an incremental delta batch can neither add nor subtract safely,
+        // so it must fall back to a full/dirty-group recompute. Regression guard for the M4 finding.
+        expect(detectAdditiveMeasures('SELECT region, SUM(DISTINCT amount) AS t FROM sales GROUP BY region')).toBe(false);
+        // Case/spacing variants the regex must still catch.
+        expect(detectAdditiveMeasures('SELECT region, sum(  distinct amount ) AS t FROM sales GROUP BY region')).toBe(false);
+    });
     it('false when there is no additive aggregate at all', () => {
         expect(detectAdditiveMeasures('SELECT region FROM sales GROUP BY region')).toBe(false);
         expect(detectAdditiveMeasures('')).toBe(false);

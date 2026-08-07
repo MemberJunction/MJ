@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { IMetadataProvider, UserInfo, LogError, EntityInfo, ExternalDataSourceReadRouter } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo, LogError, LogStatus, EntityInfo, ExternalDataSourceReadRouter } from '@memberjunction/core';
 import { MJMaterializedResultEntity, MJQueryEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { SQLParser } from '@memberjunction/sql-parser';
@@ -289,19 +289,19 @@ export class MaterializationRefresher {
                 // refusal closes the window between an entity gaining RLS and the next codegen run, during which
                 // the scheduled sweep would otherwise keep refilling the mirror with the now-protected rows.
                 if (MaterializationRefresher.entityHasReadRLS(externalEntity)) {
-                    return await this.failRefresh(matResult, options, `Refusing to refresh base-view materialization of external RLS-protected entity "${externalEntity.Name}": a local mirror would expose rows the live path refuses under RLS.`);
+                    return await this.failRefresh(matResult, provider, options, `Refusing to refresh base-view materialization of external RLS-protected entity "${externalEntity.Name}": a local mirror would expose rows the live path refuses under RLS.`);
                 }
                 const ext = await this.rebuildFromExternalEntity(matResult, externalEntity, exec, isPostgres, contextUser, provider, runShadowName);
-                if (!ext.Success) return await this.failRefresh(matResult, options, ext.ErrorMessage ?? `External entity rebuild failed for materialization ${matResult.ID}`);
+                if (!ext.Success) return await this.failRefresh(matResult, provider, options, ext.ErrorMessage ?? `External entity rebuild failed for materialization ${matResult.ID}`);
                 rowCount = ext.RowCount ?? 0;
             } else if (sourceQuery?.externalSql) {
                 const ext = await this.rebuildFromExternalQuery(matResult, sourceQuery.query, sourceQuery.externalSql, exec, isPostgres, contextUser, provider, runShadowName);
-                if (!ext.Success) return await this.failRefresh(matResult, options, ext.ErrorMessage ?? `External query rebuild failed for materialization ${matResult.ID}`);
+                if (!ext.Success) return await this.failRefresh(matResult, provider, options, ext.ErrorMessage ?? `External query rebuild failed for materialization ${matResult.ID}`);
                 rowCount = ext.RowCount ?? 0;
             } else {
                 const sourceSelect = await this.resolveSourceSelect(matResult, contextUser, provider, isPostgres, sourceQuery?.query);
                 if (!sourceSelect) {
-                    return await this.failRefresh(matResult, options, `Could not resolve a source SELECT for materialization ${matResult.ID} (${matResult.SourceType})`);
+                    return await this.failRefresh(matResult, provider, options, `Could not resolve a source SELECT for materialization ${matResult.ID} (${matResult.SourceType})`);
                 }
 
                 const surrogateColumn = matResult.SourceType === 'Query' ? MATERIALIZATION_SURROGATE_COLUMN : undefined;
@@ -369,18 +369,22 @@ export class MaterializationRefresher {
             if (options && Object.prototype.hasOwnProperty.call(options, 'nextRefreshAt')) {
                 matResult.NextRefreshAt = options.nextRefreshAt ?? null;
             }
-            const saved = await matResult.Save();
-            if (!saved) {
-                // Do NOT route through failRefresh here. matResult already holds the full success state
-                // (Status='Active', LastRefreshedAt, Watermark, …), and failRefresh would RE-Save it — so a
-                // succeeding retry would mark the row Active/fresh with an advanced watermark while this method
-                // returns {Success:false}, a self-contradictory outcome (an operator sees a "failed" refresh
-                // that is actually Active). BaseEntity.Save is atomic, so this failed Save left the DB row
-                // unchanged; report the failure plainly and let the next sweep re-attempt (the rebuild is
-                // idempotent). Backoff is intentionally skipped — a MaterializedResult-row Save failing while
-                // the rebuild SQL succeeded is an unusual transient infrastructure error, and a prompt retry
-                // is the right recovery (not a rebuild storm risk the way a persistently bad source is).
-                return { Success: false, RowCount: rowCount, ErrorMessage: `Refresh ran but the MaterializedResult update failed: ${matResult.LatestResult?.CompleteMessage ?? 'unknown error'}` };
+            // Persist the terminal state with a GUARDED conditional UPDATE rather than BaseEntity.Save(). Save
+            // cannot express "only if still Active": its generated spUpdate binds EVERY field (Status = ISNULL(
+            // @Status, Status)) with a PK-only WHERE, so the stale in-memory Status='Active' loaded at the start
+            // of this refresh would silently CLOBBER a DriftHold/Disabled that drift-detection set concurrently
+            // DURING the (possibly long) rebuild — defeating the "hold for human review" guarantee (§13/§17.2).
+            // The guarded UPDATE writes the whole success state atomically only while the row is still Active.
+            const setNextRefresh = !!(options && Object.prototype.hasOwnProperty.call(options, 'nextRefreshAt'));
+            const applied = await this.persistTerminalStateGuarded(matResult, exec, isPostgres, setNextRefresh);
+            if (!applied) {
+                // Lost the race: the row was set to DriftHold/Disabled during this refresh. The snapshot WAS
+                // rebuilt (the swap committed), but we respect the hold — the guarded UPDATE was a no-op, so
+                // Status/Watermark/bookkeeping stay as the concurrent writer left them (the next ALLOWED refresh
+                // re-scans from the unchanged watermark; recompute is idempotent). Report the work as done so the
+                // sweep doesn't treat it as a hard failure and back off.
+                LogStatus(`MaterializationRefresher: materialization ${matResult.ID} was concurrently held/disabled during refresh — snapshot rebuilt but NOT re-activated (respecting the hold).`);
+                return { Success: true, RowCount: rowCount };
             }
             return { Success: true, RowCount: rowCount };
         } catch (err) {
@@ -390,7 +394,7 @@ export class MaterializationRefresher {
             // shadow is renamed INTO the canonical name, so there's nothing to drop.) Never let a cleanup error
             // mask the original failure. `exec`/`isPostgres` are re-derived because they're scoped to the try.
             await this.dropShadowTableBestEffort(provider, matResult.SchemaName, runShadowName);
-            return await this.failRefresh(matResult, options, msg);
+            return await this.failRefresh(matResult, provider, options, msg);
         }
     }
 
@@ -421,29 +425,77 @@ export class MaterializationRefresher {
      * post-success Save-failure path deliberately does NOT use this — see the comment there — because matResult
      * would carry the full success state and re-Saving it would contradict the reported failure.)
      *
-     * Status is deliberately NOT set here, so a concurrent DriftHold/Disabled can't be clobbered. RefreshOne
-     * assigns Watermark/SourceRowCount/Status/LastRefreshedAt/RowCount only on the SUCCESS path, so on these
-     * pre-success failures matResult carries no dirty field except the NextRefreshAt this sets — the Save writes
-     * just that. Best-effort and non-throwing: a Save failure is logged, not thrown (the next sweep re-attempts). No-op when the
-     * caller supplied no schedule (a manual "refresh now" with no options).
+     * Only NextRefreshAt is written, via the SAME guarded conditional UPDATE the success path uses
+     * (`WHERE Status NOT IN ('DriftHold','Disabled')`) — so a concurrent hold/disable is genuinely never
+     * clobbered. (BaseEntity.Save could NOT guarantee this: its spUpdate binds every field with ISNULL + a
+     * PK-only WHERE, so the stale in-memory Status='Active' would have overwritten a concurrent hold even though
+     * this method never assigns Status — the previous "not dirtying Status keeps it safe" reasoning was wrong.)
+     * Best-effort and non-throwing: an update failure is logged, not thrown (the next sweep re-attempts). No-op
+     * when the caller supplied no schedule (a manual "refresh now" with no options).
      */
     private async failRefresh(
         matResult: MJMaterializedResultEntity,
+        provider: IMetadataProvider,
         options: { nextRefreshAt?: Date | null } | undefined,
         errorMessage: string,
     ): Promise<MaterializationRefreshResult> {
         if (options && Object.prototype.hasOwnProperty.call(options, 'nextRefreshAt')) {
             try {
-                matResult.NextRefreshAt = options.nextRefreshAt ?? null;
-                const saved = await matResult.Save();
-                if (!saved) {
-                    LogError(`MaterializationRefresher: could not persist NextRefreshAt backoff for ${matResult.ID}: ${matResult.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-                }
+                const exec = provider as unknown as ISQLExecutor;
+                const isPostgres = exec.PlatformKey === 'postgresql';
+                const q = (n: string) => MaterializationRefresher.quoteIdent(n, isPostgres);
+                const nextLit = options.nextRefreshAt ? MaterializationRefresher.sqlDateTimeLiteral(options.nextRefreshAt) : 'NULL';
+                await this.execGuardedMaterializedResultUpdate(matResult, exec, isPostgres, `${q('NextRefreshAt')} = ${nextLit}`);
             } catch (e) {
                 LogError(`MaterializationRefresher: could not persist NextRefreshAt backoff for ${matResult.ID}: ${e instanceof Error ? e.message : String(e)}`);
             }
         }
         return { Success: false, ErrorMessage: errorMessage };
+    }
+
+    /** Core-schema reference for the `MJ: Materialized Results` metadata table. NOT `matResult.SchemaName` —
+     *  that is the SNAPSHOT table's schema, which differs for a base-view materialization of a non-core entity.
+     *  The metadata row lives where the entity is defined (`__mj`), read from the entity metadata. */
+    private materializedResultTableRef(matResult: MJMaterializedResultEntity, isPostgres: boolean): string {
+        const schema = matResult.EntityInfo.SchemaName;
+        const table = matResult.EntityInfo.BaseTable;
+        return isPostgres ? `${schema}."${table}"` : `[${schema}].[${table}]`;
+    }
+
+    /** Persists the terminal SUCCESS state (Status='Active' + LastRefreshedAt/RowCount/Watermark/SourceRowCount/
+     *  RefreshesSinceFullRebuild [+ NextRefreshAt]) via {@link execGuardedMaterializedResultUpdate}. Reads the
+     *  values from `matResult` (RefreshOne has already assigned them in-memory). Returns false when the row was
+     *  concurrently held/disabled (the UPDATE matched 0 rows). */
+    private async persistTerminalStateGuarded(matResult: MJMaterializedResultEntity, exec: ISQLExecutor, isPostgres: boolean, setNextRefresh: boolean): Promise<boolean> {
+        const q = (n: string) => MaterializationRefresher.quoteIdent(n, isPostgres);
+        const dtLit = (d: Date | null | undefined) => (d ? MaterializationRefresher.sqlDateTimeLiteral(d) : 'NULL');
+        const intLit = (n: number | null | undefined) => (n == null ? 'NULL' : String(Math.trunc(Number(n))));
+        const sets = [
+            `${q('Status')} = 'Active'`,
+            `${q('LastRefreshedAt')} = ${dtLit(matResult.LastRefreshedAt)}`,
+            `${q('RowCount')} = ${intLit(matResult.RowCount)}`,
+            `${q('Watermark')} = ${dtLit(matResult.Watermark)}`,
+            `${q('SourceRowCount')} = ${intLit(matResult.SourceRowCount)}`,
+            `${q('RefreshesSinceFullRebuild')} = ${intLit(matResult.RefreshesSinceFullRebuild)}`,
+        ];
+        if (setNextRefresh) sets.push(`${q('NextRefreshAt')} = ${dtLit(matResult.NextRefreshAt)}`);
+        return this.execGuardedMaterializedResultUpdate(matResult, exec, isPostgres, sets.join(', '));
+    }
+
+    /** Runs an UPDATE against the MaterializedResult metadata row guarded by `Status NOT IN ('DriftHold',
+     *  'Disabled')` — the atomic primitive that makes a status/state write unable to clobber a concurrently-set
+     *  hold. Returns true iff exactly the target row was updated (i.e. it was still Active). The affected count is
+     *  read back cross-engine: SQL Server via `@@ROWCOUNT`, PostgreSQL via a `RETURNING`-counting CTE. `matResult.ID`
+     *  is a trusted entity PK (UUID), interpolated the same way the refresher interpolates its other metadata. */
+    private async execGuardedMaterializedResultUpdate(matResult: MJMaterializedResultEntity, exec: ISQLExecutor, isPostgres: boolean, setClause: string): Promise<boolean> {
+        const tbl = this.materializedResultTableRef(matResult, isPostgres);
+        const q = (n: string) => MaterializationRefresher.quoteIdent(n, isPostgres);
+        const guard = `${q('ID')} = '${matResult.ID}' AND ${q('Status')} NOT IN ('DriftHold', 'Disabled')`;
+        const sql = isPostgres
+            ? `WITH upd AS (UPDATE ${tbl} SET ${setClause} WHERE ${guard} RETURNING 1) SELECT COUNT(*)::int AS n FROM upd`
+            : `UPDATE ${tbl} SET ${setClause} WHERE ${guard}; SELECT @@ROWCOUNT AS n`;
+        const rows = await exec.ExecuteSQL<{ n: number }>(sql);
+        return Number(rows?.[0]?.n ?? 0) > 0;
     }
 
     /**
