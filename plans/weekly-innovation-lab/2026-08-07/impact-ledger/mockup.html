@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Impact Ledger — UX Mockup</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root[data-theme="dark"] {
+  --mj-bg-page: #101a26; --mj-bg-surface: #16222f; --mj-bg-surface-card: #1a2836;
+  --mj-bg-surface-sunken: #0e1822; --mj-bg-surface-elevated: #20303f; --mj-bg-surface-hover: #223344;
+  --mj-text-primary: #e8eef4; --mj-text-secondary: #aebccb; --mj-text-muted: #7d8fa3; --mj-text-inverse: #ffffff;
+  --mj-border-default: #2b3d4f; --mj-border-subtle: #223344; --mj-border-strong: #3d5266;
+  --mj-brand-primary: #1b84ff; --mj-brand-primary-hover: #3d97ff;
+  --mj-status-success: #23a55a; --mj-status-success-bg: rgba(35,165,90,0.14); --mj-status-success-text: #4ade80; --mj-status-success-border: rgba(35,165,90,0.35);
+  --mj-status-error: #e5484d; --mj-status-error-bg: rgba(229,72,77,0.14); --mj-status-error-text: #ff8589; --mj-status-error-border: rgba(229,72,77,0.35);
+  --mj-status-warning: #f59e0b; --mj-status-warning-bg: rgba(245,158,11,0.14); --mj-status-warning-text: #fbbf24; --mj-status-warning-border: rgba(245,158,11,0.35);
+  --mj-status-info: #38bdf8; --mj-status-info-bg: rgba(56,189,248,0.14); --mj-status-info-text: #7dd3fc; --mj-status-info-border: rgba(56,189,248,0.35);
+  --mj-shadow-md: 0 4px 14px rgba(0,0,0,0.35);
+}
+:root[data-theme="light"] {
+  --mj-bg-page: #f2f5f8; --mj-bg-surface: #ffffff; --mj-bg-surface-card: #f8fafc;
+  --mj-bg-surface-sunken: #eef2f6; --mj-bg-surface-elevated: #ffffff; --mj-bg-surface-hover: #f1f5f9;
+  --mj-text-primary: #1e2a36; --mj-text-secondary: #47586a; --mj-text-muted: #7d8fa3; --mj-text-inverse: #ffffff;
+  --mj-border-default: #dbe3ea; --mj-border-subtle: #e8eef4; --mj-border-strong: #c3cfda;
+  --mj-brand-primary: #0076b6; --mj-brand-primary-hover: #0d8ad1;
+  --mj-status-success: #16a34a; --mj-status-success-bg: rgba(22,163,74,0.1); --mj-status-success-text: #15803d; --mj-status-success-border: rgba(22,163,74,0.3);
+  --mj-status-error: #dc2626; --mj-status-error-bg: rgba(220,38,38,0.08); --mj-status-error-text: #b91c1c; --mj-status-error-border: rgba(220,38,38,0.28);
+  --mj-status-warning: #d97706; --mj-status-warning-bg: rgba(217,119,6,0.1); --mj-status-warning-text: #b45309; --mj-status-warning-border: rgba(217,119,6,0.3);
+  --mj-status-info: #0284c7; --mj-status-info-bg: rgba(2,132,199,0.08); --mj-status-info-text: #075985; --mj-status-info-border: rgba(2,132,199,0.28);
+  --mj-shadow-md: 0 4px 14px rgba(30,42,54,0.10);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Poppins', -apple-system, sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); transition: background .25s, color .25s; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+.mock-header { position: sticky; top: 0; z-index: 60; display: flex; align-items: center; justify-content: space-between; padding: 14px 28px; background: color-mix(in srgb, var(--mj-bg-surface) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--mj-border-subtle); }
+.mock-header h1 { font-size: 15px; font-weight: 600; }
+.mock-header h1 span { color: var(--mj-text-muted); font-weight: 400; }
+.header-right { display: flex; align-items: center; gap: 10px; }
+.theme-toggle { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--mj-text-secondary); background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default); border-radius: 999px; cursor: pointer; }
+.theme-toggle:hover { color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+
+.tabs { display: flex; gap: 4px; padding: 0 28px; border-bottom: 1px solid var(--mj-border-subtle); background: var(--mj-bg-surface); position: sticky; top: 53px; z-index: 55; }
+.tab { padding: 13px 16px; font-size: 13px; font-weight: 500; color: var(--mj-text-muted); cursor: pointer; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 8px; }
+.tab i { font-size: 12px; }
+.tab.active { color: var(--mj-brand-primary); border-bottom-color: var(--mj-brand-primary); }
+.tab:hover:not(.active) { color: var(--mj-text-primary); }
+
+.app { max-width: 1180px; margin: 0 auto; padding: 28px; }
+.screen { display: none; animation: fadein .3s ease; }
+.screen.active { display: block; }
+@keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+.page-head { margin-bottom: 20px; }
+.page-head h2 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+.page-head p { font-size: 13.5px; color: var(--mj-text-muted); max-width: 640px; line-height: 1.55; }
+
+/* ── Timeline screen ─────────────────────────────────────────────── */
+.filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+.chip { padding: 6px 13px; border-radius: 999px; font-size: 12px; font-weight: 500; border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); color: var(--mj-text-secondary); cursor: pointer; }
+.chip.active { background: color-mix(in srgb, var(--mj-brand-primary) 16%, transparent); border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+.search-box { margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 7px 13px; border: 1px solid var(--mj-border-default); border-radius: 8px; background: var(--mj-bg-surface-card); font-size: 12.5px; color: var(--mj-text-muted); min-width: 220px; }
+
+.moment-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-subtle); border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; box-shadow: var(--mj-shadow-md); }
+.moment-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.moment-meta { display: flex; align-items: center; gap: 10px; }
+.moment-icon { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+.moment-icon.gift { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+.moment-icon.program { background: var(--mj-status-info-bg); color: var(--mj-status-info-text); }
+.moment-icon.grant { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); }
+.moment-title-block .program-name { font-size: 12px; font-weight: 600; color: var(--mj-text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.moment-title-block .timestamp { font-size: 11.5px; color: var(--mj-text-muted); margin-top: 1px; }
+.status-badge { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.status-badge.draft { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); border: 1px solid var(--mj-status-warning-border); }
+.status-badge.approved { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); border: 1px solid var(--mj-status-success-border); }
+
+.moment-text { font-size: 14.5px; line-height: 1.65; color: var(--mj-text-primary); margin-bottom: 12px; }
+.moment-text b { font-weight: 600; }
+.citations { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.citation { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-family: 'JetBrains Mono', monospace; padding: 4px 10px; border-radius: 7px; background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default); color: var(--mj-text-secondary); cursor: pointer; }
+.citation:hover { border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+.citation i { font-size: 10px; }
+
+.moment-actions { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid var(--mj-border-subtle); }
+.btn { font: inherit; font-size: 12.5px; font-weight: 600; padding: 8px 15px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; border: 1px solid transparent; }
+.btn-primary { background: var(--mj-brand-primary); color: var(--mj-text-inverse); }
+.btn-primary:hover { background: var(--mj-brand-primary-hover); }
+.btn-ghost { background: transparent; border-color: var(--mj-border-default); color: var(--mj-text-secondary); }
+.btn-ghost:hover { border-color: var(--mj-border-strong); color: var(--mj-text-primary); }
+.btn-danger-ghost { background: transparent; border-color: var(--mj-border-default); color: var(--mj-status-error-text); }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+
+/* ── Grant tracker ─────────────────────────────────────────────── */
+.grant-table { width: 100%; border-collapse: collapse; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-subtle); border-radius: 14px; overflow: hidden; box-shadow: var(--mj-shadow-md); }
+.grant-table th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--mj-text-muted); padding: 12px 18px; background: var(--mj-bg-surface-sunken); border-bottom: 1px solid var(--mj-border-subtle); }
+.grant-table td { padding: 15px 18px; font-size: 13.5px; border-bottom: 1px solid var(--mj-border-subtle); vertical-align: top; }
+.grant-table tr:last-child td { border-bottom: none; }
+.grant-table tr:hover td { background: var(--mj-bg-surface-hover); }
+.grant-name { font-weight: 600; }
+.grant-funder { font-size: 12px; color: var(--mj-text-muted); }
+.obligation-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin-bottom: 6px; }
+.obligation-row:last-child { margin-bottom: 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot.met { background: var(--mj-status-success); }
+.dot.upcoming { background: var(--mj-status-info); }
+.dot.risk { background: var(--mj-status-error); }
+.pill { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+.pill.met { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+.pill.upcoming { background: var(--mj-status-info-bg); color: var(--mj-status-info-text); }
+.pill.risk { background: var(--mj-status-error-bg); color: var(--mj-status-error-text); }
+.source-link { font-size: 11.5px; color: var(--mj-brand-primary); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; }
+
+/* ── Composer ─────────────────────────────────────────────── */
+.composer-layout { display: grid; grid-template-columns: 280px 1fr; gap: 22px; }
+.composer-panel { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-subtle); border-radius: 14px; padding: 20px; box-shadow: var(--mj-shadow-md); align-self: start; }
+.field-label { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 7px; display: block; }
+.select-fake { padding: 9px 12px; border: 1px solid var(--mj-border-default); border-radius: 8px; background: var(--mj-bg-surface-card); font-size: 13px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; color: var(--mj-text-primary); }
+.audience-options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.audience-opt { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--mj-border-default); border-radius: 8px; font-size: 13px; cursor: pointer; }
+.audience-opt.selected { border-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); color: var(--mj-brand-primary); font-weight: 600; }
+.audience-opt i { width: 16px; text-align: center; }
+
+.packet-doc { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-subtle); border-radius: 14px; padding: 34px 40px; box-shadow: var(--mj-shadow-md); }
+.packet-doc h3 { font-size: 19px; margin-bottom: 3px; }
+.packet-doc .sub { font-size: 12.5px; color: var(--mj-text-muted); margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px dashed var(--mj-border-default); }
+.packet-section { margin-bottom: 20px; }
+.packet-section h4 { font-size: 13px; font-weight: 600; color: var(--mj-brand-primary); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+.packet-section p { font-size: 14px; line-height: 1.7; color: var(--mj-text-primary); }
+.packet-figs { display: flex; gap: 14px; margin: 14px 0; }
+.fig { flex: 1; background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-subtle); border-radius: 10px; padding: 14px; text-align: center; }
+.fig .num { font-size: 21px; font-weight: 700; color: var(--mj-brand-primary); font-family: 'JetBrains Mono', monospace; }
+.fig .lbl { font-size: 11px; color: var(--mj-text-muted); margin-top: 3px; }
+.composer-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--mj-border-subtle); }
+.citation-count { font-size: 12px; color: var(--mj-text-muted); display: flex; align-items: center; gap: 6px; }
+</style>
+</head>
+<body>
+<header class="mock-header">
+  <h1>Impact Ledger <span>— UX mockup, weekly innovation lab, 2026-08-07</span></h1>
+  <div class="header-right">
+    <button class="theme-toggle" onclick="toggleTheme()"><i class="fa-solid fa-circle-half-stroke"></i> Toggle theme</button>
+  </div>
+</header>
+<nav class="tabs">
+  <div class="tab active" onclick="showScreen('timeline', this)"><i class="fa-solid fa-timeline"></i> Impact Timeline</div>
+  <div class="tab" onclick="showScreen('grants', this)"><i class="fa-solid fa-file-contract"></i> Grant Compliance Tracker</div>
+  <div class="tab" onclick="showScreen('composer', this)"><i class="fa-solid fa-file-lines"></i> Board Packet Composer</div>
+</nav>
+
+<div class="app">
+
+  <!-- SCREEN 1: TIMELINE -->
+  <section id="screen-timeline" class="screen active">
+    <div class="page-head">
+      <h2>Impact Timeline</h2>
+      <p>AI-drafted Impact Moments, always sourced. Nothing here reaches a funder or board until a human approves it.</p>
+    </div>
+    <div class="filter-bar">
+      <span class="chip active">All programs</span>
+      <span class="chip">Youth Mentorship</span>
+      <span class="chip">Community Health Fund</span>
+      <span class="chip">Winter Grant Cycle</span>
+      <div class="search-box"><i class="fa-solid fa-magnifying-glass"></i> Search moments…</div>
+    </div>
+
+    <div class="moment-card">
+      <div class="moment-top">
+        <div class="moment-meta">
+          <div class="moment-icon program"><i class="fa-solid fa-people-group"></i></div>
+          <div class="moment-title-block">
+            <div class="program-name">Youth Mentorship</div>
+            <div class="timestamp">Drafted 6 minutes ago · triggered by 3 new enrollments</div>
+          </div>
+        </div>
+        <span class="status-badge draft">Draft — needs review</span>
+      </div>
+      <p class="moment-text">Since March 1st, <b>Youth Mentorship</b> has enrolled <b>40 new mentees</b>, an outcome directly tied to <b>$12,400</b> in Q2 restricted funds from the Ferris Family Foundation grant.</p>
+      <div class="citations">
+        <span class="citation"><i class="fa-solid fa-link"></i> 40 Enrollment records</span>
+        <span class="citation"><i class="fa-solid fa-link"></i> Ferris Family Foundation — Gift #FF-2026-03</span>
+        <span class="citation"><i class="fa-solid fa-link"></i> Program: Youth Mentorship</span>
+      </div>
+      <div class="moment-actions">
+        <button class="btn btn-primary btn-sm"><i class="fa-solid fa-check"></i> Approve &amp; publish</button>
+        <button class="btn btn-ghost btn-sm"><i class="fa-solid fa-pen"></i> Edit</button>
+        <button class="btn btn-danger-ghost btn-sm"><i class="fa-solid fa-xmark"></i> Discard</button>
+      </div>
+    </div>
+
+    <div class="moment-card">
+      <div class="moment-top">
+        <div class="moment-meta">
+          <div class="moment-icon gift"><i class="fa-solid fa-hand-holding-heart"></i></div>
+          <div class="moment-title-block">
+            <div class="program-name">Community Health Fund</div>
+            <div class="timestamp">Approved 2 days ago by Dana R.</div>
+          </div>
+        </div>
+        <span class="status-badge approved">Approved</span>
+      </div>
+      <p class="moment-text">The Community Health Fund crossed <b>$85,000</b> in cumulative gifts this quarter, on pace to exceed the annual goal of $300,000 by early Q4 — driven largely by a <b>22% increase</b> in recurring monthly donors since January.</p>
+      <div class="citations">
+        <span class="citation"><i class="fa-solid fa-link"></i> 214 Gift records, Q1–Q2</span>
+        <span class="citation"><i class="fa-solid fa-link"></i> Fund: Community Health Fund</span>
+      </div>
+    </div>
+
+    <div class="moment-card">
+      <div class="moment-top">
+        <div class="moment-meta">
+          <div class="moment-icon grant"><i class="fa-solid fa-scroll"></i></div>
+          <div class="moment-title-block">
+            <div class="program-name">Winter Grant Cycle</div>
+            <div class="timestamp">Drafted 1 hour ago · triggered by milestone completion</div>
+          </div>
+        </div>
+        <span class="status-badge draft">Draft — needs review</span>
+      </div>
+      <p class="moment-text">The <b>Q2 outcomes report</b> deliverable for the Hargrove Foundation grant was completed <b>9 days ahead</b> of its June 30 deadline, satisfying obligation #3 of 5 on the grant agreement.</p>
+      <div class="citations">
+        <span class="citation"><i class="fa-solid fa-link"></i> Grant Obligation #HG-2026-Q2-03</span>
+        <span class="citation"><i class="fa-solid fa-link"></i> Hargrove Foundation Agreement, p.4</span>
+      </div>
+      <div class="moment-actions">
+        <button class="btn btn-primary btn-sm"><i class="fa-solid fa-check"></i> Approve &amp; publish</button>
+        <button class="btn btn-ghost btn-sm"><i class="fa-solid fa-pen"></i> Edit</button>
+        <button class="btn btn-danger-ghost btn-sm"><i class="fa-solid fa-xmark"></i> Discard</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREEN 2: GRANT TRACKER -->
+  <section id="screen-grants" class="screen">
+    <div class="page-head">
+      <h2>Grant Compliance Tracker</h2>
+      <p>Obligations extracted automatically from grant agreements. Every obligation links back to the exact passage it was read from.</p>
+    </div>
+    <table class="grant-table">
+      <thead>
+        <tr><th style="width:26%">Grant</th><th style="width:44%">Obligations</th><th style="width:16%">Amount</th><th style="width:14%">Overall status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="grant-name">Hargrove Foundation — General Operating</div><div class="grant-funder">Funder: Hargrove Foundation</div></td>
+          <td>
+            <div class="obligation-row"><span class="dot met"></span> Q1 financial report <span class="pill met">Met · Apr 2</span></div>
+            <div class="obligation-row"><span class="dot met"></span> Q2 outcomes report <span class="pill met">Met · Jun 21</span></div>
+            <div class="obligation-row"><span class="dot upcoming"></span> Q3 outcomes report <span class="pill upcoming">Due Sep 30</span></div>
+            <div class="source-link"><i class="fa-solid fa-file-lines"></i> View source: Grant Agreement §4.2</div>
+          </td>
+          <td>$150,000</td>
+          <td><span class="pill met">On track</span></td>
+        </tr>
+        <tr>
+          <td><div class="grant-name">Ferris Family Foundation — Youth Mentorship</div><div class="grant-funder">Funder: Ferris Family Foundation</div></td>
+          <td>
+            <div class="obligation-row"><span class="dot met"></span> Program launch confirmation <span class="pill met">Met · Mar 3</span></div>
+            <div class="obligation-row"><span class="dot risk"></span> Mid-year enrollment report <span class="pill risk">Due in 4 days</span></div>
+            <div class="obligation-row"><span class="dot upcoming"></span> Final impact report <span class="pill upcoming">Due Dec 15</span></div>
+            <div class="source-link"><i class="fa-solid fa-file-lines"></i> View source: Grant Agreement §2.1, p.2</div>
+          </td>
+          <td>$50,000</td>
+          <td><span class="pill risk">Action needed</span></td>
+        </tr>
+        <tr>
+          <td><div class="grant-name">Community Trust — Health Equity Initiative</div><div class="grant-funder">Funder: Regional Community Trust</div></td>
+          <td>
+            <div class="obligation-row"><span class="dot upcoming"></span> Budget narrative revision <span class="pill upcoming">Due Aug 20</span></div>
+            <div class="obligation-row"><span class="dot upcoming"></span> Annual site visit <span class="pill upcoming">Scheduled Oct 12</span></div>
+            <div class="source-link"><i class="fa-solid fa-file-lines"></i> View source: Grant Agreement §6</div>
+          </td>
+          <td>$95,000</td>
+          <td><span class="pill upcoming">Upcoming</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SCREEN 3: COMPOSER -->
+  <section id="screen-composer" class="screen">
+    <div class="page-head">
+      <h2>Board Packet Composer</h2>
+      <p>Pick an audience and a window. The agent assembles a draft from approved Impact Moments — every claim stays clickable back to its source.</p>
+    </div>
+    <div class="composer-layout">
+      <div class="composer-panel">
+        <span class="field-label">Audience</span>
+        <div class="audience-options">
+          <div class="audience-opt selected"><i class="fa-solid fa-users"></i> Board of Directors</div>
+          <div class="audience-opt"><i class="fa-solid fa-hand-holding-dollar"></i> Ferris Family Foundation</div>
+          <div class="audience-opt"><i class="fa-solid fa-globe"></i> Annual Report (public)</div>
+        </div>
+        <span class="field-label">Date range</span>
+        <div class="select-fake">Q2 2026 (Apr 1 – Jun 30) <i class="fa-solid fa-chevron-down"></i></div>
+        <span class="field-label">Include programs</span>
+        <div class="select-fake">All 3 active programs <i class="fa-solid fa-chevron-down"></i></div>
+        <button class="btn btn-primary" style="width:100%; justify-content:center; margin-top:6px;"><i class="fa-solid fa-wand-magic-sparkles"></i> Regenerate draft</button>
+      </div>
+
+      <div>
+        <div class="packet-doc">
+          <h3>Q2 2026 Board Update</h3>
+          <div class="sub">Prepared for: Board of Directors · Apr 1 – Jun 30, 2026 · Draft, assembled from 6 approved Impact Moments</div>
+
+          <div class="packet-figs">
+            <div class="fig"><div class="num">$248K</div><div class="lbl">Total gifts, Q2</div></div>
+            <div class="fig"><div class="num">40</div><div class="lbl">New enrollments</div></div>
+            <div class="fig"><div class="num">3/3</div><div class="lbl">Grant obligations met</div></div>
+          </div>
+
+          <div class="packet-section">
+            <h4>Program impact</h4>
+            <p>Youth Mentorship enrolled 40 new mentees this quarter, tied directly to $12,400 in Q2 restricted funding from the Ferris Family Foundation. The Community Health Fund crossed $85,000 in cumulative gifts, on pace to exceed its $300,000 annual goal by early Q4.</p>
+          </div>
+          <div class="packet-section">
+            <h4>Grant standing</h4>
+            <p>All Q2 reporting obligations were met on or ahead of schedule, including the Hargrove Foundation outcomes report, completed 9 days early.</p>
+          </div>
+
+          <div class="composer-footer">
+            <span class="citation-count"><i class="fa-solid fa-link"></i> 11 source citations behind this draft</span>
+            <button class="btn btn-primary btn-sm"><i class="fa-solid fa-file-export"></i> Export as Artifact</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+function showScreen(id, el) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+function toggleTheme() {
+  const root = document.documentElement;
+  root.setAttribute('data-theme', root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+}
+</script>
+</body>
+</html>
