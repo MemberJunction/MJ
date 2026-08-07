@@ -10,3 +10,5 @@ export * from './lib/task-graph-editor.module';
 export * from './lib/task-graph-editor.component';
 export * from './lib/task-graph-editor-events';
 export * from './lib/task-graph-canvas-adapter';
+export * from './lib/task-graph-properties-panel.component';
+export * from './lib/task-graph-runtime-source';

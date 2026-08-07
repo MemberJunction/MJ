@@ -270,6 +270,19 @@ export class TaskGraphEditorComponent extends BaseAngularComponent {
         return true;
     }
 
+    /**
+     * Sets — or with an empty string, clears — a dependency edge's condition.
+     *
+     * Implemented as remove-then-add so it travels the same `Before*`/`After*` path as any other
+     * edge change. A separate silent mutation would be a second write path into the spec, and the
+     * veto contract would then be right in one place and wrong in the other.
+     */
+    public SetDependencyCondition(fromTempId: string, toTempId: string, condition: string): boolean {
+        if (this.ReadOnly || !this.currentSpec) return false;
+        if (!this.RemoveDependency(fromTempId, toTempId)) return false;
+        return this.AddDependency(fromTempId, toTempId, condition.trim() || undefined);
+    }
+
     /** Asks the host to open the agent behind a task. */
     public RequestAgentOpen(task: TaskGraphSpecNode): void {
         if (task.agentName) {
