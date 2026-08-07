@@ -43,9 +43,15 @@ export default defineConfig({
     starlight({
       title: 'MemberJunction',
       description: 'The open-source, AI-native data platform — unify your data, add intelligence, build AI-native apps on top of it.',
+      /*
+       * Horizontal lockup (948x132). The previous stacked pair was 200px wide,
+       * which renders soft on retina and reads as a tiny mark once the header
+       * bar constrains it by height. `light`/`dark` name the THEME the file is
+       * shown in, so `light` carries the navy-ink artwork.
+       */
       logo: {
-        light: './src/assets/MJ_logo.webp',
-        dark: './src/assets/MJ_logo_dark.png',
+        light: './src/assets/MJ_logo_wide.png',
+        dark: './src/assets/MJ_logo_wide_dark.png',
         replacesTitle: true,
       },
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/MemberJunction/MJ' }],
@@ -54,6 +60,8 @@ export default defineConfig({
       customCss: ['./src/styles/custom.css'],
       components: {
         Footer: './src/components/Footer.astro',
+        // Appends the documented-line version pill next to the logo lockup.
+        SiteTitle: './src/components/SiteTitle.astro',
         // Adds the documentation-version switcher next to the theme select
         // on versioned deploys (DOCS_VERSION/DOCS_VERSIONS set by docs.yml).
         ThemeSelect: './src/components/ThemeSelect.astro',
