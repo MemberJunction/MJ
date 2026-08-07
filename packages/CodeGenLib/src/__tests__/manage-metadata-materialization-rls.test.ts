@@ -151,6 +151,19 @@ describe('assessQuerySourceRLSSafety — P1 under-linking gate', () => {
         expect(v.safe).toBe(true);
     });
 
+    it('FAILS CLOSED on an unqualified ref that also matches an under-linked entity in ANOTHER schema (ambiguity → fail closed)', () => {
+        // Two entities share base table 'widgets': __mj.widgets (linked, enumerated first) and app.widgets (NOT
+        // linked, restricted). The unqualified `FROM widgets` is schema-ambiguous; picking only the first match
+        // would pass the linked one and leak the restricted one — the guard must consider ALL candidates and refuse.
+        const mjWidgets: FakeEntity = { Name: 'MJ Widgets', SchemaName: '__mj', BaseView: 'vwMJWidgets', BaseTable: 'widgets', Permissions: [] };
+        const appWidgets: FakeEntity = { Name: 'App Widgets', SchemaName: 'app', BaseView: 'vwAppWidgets', BaseTable: 'widgets', Permissions: [] };
+        const sql = 'SELECT w.id FROM widgets w';
+        const v = mm.assess({ e1: orders, e2: mjWidgets, e3: appWidgets }, ['e1', 'e2'], sql);
+        expect(v.safe).toBe(false);
+        expect(v.reason).toMatch(/P1 under-linking guard/i);
+        expect(v.reason).toContain('"App Widgets"');
+    });
+
     it('does NOT refuse a ref that maps to no entity (CTE/function/alias) — only genuine entity under-linking trips it', () => {
         // `agg` is a derived-table alias that maps to no entity; the only real source (orders) is linked → safe.
         const sql = 'SELECT agg.total FROM (SELECT SUM(amount) AS total FROM __mj.orders) agg';
