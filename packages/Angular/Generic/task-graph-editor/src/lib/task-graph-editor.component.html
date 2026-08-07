@@ -1,0 +1,39 @@
+<div class="mj-tge">
+  @if (IsEmpty) {
+    <mj-empty-state
+      Icon="fa-diagram-project"
+      Title="Nothing here yet"
+      [Message]="EmptyStateMessage">
+    </mj-empty-state>
+  } @else {
+    @if (!IsValid && ValidationErrors.length > 0) {
+      <!-- Author-time validation comes from the SAME function the engine runs at submission, so a
+           graph that looks fine here cannot be rejected later for a reason the canvas never showed. -->
+      <mj-alert Variant="warning" class="mj-tge__validation">
+        <strong>{{ ValidationErrors.length }} problem{{ ValidationErrors.length === 1 ? '' : 's' }} to fix</strong>
+        <ul class="mj-tge__validation-list">
+          @for (err of ValidationErrors; track err.Code + (err.TempId ?? '')) {
+            <li>{{ err.Message }}</li>
+          }
+        </ul>
+      </mj-alert>
+    }
+
+    <mj-flow-editor
+      class="mj-tge__canvas"
+      [Nodes]="Nodes"
+      [Connections]="Connections"
+      [NodeTypes]="NodeTypes"
+      [ReadOnly]="ReadOnly"
+      [ShowToolbar]="ShowToolbar"
+      [ShowPalette]="ShowPalette && !ReadOnly"
+      [ShowMinimap]="ShowMinimap"
+      [ShowStatusBar]="ShowStatusBar"
+      [AutoLayoutDirection]="AutoLayoutDirection"
+      (NodeSelected)="OnNodeSelected($event)"
+      (NodeRemoved)="OnNodeRemoved($event)"
+      (ConnectionCreated)="OnConnectionCreated($event)"
+      (ConnectionRemoved)="OnConnectionRemoved($event)">
+    </mj-flow-editor>
+  }
+</div>

@@ -39,7 +39,7 @@ import {
     QueryCategoryInfo,
     Metadata,
 } from '@memberjunction/core';
-import type { QueryExecutionSpec } from '@memberjunction/core';
+import type { QueryExecutionSpec, RunViewParams } from '@memberjunction/core';
 import type { ExecuteSQLBatchOptions } from '../GenericDatabaseProvider';
 import type { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '../saveTypes.js';
 
@@ -78,6 +78,9 @@ class TestGenericProvider extends GenericDatabaseProvider {
     public testTransformExternalSQLClause(clause: string, entityInfo: EntityInfo): string { return this.TransformExternalSQLClause(clause, entityInfo); }
     public testBuildTotalRowCountSQL(entityInfo: EntityInfo, usingPagination: boolean, maxRowsForQuery: number): string | null {
         return this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
+    }
+    public testGetEffectiveBaseView(entityInfo: EntityInfo, params: { DataSource?: 'Live' | 'Materialized' }): string {
+        return this.GetEffectiveBaseView(entityInfo, params as unknown as RunViewParams);
     }
 
     // Expose protected methods for testing
@@ -306,6 +309,25 @@ describe('GenericDatabaseProvider', () => {
             // raw unquoted `AS TotalRowCount` that caused the PG bug.
             expect(sql).toContain('AS "TotalRowCount"');
             expect(sql).not.toMatch(/AS\s+TotalRowCount\s/);
+        });
+    });
+
+    describe('GetEffectiveBaseView (DataSource routing)', () => {
+        const baseViewEntity = { SchemaName: '__mj', BaseView: 'vwCustomers', CodeName: 'Customers' } as unknown as EntityInfo;
+        // A query materialization's minted entity: its BaseView ALREADY is the materialized wrapper view.
+        const queryMatEntity = { SchemaName: '__mj', BaseView: 'materialized_vwE2E_Sales_By_Region', CodeName: 'MJE2ESalesByRegion' } as unknown as EntityInfo;
+
+        it('default (Live) returns the entity base view', () => {
+            expect(provider.testGetEffectiveBaseView(baseViewEntity, {})).toBe('vwCustomers');
+            expect(provider.testGetEffectiveBaseView(baseViewEntity, { DataSource: 'Live' })).toBe('vwCustomers');
+        });
+        it('base-view materialization: Materialized swaps the live view for materialized_vw<CodeName>', () => {
+            expect(provider.testGetEffectiveBaseView(baseViewEntity, { DataSource: 'Materialized' })).toBe('materialized_vwCustomers');
+        });
+        it('query materialization: Materialized is a no-op (entity base view IS already the materialized view)', () => {
+            // Regression: previously derived materialized_vw<CodeName> (= materialized_vwMJE2ESalesByRegion),
+            // which does not exist — the minted CodeName differs from the query-derived view name.
+            expect(provider.testGetEffectiveBaseView(queryMatEntity, { DataSource: 'Materialized' })).toBe('materialized_vwE2E_Sales_By_Region');
         });
     });
 

@@ -10,15 +10,16 @@
  * Every check returns ALL failures rather than throwing on the first — a producer fixing a
  * malformed graph should see every problem at once, not discover them one round-trip at a time.
  *
- * @module @memberjunction/task-graph
+ * @module @memberjunction/ai-core-plus
  */
-import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from '@memberjunction/ai-core-plus';
+import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from './graph-algorithms';
 import {
     MAX_TASKS_PER_GRAPH,
     TaskGraphSpec,
     TaskGraphValidationError,
     TaskGraphValidationResult,
-} from './TaskGraphSpec';
+    NormalizeDependency,
+} from './task-graph-spec';
 
 /**
  * Validates a spec's structure.
@@ -96,7 +97,8 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
     // --- graph-level checks --------------------------------------------------
     const known = new Set(tasks.map((t) => t.tempId).filter(Boolean));
     for (const task of tasks) {
-        for (const dep of task.dependsOn ?? []) {
+        for (const raw of task.dependsOn ?? []) {
+            const dep = NormalizeDependency(raw).tempId;
             if (dep !== task.tempId && !known.has(dep)) {
                 errors.push({
                     Code: 'UnknownDependency',
@@ -112,8 +114,9 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
     const nodes: TaskGraphNode[] = tasks.filter((t) => !!t.tempId).map((t) => ({ id: t.tempId, status: 'Pending' }));
     const edges: TaskGraphEdge[] = tasks.flatMap((t) =>
         (t.dependsOn ?? [])
-            .filter((d) => known.has(d) && d !== t.tempId)
-            .map((d) => ({ taskId: t.tempId, dependsOnTaskId: d })),
+            .map(NormalizeDependency)
+            .filter((d) => known.has(d.tempId) && d.tempId !== t.tempId)
+            .map((d) => ({ taskId: t.tempId, dependsOnTaskId: d.tempId, dependencyType: d.dependencyType })),
     );
     const cycle = DetectCycle(nodes, edges);
     if (cycle.hasCycle) {

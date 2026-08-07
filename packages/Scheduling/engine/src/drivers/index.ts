@@ -9,4 +9,5 @@ export * from './IntegrationSyncScheduledJobDriver';
 export * from './IntegrationDiscoveryScheduledJobDriver';
 export * from './AgentRunSweepScheduledJobDriver';
 export * from './RecordProcessScheduledJobDriver';
+export * from './MaterializationRefreshScheduledJobDriver';
 export * from './UserRoutineDispatcherDriver';
