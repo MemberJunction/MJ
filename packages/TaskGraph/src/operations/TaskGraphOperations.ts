@@ -33,9 +33,8 @@ import {
     type TaskGraphRetryInput,
     type TaskGraphStatusOutput,
 } from '@memberjunction/core-entities';
-import { ComputeParentRollup, type TaskGraphNodeStatus } from '@memberjunction/ai-core-plus';
+import { ComputeParentRollup, type TaskGraphNodeStatus, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { TaskGraphService, TaskGraphSubmitContext } from '../TaskGraphService';
-import { TaskGraphSpec } from '../TaskGraphSpec';
 
 /**
  * The columns `GetStatus` reads. `Status` is pinned to the algorithm's own node-status union rather

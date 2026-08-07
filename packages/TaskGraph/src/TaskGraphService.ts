@@ -23,8 +23,11 @@ import {
     UserInfo,
 } from '@memberjunction/core';
 import { MJTaskEntity, MJTaskDependencyEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
-import { TaskGraphSpec } from './TaskGraphSpec';
-import { FormatValidationErrors, ValidateTaskGraphSpec } from './TaskGraphValidator';
+import {
+    FormatValidationErrors,
+    ValidateTaskGraphSpec,
+    type TaskGraphSpec,
+} from '@memberjunction/ai-core-plus';
 
 /** Context a submission carries beyond the graph itself. */
 export type TaskGraphSubmitContext = {
@@ -36,7 +39,89 @@ export type TaskGraphSubmitContext = {
     ContextUser: UserInfo;
     /** Provider to persist through. */
     Provider: IMetadataProvider;
+    /** The agent run that emitted this graph, for provenance and `reinvoke` routing. */
+    AgentRunID?: string | null;
+    /**
+     * How many continuation hops produced this graph. A graph submitted by an agent that was itself
+     * re-invoked by a finished graph carries its parent's depth + 1.
+     */
+    ReinvokeDepth?: number;
 };
+
+/**
+ * What the parent Task row remembers about the graph beyond its tasks.
+ *
+ * Persisted rather than held in memory because the dispatcher instance that *finishes* a graph is
+ * routinely not the one that accepted it — a restart, a peer instance, or simply a graph that
+ * outlives a deploy all break that assumption.
+ */
+export type TaskGraphParentMetadata = {
+    continuation: 'message' | 'reinvoke' | 'none';
+    reinvokeDepth: number;
+    submittedByAgentRunID: string | null;
+    /**
+     * Set once the completion handler has delivered. Written with a compare-and-swap guard, which is
+     * what turns at-least-once delivery into effectively-once: a crash between "graph complete" and
+     * "continuation delivered" leaves this unset, so the next sweep retries, and two instances
+     * racing the same completion produce one winner rather than two notifications.
+     */
+    continuationDeliveredAt?: string;
+};
+
+/**
+ * Continuation chains are bounded separately from graph nesting.
+ *
+ * The spawn-depth cap governs graphs nested *by tasks*; this one governs graphs chained *by
+ * continuations* — an agent re-invoked with a finished graph's results can emit another graph, which
+ * re-invokes it again. Both loops exist and neither cap constrains the other, so both are needed. At
+ * the cap the dispatcher forces `continuation: 'message'`, which ends the chain without losing the
+ * results.
+ */
+export const MAX_REINVOKE_DEPTH = 5;
+
+/** What a parent row means when it carries no metadata, or metadata we cannot read. */
+const DEFAULT_PARENT_METADATA: TaskGraphParentMetadata = {
+    continuation: 'message',
+    reinvokeDepth: 0,
+    submittedByAgentRunID: null,
+};
+
+/**
+ * Parses a parent Task's continuation metadata.
+ *
+ * Shared by the writer (`TaskGraphService`) and the reader (`TaskGraphDispatcher`) so the two cannot
+ * drift — the failure that shape invites is a graph that completes and then does nothing, because
+ * one side wrote a field the other never looked for.
+ *
+ * Unparseable input defaults to `message` rather than throwing. A row predating this metadata, or
+ * one a user hand-edited, is a legitimate state, and the right response to "I don't know what this
+ * graph wanted" is still to tell the user their work finished.
+ */
+export function ParseTaskGraphParentMetadata(raw: string | null | undefined): TaskGraphParentMetadata {
+    if (!raw) return { ...DEFAULT_PARENT_METADATA };
+    try {
+        const parsed = JSON.parse(raw) as Partial<TaskGraphParentMetadata>;
+        if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_PARENT_METADATA };
+        return {
+            ...DEFAULT_PARENT_METADATA,
+            ...parsed,
+            // Guard the two fields the dispatcher branches on. A JSON round-trip, a hand edit, or a
+            // future producer can all supply the wrong type here, and a bad `reinvokeDepth` would
+            // either disable the cap (NaN comparisons are always false) or trip it immediately.
+            continuation: parsed.continuation === 'reinvoke' || parsed.continuation === 'none'
+                ? parsed.continuation
+                : 'message',
+            reinvokeDepth: Number.isFinite(parsed.reinvokeDepth) ? Number(parsed.reinvokeDepth) : 0,
+        };
+    } catch {
+        return { ...DEFAULT_PARENT_METADATA };
+    }
+}
+
+/** True when a continuation chain has gone as far as it may. */
+export function IsReinvokeCapReached(meta: TaskGraphParentMetadata): boolean {
+    return meta.reinvokeDepth >= MAX_REINVOKE_DEPTH;
+}
 
 export type TaskGraphSubmitResult = {
     Success: boolean;
@@ -230,6 +315,15 @@ export class TaskGraphService {
         parent.ConversationDetailID = context.ConversationDetailID ?? null;
         parent.Status = 'In Progress';
         parent.PercentComplete = 0;
+        // The parent row carries what happens AFTER the graph settles. It lives here rather than in
+        // dispatcher memory because the dispatcher that finishes a graph is frequently not the
+        // process that accepted it — a restart, a second instance, or simply a long-running graph
+        // all break that assumption. Anything the completion path needs has to be durable too.
+        parent.InputPayload = JSON.stringify({
+            continuation: spec.continuation ?? 'message',
+            reinvokeDepth: context.ReinvokeDepth ?? 0,
+            submittedByAgentRunID: context.AgentRunID ?? null,
+        } satisfies TaskGraphParentMetadata);
         if (!(await parent.Save())) {
             throw new Error(`Could not create parent task: ${parent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }

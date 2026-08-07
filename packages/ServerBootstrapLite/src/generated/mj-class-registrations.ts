@@ -950,8 +950,9 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
-// @memberjunction/task-graph (4 classes)
+// @memberjunction/task-graph (5 classes)
 import {
+    DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphRetryTaskServerOperation,
@@ -1864,6 +1865,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
+    DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphRetryTaskServerOperation,
@@ -2067,7 +2069,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 888;
+export const CLASS_REGISTRATIONS_COUNT = 889;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

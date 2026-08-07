@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
@@ -99,7 +99,8 @@ import {
     AgentRunStepSaveQueue,
     AgentSkillActivationRequest,
     AgentSkillInvocation,
-    ExtractPromptResultText
+    ExtractPromptResultText,
+    GetTaskGraphSubmitter
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -3840,6 +3841,12 @@ export class BaseAgent {
             case 'ClientTools' as typeof nextStep.step:
                 // Client tools are valid - execution handled by executeClientToolsStep
                 return nextStep;
+            // Type assertion required because 'Tasks' is not part of the BaseAgentNextStep step
+            // union (submit-and-detach — the terminal step it produces is 'Success'). The graph was
+            // already validated against TaskGraphSpec by the agent type, so there is nothing left
+            // to check here; submission is handled by executeTasksStep.
+            case 'Tasks' as typeof nextStep.step:
+                return nextStep;
             default:
                 // if we get here, the next step is not recognized, we can return a retry step
                 this.logError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
@@ -6834,6 +6841,22 @@ The context is now within limits. Please retry your request with the recovered c
                 responseType[responseTypeKey] = true;
             }
         }
+
+        // Capability gates align the OTHER way: default OFF, and the section appears only when the
+        // gate is explicitly on. Running these through the loop above would invert their meaning —
+        // that loop's `else` branch defaults an unset key to true, which is exactly what a gated
+        // capability must never do.
+        const gateMappings: Array<{ gateFlag: string; responseTypeKey: string }> = [
+            { gateFlag: 'enableTaskGraphs', responseTypeKey: 'tasks' }
+        ];
+
+        for (const { gateFlag, responseTypeKey } of gateMappings) {
+            const wasExplicitlySet = explicitResponseType &&
+                Object.prototype.hasOwnProperty.call(explicitResponseType, responseTypeKey);
+            if (!wasExplicitlySet) {
+                responseType[responseTypeKey] = params[gateFlag] === true;
+            }
+        }
     }
 
     /**
@@ -8632,6 +8655,10 @@ The context is now within limits. Please retry your request with the recovered c
                 }
                 return await this.executePromptStep(params, config, previousDecision, stepCount);
             case 'Sub-Agent':
+                // A Sub-Agent step carrying a task graph is a FOLDED graph (D9): the agent type
+                // rewrote a one-node graph into an ordinary in-run call. Record it before running,
+                // so the run shows what was emitted even if the sub-agent then fails.
+                await this.recordFoldedTaskGraph(params, previousDecision);
                 return await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
             case 'Actions':
                 return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount);
@@ -8645,6 +8672,11 @@ The context is now within limits. Please retry your request with the recovered c
             // (Plan Mode). executePlanStep's terminal return is 'Chat'-shaped (see its doc comment).
             case 'Plan' as typeof previousDecision.step:
                 return await this.executePlanStep(params, previousDecision);
+            // Type assertion required because 'Tasks' is not part of the BaseAgentNextStep step
+            // union — LoopAgentType.DetermineNextStep() emits it when an opted-in agent submits a
+            // durable task graph. executeTasksStep detaches (see its doc comment).
+            case 'Tasks' as typeof previousDecision.step:
+                return await this.executeTasksStep(params, previousDecision);
             // Type assertion required because 'ClientTools' is not part of the BaseAgentNextStep
             // step union — LoopAgentType.DetermineNextStep() emits it when the LLM chooses client tools.
             case 'ClientTools' as typeof previousDecision.step:
@@ -11818,6 +11850,139 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @protected
      */
+    /**
+     * Submits a durable task graph and ends the turn (submit-and-detach).
+     *
+     * **Why detaching is the whole point.** The alternative — holding the run open until the graph
+     * finishes — is exactly what the old client-driven path did, and it is what made a page reload
+     * lose the work, a server restart orphan it, and every non-Explorer channel unable to reach it
+     * at all. Once submission returns, the graph lives in Task rows and a server-side dispatcher
+     * owns it; the run has no reason to stay alive, so it doesn't.
+     *
+     * **The run step is written whether or not submission succeeds.** A rejected graph is the case
+     * where forensics matter most — the operator needs to see what the model emitted and why it was
+     * refused, and a step written only on the happy path would erase precisely that.
+     *
+     * **A missing submitter is reported, never swallowed.** In a host with no durable-execution
+     * package loaded there is nobody to run the graph. Returning a failure the model can read is
+     * the honest outcome; silently continuing would leave the agent believing it had scheduled work
+     * that does not exist.
+     *
+     * @protected
+     */
+    protected async executeTasksStep(
+        params: ExecuteAgentParams,
+        previousDecision: BaseAgentNextStep
+    ): Promise<BaseAgentNextStep> {
+        const graph = previousDecision.taskGraph;
+        const spec = graph?.spec;
+        if (!spec) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: 'A Tasks step reached execution with no task graph attached.',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+
+        const stepEntity = await this.createStepEntity({
+            stepType: 'TaskGraph',
+            stepName: `Task Graph: ${spec.workflowName}`,
+            contextUser: params.contextUser,
+            inputData: { spec, folded: false }
+        });
+
+        const submitter = GetTaskGraphSubmitter();
+        if (!submitter) {
+            const errorMessage =
+                'No task-graph submitter is registered on this host, so the graph could not be made durable. ' +
+                'Task graphs require the durable-execution package to be loaded.';
+            await this.finalizeStepEntity(stepEntity, false, errorMessage, { spec, submitted: false });
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage,
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+
+        const outcome = await submitter.Submit({
+            Spec: spec,
+            EnvironmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
+            ConversationDetailID: params.conversationDetailId ?? null,
+            AgentRunID: this._agentRun?.ID ?? null,
+            ContextUser: params.contextUser,
+            Provider: this.ProviderToUse
+        });
+
+        await this.finalizeStepEntity(
+            stepEntity,
+            outcome.Success,
+            outcome.ErrorMessage,
+            { spec, submitted: outcome.Success, parentTaskID: outcome.ParentTaskID }
+        );
+
+        if (!outcome.Success) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: outcome.ErrorMessage || 'Task graph submission failed.',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+
+        // Success means "this graph is durable and will run", NOT "this graph has run". Saying
+        // otherwise here is the exact lie the old await-everything path told when it returned early.
+        return {
+            step: 'Success',
+            terminate: true,
+            message:
+                previousDecision.message ||
+                `Started **${spec.workflowName}** — ${spec.tasks.length} task(s) running. ` +
+                `I'll follow up when it finishes.`,
+            reasoning: previousDecision.reasoning,
+            confidence: previousDecision.confidence,
+            previousPayload: previousDecision.previousPayload,
+            newPayload: previousDecision.newPayload || previousDecision.previousPayload
+        };
+    }
+
+    /**
+     * Records a constant-folded task graph (D9) without submitting it.
+     *
+     * Folding rewrites a one-node graph into an ordinary in-run sub-agent call, which means no Task
+     * row and no dispatcher hop. Writing the step anyway is what keeps that decision legible: run
+     * forensics show why a graph did not reach the dispatcher, a user who edits a two-node graph
+     * down to one can read the durability change off the run record instead of inferring it, and
+     * Save as Workflow (D17) can attach to the recorded spec — so the single-node case, the shape
+     * most likely worth promoting, is promotable like any other.
+     *
+     * @protected
+     */
+    protected async recordFoldedTaskGraph(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep
+    ): Promise<void> {
+        const graph = nextStep.taskGraph;
+        if (!graph?.folded) return;
+
+        const stepEntity = await this.createStepEntity({
+            stepType: 'TaskGraph',
+            stepName: `Task Graph (folded): ${graph.spec.workflowName}`,
+            contextUser: params.contextUser,
+            inputData: { spec: graph.spec, folded: true, foldReason: graph.foldReason }
+        });
+        await this.finalizeStepEntity(stepEntity, true, undefined, {
+            spec: graph.spec,
+            folded: true,
+            foldReason: graph.foldReason,
+            submitted: false
+        });
+    }
+
     protected async executePlanStep(
         params: ExecuteAgentParams,
         previousDecision: BaseAgentNextStep

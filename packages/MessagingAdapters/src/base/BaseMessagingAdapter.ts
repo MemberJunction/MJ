@@ -13,7 +13,6 @@ import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessage } from '@memberjunction/ai';
 import { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { DetectAndSubmitTaskGraph } from '@memberjunction/task-graph';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import {
     MessagingAdapterSettings,
@@ -606,14 +605,6 @@ export abstract class BaseMessagingAdapter {
             this.setThreadConversationId(threadKey, conversationId);
         }
 
-        // Structured task graph FIRST — ahead of the delegation heuristics below.
-        //
-        // Before this, messaging channels dropped graphs entirely: detectDelegation only understands
-        // `invokeAgent` and a regex over the reply text, so a multi-step plan emitted over Slack or
-        // Teams simply never executed. A structured graph is an unambiguous signal and must win over
-        // a text match, hence the ordering.
-        if (await this.trySubmitTaskGraph(result, contextUser, conversationId)) return;
-
         // Check for delegation: payload.invokeAgent indicates the agent wants to hand off
         const delegationTarget = this.detectDelegation(result);
         if (delegationTarget) {
@@ -757,35 +748,6 @@ export abstract class BaseMessagingAdapter {
      *
      * @returns The target agent name, or null if no delegation.
      */
-    /**
-     * Submits a task graph emitted in the agent's payload, if there is one.
-     *
-     * Returns true when a graph was detected AND submitted, meaning this turn is done — the
-     * dispatcher owns the work from here. Returns false for "no graph", so the caller falls through
-     * to normal reply handling. A graph that was detected but REJECTED also returns false: the user
-     * should still get a reply rather than silence, and the rejection is already logged with reasons.
-     */
-    private async trySubmitTaskGraph(
-        result: ExecuteAgentResult,
-        contextUser: UserInfo,
-        conversationId: string | undefined,
-    ): Promise<boolean> {
-        const environmentID = await this.resolveEnvironmentID(contextUser);
-        if (!environmentID) return false;
-
-        const outcome = await DetectAndSubmitTaskGraph(
-            result.payload,
-            {
-                EnvironmentID: environmentID,
-                ConversationDetailID: conversationId ?? null,
-                ContextUser: contextUser,
-                Provider: Metadata.Provider, // global-provider-ok: messaging adapters are single-provider hosts
-            },
-            `messaging:${this.constructor.name}`,
-        );
-        return outcome.Detected && outcome.Submitted;
-    }
-
     /** Cached environment lookup — messaging adapters are long-lived and single-environment. */
     private cachedEnvironmentID: string | null = null;
     private async resolveEnvironmentID(contextUser: UserInfo): Promise<string | null> {

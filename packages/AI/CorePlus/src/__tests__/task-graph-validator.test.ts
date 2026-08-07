@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { ValidateTaskGraphSpec, FormatValidationErrors } from '../TaskGraphValidator';
-import { MAX_TASKS_PER_GRAPH, TaskGraphSpec, TaskGraphSpecNode } from '../TaskGraphSpec';
+import { ValidateTaskGraphSpec, FormatValidationErrors } from '../task-graph/task-graph-validator';
+import { MAX_TASKS_PER_GRAPH, TaskGraphSpec, TaskGraphSpecNode } from '../task-graph/task-graph-spec';
 
 const node = (over: Partial<TaskGraphSpecNode> = {}): TaskGraphSpecNode => ({
     tempId: 'a',
