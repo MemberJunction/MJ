@@ -28,6 +28,7 @@ export * from './checks/permission-engine.checks';
 export * from './checks/predictive-studio.checks';
 export * from './checks/prompt-runner.checks';
 export * from './checks/record-process-facade.checks';
+export * from './checks/task-graph-orchestration.checks';
 export * from './checks/record-process.checks';
 export * from './checks/remote-op-ai-authoring.checks';
 export * from './checks/remote-op-wire-progress.checks';

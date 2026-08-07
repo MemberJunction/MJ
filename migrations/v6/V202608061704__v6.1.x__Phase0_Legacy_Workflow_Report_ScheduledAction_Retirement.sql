@@ -255,6 +255,59 @@ DROP TABLE IF EXISTS [${flyway:defaultSchema}].[Workflow];
 DROP TABLE IF EXISTS [${flyway:defaultSchema}].[WorkflowEngine];
 GO
 
+-- ════════════════════════════════════════════════════════════════════════════════════
+-- Harden spDeleteEntityWithCoreDependencies before the generated block runs.
+--
+-- The generated block below deletes 11 interrelated entities via
+-- spDeleteEntityWithCoreDependencies, in parent-before-child order (Scheduled Actions
+-- before Scheduled Action Params; Reports before Report Snapshots/User States/Versions).
+-- The prior SP cleared only each target entity's OWN EntityField rows, never the INBOUND
+-- EntityField.RelatedEntityID references pointing AT it from sibling entities. So the
+-- parent's final `DELETE FROM Entity` tripped FK_EntityField_RelatedEntity because a
+-- not-yet-deleted child still carried a field whose RelatedEntityID = the parent.
+--
+-- Nulling inbound references before deleting the Entity row is correct for every caller:
+-- once an entity is gone, any field that pointed at it no longer has a valid relationship.
+-- This is a permanent fix to the class of bug, not a one-off patch for this migration.
+-- ════════════════════════════════════════════════════════════════════════════════════
+ALTER PROC [${flyway:defaultSchema}].[spDeleteEntityWithCoreDependencies]
+  @EntityID uniqueidentifier
+AS
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE EntityFieldID IN (SELECT ID FROM [${flyway:defaultSchema}].EntityField WHERE EntityID = @EntityID)
+DELETE FROM [${flyway:defaultSchema}].EntitySetting WHERE EntityID = @EntityID
+DELETE FROM [${flyway:defaultSchema}].EntityField WHERE EntityID = @EntityID
+DELETE FROM [${flyway:defaultSchema}].EntityPermission WHERE EntityID = @EntityID
+DELETE FROM [${flyway:defaultSchema}].EntityRelationship WHERE EntityID = @EntityID OR RelatedEntityID = @EntityID
+DELETE FROM [${flyway:defaultSchema}].UserApplicationEntity WHERE EntityID = @EntityID
+DELETE FROM [${flyway:defaultSchema}].ApplicationEntity WHERE EntityID = @EntityID
+DELETE FROM [${flyway:defaultSchema}].RecordChange WHERE EntityID = @EntityID
+DELETE FROM [${flyway:defaultSchema}].AuditLog WHERE EntityID=@EntityID
+DELETE FROM [${flyway:defaultSchema}].[Conversation] WHERE LinkedEntityID=@EntityID
+DELETE FROM [${flyway:defaultSchema}].ListDetail WHERE ListID IN (SELECT ID FROM [${flyway:defaultSchema}].List WHERE EntityID=@EntityID)
+DELETE FROM [${flyway:defaultSchema}].List WHERE EntityID=@EntityID
+
+DELETE FROM [${flyway:defaultSchema}].[EntityDocument] WHERE [EntityID] = @EntityID;
+DELETE FROM [${flyway:defaultSchema}].[CompanyIntegrationRecordMap] WHERE [EntityID] = @EntityID;
+DELETE FROM [${flyway:defaultSchema}].[ResourceType] WHERE [EntityID] = @EntityID;
+DELETE FROM [${flyway:defaultSchema}].[UserApplicationEntity] WHERE [EntityID] = @EntityID;
+
+UPDATE [${flyway:defaultSchema}].Dataset SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN (SELECT DatasetID FROM [${flyway:defaultSchema}].DatasetItem WHERE EntityID=@EntityID)
+DELETE FROM [${flyway:defaultSchema}].[DatasetItem] WHERE [EntityID] = @EntityID;
+
+DELETE FROM [${flyway:defaultSchema}].[UserViewCategory] WHERE [EntityID] = @EntityID;
+DELETE FROM [${flyway:defaultSchema}].[UserView] WHERE [EntityID] = @EntityID;
+
+DELETE FROM [${flyway:defaultSchema}].[EntityAIAction] WHERE [EntityID] = @EntityID;
+DELETE FROM [${flyway:defaultSchema}].[EntityCommunicationMessageType] WHERE [EntityID] = @EntityID;
+DELETE FROM [${flyway:defaultSchema}].[EntityAIAction] WHERE [OutputEntityID] = @EntityID;
+
+-- Clear inbound metadata references from OTHER entities' fields that point AT this entity,
+-- so the Entity row can be deleted without tripping FK_EntityField_RelatedEntity.
+UPDATE [${flyway:defaultSchema}].EntityField SET RelatedEntityID = NULL WHERE RelatedEntityID = @EntityID
+
+DELETE FROM [${flyway:defaultSchema}].Entity WHERE ID = @EntityID
+GO
+
 
 
 
