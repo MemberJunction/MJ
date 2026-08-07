@@ -67,6 +67,9 @@ const OPTED_IN_AGENTS = [
     'Web Research Agent',
 ] as const;
 
+/** Must match HUMAN_TASK_NOTIFICATION_TYPE in TaskGraphDispatcher. */
+const HUMAN_TASK_NOTIFICATION_TYPE = 'Task Assignment';
+
 const TASK_NAME = 'mj-integration-test-task-graph-columns (safe to delete)';
 const CREATED_TASK_IDS: string[] = [];
 const CREATED_TASK_TYPE_IDS: string[] = [];
@@ -382,6 +385,86 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
             AssertEqual(declared!.default, false, 'the Loop enableTaskGraphs default must stay FALSE');
 
             console.log(`      → ${OPTED_IN_AGENTS.length} agents opted in; Loop type default is off`);
+        }
+    },
+    {
+        Id: 'task-graph-orchestration.TG9',
+        Name: 'TG9: TaskDependency.Condition exists and round-trips, so durable graphs can branch',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // Conditional edges are what make a runtime task graph the same model as a design-time
+            // flow. The column can exist in SQL while being absent from generated metadata — the
+            // migration-ran-but-CodeGen-did-not failure — which would leave every typed consumer
+            // silently writing nothing.
+            const entity = ctx.Provider.EntityByName('MJ: Task Dependencies');
+            Assert(!!entity, 'MJ: Task Dependencies entity not found in metadata');
+            Assert(
+                entity!.Fields.some((f) => f.Name === 'Condition'),
+                'MJ: Task Dependencies is missing Condition — did CodeGen run after the Phase 4 migration?',
+            );
+
+            // And it must round-trip: a graph submitted with a conditional edge has to come back
+            // carrying that condition, or the dispatcher evaluates nothing.
+            const agentName = await resolveAgentName(ctx);
+            const spec: TaskGraphSpec = {
+                workflowName: 'mj-integration-test-conditional-edge (safe to delete)',
+                tasks: [
+                    { tempId: 'a', name: 'Check', description: 'check', agentName, dependsOn: [] },
+                    {
+                        tempId: 'b',
+                        name: 'Escalate',
+                        description: 'escalate',
+                        agentName,
+                        dependsOn: [{ tempId: 'a', condition: 'output.severity > 3' }],
+                    },
+                ],
+            };
+            const result = await new TaskGraphService().Submit(spec, await buildSubmitContext(ctx));
+            Assert(result.Success, `conditional-edge submission failed: ${result.ErrorMessage}`);
+            CREATED_PARENT_IDS.push(result.ParentTaskID!);
+
+            await settle(300);
+            const children = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTaskEntity>(
+                { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${result.ParentTaskID}'`, ResultType: 'entity_object' },
+                ctx.User,
+            );
+            const ids = (children.Results ?? []).map((c) => `'${c.ID}'`).join(',');
+            const deps = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Condition: string | null }>(
+                {
+                    EntityName: 'MJ: Task Dependencies',
+                    ExtraFilter: `TaskID IN (${ids})`,
+                    Fields: ['Condition'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            AssertEqual(deps.Results?.length ?? 0, 1, 'the conditional edge persisted');
+            AssertEqual(deps.Results![0].Condition, 'output.severity > 3', 'the condition round-tripped');
+            console.log('      → conditional dependency edge persisted and round-tripped');
+        }
+    },
+    {
+        Id: 'task-graph-orchestration.TG10',
+        Name: 'TG10: the Task Assignment notification type is seeded, so human tasks can be announced',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // A human task that nobody is told about stalls its whole graph, silently and
+            // indefinitely — the dispatcher has no executor to claim it and no reason to log. The
+            // notification is the only thing preventing that, and it needs a seeded type to send.
+            const rows = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Name: string }>(
+                {
+                    EntityName: 'MJ: User Notification Types',
+                    ExtraFilter: `Name='${HUMAN_TASK_NOTIFICATION_TYPE}'`,
+                    Fields: ['Name'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            Assert(rows.Success, `could not read MJ: User Notification Types: ${rows.ErrorMessage}`);
+            AssertEqual(
+                rows.Results?.length ?? 0,
+                1,
+                `notification type '${HUMAN_TASK_NOTIFICATION_TYPE}' is not seeded — human tasks would stall unannounced`,
+            );
+            console.log(`      → '${HUMAN_TASK_NOTIFICATION_TYPE}' notification type is seeded`);
         }
     },
 ];

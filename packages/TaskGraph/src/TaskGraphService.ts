@@ -25,6 +25,7 @@ import {
 import { MJTaskEntity, MJTaskDependencyEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
 import {
     FormatValidationErrors,
+    NormalizeDependency,
     ValidateTaskGraphSpec,
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
@@ -379,18 +380,22 @@ export class TaskGraphService {
         for (const node of spec.tasks) {
             const taskID = taskIDMap.get(node.tempId);
             if (!taskID) continue;
-            for (const depTempId of node.dependsOn ?? []) {
-                const dependsOnTaskID = taskIDMap.get(depTempId);
+            for (const raw of node.dependsOn ?? []) {
+                const edge = NormalizeDependency(raw);
+                const dependsOnTaskID = taskIDMap.get(edge.tempId);
                 if (!dependsOnTaskID) continue; // validation already rejected unknown refs
 
                 const dep = await context.Provider.GetEntityObject<MJTaskDependencyEntity>('MJ: Task Dependencies', context.ContextUser);
                 dep.NewRecord();
                 dep.TaskID = taskID;
                 dep.DependsOnTaskID = dependsOnTaskID;
-                dep.DependencyType = 'Prerequisite';
+                dep.DependencyType = edge.dependencyType ?? 'Prerequisite';
+                // NULL for an unconditional edge, matching AIAgentStepPath — so a graph authored in
+                // the flow editor and one emitted by an agent store the same thing.
+                dep.Condition = edge.condition ?? null;
                 if (!(await dep.Save())) {
                     throw new Error(
-                        `Could not create dependency ${node.tempId} -> ${depTempId}: ${dep.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                        `Could not create dependency ${node.tempId} -> ${edge.tempId}: ${dep.LatestResult?.CompleteMessage ?? 'unknown error'}`,
                     );
                 }
             }

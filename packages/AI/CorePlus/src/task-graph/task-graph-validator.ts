@@ -18,6 +18,7 @@ import {
     TaskGraphSpec,
     TaskGraphValidationError,
     TaskGraphValidationResult,
+    NormalizeDependency,
 } from './task-graph-spec';
 
 /**
@@ -96,7 +97,8 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
     // --- graph-level checks --------------------------------------------------
     const known = new Set(tasks.map((t) => t.tempId).filter(Boolean));
     for (const task of tasks) {
-        for (const dep of task.dependsOn ?? []) {
+        for (const raw of task.dependsOn ?? []) {
+            const dep = NormalizeDependency(raw).tempId;
             if (dep !== task.tempId && !known.has(dep)) {
                 errors.push({
                     Code: 'UnknownDependency',
@@ -112,8 +114,9 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
     const nodes: TaskGraphNode[] = tasks.filter((t) => !!t.tempId).map((t) => ({ id: t.tempId, status: 'Pending' }));
     const edges: TaskGraphEdge[] = tasks.flatMap((t) =>
         (t.dependsOn ?? [])
-            .filter((d) => known.has(d) && d !== t.tempId)
-            .map((d) => ({ taskId: t.tempId, dependsOnTaskId: d })),
+            .map(NormalizeDependency)
+            .filter((d) => known.has(d.tempId) && d.tempId !== t.tempId)
+            .map((d) => ({ taskId: t.tempId, dependsOnTaskId: d.tempId, dependencyType: d.dependencyType })),
     );
     const cycle = DetectCycle(nodes, edges);
     if (cycle.hasCycle) {
