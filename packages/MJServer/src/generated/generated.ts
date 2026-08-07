@@ -53471,6 +53471,9 @@ export class MJEntityRelationship_ {
     @Field(() => Boolean, {description: `When 1, allows system/LLM to auto-update AdditionalFieldsToInclude; when 0, user has locked this field`}) 
     AutoUpdateAdditionalFieldsToInclude: boolean;
         
+    @Field({nullable: true, description: `Optional JSON policy object that declares this relationship as a first-class related-record collection, so CodeGen can emit a typed DeclareRelatedRecords(...) declaration on the entity subclass. Shape is IRelatedRecordCollectionConfig: Name (the generated property name, e.g. "Lines"), Load ('explicit' | 'eager' | 'never'), OnRemove ('delete' | 'orphan' | 'refuse'), OrderBy, Sequence ({ Field, From }), and ClearAfterSave. RelatedEntity and RelatedEntityJoinField are NOT repeated here — they are read from this row's own columns. NULL means the relationship is not a declared collection, which is the default and reproduces pre-6.2 behaviour exactly.`}) 
+    RelatedRecordCollection?: string;
+        
     @Field() 
     @MaxLength(255)
     Entity: string;
@@ -53581,6 +53584,9 @@ export class CreateMJEntityRelationshipInput {
     @Field(() => Boolean, { nullable: true })
     AutoUpdateAdditionalFieldsToInclude?: boolean;
 
+    @Field({ nullable: true })
+    RelatedRecordCollection: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -53656,6 +53662,9 @@ export class UpdateMJEntityRelationshipInput {
 
     @Field(() => Boolean, { nullable: true })
     AutoUpdateAdditionalFieldsToInclude?: boolean;
+
+    @Field({ nullable: true })
+    RelatedRecordCollection?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

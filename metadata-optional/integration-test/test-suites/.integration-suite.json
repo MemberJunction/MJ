@@ -498,7 +498,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT03 - Client GraphQL Cache Integrity",
-            "Sequence": 34,
+            "Sequence": 35,
             "Status": "Active"
           },
           "primaryKey": {
@@ -513,7 +513,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT15 - Remote Operations Over-The-Wire Progress",
-            "Sequence": 35,
+            "Sequence": 36,
             "Status": "Active"
           },
           "primaryKey": {
@@ -528,7 +528,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT23 - RLS Client Smart-Cache Isolation",
-            "Sequence": 36,
+            "Sequence": 37,
             "Status": "Active"
           },
           "primaryKey": {
@@ -543,7 +543,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT25 - View Execution (client-first)",
-            "Sequence": 37,
+            "Sequence": 38,
             "Status": "Active"
           },
           "primaryKey": {
@@ -558,7 +558,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT26 - Application Wiring (all shipped apps)",
-            "Sequence": 38,
+            "Sequence": 39,
             "Status": "Active"
           },
           "primaryKey": {
@@ -573,7 +573,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT27 - Core Entity Write-Side",
-            "Sequence": 39,
+            "Sequence": 40,
             "Status": "Active"
           },
           "primaryKey": {
@@ -588,7 +588,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT28 - Permission Engine and Scope Enforcement",
-            "Sequence": 40,
+            "Sequence": 41,
             "Status": "Active"
           },
           "primaryKey": {
@@ -603,7 +603,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT31 - RunView Feature Matrix",
-            "Sequence": 41,
+            "Sequence": 42,
             "Status": "Active"
           },
           "primaryKey": {
@@ -618,7 +618,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT32 - RunView Cross-Feature Edges",
-            "Sequence": 42,
+            "Sequence": 43,
             "Status": "Active"
           },
           "primaryKey": {
@@ -633,7 +633,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT33 - RunQuery Catalog Sweep",
-            "Sequence": 43,
+            "Sequence": 44,
             "Status": "Active"
           },
           "primaryKey": {
@@ -648,7 +648,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT34 - RunQuery Parameter Permutation",
-            "Sequence": 44,
+            "Sequence": 45,
             "Status": "Active"
           },
           "primaryKey": {
@@ -663,7 +663,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT37 - Subscription Channel Isolation",
-            "Sequence": 45,
+            "Sequence": 46,
             "Status": "Active"
           },
           "primaryKey": {
@@ -678,7 +678,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT40 - Entity-Server Invariants",
-            "Sequence": 46,
+            "Sequence": 47,
             "Status": "Active"
           },
           "primaryKey": {
@@ -693,7 +693,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT43 - AI Cost Pipeline Integrity",
-            "Sequence": 47,
+            "Sequence": 48,
             "Status": "Active"
           },
           "primaryKey": {
@@ -708,7 +708,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT44 - AI Permission Helpers",
-            "Sequence": 48,
+            "Sequence": 49,
             "Status": "Active"
           },
           "primaryKey": {
@@ -723,7 +723,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT45 - Embedding Invariants",
-            "Sequence": 49,
+            "Sequence": 50,
             "Status": "Active"
           },
           "primaryKey": {
@@ -738,7 +738,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT47 - Transaction Group Atomicity",
-            "Sequence": 50,
+            "Sequence": 51,
             "Status": "Active"
           },
           "primaryKey": {
@@ -753,7 +753,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT50 - CodeGen Artifact Consistency",
-            "Sequence": 51,
+            "Sequence": 52,
             "Status": "Active"
           },
           "primaryKey": {
@@ -768,7 +768,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT52 - Unified Search Seams",
-            "Sequence": 52,
+            "Sequence": 53,
             "Status": "Active"
           },
           "primaryKey": {
@@ -840,6 +840,17 @@
           },
           "primaryKey": {
             "ID": "7D2B4F91-3A68-4C05-B1E7-9F60A2C8D453"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT72 - Entity Graph (related-record collections)",
+            "Sequence": 34,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B4FE6167-1F8A-4B5C-A565-A008CE03BFD8"
           }
         }
       ]

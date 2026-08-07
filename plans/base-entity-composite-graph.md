@@ -176,8 +176,15 @@ notes.
 | 5 | `MJ.SaveEntityGraph` + `ExecuteGraphRemote` + result-graph application + scope gating | ✓ (browser composites) |
 | 6 | Delete graph (reverse order) + eager/explicit load wiring | — |
 | 7 | `RunView.IncludeRelatedRecords` | ✓ (perf) |
+| 8 | `EntityRelationship.RelatedRecordCollection` + CodeGen emission of `DeclareRelatedRecords(...)` | ✓ (additive; NULL = today's behaviour) |
 
 Phases 1 and 4 deliver the server-side deduplication on their own.
+
+Phase 8 makes the declaration metadata-driven: two existing columns (`RelatedEntity`,
+`RelatedEntityJoinField`) plus one nullable JSONType blob are read by
+`EntitySubClassGeneratorBase.GenerateRelatedRecordCollections()`, which emits the field
+initialiser onto the generated subclass. Hand-written declarations remain valid — the two paths
+produce the same runtime object.
 
 ### Security note for phase 5
 
@@ -194,8 +201,6 @@ inside `Save()`, but the API-key ceiling does not check itself.
 - A general identity-map / ObjectContext ORM. MJ's per-record model does not want one.
 - Repairing the dead `EntityRelationshipsToLoad` path (defect #7). Tracked separately; the design
   deliberately does not depend on it.
-- Metadata-driven declaration via CodeGen. Code-first needs no migration and can be adopted
-  immediately; metadata generation can emit the same `DeclareRelatedRecords` call later.
 
 ---
 
