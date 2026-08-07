@@ -6025,16 +6025,37 @@ export class ManageMetadataBase {
          const linkedSet = new Set(sourceEntityIds.map((id) => id.trim().toLowerCase()));
          let refs: { SchemaName?: string; TableName?: string }[] = [];
          try { refs = SQLParser.ExtractTableRefs(sql, this.dialect) ?? []; } catch { refs = []; }
+         // CTE self-references are emitted by ExtractTableRefs as unqualified (dbo-defaulted) refs, but they are
+         // NOT base-table sources. Since findEntityByBaseObject now falls back to a schema-agnostic name match for
+         // unqualified refs (to catch under-linked __mj/app-schema sources), a CTE that happens to share an
+         // entity's base-table name would otherwise be misread as an under-linked source and over-refuse. Collect
+         // the CTE names and skip any unqualified ref that matches one. (Parse failure → no exclusion; the guard
+         // still fails closed, only slightly more conservatively.)
+         const cteNames = new Set<string>();
+         try {
+            // Extract each CTE's name from its "name AS (...)" definition. Handle all three quotings SQLParser can
+            // emit ([bracket], "double-quote", bare) plus an optional column list — mirroring the parser's own CTE
+            // header regex. A missed name only means a (safe) over-refusal, but bracket names are the common T-SQL
+            // form, so cover them.
+            for (const def of SQLParser.ExtractCTEs(sql, this.dialect)?.CTEDefinitions ?? []) {
+               const m = /^\s*(?:\[([^\]]+)\]|"([^"]+)"|([A-Za-z_][\w$]*))\s*(?:\([^)]*\))?\s+AS\b/i.exec(def);
+               const name = m?.[1] ?? m?.[2] ?? m?.[3];
+               if (name) cteNames.add(name.trim().toLowerCase());
+            }
+         } catch { /* no CTE exclusion available — guard stays fail-closed */ }
          for (const ref of refs) {
             if (!ref.TableName) continue;
+            const refSchema = (ref.SchemaName ?? '').trim().toLowerCase();
+            // Skip CTE self-references (only unqualified / dbo-defaulted refs can be a CTE name).
+            if ((refSchema === '' || refSchema === 'dbo') && cteNames.has(ref.TableName.trim().toLowerCase())) continue;
             const entity = this.findEntityByBaseObject(md, ref.SchemaName, ref.TableName);
             // Refuse ANY under-linked entity source, not only RLS-protected ones. Both the RLS-safety check above
             // AND the read-grant role intersection (addMaterializedQueryEntityPermissions) are computed over the
             // LINKED set only, so a source query-analysis did NOT link is invisible to both: an RLS source would
             // leak its rows unscoped, and a merely CanRead-restricted (non-RLS) source would let the minted
-            // entity's read grant exceed "can read every source" — a privilege escalation. A parsed ref only maps
-            // to an entity when it IS that entity's base view/table (CTEs/functions/aliases map to nothing and are
-            // skipped), so a mapped-but-unlinked source is genuine under-linking (analysis is incomplete) and
+            // entity's read grant exceed "can read every source" — a privilege escalation. A parsed ref maps to an
+            // entity when it IS that entity's base view/table; derived-table aliases map to nothing, and CTE
+            // self-references are excluded above, so a mapped-but-unlinked source is genuine under-linking and
             // refusing is correct; over-refusal is harmless (the query stays live-only — link the source via full
             // query analysis, or use a base-view materialization which inherits source read access).
             if (entity && !linkedSet.has(entity.ID.trim().toLowerCase())) {
@@ -6047,16 +6068,27 @@ export class ManageMetadataBase {
    }
 
    /** Maps a physical (schema, table/view) reference to the MJ entity backed by it — by BaseView or BaseTable,
-    *  case/whitespace-insensitive, schema-scoped when a schema is given. Used by the P1 under-linking guard. */
+    *  case/whitespace-insensitive. Prefers an exact schema+name match; but because {@link SQLParser.ExtractTableRefs}
+    *  defaults an UNQUALIFIED table ref to schema `'dbo'` (see SQLTableReference), and MJ core/app entities live in
+    *  `__mj`/app schemas (never `dbo`), a `'dbo'` ref that matches no `dbo` entity is treated as unqualified and
+    *  falls back to a schema-agnostic name match — otherwise the P1 under-linking guard would silently miss an
+    *  unqualified reference to a `__mj`/app-schema entity (the common case). A non-default explicit schema that
+    *  doesn't match returns undefined (no false cross-schema map). Used by the P1 under-linking guard. */
    protected findEntityByBaseObject(md: Metadata, schema: string | undefined, table: string): EntityInfo | undefined {
       const t = table.trim().toLowerCase();
       const s = (schema ?? '').trim().toLowerCase();
-      return md.Entities.find((e) => {
-         const schemaOk = !s || (e.SchemaName ?? '').trim().toLowerCase() === s;
+      const nameMatch = (e: EntityInfo): boolean => {
          const bv = (e.BaseView ?? '').trim().toLowerCase();
          const bt = (e.BaseTable ?? '').trim().toLowerCase();
-         return schemaOk && (bv === t || bt === t);
-      });
+         return bv === t || bt === t;
+      };
+      if (s) {
+         const exact = md.Entities.find((e) => (e.SchemaName ?? '').trim().toLowerCase() === s && nameMatch(e));
+         if (exact) return exact;
+         if (s !== 'dbo') return undefined; // explicit non-default schema, no match → not this entity
+      }
+      // Empty schema, or the parser's default 'dbo' with no dbo match → treat as unqualified: name-only.
+      return md.Entities.find(nameMatch);
    }
 
    /**

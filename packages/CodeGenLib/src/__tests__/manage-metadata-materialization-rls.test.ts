@@ -123,6 +123,34 @@ describe('assessQuerySourceRLSSafety — P1 under-linking gate', () => {
         expect(v.reason).toContain('"Products"');
     });
 
+    it('FAILS CLOSED on an UNQUALIFIED ref to an under-linked __mj entity (parser defaults refs to dbo)', () => {
+        // No `__mj.` prefix — the SQL parser defaults an unqualified table ref to schema 'dbo', but the entities
+        // live in '__mj'. Before the fix, findEntityByBaseObject demanded an exact 'dbo' entity and silently
+        // missed the __mj source, leaving the escalation hole open for the common unqualified-ref case.
+        const sql = 'SELECT o.total, p.name FROM orders o JOIN products p ON o.pid = p.id';
+        const v = mm.assess({ e1: orders, e3: products }, ['e1'], sql);
+        expect(v.safe).toBe(false);
+        expect(v.reason).toMatch(/P1 under-linking guard/i);
+        expect(v.reason).toContain('"Products"');
+    });
+
+    it('does NOT over-refuse a CTE whose name shadows an entity base table (CTE self-ref excluded)', () => {
+        // `products` here is a CTE, not the Products entity. With the unqualified-ref name fallback, the CTE
+        // self-reference must be excluded so it is not misread as an under-linked source. The only real source
+        // (orders) is linked → safe.
+        const sql = 'WITH products AS (SELECT id, name FROM __mj.orders) SELECT o.total FROM __mj.orders o JOIN products p ON o.pid = p.id';
+        const v = mm.assess({ e1: orders, e3: products }, ['e1'], sql);
+        expect(v.safe).toBe(true);
+    });
+
+    it('does NOT over-refuse a BRACKET-quoted CTE ([name]) that shadows an entity base table', () => {
+        // [products] is a T-SQL bracket-quoted CTE, not the Products entity. The CTE-name exclusion must recognize
+        // the [bracket] form (SQLParser's regex-fallback emits it) so it isn't misread as an under-linked source.
+        const sql = 'WITH [products] AS (SELECT id FROM __mj.orders) SELECT o.total FROM __mj.orders o JOIN [products] p ON o.pid = p.id';
+        const v = mm.assess({ e1: orders, e3: products }, ['e1'], sql);
+        expect(v.safe).toBe(true);
+    });
+
     it('does NOT refuse a ref that maps to no entity (CTE/function/alias) — only genuine entity under-linking trips it', () => {
         // `agg` is a derived-table alias that maps to no entity; the only real source (orders) is linked → safe.
         const sql = 'SELECT agg.total FROM (SELECT SUM(amount) AS total FROM __mj.orders) agg';
