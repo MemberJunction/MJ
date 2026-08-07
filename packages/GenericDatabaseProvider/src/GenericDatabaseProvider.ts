@@ -1134,6 +1134,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // entity.Get(), which would assert active status (deprecation warning / disabled throw)
             // for what is NOT user use of the field. (EntityField.Value itself never asserts.)
             const theField = entity.GetFieldByName(f.Name);
+
+            // Not-loaded fields (the hydration source omitted them — e.g. field-security
+            // stripping) are OMITTED from the SP call entirely: every generated param has a
+            // default, the update procs' ISNULL(@p, [Col]) merge preserves the stored value,
+            // and the create procs substitute the column default. Skipping here also
+            // suppresses the _Clear companion, which RenderSaveCallBinding derives from the
+            // fieldValueMap this loop builds — so a not-loaded nullable field can never be
+            // wiped to NULL by its own construction state.
+            if (theField?.NotLoaded) continue;
+
             const rawValue = theField?.Value;
 
             // PK-on-CREATE with no explicit value: omit so the SP default fires.

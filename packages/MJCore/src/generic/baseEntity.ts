@@ -53,6 +53,37 @@ export class EntityField {
     private _OldValue: any;
     private _Value: any;
     private _NeverSet: boolean = true;
+    private _NotLoaded: boolean = false;
+
+    /**
+     * True when the source this entity was hydrated from OMITTED this field's key — most
+     * commonly because field-level security stripped it before the payload reached us, but
+     * equally for any partial hydration. The field's in-memory state (its metadata default,
+     * else null) is a construction artifact, not data: the save path skips not-loaded fields
+     * entirely (the generated procs' `ISNULL(@p, [Col])` merge then preserves the stored
+     * value), {@link Dirty} always reports false for them, and {@link Validate} exempts them
+     * from the required/null check.
+     *
+     * Deliberately DISTINCT from `_NeverSet`, which means "no set since construction," exists
+     * to permit the one-time write to ReadOnly fields on load, and is re-armed wholesale by
+     * `InnerLoad` — reusing it would conflate defaults with omissions. This flag is set only
+     * by the hydration paths (via {@link MarkNotLoaded}) when a source omits the key, is
+     * cleared by ANY explicit set (an intentional blind write to a read-denied field is a
+     * legitimate write-only update and must save), and is never present on new (unhydrated)
+     * entities — their fields legitimately hold metadata defaults for INSERT.
+     */
+    public get NotLoaded(): boolean {
+        return this._NotLoaded;
+    }
+
+    /**
+     * Framework-internal: hydration paths call this for each field whose key the hydration
+     * source omitted. Application code should never need it — an explicit {@link Value} set
+     * clears the flag.
+     */
+    public MarkNotLoaded(): void {
+        this._NotLoaded = true;
+    }
 
     get Name(): string {
         return this._entityFieldInfo.Name;
@@ -142,9 +173,17 @@ export class EntityField {
                 value = value.replace(/ +$/, '');
             }
             this._Value = value;
+            // Any explicit set means the field now holds REAL data — including a blind write to
+            // a read-denied field (the write-only case), which must flow to the save. Captured
+            // BEFORE clearing so the OldValue branch below can see it: a set onto a not-loaded
+            // field is an EDIT (must become dirty and reach the save), never the "initial value
+            // set" of record setup — the record's setup moment was the hydration that omitted
+            // this field.
+            const wasNotLoaded = this._NotLoaded;
+            this._NotLoaded = false;
 
             // in the below, we set the OldValue, but only if (a) we have never set the value before, or (b) the value or the old value is not null - which means that we are in a record setup scenario
-            if (this._NeverSet &&
+            if (this._NeverSet && !wasNotLoaded &&
                 (value !== null || this._OldValue !== null)) {
                 // initial value set
                 this._OldValue = value;
@@ -165,9 +204,11 @@ export class EntityField {
 
     /**
      * Returns true if the field is dirty, false otherwise. A field is considered dirty if the value is different from the old value. If the field is read only, it is never dirty.
+     * A {@link NotLoaded} field is never dirty either — its in-memory state is a construction
+     * artifact, not data, and nothing that was never loaded can have been changed.
      */
     get Dirty(): boolean {
-        if (this.ReadOnly)
+        if (this.ReadOnly || this._NotLoaded)
             return false
         else {
             const oldNull = this._OldValue === null || this.OldValue === undefined || Number.isNaN(this.OldValue); // check for NaN because sometimes we have old values that are NaN and we need to account for that
@@ -312,7 +353,13 @@ export class EntityField {
         // no longer false-warns or throws here.
         if (!ef.ReadOnly && !ef.SkipValidation) {
             // only do validation on updatable fields and skip the special case fields defined inside the SkipValidation property (like ID/CreatedAt/UpdatedAt)
-            if (!ef.AllowsNull && (this.Value === null || this.Value === undefined)) {
+            // NotLoaded exemption: a field the hydration source omitted holds null/default by
+            // construction and is SKIPPED by the save SQL, so the stored value is untouched —
+            // failing the required check here would make every partially hydrated record
+            // unsaveable for unrelated edits (the exact NOT-NULL breakage mode the not-loaded
+            // design exists to remove). Length/type checks below still apply to whatever the
+            // constructor state is; only the required/null check is meaningless for it.
+            if (!ef.AllowsNull && !this._NotLoaded && (this.Value === null || this.Value === undefined)) {
                 // make sure this isn't a field that has a default value and we are inside a new record
                 if (ef.DefaultValue === null || ef.DefaultValue === undefined || ef.DefaultValue.trim().length === 0) {
                     // we have no default value, so this is an error
@@ -1548,6 +1595,8 @@ export abstract class BaseEntity<T = unknown> {
         // ignoreNonExistentFields=true remains as a safety net; ownedFieldsFrom already
         // dropped columns that belong to another level of the IS-A chain.
         this.SetMany(this.ownedFieldsFrom(data), true, true, true);
+        // Hydrate is a hydration entry point: keys the source omitted are not-loaded.
+        this.markFieldsOmittedBySourceAsNotLoaded(data);
     }
 
     /**
@@ -3015,6 +3064,12 @@ export abstract class BaseEntity<T = unknown> {
     public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): any {
         let obj = {};
         for (let field of this.Fields) {
+            // NotLoaded fields are OMITTED (D-3 decision): their in-memory state is a
+            // construction artifact, and serializing it would launder a default/null into
+            // something downstream code treats as data — the exact masquerade the flag exists
+            // to prevent. Key-absence also propagates the flag naturally: hydrating another
+            // entity from this output re-marks the same fields not-loaded.
+            if (field.NotLoaded) continue;
             if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
                 // Reads field.Value directly — serialization is framework-internal, so it does not
                 // (and must not) assert active status. No suppression toggle needed: the assertion no
@@ -3221,11 +3276,30 @@ export abstract class BaseEntity<T = unknown> {
                     }
                 }
             }
+            // _raw IS a hydration source (LoadFromData fast path) — fields whose key it omitted
+            // are not-loaded, not defaulted. See EntityField.NotLoaded.
+            this.markFieldsOmittedBySourceAsNotLoaded(this._raw);
             // Raw data has been promoted into Fields — release the reference so we don't carry
             // duplicate state. Fields hold their own copies, so a frozen source no longer
             // constrains anything from here on.
             this._raw = null;
             this._rawConverted = null;
+        }
+    }
+
+    /**
+     * Marks every field whose key the given HYDRATION SOURCE omitted as {@link EntityField.NotLoaded}.
+     * Called only by the hydration entry points ({@link LoadFromData} both modes, {@link Hydrate},
+     * {@link InnerLoad}) — never by plain {@link SetMany}, which is an incremental mutation API
+     * where omitting a field means "leave it alone," not "this field was never loaded."
+     * Both the field Name and CodeName are checked, matching SetMany's key acceptance.
+     */
+    private markFieldsOmittedBySourceAsNotLoaded(source: Record<string, unknown>): void {
+        if (!source || typeof source !== 'object') return;
+        for (const field of this.Fields) {
+            if (source[field.Name] === undefined && source[field.CodeName] === undefined) {
+                field.MarkNotLoaded();
+            }
         }
     }
 
@@ -3242,7 +3316,9 @@ export abstract class BaseEntity<T = unknown> {
             for (let field of this.Fields) {
                 if (!field.IsPrimaryKey || includePrimaryKeys) {
                     const otherField = other.GetFieldByName(field.Name);
-                    if (otherField) {
+                    // Skip fields the SOURCE never loaded (D-3): copying their construction
+                    // state would masquerade a default/null as real data on this entity.
+                    if (otherField && !otherField.NotLoaded) {
                         this.Set(field.Name, otherField.Value);
                         if (replaceOldValues) {
                             field.ResetOldValue();
@@ -3873,6 +3949,14 @@ export abstract class BaseEntity<T = unknown> {
             // does not own (e.g. OrderHeader on Event Order Line). Keep only columns
             // this entity defines, and ignore anything leftover.
             this.SetMany(this.ownedFieldsFrom(fieldData), true, true, true);
+            // finalizeSave re-hydrates from the save RESPONSE — a hydration source. Keys it
+            // omitted (e.g. fields the server stripped for field security) must be marked
+            // not-loaded, or the defaults init() just produced would masquerade as confirmed
+            // values and be resent on the NEXT save (the create/update-response corner: a
+            // trigger/system adjustment or concurrent change would be silently stomped).
+            if (typeof fieldData === 'object' && !Array.isArray(fieldData)) {
+                this.markFieldsOmittedBySourceAsNotLoaded(fieldData as Record<string, unknown>);
+            }
             this._everSaved = true; // Mark as saved after successful save
             const result = this.LatestResult;
             if (result)
@@ -4136,6 +4220,10 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             this.SetMany(data, false, true, true); // don't ignore non-existent fields, but DO replace old values
+            // InnerLoad is a hydration entry point: any field the provider's row omitted (e.g.
+            // a client-side load whose server response stripped read-denied fields) is
+            // not-loaded, so its constructor state never masquerades as data on the next save.
+            this.markFieldsOmittedBySourceAsNotLoaded(data);
             if (EntityRelationshipsToLoad) {
                 for (let relationship of EntityRelationshipsToLoad) {
                     if (data[relationship]) {
@@ -4309,6 +4397,10 @@ export abstract class BaseEntity<T = unknown> {
         // Hits when: subsequent LoadFromData call on an already-loaded instance, IS-A entity
         // (parent or child), or non-plain-object input. Preserves original semantics exactly.
         this.SetMany(data, true, _replaceOldValues, true); // ignore non-existent fields, but DO replace old values based on the provided param
+        if (isPlainObject) {
+            // LoadFromData is a hydration entry point: keys the source omitted are not-loaded.
+            this.markFieldsOmittedBySourceAsNotLoaded(data as Record<string, unknown>);
+        }
         // now, check to see if we have the primary key set, if so, we should consider ourselves
         // loaded from the database and set the _recordLoaded flag to true along with the _everSaved flag
         if (this.PrimaryKeys && this.PrimaryKeys.length > 0) {

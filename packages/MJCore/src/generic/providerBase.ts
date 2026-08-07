@@ -2650,7 +2650,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // warms its own superset slot under its fls: fingerprint segment.
         const entity = params.EntityName ? this.EntityByName(params.EntityName) : null;
         const willCache = this.runViewCacheEligible(params, contextUser);
-        if (entity && willCache) {
+        // entity_object ALWAYS widens, cache-eligible or not: a BaseEntity must hydrate from
+        // every column it is entitled to, or it round-trips partial state into a save. The
+        // server's DB path has always done this in PreProcessRunView, but that hook is not on
+        // the client's path — so a client entity_object request WITHOUT CacheLocal shipped the
+        // caller's narrow Fields over the wire and materialized partial entities. (Invisible
+        // until the not-loaded flag: the old GetAll emitted every field name regardless of
+        // what had actually been loaded, so even the integration oracle for this could not
+        // fail.) For a field-restricted user "every column" means their ALLOWED set — the
+        // denied ones arrive absent and are marked not-loaded, which is the D-2 contract.
+        const widenForEntityObject = params.ResultType === 'entity_object';
+        if (entity && (willCache || widenForEntityObject)) {
             params.Fields = this.ComputeRunViewFetchFields(entity, contextUser);
             // Platform contract: explicit Fields always include the primary key(s) —
             // project back down to requested ∪ PK, matching the direct SQL path.
@@ -2840,7 +2850,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // fields, or the user's field-security ALLOWED set when restricted (see PreRunView).
             const batchEntity = param.EntityName ? this.EntityByName(param.EntityName) : null;
             const batchWillCache = this.runViewCacheEligible(param, contextUser);
-            if (batchEntity && batchWillCache) {
+            // Same entity_object-always-widens rule as the single-view path above.
+            const batchWidenForEntityObject = param.ResultType === 'entity_object';
+            if (batchEntity && (batchWillCache || batchWidenForEntityObject)) {
                 param.Fields = this.ComputeRunViewFetchFields(batchEntity, contextUser);
                 // Platform contract: explicit Fields always include the primary key(s)
                 if (callerFields) {
