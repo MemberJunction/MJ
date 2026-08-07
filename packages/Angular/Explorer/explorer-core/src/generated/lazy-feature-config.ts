@@ -17,7 +17,7 @@
  * which silently merges all chunks into one.
  */
 
-// --- @memberjunction/ng-dashboards → ./actions-dashboards.module (7 entries) ---
+// --- @memberjunction/ng-dashboards → ./actions-dashboards.module (6 entries) ---
 const loadNgDashboardsActionsDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/actions-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/actions-dashboards.module').then(() => {})
@@ -136,7 +136,6 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::ActionsEntitiesResource': loadNgDashboardsActionsDashboardsModule,
   'BaseResourceComponent::ActionsMonitorResource': loadNgDashboardsActionsDashboardsModule,
   'BaseResourceComponent::ActionsOverviewResource': loadNgDashboardsActionsDashboardsModule,
-  'BaseResourceComponent::ActionsScheduleResource': loadNgDashboardsActionsDashboardsModule,
   'BaseResourceComponent::ActionsSecurityResource': loadNgDashboardsActionsDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./ai-dashboards.module
@@ -284,4 +283,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 116;
+export const LAZY_FEATURE_CONFIG_COUNT = 115;

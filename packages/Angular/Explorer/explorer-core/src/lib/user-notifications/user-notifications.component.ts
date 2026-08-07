@@ -564,9 +564,6 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       case 'dashboards':
         this.navigationService.OpenDashboard(recordId, 'Dashboard');
         break;
-      case 'reports':
-        this.navigationService.OpenReport(recordId, 'Report');
-        break;
       default:
         console.warn(`[UserNotifications] Unhandled resource type for navigation: ${rt.Name}`);
         break;

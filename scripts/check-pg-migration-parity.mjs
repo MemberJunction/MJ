@@ -70,9 +70,13 @@ const INTENTIONALLY_NO_PG_COUNTERPART = new Set([
  * into a permanent exemption.
  */
 const PENDING_CONVERSION = new Map([
-    // EMPTY — and it should stay that way. The four 6.x-era gaps this ratchet was
-    // introduced to hold (#3471) were all closed on 2026-08-05. Parity is now whole:
-    // every T-SQL V-migration has a committed counterpart or a documented exclusion.
+    // The four 6.x-era gaps this ratchet was introduced to hold (#3471) were all closed
+    // on 2026-08-05, and the list was empty. The entries below are the unified-workflow
+    // program's migrations (plan #3456), which by explicit program ruling are perfected on
+    // SQL Server only — PostgreSQL parity is handled separately. Tracked in #3545; each
+    // entry is removed by the PR that lands its counterpart.
+    ['V202608061704__v6.1.x__Phase0_Legacy_Workflow_Report_ScheduledAction_Retirement',
+     'Unified-workflow Phase 0 legacy retirement — PG counterpart tracked in #3545'],
 ]);
 
 function readDirOrExit(path, label) {

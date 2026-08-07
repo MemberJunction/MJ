@@ -1,7 +1,7 @@
 import { MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
-import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
+import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
@@ -1325,13 +1325,6 @@ export abstract class BaseEntity<T = unknown> {
      */
     public get RunQueryProviderToUse(): IRunQueryProvider {
         return this.ProviderToUse as any as IRunQueryProvider;
-    }
-
-    /**
-     * Returns the RunReportProvider to be used for a given instance of a BaseEntity derived subclass.
-     */
-    public get RunReportProviderToUse(): IRunReportProvider {
-        return this.ProviderToUse as any as IRunReportProvider;
     }
 
     /**

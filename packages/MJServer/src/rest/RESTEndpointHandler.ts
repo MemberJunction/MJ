@@ -189,8 +189,7 @@ export class RESTEndpointHandler {
         // Transaction operations
         this.router.post('/transactions', this.executeTransaction.bind(this));
         
-        // Reports and queries
-        this.router.get('/reports/:reportId', this.runReport.bind(this));
+        // Queries
         this.router.post('/queries/run', this.runQuery.bind(this));
         
         // Error handling
@@ -774,19 +773,6 @@ export class RESTEndpointHandler {
     private async executeTransaction(req: express.Request, res: express.Response): Promise<void> {
         try {
             // Placeholder implementation - this would need to be implemented to handle transactions
-            res.status(501).json({ error: 'Not implemented' });
-        } catch (error) {
-            LogError(error);
-            res.status(500).json({ error: (error as Error)?.message || 'Unknown error' });
-        }
-    }
-
-    /**
-     * Run a report
-     */
-    private async runReport(req: express.Request, res: express.Response): Promise<void> {
-        try {
-            // Placeholder implementation - this would need to be implemented to run reports
             res.status(501).json({ error: 'Not implemented' });
         } catch (error) {
             LogError(error);
