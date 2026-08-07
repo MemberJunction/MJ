@@ -288,16 +288,28 @@ await order.Save();   // header + lines, atomically
 
 Other rules that follow from this:
 
-- **`Load: 'eager'` never fires from `LoadFromData()`.** For result sets use
+- **`Load: 'immediate'` never fires from `LoadFromData()`.** For result sets use
   `RunView({ ..., ResultType: 'entity_object', IncludeRelatedRecords: ['Lines'] })`, which costs `1 + K`
   queries instead of N+1.
+- **Prefer declaring it in metadata.** Set `EntityRelationship.RelatedRecordCollection` and CodeGen
+  emits the declaration onto the *generated* class — both tiers get it, no subclass needed.
+- **`Source: 'cache'` gives zero-query related records** for entities a `BaseEngine` already caches
+  (action params, prompt models, API key scopes). It resolves generically through
+  `BaseEngineRegistry`, falls back to a database load on a miss, and defaults `ReadOnly: true` —
+  because you are then holding *the engine's own instances*, as a live view. Declare
+  `ReadOnly: false` to get copies you can safely modify. `Load: 'lazy'` requires both, and **throws**
+  on a cache miss rather than returning an empty array.
+- **`await entity.LoadRelatedRecords()`** populates everything: cache-backed for free,
+  database-backed batched into one `RunViews`.
 - **Declare collections on a shared subclass**, with server-only behaviour in a class that extends
   it. `ClassFactory` priority auto-increments by load order, so the server subclass wins server-side
   with no configuration — and the browser still sees the collection.
 - **`BeginISATransaction()`, `ProviderTransaction` and `PropagateTransactionToParents()` were removed in 6.2.** Use `BeginEntityTransaction()` / `RunInEntityTransaction()`.
 
 Read [`guides/TRANSACTIONS_AND_BATCHING_GUIDE.md`](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md)
-before writing anything that saves more than one record together.
+before writing anything that saves more than one record together, and
+[`packages/MJCore/docs/related-record-collections.md`](../../packages/MJCore/docs/related-record-collections.md)
+for the full model with flow diagrams.
 
 ### 🚨 NEVER WRITE DIRECT SQL DML AGAINST AN ENTITY — unless it opts in
 

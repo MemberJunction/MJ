@@ -103,6 +103,25 @@ describe('Source: cache — populating from a loaded engine', () => {
         expect(collection.Items.map(r => r.Get('Name'))).toEqual(['alpha', 'beta']);
     });
 
+    it('honours a MULTI-FIELD OrderBy, term by term', () => {
+        BaseEngineRegistry.Instance.UnregisterEngine(BaseEngineRegistry.Instance.GetEngineInfo(ENGINE_NAME)!.instance!);
+        const engine = makeEngine(true, [
+            makeRecord('b', 'A1', 'same'),
+            makeRecord('a', 'A1', 'same'),
+            makeRecord('c', 'A1', 'earlier'),
+        ]);
+        BaseEngineRegistry.Instance.RegisterEngine(engine);
+
+        const collection = makeCollection({ Load: 'lazy', OrderBy: 'Name ASC, ID DESC' });
+        expect(collection.Items.map(r => r.Get('ID'))).toEqual(['c', 'b', 'a']);
+    });
+
+    it('refuses an OrderBy it cannot honour in memory rather than half-applying it', () => {
+        const collection = makeCollection({ Load: 'lazy', OrderBy: 'CASE WHEN x THEN 1 ELSE 2 END' });
+        expect(() => collection.Items).not.toThrow();
+        expect(collection.Count).toBe(2); // donor order, unsorted — but complete
+    });
+
     it('honours DESC', () => {
         const collection = makeCollection({ Load: 'lazy', OrderBy: 'Name DESC' });
         expect(collection.Items.map(r => r.Get('Name'))).toEqual(['beta', 'alpha']);
@@ -135,6 +154,57 @@ describe('Source: cache — populating from a loaded engine', () => {
         const collection = makeCollection({ Load: 'explicit' });
         expect(collection.Items).toEqual([]);
         expect(collection.IsLoaded).toBe(false);
+    });
+});
+
+describe('Source: cache — the collection is a LIVE view, not a snapshot', () => {
+    it('sees rows the engine adds in place after the collection was first read', () => {
+        const engine = makeEngine(true, [makeRecord('p1', 'A1')]);
+        BaseEngineRegistry.Instance.RegisterEngine(engine);
+        const collection = makeCollection({ Load: 'lazy' });
+
+        expect(collection.Count).toBe(1);
+        engine.ActionParams.push(makeRecord('p2', 'A1'));   // in-place mutation, same array identity
+        expect(collection.Items.map(r => r.Get('ID')).sort()).toEqual(['p1', 'p2']);
+    });
+
+    it('sees a wholesale REASSIGNMENT of the engine array — the ordered-config refresh path', () => {
+        const engine = makeEngine(true, [makeRecord('p1', 'A1')]);
+        BaseEngineRegistry.Instance.RegisterEngine(engine);
+        const collection = makeCollection({ Load: 'lazy' });
+        expect(collection.Count).toBe(1);
+
+        engine.ActionParams = [makeRecord('p7', 'A1'), makeRecord('p8', 'A1')];
+        expect(collection.Items.map(r => r.Get('ID')).sort()).toEqual(['p7', 'p8']);
+    });
+
+    it('sees removals too', () => {
+        const engine = makeEngine(true, [makeRecord('p1', 'A1'), makeRecord('p2', 'A1')]);
+        BaseEngineRegistry.Instance.RegisterEngine(engine);
+        const collection = makeCollection({ Load: 'lazy' });
+        expect(collection.Count).toBe(2);
+
+        engine.ActionParams.splice(0, 1);
+        expect(collection.Items.map(r => r.Get('ID'))).toEqual(['p2']);
+    });
+
+    it('a WRITABLE cache collection does NOT track the engine — those copies belong to the caller', async () => {
+        const engine = makeEngine(true, [makeRecord('p1', 'A1')]);
+        BaseEngineRegistry.Instance.RegisterEngine(engine);
+        // ReadOnly:false means copies, so the owner needs a factory to copy through.
+        const owner = {
+            ...makeOwner(),
+            ProviderToUse: {
+                GetEntityObject: async () => ({ ...makeRecord('copy', 'A1'), LoadFromData: () => true }),
+            },
+        } as unknown as BaseEntity;
+        // Silently replacing those copies would discard the caller's edits.
+        const collection = makeCollection({ Load: 'explicit', ReadOnly: false }, owner);
+        await collection.Load();
+        const before = collection.Count;
+
+        engine.ActionParams.push(makeRecord('p2', 'A1'));
+        expect(collection.Count).toBe(before);
     });
 });
 

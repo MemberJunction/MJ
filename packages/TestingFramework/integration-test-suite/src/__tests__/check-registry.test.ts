@@ -128,7 +128,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 6], // CV1-CV6 content vectorization pipeline (IT67)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 5], // SA1-SA5 scoped-anonymous elevation permission contract (IT68)
-        ['entity-graph', EntityGraphChecks, 8], // EG1-EG8 related-record collection graph saves (IT72)
+        ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {

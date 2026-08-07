@@ -1,5 +1,9 @@
 # Transactions, Batching & Entity Graphs
 
+> **Deep dive on entity graphs specifically** — metadata declaration, flow diagrams for the local
+> save and the network round trip, cache-backed sources and load modes:
+> [Related-Record Collections](../packages/MJCore/docs/related-record-collections.md).
+
 MemberJunction has **three** different mechanisms that all sound like "do several things at once,"
 and picking the wrong one produces bugs that do not announce themselves — torn writes, saves that
 report success without persisting, children that duplicate on every edit.

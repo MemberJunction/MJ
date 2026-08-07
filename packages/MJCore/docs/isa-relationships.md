@@ -1,5 +1,10 @@
 # IS-A Type Relationships in MemberJunction
 
+> **Not what you want?** IS-A is *vertical* — one logical record spread across parent and child
+> tables sharing a primary key. For a header plus N rows that carry a foreign key back to it (order
+> lines, an action's parameters), see [Related-Record Collections](./related-record-collections.md).
+> MJCore reserves the word **child** for IS-A subtypes; FK dependents are **related records**.
+
 > **Package**: [@memberjunction/core](../readme.md)
 > **Related Guides**: [Virtual Entities](./virtual-entities.md) | [RunQuery Pagination](./runquery-pagination.md)
 > **Related Packages**: [@memberjunction/codegen-lib](../../CodeGenLib/README.md) | [@memberjunction/sqlserver-dataprovider](../../SQLServerDataProvider/README.md) | [@memberjunction/graphql-dataprovider](../../GraphQLDataProvider/README.md) | [@memberjunction/ng-core-entity-forms](../../Angular/Explorer/core-entity-forms/README.md)

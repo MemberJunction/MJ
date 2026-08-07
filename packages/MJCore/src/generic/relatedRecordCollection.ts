@@ -283,6 +283,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         if (!this.loaded && this.LoadMode === 'lazy') {
             this.populateLazyOrThrow();
         }
+        this.refreshCacheViewIfStale();
         return this.items;
     }
 
@@ -295,9 +296,17 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         return this.removed;
     }
 
-    /** Number of retained children. */
+    /**
+     * Number of retained related records.
+     *
+     * Deliberately delegates to {@link Items} rather than reading the backing array: for a `'lazy'`
+     * collection `Items` is what triggers population, so reading the raw array here would report 0
+     * for a collection that has simply not been touched yet — and `Count === 0` while
+     * `Items.length === 2` is the kind of inconsistency nobody debugs quickly. Same reason it picks
+     * up a live cache view's refresh.
+     */
     public get Count(): number {
-        return this.items.length;
+        return this.Items.length;
     }
 
     /** Whether this collection has been populated from the database. */
@@ -533,6 +542,46 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * @returns True when the collection was populated from a cache.
      */
     /**
+     * Re-reads a live cache view when the donor engine has moved on.
+     *
+     * Only applies to a read-only cache-sourced collection — the case where the records belong to
+     * the engine rather than to this collection. A writable cache collection holds COPIES the caller
+     * owns, so silently replacing them would discard their edits; and a database-sourced collection
+     * is a point-in-time load by definition, which is what callers expect of one.
+     *
+     * The check is two reference comparisons in the common case, so this stays cheap enough to run
+     * on every read.
+     */
+    private refreshCacheViewIfStale(): void {
+        if (!this.cacheDonor || this.Source !== 'cache' || !this.IsReadOnly) {
+            return;
+        }
+        const current = this.cacheDonor.engine[this.cacheDonor.propertyName];
+        if (!Array.isArray(current)) {
+            return;
+        }
+        if (current === this.cacheDonor.array && current.length === this.cacheDonor.length) {
+            return; // unchanged
+        }
+
+        // Re-filter from the donor we already hold rather than re-walking the registry. The
+        // engine + property name IS the durable handle: reading the property fresh each time
+        // survives the engine reassigning it wholesale, which is the case a captured array
+        // reference misses. Re-running discovery here would also risk silently binding to a
+        // DIFFERENT engine mid-life if two happened to cache the same entity.
+        const parentKey = this.Owner.FirstPrimaryKey?.Value;
+        if (parentKey === null || parentKey === undefined || parentKey === '') {
+            return;
+        }
+        const joinField = this.RelatedEntityJoinField;
+        const records = current as T[];
+        const mine = records.filter(r => UUIDsEqual(String(r.Get(joinField) ?? ''), String(parentKey)));
+        this.cacheDonor.array = records as unknown[];
+        this.cacheDonor.length = records.length;
+        this.SetLoadedItems(this.sortLikeOrderBy(mine));
+    }
+
+    /**
      * Populates a `'lazy'` collection from cache, or throws explaining why it could not.
      *
      * **A lazy declaration is an assertion.** Writing `Load: 'lazy'` says "an engine caches this
@@ -573,6 +622,22 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
                 `entity config for '${this.RelatedEntityName}' to an engine.`,
         );
     }
+
+    /**
+     * The engine and property this collection last read from, plus enough about that array to tell
+     * cheaply whether it has moved on.
+     *
+     * A cache-sourced read-only collection is a **live view**, not a snapshot. `.claude/rules/data-access.md`
+     * spells out why: an engine responds to entity events either by mutating its array in place or —
+     * for ordered configs — by REASSIGNING the property wholesale, so a captured reference silently
+     * goes stale. The documented remedy is to resolve per-access from the engine plus the config's
+     * property name, which is what this records.
+     *
+     * Revalidation is deliberately cheap: identity catches a reassignment, length catches an
+     * in-place push or splice, and field-level edits need no detection at all because a read-only
+     * collection hands out the engine's own instances — the caller is already looking at them.
+     */
+    private cacheDonor: { engine: Record<string, unknown>; propertyName: string; array: unknown[]; length: number } | null = null;
 
     private populateFromCache(): boolean {
         // Sharing is the only synchronous option: copying needs `GetEntityObject`, which is async.
@@ -616,6 +681,17 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
             return null;
         }
 
+        // Remember where this came from so the collection can stay live rather than snapshotting.
+        const propertyName = donor.config.PropertyName;
+        if (propertyName) {
+            this.cacheDonor = {
+                engine: donor.engine as Record<string, unknown>,
+                propertyName,
+                array: donor.records as unknown[],
+                length: donor.records.length,
+            };
+        }
+
         const joinField = this.RelatedEntityJoinField;
         const mine = donor.records.filter(r => UUIDsEqual(String(r.Get(joinField) ?? ''), String(parentKey)));
         return this.sortLikeOrderBy(mine);
@@ -633,24 +709,60 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * @returns A new, ordered array.
      */
     private sortLikeOrderBy(records: T[]): T[] {
+        const terms = this.parseOrderBy();
+        if (terms.length === 0) {
+            return [...records];
+        }
+        return [...records].sort((a, b) => {
+            // Compare term by term, stopping at the first that discriminates — the ordinary
+            // multi-key sort, so 'Priority ASC, Name ASC' means what it says rather than being
+            // silently reduced to the first field.
+            for (const { field, sign } of terms) {
+                const av = a.Get(field);
+                const bv = b.Get(field);
+                if (av === bv) {
+                    continue;
+                }
+                if (av === null || av === undefined) return -sign;
+                if (bv === null || bv === undefined) return sign;
+                return (av < bv ? -1 : 1) * sign;
+            }
+            return 0;
+        });
+    }
+
+    /**
+     * Parses the declared `OrderBy` into comparable terms.
+     *
+     * Handles `FIELD [ASC|DESC]` lists — `'Priority ASC, Name DESC'`. Anything beyond that (an
+     * expression, a function call, a CASE) is refused wholesale rather than partially applied,
+     * because a *silently* mis-ordered sequenced collection renumbers itself into that wrong order
+     * on the next mutation. This is in-memory ordering for cache-sourced collections only; a
+     * database-sourced load passes the clause to SQL untouched.
+     *
+     * @returns One term per field, or an empty array when the clause cannot be honoured in memory.
+     */
+    private parseOrderBy(): { field: string; sign: number }[] {
         const clause = this.OrderByClause?.trim();
         if (!clause) {
-            return [...records];
+            return [];
         }
-        const parts = clause.split(/\s+/);
-        if (parts.length > 2 || clause.includes(',')) {
-            return [...records];
+        const terms: { field: string; sign: number }[] = [];
+        for (const raw of clause.split(',')) {
+            const parts = raw.trim().split(/\s+/).filter(Boolean);
+            if (parts.length === 0 || parts.length > 2) {
+                return []; // not a plain field list — do not half-apply it
+            }
+            const [field, direction] = parts;
+            if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(field)) {
+                return []; // an expression rather than a column
+            }
+            if (direction && !['ASC', 'DESC'].includes(direction.toUpperCase())) {
+                return [];
+            }
+            terms.push({ field, sign: (direction ?? 'ASC').toUpperCase() === 'DESC' ? -1 : 1 });
         }
-        const [field, direction] = parts;
-        const sign = (direction ?? 'ASC').toUpperCase() === 'DESC' ? -1 : 1;
-        return [...records].sort((a, b) => {
-            const av = a.Get(field);
-            const bv = b.Get(field);
-            if (av === bv) return 0;
-            if (av === null || av === undefined) return -sign;
-            if (bv === null || bv === undefined) return sign;
-            return (av < bv ? -1 : 1) * sign;
-        });
+        return terms;
     }
 
     /**

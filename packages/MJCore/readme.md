@@ -878,12 +878,42 @@ const result = await rv.RunView<OrderEntity>({
 });
 ```
 
-**Key APIs:** `BaseEntity.DeclareRelatedRecords()`, `RegisterCompanion()`, `GetCompanion()`,
-`Companions`, `SerializeCompanions()`, `DeserializeCompanions()`; `RelatedRecordCollection<T>`
-(`Items`, `Removed`, `Add`, `Create`, `Remove`, `Load`, `Dirty`); `EntityCompanion` (subclass for a
-new *kind* of companion); `EntitySavePlan`.
+#### Declaring one without writing code
 
-Full guide: [Transactions, Batching & Entity Graphs](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md).
+Set `EntityRelationship.RelatedRecordCollection` (a JSONType blob) and CodeGen emits the declaration
+onto the **generated** entity class, so both tiers get it and no subclass is needed. `RelatedEntity`
+and `RelatedEntityJoinField` stay as columns on that same row rather than being repeated in the JSON
+— one source of truth each.
+
+#### Reading from an engine cache instead of the database
+
+```typescript
+{ Name: 'Params', Source: 'cache', Load: 'lazy' }   // ReadOnly defaults to true here
+```
+
+`Source: 'cache'` finds whichever loaded `BaseEngine` already holds the entity — generically, via
+`BaseEngineRegistry` — and filters it by the join field. **Zero queries**, and it falls back to a
+database load on a miss. Read-only (the default for `cache`) hands out the engine's own instances as
+a *live view*; writable copies them so the cache is never mutated in place.
+
+`Load: 'lazy'` fills on first read of `Items`, reproducing a hand-written memoised getter — and
+**throws** rather than returning an empty array when no engine caches the entity, because a lazy
+declaration asserts that one does.
+
+```typescript
+await action.LoadRelatedRecords();   // cache-backed free, database-backed batched into ONE RunViews
+```
+
+**Key APIs:** `BaseEntity.DeclareRelatedRecords()`, `LoadRelatedRecords()`, `RegisterCompanion()`,
+`GetCompanion()`, `Companions`, `SerializeCompanions()`, `DeserializeCompanions()`;
+`RelatedRecordCollection<T>` (`Items`, `Removed`, `Count`, `Add`, `Create`, `Remove`, `Load`,
+`Dirty`, `Source`, `IsReadOnly`); `EntityCompanion` (subclass for a new *kind* of companion);
+`EntitySavePlan`.
+
+**Full guide — with flow diagrams for the local save and the network round trip:**
+[Related-Record Collections](./docs/related-record-collections.md). For when to use this versus a
+provider transaction versus a TransactionGroup, see
+[Transactions, Batching & Entity Graphs](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md).
 
 ---
 
@@ -2010,6 +2040,7 @@ For detailed guides on specific topics, see the [docs/](./docs/) folder:
 
 - [Virtual Entities](./docs/virtual-entities.md) — Config-driven creation, LLM decoration, read-only enforcement
 - [IS-A Relationships](./docs/isa-relationships.md) — Type inheritance, save/delete orchestration, provider integration
+- [Related-Record Collections](./docs/related-record-collections.md) — Parent + its FK rows as one unit: metadata declaration, the local save flow and the one-call network round trip (both diagrammed), cache-backed sources, load modes, sequencing and the cycle guard
 - [Organic Keys](./docs/organic-keys.md) — Cross-system matching by shared business data (email, phone, domain), CodeGen integration, transitive views
 - [RunQuery Pagination](./docs/runquery-pagination.md) — Parameterized queries with pagination support
 - [Full-Text Search](./docs/FULL_TEXT_SEARCH_GUIDE.md) — Database-native FTS via `Metadata.FullTextSearch()`, SQL Server FREETEXT / PostgreSQL tsvector, provider architecture, Knowledge Hub integration
