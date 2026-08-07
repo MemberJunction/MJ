@@ -13,3 +13,4 @@ export * from './TaskGraphService';
 export * from './TaskClaimStore';
 export * from './TaskGraphDispatcher';
 export * from './TaskGraphDetection';
+export * from './operations/TaskGraphOperations';

@@ -25,9 +25,10 @@
  *
  * Deterministic — no model calls. TG2 creates one task and the bundle Teardown removes it.
  */
-import { Metadata, RunView } from '@memberjunction/core';
+import { BaseRemotableOperation, Metadata, RunView } from '@memberjunction/core';
 import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
-import { TaskGraphService, type TaskGraphSpec } from '@memberjunction/task-graph';
+import { MJGlobal } from '@memberjunction/global';
+import { LoadTaskGraphOperations, TaskGraphService, type TaskGraphSpec } from '@memberjunction/task-graph';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -40,6 +41,14 @@ const PHASE1_TASK_FIELDS = [
     'AgentRunID',
     'ClaimedBy',
     'ClaimExpiresAt',
+] as const;
+
+/** The task-graph control plane, as Remote Operation keys. Deliberately no `Pause` — see TG7. */
+const TASK_GRAPH_OPERATION_KEYS = [
+    'TaskGraph.Submit',
+    'TaskGraph.Cancel',
+    'TaskGraph.RetryTask',
+    'TaskGraph.GetStatus',
 ] as const;
 
 const TASK_NAME = 'mj-integration-test-task-graph-columns (safe to delete)';
@@ -263,6 +272,52 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
             );
             AssertEqual(deps.Results?.length ?? 0, 1, 'the a->b dependency edge persisted');
             console.log(`      \u2192 graph persisted: parent ${result.ParentTaskID}, 2 tasks, 1 edge`);
+        }
+    },
+    {
+        Id: 'task-graph-orchestration.TG7',
+        Name: 'TG7: the four task-graph Remote Operations are published and backed by implementations',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // The control plane is Remote Operations, not bespoke resolvers, so that MCP callers,
+            // Action wrappers and the UI all reach one registration. Two failure modes break that
+            // and neither shows up in a build:
+            //
+            //   1. The metadata row is missing \u2014 the operation is unreachable by every caller,
+            //      because routing resolves the key against `MJ: Remote Operations` first. This is
+            //      what a forgotten `mj sync push` looks like.
+            //   2. The row exists but the implementing subclass never registers \u2014 routing resolves
+            //      to the CodeGen-emitted, contract-only base, whose InternalExecute does nothing.
+            //      A key typo between the metadata row and `@RegisterClass` produces exactly this.
+            const rows = await new RunView().RunView<{ OperationKey: string; Status: string }>(
+                {
+                    EntityName: 'MJ: Remote Operations',
+                    ExtraFilter: `OperationKey LIKE 'TaskGraph.%'`,
+                    Fields: ['OperationKey', 'Status'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            Assert(rows.Success, `could not read MJ: Remote Operations: ${rows.ErrorMessage}`);
+            const published = new Map((rows.Results ?? []).map((r) => [r.OperationKey, r.Status]));
+
+            LoadTaskGraphOperations();
+
+            for (const key of TASK_GRAPH_OPERATION_KEYS) {
+                Assert(published.has(key), `Remote Operation '${key}' has no metadata row \u2014 it is unreachable`);
+                AssertEqual(published.get(key), 'Active', `Remote Operation '${key}' is not Active`);
+
+                const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRemotableOperation>(
+                    BaseRemotableOperation, key,
+                );
+                Assert(!!instance, `no class resolved for Remote Operation '${key}'`);
+                AssertEqual(instance!.OperationKey, key, `resolved class reports the wrong OperationKey for '${key}'`);
+                Assert(
+                    instance!.constructor.name.endsWith('ServerOperation'),
+                    `'${key}' resolved to '${instance!.constructor.name}' \u2014 the generated contract-only base won, ` +
+                    `so every call would succeed at the transport and do nothing`,
+                );
+            }
+            console.log(`      \u2192 ${TASK_GRAPH_OPERATION_KEYS.length} task-graph operations published and implemented`);
         }
     },
 ];

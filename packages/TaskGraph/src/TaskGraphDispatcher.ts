@@ -28,6 +28,7 @@ import {
     type TaskGraphNodeStatus,
 } from '@memberjunction/ai-core-plus';
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { IShutdownable, ShutdownRegistry } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
 import {
@@ -44,7 +45,7 @@ type GraphState = {
     entityById: Map<string, MJTaskEntity>;
 };
 
-export class TaskGraphDispatcher {
+export class TaskGraphDispatcher implements IShutdownable {
     private readonly config: TaskGraphDispatcherConfig;
     private readonly claims: TaskClaimStore;
 
@@ -77,6 +78,11 @@ export class TaskGraphDispatcher {
         if (this.running) return;
         this.running = true;
 
+        // Self-register rather than make each host remember to stop us. A dispatcher that keeps
+        // polling through a graceful shutdown would claim work the process is about to abandon,
+        // which is exactly the orphaned-claim state reconciliation exists to clean up.
+        ShutdownRegistry.Instance.Register(this);
+
         LogStatus(`[TaskGraphDispatcher] Starting as instance '${this.config.InstanceID}'.`);
         await this.Reconcile();
 
@@ -107,6 +113,14 @@ export class TaskGraphDispatcher {
             LogError(`[TaskGraphDispatcher] Stopped with ${this.inFlight.size} task(s) still in flight; their claims will expire.`);
         }
         LogStatus(`[TaskGraphDispatcher] Stopped.`);
+    }
+
+    /** Name shown in the shutdown drain log. */
+    public readonly ShutdownName = 'TaskGraphDispatcher';
+
+    /** {@link IShutdownable} — idempotent by way of `Stop`'s `running` guard. */
+    public async Shutdown(): Promise<void> {
+        await this.Stop();
     }
 
     /**
