@@ -3,48 +3,115 @@ title: MemberJunction
 description: The open-source, AI-native data platform. Unify your data, add intelligence, and build AI-native apps on top of it.
 template: splash
 editUrl: false
-hero:
-  tagline: The open-source, AI-native data platform. Unify your data. Add intelligence. Build AI-native apps on top of it.
-  image:
-    light: ../../assets/MJ_logo.webp
-    dark: ../../assets/MJ_logo_dark.png
-  actions:
-    - text: Get Started
-      link: ./getting-started/
-      icon: right-arrow
-      variant: primary
-    - text: Skip the ops — run MJ on MJ Central
-      link: https://central.memberjunction.com
-      icon: rocket
-      variant: secondary
-    - text: GitHub
-      link: https://github.com/MemberJunction/MJ
-      icon: github
-      variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import InstallBlock from '../../components/InstallBlock.astro';
+import LandingFooter from '../../components/LandingFooter.astro';
 
-<CardGrid stagger>
-  <Card title="What is MemberJunction?" icon="information">
-    A metadata-driven platform that turns your database into a full application — typed entities, GraphQL APIs, Angular UI, validation, and audit trails, all generated. [Read the overview](./overview/).
-  </Card>
-  <Card title="Developer Guides" icon="open-book">
-    Forty-plus cross-cutting guides rendered straight from the repo — caching, dashboards, permissions, agent memory, and more. [Browse the guides](./guides/).
-  </Card>
-  <Card title="AI &amp; Agents" icon="seti:pipeline">
-    Fifteen-plus AI providers behind one abstraction, an agent framework, prompt engine, and published agent skills. [Explore AI &amp; Agents](./ai-and-agents/).
-  </Card>
-  <Card title="Package Directory" icon="seti:npm">
-    290+ modular TypeScript packages that work together or independently, each documented from its own README. [See all packages](./packages/).
-  </Card>
-  <Card title="API Reference" icon="document">
-    Full TypeDoc reference for every published package, regenerated on each release. [Open the API reference](./api/).
-  </Card>
-  <Card title="Ecosystem" icon="puzzle">
-    Skyway migrations, the Forge SQL GUI, the VSCode extension, and BizApps. [Meet the ecosystem](./ecosystem/).
-  </Card>
-  <Card title="Release Notes" icon="seti:clock">
-    What changed in each MemberJunction release, including the current LTS line. [See all releases](./releases/).
-  </Card>
-</CardGrid>
+<div class="mjd-landing">
+
+<section class="mjd-hero">
+  <div class="mjd-pills">
+    <span class="mjd-pill mjd-pill--accent">v5.x</span>
+    <span class="mjd-pill">Open Source</span>
+    <span class="mjd-pill">ISC License</span>
+  </div>
+
+  <h1 class="mjd-title">MemberJunction</h1>
+
+  {/* Keep each text run on ONE line with its tag. MDX parses a multi-line child
+      as markdown and wraps it in its own <p>, which nests <p> inside <p> and the
+      browser then splits the pair apart, collapsing the styled element to 0 width. */}
+  <p class="mjd-tagline">The open-source, AI-native data platform. Unify your data. Add intelligence. Build AI-native apps on top of it.</p>
+
+  <p class="mjd-subtagline">MemberJunction is downloadable computer software for data integration, management, and AI-native application development. Download and install it on your own infrastructure, free.</p>
+
+  <div class="mjd-ctas">
+    {/* MJ is NOT distributed as a downloadable archive — main.zip is a GitHub
+        source snapshot, not an installer. Installation is clone → npm install →
+        configure → `node InstallMJ.js`, documented on the overview page. Do not
+        reintroduce a direct .zip link here. */}
+    {/* Deep-linked to the section, not the page top: /overview/ renders the
+        whole README and runs ~28,000px, with this section ~9% down. The anchor
+        slug is derived from that heading's text — renaming the heading breaks
+        this link. */}
+    <a class="mjd-btn mjd-btn--primary" href="./overview/#download--install">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 17l6-5-6-5"></path><path d="M12 19h8"></path>
+      </svg>
+      <span>Download &amp; Install</span>
+    </a>
+    <a class="mjd-btn mjd-btn--secondary" href="./getting-started/">Get Started</a>
+    <a class="mjd-btn mjd-btn--ghost" href="https://github.com/MemberJunction/MJ">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"></path>
+      </svg>
+      <span>GitHub</span>
+    </a>
+  </div>
+
+  <p class="mjd-ctas-note">Self-hosted · install from source · Windows, macOS, Linux</p>
+</section>
+
+<section class="mjd-split">
+  <InstallBlock />
+
+  <div class="mjd-hosted">
+    <span class="mjd-hosted__eyebrow">Prefer hosted?</span>
+    <h3 class="mjd-hosted__title">Skip the ops, run MJ on MJ Central</h3>
+    <p class="mjd-hosted__body">Same platform, managed for you. Single-tenant, no vendor lock-in. Move to self-hosted whenever you want.</p>
+    {/* Canonical MJ Central URL is an open question: the landing mockup specifies
+        memberjunction.com/mj-central, this is what the site has always used, and
+        both resolve. Left as-is pending a call from the team. */}
+    <a class="mjd-hosted__link" href="https://central.memberjunction.com">Explore MJ Central →</a>
+  </div>
+</section>
+
+<section class="mjd-docs">
+  <h2 class="mjd-docs__eyebrow">Documentation</h2>
+  <p class="mjd-docs__lede">Everything you need to install, extend, and ship on MemberJunction.</p>
+
+  <div class="mjd-cards">
+    <a class="mjd-card" href="./overview/">
+      <span class="mjd-card__title">What is MemberJunction?</span>
+      <span class="mjd-card__body">A metadata-driven platform that turns your database into a full application — typed entities, GraphQL APIs, Angular UI, validation, and audit trails, all generated.</span>
+      <span class="mjd-card__cta">Read the overview →</span>
+    </a>
+    <a class="mjd-card" href="./guides/">
+      <span class="mjd-card__title">Developer Guides</span>
+      <span class="mjd-card__body">Forty-plus cross-cutting guides rendered straight from the repo — caching, dashboards, permissions, agent memory, and more.</span>
+      <span class="mjd-card__cta">Browse the guides →</span>
+    </a>
+    <a class="mjd-card" href="./ai-and-agents/">
+      <span class="mjd-card__title">AI &amp; Agents</span>
+      <span class="mjd-card__body">Thirty-plus AI providers behind one abstraction, an agent framework, prompt engine, and published agent skills.</span>
+      <span class="mjd-card__cta">Explore AI &amp; Agents →</span>
+    </a>
+    <a class="mjd-card" href="./packages/">
+      <span class="mjd-card__title">Package Directory</span>
+      <span class="mjd-card__body">300+ modular TypeScript packages that work together or independently, each documented from its own README.</span>
+      <span class="mjd-card__cta">See all packages →</span>
+    </a>
+    <a class="mjd-card" href="./api/">
+      <span class="mjd-card__title">API Reference</span>
+      <span class="mjd-card__body">Full TypeDoc reference for every published package, regenerated on each release.</span>
+      <span class="mjd-card__cta">Open the API reference →</span>
+    </a>
+    <a class="mjd-card" href="./ecosystem/">
+      <span class="mjd-card__title">Ecosystem</span>
+      <span class="mjd-card__body">Skyway migrations, the Forge SQL GUI, the VSCode extension, and BizApps.</span>
+      <span class="mjd-card__cta">Meet the ecosystem →</span>
+    </a>
+    <a class="mjd-card" href="./releases/">
+      <span class="mjd-card__title">Release Notes</span>
+      <span class="mjd-card__body">What changed in each MemberJunction release, including the current LTS line.</span>
+      <span class="mjd-card__cta">See all releases →</span>
+    </a>
+  </div>
+</section>
+
+</div>
+
+{/* Sibling of .mjd-landing, not a child — the bar runs edge to edge rather
+    than stopping at the landing's 1120px column. */}
+<LandingFooter />
