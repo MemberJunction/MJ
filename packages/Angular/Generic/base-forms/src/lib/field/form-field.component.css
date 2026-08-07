@@ -659,6 +659,11 @@
   background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
 }
 
+/* Keyboard-active option (arrow-key navigation) — mirrors the FK grid's active-row tint */
+.mj-fk-option--active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+}
+
 /* ============================================
    MULTI-COLUMN FK DROPDOWN — aligned mini-grid (icon + name + extra cols)
    with sortable headers and horizontal scroll.

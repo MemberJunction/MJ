@@ -15,6 +15,13 @@ import { CompositeKey } from '@memberjunction/core';
 import { EscapeHTML, HighlightSearchMatches } from '@memberjunction/global';
 
 /**
+ * Monotonic counter backing each panel instance's unique DOM ids — the header and
+ * body must reference each other via aria-controls / aria-labelledby, and SectionKey
+ * alone isn't unique when the same form renders twice (e.g. a dialog over a tab).
+ */
+let nextCollapsiblePanelInstanceId = 0;
+
+/**
  * Reusable collapsible panel for form sections.
  *
  * Supports three visual variants:
@@ -56,6 +63,9 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   private cdr = inject(ChangeDetectorRef);
   private elementRef = inject(ElementRef);
   private ngZone = inject(NgZone);
+
+  /** Unique per-instance discriminator for the header/body ARIA id pair. */
+  private readonly instanceId = ++nextCollapsiblePanelInstanceId;
 
   /** Unique key for state persistence */
   @Input() SectionKey = '';
@@ -257,6 +267,29 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     }
   }
 
+  // ---- Accessibility ----
+
+  /** DOM id of the panel body region; the header's aria-controls points here. */
+  get PanelBodyId(): string {
+    return `mj-panel-body-${this.instanceId}`;
+  }
+
+  /** DOM id of the header; the body region's aria-labelledby points here. */
+  get PanelHeaderId(): string {
+    return `mj-panel-header-${this.instanceId}`;
+  }
+
+  /**
+   * Keyboard activation for the header's `role="button"`: Enter and Space toggle,
+   * matching native button semantics (Space must not scroll the page).
+   */
+  OnHeaderKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.Toggle();
+    }
+  }
+
   // ---- Actions ----
 
   Toggle(): void {
@@ -273,7 +306,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    * Derives the PrimaryKey from the Form's record when InheritedRecordPrimaryKey
    * is not explicitly provided (which is the common case in generated templates).
    */
-  OnInheritedBadgeClick(event: MouseEvent): void {
+  OnInheritedBadgeClick(event: Event): void {
     event.stopPropagation();
     if (!this.InheritedFromEntity) return;
 
