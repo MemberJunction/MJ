@@ -8,6 +8,16 @@ import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
 import { LogDebug, LogError, LogStatus } from './logging';
 import { CompositeKey, FieldValueCollection } from './compositeKey';
+import { ChildCollection, ChildCollectionOptions } from './childCollection';
+import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionPayload } from './entityCompanion';
+import { EntitySavePlan, ExecuteEntitySavePlan } from './entitySavePlan';
+import { EntityTransactionScope } from './entityTransactionScope';
+import { BaseRemotableOperation } from './baseRemotableOperation';
+import {
+    SAVE_ENTITY_GRAPH_OPERATION_KEY,
+    type SaveEntityGraphInput,
+    type SaveEntityGraphOutput,
+} from './saveEntityGraphOperation';
 import { finalize, firstValueFrom, from, Observable, of, shareReplay, Subject, Subscription, switchMap } from 'rxjs';
 import { z } from 'zod';
 
@@ -705,8 +715,15 @@ export class BaseEntityEvent {
      * - `new_record`: Raised when NewRecord() is called
      * - `transaction_ready`: Used to indicate that a transaction is ready to be submitted for execution. The TransactionGroup class uses this to know that all async preprocessing is done and it can now submit the transaction.
      * - `remote-invalidate`: Raised when a remote server (via Redis pub/sub → GraphQL subscription) notifies this client that cached data for an entity has changed. Used to trigger BaseEngine re-fetch from server.
+     * - `graph_save_started`, `graph_save`: Raised on the ROOT entity of a multi-record composite
+     *   save (a parent plus the children contributed by its companions) when the unit of work begins
+     *   and when it settles. These are *in addition to* the per-record `save_started` / `save`
+     *   events, which still fire for every node in the graph — the graph events let a caller observe
+     *   the unit of work as a whole, e.g. to refresh a form once rather than once per line.
+     *   Payload: `{ Success, NodeCount, Error? }` on `graph_save`; `{ NodeCount }` on
+     *   `graph_save_started`.
      */
-    type: 'new_record' | 'save' | 'delete' | 'load_complete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'remote-invalidate' | 'other';
+    type: 'new_record' | 'save' | 'delete' | 'load_complete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'remote-invalidate' | 'graph_save_started' | 'graph_save' | 'other';
 
     /**
      * If type === 'save' this property can either be 'create' or 'update' to indicate the type of save operation that was performed.
@@ -982,21 +999,47 @@ export abstract class BaseEntity<T = unknown> {
     private _childEntities: { entityName: string }[] | null = null;
 
     /**
-     * Opaque provider-level transaction handle. Used by IS-A save/delete orchestration
-     * to share a single SQL transaction across the parent chain.
-     * On client (GraphQLDataProvider), this remains null.
-     * On server (SQLServerDataProvider), this holds a sql.Transaction.
+     * Opaque provider-level transaction handle, passed to the provider as an explicit
+     * `connectionSource` when set.
+     *
+     * @deprecated Since 6.2 for IS-A orchestration. IS-A now uses the provider's ambient,
+     * depth-counted transaction via {@link IMetadataProvider.BeginEntityTransaction}, so this stays
+     * `null` on that path and the provider's shared transaction is picked up automatically by every
+     * `ExecuteSQL` call that supplies no explicit `connectionSource`. The property remains for
+     * external callers that route a specific record onto a specific transaction handle. See
+     * {@link EntityTransactionScope} for why the IS-A-specific transaction was removed.
      */
     private _providerTransaction: unknown = null;
 
     /**
-     * Gets the provider transaction handle for IS-A chain orchestration.
+     * The active transaction scope owned by this entity, when it is the participant that opened (or
+     * joined) one for a multi-record unit of work — an IS-A parent chain or a composite save graph.
+     *
+     * Only the *initiator* holds a scope; other participants in the same unit of work simply write
+     * into the provider's ambient transaction without knowing it exists. That is the whole point of
+     * routing through the provider: participants stay ignorant of one another.
+     */
+    private _entityTransactionScope: EntityTransactionScope | null = null;
+
+    /**
+     * Companions registered on this entity, keyed by {@link EntityCompanion.Name}.
+     *
+     * Lazily created so that the overwhelming majority of entities — which declare no companions —
+     * pay nothing for the feature, not even an empty Map per instance.
+     */
+    private _companions: Map<string, EntityCompanion> | null = null;
+
+    /**
+     * Gets the explicit provider transaction handle for this record, if one was set.
+     *
+     * @deprecated Since 6.2 for IS-A orchestration — see {@link _providerTransaction}.
      */
     get ProviderTransaction(): unknown { return this._providerTransaction; }
 
     /**
-     * Sets the provider transaction handle. Used during IS-A save/delete to share
-     * a single database transaction across the entire parent chain.
+     * Sets an explicit provider transaction handle for this record.
+     *
+     * @deprecated Since 6.2 for IS-A orchestration — see {@link _providerTransaction}.
      */
     set ProviderTransaction(value: unknown) { this._providerTransaction = value; }
 
@@ -1297,12 +1340,524 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Propagates the ProviderTransaction handle down the IS-A parent chain so all
      * entities in the chain execute on the same database transaction.
+     *
+     * @deprecated Since 6.2. No longer called by MJ core. IS-A chains now run inside the provider's
+     * ambient transaction obtained via {@link IMetadataProvider.BeginEntityTransaction}; because
+     * every `ExecuteSQL` call with no explicit `connectionSource` picks that transaction up, there
+     * is nothing left to propagate. Retained for external callers that hand-manage transaction
+     * handles. Will be removed in 7.0.
      */
     protected PropagateTransactionToParents(): void {
         let current = this._parentEntity;
         while (current) {
             current.ProviderTransaction = this._providerTransaction;
             current = current._parentEntity;
+        }
+    }
+
+    // ─── Entity Companions ──────────────────────────────────────────────────────
+    //
+    // Companions are named, serialisable side-channels attached to a record — most commonly child
+    // collections. See entityCompanion.ts for the full rationale and lifecycle.
+
+    /**
+     * The companions registered on this entity, in declaration order.
+     *
+     * Empty for the vast majority of entities. Nothing in the save, load or validation paths does
+     * any companion work when this is empty, so the feature costs nothing where it is unused.
+     */
+    public get Companions(): readonly EntityCompanion[] {
+        return this._companions ? Array.from(this._companions.values()) : [];
+    }
+
+    /**
+     * Whether this entity has any registered companions.
+     *
+     * Used as the fast guard on the hot paths — a single boolean check keeps single-record saves on
+     * exactly the code path they took before companions existed.
+     */
+    public get HasCompanions(): boolean {
+        return this._companions !== null && this._companions.size > 0;
+    }
+
+    /**
+     * Registers a companion on this entity. Called from a subclass constructor or field
+     * initialiser, normally via {@link DeclareChildren}.
+     *
+     * @typeParam TCompanion - The companion type.
+     * @param companion - The companion to register.
+     * @returns The same companion, so it can be assigned to a readonly field in one expression.
+     * @throws When a companion with the same name is already registered — a duplicate name would
+     *         make the wire payload ambiguous and silently drop one of the two.
+     */
+    protected RegisterCompanion<TCompanion extends EntityCompanion>(companion: TCompanion): TCompanion {
+        if (!this._companions) {
+            this._companions = new Map<string, EntityCompanion>();
+        }
+        if (this._companions.has(companion.Name)) {
+            throw new Error(
+                `BaseEntity.RegisterCompanion: '${companion.Name}' is already registered on ` +
+                `${this.EntityInfo?.Name ?? this.constructor.name}. Companion names must be unique per entity.`,
+            );
+        }
+        this._companions.set(companion.Name, companion);
+        return companion;
+    }
+
+    /**
+     * Looks up a registered companion by name.
+     *
+     * @typeParam TCompanion - The expected companion type.
+     * @param name - The companion's {@link EntityCompanion.Name}.
+     * @returns The companion, or `undefined` when none is registered under that name.
+     */
+    public GetCompanion<TCompanion extends EntityCompanion = EntityCompanion>(name: string): TCompanion | undefined {
+        return this._companions?.get(name) as TCompanion | undefined;
+    }
+
+    /**
+     * Declares a typed child collection on this entity and registers it as a companion.
+     *
+     * This is the entry point for composite entities. Call it from a field initialiser on a
+     * **shared** (client + server) subclass so both tiers see the collection — a declaration that
+     * exists only in a server-side class makes the collection invisible to the browser, which is
+     * exactly the limitation this feature removes.
+     *
+     * @typeParam TChild - The child entity type.
+     * @param options - The collection declaration.
+     * @returns The registered collection.
+     *
+     * @example
+     * ```typescript
+     * public readonly Lines = this.DeclareChildren<OrderLineEntity>({
+     *     Name: 'Lines',
+     *     ChildEntity: 'MJ_BizApps_Orders: Order Lines',
+     *     ForeignKey: 'OrderHeaderID',
+     *     OrderBy: 'LineNumber ASC',
+     *     Sequence: { Field: 'LineNumber', From: 1 },
+     * });
+     * ```
+     */
+    protected DeclareChildren<TChild extends BaseEntity = BaseEntity>(
+        options: ChildCollectionOptions,
+    ): ChildCollection<TChild> {
+        return this.RegisterCompanion(new ChildCollection<TChild>(this, options));
+    }
+
+    /**
+     * Serialises every registered companion that has something to send.
+     *
+     * Companions returning `null` are omitted entirely, so a header-only save on a composite entity
+     * ships no companion payload at all and costs nothing extra on the wire.
+     *
+     * @returns The companion payloads, in declaration order.
+     */
+    public async SerializeCompanions(): Promise<EntityCompanionPayload[]> {
+        if (!this.HasCompanions) {
+            return [];
+        }
+        const payloads: EntityCompanionPayload[] = [];
+        for (const companion of this.Companions) {
+            const data = await companion.Serialize();
+            if (data !== null && data !== undefined) {
+                payloads.push({ Name: companion.Name, Data: data });
+            }
+        }
+        return payloads;
+    }
+
+    /**
+     * Restores companion state from payloads produced by {@link SerializeCompanions} on the other
+     * tier.
+     *
+     * Payloads naming a companion this entity does not declare are **ignored rather than rejected**.
+     * That is deliberate: during a rolling deploy the two tiers can disagree about which companions
+     * exist, and a hard failure would turn a harmless version skew into an outage. The mismatch is
+     * logged so it is still visible.
+     *
+     * @param payloads - Companion payloads received from the other tier.
+     */
+    public async DeserializeCompanions(payloads: EntityCompanionPayload[]): Promise<void> {
+        if (!payloads || payloads.length === 0) {
+            return;
+        }
+        for (const payload of payloads) {
+            const companion = this.GetCompanion(payload.Name);
+            if (!companion) {
+                LogDebug(
+                    `BaseEntity.DeserializeCompanions: no companion named '${payload.Name}' on ` +
+                    `${this.EntityInfo?.Name}; ignoring (tier version skew is expected during rolling deploys).`,
+                );
+                continue;
+            }
+            await companion.Deserialize(payload.Data);
+        }
+    }
+
+    /**
+     * Executes a multi-node plan by handing the entire unit of work to the server.
+     *
+     * Used when the provider cannot open a local transaction — i.e. from the browser. The client
+     * does not orchestrate the cascade; it ships intent, and the server runs the *same*
+     * `executeGraphLocal` path inside a real transaction. One cascade implementation, two possible
+     * locations.
+     *
+     * @param plan - The planned unit of work. Used for its node count in events and diagnostics;
+     *               the server rebuilds its own plan from the payload.
+     * @param _options - Save options. Not forwarded over the wire: they describe local execution
+     *                   preferences, and the server applies its own.
+     * @returns True when the server reports the graph committed.
+     */
+    private async executeGraphRemote(plan: EntitySavePlan, _options?: EntitySaveOptions): Promise<boolean> {
+        try {
+            const operation = MJGlobal.Instance.ClassFactory.CreateInstance<
+                BaseRemotableOperation<SaveEntityGraphInput, SaveEntityGraphOutput>
+            >(BaseRemotableOperation, SAVE_ENTITY_GRAPH_OPERATION_KEY);
+
+            if (!operation) {
+                throw new Error(
+                    `Composite save requires the '${SAVE_ENTITY_GRAPH_OPERATION_KEY}' remote operation, which is ` +
+                    `not registered in this process.`,
+                );
+            }
+
+            const result = await operation.Execute(
+                {
+                    EntityName: this.EntityInfo.Name,
+                    Fields: this.GetAll(),
+                    Companions: await this.SerializeCompanions(),
+                    IsExistingRecord: this.IsSaved,
+                },
+                { provider: this.ProviderToUse as unknown as IMetadataProvider, user: this.ActiveUser },
+            );
+
+            if (!result.Success || !result.Output?.Success) {
+                const detail = result.ErrorMessage ?? result.Output?.ErrorMessage ?? 'unknown error';
+                this.registerGraphFailure(detail);
+                this.RaiseEvent('graph_save', { Success: false, NodeCount: plan.NodeCount, Error: detail });
+                return false;
+            }
+
+            await this.applyGraphResult(result.Output);
+            this.RaiseEvent('graph_save', { Success: true, NodeCount: plan.NodeCount });
+            return true;
+        } catch (e) {
+            const detail = e instanceof Error ? e.message : String(e);
+            LogError(`BaseEntity.executeGraphRemote failed for ${this.EntityInfo?.Name}: ${detail}`);
+            this.registerGraphFailure(detail);
+            this.RaiseEvent('graph_save', { Success: false, NodeCount: plan.NodeCount, Error: detail });
+            return false;
+        }
+    }
+
+    /**
+     * Adopts the post-save state the server returned for the whole graph.
+     *
+     * Both halves matter. Refreshing only the header would leave the client holding children that
+     * still look unsaved — they would be re-inserted on the next save, silently duplicating rows.
+     *
+     * @param output - The server's result graph.
+     */
+    private async applyGraphResult(output: SaveEntityGraphOutput): Promise<void> {
+        // Root: rebase field values and dirty state onto what the database now holds.
+        this.init();
+        this.SetMany(output.Fields, false, true, true);
+        this._recordLoaded = true;
+        this._everSaved = true;
+
+        // Children: adopt server-assigned primary keys and computed values.
+        await this.DeserializeCompanions(output.Companions ?? []);
+        this.acceptCompanionChanges();
+
+        const result = new BaseEntityResult();
+        result.Success = true;
+        result.Type = 'update';
+        result.StartedAt = new Date();
+        result.EndedAt = new Date();
+        this.RegisterResultHistoryEntry(result);
+
+        this.RaiseEvent('save', null, 'update');
+    }
+
+    /**
+     * Gives every eager companion a chance to populate itself.
+     *
+     * Called from {@link InnerLoad} only — deliberately **not** from {@link LoadFromData}. See
+     * {@link ChildCollectionLoadMode} for why that distinction is load-bearing.
+     */
+    private async loadEagerCompanions(): Promise<void> {
+        if (!this.HasCompanions) {
+            return;
+        }
+        for (const companion of this.Companions) {
+            await companion.LoadEager();
+        }
+    }
+
+    /**
+     * Tells every companion that the unit of work committed, so they can clear pending removals and
+     * rebase their dirty state.
+     */
+    private acceptCompanionChanges(): void {
+        if (!this.HasCompanions) {
+            return;
+        }
+        for (const companion of this.Companions) {
+            companion.AcceptChanges();
+        }
+    }
+
+    /**
+     * Opens a transaction scope for a multi-record unit of work rooted at this entity, when this
+     * entity is the initiator and is not already inside a `TransactionGroup`.
+     *
+     * Participants never ask whether a transaction is already open — the provider arbitrates and
+     * either starts one or joins the one in flight. See {@link EntityTransactionScope}.
+     *
+     * @param isInitiator - Whether this entity is the one orchestrating the unit of work. Non-
+     *                      initiators never open a scope; they write into the ambient transaction.
+     * @returns True if a scope was opened (or joined) and is now held by this entity.
+     */
+    private async beginEntityTransactionScope(isInitiator: boolean): Promise<boolean> {
+        // A TransactionGroup manages its own atomicity and defers every save until Submit(); opening
+        // a provider transaction underneath it would wrap statements that have not run yet.
+        if (!isInitiator || this.TransactionGroup) {
+            return false;
+        }
+        const provider = this.ProviderToUse;
+        if (provider?.SupportsEntityTransactions !== true || !provider.BeginEntityTransaction) {
+            return false; // client-side provider — no local transaction to open
+        }
+        this._entityTransactionScope = await provider.BeginEntityTransaction();
+        return true;
+    }
+
+    /**
+     * Builds the ordered unit of work for saving this record and everything its companions
+     * contribute.
+     *
+     * The root node comes first — children need the parent's primary key, and on a create it does
+     * not exist until the parent row is inserted.
+     *
+     * @param includeRoot - Whether to include this record's own save. False when the caller has
+     *                      already persisted the root by other means.
+     * @returns The plan. A `NodeCount` of 1 means there is no graph and the caller should take the
+     *          ordinary single-record path.
+     */
+    protected BuildSavePlan(includeRoot = true): EntitySavePlan {
+        const plan = new EntitySavePlan(this);
+        if (includeRoot) {
+            plan.AddSave(this, this.EntityInfo?.Name ?? 'root', undefined, /* selfOnly */ true);
+        }
+        for (const companion of this.Companions) {
+            companion.ContributeSaveWork(plan);
+        }
+        return plan;
+    }
+
+    /**
+     * Builds the ordered unit of work for deleting this record and everything its companions
+     * contribute.
+     *
+     * Companions contribute **first**: children hold foreign keys pointing at the row that is about
+     * to disappear, so they must be removed before it.
+     *
+     * @returns The plan.
+     */
+    protected BuildDeletePlan(): EntitySavePlan {
+        const plan = new EntitySavePlan(this);
+        for (const companion of this.Companions) {
+            companion.ContributeDeleteWork(plan);
+        }
+        plan.Add({
+            Entity: this,
+            Operation: 'Delete',
+            Label: this.EntityInfo?.Name ?? 'root',
+            SelfOnly: true,
+        });
+        return plan;
+    }
+
+    /**
+     * Runs a multi-record save as one unit of work, choosing where it executes based on what the
+     * provider can do.
+     *
+     * This is the single decision point for the whole feature:
+     *
+     * - **Provider supports entity transactions** (server): execute locally inside one transaction.
+     * - **It does not** (client): serialise the graph and hand the entire unit of work to the
+     *   server via the `MJ.SaveEntityGraph` remote operation, which rebuilds the records — as their
+     *   *server-side* registered subclasses — and runs this very same local executor there.
+     *
+     * There is exactly one cascade implementation. The remote path relocates it; it never
+     * reimplements it. That is what keeps client and server behaviour from drifting.
+     *
+     * Validation is not performed here: the root node's own `_InnerSave` runs `Validate()` (which
+     * fans out to every companion, over the complete child set including pending removals) before
+     * it writes anything, and the root node executes first. So the whole graph is validated before
+     * the first row lands, which is the guarantee cross-child invariants need.
+     *
+     * @param plan - The planned unit of work.
+     * @param options - Save options forwarded to every node.
+     * @returns True when the whole graph committed.
+     */
+    private async saveGraph(plan: EntitySavePlan, options?: EntitySaveOptions): Promise<boolean> {
+        this.RaiseEvent('graph_save_started', { NodeCount: plan.NodeCount });
+
+        if (this.ProviderToUse?.SupportsEntityTransactions === true) {
+            return this.executeGraphLocal(plan, options);
+        }
+        return this.executeGraphRemote(plan, options);
+    }
+
+    /**
+     * Runs a multi-record delete as one unit of work.
+     *
+     * Unlike the save path there is no remote counterpart: a delete graph carries no state that
+     * needs rebuilding server-side, so on a client provider the nodes execute in order over
+     * ordinary mutations. That is **not atomic** — a failure partway leaves earlier deletions
+     * committed. Callers needing an atomic multi-record delete from the browser should expose a
+     * dedicated remote operation, which is also what MJ's own cascade-delete tooling does.
+     *
+     * @param plan - The planned unit of work, children first.
+     * @param options - Delete options forwarded to every node.
+     * @returns True when the whole graph completed.
+     */
+    private async deleteGraph(plan: EntitySavePlan, options?: EntityDeleteOptions): Promise<boolean> {
+        this.RaiseEvent('graph_save_started', { NodeCount: plan.NodeCount, Operation: 'Delete' });
+        return this.executeGraphLocal(plan, undefined, options);
+    }
+
+    /**
+     * Executes a multi-node plan locally, inside a single provider transaction.
+     *
+     * Used when the provider reports {@link IMetadataProvider.SupportsEntityTransactions} — i.e.
+     * server-side. The transaction is provider-arbitrated, so this composes correctly whether it is
+     * the outermost unit of work or nested inside an application cascade that already opened one.
+     *
+     * @param plan - The plan to run.
+     * @param saveOptions - Options forwarded to save nodes.
+     * @param deleteOptions - Options forwarded to delete nodes.
+     * @returns True when every node succeeded and the transaction committed.
+     */
+    private async executeGraphLocal(
+        plan: EntitySavePlan,
+        saveOptions?: EntitySaveOptions,
+        deleteOptions?: EntityDeleteOptions,
+    ): Promise<boolean> {
+        const provider = this.ProviderToUse;
+        const scope =
+            provider?.SupportsEntityTransactions === true && provider.BeginEntityTransaction
+                ? await provider.BeginEntityTransaction()
+                : null;
+        const operation: 'save' | 'delete' = deleteOptions !== undefined ? 'delete' : 'save';
+
+        try {
+            const result = await ExecuteEntitySavePlan(plan, {
+                SaveOptions: saveOptions,
+                RootSaveOptions: this.buildRootSaveOptions(saveOptions),
+                DeleteOptions: deleteOptions,
+                RootDeleteOptions: this.buildRootDeleteOptions(deleteOptions),
+            });
+            if (!result.Success) {
+                await scope?.Rollback();
+                this.registerGraphFailure(result.ErrorMessage, operation);
+                this.RaiseEvent('graph_save', { Success: false, NodeCount: plan.NodeCount, Error: result.ErrorMessage });
+                return false;
+            }
+
+            await scope?.Commit();
+            this.acceptCompanionChanges();
+            this.RaiseEvent('graph_save', { Success: true, NodeCount: plan.NodeCount });
+            return true;
+        } catch (e) {
+            await scope?.Rollback();
+            const detail = e instanceof Error ? e.message : String(e);
+            LogError(`BaseEntity.executeGraphLocal failed for ${this.EntityInfo?.Name}: ${detail}`);
+            this.registerGraphFailure(detail, operation);
+            this.RaiseEvent('graph_save', { Success: false, NodeCount: plan.NodeCount, Error: detail });
+            return false;
+        }
+    }
+
+    /**
+     * Builds the save options for the graph's **root** node.
+     *
+     * Copies the caller's options onto a real `EntitySaveOptions` instance and stamps
+     * `IsGraphNodeSave`, which is what stops the root re-entering graph planning and lets it bypass
+     * its own in-flight save debounce.
+     *
+     * @param source - The caller's options, if any.
+     * @returns Options for the root node.
+     */
+    private buildRootSaveOptions(source?: EntitySaveOptions): EntitySaveOptions {
+        const options = Object.assign(new EntitySaveOptions(), source ?? {});
+        options.IsGraphNodeSave = true;
+        return options;
+    }
+
+    /**
+     * Builds the delete options for the graph's **root** node. Delete-path counterpart of
+     * {@link buildRootSaveOptions}.
+     *
+     * @param source - The caller's options, if any.
+     * @returns Options for the root node.
+     */
+    private buildRootDeleteOptions(source?: EntityDeleteOptions): EntityDeleteOptions {
+        const options = Object.assign(new EntityDeleteOptions(), source ?? {});
+        options.IsGraphNodeDelete = true;
+        return options;
+    }
+
+    /**
+     * Records a graph-level failure on this entity's result history.
+     *
+     * Without this the caller gets a bare `false` while `LatestResult` still holds the *root's*
+     * successful save — so a child failure reads as "it just didn't work". Mirrors the parent-chain
+     * failure handling in `_InnerSave`.
+     *
+     * @param message - The failure detail.
+     */
+    private registerGraphFailure(message: string | undefined, operation: 'save' | 'delete' = 'save'): void {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = operation === 'delete' ? 'delete' : this.IsSaved ? 'update' : 'create';
+        result.Message = message ?? 'Entity graph operation failed';
+        result.StartedAt = new Date();
+        result.EndedAt = new Date();
+        result.OriginalValues = this.Fields.map(f => ({ FieldName: f.CodeName, Value: f.OldValue }));
+        this.RegisterResultHistoryEntry(result);
+    }
+
+    /**
+     * Commits the transaction scope held by this entity, if any. Safe to call unconditionally — a
+     * no-op when this entity holds no scope.
+     */
+    private async commitEntityTransactionScope(): Promise<void> {
+        const scope = this._entityTransactionScope;
+        if (!scope) {
+            return;
+        }
+        this._entityTransactionScope = null;
+        await scope.Commit();
+    }
+
+    /**
+     * Rolls back the transaction scope held by this entity, if any. Safe to call unconditionally.
+     *
+     * Rollback failures are logged and swallowed: this runs on the failure path, and throwing here
+     * would replace the caller's real error with a secondary one that explains less.
+     */
+    private async rollbackEntityTransactionScope(): Promise<void> {
+        const scope = this._entityTransactionScope;
+        if (!scope) {
+            return;
+        }
+        this._entityTransactionScope = null;
+        try {
+            await scope.Rollback();
+        } catch (rollbackError) {
+            LogError(`Error rolling back entity transaction scope for ${this.EntityInfo?.Name}: ${rollbackError}`);
         }
     }
 
@@ -1643,14 +2198,32 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Returns true if the object is Dirty, meaning something has changed since it was last saved to the database, and false otherwise. For new records, this will always return true.
+     *
+     * @remarks
+     * Dirtiness rolls up **companions** as well as fields. Without that rollup, a clean parent with
+     * three brand-new children reports `Dirty === false`, `_InnerSave` takes its not-dirty early
+     * return, and the children are silently never persisted — the save reports success and writes
+     * nothing. See {@link EntityCompanion.Dirty}.
      */
     get Dirty(): boolean {
         if (!this.IsSaved) return true;
+        if (this.companionsDirty) return true;
         // Raw mode means LoadFromData populated us but no mutation has happened — nothing can be
         // dirty. Avoid hydrating just to check.
         if (!this._fieldsHydrated) return this._parentEntity?.Dirty ?? false;
         return this._Fields.some(f => f.Dirty) ||
                (this._parentEntity?.Dirty ?? false);
+    }
+
+    /**
+     * Whether any registered companion holds unsaved work.
+     *
+     * Guarded on {@link HasCompanions} so entities without companions — nearly all of them — do no
+     * extra work on this hot path.
+     */
+    private get companionsDirty(): boolean {
+        if (!this.HasCompanions) return false;
+        return this.Companions.some(c => c.Dirty);
     }
 
     /**
@@ -2069,6 +2642,17 @@ export abstract class BaseEntity<T = unknown> {
             }
         }
 
+        // Companion payloads ride along under a reserved key, following the convention already set
+        // by OldValues___ and RestoreContext___. This is what lets a composite cross the wire on any
+        // path that serialises via GetDataObject — including the TransactionGroup envelope, which
+        // carries whole records as EntityObjectJSON — with no change to the transport itself.
+        if (this.HasCompanions) {
+            const companions = await this.SerializeCompanions();
+            if (companions.length > 0) {
+                obj[COMPANION_PAYLOAD_KEY] = companions;
+            }
+        }
+
         return obj;
     }
 
@@ -2400,6 +2984,23 @@ export abstract class BaseEntity<T = unknown> {
             return this._InnerSave(options);
         }
 
+        // Executing our own node inside a graph we already planned. Bypass both the debounce and
+        // graph routing — see EntitySaveOptions.IsGraphNodeSave for why each matters.
+        if (options?.IsGraphNodeSave) {
+            return this._InnerSave(options);
+        }
+
+        // Composite routing: when companions contribute work, this save is a multi-record unit of
+        // work rather than a single row. Building the plan is cheap and, crucially, a plan with one
+        // node falls straight through to the ordinary path below — so entities without companions,
+        // and composites whose collections happen to be empty, behave exactly as they did before.
+        if (this.HasCompanions) {
+            const plan = this.BuildSavePlan();
+            if (plan.NodeCount > 1) {
+                return this.saveGraph(plan, options);
+            }
+        }
+
         // If a save is already in progress, return its promise.
         if (this._pendingSave$) {
             return firstValueFrom(this._pendingSave$);
@@ -2445,15 +3046,12 @@ export abstract class BaseEntity<T = unknown> {
             // IS-A orchestration: determine if this is the initiating save in a parent chain
             const isISAInitiator = (!!this._parentEntity) && !_options.IsParentEntitySave;
 
-            // Begin provider transaction if IS-A initiator and NOT in a TransactionGroup
-            // TransactionGroup manages its own atomicity; IS-A just orchestrates save order within it
-            if (isISAInitiator && !this.TransactionGroup) {
-                const txn = await this.ProviderToUse?.BeginISATransaction?.();
-                if (txn) {
-                    this.ProviderTransaction = txn;
-                    this.PropagateTransactionToParents();
-                }
-            }
+            // Open (or join) a transaction scope for the parent chain. The provider arbitrates:
+            // if a transaction is already in flight — an application cascade, an enclosing graph
+            // save — this joins it as a savepoint rather than starting a second physical
+            // transaction. Before 6.2 this path called BeginISATransaction(), which was blind to
+            // any existing transaction and produced torn writes; see EntityTransactionScope.
+            await this.beginEntityTransactionScope(isISAInitiator);
 
             // Save parent chain first (root → branch → immediate parent)
             // Parent calls Save() recursively which handles its own parents, permissions, validation
@@ -2471,7 +3069,7 @@ export abstract class BaseEntity<T = unknown> {
                 const parentResult = await this._parentEntity.Save(parentSaveOptions); // we know parent entity exists hre
                 if (!parentResult) {
                     // Parent save failed — rollback if we started the transaction
-                    await this.RollbackISATransaction(isISAInitiator);
+                    await this.rollbackEntityTransactionScope();
 
                     // RECORD the failure on THIS entity's ResultHistory before returning. Without
                     // this the caller gets `false` with LatestResult === null and an empty
@@ -2557,6 +3155,17 @@ export abstract class BaseEntity<T = unknown> {
                                 valResult.Errors.push(error);
                             });
                         }
+
+                        // Companion async validation runs REGARDLESS of skipAsyncValidation.
+                        //
+                        // That flag exists so an entity can opt out of its OWN expensive async
+                        // rules; applying it to companions silently disables cross-child invariants.
+                        // That is not hypothetical — it is exactly how OrderEntityServer's
+                        // ValidateAsync, holding both the "cannot confirm an order with no lines"
+                        // guard and the entire per-line validation loop, became dead code on every
+                        // save in production: the class never overrode DefaultSkipAsyncValidation
+                        // (which defaults to true) and no caller ever passed SkipAsyncValidation:false.
+                        await this.validateCompanionsAsync(valResult);
                     }
                     if (valResult.Success) {
                         // Run registered PreSave hooks (e.g., tenant validation)
@@ -2583,11 +3192,8 @@ export abstract class BaseEntity<T = unknown> {
                             // no transaction group, so we have our results here
                             const result = this.finalizeSave(data, saveSubType);
 
-                            // IS-A: commit transaction after successful save (only the initiator commits)
-                            if (isISAInitiator && this.ProviderTransaction) {
-                                await this.ProviderToUse.CommitISATransaction?.(this.ProviderTransaction);
-                                this.ProviderTransaction = null;
-                            }
+                            // Commit the scope this entity opened, if any (only the initiator holds one).
+                            await this.commitEntityTransactionScope();
 
                             return result;
                         }
@@ -2632,9 +3238,8 @@ export abstract class BaseEntity<T = unknown> {
                 return true; // nothing to save since we're not dirty
         }
         catch (e: any) {
-            // IS-A: rollback transaction on failure (only the initiator rolls back)
-            const isISAInitiator = this._parentEntity != null && !options?.IsParentEntitySave;
-            await this.RollbackISATransaction(isISAInitiator);
+            // Roll back the scope this entity opened, if any. No-op when it holds none.
+            await this.rollbackEntityTransactionScope();
 
             if (currentResultCount === this.ResultHistory.length) {
                 // this means that NO new results were added to the history anywhere
@@ -2701,20 +3306,6 @@ export abstract class BaseEntity<T = unknown> {
         return remainingChildren.length === 0;
     }
 
-    /**
-     * Helper to rollback an IS-A provider transaction if one is active.
-     * Only called by the IS-A initiator (the leaf entity that started the chain).
-     */
-    private async RollbackISATransaction(isInitiator: boolean): Promise<void> {
-        if (isInitiator && this.ProviderTransaction) {
-            try {
-                await this.ProviderToUse?.RollbackISATransaction?.(this.ProviderTransaction);
-            } catch (rollbackError) {
-                LogError(`Error rolling back IS-A transaction: ${rollbackError}`);
-            }
-            this.ProviderTransaction = null;
-        }
-    }
 
     private finalizeSave(data: any, saveSubType: BaseEntityEvent["saveSubType"]): boolean {
         if (data) {
@@ -2945,6 +3536,16 @@ export abstract class BaseEntity<T = unknown> {
             // Only runs for parent-type entities; idempotent via _childEntityDiscoveryDone.
             await this.InitializeChildEntity();
 
+            // Companions declared Load:'eager' populate here — and ONLY here.
+            //
+            // Deliberately not in LoadFromData(): that is the per-row materialisation path for
+            // RunView(ResultType:'entity_object'), so an eager child query there becomes one query
+            // per row of every view. That is a live N+1 in production accounting code today
+            // (JournalEntryEntityServer.LoadFromData → LoadLines), and excluding it here is the
+            // structural fix. Set-oriented eager loading is served by RunView's batched child
+            // loading, which issues one WHERE fk IN (...) for the whole result set.
+            await this.loadEagerCompanions();
+
             // Raise load completion event
             this.RaiseEvent('load_complete', { CompositeKey });
 
@@ -3111,7 +3712,28 @@ export abstract class BaseEntity<T = unknown> {
             this._everSaved = false; // Mark as NOT saved since we loaded from data without primary keys
         }
 
+        // Absorb any companion payload that travelled with this record. This is the receiving half
+        // of the reserved-key convention applied in GetDataObject(). Note this restores state the
+        // sender already had — it never issues a query, so it cannot reintroduce the N+1 that
+        // eager companion loading is kept out of this method to avoid.
+        await this.deserializeCompanionsFromData(data);
+
         return true;
+    }
+
+    /**
+     * Extracts and applies a companion payload carried inside a plain data object, if present.
+     *
+     * @param data - The plain object passed to {@link LoadFromData}.
+     */
+    private async deserializeCompanionsFromData(data: unknown): Promise<void> {
+        if (!this.HasCompanions || !data || typeof data !== 'object') {
+            return;
+        }
+        const payloads = (data as Record<string, unknown>)[COMPANION_PAYLOAD_KEY];
+        if (Array.isArray(payloads)) {
+            await this.DeserializeCompanions(payloads as EntityCompanionPayload[]);
+        }
     }
 
     /**
@@ -3146,7 +3768,49 @@ export abstract class BaseEntity<T = unknown> {
             result.Success = result.Success && err.Success; // if any field fails, we fail, but keep going to get all of the validation messages
         }
 
+        // Companions validate LAST but still BEFORE any write, over their complete state including
+        // pending removals. That ordering is what lets a cross-child invariant — "debits must equal
+        // credits", "a confirmed order must have lines" — be enforced against the whole graph rather
+        // than discovered halfway through persisting it.
+        this.validateCompanions(result);
+
         return result;
+    }
+
+    /**
+     * Fans synchronous validation out to every registered companion.
+     *
+     * @param result - The accumulating result companions contribute to.
+     */
+    private validateCompanions(result: ValidationResult): void {
+        if (!this.HasCompanions) {
+            return;
+        }
+        for (const companion of this.Companions) {
+            companion.Validate(result);
+        }
+    }
+
+    /**
+     * Fans asynchronous validation out to every registered companion.
+     *
+     * @remarks
+     * Called from `_InnerSave` **independently of `DefaultSkipAsyncValidation`**. That flag lets an
+     * entity opt out of its *own* expensive async rules; extending it to companions silently
+     * disabled cross-child invariants, which is precisely how `OrderEntityServer.ValidateAsync` —
+     * containing both the "cannot confirm an order with no lines" guard and the entire per-line
+     * validation loop — became dead code on every save in production. Companion async validation
+     * runs whenever companions are present.
+     *
+     * @param result - The accumulating result companions contribute to.
+     */
+    private async validateCompanionsAsync(result: ValidationResult): Promise<void> {
+        if (!this.HasCompanions) {
+            return;
+        }
+        for (const companion of this.Companions) {
+            await companion.ValidateAsync(result);
+        }
     }
     
     /**
@@ -3194,6 +3858,22 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Promise<boolean>
      */
     public async Delete(options?: EntityDeleteOptions) : Promise<boolean> {
+        // Executing our own node inside a delete graph we already planned. Bypass both the debounce
+        // and graph routing — see EntityDeleteOptions.IsGraphNodeDelete.
+        if (options?.IsGraphNodeDelete) {
+            return this._InnerDelete(options);
+        }
+
+        // Composite routing: companions that own their children (OnRemove:'delete') contribute
+        // child deletions that must run before this row disappears. A single-node plan falls
+        // through to the ordinary path, so nothing changes for entities without companions.
+        if (this.HasCompanions) {
+            const plan = this.BuildDeletePlan();
+            if (plan.NodeCount > 1) {
+                return this.deleteGraph(plan, options);
+            }
+        }
+
         // If a delete is already in progress, return its promise.
         if (this._pendingDelete$) {
             return firstValueFrom(this._pendingDelete$);
@@ -3274,14 +3954,10 @@ export abstract class BaseEntity<T = unknown> {
                     }
                 }
 
-                // Begin provider transaction if IS-A initiator and NOT in a TransactionGroup
-                if (isISAInitiator && !this.TransactionGroup) {
-                    const txn = await this.ProviderToUse?.BeginISATransaction?.();
-                    if (txn) {
-                        this.ProviderTransaction = txn;
-                        this.PropagateTransactionToParents();
-                    }
-                }
+                // Open (or join) a transaction scope for the parent chain — see the matching
+                // comment in _InnerSave and EntityTransactionScope for why this is provider-
+                // arbitrated rather than IS-A-specific.
+                await this.beginEntityTransactionScope(isISAInitiator);
 
                 this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
 
@@ -3316,7 +3992,7 @@ export abstract class BaseEntity<T = unknown> {
                             const parentResult = await this._parentEntity.Delete(parentDeleteOptions);
                             if (!parentResult) {
                                 // Parent delete failed — rollback if we started the transaction
-                                await this.RollbackISATransaction(isISAInitiator);
+                                await this.rollbackEntityTransactionScope();
 
                                 // RECORD the failure on THIS entity's ResultHistory before returning —
                                 // symmetric with the parent-SAVE-failure path in _InnerSave. Without this
@@ -3350,11 +4026,8 @@ export abstract class BaseEntity<T = unknown> {
                         }
                     }
 
-                    // IS-A: commit transaction after successful chain delete
-                    if (isISAInitiator && this.ProviderTransaction) {
-                        await this.ProviderToUse.CommitISATransaction?.(this.ProviderTransaction);
-                        this.ProviderTransaction = null;
-                    }
+                    // Commit the scope this entity opened, if any (only the initiator holds one).
+                    await this.commitEntityTransactionScope();
 
                     if (!this.TransactionGroup) {
                         // NOT part of a transaction - raise event immediately
@@ -3404,9 +4077,8 @@ export abstract class BaseEntity<T = unknown> {
             }
         }
         catch (e) {
-            // IS-A: rollback transaction on failure (only the initiator rolls back)
-            const isISAInitiator = this._parentEntity != null && !options?.IsParentEntityDelete;
-            await this.RollbackISATransaction(isISAInitiator);
+            // Roll back the scope this entity opened, if any. No-op when it holds none.
+            await this.rollbackEntityTransactionScope();
 
             if (currentResultCount === this.ResultHistory.length) {
                 // this means that NO new results were added to the history anywhere

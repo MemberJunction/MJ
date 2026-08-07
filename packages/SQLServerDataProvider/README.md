@@ -668,12 +668,26 @@ MemberJunction supports IS-A type relationships where child entities inherit fro
 
 When you save or delete an entity that participates in an IS-A hierarchy, SQLServerDataProvider automatically:
 
-1. **Creates a SQL Transaction**: The initiating (leaf) entity calls `BeginISATransaction()` to create a new `sql.Transaction` on the connection pool
-2. **Propagates the Transaction**: The transaction is stored in `BaseEntity.ProviderTransaction` and shared across all entities in the parent chain
-3. **Executes Operations in Order**:
-   - For **saves**: Parent entities are saved first, then the child entity uses the parent's ID
-   - For **deletes**: The child entity is deleted first, then parents are deleted in reverse order
-4. **Commits or Rolls Back**: `CommitISATransaction()` commits all changes, or `RollbackISATransaction()` reverts everything on failure
+1. **Opens or joins a transaction scope**: the initiating (leaf) entity calls `BeginEntityTransaction()`, inherited from `DatabaseProviderBase`. This delegates to the provider's depth-counted `BeginTransaction()`, so it starts a physical transaction **or joins one already in flight** as a `SAVE TRANSACTION` savepoint.
+2. **Runs every statement in that transaction**: no handle is propagated along the chain — `ExecuteSQL` picks up the provider's ambient transaction whenever no explicit `connectionSource` is supplied.
+3. **Executes operations in order**:
+   - For **saves**: parent entities are saved first, then the child entity uses the parent's ID
+   - For **deletes**: the child entity is deleted first, then parents are deleted in reverse order
+4. **Commits or rolls back**: `scope.Commit()` / `scope.Rollback()`. The scope is settle-once, and only the outermost scope commits the physical transaction.
+
+> #### ⚠️ Changed in 6.2 — `BeginISATransaction` is deprecated
+>
+> IS-A previously used a dedicated trio (`BeginISATransaction` / `CommitISATransaction` /
+> `RollbackISATransaction`) that opened a **brand-new physical transaction on the pool with no depth
+> awareness**, while `BeginTransaction()` — used by every hand-written application cascade — is
+> depth-counted and savepoint-aware.
+>
+> The two were blind to each other. An IS-A entity saved inside an application transaction wrote
+> into **two independent physical transactions on the same pool**: rolling one back left the other
+> committed, and no error was raised. Unifying both onto `BeginEntityTransaction()` closes that.
+>
+> The three `*ISATransaction` methods remain for external callers and are slated for removal in 7.0.
+> New code should use `BeginEntityTransaction()` or `RunInEntityTransaction()`.
 
 ### Transaction Lifecycle
 
@@ -696,9 +710,16 @@ const result = await meeting.Save();
 
 ### Key Methods
 
-- `BeginISATransaction()`: Creates a new `sql.Transaction` on the connection pool and stores it in `BaseEntity.ProviderTransaction`
-- `CommitISATransaction()`: Commits the shared transaction across the entire IS-A chain
-- `RollbackISATransaction()`: Rolls back all changes if any operation in the chain fails
+- `BeginEntityTransaction()` *(inherited from `DatabaseProviderBase`)*: returns a settle-once `EntityTransactionScope`. Starts a physical transaction, or joins one already in flight. **This is the primitive to use** — for IS-A chains, composite entity graphs and hand-written cascades alike.
+- `BeginTransaction()` / `CommitTransaction()` / `RollbackTransaction()`: the underlying depth-counted ambient transaction (savepoints at depth ≥ 2, serialization against an in-flight outermost begin). `BeginEntityTransaction()` is a thin wrapper over these; prefer the wrapper so the settle-once contract is enforced for you.
+- `BeginISATransaction()` / `CommitISATransaction()` / `RollbackISATransaction()`: **deprecated (6.2)**, no longer called by MJ core. See the warning above.
+
+> **Concurrency**: the ambient transaction is a field on the *provider instance*, not a global.
+> MJServer builds per-request providers (`createPerRequestProviders`), so an ambient transaction is
+> effectively request-scoped. Long-lived single-provider processes (CLI tools, workers) must not run
+> concurrent transactional work on one provider instance.
+
+See [Transactions, Batching & Entity Graphs](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md).
 
 ### Benefits
 

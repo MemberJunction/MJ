@@ -6,6 +6,7 @@ import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDu
 import { dispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
+import { EntityTransactionScope } from "./entityTransactionScope";
 import { LogError } from "./logging";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
@@ -160,6 +161,62 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public get IsInTransaction(): boolean {
         return false;
+    }
+
+    /**
+     * Database providers execute multi-record units of work atomically, in-process.
+     *
+     * @see ProviderBase.SupportsEntityTransactions for why the base default is `false`.
+     */
+    public override get SupportsEntityTransactions(): boolean {
+        return true;
+    }
+
+    /**
+     * Begins a transaction scope, or joins one already in flight on this provider.
+     *
+     * This is the single transaction primitive for all multi-record entity work — IS-A parent
+     * chains, composite save graphs and hand-written application cascades. It delegates to the
+     * provider's existing depth-counted {@link BeginTransaction} / {@link CommitTransaction} /
+     * {@link RollbackTransaction}, which already implement the join semantics: the outermost call
+     * issues a physical `BEGIN`, nested calls create savepoints, and only the outermost commit
+     * commits for real.
+     *
+     * Routing IS-A through here is what closed the torn-write bug described in
+     * {@link EntityTransactionScope} — the previous `BeginISATransaction()` opened a *second*
+     * physical transaction on the same pool, blind to any transaction the caller had already
+     * started.
+     *
+     * The returned scope is **settle-once**: the first `Commit()` or `Rollback()` wins and later
+     * calls are no-ops, so `try { ...; Commit() } catch { Rollback() }` is safe even when the work
+     * already unwound its own scope.
+     *
+     * @returns A scope bound to this provider's ambient transaction.
+     */
+    public async BeginEntityTransaction(): Promise<EntityTransactionScope> {
+        // Capture nesting BEFORE beginning: once BeginTransaction() returns we are, by definition,
+        // in a transaction, so asking afterwards would always answer "nested".
+        const isNested = this.IsInTransaction;
+        await this.BeginTransaction();
+
+        let settled = false;
+        const settle = async (commit: boolean): Promise<void> => {
+            if (settled) {
+                return; // settle-once: the first outcome wins
+            }
+            settled = true;
+            if (commit) {
+                await this.CommitTransaction();
+            } else {
+                await this.RollbackTransaction();
+            }
+        };
+
+        return {
+            IsNested: isNested,
+            Commit: () => settle(true),
+            Rollback: () => settle(false),
+        };
     }
 
     /**

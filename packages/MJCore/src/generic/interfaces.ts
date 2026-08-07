@@ -10,6 +10,7 @@ import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
+import { EntityTransactionScope } from "./entityTransactionScope";
 
 /**
  * Base configuration class for data providers.
@@ -259,22 +260,59 @@ export interface IEntityDataProvider {
     FindISAChildEntities?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string }[]>;
 
     /**
+     * Whether this provider can execute a multi-record unit of work atomically, in-process.
+     *
+     * `true` for server-side database providers (`DatabaseProviderBase` and subclasses); `false`
+     * for client-side providers such as `GraphQLDataProvider`, which have no local transaction to
+     * begin. `BaseEntity` reads this to decide whether to run a multi-node save graph locally or
+     * route the whole unit of work to the server — see
+     * `guides/TRANSACTIONS_AND_BATCHING_GUIDE.md`.
+     *
+     * Optional on the interface so that external `IMetadataProvider` implementations are not broken
+     * by its introduction; `ProviderBase` supplies a concrete `false` default, so every provider in
+     * this repository answers it.
+     */
+    readonly SupportsEntityTransactions?: boolean;
+
+    /**
+     * Begins a provider-arbitrated transaction scope, or joins one already in flight.
+     *
+     * This is the single transaction primitive for **all** multi-record entity work — IS-A parent
+     * chains, composite graph saves and hand-written application cascades alike. Participants never
+     * ask whether someone else already opened a transaction; the provider arbitrates. See
+     * {@link EntityTransactionScope} for the full rationale, including the torn-write bug that the
+     * previous IS-A-specific trio caused.
+     *
+     * Only implemented where {@link SupportsEntityTransactions} is `true`.
+     *
+     * @returns A settle-once scope. Always pair with `Commit()` / `Rollback()`, or use
+     *          `RunInEntityTransaction()` which does that for you.
+     */
+    BeginEntityTransaction?(): Promise<EntityTransactionScope>;
+
+    /**
      * Begin an independent provider-level transaction for IS-A chain orchestration.
-     * Returns a provider-specific transaction object (e.g., sql.Transaction for SQLServer).
-     * Separate from the provider's internal transaction management (TransactionGroup system).
-     * Optional — client-side providers (GraphQL) do not implement this.
+     *
+     * @deprecated Since 6.2. Superseded by {@link BeginEntityTransaction}, which participates in
+     * the provider's depth-counted ambient transaction instead of opening a second, independent
+     * physical transaction on the same pool. The old behaviour caused torn writes whenever an IS-A
+     * save ran inside an application transaction: the two mechanisms were blind to each other, so
+     * rolling one back left the other committed. Retained only for external callers; MJ core no
+     * longer calls it. Will be removed in 7.0.
      */
     BeginISATransaction?(): Promise<unknown>;
 
     /**
      * Commit an IS-A chain transaction.
      * @param txn The transaction object returned from BeginISATransaction()
+     * @deprecated Since 6.2. Use {@link BeginEntityTransaction} and `scope.Commit()`.
      */
     CommitISATransaction?(txn: unknown): Promise<void>;
 
     /**
      * Rollback an IS-A chain transaction.
      * @param txn The transaction object returned from BeginISATransaction()
+     * @deprecated Since 6.2. Use {@link BeginEntityTransaction} and `scope.Rollback()`.
      */
     RollbackISATransaction?(txn: unknown): Promise<void>;
 }
@@ -353,6 +391,25 @@ export class EntitySaveOptions {
      * Only set when IsParentEntitySave is true.
      */
     ISAActiveChildEntityName?: string;
+
+    /**
+     * When true, this `Save()` is the execution of a single node inside an entity save graph that
+     * has already been planned.
+     *
+     * Two things depend on it, and both are load-bearing:
+     *
+     * 1. **Recursion guard.** Without it the root's own node would call `Save()`, which would build
+     *    another plan, which would execute another root node, forever.
+     * 2. **Debounce bypass.** `Save()` returns the in-flight `_pendingSave$` when one exists. The
+     *    root's node runs *inside* that in-flight save, so it would await the promise it is itself
+     *    responsible for resolving — a circular wait that hangs. Mirrors the same bypass
+     *    {@link IsParentEntitySave} performs for IS-A parent chains.
+     *
+     * Set only by the graph executor, and only on the **root** node. Child nodes deliberately do
+     * not receive it so that a child with companions of its own still builds and runs its own
+     * sub-graph — which is how nesting (payment → line → allocation) works.
+     */
+    IsGraphNodeSave?: boolean = false;
 }
 
 /**
@@ -383,6 +440,16 @@ export class EntityDeleteOptions {
      * then cascades deletion to its parent.
      */
     IsParentEntityDelete?: boolean = false;
+
+    /**
+     * When true, this `Delete()` is the execution of a single node inside an entity delete graph
+     * that has already been planned.
+     *
+     * Serves the same two purposes as {@link EntitySaveOptions.IsGraphNodeSave} — recursion guard
+     * and debounce bypass — on the delete path. Set only by the graph executor, and only on the
+     * root node.
+     */
+    IsGraphNodeDelete?: boolean = false;
 }
 
 /**

@@ -256,6 +256,49 @@ LogError(`Error: ${entity.LatestResult?.Message}`); // Incomplete info
 - **Never** wrap `Save()`/`Delete()` in try/catch expecting them to throw on business logic failures
 - Save/Delete CAN still throw for infrastructure errors (network, connection), but logical failures (validation, permissions, FK violations) return `false`
 
+### Saving a parent AND its children — use an entity graph, not a hand-rolled cascade
+
+**Do not hand-roll a parent/children save.** Declaring a child collection gets you atomicity,
+validation ordering, dirty tracking, orphan handling and client/server parity for free — and avoids
+the five defects every hand-rolled version in this codebase has shipped at least one of.
+
+```typescript
+// On a SHARED (client + server) entity subclass — not a server-only one
+public readonly Lines = this.DeclareChildren<OrderLineEntity>({
+    Name: 'Lines',
+    ChildEntity: 'MJ_BizApps_Orders: Order Lines',
+    ForeignKey: 'OrderHeaderID',
+    OrderBy: 'LineNumber ASC',
+    Load: 'explicit',                        // 'eager' | 'explicit' | 'never'
+    OnRemove: 'delete',                      // 'delete' | 'orphan' | 'refuse'
+    Sequence: { Field: 'LineNumber', From: 1 },
+});
+
+// Then, on either tier:
+await order.Save();   // header + lines, atomically
+```
+
+**The three mechanisms are not interchangeable:**
+
+| Need | Use | Never use |
+|---|---|---|
+| Parent + its children | `DeclareChildren()` + `entity.Save()` | ❌ a TransactionGroup — saves are *deferred*, so the parent's PK is unavailable, there is no read-your-writes, and `Save()` returns `true` before anything persists |
+| Several server-side writes together | `RunInEntityTransaction(this.ProviderToUse, work)` | ❌ `ProviderToUse as DatabaseProviderBase` then `BeginTransaction()` — that cast is what makes a class server-only |
+| Unrelated records in one client round trip | TransactionGroup + `Submit()` | — |
+
+Other rules that follow from this:
+
+- **`Load: 'eager'` never fires from `LoadFromData()`.** For result sets use
+  `RunView({ ..., ResultType: 'entity_object', IncludeChildren: ['Lines'] })`, which costs `1 + K`
+  queries instead of N+1.
+- **Declare collections on a shared subclass**, with server-only behaviour in a class that extends
+  it. `ClassFactory` priority auto-increments by load order, so the server subclass wins server-side
+  with no configuration — and the browser still sees the collection.
+- **`BeginISATransaction()` is deprecated (6.2).** Use `BeginEntityTransaction()`.
+
+Read [`guides/TRANSACTIONS_AND_BATCHING_GUIDE.md`](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md)
+before writing anything that saves more than one record together.
+
 ### 🚨 NEVER WRITE DIRECT SQL DML AGAINST AN ENTITY — unless it opts in
 
 **Do not write `INSERT`, `UPDATE`, or `DELETE` against an entity's base table.** All mutations go through `BaseEntity.Save()` / `.Delete()`, because that is the only path where the platform's guarantees actually run:

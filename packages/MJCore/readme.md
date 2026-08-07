@@ -130,7 +130,13 @@ flowchart LR
 | `securityInfo.ts` | Security classes: `UserInfo`, `RoleInfo`, `AuthorizationInfo`, `AuditLogTypeInfo` |
 | `interfaces.ts` | Core interfaces: `IMetadataProvider`, `IEntityDataProvider`, `IRunViewProvider`, etc. |
 | `compositeKey.ts` | `CompositeKey` and `KeyValuePair` for multi-field primary key support |
-| `transactionGroup.ts` | `TransactionGroupBase` for atomic multi-entity operations |
+| `transactionGroup.ts` | `TransactionGroupBase` — an *arbitrary batch* facility for shipping unrelated records in one atomic round trip (saves are deferred; not for parent/children) |
+| `entityTransactionScope.ts` | `EntityTransactionScope` + `RunInEntityTransaction()` — the one provider-arbitrated transaction primitive, shared by IS-A, composites and application cascades |
+| `entityCompanion.ts` | `EntityCompanion` — named, serialisable state attached to a record (the "bag") |
+| `childCollection.ts` | `ChildCollection<T>` — the typed parent/children companion |
+| `childCollectionBatchLoader.ts` | One batched child query per collection across a whole result set (`RunView.IncludeChildren`) |
+| `entitySavePlan.ts` | `EntitySavePlan` + executor — the ordered unit of work a composite save produces |
+| `saveEntityGraphOperation.ts` | `MJ.SaveEntityGraph` — routes a whole composite save to the server from a client provider |
 | `baseEngine.ts` | `BaseEngine` abstract singleton for building services with auto-loaded data |
 | `runQuery.ts` | `RunQuery` class for secure parameterized query execution |
 | `runReport.ts` | `RunReport` class for report generation |
@@ -796,6 +802,89 @@ const results = await txGroup.Submit();
 
 Each `TransactionResult` in the returned array contains a `Success` flag. If any operation fails, all are rolled back.
 
+> **A TransactionGroup is an *arbitrary batch* facility, not a composite-save engine.** Under a
+> transaction group `Save()` **defers**: the provider only registers an instruction, so the entity
+> returns `true` before anything persists, the primary key is unavailable afterwards, there is no
+> read-your-writes, and ordering is array position with a flat `Define`/`Use` variable namespace.
+> To save a parent *and its children*, use an **entity graph** (below), not a transaction group.
+> Full comparison: [Transactions, Batching & Entity Graphs](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md).
+
+---
+
+### Entity Companions & Composite Graph Saves
+
+A **companion** is named, serialisable state attached to a record that is not one of its fields —
+most commonly a collection of child records. Companions load, validate, serialise and persist with
+their parent, on **both tiers**, from one call: `entity.Save()`.
+
+Declare a child collection on a **shared (client + server)** entity subclass:
+
+```typescript
+@RegisterClass(BaseEntity, 'MJ_BizApps_Orders: Orders')
+export class OrderEntity extends mjBizAppsOrdersOrderEntity {
+    public readonly Lines = this.DeclareChildren<OrderLineEntity>({
+        Name: 'Lines',
+        ChildEntity: 'MJ_BizApps_Orders: Order Lines',
+        ForeignKey: 'OrderHeaderID',
+        OrderBy: 'LineNumber ASC',
+        Load: 'explicit',                        // 'eager' | 'explicit' | 'never'
+        OnRemove: 'delete',                      // 'delete' | 'orphan' | 'refuse'
+        Sequence: { Field: 'LineNumber', From: 1 },
+    });
+
+    public override Validate(): ValidationResult {
+        const result = super.Validate();         // fans out to every companion
+        assertHasLines(this.Lines.Items, result);// sees the WHOLE graph, before any write
+        return result;
+    }
+}
+```
+
+```typescript
+const order = await md.GetEntityObject<OrderEntity>('MJ_BizApps_Orders: Orders');
+order.NewRecord();
+(await order.Lines.Create()).Quantity = 2;
+(await order.Lines.Create()).Quantity = 5;
+await order.Save();      // header + both lines, atomically
+```
+
+**How it executes.** `Save()` builds an `EntitySavePlan`. A single-node plan takes the ordinary
+save path unchanged. A multi-node plan runs:
+
+| Provider | Behaviour |
+|---|---|
+| `SupportsEntityTransactions === true` (server) | Executes locally inside one transaction scope |
+| `false` (browser) | Serialises the graph and routes the whole unit of work to the server via the `MJ.SaveEntityGraph` remote operation, which rebuilds the records as their **server-side** subclasses and runs the same local executor there |
+
+There is exactly one cascade implementation; the remote path relocates it rather than
+reimplementing it.
+
+**Platform guarantees are preserved.** Every node is persisted via that record's own `Save()` /
+`Delete()` — never direct SQL — so Record Changes, entity actions, validation, subclass overrides,
+`PreSave` hooks, `save_started` / `save` / `delete` events and cache invalidation all fire per node.
+The root additionally raises `graph_save_started` and `graph_save` so a UI can refresh once per unit
+of work.
+
+**Loading.** `Load: 'eager'` is honoured by `Load()` and **never** by `LoadFromData()` — that method
+is the per-row materialisation path for `RunView(ResultType:'entity_object')`, so loading children
+there degrades a view into N+1 queries. For result sets, ask for children explicitly and get one
+batched query per collection:
+
+```typescript
+const result = await rv.RunView<OrderEntity>({
+    EntityName: 'MJ_BizApps_Orders: Orders',
+    ResultType: 'entity_object',
+    IncludeChildren: ['Lines'],   // 1 query for ALL orders' lines, not one per order
+});
+```
+
+**Key APIs:** `BaseEntity.DeclareChildren()`, `RegisterCompanion()`, `GetCompanion()`,
+`Companions`, `SerializeCompanions()`, `DeserializeCompanions()`; `ChildCollection<T>`
+(`Items`, `Removed`, `Add`, `Create`, `Remove`, `Load`, `Dirty`); `EntityCompanion` (subclass for a
+new *kind* of companion); `EntitySavePlan`.
+
+Full guide: [Transactions, Batching & Entity Graphs](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md).
+
 ---
 
 ### Datasets
@@ -1185,8 +1274,30 @@ abstract class DatabaseProviderBase extends ProviderBase {
     abstract BeginTransaction(): Promise<void>;
     abstract CommitTransaction(): Promise<void>;
     abstract RollbackTransaction(): Promise<void>;
+
+    // The unified, provider-arbitrated transaction primitive (6.2+). Starts a transaction or joins
+    // one already in flight. Used by IS-A chains, composite graph saves, and application cascades
+    // alike — so none of them has to know about the others.
+    get SupportsEntityTransactions(): boolean;                    // true here, false on ProviderBase
+    BeginEntityTransaction(): Promise<EntityTransactionScope>;
 }
 ```
+
+**Prefer `BeginEntityTransaction()` / `RunInEntityTransaction()` over calling `BeginTransaction()`
+directly.** The scope is settle-once and composes with any transaction already open:
+
+```typescript
+import { RunInEntityTransaction } from '@memberjunction/core';
+
+await RunInEntityTransaction(this.ProviderToUse, async () => {
+    await header.Save();
+    for (const line of lines) { line.HeaderID = header.ID; await line.Save(); }
+});
+```
+
+See [Transactions, Batching & Entity Graphs](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md) for
+the difference between provider transactions, Transaction Groups, and entity graphs — and for why
+the `BeginISATransaction` trio was retired in 6.2.
 
 ---
 
