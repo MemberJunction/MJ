@@ -25,10 +25,11 @@
  *
  * Deterministic — no model calls. TG2 creates one task and the bundle Teardown removes it.
  */
-import { BaseRemotableOperation, Metadata, RunView } from '@memberjunction/core';
+import { BaseRemotableOperation, RunView } from '@memberjunction/core';
+import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
-import { LoadTaskGraphOperations, TaskGraphService, type TaskGraphSpec } from '@memberjunction/task-graph';
+import { LoadTaskGraphOperations, TaskGraphService } from '@memberjunction/task-graph';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -51,6 +52,21 @@ const TASK_GRAPH_OPERATION_KEYS = [
     'TaskGraph.GetStatus',
 ] as const;
 
+/**
+ * The D3 launch opt-ins. Workflow Planner is on this list although the plan's own opt-in list omits
+ * it — emitting task graphs is that agent's entire job, so leaving it gated would break it outright.
+ */
+const OPTED_IN_AGENTS = [
+    'Sage',
+    'Workflow Planner',
+    'Query Builder',
+    'Research Agent',
+    'Research Report Writer',
+    'Database Research Agent',
+    'File Research Agent',
+    'Web Research Agent',
+] as const;
+
 const TASK_NAME = 'mj-integration-test-task-graph-columns (safe to delete)';
 const CREATED_TASK_IDS: string[] = [];
 const CREATED_TASK_TYPE_IDS: string[] = [];
@@ -59,7 +75,7 @@ const CREATED_PARENT_IDS: string[] = [];
 
 /** Resolves a TaskType, creating a disposable one if the install has none. */
 async function resolveTaskTypeID(ctx: IntegrationCheckContext): Promise<string> {
-    const existing = await new RunView().RunView<{ ID: string }>(
+    const existing = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
         { EntityName: 'MJ: Task Types', Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
     );
     const found = existing.Results?.[0]?.ID;
@@ -77,7 +93,7 @@ async function resolveTaskTypeID(ctx: IntegrationCheckContext): Promise<string> 
 
 /** Resolves any real agent name, so a graph can be well-formed without hardcoding one. */
 async function resolveAgentName(ctx: IntegrationCheckContext): Promise<string> {
-    const res = await new RunView().RunView<{ Name: string }>(
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Name: string }>(
         { EntityName: 'MJ: AI Agents', Fields: ['Name'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
     );
     const name = res.Results?.[0]?.Name;
@@ -87,7 +103,7 @@ async function resolveAgentName(ctx: IntegrationCheckContext): Promise<string> {
 
 /** Counts parent tasks by name — used to prove a rejected graph persisted nothing. */
 async function countTasksNamed(ctx: IntegrationCheckContext, name: string): Promise<number> {
-    const res = await new RunView().RunView<{ ID: string }>(
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
         { EntityName: 'MJ: Tasks', ExtraFilter: `Name='${name.replace(/'/g, "''")}'`, Fields: ['ID'], ResultType: 'simple' },
         ctx.User,
     );
@@ -96,7 +112,7 @@ async function countTasksNamed(ctx: IntegrationCheckContext, name: string): Prom
 
 /** Submission context bound to the check's provider + user. */
 async function buildSubmitContext(ctx: IntegrationCheckContext) {
-    const res = await new RunView().RunView<{ ID: string }>(
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
         { EntityName: 'MJ: Environments', Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
     );
     const environmentID = res.Results?.[0]?.ID;
@@ -126,7 +142,7 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
         Id: 'task-graph-orchestration.TG2',
         Name: 'TG2: the Phase 1 payload/claim columns round-trip through the entity layer',
         Fn: async (ctx: IntegrationCheckContext) => {
-            const envRes = await new RunView().RunView<{ ID: string }>(
+            const envRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
                 { EntityName: 'MJ: Environments', Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
             );
             const environmentID = envRes.Results?.[0]?.ID;
@@ -148,7 +164,7 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
             CREATED_TASK_IDS.push(task.ID);
 
             await settle(250);
-            const reread = await new RunView().RunView<MJTaskEntity>(
+            const reread = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTaskEntity>(
                 { EntityName: 'MJ: Tasks', ExtraFilter: `ID='${task.ID}'`, ResultType: 'entity_object' }, ctx.User,
             );
             const row = reread.Results?.[0];
@@ -256,7 +272,7 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
             CREATED_PARENT_IDS.push(result.ParentTaskID!);
 
             await settle(300);
-            const children = await new RunView().RunView<MJTaskEntity>(
+            const children = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTaskEntity>(
                 { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${result.ParentTaskID}'`, ResultType: 'entity_object' }, ctx.User,
             );
             AssertEqual(children.Results?.length ?? 0, 2, 'both child tasks persisted');
@@ -267,7 +283,7 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
             Assert(!(first!.Description ?? '').includes('__TASK_METADATA__'), 'Description carries no legacy marker');
 
             const ids = children.Results!.map((c) => `'${c.ID}'`).join(',');
-            const deps = await new RunView().RunView(
+            const deps = await RunView.FromMetadataProvider(ctx.Provider).RunView(
                 { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${ids})`, ResultType: 'simple' }, ctx.User,
             );
             AssertEqual(deps.Results?.length ?? 0, 1, 'the a->b dependency edge persisted');
@@ -288,7 +304,7 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
             //   2. The row exists but the implementing subclass never registers \u2014 routing resolves
             //      to the CodeGen-emitted, contract-only base, whose InternalExecute does nothing.
             //      A key typo between the metadata row and `@RegisterClass` produces exactly this.
-            const rows = await new RunView().RunView<{ OperationKey: string; Status: string }>(
+            const rows = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ OperationKey: string; Status: string }>(
                 {
                     EntityName: 'MJ: Remote Operations',
                     ExtraFilter: `OperationKey LIKE 'TaskGraph.%'`,
@@ -317,7 +333,55 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
                     `so every call would succeed at the transport and do nothing`,
                 );
             }
-            console.log(`      \u2192 ${TASK_GRAPH_OPERATION_KEYS.length} task-graph operations published and implemented`);
+            console.log(`      → ${TASK_GRAPH_OPERATION_KEYS.length} task-graph operations published and implemented`);
+        }
+    },
+    {
+        Id: 'task-graph-orchestration.TG8',
+        Name: 'TG8: the launch opt-in agents carry enableTaskGraphs, and the Loop default stays OFF',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // The gate is metadata-driven, so it can be wrong in two directions and the build
+            // catches neither. Opting an agent in but never pushing the metadata leaves it unable to
+            // delegate at all (Sage's entire delegation path runs through 'Tasks'); leaving the Loop
+            // TYPE default on would hand durable reach to every Loop agent in the install at once.
+            const agents = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Name: string; AgentTypePromptParams: string | null }>(
+                {
+                    EntityName: 'MJ: AI Agents',
+                    ExtraFilter: `Name IN (${OPTED_IN_AGENTS.map((n) => `'${n.replace(/'/g, "''")}'`).join(',')})`,
+                    Fields: ['Name', 'AgentTypePromptParams'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            Assert(agents.Success, `could not read MJ: AI Agents: ${agents.ErrorMessage}`);
+
+            const byName = new Map((agents.Results ?? []).map((a) => [a.Name, a.AgentTypePromptParams]));
+            for (const name of OPTED_IN_AGENTS) {
+                Assert(byName.has(name), `agent '${name}' not found — was the metadata pushed?`);
+                const raw = byName.get(name);
+                Assert(!!raw, `agent '${name}' has no AgentTypePromptParams`);
+                const params = JSON.parse(raw!) as { enableTaskGraphs?: unknown };
+                AssertEqual(params.enableTaskGraphs, true, `agent '${name}' is not opted into task graphs`);
+            }
+
+            // And the type-level default must remain false, so opting in stays a deliberate act.
+            const types = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ PromptParamsSchema: string | null }>(
+                {
+                    EntityName: 'MJ: AI Agent Types',
+                    ExtraFilter: `Name='Loop'`,
+                    Fields: ['PromptParamsSchema'],
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            const schemaRaw = types.Results?.[0]?.PromptParamsSchema;
+            Assert(!!schemaRaw, 'the Loop agent type has no PromptParamsSchema');
+            const schema = JSON.parse(schemaRaw!) as { properties?: { enableTaskGraphs?: { default?: unknown } } };
+            const declared = schema.properties?.enableTaskGraphs;
+            Assert(!!declared, 'PromptParamsSchema does not declare enableTaskGraphs');
+            AssertEqual(declared!.default, false, 'the Loop enableTaskGraphs default must stay FALSE');
+
+            console.log(`      → ${OPTED_IN_AGENTS.length} agents opted in; Loop type default is off`);
         }
     },
 ];
@@ -332,13 +396,13 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('task-graph-orchestration', 
     Teardown: async (ctx: IntegrationCheckContext) => {
         // Submitted graphs first: dependency edges, then children, then the parent.
         for (const parentID of CREATED_PARENT_IDS) {
-            const childRes = await new RunView().RunView<MJTaskEntity>(
+            const childRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTaskEntity>(
                 { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentID}'`, ResultType: 'entity_object' }, ctx.User,
             );
             const children = childRes.Results ?? [];
             if (children.length > 0) {
                 const ids = children.map((c) => `'${c.ID}'`).join(',');
-                const depRes = await new RunView().RunView(
+                const depRes = await RunView.FromMetadataProvider(ctx.Provider).RunView(
                     { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${ids})`, ResultType: 'entity_object' }, ctx.User,
                 );
                 for (const dep of (depRes.Results ?? []) as Array<{ Delete: () => Promise<boolean> }>) {
@@ -347,7 +411,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('task-graph-orchestration', 
             }
             for (const child of children) await child.Delete();
 
-            const parentRes = await new RunView().RunView<MJTaskEntity>(
+            const parentRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTaskEntity>(
                 { EntityName: 'MJ: Tasks', ExtraFilter: `ID='${parentID}'`, ResultType: 'entity_object' }, ctx.User,
             );
             const parent = parentRes.Results?.[0];
@@ -356,7 +420,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('task-graph-orchestration', 
         CREATED_PARENT_IDS.length = 0;
 
         for (const id of CREATED_TASK_IDS) {
-            const res = await new RunView().RunView<MJTaskEntity>(
+            const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTaskEntity>(
                 { EntityName: 'MJ: Tasks', ExtraFilter: `ID='${id}'`, ResultType: 'entity_object' }, ctx.User,
             );
             const row = res.Results?.[0];
@@ -366,7 +430,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('task-graph-orchestration', 
 
         // Only removes a TaskType this bundle created; a pre-existing one is left alone.
         for (const id of CREATED_TASK_TYPE_IDS) {
-            const res = await new RunView().RunView<MJTaskTypeEntity>(
+            const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTaskTypeEntity>(
                 { EntityName: 'MJ: Task Types', ExtraFilter: `ID='${id}'`, ResultType: 'entity_object' }, ctx.User,
             );
             const row = res.Results?.[0];
