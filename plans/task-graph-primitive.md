@@ -21,8 +21,8 @@ Each phase ships as its own PR, cut fresh from `next` after the prior one merges
 
 | # | Phase | PR | Status |
 |---|---|---|---|
-| 0 | Legacy retirement — Workflow trio, the `Report*` family, Scheduled Actions, Output Trigger Types | [#3553](https://github.com/MemberJunction/MJ/pull/3553) | 🟦 In review |
-| 1 | Truthful engine — Task columns + indexes + backfill, failure propagation, cycle detection, wave parallelization | — | ⬜ Not started |
+| 0 | Legacy retirement — Workflow trio, the `Report*` family, Scheduled Actions, Output Trigger Types | [#3553](https://github.com/MemberJunction/MJ/pull/3553) | ✅ Merged 2026-08-06 |
+| 1 | Truthful engine — Task columns + indexes + backfill, failure propagation, cycle detection, wave parallelization | [#3562](https://github.com/MemberJunction/MJ/pull/3562) | 🟦 In review |
 | 2 | Placement — `@memberjunction/task-graph`, dispatcher + claim protocol, server-side detection, client → observer | — | ⬜ Not started |
 | 3 | The primitive — `'Tasks'` in the Loop union, `TaskGraphSpec`, folding, continuations, opt-in metadata, prompt migration | — | ⬜ Not started |
 | 4 | Convergence — `GraphTraversalEngine`, joins + `traversalMode`, human tasks, sweep enforcement, Save as Workflow | — | ⬜ Not started |
