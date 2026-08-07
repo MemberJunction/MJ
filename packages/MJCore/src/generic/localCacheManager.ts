@@ -34,14 +34,24 @@ function LogStatusVerbose(message: string): void {
  * - `Date` internal slots: `Object.freeze` cannot protect them — `setHours` and friends
  *   still work.
  */
-function deepFreezeCacheValue<T>(value: T): T {
-    if (value === null || typeof value !== 'object' || Object.isFrozen(value)
+function deepFreezeCacheValue<T>(value: T, visited: WeakSet<object> = new WeakSet<object>()): T {
+    if (value === null || typeof value !== 'object'
         || ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
         return value;
     }
+    // Cycle termination and re-entry short-circuit key off an explicit visited set rather than
+    // `Object.isFrozen`. Those are not the same test: an object frozen SHALLOWLY by someone else
+    // (a caller that ran `Object.freeze(row)` before handing it over) reports frozen while its
+    // nested values are still writable, so keying off isFrozen would skip the whole subtree and
+    // leave shared state mutable. Already-frozen objects are cheap to re-freeze; unvisited
+    // children are the thing that must not be skipped.
+    if (visited.has(value as object)) {
+        return value;
+    }
+    visited.add(value as object);
     Object.freeze(value);
     for (const nested of Object.values(value)) {
-        deepFreezeCacheValue(nested);
+        deepFreezeCacheValue(nested, visited);
     }
     return value;
 }
@@ -512,11 +522,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         storageProvider: ILocalStorageProvider,
         config?: Partial<LocalCacheManagerConfig>
     ): Promise<void> {
-        this._storageProvider = storageProvider;
         if (config) {
             this._config = { ...this._config, ...config };
         }
+        // Resolve the freeze decision BEFORE publishing the provider. The probe awaits I/O, and
+        // `_storageProvider` is what every write path reads to decide whether to freeze — so
+        // assigning it first opens a window where writes see the new provider paired with the
+        // PREVIOUS provider's (or the default `false`) freeze decision. Same ordering bug that
+        // `SetStorageProvider` had; fixed here too rather than left as the one asymmetric path.
         this._sharesReferences = await this.resolveSharesReferences(storageProvider);
+        this._storageProvider = storageProvider;
 
         await this.loadRegistry();
         this._initialized = true;
@@ -572,22 +587,26 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param newProvider - The new storage provider to use
      */
     public async SetStorageProvider(newProvider: ILocalStorageProvider): Promise<void> {
-        if (!this._initialized) {
-            // Not yet initialized — just set the provider and return
-            this._storageProvider = newProvider;
-            this._sharesReferences = await this.resolveSharesReferences(newProvider);
-            return;
-        }
-
-        const oldProvider = this._storageProvider;
-        this._storageProvider = newProvider;
         // The freeze decision belongs to the ACTIVE provider, not to whichever one happened to be
         // installed at Initialize. MJAPI initializes on the in-memory provider during engine
         // loading and swaps to Redis afterward, so these two have OPPOSITE reference semantics on
         // every Redis deployment — carrying the old answer forward means freezing rows Redis has
         // already isolated (all of the hazard, none of the protection), or, on the reverse swap,
         // silently dropping the protection.
+        //
+        // Resolved BEFORE `_storageProvider` is published in both branches: the probe awaits I/O,
+        // and write paths read `_storageProvider` to decide whether to freeze, so publishing first
+        // would pair the new provider with the old provider's decision for the duration of the probe.
+        if (!this._initialized) {
+            // Not yet initialized — just set the provider and return
+            this._sharesReferences = await this.resolveSharesReferences(newProvider);
+            this._storageProvider = newProvider;
+            return;
+        }
+
+        const oldProvider = this._storageProvider;
         this._sharesReferences = await this.resolveSharesReferences(newProvider);
+        this._storageProvider = newProvider;
 
         // Migrate existing cached data from old provider to new provider
         const entries = this.GetAllEntries();
@@ -1372,7 +1391,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *
      * @param name - The dataset name
      * @param itemFilters - Optional filters applied to the dataset
-     * @param dataset - The dataset result to cache
+     * @param dataset - The dataset result to cache. Deep-frozen on reference-sharing storage,
+     *                  like every other cache write funnel — see below.
      * @param keyPrefix - Prefix for the cache key (typically includes connection info)
      */
     public async SetDataset(
@@ -1387,6 +1407,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // Estimate size from a string representation (used only for cache eviction
         // accounting; the actual stored value is the native object).
         const sizeBytes = this.estimateSize(JSON.stringify(dataset));
+
+        // Fourth write funnel, held to the same contract as SetRunViewResult /
+        // SetRunQueryResult / storeCachedResults. `GetDataset` hands this object straight back
+        // out, so on a reference-sharing provider every reader shares it — the same exposure the
+        // other three close. It has no in-repo caller today (GetDatasetByName caches per ITEM via
+        // SetRunViewResult), but it is exported public API, so an external caller would otherwise
+        // get an unprotected slot with no indication that it differs from the documented rule.
+        //
+        // Frozen BEFORE the awaited eviction below, for the same reason as the other funnels: a
+        // yield point between the decision to cache and the freeze is a window in which the
+        // caller can still mutate what is about to become shared state.
+        this.freezeRowDataIfProviderSharesReferences(dataset);
 
         // Check if we need to evict entries
         await this.evictIfNeeded(sizeBytes);
@@ -1814,9 +1846,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return deepFreezeCacheValue(payload);
         } catch (e) {
             // The freeze is protective, never load-bearing — an exotic value Object.freeze
-            // rejects (beyond the guarded binary kinds) must degrade to an unfrozen write,
-            // not take down the read path it defends.
-            LogError(`LocalCacheManager: freeze-on-write failed; storing unfrozen. ${e}`);
+            // rejects (beyond the guarded binary kinds) must degrade to a stored write rather
+            // than taking down the read path it defends.
+            //
+            // The payload is PARTIALLY frozen at this point and cannot be un-frozen: the walk
+            // freezes parent-first, so everything visited before the throw is already immutable.
+            // Say that plainly instead of claiming "unfrozen" — an operator debugging a
+            // downstream TypeError needs to know the entry is a mix, not a clean opt-out.
+            LogError(
+                `LocalCacheManager: freeze-on-write failed partway; storing the entry with ` +
+                `whatever was frozen before the failure (partial protection, not none). ${e}`
+            );
             return payload;
         }
     }

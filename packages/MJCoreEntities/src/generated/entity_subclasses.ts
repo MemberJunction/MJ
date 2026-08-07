@@ -44437,7 +44437,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     /**
     * Validate() method override for MJ: AI Agent Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * CompactionTargetPercent: The compaction target percentage must be a value between 1 and 100 percent.
-    * * CompactionTriggerPercent: The compaction trigger percentage must be a value between 1 and 100.
+    * * CompactionTriggerPercent: The compaction trigger percentage must be a value between 1 and 100 percent.
     * * ContextWindowMaxTokens: The maximum tokens for the context window must be a positive number greater than 0.
     * * Table-Level: The compaction target percentage must be less than the compaction trigger percentage to ensure that compaction successfully reduces the resource usage below the trigger threshold.
     * @public
@@ -44473,7 +44473,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     }
 
     /**
-    * The compaction trigger percentage must be a value between 1 and 100.
+    * The compaction trigger percentage must be a value between 1 and 100 percent.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method

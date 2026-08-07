@@ -215,7 +215,16 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
             }
         }
         if (allKept) {
-            return rows;
+            // ...but only when handing the input back is safe. A `Fields` request is documented
+            // to yield a per-caller row set the caller may mutate, and full coverage is not a
+            // narrower promise than partial coverage — it just happens to project to the same
+            // shape. Frozen input means `rows` is the cache's shared array, so returning it here
+            // would quietly hand a Fields caller immutable rows and break that contract for the
+            // one field list that covers everything. Fall through to the copy path in that case;
+            // unfrozen input (the DB-miss path) keeps the allocation-free fast path.
+            if (!Object.isFrozen(rows)) {
+                return rows;
+            }
         }
     }
 

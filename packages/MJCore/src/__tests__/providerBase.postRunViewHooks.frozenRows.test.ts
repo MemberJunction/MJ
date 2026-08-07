@@ -12,14 +12,13 @@
  *
  *   1. hooks receive frozen rows (the ordering + exposure, so a refactor can't silently move it),
  *   2. in-place ROW mutation inside a hook fails loudly rather than corrupting the cache,
- *   3. [RED until fixed] a hook that RETURNS a replacement result must have it honored — the
- *      hook type is `(...) => RunViewResult | Promise<RunViewResult>`, the client path and the
- *      server BATCH path (`results[i] = await RunPostRunViewHooks(...)`) both honor it, but the
- *      singular server path reassigns a local (`result = await RunPostRunViewHooks(...)` inside
- *      `PostRunView`) and RunView returns its own reference — the replacement is silently
- *      dropped. Pre-freeze that was masked by hooks mutating rows in place; the freeze removed
- *      that workaround, so today NO signature-conformant hook can modify singular server
- *      results,
+ *   3. a hook that RETURNS a replacement result has it honored on the singular server path.
+ *      The hook type is `(...) => RunViewResult | Promise<RunViewResult>`, and the client and
+ *      server BATCH paths always honored it, but the singular path reassigned a local while
+ *      `RunView` returned its own reference — so the replacement was silently dropped.
+ *      Pre-freeze that was masked by hooks mutating rows in place; the freeze removed that
+ *      workaround, leaving no way for a signature-conformant hook to modify singular server
+ *      results. `PostRunView` now copies the replacement onto the result it was handed,
  *   4. reassigning `results.Results` ON the passed result object works today (the result object
  *      itself is not frozen) and never leaks into the cached slot — the one pattern that is safe
  *      on every path, before and after the propagation fix.
@@ -211,7 +210,7 @@ describe('PostRunView hooks receive frozen cache rows (server miss path)', () =>
         expect((reread.Results[0] as Record<string, unknown>)['Name']).toBe('Alice');
     });
 
-    it('honors a hook that RETURNS a replacement result, like the client and batch paths do [RED until the propagation fix]', async () => {
+    it('honors a hook that RETURNS a replacement result, like the client and batch paths do', async () => {
         // Encodes the hook signature's contract: `PostRunViewHook` returns a RunViewResult and
         // the pipeline must use it. Fails today because PostRunView reassigns its local
         // parameter (providerBase.ts ~2972) and RunView returns its own reference — the
