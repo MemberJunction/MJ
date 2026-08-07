@@ -15,6 +15,7 @@
     ".": "./dist/index.js"
   },
   "scripts": {
+    "prebuild": "rimraf dist",
     "build": "tsc && tsc-alias -f",
     "bundle": "tsc -noEmit && pkgroll --sourcemap --minify",
     "watch": "tsc -w",
@@ -156,6 +157,7 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "pkgroll": "2.23.0",
+    "rimraf": "6.1.2",
     "typescript": "^5.9.3",
     "vitest": "^3.1.1"
   },
