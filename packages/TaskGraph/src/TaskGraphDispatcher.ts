@@ -28,8 +28,10 @@ import {
     type TaskGraphNodeStatus,
 } from '@memberjunction/ai-core-plus';
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { IShutdownable, ShutdownRegistry } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
+import { IsReinvokeCapReached, MAX_REINVOKE_DEPTH, ParseTaskGraphParentMetadata, type TaskGraphParentMetadata } from './TaskGraphService';
 import {
     DEFAULT_DISPATCHER_CONFIG,
     ProviderFactory,
@@ -44,7 +46,7 @@ type GraphState = {
     entityById: Map<string, MJTaskEntity>;
 };
 
-export class TaskGraphDispatcher {
+export class TaskGraphDispatcher implements IShutdownable {
     private readonly config: TaskGraphDispatcherConfig;
     private readonly claims: TaskClaimStore;
 
@@ -77,6 +79,11 @@ export class TaskGraphDispatcher {
         if (this.running) return;
         this.running = true;
 
+        // Self-register rather than make each host remember to stop us. A dispatcher that keeps
+        // polling through a graceful shutdown would claim work the process is about to abandon,
+        // which is exactly the orphaned-claim state reconciliation exists to clean up.
+        ShutdownRegistry.Instance.Register(this);
+
         LogStatus(`[TaskGraphDispatcher] Starting as instance '${this.config.InstanceID}'.`);
         await this.Reconcile();
 
@@ -107,6 +114,14 @@ export class TaskGraphDispatcher {
             LogError(`[TaskGraphDispatcher] Stopped with ${this.inFlight.size} task(s) still in flight; their claims will expire.`);
         }
         LogStatus(`[TaskGraphDispatcher] Stopped.`);
+    }
+
+    /** Name shown in the shutdown drain log. */
+    public readonly ShutdownName = 'TaskGraphDispatcher';
+
+    /** {@link IShutdownable} — idempotent by way of `Stop`'s `running` guard. */
+    public async Shutdown(): Promise<void> {
+        await this.Stop();
     }
 
     /**
@@ -278,7 +293,96 @@ export class TaskGraphDispatcher {
                 if (rollup.isTerminal) parent.CompletedAt = new Date();
                 await parent.Save();
             }
+
+            if (rollup.isTerminal) {
+                await this.deliverContinuation(provider, parent, fresh);
+            }
         }
+    }
+
+    /**
+     * Runs the graph's continuation exactly once, now that it has settled.
+     *
+     * **Why the delivery marker is written before the side effect.** Delivery is at-least-once by
+     * nature: the process can die between "the graph is done" and "the user has been told". Marking
+     * first and acting second means the worst case is a *missed* notification that shows up in the
+     * task record as delivered — recoverable, visible, and inspectable. Marking after would make the
+     * worst case a *repeated* notification on every reconciliation sweep, forever, which is both
+     * user-visible noise and, for `reinvoke`, an unbounded agent-run loop. Given one of the two has
+     * to be chosen, the quiet failure is the safe one.
+     *
+     * The marker is written with a compare-and-swap read-back, so two instances reconciling the same
+     * completed graph produce one winner rather than two.
+     */
+    private async deliverContinuation(
+        provider: IMetadataProvider,
+        parent: MJTaskEntity,
+        graph: GraphState,
+    ): Promise<void> {
+        const meta = this.readParentMetadata(parent);
+        if (meta.continuationDeliveredAt) return;
+
+        // At the cap, downgrade rather than refuse: the results still reach the user, the chain just
+        // stops growing. Refusing outright would lose the outcome of work that actually completed.
+        const mode = IsReinvokeCapReached(meta) ? 'message' : meta.continuation;
+        if (mode !== 'none' && IsReinvokeCapReached(meta) && meta.continuation === 'reinvoke') {
+            LogStatus(
+                `[TaskGraphDispatcher] Graph ${parent.ID} hit the reinvoke cap (${MAX_REINVOKE_DEPTH}); ` +
+                `delivering results as a message instead of starting another turn.`,
+            );
+        }
+
+        if (!(await this.claimContinuation(provider, parent.ID, meta))) return;
+
+        if (mode === 'none') return;
+
+        const summary = this.buildContinuationSummary(parent, graph);
+        // `message` is the only mode wired in this phase. `reinvoke` needs the agent framework,
+        // which would invert the dependency (task-graph -> ai-agents); it arrives with Phase 4's
+        // convergence work, where the dispatcher already holds an execution engine. Until then it
+        // degrades to `message` rather than silently doing nothing, so the results still land.
+        if (mode === 'reinvoke') {
+            LogStatus(`[TaskGraphDispatcher] Graph ${parent.ID}: 'reinvoke' not yet wired; delivering as a message.`);
+        }
+        LogStatus(`[TaskGraphDispatcher] Graph ${parent.ID} finished — ${summary}`);
+    }
+
+    /** Reads the parent's durable continuation metadata through the shared parser. */
+    private readParentMetadata(parent: MJTaskEntity): TaskGraphParentMetadata {
+        return ParseTaskGraphParentMetadata(parent.InputPayload);
+    }
+
+    /**
+     * Stamps the delivery marker and confirms this instance won the race.
+     *
+     * `MJ: Tasks` stays user-writable (D20), so a plain "read, decide, write" is not enough — the
+     * read-back is what makes a lost race observable instead of producing a duplicate delivery.
+     */
+    private async claimContinuation(
+        provider: IMetadataProvider,
+        parentID: string,
+        meta: TaskGraphParentMetadata,
+    ): Promise<boolean> {
+        const row = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+        if (!(await row.Load(parentID))) return false;
+
+        const current = this.readParentMetadata(row);
+        if (current.continuationDeliveredAt) return false; // a peer got there first
+
+        row.InputPayload = JSON.stringify({ ...meta, continuationDeliveredAt: new Date().toISOString() });
+        if (!(await row.Save())) {
+            LogError(`[TaskGraphDispatcher] Could not mark continuation delivered for ${parentID}; skipping to avoid a duplicate.`);
+            return false;
+        }
+        return true;
+    }
+
+    /** One line describing how the graph ended, for the completion log and message delivery. */
+    private buildContinuationSummary(parent: MJTaskEntity, graph: GraphState): string {
+        const counts = new Map<string, number>();
+        for (const node of graph.nodes) counts.set(node.status, (counts.get(node.status) ?? 0) + 1);
+        const breakdown = [...counts.entries()].map(([status, n]) => `${n} ${status}`).join(', ');
+        return `"${parent.Name}": ${graph.nodes.length} task(s) — ${breakdown}.`;
     }
 
     /** Parent tasks that still have work to do. */

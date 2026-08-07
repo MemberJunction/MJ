@@ -10,7 +10,7 @@
  * The `Spec` suffix follows `AgentSpec` — it memorializes a graph rather than merely requesting
  * execution, which is what makes Save as Workflow (D17) possible later.
  *
- * @module @memberjunction/task-graph
+ * @module @memberjunction/ai-core-plus
  */
 
 /** One node in a submitted graph. */
