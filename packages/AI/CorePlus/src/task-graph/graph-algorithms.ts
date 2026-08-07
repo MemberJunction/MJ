@@ -72,11 +72,11 @@ export type CycleDetectionResult =
  * and this runs on submitted (potentially LLM-authored) input.
  *
  * Nodes referenced only by edges are still traversed, so a cycle among unknown ids is still caught —
- * validation of unresolvable references is a separate concern (see {@link findUnknownDependencyRefs}).
+ * validation of unresolvable references is a separate concern (see {@link FindUnknownDependencyRefs}).
  *
  * @returns the first cycle found, or `{ hasCycle: false }`
  */
-export function detectCycle(nodes: readonly TaskGraphNode[], edges: readonly TaskGraphEdge[]): CycleDetectionResult {
+export function DetectCycle(nodes: readonly TaskGraphNode[], edges: readonly TaskGraphEdge[]): CycleDetectionResult {
     const adjacency = buildDependsOnAdjacency(edges);
 
     // Every id that appears anywhere, so edge-only ids are traversed too.
@@ -134,7 +134,7 @@ export function detectCycle(nodes: readonly TaskGraphNode[], edges: readonly Tas
  * A graph with dangling references executes with holes, so submission should reject rather than
  * silently skip — the failure mode this replaces.
  */
-export function findUnknownDependencyRefs(
+export function FindUnknownDependencyRefs(
     nodes: readonly TaskGraphNode[],
     edges: readonly TaskGraphEdge[]
 ): TaskGraphEdge[] {
@@ -152,7 +152,7 @@ export function findUnknownDependencyRefs(
  * launch concurrently. That is what makes wave parallelization possible without changing this
  * function, and what the durable dispatcher reuses for its claim loop.
  */
-export function computeEligibleTasks(
+export function ComputeEligibleTasks(
     nodes: readonly TaskGraphNode[],
     edges: readonly TaskGraphEdge[]
 ): TaskGraphNode[] {
@@ -179,7 +179,7 @@ export function computeEligibleTasks(
  *
  * @returns ids of tasks that should be transitioned to `Blocked`
  */
-export function computeTasksToBlock(
+export function ComputeTasksToBlock(
     nodes: readonly TaskGraphNode[],
     edges: readonly TaskGraphEdge[]
 ): string[] {
@@ -227,7 +227,7 @@ export type ParentRollup = {
  *
  * `percentComplete` counts only `Complete` children, so a half-failed graph never reads as 100%.
  */
-export function computeParentRollup(children: readonly TaskGraphNode[]): ParentRollup {
+export function ComputeParentRollup(children: readonly TaskGraphNode[]): ParentRollup {
     if (children.length === 0) {
         return { status: 'Complete', percentComplete: 100, isTerminal: true };
     }
@@ -269,15 +269,15 @@ export function computeParentRollup(children: readonly TaskGraphNode[]): ParentR
  * zero in-flight tasks is deadlocked — previously this exited the execution loop quietly and the
  * parent was marked complete.
  */
-export function isGraphStalled(nodes: readonly TaskGraphNode[], edges: readonly TaskGraphEdge[]): boolean {
+export function IsGraphStalled(nodes: readonly TaskGraphNode[], edges: readonly TaskGraphEdge[]): boolean {
     const anyActive = nodes.some((n) => n.status === 'In Progress');
     if (anyActive) return false;
-    if (computeEligibleTasks(nodes, edges).length > 0) return false;
+    if (ComputeEligibleTasks(nodes, edges).length > 0) return false;
     return nodes.some((n) => n.status === 'Pending');
 }
 
 /** True when every task has reached a terminal status. */
-export function isGraphSettled(nodes: readonly TaskGraphNode[]): boolean {
+export function IsGraphSettled(nodes: readonly TaskGraphNode[]): boolean {
     return nodes.every((n) => TERMINAL_STATUSES.has(n.status) || n.status === 'Blocked');
 }
 

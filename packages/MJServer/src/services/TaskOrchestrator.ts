@@ -7,11 +7,11 @@ import { UserPayload } from '../types.js';
 import { publishStatusUpdate } from '../generic/PushStatusResolver.js';
 import {
     MJAIAgentEntityExtended,
-    computeEligibleTasks,
-    computeParentRollup,
-    computeTasksToBlock,
-    detectCycle,
-    isGraphStalled,
+    ComputeEligibleTasks,
+    ComputeParentRollup,
+    ComputeTasksToBlock,
+    DetectCycle,
+    IsGraphStalled,
     type TaskGraphEdge,
     type TaskGraphNode,
     type TaskGraphNodeStatus,
@@ -187,7 +187,7 @@ export class TaskOrchestrator {
         const cycleEdges: TaskGraphEdge[] = resolvedTasks.flatMap(rt =>
             (rt.def.dependsOn ?? []).map(dep => ({ taskId: rt.def.tempId, dependsOnTaskId: dep }))
         );
-        const cycleCheck = detectCycle(cycleNodes, cycleEdges);
+        const cycleCheck = DetectCycle(cycleNodes, cycleEdges);
         if (cycleCheck.hasCycle) {
             throw new Error(
                 `Cannot create task graph "${taskGraph.workflowName}": dependency cycle detected ` +
@@ -370,9 +370,9 @@ export class TaskOrchestrator {
             const blocked = await this.applyFailurePropagation(graph);
             if (blocked > 0) continue; // re-read; statuses changed
 
-            const eligible = computeEligibleTasks(graph.nodes, graph.edges);
+            const eligible = ComputeEligibleTasks(graph.nodes, graph.edges);
             if (eligible.length === 0) {
-                if (isGraphStalled(graph.nodes, graph.edges)) {
+                if (IsGraphStalled(graph.nodes, graph.edges)) {
                     // Pending work with nothing runnable and nothing in flight. Previously this
                     // exited quietly and the parent was reported Complete.
                     LogError(`Task graph ${parentTaskId} is stalled: pending tasks with no satisfiable path.`);
@@ -396,7 +396,7 @@ export class TaskOrchestrator {
         await this.completeParentTask(parentTaskId);
 
         const finalGraph = await this.loadGraphState(parentTaskId);
-        const rollup = computeParentRollup(finalGraph.nodes);
+        const rollup = ComputeParentRollup(finalGraph.nodes);
         this.publishTaskProgress(
             parentTask.Name,
             rollup.status === 'Complete' ? 'Workflow completed' : `Workflow finished with status: ${rollup.status}`,
@@ -453,7 +453,7 @@ export class TaskOrchestrator {
      * @returns how many tasks were transitioned
      */
     private async applyFailurePropagation(graph: GraphState): Promise<number> {
-        const toBlock = computeTasksToBlock(graph.nodes, graph.edges);
+        const toBlock = ComputeTasksToBlock(graph.nodes, graph.edges);
         if (toBlock.length === 0) return 0;
 
         let blocked = 0;
@@ -557,7 +557,7 @@ export class TaskOrchestrator {
         // Roll the children up honestly. Previously the parent was set Complete/100%
         // unconditionally, so a graph whose children failed still reported success.
         const graph = await this.loadGraphState(parentTaskId);
-        const rollup = computeParentRollup(graph.nodes);
+        const rollup = ComputeParentRollup(graph.nodes);
 
         parentTask.Status = rollup.status;
         parentTask.PercentComplete = rollup.percentComplete;

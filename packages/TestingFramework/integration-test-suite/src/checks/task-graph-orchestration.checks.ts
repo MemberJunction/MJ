@@ -1,225 +1,149 @@
 /**
- * task-graph-orchestration.checks.ts — the 'task-graph-orchestration' bundle (TG1–TG4): live
- * integration checks for the task-graph substrate delivered by Phase 1 of the unified workflow
- * DAG engine program (plan: PR #3456).
+ * task-graph-orchestration.checks.ts — the 'task-graph-orchestration' bundle: live integration
+ * checks for the task-graph substrate delivered by the unified workflow DAG engine program
+ * (plan: PR #3456).
  *
- * These pin the three correctness fixes at the SEAM — i.e. against a real database through
- * TaskOrchestrator's public API — rather than against the pure algorithms, which are already
- * covered exhaustively by unit tests in `@memberjunction/ai-core-plus`
- * (`task-graph-algorithms.test.ts`, 44 cases). What can only be verified here is that the
- * orchestrator actually rejects bad graphs BEFORE persisting them, and that payloads land in
- * their columns rather than smuggled inside Description.
+ * **Phase 1 scope is deliberately narrow.** The behavioral checks that would exercise submission
+ * — cycle rejection, unknown-agent rejection, payloads landing in columns — need to drive the
+ * orchestrator, which in Phase 1 still lives inside MJServer as `TaskOrchestrator`. Reaching it
+ * from here would mean exporting it from MJServer and taking a dependency on the whole server
+ * package, both of which Phase 2 immediately undoes: per the plan's §3.2 the submission API moves
+ * to `@memberjunction/task-graph` (`TaskGraphService`), and per D6 the useful parts of
+ * `TaskOrchestrator` carry over there. Those checks therefore land in Phase 2 against the new
+ * package's public API — which is their correct target anyway, since that is where server-side
+ * submission validation lives.
  *
- *   - TG1: a cyclic graph is rejected at creation and persists nothing
- *   - TG2: a graph naming an unknown agent is rejected rather than silently executing with holes
- *   - TG3: inputs land in Task.InputPayload; Description carries no __TASK_METADATA__ marker
- *   - TG4: the six Phase 1 columns exist and are writable/readable as columns
+ * What Phase 1 CAN verify without that coupling is that the schema it added is genuinely present
+ * and usable through the entity layer. That is not a tautology: the columns can exist in the
+ * database while being absent from generated metadata, which is exactly what happens when the
+ * migration lands without CodeGen being re-run — a silent failure that breaks every consumer of
+ * the typed properties.
  *
- * Deterministic — no model calls. TG1 and TG2 assert on rejection, so they leave nothing behind;
- * TG3/TG4 create a graph and the bundle Teardown removes it in FK-safe order.
+ *   - TG1: the six Phase 1 Task columns exist in entity metadata
+ *   - TG2: they round-trip through BaseEntity (write, reload, read back)
+ *   - TG3: AIAgentRunStep.StepType accepts the new 'TaskGraph' value
  *
- * The failure-propagation and wave-parallelization behaviors are NOT covered here: exercising them
- * end to end requires real agent runs (model calls), which this deterministic tier excludes. Their
- * logic lives in the pure algorithms and is unit-tested; the durable-dispatcher bundle in Phase 2
- * is where they get live coverage, once execution no longer depends on an LLM answering.
+ * Deterministic — no model calls. TG2 creates one task and the bundle Teardown removes it.
  */
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
-import { TaskOrchestrator } from '@memberjunction/server';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
-const CREATED_PARENT_IDS: string[] = [];
+/** Columns added by the Phase 1 migration. */
+const PHASE1_TASK_FIELDS = [
+    'InputPayload',
+    'OutputPayload',
+    'ErrorMessage',
+    'AgentRunID',
+    'ClaimedBy',
+    'ClaimExpiresAt',
+] as const;
 
-/** Builds an orchestrator bound to the check's provider + user. */
-function orchestrator(ctx: IntegrationCheckContext): TaskOrchestrator {
-    // (contextUser, pubSub, sessionId, userPayload, createNotifications, conversationDetailId, provider)
-    return new TaskOrchestrator(ctx.User, undefined, undefined, undefined, false, undefined, ctx.Provider);
-}
+const TASK_NAME = 'mj-integration-test-task-graph-columns (safe to delete)';
+const CREATED_TASK_IDS: string[] = [];
+const CREATED_TASK_TYPE_IDS: string[] = [];
 
-/** Resolves the environment the checks should create tasks in. */
-async function resolveEnvironmentID(ctx: IntegrationCheckContext): Promise<string> {
-    const res = await new RunView().RunView<{ ID: string }>(
-        { EntityName: 'MJ: Environments', Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
+/** Resolves a TaskType, creating a disposable one if the install has none. */
+async function resolveTaskTypeID(ctx: IntegrationCheckContext): Promise<string> {
+    const existing = await new RunView().RunView<{ ID: string }>(
+        { EntityName: 'MJ: Task Types', Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
     );
-    const id = res.Results?.[0]?.ID;
-    Assert(!!id, 'Could not resolve an Environment for task-graph checks');
-    return id!;
-}
+    const found = existing.Results?.[0]?.ID;
+    if (found) return found;
 
-/** Resolves any real agent name, so a graph can be well-formed without hardcoding one. */
-async function resolveAgentName(ctx: IntegrationCheckContext): Promise<string> {
-    const res = await new RunView().RunView<{ Name: string }>(
-        { EntityName: 'MJ: AI Agents', Fields: ['Name'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
-    );
-    const name = res.Results?.[0]?.Name;
-    Assert(!!name, 'Could not resolve an AI Agent for task-graph checks');
-    return name!;
-}
-
-/** Counts parent tasks by name — used to prove a rejected graph persisted nothing. */
-async function countTasksNamed(ctx: IntegrationCheckContext, name: string): Promise<number> {
-    const res = await new RunView().RunView<{ ID: string }>(
-        { EntityName: 'MJ: Tasks', ExtraFilter: `Name='${name.replace(/'/g, "''")}'`, Fields: ['ID'], ResultType: 'simple' },
-        ctx.User,
-    );
-    return res.Results?.length ?? 0;
+    const tt = await ctx.Provider.GetEntityObject<MJTaskTypeEntity>('MJ: Task Types', ctx.User);
+    tt.NewRecord();
+    tt.Name = 'mj-integration-test-task-type (safe to delete)';
+    tt.Description = 'Created by the task-graph-orchestration integration bundle.';
+    const saved = await tt.Save();
+    Assert(saved, `could not create a TaskType fixture: ${tt.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    CREATED_TASK_TYPE_IDS.push(tt.ID);
+    return tt.ID;
 }
 
 export const TaskGraphOrchestrationChecks: NamedCheck[] = [
     {
         Id: 'task-graph-orchestration.TG1',
-        Name: 'TG1: a cyclic task graph is rejected at creation and persists nothing',
-        Fn: async (ctx: IntegrationCheckContext) => {
-            const agentName = await resolveAgentName(ctx);
-            const workflowName = 'mj-integration-test-cyclic-graph (safe to delete)';
-            const environmentId = await resolveEnvironmentID(ctx);
+        Name: 'TG1: the six Phase 1 Task columns are present in entity metadata',
+        Fn: async (_ctx: IntegrationCheckContext) => {
+            // Guards the migration-ran-but-CodeGen-did-not failure mode: the columns exist in SQL
+            // while the generated entity has no idea, so every typed consumer breaks silently.
+            const entity = new Metadata().EntityByName('MJ: Tasks');
+            Assert(!!entity, 'MJ: Tasks entity not found in metadata');
 
-            // a -> b -> a. Before Phase 1 this persisted happily and then deadlocked: nothing ever
-            // became eligible, the loop exited, and the parent was marked Complete.
-            const graph = {
-                workflowName,
-                reasoning: 'integration check: cycle rejection',
-                tasks: [
-                    { tempId: 'a', name: 'A', description: 'A', agentName, dependsOn: ['b'] },
-                    { tempId: 'b', name: 'B', description: 'B', agentName, dependsOn: ['a'] },
-                ],
-            };
-
-            let threw = false;
-            try {
-                await orchestrator(ctx).createTasksFromGraph(graph as never, null as never, environmentId);
-            } catch (e) {
-                threw = true;
-                const msg = e instanceof Error ? e.message : String(e);
-                Assert(/cycle/i.test(msg), `rejection should name the cycle, got: ${msg}`);
-            }
-            Assert(threw, 'a cyclic graph must be rejected, not persisted');
-
-            await settle(200);
-            AssertEqual(await countTasksNamed(ctx, workflowName), 0, 'a rejected cyclic graph must persist no parent task');
-            console.log('      → cyclic graph rejected before persistence');
+            const missing = PHASE1_TASK_FIELDS.filter(f => !entity!.Fields.some(ef => ef.Name === f));
+            Assert(
+                missing.length === 0,
+                `MJ: Tasks is missing Phase 1 field(s): ${missing.join(', ')} — did CodeGen run after the migration?`,
+            );
+            console.log(`      → all ${PHASE1_TASK_FIELDS.length} Phase 1 columns present in metadata`);
         }
     },
     {
         Id: 'task-graph-orchestration.TG2',
-        Name: 'TG2: a graph naming an unknown agent is rejected rather than executing with holes',
+        Name: 'TG2: the Phase 1 payload/claim columns round-trip through the entity layer',
         Fn: async (ctx: IntegrationCheckContext) => {
-            const agentName = await resolveAgentName(ctx);
-            const workflowName = 'mj-integration-test-unknown-agent (safe to delete)';
-            const environmentId = await resolveEnvironmentID(ctx);
+            const envRes = await new RunView().RunView<{ ID: string }>(
+                { EntityName: 'MJ: Environments', Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
+            );
+            const environmentID = envRes.Results?.[0]?.ID;
+            Assert(!!environmentID, 'could not resolve an Environment');
 
-            // Previously the unresolvable task was logged and SKIPPED, so the graph ran missing
-            // a step the caller had asked for — a silent partial execution.
-            const graph = {
-                workflowName,
-                reasoning: 'integration check: unknown-agent rejection',
-                tasks: [
-                    { tempId: 'a', name: 'A', description: 'A', agentName, dependsOn: [] },
-                    { tempId: 'b', name: 'B', description: 'B', agentName: 'ThisAgentDoesNotExist_MJIntegrationCheck', dependsOn: [] },
-                ],
-            };
+            const task = await ctx.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', ctx.User);
+            task.NewRecord();
+            task.Name = TASK_NAME;
+            task.TypeID = await resolveTaskTypeID(ctx);
+            task.EnvironmentID = environmentID!;
+            task.Status = 'Pending';
+            task.InputPayload = JSON.stringify({ integrationCheck: true, marker: 'TG2' });
+            task.OutputPayload = JSON.stringify({ rows: 42 });
+            task.ErrorMessage = 'TG2 write check';
+            task.ClaimedBy = 'integration-check-instance';
 
-            let threw = false;
-            try {
-                await orchestrator(ctx).createTasksFromGraph(graph as never, null as never, environmentId);
-            } catch (e) {
-                threw = true;
-                const msg = e instanceof Error ? e.message : String(e);
-                Assert(
-                    msg.includes('ThisAgentDoesNotExist_MJIntegrationCheck'),
-                    `rejection should name the unresolvable agent, got: ${msg}`,
-                );
-            }
-            Assert(threw, 'a graph with an unknown agent must be rejected, not silently trimmed');
+            const saved = await task.Save();
+            Assert(saved, `writing the Phase 1 columns failed: ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            CREATED_TASK_IDS.push(task.ID);
 
-            await settle(200);
-            AssertEqual(await countTasksNamed(ctx, workflowName), 0, 'a rejected graph must persist no parent task');
-            console.log('      → unknown-agent graph rejected before persistence');
+            await settle(250);
+            const reread = await new RunView().RunView<MJTaskEntity>(
+                { EntityName: 'MJ: Tasks', ExtraFilter: `ID='${task.ID}'`, ResultType: 'entity_object' }, ctx.User,
+            );
+            const row = reread.Results?.[0];
+            Assert(!!row, 'task did not reload');
+
+            AssertEqual(
+                (JSON.parse(row!.InputPayload!) as { marker?: string }).marker, 'TG2',
+                'InputPayload round-trips',
+            );
+            AssertEqual(
+                (JSON.parse(row!.OutputPayload!) as { rows?: number }).rows, 42,
+                'OutputPayload round-trips',
+            );
+            AssertEqual(row!.ErrorMessage, 'TG2 write check', 'ErrorMessage round-trips');
+            AssertEqual(row!.ClaimedBy, 'integration-check-instance', 'ClaimedBy round-trips');
+            console.log(`      → payload/claim columns round-tripped on task ${row!.ID}`);
         }
     },
     {
         Id: 'task-graph-orchestration.TG3',
-        Name: 'TG3: task inputs land in Task.InputPayload, not behind a __TASK_METADATA__ marker in Description',
-        Fn: async (ctx: IntegrationCheckContext) => {
-            const agentName = await resolveAgentName(ctx);
-            const workflowName = 'mj-integration-test-payload-columns (safe to delete)';
-            const environmentId = await resolveEnvironmentID(ctx);
+        Name: "TG3: AIAgentRunStep.StepType accepts the new 'TaskGraph' value",
+        Fn: async (_ctx: IntegrationCheckContext) => {
+            // The value list is CodeGen-derived from the CHECK constraint, so its presence proves
+            // the drop-and-re-add in the migration was picked up rather than silently skipped.
+            const entity = new Metadata().EntityByName('MJ: AI Agent Run Steps');
+            Assert(!!entity, 'MJ: AI Agent Run Steps entity not found in metadata');
 
-            const graph = {
-                workflowName,
-                reasoning: 'integration check: payload columns',
-                tasks: [
-                    {
-                        tempId: 'a',
-                        name: 'Payload Task',
-                        description: 'A task whose input should be a column',
-                        agentName,
-                        dependsOn: [],
-                        inputPayload: { integrationCheck: true, marker: 'TG3' },
-                    },
-                ],
-            };
+            const stepType = entity!.Fields.find(f => f.Name === 'StepType');
+            Assert(!!stepType, 'StepType field not found');
 
-            const { parentTaskId } = await orchestrator(ctx).createTasksFromGraph(graph as never, null as never, environmentId);
-            CREATED_PARENT_IDS.push(parentTaskId);
-            await settle(300);
-
-            const res = await new RunView().RunView<MJTaskEntity>(
-                { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentTaskId}'`, ResultType: 'entity_object' }, ctx.User,
-            );
-            const child = res.Results?.[0];
-            Assert(!!child, 'child task was not persisted');
-
-            Assert(!!child!.InputPayload, 'InputPayload column is empty — the input was not stored as a column');
-            const parsed = JSON.parse(child!.InputPayload!) as { marker?: string };
-            AssertEqual(parsed.marker, 'TG3', 'InputPayload round-trips the submitted payload');
-
-            // The whole point of the column: Description goes back to being a human description.
+            const values = (stepType!.EntityFieldValues ?? []).map(v => v.Value);
             Assert(
-                !(child!.Description ?? '').includes('__TASK_METADATA__'),
-                'Description still carries the legacy __TASK_METADATA__ marker',
+                values.includes('TaskGraph'),
+                `StepType value list does not include 'TaskGraph' (has: ${values.join(', ')})`,
             );
-            console.log(`      → InputPayload stored as a column; Description clean (task ${child!.ID})`);
-        }
-    },
-    {
-        Id: 'task-graph-orchestration.TG4',
-        Name: 'TG4: the Phase 1 payload/claim columns exist and round-trip through the entity layer',
-        Fn: async (ctx: IntegrationCheckContext) => {
-            // Guards against the columns being present in the migration but missing from generated
-            // metadata — the failure mode where CodeGen did not re-run after the schema change.
-            const entity = new Metadata().EntityByName('MJ: Tasks');
-            Assert(!!entity, 'MJ: Tasks entity not found in metadata');
-
-            for (const field of ['InputPayload', 'OutputPayload', 'ErrorMessage', 'AgentRunID', 'ClaimedBy', 'ClaimExpiresAt']) {
-                Assert(
-                    entity!.Fields.some(f => f.Name === field),
-                    `MJ: Tasks is missing the Phase 1 field ${field} — did CodeGen run after the migration?`,
-                );
-            }
-
-            Assert(CREATED_PARENT_IDS.length > 0, 'TG3 must run before TG4 (it creates the fixture graph)');
-            const parentTaskId = CREATED_PARENT_IDS[CREATED_PARENT_IDS.length - 1];
-
-            const res = await new RunView().RunView<MJTaskEntity>(
-                { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentTaskId}'`, ResultType: 'entity_object' }, ctx.User,
-            );
-            const child = res.Results?.[0];
-            Assert(!!child, 'fixture child task not found');
-
-            child!.OutputPayload = JSON.stringify({ integrationCheck: true });
-            child!.ErrorMessage = 'TG4 write check';
-            const saved = await child!.Save();
-            Assert(saved, `writing the new columns failed: ${child!.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-
-            await settle(200);
-            const reread = await new RunView().RunView<MJTaskEntity>(
-                { EntityName: 'MJ: Tasks', ExtraFilter: `ID='${child!.ID}'`, ResultType: 'entity_object' }, ctx.User,
-            );
-            AssertEqual(reread.Results?.[0]?.ErrorMessage, 'TG4 write check', 'ErrorMessage round-trips');
-            console.log('      → all six Phase 1 columns present in metadata and writable');
+            console.log("      → StepType value list includes 'TaskGraph'");
         }
     },
 ];
@@ -229,41 +153,26 @@ for (const check of TaskGraphOrchestrationChecks) {
 }
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle('task-graph-orchestration', {
-    // Nothing to build up front — TG1/TG2 assert on rejection and TG3 creates its own fixture.
+    // Nothing to build up front — TG1/TG3 are metadata assertions and TG2 creates its own row.
     Setup: async () => { /* no shared fixture */ },
     Teardown: async (ctx: IntegrationCheckContext) => {
-        // FK-safe: dependencies -> children -> parent.
-        for (const parentTaskId of CREATED_PARENT_IDS) {
-            const childRes = await new RunView().RunView<MJTaskEntity>(
-                { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentTaskId}'`, ResultType: 'entity_object' }, ctx.User,
+        for (const id of CREATED_TASK_IDS) {
+            const res = await new RunView().RunView<MJTaskEntity>(
+                { EntityName: 'MJ: Tasks', ExtraFilter: `ID='${id}'`, ResultType: 'entity_object' }, ctx.User,
             );
-            const children = childRes.Results ?? [];
-
-            if (children.length > 0) {
-                const idList = children.map(c => `'${c.ID}'`).join(',');
-                const depRes = await new RunView().RunView(
-                    { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${idList})`, ResultType: 'entity_object' },
-                    ctx.User,
-                );
-                for (const dep of (depRes.Results ?? []) as Array<{ Delete: () => Promise<boolean> }>) {
-                    await dep.Delete();
-                }
-            }
-
-            for (const child of children) {
-                await child.Delete();
-            }
-
-            const parentRes = await new RunView().RunView<MJTaskEntity>(
-                { EntityName: 'MJ: Tasks', ExtraFilter: `ID='${parentTaskId}'`, ResultType: 'entity_object' }, ctx.User,
-            );
-            const parent = parentRes.Results?.[0];
-            if (parent) await parent.Delete();
+            const row = res.Results?.[0];
+            if (row) await row.Delete();
         }
-        CREATED_PARENT_IDS.length = 0;
+        CREATED_TASK_IDS.length = 0;
+
+        // Only removes a TaskType this bundle created; a pre-existing one is left alone.
+        for (const id of CREATED_TASK_TYPE_IDS) {
+            const res = await new RunView().RunView<MJTaskTypeEntity>(
+                { EntityName: 'MJ: Task Types', ExtraFilter: `ID='${id}'`, ResultType: 'entity_object' }, ctx.User,
+            );
+            const row = res.Results?.[0];
+            if (row) await row.Delete();
+        }
+        CREATED_TASK_TYPE_IDS.length = 0;
     },
 });
-
-// Referenced so the import of MJTaskTypeEntity is not elided; the bundle relies on the task type
-// the orchestrator ensures on first use rather than creating its own.
-export type _TaskTypeRef = MJTaskTypeEntity;
