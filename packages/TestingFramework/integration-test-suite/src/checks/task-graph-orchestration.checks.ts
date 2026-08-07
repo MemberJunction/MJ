@@ -27,6 +27,7 @@
  */
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
+import { TaskGraphService, type TaskGraphSpec } from '@memberjunction/task-graph';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -44,6 +45,8 @@ const PHASE1_TASK_FIELDS = [
 const TASK_NAME = 'mj-integration-test-task-graph-columns (safe to delete)';
 const CREATED_TASK_IDS: string[] = [];
 const CREATED_TASK_TYPE_IDS: string[] = [];
+/** Parent tasks created by the submission checks; torn down FK-safe (edges -> children -> parent). */
+const CREATED_PARENT_IDS: string[] = [];
 
 /** Resolves a TaskType, creating a disposable one if the install has none. */
 async function resolveTaskTypeID(ctx: IntegrationCheckContext): Promise<string> {
@@ -61,6 +64,35 @@ async function resolveTaskTypeID(ctx: IntegrationCheckContext): Promise<string> 
     Assert(saved, `could not create a TaskType fixture: ${tt.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     CREATED_TASK_TYPE_IDS.push(tt.ID);
     return tt.ID;
+}
+
+/** Resolves any real agent name, so a graph can be well-formed without hardcoding one. */
+async function resolveAgentName(ctx: IntegrationCheckContext): Promise<string> {
+    const res = await new RunView().RunView<{ Name: string }>(
+        { EntityName: 'MJ: AI Agents', Fields: ['Name'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
+    );
+    const name = res.Results?.[0]?.Name;
+    Assert(!!name, 'Could not resolve an AI Agent for task-graph checks');
+    return name!;
+}
+
+/** Counts parent tasks by name — used to prove a rejected graph persisted nothing. */
+async function countTasksNamed(ctx: IntegrationCheckContext, name: string): Promise<number> {
+    const res = await new RunView().RunView<{ ID: string }>(
+        { EntityName: 'MJ: Tasks', ExtraFilter: `Name='${name.replace(/'/g, "''")}'`, Fields: ['ID'], ResultType: 'simple' },
+        ctx.User,
+    );
+    return res.Results?.length ?? 0;
+}
+
+/** Submission context bound to the check's provider + user. */
+async function buildSubmitContext(ctx: IntegrationCheckContext) {
+    const res = await new RunView().RunView<{ ID: string }>(
+        { EntityName: 'MJ: Environments', Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
+    );
+    const environmentID = res.Results?.[0]?.ID;
+    Assert(!!environmentID, 'could not resolve an Environment');
+    return { EnvironmentID: environmentID!, ConversationDetailID: null, ContextUser: ctx.User, Provider: ctx.Provider };
 }
 
 export const TaskGraphOrchestrationChecks: NamedCheck[] = [
@@ -146,6 +178,93 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
             console.log("      → StepType value list includes 'TaskGraph'");
         }
     },
+    {
+        Id: 'task-graph-orchestration.TG4',
+        Name: 'TG4: a cyclic graph is rejected by TaskGraphService and persists nothing',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // Deferred from Phase 1 — it needed a submission API that did not exist yet. Before the
+            // engine work, a cyclic graph persisted happily and then deadlocked silently: nothing
+            // ever became eligible, the loop exited, and the parent was marked Complete.
+            const workflowName = 'mj-integration-test-cyclic (safe to delete)';
+            const spec: TaskGraphSpec = {
+                workflowName,
+                tasks: [
+                    { tempId: 'a', name: 'A', description: 'A', agentName: await resolveAgentName(ctx), dependsOn: ['b'] },
+                    { tempId: 'b', name: 'B', description: 'B', agentName: await resolveAgentName(ctx), dependsOn: ['a'] },
+                ],
+            };
+            const result = await new TaskGraphService().Submit(spec, await buildSubmitContext(ctx));
+            Assert(!result.Success, 'a cyclic graph must be rejected');
+            Assert(/cycle/i.test(result.ErrorMessage ?? ''), `rejection should name the cycle, got: ${result.ErrorMessage}`);
+
+            await settle(200);
+            AssertEqual(await countTasksNamed(ctx, workflowName), 0, 'a rejected graph must persist no parent task');
+            console.log('      \u2192 cyclic graph rejected before persistence');
+        }
+    },
+    {
+        Id: 'task-graph-orchestration.TG5',
+        Name: 'TG5: a graph naming an unknown agent is rejected rather than executing with holes',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // Previously the unresolvable task was logged and SKIPPED, so the graph ran missing a
+            // step the caller had asked for — a silent partial execution.
+            const workflowName = 'mj-integration-test-unknown-agent (safe to delete)';
+            const spec: TaskGraphSpec = {
+                workflowName,
+                tasks: [
+                    { tempId: 'a', name: 'A', description: 'A', agentName: await resolveAgentName(ctx), dependsOn: [] },
+                    { tempId: 'b', name: 'B', description: 'B', agentName: 'ThisAgentDoesNotExist_MJCheck', dependsOn: [] },
+                ],
+            };
+            const result = await new TaskGraphService().Submit(spec, await buildSubmitContext(ctx));
+            Assert(!result.Success, 'a graph with an unknown agent must be rejected');
+            Assert(
+                (result.ErrorMessage ?? '').includes('ThisAgentDoesNotExist_MJCheck'),
+                `rejection should name the unresolvable agent, got: ${result.ErrorMessage}`,
+            );
+
+            await settle(200);
+            AssertEqual(await countTasksNamed(ctx, workflowName), 0, 'a rejected graph must persist no parent task');
+            console.log('      \u2192 unknown-agent graph rejected before persistence');
+        }
+    },
+    {
+        Id: 'task-graph-orchestration.TG6',
+        Name: 'TG6: a valid graph persists parent + children + edges, with inputs in InputPayload',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const agentName = await resolveAgentName(ctx);
+            const spec: TaskGraphSpec = {
+                workflowName: 'mj-integration-test-valid-graph (safe to delete)',
+                reasoning: 'integration check: happy path',
+                tasks: [
+                    { tempId: 'a', name: 'First', description: 'first', agentName, dependsOn: [], inputPayload: { marker: 'TG6' } },
+                    { tempId: 'b', name: 'Second', description: 'second', agentName, dependsOn: ['a'] },
+                ],
+            };
+            const result = await new TaskGraphService().Submit(spec, await buildSubmitContext(ctx));
+            Assert(result.Success, `submission failed: ${result.ErrorMessage}`);
+            Assert(!!result.ParentTaskID, 'no parent task ID returned');
+            CREATED_PARENT_IDS.push(result.ParentTaskID!);
+
+            await settle(300);
+            const children = await new RunView().RunView<MJTaskEntity>(
+                { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${result.ParentTaskID}'`, ResultType: 'entity_object' }, ctx.User,
+            );
+            AssertEqual(children.Results?.length ?? 0, 2, 'both child tasks persisted');
+
+            const first = children.Results!.find((c) => c.Name === 'First');
+            Assert(!!first?.InputPayload, 'InputPayload was not stored as a column');
+            AssertEqual((JSON.parse(first!.InputPayload!) as { marker?: string }).marker, 'TG6', 'InputPayload round-trips');
+            Assert(!(first!.Description ?? '').includes('__TASK_METADATA__'), 'Description carries no legacy marker');
+
+            const ids = children.Results!.map((c) => `'${c.ID}'`).join(',');
+            const deps = await new RunView().RunView(
+                { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${ids})`, ResultType: 'simple' }, ctx.User,
+            );
+            AssertEqual(deps.Results?.length ?? 0, 1, 'the a->b dependency edge persisted');
+            console.log(`      \u2192 graph persisted: parent ${result.ParentTaskID}, 2 tasks, 1 edge`);
+        }
+    },
 ];
 
 for (const check of TaskGraphOrchestrationChecks) {
@@ -156,6 +275,31 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('task-graph-orchestration', 
     // Nothing to build up front — TG1/TG3 are metadata assertions and TG2 creates its own row.
     Setup: async () => { /* no shared fixture */ },
     Teardown: async (ctx: IntegrationCheckContext) => {
+        // Submitted graphs first: dependency edges, then children, then the parent.
+        for (const parentID of CREATED_PARENT_IDS) {
+            const childRes = await new RunView().RunView<MJTaskEntity>(
+                { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentID}'`, ResultType: 'entity_object' }, ctx.User,
+            );
+            const children = childRes.Results ?? [];
+            if (children.length > 0) {
+                const ids = children.map((c) => `'${c.ID}'`).join(',');
+                const depRes = await new RunView().RunView(
+                    { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${ids})`, ResultType: 'entity_object' }, ctx.User,
+                );
+                for (const dep of (depRes.Results ?? []) as Array<{ Delete: () => Promise<boolean> }>) {
+                    await dep.Delete();
+                }
+            }
+            for (const child of children) await child.Delete();
+
+            const parentRes = await new RunView().RunView<MJTaskEntity>(
+                { EntityName: 'MJ: Tasks', ExtraFilter: `ID='${parentID}'`, ResultType: 'entity_object' }, ctx.User,
+            );
+            const parent = parentRes.Results?.[0];
+            if (parent) await parent.Delete();
+        }
+        CREATED_PARENT_IDS.length = 0;
+
         for (const id of CREATED_TASK_IDS) {
             const res = await new RunView().RunView<MJTaskEntity>(
                 { EntityName: 'MJ: Tasks', ExtraFilter: `ID='${id}'`, ResultType: 'entity_object' }, ctx.User,
