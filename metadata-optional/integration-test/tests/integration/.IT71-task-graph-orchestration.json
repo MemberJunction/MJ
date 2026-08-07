@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT71 - Task Graph Orchestration",
+    "Description": "Deterministic coverage of the unified workflow DAG engine (plan PR #3456), bundle 'task-graph-orchestration', TG1-TG7. TG1: the six Phase 1 Task columns (InputPayload, OutputPayload, ErrorMessage, AgentRunID, ClaimedBy, ClaimExpiresAt) are present in entity metadata. TG2: those columns round-trip through BaseEntity — write, reload, read back — proving the migration and CodeGen agree. TG3: AIAgentRunStep.StepType accepts the new 'TaskGraph' value, which proves the CHECK-constraint drop-and-re-add was picked up rather than silently skipped. TG4: a cyclic graph is rejected by TaskGraphService naming the cycle, and persists nothing — before the engine work a cycle persisted happily and then deadlocked silently, with the parent marked Complete. TG5: a graph naming an unknown agent is rejected rather than executing with holes; previously the unresolvable task was logged and SKIPPED, producing silent partial execution. TG6: a valid graph persists parent + children + dependency edges with inputs in the InputPayload column and no legacy __TASK_METADATA__ marker in Description. TG7: the four task-graph Remote Operations (TaskGraph.Submit/.Cancel/.RetryTask/.GetStatus) each have an Active metadata row AND resolve to a server implementation rather than the CodeGen contract-only base — the two failure modes a build cannot catch, a forgotten metadata push and a key typo. NO LLM calls. Mutation-by-design: creates and FK-ordered-deletes its own tagged Tasks, Task Dependencies, and Task Types.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Malformed graphs are rejected before persistence rather than deadlocking or partially executing; valid graphs persist as parent + children + edges with structured payloads in columns; the Phase 1 schema round-trips; and the task-graph control plane is both published and backed by real implementations."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "task-graph-orchestration"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "73C015EF-A112-4BF6-A0A0-EEB2D1177036"
+  },
+  "sync": {
+    "lastModified": "2026-08-07T06:38:48.387Z",
+    "checksum": "428f99aa11d372ef06d139ce4a7f86f1595d35c27d2d0672735511f129ec26d8"
+  }
+}

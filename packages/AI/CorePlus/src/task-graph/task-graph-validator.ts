@@ -10,15 +10,15 @@
  * Every check returns ALL failures rather than throwing on the first — a producer fixing a
  * malformed graph should see every problem at once, not discover them one round-trip at a time.
  *
- * @module @memberjunction/task-graph
+ * @module @memberjunction/ai-core-plus
  */
-import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from '@memberjunction/ai-core-plus';
+import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from './graph-algorithms';
 import {
     MAX_TASKS_PER_GRAPH,
     TaskGraphSpec,
     TaskGraphValidationError,
     TaskGraphValidationResult,
-} from './TaskGraphSpec';
+} from './task-graph-spec';
 
 /**
  * Validates a spec's structure.

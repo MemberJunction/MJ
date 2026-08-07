@@ -2463,6 +2463,7 @@ export class ManageMetadataBase {
       await import('@memberjunction/external-data-source-sqlserver');
       await import('@memberjunction/external-data-source-mysql');
       await import('@memberjunction/external-data-source-oracle');
+      await import('@memberjunction/external-data-source-databricks');
       const router = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
       if (!router) {
          logError('   Cannot sync external entity fields: no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources (and the relevant driver) are loaded in the CodeGen process.');

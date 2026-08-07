@@ -104,6 +104,7 @@
     "@memberjunction/search-engine": "6.1.0-edge.0",
     "@memberjunction/storage": "6.1.0-edge.0",
     "@memberjunction/tag-engine-base": "6.1.0-edge.0",
+    "@memberjunction/task-graph": "6.1.0-edge.0",
     "@memberjunction/templates": "6.1.0-edge.0",
     "@memberjunction/testing-engine": "6.1.0-edge.0"
   },

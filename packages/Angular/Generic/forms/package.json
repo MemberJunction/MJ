@@ -30,9 +30,9 @@
     "vitest": "^4.0.18"
   },
   "peerDependencies": {
-    "@angular/common": "21.1.3",
-    "@angular/core": "21.1.3",
-    "@angular/forms": "21.1.3"
+    "@angular/common": "^21.1.3",
+    "@angular/core": "^21.1.3",
+    "@angular/forms": "^21.1.3"
   },
   "dependencies": {
     "@memberjunction/ai-core-plus": "6.1.0-edge.0",
