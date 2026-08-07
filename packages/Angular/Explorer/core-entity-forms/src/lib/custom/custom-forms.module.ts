@@ -57,6 +57,7 @@ import { MJQueryFormComponentExtended } from "./Queries/query-form.component";
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
 import { FlowEditorModule } from "@memberjunction/ng-flow-editor";
+import { TaskGraphEditorModule } from "@memberjunction/ng-task-graph-editor";
 import { MarkdownModule } from "@memberjunction/ng-markdown";
 import { NgTreesModule } from "@memberjunction/ng-trees";
 import { MJTestRunFormComponentExtended } from "./Tests/test-run-form.component";
@@ -189,6 +190,7 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         ActionGalleryModule,
         TestingModule,
         FlowEditorModule,
+        TaskGraphEditorModule,
         SharedGenericModule,
         EntityRelationshipDiagramModule,
         ListManagementModule,
