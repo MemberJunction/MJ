@@ -841,6 +841,17 @@
           "primaryKey": {
             "ID": "7D2B4F91-3A68-4C05-B1E7-9F60A2C8D453"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT71 - Task Graph Orchestration",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8D5955F1-2D54-4214-BD61-CE41D2F082E3"
+          }
         }
       ]
     },
