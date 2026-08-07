@@ -335,7 +335,7 @@ export class ManageMetadataBase {
 
    /**
     * Produces a schema-qualified object reference.
-    * SQL Server: [schema].[object], PostgreSQL: schema."object"
+    * SQL Server: [schema].[object], PostgreSQL: "schema"."object"
     */
    protected qs(schema: string, object: string): string {
       return this.dialect.QuoteSchema(schema, object);

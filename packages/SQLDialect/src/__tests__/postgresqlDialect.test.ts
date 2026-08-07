@@ -572,6 +572,10 @@ describe('PostgreSQLDialect', () => {
         it('preserves mixed casing exactly (PG would lowercase otherwise)', () => {
             expect(dialect.QuoteColumnAlias('IDValue')).toBe('"IDValue"');
         });
+
+        it('doubles an embedded double-quote so an untrusted alias cannot break out of quoting', () => {
+            expect(dialect.QuoteColumnAlias('ev"il')).toBe('"ev""il"');
+        });
     });
 
     describe('CastToBoundedString', () => {

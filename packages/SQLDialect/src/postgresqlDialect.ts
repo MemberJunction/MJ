@@ -186,10 +186,12 @@ export class PostgreSQLDialect extends SQLDialect {
      * `AS EntityName` into the result column `entityname`. Quoting the
      * alias preserves the requested casing for callers that key off the
      * column name (e.g. when consuming results into a TypeScript object
-     * with a PascalCase property).
+     * with a PascalCase property). Any embedded `"` is doubled (`"`→`""`),
+     * for consistency with QuoteIdentifier — an alias sourced from an
+     * untrusted name can't break out of its quoting.
      */
     QuoteColumnAlias(aliasName: string): string {
-        return `"${aliasName}"`;
+        return `"${aliasName.replace(/"/g, '""')}"`;
     }
 
     /**
