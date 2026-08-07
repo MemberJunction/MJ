@@ -37,7 +37,6 @@ import {
   LogError,
   EntityRecordNameInput,
   EntityRecordNameResult,
-  IRunReportProvider,
   RecordDependency,
   EntityDependency,
   LogStatus,
@@ -262,7 +261,7 @@ async function executeSQLCore(
  */
 export class SQLServerDataProvider
   extends GenericDatabaseProvider
-  implements IEntityDataProvider, IMetadataProvider, IRunReportProvider, IColocatedVectorHost
+  implements IEntityDataProvider, IMetadataProvider, IColocatedVectorHost
 {
   /**************************************************************************/
   // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
