@@ -5,7 +5,23 @@ import { ChatMessageRole } from '@memberjunction/ai';
 import { PubSubEngine } from 'type-graphql';
 import { UserPayload } from '../types.js';
 import { publishStatusUpdate } from '../generic/PushStatusResolver.js';
-import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import {
+    MJAIAgentEntityExtended,
+    ComputeEligibleTasks,
+    ComputeParentRollup,
+    ComputeTasksToBlock,
+    DetectCycle,
+    IsGraphStalled,
+    type TaskGraphEdge,
+    type TaskGraphNode,
+    type TaskGraphNodeStatus,
+} from '@memberjunction/ai-core-plus';
+
+/**
+ * Maximum number of eligible tasks executed concurrently within one wave.
+ * Mirrors BaseAgent's bounded sub-agent fan-out; carries into the Phase 2 dispatcher.
+ */
+const TASK_EXECUTION_CONCURRENCY = 5;
 
 /**
  * Task definition from LLM response
@@ -41,6 +57,13 @@ export interface TaskExecutionResult {
 /**
  * TaskOrchestrator handles multi-step task execution with dependencies
  */
+/** One graph's children + edges, in both algorithm shape and mutable-entity shape. */
+type GraphState = {
+    nodes: TaskGraphNode[];
+    edges: TaskGraphEdge[];
+    entityById: Map<string, MJTaskEntity>;
+};
+
 export class TaskOrchestrator {
     // Default artifact type ID for JSON (when agent doesn't specify DefaultArtifactTypeID)
     private readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
@@ -137,13 +160,39 @@ export class TaskOrchestrator {
         LogStatus(`Preparing parent + ${uniqueTasks.length} unique child tasks (${taskGraph.tasks.length - uniqueTasks.length} duplicates filtered)`);
 
         const resolvedTasks: Array<{ def: TaskDefinition; agentId: string }> = [];
+        const unresolvedAgents: string[] = [];
         for (const taskDef of uniqueTasks) {
             const agent = await this.findAgentByName(taskDef.agentName);
             if (!agent) {
-                LogError(`Agent not found: ${taskDef.agentName}`);
+                // Previously this logged and skipped, so the graph executed with holes —
+                // silently dropping work the caller asked for. Collect them all so the
+                // error names every bad reference rather than only the first.
+                unresolvedAgents.push(taskDef.agentName);
                 continue;
             }
             resolvedTasks.push({ def: taskDef, agentId: agent.ID });
+        }
+        if (unresolvedAgents.length > 0) {
+            throw new Error(
+                `Cannot create task graph "${taskGraph.workflowName}": ` +
+                `${unresolvedAgents.length} task(s) reference unknown agent(s): ${unresolvedAgents.join(', ')}. ` +
+                `Executing a graph with unresolvable agents would silently drop those tasks.`
+            );
+        }
+
+        // Reject cycles before anything is persisted. A cyclic graph deadlocks at runtime:
+        // nothing ever becomes eligible, so the loop exits and the parent used to be marked
+        // Complete despite no work having run.
+        const cycleNodes: TaskGraphNode[] = resolvedTasks.map(rt => ({ id: rt.def.tempId, status: 'Pending' }));
+        const cycleEdges: TaskGraphEdge[] = resolvedTasks.flatMap(rt =>
+            (rt.def.dependsOn ?? []).map(dep => ({ taskId: rt.def.tempId, dependsOnTaskId: dep }))
+        );
+        const cycleCheck = DetectCycle(cycleNodes, cycleEdges);
+        if (cycleCheck.hasCycle) {
+            throw new Error(
+                `Cannot create task graph "${taskGraph.workflowName}": dependency cycle detected ` +
+                `(${cycleCheck.path.join(' -> ')}). A cyclic graph can never execute.`
+            );
         }
 
         // Persist parent + children + dependency graph in one transaction
@@ -172,7 +221,8 @@ export class TaskOrchestrator {
                         inputPayload: def.inputPayload,
                         tempId: def.tempId
                     };
-                    task.Description = `${def.description}\n\n__TASK_METADATA__\n${JSON.stringify(metadata)}`;
+                    task.Description = def.description;
+                    task.InputPayload = def.inputPayload ? JSON.stringify(def.inputPayload) : null;
                 }
 
                 if (!await task.Save()) {
@@ -302,82 +352,164 @@ export class TaskOrchestrator {
      */
     async executeTasksForParent(parentTaskId: string): Promise<TaskExecutionResult[]> {
         const results: TaskExecutionResult[] = [];
-        let hasMore = true;
 
-        // Get parent task for progress updates
         const md = this.getMetadata();
         const parentTask = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         await parentTask.Load(parentTaskId);
 
-        // Publish workflow start
         this.publishTaskProgress(parentTask.Name, 'Starting workflow execution', 0);
 
-        while (hasMore) {
-            // Find tasks that are pending and have no incomplete dependencies
-            const eligibleTasks = await this.findEligibleTasks(parentTaskId);
+        // Each pass loads the whole graph once and decides from that snapshot, rather than
+        // issuing a dependency query per candidate task. The decision itself is delegated to
+        // the pure algorithms so the Phase 2 dispatcher reuses identical semantics.
+        for (;;) {
+            const graph = await this.loadGraphState(parentTaskId);
 
-            if (eligibleTasks.length === 0) {
-                hasMore = false;
+            // Settle any task whose dependencies can no longer be satisfied BEFORE picking
+            // work, so a failure earlier in this pass stops its branch immediately.
+            const blocked = await this.applyFailurePropagation(graph);
+            if (blocked > 0) continue; // re-read; statuses changed
+
+            const eligible = ComputeEligibleTasks(graph.nodes, graph.edges);
+            if (eligible.length === 0) {
+                if (IsGraphStalled(graph.nodes, graph.edges)) {
+                    // Pending work with nothing runnable and nothing in flight. Previously this
+                    // exited quietly and the parent was reported Complete.
+                    LogError(`Task graph ${parentTaskId} is stalled: pending tasks with no satisfiable path.`);
+                }
                 break;
             }
 
-            // Execute eligible tasks (could be parallelized in the future)
-            for (const task of eligibleTasks) {
-                // Publish task start
-                this.publishTaskProgress(task.Name, 'Starting task', 0);
+            // Execute the whole wave with bounded concurrency. Sibling branches are independent
+            // by construction — that is what the dependency edges encode — so running them
+            // sequentially was pure latency.
+            const wave = eligible
+                .map(n => graph.entityById.get(n.id))
+                .filter((t): t is MJTaskEntity => t != null);
 
-                const result = await this.executeTask(task);
-                results.push(result);
+            const waveResults = await this.executeWithConcurrency(wave, TASK_EXECUTION_CONCURRENCY);
+            results.push(...waveResults);
 
-                // Publish task complete
-                if (result.success) {
-                    this.publishTaskProgress(task.Name, 'Task completed successfully', 100);
-                } else {
-                    this.publishTaskProgress(task.Name, `Task failed: ${result.error}`, 100);
-                }
-
-                // Update parent task progress after each child completes
-                await this.updateParentTaskProgress(parentTaskId);
-            }
+            await this.updateParentTaskProgress(parentTaskId);
         }
 
-        // Mark parent task as complete
         await this.completeParentTask(parentTaskId);
 
-        // Publish workflow complete
-        this.publishTaskProgress(parentTask.Name, 'Workflow completed', 100);
+        const finalGraph = await this.loadGraphState(parentTaskId);
+        const rollup = ComputeParentRollup(finalGraph.nodes);
+        this.publishTaskProgress(
+            parentTask.Name,
+            rollup.status === 'Complete' ? 'Workflow completed' : `Workflow finished with status: ${rollup.status}`,
+            rollup.percentComplete
+        );
 
         return results;
     }
 
     /**
-     * Find tasks that are ready to execute (pending with no incomplete dependencies)
+     * Runs a wave of tasks with a bounded number in flight at once.
+     *
+     * A rejected promise would abandon the rest of the wave, so every task is wrapped —
+     * executeTask already converts failures into a result object, and this guards the
+     * unexpected-throw path so one bad task cannot strand its siblings.
      */
-    private async findEligibleTasks(parentTaskId: string): Promise<MJTaskEntity[]> {
+    private async executeWithConcurrency(tasks: MJTaskEntity[], limit: number): Promise<TaskExecutionResult[]> {
+        const results: TaskExecutionResult[] = new Array(tasks.length);
+        let cursor = 0;
+
+        const worker = async (): Promise<void> => {
+            for (;;) {
+                const index = cursor++;
+                if (index >= tasks.length) return;
+                const task = tasks[index];
+
+                this.publishTaskProgress(task.Name, 'Starting task', 0);
+                try {
+                    const result = await this.executeTask(task);
+                    results[index] = result;
+                    this.publishTaskProgress(
+                        task.Name,
+                        result.success ? 'Task completed successfully' : `Task failed: ${result.error}`,
+                        100
+                    );
+                } catch (e) {
+                    const message = e instanceof Error ? e.message : String(e);
+                    LogError(`Unexpected error executing task ${task.ID}: ${message}`);
+                    results[index] = { taskId: task.ID, success: false, error: message };
+                }
+            }
+        };
+
+        await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => worker()));
+        return results;
+    }
+
+    /**
+     * Marks every task whose dependencies can never be satisfied as Blocked.
+     *
+     * Without this a Failed dependency leaves its dependents Pending forever: they are never
+     * eligible, so the graph appears to finish while work silently never ran.
+     *
+     * @returns how many tasks were transitioned
+     */
+    private async applyFailurePropagation(graph: GraphState): Promise<number> {
+        const toBlock = ComputeTasksToBlock(graph.nodes, graph.edges);
+        if (toBlock.length === 0) return 0;
+
+        let blocked = 0;
+        for (const taskId of toBlock) {
+            const task = graph.entityById.get(taskId);
+            if (!task) continue;
+            task.Status = 'Blocked';
+            const saved = await task.Save();
+            if (saved) {
+                blocked++;
+                LogStatus(`Task blocked (unsatisfiable dependency): ${task.Name} (${task.ID})`);
+            } else {
+                LogError(`Failed to mark task ${task.ID} as Blocked: ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        }
+        return blocked;
+    }
+
+    /**
+     * Loads a graph's children and dependency edges in one shot, in both the plain shape the
+     * pure algorithms consume and an id->entity map for mutation.
+     */
+    private async loadGraphState(parentTaskId: string): Promise<GraphState> {
         const rv = new RunView();
 
-        // Get all pending tasks for this parent
-        const tasksResult = await rv.RunView<MJTaskEntity>({
+        const childrenResult = await rv.RunView<MJTaskEntity>({
             EntityName: 'MJ: Tasks',
-            ExtraFilter: `ParentID='${parentTaskId}' AND Status='Pending'`,
+            ExtraFilter: `ParentID='${parentTaskId}'`,
             ResultType: 'entity_object'
         }, this.contextUser);
 
-        if (!tasksResult.Success || !tasksResult.Results) {
-            return [];
+        const children = (childrenResult.Success ? childrenResult.Results : []) ?? [];
+        if (children.length === 0) {
+            return { nodes: [], edges: [], entityById: new Map() };
         }
 
-        const eligibleTasks: MJTaskEntity[] = [];
+        // Scope dependency loading to this graph's tasks. Quoting is safe: these are UUIDs
+        // that came from the database, not user input.
+        const idList = children.map(c => `'${c.ID}'`).join(',');
+        const depsResult = await rv.RunView<MJTaskDependencyEntity>({
+            EntityName: 'MJ: Task Dependencies',
+            ExtraFilter: `TaskID IN (${idList})`,
+            ResultType: 'entity_object'
+        }, this.contextUser);
 
-        // Check each task for incomplete dependencies
-        for (const task of tasksResult.Results) {
-            const hasIncompleteDeps = await this.hasIncompleteDependencies(task.ID);
-            if (!hasIncompleteDeps) {
-                eligibleTasks.push(task);
-            }
-        }
+        const deps = (depsResult.Success ? depsResult.Results : []) ?? [];
 
-        return eligibleTasks;
+        return {
+            nodes: children.map(c => ({ id: c.ID, status: c.Status as TaskGraphNodeStatus })),
+            edges: deps.map(d => ({
+                taskId: d.TaskID,
+                dependsOnTaskId: d.DependsOnTaskID,
+                dependencyType: d.DependencyType as TaskGraphEdge['dependencyType']
+            })),
+            entityById: new Map(children.map(c => [c.ID, c]))
+        };
     }
 
     /**
@@ -422,45 +554,37 @@ export class TaskOrchestrator {
         const loaded = await parentTask.Load(parentTaskId);
         if (!loaded) return;
 
-        parentTask.Status = 'Complete';
-        parentTask.PercentComplete = 100;
-        parentTask.CompletedAt = new Date();
+        // Roll the children up honestly. Previously the parent was set Complete/100%
+        // unconditionally, so a graph whose children failed still reported success.
+        const graph = await this.loadGraphState(parentTaskId);
+        const rollup = ComputeParentRollup(graph.nodes);
+
+        parentTask.Status = rollup.status;
+        parentTask.PercentComplete = rollup.percentComplete;
+        if (rollup.isTerminal) {
+            parentTask.CompletedAt = new Date();
+        }
+
+        const failedChildren = graph.nodes.filter(n => n.status === 'Failed').length;
+        const blockedChildren = graph.nodes.filter(n => n.status === 'Blocked').length;
+        if (failedChildren > 0 || blockedChildren > 0) {
+            parentTask.ErrorMessage =
+                `${failedChildren} task(s) failed and ${blockedChildren} task(s) were blocked by unsatisfiable dependencies.`;
+        }
+
         const saved = await parentTask.Save();
+        if (!saved) {
+            LogError(`Failed to finalize parent task ${parentTaskId}: ${parentTask.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            return;
+        }
 
-        LogStatus(`Parent workflow task completed: ${parentTask.Name}`);
+        LogStatus(`Parent workflow task finalized: ${parentTask.Name} -> ${rollup.status} (${rollup.percentComplete}%)`);
 
-        // If notifications enabled, create user notification
-        if (this.createNotifications && saved) {
+        // Only notify on a genuinely successful workflow; a failed graph should not
+        // announce completion.
+        if (this.createNotifications && rollup.status === 'Complete') {
             await this.createTaskGraphCompletionNotification(parentTask);
         }
-    }
-
-    /**
-     * Check if a task has incomplete dependencies
-     */
-    private async hasIncompleteDependencies(taskId: string): Promise<boolean> {
-        const rv = new RunView();
-
-        // Get dependencies
-        const depsResult = await rv.RunView<MJTaskDependencyEntity>({
-            EntityName: 'MJ: Task Dependencies',
-            ExtraFilter: `TaskID='${taskId}'`,
-            ResultType: 'entity_object'
-        }, this.contextUser);
-
-        if (!depsResult.Success || !depsResult.Results || depsResult.Results.length === 0) {
-            return false; // No dependencies
-        }
-
-        // Check if any dependency is not complete
-        for (const dep of depsResult.Results) {
-            const dependsOnTask = await this.loadTask(dep.DependsOnTaskID);
-            if (dependsOnTask && dependsOnTask.Status !== 'Complete') {
-                return true; // Has incomplete dependency
-            }
-        }
-
-        return false;
     }
 
     /**
@@ -520,20 +644,20 @@ export class TaskOrchestrator {
                 // Extract output - check both message and payload
                 const output = this.extractAgentOutput(agentResult);
 
-                // Store output in task metadata
-                const outputMetadata = {
-                    outputType: output.type,
-                    output: output.content,
-                    agentRunId: agentResult.agentRun?.ID
-                };
-
-                // Update task with success
+                // Update task with success. Output rides in its own column now — it used to be
+                // appended to Description behind a __TASK_OUTPUT__ marker, which leaked
+                // orchestration plumbing into search results and the task detail panel.
                 task.Status = 'Complete';
                 task.CompletedAt = new Date();
                 task.PercentComplete = 100;
-                // Store output in description (would be better as a separate column)
-                task.Description = `${task.Description}\n\n__TASK_OUTPUT__\n${JSON.stringify(outputMetadata)}`;
-                await task.Save();
+                task.OutputPayload = output.content != null ? JSON.stringify(output.content) : null;
+                // Link the specific run that produced this task, so the Gantt stops mapping
+                // every sibling to the same conversation-level run.
+                task.AgentRunID = agentResult.agentRun?.ID ?? null;
+                const taskSaved = await task.Save();
+                if (!taskSaved) {
+                    LogError(`Failed to save completed task ${task.ID}: ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
 
                 LogStatus(`Task completed: ${task.Name} (output type: ${output.type})`);
 
@@ -561,12 +685,15 @@ export class TaskOrchestrator {
                     output: output.content
                 };
             } else {
-                // Update task with failure
+                // Update task with failure. ErrorMessage is a column now, so the reason a task
+                // failed survives on the row for the UI and for the dispatcher's forensics.
+                const errorMsg = agentResult.agentRun?.ErrorMessage || 'Agent execution failed';
                 task.Status = 'Failed';
                 task.CompletedAt = new Date();
+                task.ErrorMessage = errorMsg;
+                task.AgentRunID = agentResult.agentRun?.ID ?? null;
                 await task.Save();
 
-                const errorMsg = agentResult.agentRun?.ErrorMessage || 'Agent execution failed';
                 LogError(`Task failed: ${task.Name} - ${errorMsg}`);
 
                 return {
@@ -578,15 +705,16 @@ export class TaskOrchestrator {
         } catch (error) {
             LogError(error);
 
-            // Update task with failure
+            const errorMsg = error instanceof Error ? error.message : 'Unknown error';
             task.Status = 'Failed';
             task.CompletedAt = new Date();
+            task.ErrorMessage = errorMsg;
             await task.Save();
 
             return {
                 taskId: task.ID,
                 success: false,
-                error: error instanceof Error ? error.message : 'Unknown error'
+                error: errorMsg
             };
         }
     }
@@ -595,15 +723,14 @@ export class TaskOrchestrator {
      * Extract input payload from task metadata
      */
     private extractInputPayload(task: MJTaskEntity): any | null {
-        if (!task.Description) return null;
-
-        const metadataMatch = task.Description.match(/__TASK_METADATA__\n(.+?)(?:\n\n|$)/s);
-        if (!metadataMatch) return null;
-
+        // Reads the column directly. The legacy __TASK_METADATA__ marker was converted by the
+        // Phase 1 migration's one-time backfill, so there is deliberately no fallback parse —
+        // a fallback with no backfill never dies.
+        if (!task.InputPayload) return null;
         try {
-            const metadata = JSON.parse(metadataMatch[1]);
-            return metadata.inputPayload || null;
-        } catch {
+            return JSON.parse(task.InputPayload);
+        } catch (e) {
+            LogError(`Task ${task.ID} has malformed InputPayload JSON: ${e}`);
             return null;
         }
     }
@@ -629,16 +756,12 @@ export class TaskOrchestrator {
         // Get output from each dependency
         for (const dep of depsResult.Results) {
             const dependsOnTask = await this.loadTask(dep.DependsOnTaskID);
-            if (!dependsOnTask || !dependsOnTask.Description) continue;
+            if (!dependsOnTask?.OutputPayload) continue;
 
-            const outputMatch = dependsOnTask.Description.match(/__TASK_OUTPUT__\n(.+?)$/s);
-            if (outputMatch) {
-                try {
-                    const outputMetadata = JSON.parse(outputMatch[1]);
-                    outputs.set(dep.DependsOnTaskID, outputMetadata.output);
-                } catch (e) {
-                    LogError(`Failed to parse output for task ${dep.DependsOnTaskID}: ${e}`);
-                }
+            try {
+                outputs.set(dep.DependsOnTaskID, JSON.parse(dependsOnTask.OutputPayload));
+            } catch (e) {
+                LogError(`Task ${dep.DependsOnTaskID} has malformed OutputPayload JSON: ${e}`);
             }
         }
 

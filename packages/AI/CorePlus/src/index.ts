@@ -23,3 +23,4 @@ export * from './MJAIAgentRunEntityExtended';
 export * from './MJAIAgentRunStepEntityExtended';
 export * from './MJAIPromptRunEntityExtended';
 export * from './MJEntityDocumentEntityExtended';
+export * from './task-graph/graph-algorithms';
