@@ -139,27 +139,6 @@ import {
     OpenRouterLLM,
 } from '@memberjunction/ai-openrouter';
 
-// @memberjunction/ai-vertex (1 classes)
-import {
-    VertexLLM,
-} from '@memberjunction/ai-vertex';
-
-// @memberjunction/ai-xai (2 classes)
-import {
-    xAILLM,
-    xAIRealtime,
-} from '@memberjunction/ai-xai';
-
-// @memberjunction/ai-zhipu (1 classes)
-import {
-    ZhipuLLM,
-} from '@memberjunction/ai-zhipu';
-
-// @memberjunction/core (1 classes)
-import {
-    SaveEntityGraphOperation,
-} from '@memberjunction/core';
-
 // @memberjunction/ai-vectors-memory (2 classes)
 import {
     SimpleVectorDatabase,
@@ -186,6 +165,22 @@ import {
 import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
+
+// @memberjunction/ai-vertex (1 classes)
+import {
+    VertexLLM,
+} from '@memberjunction/ai-vertex';
+
+// @memberjunction/ai-xai (2 classes)
+import {
+    xAILLM,
+    xAIRealtime,
+} from '@memberjunction/ai-xai';
+
+// @memberjunction/ai-zhipu (1 classes)
+import {
+    ZhipuLLM,
+} from '@memberjunction/ai-zhipu';
 
 // @memberjunction/core-entities (400 classes)
 import {
@@ -955,6 +950,15 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
+// @memberjunction/task-graph (5 classes)
+import {
+    DurableTaskGraphSubmitter,
+    TaskGraphCancelServerOperation,
+    TaskGraphGetStatusServerOperation,
+    TaskGraphRetryTaskServerOperation,
+    TaskGraphSubmitServerOperation,
+} from '@memberjunction/task-graph';
+
 // @memberjunction/scheduling-engine (7 classes)
 import {
     ActionScheduledJobDriver,
@@ -1206,11 +1210,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     LlamaCppLLM,
     MiniMaxLLM,
     OpenRouterLLM,
-    VertexLLM,
-    xAILLM,
-    xAIRealtime,
-    ZhipuLLM,
-    SaveEntityGraphOperation,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
     PgVectorColocatedDatabase,
@@ -1218,6 +1217,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     PineconeDatabase,
     QdrantDatabase,
     SQLServerVectorDatabase,
+    VertexLLM,
+    xAILLM,
+    xAIRealtime,
+    ZhipuLLM,
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
@@ -1862,6 +1865,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
+    DurableTaskGraphSubmitter,
+    TaskGraphCancelServerOperation,
+    TaskGraphGetStatusServerOperation,
+    TaskGraphRetryTaskServerOperation,
+    TaskGraphSubmitServerOperation,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
@@ -2061,7 +2069,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 885;
+export const CLASS_REGISTRATIONS_COUNT = 889;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2088,15 +2096,14 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-llamacpp',
     '@memberjunction/ai-minimax',
     '@memberjunction/ai-openrouter',
-    '@memberjunction/ai-vertex',
-    '@memberjunction/ai-xai',
-    '@memberjunction/ai-zhipu',
-    '@memberjunction/core',
     '@memberjunction/ai-vectors-memory',
     '@memberjunction/ai-vectors-pgvector',
     '@memberjunction/ai-vectors-pinecone',
     '@memberjunction/ai-vectors-qdrant',
     '@memberjunction/ai-vectors-sqlserver',
+    '@memberjunction/ai-vertex',
+    '@memberjunction/ai-xai',
+    '@memberjunction/ai-zhipu',
     '@memberjunction/core-entities',
     '@memberjunction/actions-base',
     '@memberjunction/ai-core-plus',
@@ -2128,6 +2135,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-form-builder',
     '@memberjunction/record-set-processor',
     '@memberjunction/predictive-studio',
+    '@memberjunction/task-graph',
     '@memberjunction/scheduling-engine',
     '@memberjunction/core-entities-server',
     '@memberjunction/core-actions',

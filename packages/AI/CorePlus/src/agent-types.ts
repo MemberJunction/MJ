@@ -155,6 +155,7 @@ export interface SecondaryDimension {
 // Exported directly from index.ts, not re-exported here
 import type { ForEachOperation } from './foreach-operation';
 import type { WhileOperation } from './while-operation';
+import type { TaskGraphSpec } from './task-graph/task-graph-spec';
 
 /**
  * Represents a media output that an agent has explicitly promoted to its outputs.
@@ -641,6 +642,23 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * via the standard response-form HITL flow before the agent may execute Actions/Sub-Agents.
      */
     planDetails?: { plan: string };
+    /**
+     * The emitted task graph, set whenever a Loop agent produced one — whether it was dispatched
+     * (`step === 'Tasks'`) or constant-folded into an in-run `'Sub-Agent'` call (D9).
+     *
+     * **The fold is recorded, not silent.** The `TaskGraph` run step is written for every emitted
+     * graph, so run forensics show why a graph did or did not reach the dispatcher; a user who
+     * edits a two-node graph down to one can read the durability change off the run record instead
+     * of inferring it; and Save as Workflow (D17) attaches to the recorded spec, which makes the
+     * single-node case — the shape most likely to be worth promoting — promotable like any other.
+     */
+    taskGraph?: {
+        spec: TaskGraphSpec;
+        /** True when the graph was flattened to an in-run sub-agent call rather than dispatched. */
+        folded: boolean;
+        /** Why it folded. Absent when it did not. */
+        foldReason?: string;
+    };
     /**
      * When true, the agent should terminate after executing the current step.
      * Used by ClientTools: the main loop needs `terminate: false` so it continues
