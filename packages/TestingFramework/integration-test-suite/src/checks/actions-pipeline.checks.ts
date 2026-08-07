@@ -161,10 +161,10 @@ export const ActionsPipelineChecks: NamedCheck[] = [
             // The fixture action's declared contract, which AP2/AP3 depend on.
             const calc = fx().Calc;
             AssertEqual(calc.Status, 'Active', `'${FIXTURE_ACTION}' status`);
-            const exprParam = calc.Params.find(p => p.Name.trim().toLowerCase() === 'expression');
+            const exprParam = calc.Params.Items.find(p => p.Name.trim().toLowerCase() === 'expression');
             Assert(exprParam != null, `'${FIXTURE_ACTION}' is missing its 'Expression' param`);
             AssertEqual(exprParam!.Type, 'Input', `'Expression' param direction`);
-            const codes = new Set(calc.ResultCodes.map(rc => rc.ResultCode.trim().toUpperCase()));
+            const codes = new Set(calc.ResultCodes.Items.map(rc => rc.ResultCode.trim().toUpperCase()));
             for (const required of ['SUCCESS', 'INVALID_EXPRESSION', 'MISSING_PARAMETERS']) {
                 Assert(codes.has(required), `'${FIXTURE_ACTION}' is missing declared result code '${required}' (has: [${[...codes].join(', ')}])`);
             }
