@@ -56,6 +56,7 @@
     "@memberjunction/external-data-source-sqlserver": "6.1.0-edge.0",
     "@memberjunction/external-data-source-mysql": "6.1.0-edge.0",
     "@memberjunction/external-data-source-oracle": "6.1.0-edge.0",
+    "@memberjunction/external-data-source-databricks": "6.1.0-edge.0",
     "@memberjunction/sql-parser": "6.1.0-edge.0",
     "@memberjunction/global": "6.1.0-edge.0",
     "@memberjunction/server-bootstrap-lite": "6.1.0-edge.0",

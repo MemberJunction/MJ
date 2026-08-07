@@ -1,0 +1,81 @@
+/**
+ * @fileoverview MJServer's implementation of the task-graph `TaskAgentRunner` seam.
+ *
+ * The dispatcher knows *when* a task should run and *what* it depends on, but nothing about how an
+ * agent executes. That is injected, so the package stays testable without standing up the agent
+ * framework and so a host with a different execution strategy (a queue, a remote worker) can
+ * substitute its own.
+ *
+ * This adapter is the thin translation between the two: it turns a task's input payload and its
+ * dependencies' outputs into agent messages, runs the agent, and maps the result back into the
+ * shape the dispatcher persists.
+ *
+ * @module @memberjunction/server
+ */
+import { AgentRunner } from '@memberjunction/ai-agents';
+import { ChatMessageRole } from '@memberjunction/ai';
+import { LogError } from '@memberjunction/core';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import type { TaskAgentRunner, TaskAgentRunParams, TaskAgentRunResult } from '@memberjunction/task-graph';
+
+export class TaskGraphAgentRunner implements TaskAgentRunner {
+    public async RunAgentForTask(params: TaskAgentRunParams): Promise<TaskAgentRunResult> {
+        try {
+            const agent = await params.Provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', params.ContextUser);
+            if (!(await agent.Load(params.AgentID))) {
+                return { Success: false, ErrorMessage: `Agent ${params.AgentID} could not be loaded.` };
+            }
+
+            const result = await new AgentRunner().RunAgent({
+                agent,
+                conversationMessages: [{ role: ChatMessageRole.user, content: this.buildPrompt(params) }],
+                contextUser: params.ContextUser,
+            });
+
+            const success = result?.success === true;
+            return {
+                Success: success,
+                Output: this.extractOutput(result),
+                ErrorMessage: success ? undefined : (result?.agentRun?.ErrorMessage ?? 'Agent execution failed'),
+                AgentRunID: result?.agentRun?.ID,
+            };
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            LogError(`[TaskGraphAgentRunner] Task ${params.TaskID} failed: ${message}`);
+            return { Success: false, ErrorMessage: message };
+        }
+    }
+
+    /**
+     * Builds the agent's instruction from the task's own input plus its dependencies' outputs.
+     *
+     * Dependency outputs are included inline because a task's whole reason for depending on another
+     * is to consume what it produced. They are rendered as labelled JSON rather than prose so the
+     * agent can parse them reliably rather than inferring structure from formatting.
+     */
+    private buildPrompt(params: TaskAgentRunParams): string {
+        const sections: string[] = [];
+
+        if (params.InputPayload != null) {
+            sections.push(`## Task input\n\`\`\`json\n${JSON.stringify(params.InputPayload, null, 2)}\n\`\`\``);
+        }
+
+        if (params.DependencyOutputs.size > 0) {
+            const rendered = [...params.DependencyOutputs.entries()]
+                .map(([taskID, output]) => `### Output of task ${taskID}\n\`\`\`json\n${JSON.stringify(output, null, 2)}\n\`\`\``)
+                .join('\n\n');
+            sections.push(`## Results from prerequisite tasks\n\n${rendered}`);
+        }
+
+        return sections.length > 0
+            ? sections.join('\n\n')
+            : 'Execute this task.';
+    }
+
+    /** Prefers a structured payload over prose, so downstream tasks get data rather than text. */
+    private extractOutput(result: unknown): unknown {
+        const r = result as { payload?: unknown; agentRun?: { Message?: string } } | null;
+        if (r?.payload != null) return r.payload;
+        return r?.agentRun?.Message ?? null;
+    }
+}

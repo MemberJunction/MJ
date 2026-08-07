@@ -161,6 +161,10 @@ When the tab-container reattaches a cached component, an **incoming** navigation
 
 ## 🚨 NPM Workspace and Peer Dependencies (For Downstream Projects)
 
+### Angular framework peers: ranges, never exact pins
+
+**Rule (2026-08-07, MJ#3580):** every `ng-*` library declares its `@angular/*` peerDependencies as a **caret range at the era platform pin** (`"@angular/core": "^21.1.3"`), never an exact version. A peer declaration is a compatibility claim, not an install instruction — an exact pin falsely rejects every other Angular 21.x build, breaks strict peer resolution in consuming workspaces, and turns each Angular security patch into a republish of all ~290 ng-* packages. Exact `@angular/*` versions belong only where installation is decided: application `dependencies` (MJExplorer), build tooling `devDependencies` (`@angular/compiler-cli`), and the era platform manifest in `release-lines.json`. When creating a new ng-* package, copy the peer block from an existing one and keep the carets.
+
 ### Shared Singleton Services Pattern
 
 MemberJunction Angular packages use **peer dependencies** for shared singleton services to ensure proper npm deduplication in workspace monorepos. This prevents the "No provider found for MJAuthBase" error caused by multiple copies of `@memberjunction/ng-auth-services` being installed in nested `node_modules` directories.
