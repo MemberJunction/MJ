@@ -25,7 +25,7 @@
  *
  * Deterministic — no model calls. TG2 creates one task and the bundle Teardown removes it.
  */
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
 import { TaskGraphService, type TaskGraphSpec } from '@memberjunction/task-graph';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
@@ -99,10 +99,10 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
     {
         Id: 'task-graph-orchestration.TG1',
         Name: 'TG1: the six Phase 1 Task columns are present in entity metadata',
-        Fn: async (_ctx: IntegrationCheckContext) => {
+        Fn: async (ctx: IntegrationCheckContext) => {
             // Guards the migration-ran-but-CodeGen-did-not failure mode: the columns exist in SQL
             // while the generated entity has no idea, so every typed consumer breaks silently.
-            const entity = new Metadata().EntityByName('MJ: Tasks');
+            const entity = ctx.Provider.EntityByName('MJ: Tasks');
             Assert(!!entity, 'MJ: Tasks entity not found in metadata');
 
             const missing = PHASE1_TASK_FIELDS.filter(f => !entity!.Fields.some(ef => ef.Name === f));
@@ -161,10 +161,10 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
     {
         Id: 'task-graph-orchestration.TG3',
         Name: "TG3: AIAgentRunStep.StepType accepts the new 'TaskGraph' value",
-        Fn: async (_ctx: IntegrationCheckContext) => {
+        Fn: async (ctx: IntegrationCheckContext) => {
             // The value list is CodeGen-derived from the CHECK constraint, so its presence proves
             // the drop-and-re-add in the migration was picked up rather than silently skipped.
-            const entity = new Metadata().EntityByName('MJ: AI Agent Run Steps');
+            const entity = ctx.Provider.EntityByName('MJ: AI Agent Run Steps');
             Assert(!!entity, 'MJ: AI Agent Run Steps entity not found in metadata');
 
             const stepType = entity!.Fields.find(f => f.Name === 'StepType');
