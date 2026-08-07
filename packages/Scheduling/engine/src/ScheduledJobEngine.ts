@@ -1070,7 +1070,13 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
-     * Send notifications if configured
+     * Send notifications if configured.
+     *
+     * Runs at the tail of job completion, after the run record is written — so a delivery problem
+     * is contained here rather than faulting the bookkeeping of a job that actually succeeded.
+     * `NotificationManager` already swallows its own errors; the guard covers the formatting call
+     * into plugin code, which does not carry that contract.
+     *
      * @private
      */
     private async sendNotificationsIfNeeded(
@@ -1099,13 +1105,23 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             return;
         }
 
-        const content = plugin.FormatNotification(context, result);
+        try {
+            const content = plugin.FormatNotification(context, result);
 
-        await NotificationManager.SendScheduledJobNotification(
-            recipientUserId,
-            content,
-            channels
-        );
+            await NotificationManager.SendScheduledJobNotification({
+                RecipientUserID: recipientUserId,
+                Content: content,
+                Channels: channels,
+                ContextUser: context.ContextUser,
+                ScheduledJobID: job.ID,
+                ScheduledJobRunID: context.Run?.ID,
+                // The provider this job ran under, not the process default — a server hosting more
+                // than one connection must notify through the same one it read the job from.
+                Provider: this.Base.ProviderToUse,
+            });
+        } catch (error) {
+            this.logError(`Notification for job "${job.Name}" failed (non-fatal)`, error);
+        }
     }
 
     /**

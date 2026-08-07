@@ -153,6 +153,7 @@ export * from './resolvers/QueryResolver.js';
 export * from './services/TaskGraphProviderFactory.js';
 export * from './services/TaskGraphAgentRunner.js';
 export * from './services/StartTaskGraphDispatcher.js';
+export * from './services/TaskGraphContinuationDeliverer.js';
 export * from './resolvers/TestQuerySQLResolver.js';
 export * from './resolvers/SqlLoggingConfigResolver.js';
 export * from './resolvers/SyncRolesUsersResolver.js';

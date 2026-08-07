@@ -953,16 +953,6 @@ import {
     RemoteBrowserChannel,
 } from '@memberjunction/remote-browser-server';
 
-// @memberjunction/scheduling-actions (6 classes)
-import {
-    CreateScheduledJobAction,
-    DeleteScheduledJobAction,
-    ExecuteScheduledJobNowAction,
-    GetScheduledJobStatisticsAction,
-    QueryScheduledJobsAction,
-    UpdateScheduledJobAction,
-} from '@memberjunction/scheduling-actions';
-
 // @memberjunction/scheduling-engine-base (1 classes)
 import {
     MJScheduledJobEntityExtended,
@@ -1397,6 +1387,16 @@ import {
 import {
     AutotagAndVectorizeContentAction,
 } from '@memberjunction/actions-content-autotag';
+
+// @memberjunction/scheduling-actions (6 classes)
+import {
+    CreateScheduledJobAction,
+    DeleteScheduledJobAction,
+    ExecuteScheduledJobNowAction,
+    GetScheduledJobStatisticsAction,
+    QueryScheduledJobsAction,
+    UpdateScheduledJobAction,
+} from '@memberjunction/scheduling-actions';
 
 // @memberjunction/testing-engine (1 classes)
 import {
@@ -2069,12 +2069,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     RecordComparisonCompareServerOperation,
     SelfHostRemoteBrowser,
     RemoteBrowserChannel,
-    CreateScheduledJobAction,
-    DeleteScheduledJobAction,
-    ExecuteScheduledJobNowAction,
-    GetScheduledJobStatisticsAction,
-    QueryScheduledJobsAction,
-    UpdateScheduledJobAction,
     MJScheduledJobEntityExtended,
     AWSFileStorage,
     AzureFileStorage,
@@ -2398,6 +2392,12 @@ export const CLASS_REGISTRATIONS: any[] = [
     WriteEntityFieldsAction,
     XMLParserAction,
     AutotagAndVectorizeContentAction,
+    CreateScheduledJobAction,
+    DeleteScheduledJobAction,
+    ExecuteScheduledJobNowAction,
+    GetScheduledJobStatisticsAction,
+    QueryScheduledJobsAction,
+    UpdateScheduledJobAction,
     AgentEvalDriver,
     ComputerUseAction,
     ComputerUseTestDriver,
@@ -2490,7 +2490,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/record-comparison',
     '@memberjunction/remote-browser-selfhost',
     '@memberjunction/remote-browser-server',
-    '@memberjunction/scheduling-actions',
     '@memberjunction/scheduling-engine-base',
     '@memberjunction/storage',
     '@memberjunction/archiving-engine',
@@ -2519,6 +2518,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/codegen-lib',
     '@memberjunction/core-actions',
     '@memberjunction/actions-content-autotag',
+    '@memberjunction/scheduling-actions',
     '@memberjunction/testing-engine',
     '@memberjunction/computer-use-engine',
     '@memberjunction/server',

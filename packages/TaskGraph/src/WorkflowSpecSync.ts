@@ -34,6 +34,7 @@ import {
 } from '@memberjunction/core-entities';
 import {
     FormatWorkflowValidationErrors,
+    NormalizeInvocationType,
     NormalizeTriggers,
     ValidateWorkflowSpec,
     type WorkflowEntityEventTrigger,
@@ -64,6 +65,14 @@ export const WORKFLOW_OWNER_KEY = 'WorkflowAgentID';
  * binding row, which is what this creates.
  */
 export const EXECUTE_AGENT_ACTION = 'Execute Agent';
+
+/**
+ * A trigger's scope, resolved from names to the IDs the binding stores.
+ *
+ * Both null means "every record of the entity". Present values narrow the binding through the
+ * engine's own scope resolver, which is what makes "watch THIS invoice" actually watch one invoice.
+ */
+type TriggerScope = { EntityID: string | null; RecordID: string | null };
 
 /** Everything reconciliation needs beyond the spec itself. */
 export type WorkflowSyncContext = {
@@ -212,6 +221,12 @@ export class WorkflowSpecSync {
      *
      * Idempotent by lookup rather than by delete-and-recreate: re-saving a workflow must not detach
      * and re-attach a live trigger, because a change landing in that window would be missed.
+     *
+     * **Scope reconciles onto the binding's own `ScopeEntityID`/`ScopeRecordID`.** Those columns and
+     * the engine's scope resolver already exist for exactly this; leaving them unset while the spec
+     * declared a scope produced a workflow firing on every record of the entity while its author
+     * believed it was watching one. `filter` is refused upstream by `ValidateWorkflowSpec` for the
+     * same reason — it cannot be honored yet, so it must not be quietly accepted.
      */
     private async reconcileEntityEvent(
         trigger: WorkflowEntityEventTrigger,
@@ -223,6 +238,8 @@ export class WorkflowSpecSync {
         const entity = context.Provider.EntityByName(trigger.entityName);
         if (!entity) throw new Error(`entity "${trigger.entityName}" not found in metadata`);
 
+        const scope = this.resolveScope(trigger, context);
+
         const actionResult = await rv.RunView<MJActionEntity>(
             { EntityName: 'MJ: Actions', ExtraFilter: `Name='${EXECUTE_AGENT_ACTION}'`, ResultType: 'entity_object' },
             context.ContextUser,
@@ -230,18 +247,23 @@ export class WorkflowSpecSync {
         const action = actionResult.Results?.[0];
         if (!action) throw new Error(`the '${EXECUTE_AGENT_ACTION}' action is not present — has the metadata seed been pushed?`);
 
+        // Resolved through the shared normalizer so the shorthand an author writes ("Update") and
+        // the name the platform fires ("AfterUpdate") cannot drift apart.
+        const invocationName = NormalizeInvocationType(trigger.invocationType);
+        if (!invocationName) throw new Error(`invocation type "${trigger.invocationType}" is not one this platform fires`);
+
         const invocationResult = await rv.RunView<MJEntityActionInvocationTypeEntity>(
             {
                 EntityName: 'MJ: Entity Action Invocation Types',
-                ExtraFilter: `Name='${trigger.invocationType.replace(/'/g, "''")}'`,
+                ExtraFilter: `Name='${invocationName}'`,
                 ResultType: 'entity_object',
             },
             context.ContextUser,
         );
         const invocationType = invocationResult.Results?.[0];
-        if (!invocationType) throw new Error(`invocation type "${trigger.invocationType}" not found`);
+        if (!invocationType) throw new Error(`invocation type "${invocationName}" is not seeded`);
 
-        const entityAction = await this.upsertEntityAction(entity.ID, action.ID, context);
+        const entityAction = await this.upsertEntityAction(entity.ID, action.ID, agentID, scope, context);
         await this.upsertInvocation(entityAction.ID, invocationType.ID, context);
 
         // Which agent to run — fixed for the life of the binding.
@@ -255,25 +277,54 @@ export class WorkflowSpecSync {
         await this.upsertActionParam(entityAction.ID, action.ID, 'Data', 'Entity Object Data', null, context);
     }
 
-    /** Finds or creates the Entity Action binding this workflow needs. */
+    /**
+     * Turn the spec's scope names into the IDs the binding stores.
+     *
+     * A scope that names an entity the instance does not have is an error rather than a silent
+     * widening: "watch this one invoice" degrading to "watch every invoice" is the failure the
+     * scope columns exist to prevent.
+     */
+    private resolveScope(trigger: WorkflowEntityEventTrigger, context: WorkflowSyncContext): TriggerScope {
+        if (!trigger.scopeEntityName?.trim()) {
+            return { EntityID: null, RecordID: null };
+        }
+        const scopeEntity = context.Provider.EntityByName(trigger.scopeEntityName);
+        if (!scopeEntity) throw new Error(`scope entity "${trigger.scopeEntityName}" not found in metadata`);
+        return { EntityID: scopeEntity.ID, RecordID: trigger.scopeRecordID?.trim() || null };
+    }
+
+    /**
+     * Finds or creates the Entity Action binding this workflow needs.
+     *
+     * **Each workflow owns its own binding row.** `Execute Agent` is one shared action, so every
+     * workflow watching a given entity would otherwise land on the same `(EntityID, ActionID)` pair
+     * — and reusing that row means rewriting its `AgentID`, which silently repoints the first
+     * workflow's trigger at the second workflow's agent. Workflow A keeps looking configured, keeps
+     * showing its trigger, and never runs again.
+     *
+     * That shape was briefly impossible: `UQ_EntityAction_ActionID_EntityID`, added by the v5.37.x
+     * junction sweep, permitted one binding per (entity, action). The sweep's own stated scope was
+     * "pure junction tables ... with no other meaningful data columns", which `EntityAction` — with
+     * Status, Sequence, LoggingMode, scope columns and three owned child collections — never met.
+     * `V202608080100__v6.1.x__Drop_EntityAction_Uniqueness` removes it, which also unblocks the
+     * ordinary case of one action bound to one entity at two different events with different params.
+     *
+     * Ownership is therefore matched on the agent and the scope, not on entity + action alone.
+     */
     private async upsertEntityAction(
         entityID: string,
         actionID: string,
+        agentID: string,
+        scope: TriggerScope,
         context: WorkflowSyncContext,
     ): Promise<MJEntityActionEntity> {
-        const result = await RunView.FromMetadataProvider(context.Provider).RunView<MJEntityActionEntity>(
-            {
-                EntityName: 'MJ: Entity Actions',
-                ExtraFilter: `EntityID='${entityID}' AND ActionID='${actionID}'`,
-                ResultType: 'entity_object',
-            },
-            context.ContextUser,
-        );
-        const existing = result.Results?.[0];
+        const existing = await this.findOwnedEntityAction(entityID, actionID, agentID, scope, context);
         if (existing) {
             if (existing.Status !== 'Active') {
                 existing.Status = 'Active';
-                await existing.Save();
+                if (!(await existing.Save())) {
+                    throw new Error(`could not reactivate the entity-action binding: ${existing.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
             }
             return existing;
         }
@@ -282,11 +333,57 @@ export class WorkflowSpecSync {
         row.NewRecord();
         row.EntityID = entityID;
         row.ActionID = actionID;
+        row.ScopeEntityID = scope.EntityID;
+        row.ScopeRecordID = scope.RecordID;
         row.Status = 'Active';
         if (!(await row.Save())) {
             throw new Error(`could not create the entity-action binding: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
         return row;
+    }
+
+    /**
+     * This workflow's own binding at this scope, if it already has one.
+     *
+     * Ownership lives in the `AgentID` param rather than on the binding row, so candidates are
+     * narrowed in SQL by entity + action + scope and then matched on that param. Scope is part of
+     * the identity because narrowing a trigger to a different record is a *different* subscription,
+     * not an edit of the existing one — matching without it would silently re-point the old binding.
+     */
+    private async findOwnedEntityAction(
+        entityID: string,
+        actionID: string,
+        agentID: string,
+        scope: TriggerScope,
+        context: WorkflowSyncContext,
+    ): Promise<MJEntityActionEntity | null> {
+        const rv = RunView.FromMetadataProvider(context.Provider);
+        const scopeFilter =
+            `AND ScopeEntityID ${scope.EntityID ? `= '${scope.EntityID}'` : 'IS NULL'} ` +
+            `AND ScopeRecordID ${scope.RecordID ? `= '${scope.RecordID}'` : 'IS NULL'}`;
+
+        const result = await rv.RunView<MJEntityActionEntity>(
+            {
+                EntityName: 'MJ: Entity Actions',
+                ExtraFilter: `EntityID='${entityID}' AND ActionID='${actionID}' ${scopeFilter}`,
+                ResultType: 'entity_object',
+            },
+            context.ContextUser,
+        );
+        const candidates = result.Results ?? [];
+        if (candidates.length === 0) return null;
+
+        const params = await rv.RunView<MJEntityActionParamEntity>(
+            {
+                EntityName: 'MJ: Entity Action Params',
+                ExtraFilter:
+                    `ActionParam='AgentID' AND EntityActionID IN (${candidates.map((c) => `'${c.ID}'`).join(',')})`,
+                ResultType: 'entity_object',
+            },
+            context.ContextUser,
+        );
+        const mine = (params.Results ?? []).find((p) => p.Value != null && UUIDsEqual(p.Value, agentID));
+        return mine ? candidates.find((c) => UUIDsEqual(c.ID, mine.EntityActionID)) ?? null : null;
     }
 
     /** Finds or creates the invocation row that says which change fires the action. */
