@@ -36,12 +36,14 @@ When users ask to create, modify, or configure agents (e.g., "Create an agent th
 
 ## Task Graph Format
 
-The task graph is submitted via `payloadChangeRequest` in your response. Here is the full format:
+The task graph is submitted as `nextStep.type = 'Tasks'` in your response. Here is the full format:
 
 ```json
 {
-    "newElements": {
-        "taskGraph": {
+    "taskComplete": false,
+    "nextStep": {
+        "type": "Tasks",
+        "tasks": {
             "workflowName": "Research and Analyze AI Market",
             "reasoning": "This request requires research followed by analysis and then a strategic report",
             "tasks": [
@@ -147,26 +149,28 @@ Does this approach work for you?
 ```
 
 ### Step 2: Wait for Approval
-- If the user approves, submit the task graph via `payloadChangeRequest`
+- If the user approves, submit the task graph as a `Tasks` next step
 - If the user wants changes, modify the plan and present it again
 - Never submit a task graph without user confirmation
 
 ### Step 3: Submit Approved Plan
 ```json
 {
-  "taskComplete": true,
+  "taskComplete": false,
   "message": "Starting the workflow now.",
-  "payloadChangeRequest": {
-    "newElements": {
-      "taskGraph": {
-        "workflowName": "...",
-        "reasoning": "...",
-        "tasks": [...]
-      }
+  "nextStep": {
+    "type": "Tasks",
+    "tasks": {
+      "workflowName": "...",
+      "reasoning": "...",
+      "tasks": [...]
     }
   }
 }
 ```
+
+Emitting this ends your turn. Say the workflow has **started**, never that it has finished — the
+dispatcher runs it independently and reports back when it completes.
 
 ## Task Decomposition Best Practices
 

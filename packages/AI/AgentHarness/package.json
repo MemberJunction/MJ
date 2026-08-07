@@ -29,5 +29,9 @@
     "typescript": "^5.4.5",
     "tsc-alias": "^1.8.10",
     "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }
