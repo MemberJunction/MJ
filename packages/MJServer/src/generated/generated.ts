@@ -8711,6 +8711,9 @@ each time the agent processes a prompt step.`})
     @Field(() => [MJExperimentSession_])
     MJExperimentSessions_AgentRunIDArray: MJExperimentSession_[]; // Link to MJExperimentSessions
     
+    @Field(() => [MJTask_])
+    MJTasks_AgentRunIDArray: MJTask_[]; // Link to MJTasks
+    
     @Field(() => [MJUserRoutineRun_])
     MJUserRoutineRuns_AgentRunIDArray: MJUserRoutineRun_[]; // Link to MJUserRoutineRuns
     
@@ -9212,6 +9215,16 @@ export class MJAIAgentRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExperimentSessions')} WHERE ${provider.QuoteIdentifier('AgentRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Experiment Sessions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiagentrun_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Experiment Sessions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTask_])
+    async MJTasks_AgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tasks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTasks')} WHERE ${provider.QuoteIdentifier('AgentRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tasks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagentrun_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tasks', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -84752,6 +84765,26 @@ export class MJTask_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Structured input for this task, stored as JSON. Replaces the legacy __TASK_METADATA__ marker that was embedded in Description.`}) 
+    InputPayload?: string;
+        
+    @Field({nullable: true, description: `Structured output produced by this task, stored as JSON. Downstream tasks read their dependencies' outputs from here. Replaces the legacy __TASK_OUTPUT__ marker that was embedded in Description.`}) 
+    OutputPayload?: string;
+        
+    @Field({nullable: true, description: `Failure detail when Status is Failed. Null for tasks that have not failed.`}) 
+    ErrorMessage?: string;
+        
+    @Field({nullable: true, description: `The specific AI Agent Run that executed this task. Distinct from the conversation-level link: sibling tasks in one graph each get their own run, so this is what run-history and Gantt views should follow.`}) 
+    @MaxLength(36)
+    AgentRunID?: string;
+        
+    @Field({nullable: true, description: `Identifier of the dispatcher instance currently executing this task. Part of the compare-and-swap claim protocol; set only by the dispatcher, never by user-facing writes. Null when unclaimed. Human-assigned tasks never carry a claim.`}) 
+    @MaxLength(100)
+    ClaimedBy?: string;
+        
+    @Field({nullable: true, description: `When the current dispatcher claim lapses. Long-running tasks extend it by heartbeat; reconciliation treats an expired claim as an orphaned task and returns it to Pending.`}) 
+    ClaimExpiresAt?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -84779,6 +84812,10 @@ export class MJTask_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AgentRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -84845,6 +84882,24 @@ export class CreateMJTaskInput {
     @Field({ nullable: true })
     CompletedAt: Date | null;
 
+    @Field({ nullable: true })
+    InputPayload: string | null;
+
+    @Field({ nullable: true })
+    OutputPayload: string | null;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    AgentRunID: string | null;
+
+    @Field({ nullable: true })
+    ClaimedBy: string | null;
+
+    @Field({ nullable: true })
+    ClaimExpiresAt: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -84899,6 +84954,24 @@ export class UpdateMJTaskInput {
 
     @Field({ nullable: true })
     CompletedAt?: Date | null;
+
+    @Field({ nullable: true })
+    InputPayload?: string | null;
+
+    @Field({ nullable: true })
+    OutputPayload?: string | null;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    AgentRunID?: string | null;
+
+    @Field({ nullable: true })
+    ClaimedBy?: string | null;
+
+    @Field({ nullable: true })
+    ClaimExpiresAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

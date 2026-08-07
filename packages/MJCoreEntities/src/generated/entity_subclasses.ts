@@ -2982,7 +2982,7 @@ export const MJAIAgentRunStepSchema = z.object({
         * * Display Name: Step Number
         * * SQL Data Type: int
         * * Description: Sequential number of this step within the agent run, starting from 1`),
-    StepType: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Compaction'), z.literal('Decision'), z.literal('ForEach'), z.literal('Plan'), z.literal('Prompt'), z.literal('Skill'), z.literal('Sub-Agent'), z.literal('Tool'), z.literal('Validation'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Compaction'), z.literal('Decision'), z.literal('ForEach'), z.literal('Plan'), z.literal('Prompt'), z.literal('Skill'), z.literal('Sub-Agent'), z.literal('TaskGraph'), z.literal('Tool'), z.literal('Validation'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(50)
@@ -2998,6 +2998,7 @@ export const MJAIAgentRunStepSchema = z.object({
     *   * Prompt
     *   * Skill
     *   * Sub-Agent
+    *   * TaskGraph
     *   * Tool
     *   * Validation
     *   * While
@@ -29232,12 +29233,12 @@ export const MJTaskSchema = z.object({
         * * Default Value: newsequentialid()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent Task
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Name
+        * * Display Name: Task Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Display name for the task`),
     Description: z.string().nullable().describe(`
@@ -29247,7 +29248,7 @@ export const MJTaskSchema = z.object({
         * * Description: Detailed description of the task requirements and objectives`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type
+        * * Display Name: Task Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Task Types (vwTaskTypes.ID)`),
     EnvironmentID: z.string().describe(`
@@ -29299,7 +29300,7 @@ export const MJTaskSchema = z.object({
         * * Description: Completion percentage for tracking progress (0-100)`),
     DueAt: z.date().nullable().describe(`
         * * Field Name: DueAt
-        * * Display Name: Due At
+        * * Display Name: Due Date
         * * SQL Data Type: datetimeoffset
         * * Description: Due date and time for task completion`),
     StartedAt: z.date().nullable().describe(`
@@ -29322,13 +29323,44 @@ export const MJTaskSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    InputPayload: z.string().nullable().describe(`
+        * * Field Name: InputPayload
+        * * Display Name: Input Payload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Structured input for this task, stored as JSON. Replaces the legacy __TASK_METADATA__ marker that was embedded in Description.`),
+    OutputPayload: z.string().nullable().describe(`
+        * * Field Name: OutputPayload
+        * * Display Name: Output Payload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Structured output produced by this task, stored as JSON. Downstream tasks read their dependencies' outputs from here. Replaces the legacy __TASK_OUTPUT__ marker that was embedded in Description.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Failure detail when Status is Failed. Null for tasks that have not failed.`),
+    AgentRunID: z.string().nullable().describe(`
+        * * Field Name: AgentRunID
+        * * Display Name: Agent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: The specific AI Agent Run that executed this task. Distinct from the conversation-level link: sibling tasks in one graph each get their own run, so this is what run-history and Gantt views should follow.`),
+    ClaimedBy: z.string().nullable().describe(`
+        * * Field Name: ClaimedBy
+        * * Display Name: Claimed By
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Identifier of the dispatcher instance currently executing this task. Part of the compare-and-swap claim protocol; set only by the dispatcher, never by user-facing writes. Null when unclaimed. Human-assigned tasks never carry a claim.`),
+    ClaimExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ClaimExpiresAt
+        * * Display Name: Claim Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the current dispatcher claim lapses. Long-running tasks extend it by heartbeat; reconciliation treats an expired claim as an orphaned task and returns it to Pending.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type Name
+        * * Display Name: Task Type Name
         * * SQL Data Type: nvarchar(255)`),
     Environment: z.string().describe(`
         * * Field Name: Environment
@@ -29340,7 +29372,7 @@ export const MJTaskSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Name
+        * * Display Name: Conversation
         * * SQL Data Type: nvarchar(100)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
@@ -29350,9 +29382,13 @@ export const MJTaskSchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
+    AgentRun: z.string().nullable().describe(`
+        * * Field Name: AgentRun
+        * * Display Name: Agent Run
+        * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent
+        * * Display Name: Root Task
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -40980,15 +41016,16 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     *   * Prompt
     *   * Skill
     *   * Sub-Agent
+    *   * TaskGraph
     *   * Tool
     *   * Validation
     *   * While
     * * Description: Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation, ForEach, While, Tool
     */
-    get StepType(): 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'Tool' | 'Validation' | 'While' {
+    get StepType(): 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'Tool' | 'Validation' | 'While') {
+    set StepType(value: 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -109574,7 +109611,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent Task
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
     */
@@ -109587,7 +109624,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Name
-    * * Display Name: Name
+    * * Display Name: Task Name
     * * SQL Data Type: nvarchar(255)
     * * Description: Display name for the task
     */
@@ -109613,7 +109650,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type
+    * * Display Name: Task Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Task Types (vwTaskTypes.ID)
     */
@@ -109729,7 +109766,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: DueAt
-    * * Display Name: Due At
+    * * Display Name: Due Date
     * * SQL Data Type: datetimeoffset
     * * Description: Due date and time for task completion
     */
@@ -109787,6 +109824,85 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     }
 
     /**
+    * * Field Name: InputPayload
+    * * Display Name: Input Payload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Structured input for this task, stored as JSON. Replaces the legacy __TASK_METADATA__ marker that was embedded in Description.
+    */
+    get InputPayload(): string | null {
+        return this.Get('InputPayload');
+    }
+    set InputPayload(value: string | null) {
+        this.Set('InputPayload', value);
+    }
+
+    /**
+    * * Field Name: OutputPayload
+    * * Display Name: Output Payload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Structured output produced by this task, stored as JSON. Downstream tasks read their dependencies' outputs from here. Replaces the legacy __TASK_OUTPUT__ marker that was embedded in Description.
+    */
+    get OutputPayload(): string | null {
+        return this.Get('OutputPayload');
+    }
+    set OutputPayload(value: string | null) {
+        this.Set('OutputPayload', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Failure detail when Status is Failed. Null for tasks that have not failed.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: AgentRunID
+    * * Display Name: Agent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: The specific AI Agent Run that executed this task. Distinct from the conversation-level link: sibling tasks in one graph each get their own run, so this is what run-history and Gantt views should follow.
+    */
+    get AgentRunID(): string | null {
+        return this.Get('AgentRunID');
+    }
+    set AgentRunID(value: string | null) {
+        this.Set('AgentRunID', value);
+    }
+
+    /**
+    * * Field Name: ClaimedBy
+    * * Display Name: Claimed By
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Identifier of the dispatcher instance currently executing this task. Part of the compare-and-swap claim protocol; set only by the dispatcher, never by user-facing writes. Null when unclaimed. Human-assigned tasks never carry a claim.
+    */
+    get ClaimedBy(): string | null {
+        return this.Get('ClaimedBy');
+    }
+    set ClaimedBy(value: string | null) {
+        this.Set('ClaimedBy', value);
+    }
+
+    /**
+    * * Field Name: ClaimExpiresAt
+    * * Display Name: Claim Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the current dispatcher claim lapses. Long-running tasks extend it by heartbeat; reconciliation treats an expired claim as an orphaned task and returns it to Pending.
+    */
+    get ClaimExpiresAt(): Date | null {
+        return this.Get('ClaimExpiresAt');
+    }
+    set ClaimExpiresAt(value: Date | null) {
+        this.Set('ClaimExpiresAt', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
@@ -109797,7 +109913,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Type Name
+    * * Display Name: Task Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get Type(): string {
@@ -109824,7 +109940,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Name
+    * * Display Name: Conversation
     * * SQL Data Type: nvarchar(100)
     */
     get ConversationDetail(): string | null {
@@ -109850,8 +109966,17 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     }
 
     /**
+    * * Field Name: AgentRun
+    * * Display Name: Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentRun(): string | null {
+        return this.Get('AgentRun');
+    }
+
+    /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent
+    * * Display Name: Root Task
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
