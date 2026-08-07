@@ -23,6 +23,8 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
             );
             expect(r.role).toBe('RowFilter');
             expect(r.filterColumn).toBe('Status');
+            expect(r.filterOperator).toBe('=');
+            expect(r.filterKind).toBe('scalar');
         });
 
         it('numeric equality on a single column', () => {
@@ -35,9 +37,11 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
             );
             expect(r.role).toBe('RowFilter');
             expect(r.filterColumn).toBe('ChapterID');
+            expect(r.filterOperator).toBe('=');
+            expect(r.filterKind).toBe('scalar');
         });
 
-        it('range operator (>) is a re-applicable row filter', () => {
+        it('range operator (>) is a re-applicable row filter, operator captured', () => {
             const r = verifyParamRole(
                 [
                     'SELECT ID FROM Members WHERE Score > 10',
@@ -47,9 +51,28 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
             );
             expect(r.role).toBe('RowFilter');
             expect(r.filterColumn).toBe('Score');
+            expect(r.filterOperator).toBe('>');
+            expect(r.filterKind).toBe('scalar');
         });
 
-        it('IN list (array param) with varying length collapses to a single bag site', () => {
+        it('range with column-on-the-right FLIPS the operator (100 < Score ⟺ Score > 100)', () => {
+            // The critical directionality case: read-time injection emits `column <op> value`, so a
+            // `value < column` predicate must be recorded as the flipped `>` — else the materialized read
+            // would invert the predicate and silently return the complementary row set.
+            const r = verifyParamRole(
+                [
+                    'SELECT ID FROM Members WHERE 100 < Score',
+                    'SELECT ID FROM Members WHERE 250 < Score',
+                ],
+                tsql,
+            );
+            expect(r.role).toBe('RowFilter');
+            expect(r.filterColumn).toBe('Score');
+            expect(r.filterOperator).toBe('>'); // flipped from the written `<`
+            expect(r.filterKind).toBe('scalar');
+        });
+
+        it('IN list (array param) with varying length → list kind, IN operator', () => {
             const r = verifyParamRole(
                 [
                     "SELECT ID FROM Orders WHERE Status IN ('A','B')",
@@ -59,6 +82,8 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
             );
             expect(r.role).toBe('RowFilter');
             expect(r.filterColumn).toBe('Status');
+            expect(r.filterOperator).toBe('IN');
+            expect(r.filterKind).toBe('list');
         });
 
         it('only the varied predicate counts; a sibling fixed predicate is ignored', () => {
@@ -85,7 +110,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
             expect(r.filterColumn).toBe('Status');
         });
 
-        it('column-on-the-right form (literal = column) is still a row filter', () => {
+        it('column-on-the-right form (literal = column) is still a row filter (= is symmetric)', () => {
             const r = verifyParamRole(
                 [
                     "SELECT ID FROM Orders WHERE 'Active' = Status",
@@ -95,6 +120,8 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
             );
             expect(r.role).toBe('RowFilter');
             expect(r.filterColumn).toBe('Status');
+            expect(r.filterOperator).toBe('='); // symmetric — flip is a no-op
+            expect(r.filterKind).toBe('scalar');
         });
 
         it('PostgreSQL column shape ({expr:{value}}) resolves correctly', () => {
