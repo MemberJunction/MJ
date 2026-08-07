@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Integration Tests",
-      "Description": "Parent suite for the metadata-driven Integration Test TestType (graduated from packages/MJServer/integration-test-scripts). Tiering is expressed as sibling child suites: 'Integration Tests \u2014 Deterministic' is the credential-free, blocking tier; 'Integration Tests \u2014 Live Model' is the opt-in, token-costing tier. The mutation axis is NOT a separate suite \u2014 mutation checks live inside the deterministic suite's tests and are gated at runtime by the driver reading RUN_MUTATION_TESTS.",
+      "Description": "Parent suite for the metadata-driven Integration Test TestType (graduated from packages/MJServer/integration-test-scripts). Tiering is expressed as sibling child suites: 'Integration Tests — Deterministic' is the credential-free, blocking tier; 'Integration Tests — Live Model' is the opt-in, token-costing tier. The mutation axis is NOT a separate suite — mutation checks live inside the deterministic suite's tests and are gated at runtime by the driver reading RUN_MUTATION_TESTS.",
       "Status": "Active"
     },
     "primaryKey": {
@@ -15,9 +15,9 @@
   },
   {
     "fields": {
-      "Name": "Integration Tests \u2014 Deterministic",
+      "Name": "Integration Tests — Deterministic",
       "ParentID": "@lookup:MJ: Test Suites.Name=Integration Tests",
-      "Description": "The blocking, credential-free integration tier. Members run with no LLM credentials against a live DB/transport. Mutation-class checks (S17/S23/S24, C10) are ordinary members gated at runtime by RUN_MUTATION_TESTS \u2014 they appear here but only fire when the driver sees the env gate. IT03 (client/GraphQL) is seeded Skip until MJAPI is provisioned in CI (Phase 5). ORDERING INVARIANT: client-transport members are sequenced LAST \u2014 bootstrapIntegrationClient rebinds the process's global provider to GraphQL, so no server-transport member may run after the first client one.",
+      "Description": "The blocking, credential-free integration tier. Members run with no LLM credentials against a live DB/transport. Mutation-class checks (S17/S23/S24, C10) are ordinary members gated at runtime by RUN_MUTATION_TESTS — they appear here but only fire when the driver sees the env gate. IT03 (client/GraphQL) is seeded Skip until MJAPI is provisioned in CI (Phase 5). ORDERING INVARIANT: client-transport members are sequenced LAST — bootstrapIntegrationClient rebinds the process's global provider to GraphQL, so no server-transport member may run after the first client one.",
       "Status": "Active"
     },
     "relatedEntities": {
@@ -498,7 +498,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT03 - Client GraphQL Cache Integrity",
-            "Sequence": 35,
+            "Sequence": 34,
             "Status": "Active"
           },
           "primaryKey": {
@@ -513,7 +513,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT15 - Remote Operations Over-The-Wire Progress",
-            "Sequence": 36,
+            "Sequence": 35,
             "Status": "Active"
           },
           "primaryKey": {
@@ -528,7 +528,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT23 - RLS Client Smart-Cache Isolation",
-            "Sequence": 37,
+            "Sequence": 36,
             "Status": "Active"
           },
           "primaryKey": {
@@ -543,7 +543,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT25 - View Execution (client-first)",
-            "Sequence": 38,
+            "Sequence": 37,
             "Status": "Active"
           },
           "primaryKey": {
@@ -558,7 +558,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT26 - Application Wiring (all shipped apps)",
-            "Sequence": 39,
+            "Sequence": 38,
             "Status": "Active"
           },
           "primaryKey": {
@@ -573,7 +573,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT27 - Core Entity Write-Side",
-            "Sequence": 40,
+            "Sequence": 39,
             "Status": "Active"
           },
           "primaryKey": {
@@ -588,7 +588,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT28 - Permission Engine and Scope Enforcement",
-            "Sequence": 41,
+            "Sequence": 40,
             "Status": "Active"
           },
           "primaryKey": {
@@ -603,7 +603,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT31 - RunView Feature Matrix",
-            "Sequence": 42,
+            "Sequence": 41,
             "Status": "Active"
           },
           "primaryKey": {
@@ -618,7 +618,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT32 - RunView Cross-Feature Edges",
-            "Sequence": 43,
+            "Sequence": 42,
             "Status": "Active"
           },
           "primaryKey": {
@@ -633,7 +633,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT33 - RunQuery Catalog Sweep",
-            "Sequence": 44,
+            "Sequence": 43,
             "Status": "Active"
           },
           "primaryKey": {
@@ -648,7 +648,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT34 - RunQuery Parameter Permutation",
-            "Sequence": 45,
+            "Sequence": 44,
             "Status": "Active"
           },
           "primaryKey": {
@@ -663,7 +663,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT37 - Subscription Channel Isolation",
-            "Sequence": 46,
+            "Sequence": 45,
             "Status": "Active"
           },
           "primaryKey": {
@@ -678,7 +678,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT40 - Entity-Server Invariants",
-            "Sequence": 47,
+            "Sequence": 46,
             "Status": "Active"
           },
           "primaryKey": {
@@ -693,7 +693,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT43 - AI Cost Pipeline Integrity",
-            "Sequence": 48,
+            "Sequence": 47,
             "Status": "Active"
           },
           "primaryKey": {
@@ -708,7 +708,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT44 - AI Permission Helpers",
-            "Sequence": 49,
+            "Sequence": 48,
             "Status": "Active"
           },
           "primaryKey": {
@@ -723,7 +723,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT45 - Embedding Invariants",
-            "Sequence": 50,
+            "Sequence": 49,
             "Status": "Active"
           },
           "primaryKey": {
@@ -738,7 +738,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT47 - Transaction Group Atomicity",
-            "Sequence": 51,
+            "Sequence": 50,
             "Status": "Active"
           },
           "primaryKey": {
@@ -753,7 +753,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT50 - CodeGen Artifact Consistency",
-            "Sequence": 52,
+            "Sequence": 51,
             "Status": "Active"
           },
           "primaryKey": {
@@ -768,7 +768,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT52 - Unified Search Seams",
-            "Sequence": 53,
+            "Sequence": 52,
             "Status": "Active"
           },
           "primaryKey": {
@@ -845,8 +845,23 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT72 - Entity Graph (related-record collections)",
+            "TestID": "@lookup:MJ: Tests.Name=IT71 - Task Graph Orchestration",
             "Sequence": 34,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "03B972BB-3EC8-463C-A982-140153E65ACC"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T18:02:58.170Z",
+            "checksum": "c502c3b56c8b5c21b27f0f89fcf7eb394de74646099129c045538ee469e05821"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT72 - Entity Graph (related-record collections)",
+            "Sequence": 33,
             "Status": "Active"
           },
           "primaryKey": {
@@ -865,7 +880,7 @@
   },
   {
     "fields": {
-      "Name": "Integration Tests \u2014 Live Model",
+      "Name": "Integration Tests — Live Model",
       "ParentID": "@lookup:MJ: Test Suites.Name=Integration Tests",
       "Description": "The opt-in integration tier (RUN_AGENT_TESTS=1). Members are prompt/agent deep-verifier checks that incur LLM token cost and are never run by the default CI gate. Each is tier='live-model', so the driver skips-as-Passed unless RUN_AGENT_TESTS is set.",
       "Status": "Active"

@@ -1,0 +1,37 @@
+@if (Spec) {
+  <div class="mj-wpc" [class.mj-wpc--expanded]="Expanded">
+    <button type="button" class="mj-wpc__header" (click)="ToggleExpanded()"
+            [attr.aria-expanded]="Expanded">
+      <i class="fa-solid" [class.fa-chevron-right]="!Expanded" [class.fa-chevron-down]="Expanded"></i>
+      <span class="mj-wpc__title">{{ Spec.workflowName }}</span>
+      <span class="mj-wpc__summary">{{ SummaryLine }}</span>
+      @if (IsFinished) {
+        <i class="fa-solid fa-circle-check mj-wpc__done" aria-label="Finished"></i>
+      }
+    </button>
+
+    @if (Expanded) {
+      <div class="mj-wpc__body">
+        <!-- The SAME component the editor uses, read-only. A simpler chat-only renderer would be a
+             second thing that can disagree with the canvas about what a graph means. -->
+        <mj-task-graph-editor
+          class="mj-wpc__canvas"
+          [Spec]="Spec"
+          [RuntimeStatus]="RuntimeStatus"
+          [ReadOnly]="true"
+          [ShowPalette]="false"
+          [ShowToolbar]="false"
+          [ShowMinimap]="false">
+        </mj-task-graph-editor>
+
+        @if (CanSave) {
+          <div class="mj-wpc__actions">
+            <button mjButton variant="primary" size="sm" (click)="RequestSave()">
+              <i class="fa-solid fa-floppy-disk"></i> Save this approach as a Workflow
+            </button>
+          </div>
+        }
+      </div>
+    }
+  </div>
+}

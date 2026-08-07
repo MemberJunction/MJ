@@ -17,6 +17,7 @@ import officeparser from 'officeparser'
 import * as fs from 'fs'
 import { ProcessRunParams, JsonObject, ContentItemProcessParams } from './process.types'
 import { ClassificationContextResolver, IContentSourceClassificationConfiguration } from './ClassificationContextResolver'
+import { FieldPathResolver } from './FieldPathResolver'
 import { toZonedTime } from 'date-fns-tz'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
@@ -1624,9 +1625,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         let processed = 0;
         const allPromptRunIDs: string[] = [];
 
+        // One resolver per pass: dotted field paths declared by the vector driver
+        // ('<FKField>.<Field>') are batched and cached across every infra group below.
+        const pathResolver = new FieldPathResolver(this.ProviderToUse, contextUser, 'MJ: Content Items');
+
         for (const [groupKey, groupItems] of groups) {
             const infra = await this.resolveGroupInfrastructure(groupKey, contextUser);
-            const groupResult = await this.vectorizeGroup(groupItems, infra, tagMap, batchSize, contextUser, (batchProcessed) => {
+            const groupResult = await this.vectorizeGroup(groupItems, infra, tagMap, batchSize, contextUser, pathResolver, (batchProcessed) => {
                 processed += batchProcessed;
                 onProgress?.(Math.min(processed, eligible.length), eligible.length);
             });
@@ -1657,11 +1662,29 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         tagMap: Map<string, string[]>,
         batchSize: number,
         contextUser: UserInfo,
+        pathResolver: FieldPathResolver,
         onBatchComplete: (count: number) => void
     ): Promise<{ vectorized: number; promptRunIDs: string[] }> {
         let vectorized = 0;
         const promptRunIDs: string[] = [];
         const modelRunner = new AIModelRunner();
+
+        // Provider directives are built for every item BEFORE any embedding spend. A driver may
+        // reject a record from BuildProviderDirectives (e.g. a mandatory routing value its config
+        // requires — such as a tenant-isolation field — is missing); rejected items are marked
+        // Failed individually and excluded so they never poison the rest of the group. Recovery
+        // after fixing the data: reset the item to Pending or use ForceReprocess.
+        const { directives, rejected } = await this.precomputeProviderDirectives(items, infra, pathResolver);
+        if (rejected.length > 0) {
+            LogError(`VectorizeContentItems: ${rejected.length} item(s) rejected by the vector provider's directive policy — marked Failed, remaining items proceed`);
+            await this.updateEmbeddingStatusBatch(rejected, 'Failed', contextUser);
+            onBatchComplete(rejected.length);
+            const rejectedIDs = new Set(rejected.map(i => NormalizeUUID(i.ID)));
+            items = items.filter(i => !rejectedIDs.has(NormalizeUUID(i.ID)));
+        }
+        if (items.length === 0) {
+            return { vectorized, promptRunIDs };
+        }
 
         // Mark every item in this infra group as Processing up front so dashboards
         // reflect in-flight state. Each batch will transition its items to Complete
@@ -1703,7 +1726,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 promptRunIDs.push(runResult.PromptRunID);
             }
 
-            const records = this.buildVectorRecords(allChunks, runResult.Vectors, tagMap, infra);
+            const records = this.buildVectorRecords(allChunks, runResult.Vectors, tagMap, infra, directives);
 
             const batchSuccess = await this.upsertVectorRecords(records, infra);
             if (batchSuccess) {
@@ -1769,7 +1792,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         allChunks: EmbeddingChunk[],
         vectors: number[][],
         tagMap: Map<string, string[]>,
-        infra: ResolvedVectorInfrastructure
+        infra: ResolvedVectorInfrastructure,
+        directivesByItem?: Map<string, Record<string, unknown> | undefined>
     ): VectorRecord[] {
         const countByItem = new Map<string, number>();
         for (const c of allChunks) {
@@ -1779,7 +1803,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         // eligibility). Resolved once per batch — every chunk shares the same source entity.
         const contentItemEntity = this.ProviderToUse.EntityByName('MJ: Content Items');
         return allChunks.map((chunk, idx) =>
-            this.buildVectorRecord(chunk, vectors[idx], countByItem.get(chunk.item.ID) ?? 1, tagMap.get(chunk.item.ID), contentItemEntity, infra)
+            this.buildVectorRecord(chunk, vectors[idx], countByItem.get(chunk.item.ID) ?? 1, tagMap.get(chunk.item.ID), contentItemEntity, infra, directivesByItem)
         );
     }
 
@@ -1797,6 +1821,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * @param tags               Resolved tag names for `chunk.item`, if any.
      * @param contentItemEntity  The 'MJ: Content Items' entity metadata, for display-field resolution.
      * @param infra              Resolved vector infrastructure (source of provider directives).
+     * @param directivesByItem   Directives precomputed per item ({@link precomputeProviderDirectives});
+     *                           when absent, directives are built inline (and a driver rejection throws).
      */
     protected buildVectorRecord(
         chunk: EmbeddingChunk,
@@ -1804,7 +1830,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         chunkCountForItem: number,
         tags: string[] | undefined,
         contentItemEntity: EntityInfo | undefined,
-        infra: ResolvedVectorInfrastructure
+        infra: ResolvedVectorInfrastructure,
+        directivesByItem?: Map<string, Record<string, unknown> | undefined>
     ): VectorRecord {
         const config = this.resolveItemVectorStorageConfig(chunk.item);
         const itemLevel = this.isItemLevelVector(config, chunkCountForItem);
@@ -1813,7 +1840,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             values: vector,
             metadata: this.buildVectorMetadata(chunk, itemLevel, tags, config, contentItemEntity)
         };
-        const directives = this.buildProviderDirectives(chunk.item, infra);
+        const directives = directivesByItem
+            ? directivesByItem.get(NormalizeUUID(chunk.item.ID))
+            : this.buildProviderDirectives(chunk.item, infra);
         if (directives) {
             record.providerTemporaryDirectives = directives;
         }
@@ -1826,17 +1855,85 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * ProviderConfig — the common case — so no provider routing is applied and the base
      * BuildProviderDirectives is not even invoked. The item's full field set (GetAll) is handed to
      * the driver so it can read whatever field its config names (e.g. `namespaceField: 'OrganizationID'`).
-     * Namespace is resolved from the parent ContentItem (org-level), the same source for a chunk's
+     * Directives are always derived from the parent ContentItem — the same source for a chunk's
      * vector as for an item-level vector.
+     *
+     * When the driver declares source-record field paths (`GetSourceRecordFieldPaths` — e.g. a
+     * dotted path resolved from a related record), the caller pre-resolves the per-item values
+     * via {@link FieldPathResolver} and passes them in; each value is injected into the record
+     * under its full path key so the driver's plain `sourceRecord[path]` lookup works unchanged.
+     *
+     * MAY THROW: a driver is allowed to reject a record from `BuildProviderDirectives` (e.g. a
+     * mandatory routing value its config requires is missing). Batch callers go through
+     * {@link precomputeProviderDirectives}, which converts a throw into a per-record failure.
      */
     protected buildProviderDirectives(
         item: MJContentItemEntity,
-        infra: ResolvedVectorInfrastructure
+        infra: ResolvedVectorInfrastructure,
+        resolvedFields?: Map<string, Record<string, unknown>>
     ): Record<string, unknown> | undefined {
         if (!infra.providerConfig) {
             return undefined;
         }
-        return infra.vectorDB.BuildProviderDirectives(item.GetAll(), infra.providerConfig);
+        let sourceRecord = item.GetAll() as Record<string, unknown>;
+        const extra = resolvedFields?.get(NormalizeUUID(item.ID));
+        if (extra) {
+            sourceRecord = { ...sourceRecord, ...extra };
+        }
+        return infra.vectorDB.BuildProviderDirectives(sourceRecord, infra.providerConfig);
+    }
+
+    /**
+     * Resolve the source-record field paths the driver declares for this index, for a batch of
+     * items. Returns per-item bags of `{ pathKey: value }`, or undefined when the driver declares
+     * no paths. Deliberately generic — what a path's value MEANS (a Pinecone namespace, a shard
+     * key, a routing region...) is entirely the driver's business; the engine only resolves data.
+     */
+    private async resolveDriverFieldPaths(
+        items: MJContentItemEntity[],
+        infra: ResolvedVectorInfrastructure,
+        resolver: FieldPathResolver
+    ): Promise<Map<string, Record<string, unknown>> | undefined> {
+        if (!infra.providerConfig) return undefined;
+        const paths = infra.vectorDB.GetSourceRecordFieldPaths(infra.providerConfig);
+        if (!paths || paths.length === 0) return undefined;
+
+        const byItem = new Map<string, Record<string, unknown>>();
+        for (const path of paths) {
+            const values = await resolver.ResolveForItems(items, path);
+            for (const item of items) {
+                const key = NormalizeUUID(item.ID);
+                const bag = byItem.get(key) ?? {};
+                bag[path] = values.get(key);
+                byItem.set(key, bag);
+            }
+        }
+        return byItem;
+    }
+
+    /**
+     * Build directives for every item up front, converting a driver rejection (a throw from
+     * `BuildProviderDirectives`) into a per-record failure. Returns the directive map for the
+     * accepted items plus the rejected items — callers fail the rejected records individually
+     * (before any embedding spend) and proceed with the rest of the batch.
+     */
+    private async precomputeProviderDirectives(
+        items: MJContentItemEntity[],
+        infra: ResolvedVectorInfrastructure,
+        resolver: FieldPathResolver
+    ): Promise<{ directives: Map<string, Record<string, unknown> | undefined>; rejected: MJContentItemEntity[] }> {
+        const directives = new Map<string, Record<string, unknown> | undefined>();
+        const rejected: MJContentItemEntity[] = [];
+        const resolvedFields = await this.resolveDriverFieldPaths(items, infra, resolver);
+        for (const item of items) {
+            try {
+                directives.set(NormalizeUUID(item.ID), this.buildProviderDirectives(item, infra, resolvedFields));
+            } catch (e) {
+                LogError(`Vector provider rejected record ${item.ID}: ${e instanceof Error ? e.message : String(e)}`);
+                rejected.push(item);
+            }
+        }
+        return { directives, rejected };
     }
 
     /**
@@ -2130,12 +2227,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const items = await this.loadChunkParentItems(toPurge, contextUser);
         if (!items) { stats.failed += toPurge.length; return; }
 
+        const itemById = new Map(items.map(i => [NormalizeUUID(i.ID), i]));
         const { sourceMap, typeMap } = await this.loadContentSourceAndTypeMaps(items, contextUser);
         const itemGroups = this.groupItemsByInfrastructure(items, sourceMap, typeMap);
+        const pathResolver = new FieldPathResolver(this.ProviderToUse, contextUser, 'MJ: Content Items');
 
         for (const [groupKey, groupItems] of itemGroups) {
             const groupItemIDs = new Set(groupItems.map(i => NormalizeUUID(i.ID)));
-            const groupChunks = toPurge.filter(c => groupItemIDs.has(NormalizeUUID(c.ContentItemID)));
+            let groupChunks = toPurge.filter(c => groupItemIDs.has(NormalizeUUID(c.ContentItemID)));
             if (groupChunks.length === 0) continue;
 
             let infra: ResolvedVectorInfrastructure;
@@ -2146,7 +2245,22 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 stats.failed += groupChunks.length;
                 continue;
             }
-            await this.purgeChunkGroup(groupChunks, infra, stats);
+
+            // Deletes carry the same per-record directives as the original upsert so drivers can
+            // route each removal correctly. Chunks whose parent the driver rejects can't have
+            // their vectors targeted — they are left 'Pending' (counted failed) and retried after
+            // the data is fixed; the rest of the group proceeds.
+            const { directives, rejected } = await this.precomputeProviderDirectives(groupItems, infra, pathResolver);
+            if (rejected.length > 0) {
+                const rejectedIDs = new Set(rejected.map(i => NormalizeUUID(i.ID)));
+                const blocked = groupChunks.filter(c => rejectedIDs.has(NormalizeUUID(c.ContentItemID)));
+                LogError(`PurgeDeletedChunks: ${blocked.length} chunk(s) rejected by the vector provider's directive policy — cannot target their vectors, left Pending`);
+                stats.failed += blocked.length;
+                groupChunks = groupChunks.filter(c => !rejectedIDs.has(NormalizeUUID(c.ContentItemID)));
+                if (groupChunks.length === 0) continue;
+            }
+
+            await this.purgeChunkGroup(groupChunks, infra, stats, itemById, directives);
         }
     }
 
@@ -2154,11 +2268,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     private async purgeChunkGroup(
         groupChunks: MJContentItemChunkEntity[],
         infra: ResolvedVectorInfrastructure,
-        stats: ChunkPurgeStats
+        stats: ChunkPurgeStats,
+        itemById: Map<string, MJContentItemEntity>,
+        directivesByItem?: Map<string, Record<string, unknown> | undefined>
     ): Promise<void> {
         for (let i = 0; i < groupChunks.length; i += PURGE_VECTORDB_SUBBATCH) {
             const batch = groupChunks.slice(i, i + PURGE_VECTORDB_SUBBATCH);
-            if (await this.deleteChunkVectors(batch, infra)) {
+            if (await this.deleteChunkVectors(batch, infra, itemById, directivesByItem)) {
                 for (const c of batch) {
                     if (await this.markChunkDeleted(c)) stats.purged++; else stats.failed++;
                 }
@@ -2171,9 +2287,23 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     /** Remove a batch of chunk vectors from the vector DB (rate-limited). Returns whether it succeeded. */
     private async deleteChunkVectors(
         batch: MJContentItemChunkEntity[],
-        infra: ResolvedVectorInfrastructure
+        infra: ResolvedVectorInfrastructure,
+        itemById: Map<string, MJContentItemEntity>,
+        directivesByItem?: Map<string, Record<string, unknown> | undefined>
     ): Promise<boolean> {
-        const records: VectorRecord[] = batch.map(c => ({ id: c.VectorRecordID as string, values: [], metadata: {} }));
+        // Deletes carry the same per-record provider directives as the original upsert so
+        // drivers can route each removal correctly (e.g. to the partition the vector lives in).
+        const records: VectorRecord[] = batch.map(c => {
+            const record: VectorRecord = { id: c.VectorRecordID as string, values: [], metadata: {} };
+            const item = itemById.get(NormalizeUUID(c.ContentItemID));
+            const directives = directivesByItem
+                ? directivesByItem.get(NormalizeUUID(c.ContentItemID))
+                : (item ? this.buildProviderDirectives(item, infra) : undefined);
+            if (directives) {
+                record.providerTemporaryDirectives = directives;
+            }
+            return record;
+        });
         await this.VectorDBRateLimiter.Acquire();
         try {
             const resp = await infra.vectorDB.DeleteRecords(records, infra.indexName);
@@ -2207,7 +2337,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Bounded per run by `maxItems` and per embed/upsert call by CHUNK_EMBED_SUBBATCH + rate-limited,
      * so a large backlog drains over several runs rather than hammering the API or vector store.
      * Meant to run out-of-band from live vectorization (on demand or scheduled). Best-effort per
-     * chunk — a failure leaves the row 'Pending' (retried next run) and never aborts the pass.
+     * chunk — a transient failure leaves the row 'Pending' (retried next run) and never aborts the
+     * pass. Exception: a chunk whose record the vector driver REJECTS (a throw from
+     * `BuildProviderDirectives`, e.g. a mandatory routing value is missing) is marked 'Failed'
+     * (see {@link markChunkEmbedFailed}) so it cannot starve the oldest-first pending queue.
      *
      * @returns counts of chunks embedded, failed, and skipped (empty text / missing parent).
      */
@@ -2262,10 +2395,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const { sourceMap, typeMap } = await this.loadContentSourceAndTypeMaps(items, contextUser);
         const itemGroups = this.groupItemsByInfrastructure(items, sourceMap, typeMap);
         const tagMap = await this.loadTagsForItems(items, contextUser);
+        const pathResolver = new FieldPathResolver(this.ProviderToUse, contextUser, 'MJ: Content Items');
 
         for (const [groupKey, groupItems] of itemGroups) {
             const groupItemIDs = new Set(groupItems.map(i => NormalizeUUID(i.ID)));
-            const groupChunks = chunks.filter(c => groupItemIDs.has(NormalizeUUID(c.ContentItemID)));
+            let groupChunks = chunks.filter(c => groupItemIDs.has(NormalizeUUID(c.ContentItemID)));
             if (groupChunks.length === 0) continue;
 
             let infra: ResolvedVectorInfrastructure;
@@ -2276,8 +2410,41 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 stats.failed += groupChunks.length;
                 continue;
             }
-            await this.embedChunkGroup(groupChunks, itemById, infra, tagMap, contextUser, stats);
+
+            // Provider directives are built per parent item BEFORE any embedding spend. Chunks
+            // whose parent the driver rejects (see precomputeProviderDirectives) are marked Failed
+            // individually; the rest of the group proceeds. Recovery: fix the data, reset the
+            // rows to Pending.
+            const { directives, rejected } = await this.precomputeProviderDirectives(groupItems, infra, pathResolver);
+            if (rejected.length > 0) {
+                const rejectedIDs = new Set(rejected.map(i => NormalizeUUID(i.ID)));
+                const blocked = groupChunks.filter(c => rejectedIDs.has(NormalizeUUID(c.ContentItemID)));
+                LogError(`EmbedPendingChunks: ${blocked.length} chunk(s) rejected by the vector provider's directive policy — marked Failed, remaining chunks proceed`);
+                for (const c of blocked) {
+                    await this.markChunkEmbedFailed(c);
+                    stats.failed++;
+                }
+                groupChunks = groupChunks.filter(c => !rejectedIDs.has(NormalizeUUID(c.ContentItemID)));
+                if (groupChunks.length === 0) continue;
+            }
+
+            await this.embedChunkGroup(groupChunks, itemById, infra, tagMap, contextUser, stats, directives);
         }
+    }
+
+    /**
+     * Mark a pending chunk's embed as Failed — used when the vector provider rejects the record's
+     * directives. Deliberately NOT left 'Pending': the pending queue drains oldest-first, so rows
+     * that can never succeed without a data fix would permanently occupy the front of every future
+     * run's MaxItems window and starve resolvable chunks behind them. Best-effort save.
+     */
+    private async markChunkEmbedFailed(chunk: MJContentItemChunkEntity): Promise<boolean> {
+        chunk.EmbeddingStatus = 'Failed';
+        const saved = await chunk.Save();
+        if (!saved) {
+            LogError(`EmbedPendingChunks: failed to mark chunk ${chunk.ID} Failed: ${chunk.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return saved;
     }
 
     /** Embed + upsert one infra group's chunks in bounded sub-batches, then stamp each row Complete. */
@@ -2287,13 +2454,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         infra: ResolvedVectorInfrastructure,
         tagMap: Map<string, string[]>,
         contextUser: UserInfo,
-        stats: ChunkEmbedStats
+        stats: ChunkEmbedStats,
+        directivesByItem?: Map<string, Record<string, unknown> | undefined>
     ): Promise<void> {
         for (let i = 0; i < groupChunks.length; i += CHUNK_EMBED_SUBBATCH) {
             const batch = groupChunks.slice(i, i + CHUNK_EMBED_SUBBATCH);
             const embeddable = this.toEmbeddableChunks(batch, itemById, stats);
             if (embeddable.length === 0) continue;
-            await this.embedAndPersistChunkBatch(embeddable, infra, tagMap, contextUser, stats);
+            await this.embedAndPersistChunkBatch(embeddable, infra, tagMap, contextUser, stats, directivesByItem);
         }
     }
 
@@ -2326,7 +2494,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         infra: ResolvedVectorInfrastructure,
         tagMap: Map<string, string[]>,
         contextUser: UserInfo,
-        stats: ChunkEmbedStats
+        stats: ChunkEmbedStats,
+        directivesByItem?: Map<string, Record<string, unknown> | undefined>
     ): Promise<void> {
         const texts = embeddable.map(e => e.chunk.text);
         await this.EmbeddingRateLimiter.Acquire(texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0));
@@ -2353,7 +2522,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 values: runResult.Vectors[idx],
                 metadata: this.buildVectorMetadata(e.chunk, false, tagMap.get(e.chunk.item.ID), config, contentItemEntity),
             };
-            const directives = this.buildProviderDirectives(e.chunk.item, infra);
+            const directives = directivesByItem
+                ? directivesByItem.get(NormalizeUUID(e.chunk.item.ID))
+                : this.buildProviderDirectives(e.chunk.item, infra);
             if (directives) {
                 record.providerTemporaryDirectives = directives;
             }

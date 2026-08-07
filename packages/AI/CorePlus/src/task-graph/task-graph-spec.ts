@@ -13,6 +13,31 @@
  * @module @memberjunction/ai-core-plus
  */
 
+/** A conditional dependency edge. */
+export type TaskGraphDependency = {
+    /** The `tempId` this node waits for. */
+    tempId: string;
+    /**
+     * Boolean expression gating the edge. Omitted means unconditional.
+     *
+     * A condition that fails to evaluate does NOT open the gate — a malformed expression must never
+     * become an accidental `true` — but it is reported distinctly from one that evaluated false, so
+     * a graph stalled by a typo cannot be mistaken for one that simply took another branch.
+     */
+    condition?: string;
+    /**
+     * How this edge participates in the target's join. `Prerequisite` (the default) means the target
+     * waits for it; `Optional` means any one satisfied predecessor is enough; `Corequisite` means
+     * co-scheduled.
+     */
+    dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional';
+};
+
+/** Normalizes either dependency form to the object form. */
+export function NormalizeDependency(dep: string | TaskGraphDependency): TaskGraphDependency {
+    return typeof dep === 'string' ? { tempId: dep } : dep;
+}
+
 /** One node in a submitted graph. */
 export type TaskGraphSpecNode = {
     /**
@@ -34,8 +59,19 @@ export type TaskGraphSpecNode = {
      */
     assignToUser?: boolean;
 
-    /** `tempId`s this node depends on. */
-    dependsOn: string[];
+    /**
+     * What this node waits for.
+     *
+     * A bare `tempId` is an unconditional dependency — wait for that node, then run. The object form
+     * adds a condition, so the edge is only live when the expression holds; that is what lets a
+     * runtime graph express "run the escalation step only if the analysis found a problem" without
+     * a separate branching concept.
+     *
+     * The condition grammar is the same one design-time flow edges use (`AIAgentStepPath.Condition`),
+     * evaluated by the same shared engine. Keeping them identical is what makes Save as Workflow a
+     * projection rather than a translation.
+     */
+    dependsOn: Array<string | TaskGraphDependency>;
 
     /** Structured input persisted to `Task.InputPayload`. */
     inputPayload?: Record<string, unknown>;

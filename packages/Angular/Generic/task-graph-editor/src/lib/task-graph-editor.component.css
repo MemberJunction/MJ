@@ -1,0 +1,25 @@
+/* Design tokens only — no hardcoded colors (see .claude/rules/design-tokens.md). */
+.mj-tge {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--mj-bg-page);
+}
+
+.mj-tge__validation {
+  flex: 0 0 auto;
+  margin: var(--mj-space-sm, 0.5rem);
+}
+
+.mj-tge__validation-list {
+  margin: var(--mj-space-xs, 0.25rem) 0 0;
+  padding-inline-start: 1.25rem;
+}
+
+/* The canvas takes the remaining height; min-height:0 is what lets it actually shrink inside flex. */
+.mj-tge__canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+}

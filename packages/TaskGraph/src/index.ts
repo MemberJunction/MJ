@@ -9,6 +9,7 @@
 export * from './types';
 export * from './TaskGraphService';
 export * from './TaskClaimStore';
+export * from './DispatcherConditionEvaluator';
 export * from './TaskGraphDispatcher';
 export * from './TaskGraphSubmitterImpl';
 export * from './operations/TaskGraphOperations';

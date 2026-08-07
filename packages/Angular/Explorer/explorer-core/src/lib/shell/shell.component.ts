@@ -1303,20 +1303,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }) || null;
     }
 
-    // Report: /app/:appName/report/:reportId
-    const appReportMatch = urlPath.match(/^\/app\/([^\/]+)\/report\/(.+)$/);
-    if (appReportMatch) {
-      const reportId = appReportMatch[2];
-
-      return tabs.find(tab => {
-        const tabConfig = tab.configuration || {};
-        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-        const tabReportId = (tabConfig['reportId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
-
-        return resourceType === 'reports' && tabReportId === reportId;
-      }) || null;
-    }
-
     // Artifact: /app/:appName/artifact/:artifactId
     const appArtifactMatch = urlPath.match(/^\/app\/([^\/]+)\/artifact\/(.+)$/);
     if (appArtifactMatch) {
@@ -1609,13 +1595,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           // /app/:appName/query/:queryId
           if (recordId) {
             return appendQP(`/app/${encodeURIComponent(appPath)}/query/${recordId}`);
-          }
-          break;
-
-        case 'reports':
-          // /app/:appName/report/:reportId
-          if (recordId) {
-            return appendQP(`/app/${encodeURIComponent(appPath)}/report/${recordId}`);
           }
           break;
 
