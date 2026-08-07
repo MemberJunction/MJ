@@ -256,6 +256,64 @@ LogError(`Error: ${entity.LatestResult?.Message}`); // Incomplete info
 - **Never** wrap `Save()`/`Delete()` in try/catch expecting them to throw on business logic failures
 - Save/Delete CAN still throw for infrastructure errors (network, connection), but logical failures (validation, permissions, FK violations) return `false`
 
+### Saving a parent AND its children — use an entity graph, not a hand-rolled cascade
+
+**Do not hand-roll a parent/children save.** Declaring a child collection gets you atomicity,
+validation ordering, dirty tracking, orphan handling and client/server parity for free — and avoids
+the five defects every hand-rolled version in this codebase has shipped at least one of.
+
+```typescript
+// On a SHARED (client + server) entity subclass — not a server-only one
+public readonly Lines = this.DeclareRelatedRecords<OrderLineEntity>({
+    Name: 'Lines',
+    RelatedEntity: 'MJ_BizApps_Orders: Order Lines',
+    RelatedEntityJoinField: 'OrderHeaderID',
+    OrderBy: 'LineNumber ASC',
+    Load: 'explicit',                        // 'eager' | 'explicit' | 'never'
+    OnRemove: 'delete',                      // 'delete' | 'orphan' | 'refuse'
+    Sequence: { Field: 'LineNumber', From: 1 },
+});
+
+// Then, on either tier:
+await order.Save();   // header + lines, atomically
+```
+
+**The three mechanisms are not interchangeable:**
+
+| Need | Use | Never use |
+|---|---|---|
+| Parent + its children | `DeclareRelatedRecords()` + `entity.Save()` | ❌ a TransactionGroup — saves are *deferred*, so the parent's PK is unavailable, there is no read-your-writes, and `Save()` returns `true` before anything persists |
+| Several server-side writes together | `RunInEntityTransaction(this.ProviderToUse, work)` | ❌ `ProviderToUse as DatabaseProviderBase` then `BeginTransaction()` — that cast is what makes a class server-only |
+| Unrelated records in one client round trip | TransactionGroup + `Submit()` | — |
+
+Other rules that follow from this:
+
+- **`Load: 'immediate'` never fires from `LoadFromData()`.** For result sets use
+  `RunView({ ..., ResultType: 'entity_object', IncludeRelatedRecords: ['Lines'] })`, which costs `1 + K`
+  queries instead of N+1.
+- **Prefer declaring it in metadata.** Set `EntityRelationship.RelatedRecordCollection` and CodeGen
+  emits the declaration onto the *generated* class — both tiers get it, no subclass needed.
+- **`Source: 'cache'` gives zero-query related records** for entities a `BaseEngine` already caches
+  (action params, prompt models, API key scopes). It resolves generically through
+  `BaseEngineRegistry`, falls back to a database load on a miss, and defaults `ReadOnly: true` —
+  because you are then holding *the engine's own instances*, as a live view. Declare
+  `ReadOnly: false` to get copies you can safely modify. `Load: 'lazy'` requires both, and **throws**
+  on a cache miss rather than returning an empty array.
+- **`await entity.LoadRelatedRecords()`** populates everything: cache-backed for free,
+  database-backed batched into one `RunViews`.
+- **The collection is iterable** — `for (const l of order.Lines)`, `[...order.Lines]`,
+  `order.Lines.length` all work. Use `.Items` for `map`/`filter`/`find`; it is `readonly` on
+  purpose, so mutate through `Add`/`Create`/`Remove` and never by pushing at an array.
+- **Declare collections on a shared subclass**, with server-only behaviour in a class that extends
+  it. `ClassFactory` priority auto-increments by load order, so the server subclass wins server-side
+  with no configuration — and the browser still sees the collection.
+- **`BeginISATransaction()`, `ProviderTransaction` and `PropagateTransactionToParents()` were removed in 6.2.** Use `BeginEntityTransaction()` / `RunInEntityTransaction()`.
+
+Read [`guides/TRANSACTIONS_AND_BATCHING_GUIDE.md`](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md)
+before writing anything that saves more than one record together, and
+[`packages/MJCore/docs/related-record-collections.md`](../../packages/MJCore/docs/related-record-collections.md)
+for the full model with flow diagrams.
+
 ### 🚨 NEVER WRITE DIRECT SQL DML AGAINST AN ENTITY — unless it opts in
 
 **Do not write `INSERT`, `UPDATE`, or `DELETE` against an entity's base table.** All mutations go through `BaseEntity.Save()` / `.Delete()`, because that is the only path where the platform's guarantees actually run:

@@ -643,13 +643,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             entity.EntityInfo.AllowMultipleSubtypes &&
             entity.EntityInfo.TrackRecordChanges
         )
+            // No explicit connectionSource: sibling writes must land in the same transaction as the
+            // save that triggered them, which is what happens by default — ExecuteSQL runs on the
+            // provider's ambient transaction when no source is given.
             ? this.PropagateRecordChangesToSiblings(
                 entity.EntityInfo,
                 overlappingChangeData,
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
-                entity.ProviderTransaction ? { connectionSource: entity.ProviderTransaction } : undefined,
             )
             : null;
 

@@ -856,6 +856,17 @@
             "lastModified": "2026-08-07T18:02:58.170Z",
             "checksum": "c502c3b56c8b5c21b27f0f89fcf7eb394de74646099129c045538ee469e05821"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT72 - Entity Graph (related-record collections)",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B4FE6167-1F8A-4B5C-A565-A008CE03BFD8"
+          }
         }
       ]
     },

@@ -259,7 +259,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    
 
    protected GetActionParamsForAction(action: MJActionEntityExtended): ActionParam[] {
-      const params: ActionParam[] = action.Params.map((param: MJActionParamEntity) => {
+      const params: ActionParam[] = action.Params.Items.map((param: MJActionParamEntity) => {
          let value: any = null;
          switch (param.ValueType) {
             case 'Scalar':

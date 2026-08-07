@@ -640,7 +640,7 @@ export class BaseAgent {
             // Check if this param is marked as MediaOutput in action metadata
             // Note: 'MediaOutput' ValueType is added in v3.1.x migration.
             // Before CodeGen runs, this property may not exist on the entity type.
-            const paramMetadata = actionEntity?.Params?.find(p => p.Name === param.Name);
+            const paramMetadata = actionEntity?.Params?.Items.find(p => p.Name === param.Name);
             const valueType = paramMetadata?.ValueType as string | undefined;
             const isMediaOutputParam = valueType === 'MediaOutput';
 
@@ -7271,12 +7271,12 @@ The context is now within limits. Please retry your request with the recovered c
             lines.push(`### ${action.Name}`);
             lines.push(action.Description);
 
-            const inputParams = action.Params
+            const inputParams = action.Params.Items
                 .filter(p => {
                     const t = p.Type.trim().toLowerCase();
                     return t === 'input' || t === 'both';
                 });
-            const outputParams = action.Params
+            const outputParams = action.Params.Items
                 .filter(p => {
                     const t = p.Type.trim().toLowerCase();
                     return t === 'output' || t === 'both';
@@ -7289,8 +7289,8 @@ The context is now within limits. Please retry your request with the recovered c
                 lines.push(`**Output:** ${outputParams.map(p => this.formatActionParameter(p)).join(', ')}`);
             }
 
-            if (action.ResultCodes.length > 0) {
-                const rcParts = action.ResultCodes.map(rc => {
+            if (action.ResultCodes.Items.length > 0) {
+                const rcParts = action.ResultCodes.Items.map(rc => {
                     const marker = rc.IsSuccess ? '✓' : '✗';
                     const desc = rc.Description && rc.Description.toLowerCase() !== rc.ResultCode.toLowerCase()
                         ? ` ${rc.Description}`
