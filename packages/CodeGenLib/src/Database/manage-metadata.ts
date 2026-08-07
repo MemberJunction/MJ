@@ -335,7 +335,7 @@ export class ManageMetadataBase {
 
    /**
     * Produces a schema-qualified object reference.
-    * SQL Server: [schema].[object], PostgreSQL: schema."object"
+    * SQL Server: [schema].[object], PostgreSQL: "schema"."object"
     */
    protected qs(schema: string, object: string): string {
       return this.dialect.QuoteSchema(schema, object);
@@ -1791,95 +1791,129 @@ export class ManageMetadataBase {
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       await md.Refresh(); // reflect this run's schema/field sync before judging drift
       let heldCount = 0;
+      let failedCount = 0;
 
+      // Per-row isolation: a throw while processing ONE materialization (a transient query read, a dropped
+      // source table, a permission edge) must NOT abort reconciliation for the REST — otherwise a single
+      // failing row indefinitely defers the C1 RLS re-check + C2 grant re-narrow for every materialization
+      // after it (a latent fail-open). Log, count, and continue; the pass reports PARTIAL reconciliation.
       for (const r of rows.recordset) {
-         // RLS re-check (C1): a QUERY materialization whose source has SINCE gained a read RLS filter (or lost
-         // its source-entity provenance) would keep serving the full unscoped snapshot to every user — the
-         // mint-time gate cannot see a change made after minting. Re-run the same assessment here and, when it
-         // now fails, hold the materialization AND revoke the minted entity's read access: a precomputed
-         // snapshot cannot enforce per-user scoping, so fail closed until a human authors protection. Base-view
-         // materializations re-apply the source entity's RLS at read time (they reuse the source entity), so
-         // they are exempt from this check.
-         if (r.SourceType === 'Query' && r.SourceQueryID) {
-            const qe = await this.runQueryWithParams(pool, `SELECT EntityID FROM ${this.qs(coreSchema, 'QueryEntity')} WHERE QueryID = @Q`, { Q: r.SourceQueryID as string });
-            const sourceEntityIds = qe.recordset.map((x: CodeGenQueryRow) => x.EntityID as string);
-            // Load the query text so the P1 under-linking guard can parse it for source tables the QueryEntity
-            // links may have missed (see assessQuerySourceRLSSafety). Best-effort: if the read fails, the
-            // linked-source checks still run — only a POSITIVE unlinked-RLS detection changes the verdict.
-            const qSqlRes = await this.runQueryWithParams(pool, `SELECT SQL FROM ${this.qs(coreSchema, 'Query')} WHERE ID = @Q`, { Q: r.SourceQueryID as string });
-            const driftSQL = (qSqlRes.recordset?.[0] as CodeGenQueryRow)?.SQL as string | undefined;
-            const rlsVerdict = this.assessQuerySourceRLSSafety(md, sourceEntityIds, driftSQL);
-            if (!rlsVerdict.safe) {
-               // Revoke read FIRST, then flag DriftHold. The revoke is the security-critical action (closes the
-               // leak — the snapshot serving unscoped source rows); DriftHold only stops future refreshes. Doing
-               // revoke first means that if the second statement fails, the readable window is already closed
-               // (fail-safe) — whereas DriftHold-then-revoke would leave read OPEN if the revoke failed.
-               if (r.GeneratedEntityID) {
-                  await this.revokeMaterializedEntityReadAccess(pool, r.GeneratedEntityID as string, r.TableName as string, rlsVerdict.reason ?? 'source RLS drift');
-               }
-               await this.LogSQLAndExecute(
-                  pool,
-                  `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
-                  `Flag materialization "${r.TableName}" as DriftHold (source RLS drift)`,
-               );
-               logError(`    > RLS DRIFT: materialization "${r.TableName}" → read access revoked + DriftHold — ${rlsVerdict.reason}`);
+         try {
+            if (await this.evaluateAndHoldDriftRow(pool, md, r as CodeGenQueryRow, coreSchema)) {
                heldCount++;
-               continue; // already held for the leak; the shape-drift check below is moot
             }
-            // Leak 2 (C2 ongoing): RLS is still safe, but a role may have LOST plain read on a source since mint.
-            // The intersection grant is computed once at mint and never re-narrowed by the RLS check above, so
-            // re-narrow it here to the CURRENT source-read intersection — otherwise a role that lost read on a
-            // source keeps reading the snapshot's rows it can no longer read live. Re-narrow only (never re-grant).
+         } catch (rowErr) {
+            failedCount++;
+            logError(`    > Drift/security re-check FAILED for materialization "${r.TableName}" (ID ${r.ID}) — isolated and skipped, continuing with the rest: ${rowErr instanceof Error ? rowErr.message : String(rowErr)}`);
+         }
+      }
+      if (failedCount > 0) {
+         logError(`    > detectMaterializationDrift: ${failedCount} materialization(s) failed the drift/security re-check and were skipped — reconciliation is PARTIAL this run (a source that gained RLS on a skipped row may still be granting read). Investigate the logged errors.`);
+      }
+      return { success: failedCount === 0, heldCount };
+   }
+
+   /**
+    * Processes ONE materialization row: the C1 RLS re-check, the C2 read-grant re-narrow, the external
+    * base-view leak guard, and generic shape/provenance drift. Returns true if the row was held. Extracted
+    * from {@link detectMaterializationDrift} so a throw on one row can be isolated by the caller's try/catch
+    * instead of aborting reconciliation for every remaining materialization.
+    */
+   protected async evaluateAndHoldDriftRow(pool: CodeGenConnection, md: Metadata, r: CodeGenQueryRow, coreSchema: string): Promise<boolean> {
+      // RLS re-check (C1): a QUERY materialization whose source has SINCE gained a read RLS filter (or lost
+      // its source-entity provenance) would keep serving the full unscoped snapshot to every user — the
+      // mint-time gate cannot see a change made after minting. Re-run the same assessment here and, when it
+      // now fails, hold the materialization AND revoke the minted entity's read access: a precomputed
+      // snapshot cannot enforce per-user scoping, so fail closed until a human authors protection. Base-view
+      // materializations re-apply the source entity's RLS at read time (they reuse the source entity), so
+      // they are exempt from this check.
+      if (r.SourceType === 'Query' && r.SourceQueryID) {
+         const qe = await this.runQueryWithParams(pool, `SELECT EntityID FROM ${this.qs(coreSchema, 'QueryEntity')} WHERE QueryID = @Q`, { Q: r.SourceQueryID as string });
+         const sourceEntityIds = qe.recordset.map((x: CodeGenQueryRow) => x.EntityID as string);
+         // Load the query text so the P1 under-linking guard can parse it for source tables the QueryEntity
+         // links may have missed (see assessQuerySourceRLSSafety). Best-effort: if the read fails, the
+         // linked-source checks still run — only a POSITIVE unlinked-RLS detection changes the verdict.
+         const qSqlRes = await this.runQueryWithParams(pool, `SELECT SQL FROM ${this.qs(coreSchema, 'Query')} WHERE ID = @Q`, { Q: r.SourceQueryID as string });
+         const driftSQL = (qSqlRes.recordset?.[0] as CodeGenQueryRow)?.SQL as string | undefined;
+         const rlsVerdict = this.assessQuerySourceRLSSafety(md, sourceEntityIds, driftSQL);
+         if (!rlsVerdict.safe) {
+            // Revoke read FIRST, then flag DriftHold. The revoke is the security-critical action (closes the
+            // leak — the snapshot serving unscoped source rows); DriftHold only stops future refreshes. Doing
+            // revoke first means that if the second statement fails, the readable window is already closed
+            // (fail-safe) — whereas DriftHold-then-revoke would leave read OPEN if the revoke failed.
             if (r.GeneratedEntityID) {
-               const sourceEntities = sourceEntityIds.map((id) => md.EntityByID(id)).filter((e): e is EntityInfo => !!e);
-               const revoked = await this.reconcileMaterializedQueryEntityReadGrants(pool, r.GeneratedEntityID as string, r.TableName as string, sourceEntities);
-               if (revoked > 0) {
-                  logStatus(`    > PERMISSION DRIFT: materialized entity "${r.TableName}" → revoked ${revoked} over-broad read grant(s) (a role can no longer read every source).`);
-               }
+               await this.revokeMaterializedEntityReadAccess(pool, r.GeneratedEntityID as string, r.TableName as string, rlsVerdict.reason ?? 'source RLS drift');
             }
-         }
-
-         // SECURITY (Leak 1 drift side): an existing base-view materialization of an EXTERNAL read-RLS-protected
-         // entity leaks (the mirror is readable via raw queries, but the entity's live reads are RLS-refused and
-         // the read path never re-applies RLS to an external mirror). The mint gate refuses NEW ones; hold any
-         // that already exist (or whose entity became external/RLS after minting) so refresh stops — and flag for
-         // a human to drop the mirror. (Local base-view RLS is safe and not held.)
-         if (r.SourceType === 'EntityBaseView' && r.SourceEntityID) {
-            const bvEntity = md.EntityByID(r.SourceEntityID as string);
-            if (bvEntity && bvEntity.ExternalDataSourceID && this.entityHasRowLevelSecurity(bvEntity)) {
-               // EMPTY the mirror now — it holds remote rows the live path refuses under RLS, and DriftHold alone
-               // would only stop FUTURE refreshes while leaving the already-populated rows queryable via raw SQL
-               // over the wrapper view. Emptying (not dropping) removes the leaked data without breaking any object
-               // dependency; the wrapper view remains but returns nothing. Then DriftHold so refresh never refills it.
-               await this.LogSQLAndExecute(
-                  pool,
-                  `DELETE FROM ${this.qs(r.SchemaName as string, r.TableName as string)}`,
-                  `Empty external RLS base-view mirror "${r.TableName}" (leak guard — mirror exposed RLS-refused rows)`,
-               );
-               await this.LogSQLAndExecute(
-                  pool,
-                  `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
-                  `Flag external RLS base-view materialization "${r.TableName}" as DriftHold (leak guard)`,
-               );
-               logError(`    > RLS LEAK GUARD: base-view materialization "${r.TableName}" mirrors an EXTERNAL read-RLS-protected entity ("${bvEntity.Name}") → mirror EMPTIED + DriftHold (refresh stopped). It exposed rows the live path refuses under RLS.`);
-               heldCount++;
-               continue;
-            }
-         }
-
-         const facts = await this.gatherDriftFacts(pool, md, r as CodeGenQueryRow, coreSchema);
-         const verdict = evaluateMaterializationDrift(facts);
-         if (verdict.drift) {
             await this.LogSQLAndExecute(
                pool,
                `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
-               `Flag materialization "${r.TableName}" as DriftHold`,
+               `Flag materialization "${r.TableName}" as DriftHold (source RLS drift)`,
             );
-            logStatus(`    > DRIFT: materialization "${r.TableName}" → DriftHold — ${verdict.reason}`);
-            heldCount++;
+            logError(`    > RLS DRIFT: materialization "${r.TableName}" → read access revoked + DriftHold — ${rlsVerdict.reason}`);
+            return true; // already held for the leak; the shape-drift check below is moot
+         }
+         // Leak 2 (C2 ongoing): RLS is still safe, but a role may have LOST plain read on a source since mint.
+         // The intersection grant is computed once at mint and never re-narrowed by the RLS check above, so
+         // re-narrow it here to the CURRENT source-read intersection — otherwise a role that lost read on a
+         // source keeps reading the snapshot's rows it can no longer read live. Re-narrow only (never re-grant).
+         if (r.GeneratedEntityID) {
+            const sourceEntities = sourceEntityIds.map((id) => md.EntityByID(id)).filter((e): e is EntityInfo => !!e);
+            const revoked = await this.reconcileMaterializedQueryEntityReadGrants(pool, r.GeneratedEntityID as string, r.TableName as string, sourceEntities);
+            if (revoked > 0) {
+               logStatus(`    > PERMISSION DRIFT: materialized entity "${r.TableName}" → revoked ${revoked} over-broad read grant(s) (a role can no longer read every source).`);
+            }
          }
       }
-      return { success: true, heldCount };
+
+      // SECURITY (Leak 1 drift side): an existing base-view materialization of an EXTERNAL read-RLS-protected
+      // entity leaks (the mirror is readable via raw queries, but the entity's live reads are RLS-refused and
+      // the read path never re-applies RLS to an external mirror). The mint gate refuses NEW ones; hold any
+      // that already exist (or whose entity became external/RLS after minting) so refresh stops — and flag for
+      // a human to drop the mirror. (Local base-view RLS is safe and not held.)
+      if (r.SourceType === 'EntityBaseView' && r.SourceEntityID) {
+         const bvEntity = md.EntityByID(r.SourceEntityID as string);
+         if (bvEntity && bvEntity.ExternalDataSourceID && this.entityHasRowLevelSecurity(bvEntity)) {
+            // EMPTY the mirror now — it holds remote rows the live path refuses under RLS, and DriftHold alone
+            // would only stop FUTURE refreshes while leaving the already-populated rows queryable via raw SQL
+            // over the wrapper view. Emptying (not dropping) removes the leaked data without breaking any object
+            // dependency; the wrapper view remains but returns nothing. Then DriftHold so refresh never refills it.
+            await this.LogSQLAndExecute(
+               pool,
+               `DELETE FROM ${this.qs(r.SchemaName as string, r.TableName as string)}`,
+               `Empty external RLS base-view mirror "${r.TableName}" (leak guard — mirror exposed RLS-refused rows)`,
+            );
+            await this.LogSQLAndExecute(
+               pool,
+               `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
+               `Flag external RLS base-view materialization "${r.TableName}" as DriftHold (leak guard)`,
+            );
+            logError(`    > RLS LEAK GUARD: base-view materialization "${r.TableName}" mirrors an EXTERNAL read-RLS-protected entity ("${bvEntity.Name}") → mirror EMPTIED + DriftHold (refresh stopped). It exposed rows the live path refuses under RLS.`);
+            return true;
+         }
+      }
+
+      const facts = await this.gatherDriftFacts(pool, md, r as CodeGenQueryRow, coreSchema);
+      const verdict = evaluateMaterializationDrift(facts);
+      if (verdict.drift) {
+         // Fail-closed on ANY hold of a QUERY materialization: once held, the row drops out of
+         // detectMaterializationDrift's `Status NOT IN ('DriftHold', ...)` scan, so the C1 RLS re-check and the
+         // C2 grant re-narrow above NEVER run for it again. A query virtual entity's reads are NOT status-gated
+         // (they always read `materialized_vw…`), so a still-readable held snapshot whose source LATER gains RLS
+         // (or whose role loses source read) would leak the full unscoped rows. Revoke read access on the hold to
+         // close that window now, mirroring the RLS-drift revoke above. Base-view mats reuse the source entity
+         // (RLS re-applied at read time via the status-gated effective base view), so they have no minted grant here.
+         if (r.SourceType === 'Query' && r.GeneratedEntityID) {
+            await this.revokeMaterializedEntityReadAccess(pool, r.GeneratedEntityID as string, r.TableName as string, `drift hold — ${verdict.reason ?? 'shape/provenance drift'}`);
+         }
+         await this.LogSQLAndExecute(
+            pool,
+            `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
+            `Flag materialization "${r.TableName}" as DriftHold`,
+         );
+         logStatus(`    > DRIFT: materialization "${r.TableName}" → DriftHold — ${verdict.reason}`);
+         return true;
+      }
+      return false;
    }
 
    /** Gathers the drift-relevant existence facts for one materialization against current metadata. */
@@ -6036,28 +6070,74 @@ export class ManageMetadataBase {
          const linkedSet = new Set(sourceEntityIds.map((id) => id.trim().toLowerCase()));
          let refs: { SchemaName?: string; TableName?: string }[] = [];
          try { refs = SQLParser.ExtractTableRefs(sql, this.dialect) ?? []; } catch { refs = []; }
+         // CTE self-references are emitted by ExtractTableRefs as unqualified (dbo-defaulted) refs, but they are
+         // NOT base-table sources. Since findEntityByBaseObject now falls back to a schema-agnostic name match for
+         // unqualified refs (to catch under-linked __mj/app-schema sources), a CTE that happens to share an
+         // entity's base-table name would otherwise be misread as an under-linked source and over-refuse. Collect
+         // the CTE names and skip any unqualified ref that matches one. (Parse failure → no exclusion; the guard
+         // still fails closed, only slightly more conservatively.)
+         const cteNames = new Set<string>();
+         try {
+            // Extract each CTE's name from its "name AS (...)" definition. Handle all three quotings SQLParser can
+            // emit ([bracket], "double-quote", bare) plus an optional column list — mirroring the parser's own CTE
+            // header regex. A missed name only means a (safe) over-refusal, but bracket names are the common T-SQL
+            // form, so cover them.
+            for (const def of SQLParser.ExtractCTEs(sql, this.dialect)?.CTEDefinitions ?? []) {
+               const m = /^\s*(?:\[([^\]]+)\]|"([^"]+)"|([A-Za-z_][\w$]*))\s*(?:\([^)]*\))?\s+AS\b/i.exec(def);
+               const name = m?.[1] ?? m?.[2] ?? m?.[3];
+               if (name) cteNames.add(name.trim().toLowerCase());
+            }
+         } catch { /* no CTE exclusion available — guard stays fail-closed */ }
          for (const ref of refs) {
             if (!ref.TableName) continue;
-            const entity = this.findEntityByBaseObject(md, ref.SchemaName, ref.TableName);
-            if (entity && this.entityHasRowLevelSecurity(entity) && !linkedSet.has(entity.ID.trim().toLowerCase())) {
-               return { safe: false, reason: `query references read-RLS-protected source "${entity.Name}" (${ref.SchemaName ?? ''}.${ref.TableName}) that query-analysis did NOT link — an unscoped snapshot can't honor its RLS (P1 under-linking guard)` };
+            const refSchema = (ref.SchemaName ?? '').trim().toLowerCase();
+            // Skip CTE self-references (only unqualified / dbo-defaulted refs can be a CTE name).
+            if ((refSchema === '' || refSchema === 'dbo') && cteNames.has(ref.TableName.trim().toLowerCase())) continue;
+            // Refuse ANY under-linked entity source, not only RLS-protected ones. Both the RLS-safety check above
+            // AND the read-grant role intersection (addMaterializedQueryEntityPermissions) are computed over the
+            // LINKED set only, so a source query-analysis did NOT link is invisible to both: an RLS source would
+            // leak its rows unscoped, and a merely CanRead-restricted (non-RLS) source would let the minted
+            // entity's read grant exceed "can read every source" — a privilege escalation. A parsed ref maps to an
+            // entity when it IS that entity's base view/table; derived-table aliases map to nothing, and CTE
+            // self-references are excluded above, so a mapped-but-unlinked source is genuine under-linking and
+            // refusing is correct; over-refusal is harmless (the query stays live-only — link the source via full
+            // query analysis, or use a base-view materialization which inherits source read access).
+            // Consider ALL candidate entities the ref can map to and fail closed if ANY is unlinked: an unqualified
+            // ref is schema-ambiguous (the parser collapses it to 'dbo'), so a same-base-name entity in another
+            // schema could be the true referent — picking only the first match could silently pass an unlinked one.
+            const candidates = this.findEntitiesByBaseObject(md, ref.SchemaName, ref.TableName);
+            const unlinked = candidates.find((e) => !linkedSet.has(e.ID.trim().toLowerCase()));
+            if (unlinked) {
+               const rlsNote = this.entityHasRowLevelSecurity(unlinked) ? ' read-RLS-protected' : ' read-restricted';
+               return { safe: false, reason: `query references${rlsNote} source "${unlinked.Name}" (${ref.SchemaName ?? ''}.${ref.TableName}) that query-analysis did NOT link — an unscoped snapshot cannot prove its per-source read access is honored (P1 under-linking guard)` };
             }
          }
       }
       return { safe: true };
    }
 
-   /** Maps a physical (schema, table/view) reference to the MJ entity backed by it — by BaseView or BaseTable,
-    *  case/whitespace-insensitive, schema-scoped when a schema is given. Used by the P1 under-linking guard. */
-   protected findEntityByBaseObject(md: Metadata, schema: string | undefined, table: string): EntityInfo | undefined {
+   /** Maps a physical (schema, table/view) reference to the MJ entities backed by it — by BaseView or BaseTable,
+    *  case/whitespace-insensitive. Returns ALL candidates so the P1 guard can fail closed on an AMBIGUOUS ref.
+    *  Resolution: an explicit, non-default schema yields only that schema's exact matches; an empty schema OR the
+    *  parser-default `'dbo'` — which {@link SQLParser.ExtractTableRefs} assigns to every UNQUALIFIED ref, while MJ
+    *  core/app entities live in `__mj`/app schemas (never `dbo`) — is treated as unqualified and yields every
+    *  schema-agnostic name match. That way an unqualified reference to a `__mj`/app-schema entity is still caught,
+    *  and a same-base-name collision across schemas surfaces every candidate rather than just the first (so the
+    *  guard refuses if any of them is under-linked). Used by the P1 under-linking guard. */
+   protected findEntitiesByBaseObject(md: Metadata, schema: string | undefined, table: string): EntityInfo[] {
       const t = table.trim().toLowerCase();
       const s = (schema ?? '').trim().toLowerCase();
-      return md.Entities.find((e) => {
-         const schemaOk = !s || (e.SchemaName ?? '').trim().toLowerCase() === s;
+      const nameMatch = (e: EntityInfo): boolean => {
          const bv = (e.BaseView ?? '').trim().toLowerCase();
          const bt = (e.BaseTable ?? '').trim().toLowerCase();
-         return schemaOk && (bv === t || bt === t);
-      });
+         return bv === t || bt === t;
+      };
+      if (s && s !== 'dbo') {
+         // Explicit, non-default schema → only that schema's entity qualifies (no cross-schema ambiguity).
+         return md.Entities.filter((e) => (e.SchemaName ?? '').trim().toLowerCase() === s && nameMatch(e));
+      }
+      // Empty schema / parser-default 'dbo' (i.e. UNQUALIFIED) → every name match across schemas is a candidate.
+      return md.Entities.filter(nameMatch);
    }
 
    /**

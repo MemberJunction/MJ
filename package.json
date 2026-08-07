@@ -172,6 +172,15 @@
     "@memberjunction/integration-test-suite": "workspace:*"
   },
   "pnpm": {
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "nunjucks>chokidar": "5",
+        "@modelcontextprotocol/sdk>zod": "^3.24",
+        "zod-to-json-schema>zod": "^3.24",
+        "openai>zod": "^3.24",
+        "@anthropic-ai/sdk>zod": "^3.24"
+      }
+    },
     "overrides": {
       "@types/node": "24.10.11",
       "browserslist": "4.28.1",

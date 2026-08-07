@@ -59,6 +59,55 @@ export type TaskAgentRunResult = {
     AgentRunID?: string;
 };
 
+/**
+ * Delivers a finished graph's outcome, per its `continuation` mode.
+ *
+ * Abstracted for the same reason agent execution is: the dispatcher knows *when* a graph has
+ * settled and *what* it produced, but posting into a conversation and starting a fresh agent turn
+ * are host concerns. Injecting them keeps this package free of both the conversation layer and the
+ * agent framework — a dependency on the latter would be circular, since agents submit graphs.
+ *
+ * A host that implements neither still gets correct behavior: the dispatcher logs the outcome and
+ * marks it delivered, so a graph never silently repeats its completion.
+ */
+export type TaskContinuationDeliverer = {
+    /** Posts the results into the conversation the graph answers. */
+    PostMessage(params: TaskContinuationParams): Promise<void>;
+    /**
+     * Starts the submitting agent a fresh turn carrying the outcome.
+     *
+     * Optional: a host with no agent framework loaded (a worker, a test) legitimately cannot do
+     * this, and the dispatcher degrades to `PostMessage` rather than dropping the completion.
+     */
+    Reinvoke?(params: TaskContinuationParams): Promise<void>;
+};
+
+/** Everything a continuation needs to say what happened. */
+export type TaskContinuationParams = {
+    ParentTaskID: string;
+    WorkflowName: string;
+    /** Conversation the graph answers, when it came from a conversational channel. */
+    ConversationDetailID: string | null;
+    /** The agent run that emitted the graph — the target of a `reinvoke`. */
+    SubmittedByAgentRunID: string | null;
+    /** How many continuation hops preceded this one, so a re-submitted graph can carry depth + 1. */
+    ReinvokeDepth: number;
+    /**
+     * Per-task outcome. Deliberately carries a `summary` and an `outputRef`, not inline payloads —
+     * a ten-task graph's full outputs would swamp the continuation turn's context window, and the
+     * agent can pull what it actually needs by task ID.
+     */
+    Tasks: Array<{
+        TaskID: string;
+        Name: string;
+        Status: string;
+        Summary?: string;
+        ErrorMessage?: string;
+    }>;
+    /** One-line human-readable roll-up. */
+    Summary: string;
+};
+
 /** Tuning knobs for the durable dispatcher. */
 export type TaskGraphDispatcherConfig = {
     /**

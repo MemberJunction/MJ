@@ -1241,6 +1241,37 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Async status-aware wrapper around {@link GetEffectiveBaseView} for the BASE-VIEW materialization case.
+     * `GetEffectiveBaseView` name-swaps unconditionally, which (a) serves a `Building`/`DriftHold`/`Disabled`
+     * snapshot — defeating "flag and hold" (§13/§17.2), since a base-view materialization reuses the source
+     * entity and thus has no read-permission revoke to fall back on the way a minted query entity does — and
+     * (b) hard-errors on a `Materialized` read of a non-materialized entity (missing view). This gates the swap
+     * on an ACTIVE `MaterializedResult` and otherwise returns the LIVE base view (graceful fallback). The status
+     * read uses `BypassCache` because DriftHold/Disabled are written by CodeGen via direct SQL (no BaseEntity
+     * cache-invalidation event), so a cached status could otherwise be stale. Non-materialized reads and minted
+     * query virtual entities (BaseView already `materialized_vw…`) skip the lookup entirely (no extra query).
+     */
+    protected async resolveEffectiveBaseView(entityInfo: EntityInfo, params: RunViewParams, contextUser?: UserInfo): Promise<string> {
+        if (!IsMaterializedDataSource(params.DataSource) || entityInfo.BaseView?.toLowerCase().startsWith('materialized_vw')) {
+            return this.GetEffectiveBaseView(entityInfo, params);
+        }
+        const rv = new RunView(this);
+        const res = await rv.RunView<{ Status: string }>(
+            {
+                EntityName: 'MJ: Materialized Results',
+                ExtraFilter: `SourceType='EntityBaseView' AND SourceEntityID='${entityInfo.ID}'`, // entityInfo.ID: trusted metadata PK
+                Fields: ['Status'],
+                ResultType: 'simple',
+                MaxRows: 1,
+                BypassCache: true,
+            },
+            contextUser,
+        );
+        const active = res.Success && res.Results?.length > 0 && res.Results[0].Status === 'Active';
+        return active ? `materialized_vw${entityInfo.CodeName}` : entityInfo.BaseView;
+    }
+
+    /**
      * Validates that the entity and RunViewParams are compatible with keyset (AfterKey) pagination,
      * then returns the SQL predicate (`<pk> > 'value'` or `<pk> < 'value'`) and the resolved
      * order-by direction.
@@ -1568,7 +1599,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // ── Build SELECT and COUNT SQL ──
             // DataSource:'Materialized' routes the read to the entity's materialized wrapper view
             // (same shape, so RLS/paging/fields all apply identically); default stays the live base view.
-            const effectiveBaseView = this.GetEffectiveBaseView(entityInfo, params);
+            const effectiveBaseView = await this.resolveEffectiveBaseView(entityInfo, params, contextUser);
             const topFragment = topSQL ? topSQL + ' ' : '';
             let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveBaseView)}`;
             // count_only ALWAYS needs the count query — BuildTotalRowCountSQL only emits
@@ -2439,7 +2470,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // snapshot cache against an unrelated source, yielding a meaningless current/stale verdict.
                 // (Materialized reads are normally kept out of the client cache by runViewCacheEligible; this
                 // matches the SQL Server override and is defense-in-depth on the PG/default path.)
-                const effectiveView = this.GetEffectiveBaseView(entityInfo, item.params);
+                const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
                 const statusSQL = `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRows')}, MAX(${this.QuoteIdentifier('__mj_UpdatedAt')}) AS ${this.QuoteIdentifier('MaxUpdatedAt')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
                 const rows = await this.ExecuteSQL<Record<string, unknown>>(statusSQL, undefined, undefined, contextUser);
                 if (rows && rows.length > 0) {

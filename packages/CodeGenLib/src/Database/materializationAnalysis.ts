@@ -355,8 +355,10 @@ export function detectAdditiveMeasures(sql: string): boolean {
     // Any non-additive aggregate present → not purely additive.
     const nonAdditive = /\b(AVG|MIN|MAX|STDEV|STDEVP|VAR|VARP|VARIANCE|MEDIAN|PERCENTILE_CONT|PERCENTILE_DISC|STRING_AGG|ARRAY_AGG|GROUP_CONCAT)\s*\(/i;
     if (nonAdditive.test(s)) return false;
-    // COUNT(DISTINCT ...) is non-additive (can't be delta-combined) even though COUNT(*) is.
-    if (/\bCOUNT\s*\(\s*DISTINCT\b/i.test(s)) return false;
+    // SUM(DISTINCT ...) and COUNT(DISTINCT ...) are non-additive — their per-group value can't be delta-combined
+    // for an in-place incremental upsert — even though SUM(x)/COUNT(*) are. (AVG/MIN/MAX/etc. are already
+    // rejected above regardless of DISTINCT.)
+    if (/\b(SUM|COUNT)\s*\(\s*DISTINCT\b/i.test(s)) return false;
     // Require at least one genuinely additive aggregate.
     return /\b(SUM|COUNT)\s*\(/i.test(s);
 }

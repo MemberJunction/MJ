@@ -86,11 +86,13 @@ describe('assessQuerySourceRLSSafety — query materialization RLS gate', () => 
 });
 
 /**
- * P1 under-linking guard — the belt-and-suspenders defense inside `assessQuerySourceRLSSafety` that catches an
- * RLS source the QueryEntity LINKER missed (reached via a wrapping view / CTE / function / aliased columns).
- * The linked-only checks above can't see it; this branch parses the query SQL directly, maps each table ref to an
- * entity, and FAILS CLOSED iff a referenced entity is read-RLS-protected but NOT in the linked set. It must be
- * PRECISE — an unlinked NON-RLS table is not a leak and must NOT trip it (else legitimate materializations break).
+ * P1 under-linking guard — the belt-and-suspenders defense inside `assessQuerySourceRLSSafety` that catches a
+ * source the QueryEntity LINKER missed (reached via a wrapping view / CTE / function / aliased columns). The
+ * linked-only checks above can't see it; this branch parses the query SQL directly, maps each table ref to an
+ * entity, and FAILS CLOSED iff a referenced entity maps to a real entity NOT in the linked set — whether it is
+ * read-RLS-protected (rows would leak unscoped) OR merely CanRead-restricted (the read-grant intersection,
+ * computed over the linked set, would over-grant = privilege escalation). Refs that map to no entity
+ * (CTEs/functions/aliases) are skipped, so only genuine under-linking of an entity source trips it.
  */
 describe('assessQuerySourceRLSSafety — P1 under-linking gate', () => {
     let mm: TestableRLS;
@@ -110,10 +112,62 @@ describe('assessQuerySourceRLSSafety — P1 under-linking gate', () => {
         expect(v.reason).toContain('"Salaries"');
     });
 
-    it('stays SAFE when an unlinked referenced table is NOT RLS-protected (no over-refusal)', () => {
-        // products is referenced but unlinked — however it has no RLS, so it is not a leak and must not refuse.
+    it('FAILS CLOSED when the SQL references a non-RLS but under-linked entity source (permission-intersection blind spot)', () => {
+        // products is referenced but NOT linked. Even with no RLS, the read-grant intersection is computed over
+        // the linked set only, so an under-linked (possibly CanRead-restricted) source would let the minted
+        // entity's grant exceed "can read every source" — refuse (fail closed).
         const sql = 'SELECT o.total, p.name FROM __mj.orders o JOIN __mj.products p ON o.pid = p.id';
         const v = mm.assess({ e1: orders, e3: products }, ['e1'], sql);
+        expect(v.safe).toBe(false);
+        expect(v.reason).toMatch(/P1 under-linking guard/i);
+        expect(v.reason).toContain('"Products"');
+    });
+
+    it('FAILS CLOSED on an UNQUALIFIED ref to an under-linked __mj entity (parser defaults refs to dbo)', () => {
+        // No `__mj.` prefix — the SQL parser defaults an unqualified table ref to schema 'dbo', but the entities
+        // live in '__mj'. Before the fix, findEntityByBaseObject demanded an exact 'dbo' entity and silently
+        // missed the __mj source, leaving the escalation hole open for the common unqualified-ref case.
+        const sql = 'SELECT o.total, p.name FROM orders o JOIN products p ON o.pid = p.id';
+        const v = mm.assess({ e1: orders, e3: products }, ['e1'], sql);
+        expect(v.safe).toBe(false);
+        expect(v.reason).toMatch(/P1 under-linking guard/i);
+        expect(v.reason).toContain('"Products"');
+    });
+
+    it('does NOT over-refuse a CTE whose name shadows an entity base table (CTE self-ref excluded)', () => {
+        // `products` here is a CTE, not the Products entity. With the unqualified-ref name fallback, the CTE
+        // self-reference must be excluded so it is not misread as an under-linked source. The only real source
+        // (orders) is linked → safe.
+        const sql = 'WITH products AS (SELECT id, name FROM __mj.orders) SELECT o.total FROM __mj.orders o JOIN products p ON o.pid = p.id';
+        const v = mm.assess({ e1: orders, e3: products }, ['e1'], sql);
+        expect(v.safe).toBe(true);
+    });
+
+    it('does NOT over-refuse a BRACKET-quoted CTE ([name]) that shadows an entity base table', () => {
+        // [products] is a T-SQL bracket-quoted CTE, not the Products entity. The CTE-name exclusion must recognize
+        // the [bracket] form (SQLParser's regex-fallback emits it) so it isn't misread as an under-linked source.
+        const sql = 'WITH [products] AS (SELECT id FROM __mj.orders) SELECT o.total FROM __mj.orders o JOIN [products] p ON o.pid = p.id';
+        const v = mm.assess({ e1: orders, e3: products }, ['e1'], sql);
+        expect(v.safe).toBe(true);
+    });
+
+    it('FAILS CLOSED on an unqualified ref that also matches an under-linked entity in ANOTHER schema (ambiguity → fail closed)', () => {
+        // Two entities share base table 'widgets': __mj.widgets (linked, enumerated first) and app.widgets (NOT
+        // linked, restricted). The unqualified `FROM widgets` is schema-ambiguous; picking only the first match
+        // would pass the linked one and leak the restricted one — the guard must consider ALL candidates and refuse.
+        const mjWidgets: FakeEntity = { Name: 'MJ Widgets', SchemaName: '__mj', BaseView: 'vwMJWidgets', BaseTable: 'widgets', Permissions: [] };
+        const appWidgets: FakeEntity = { Name: 'App Widgets', SchemaName: 'app', BaseView: 'vwAppWidgets', BaseTable: 'widgets', Permissions: [] };
+        const sql = 'SELECT w.id FROM widgets w';
+        const v = mm.assess({ e1: orders, e2: mjWidgets, e3: appWidgets }, ['e1', 'e2'], sql);
+        expect(v.safe).toBe(false);
+        expect(v.reason).toMatch(/P1 under-linking guard/i);
+        expect(v.reason).toContain('"App Widgets"');
+    });
+
+    it('does NOT refuse a ref that maps to no entity (CTE/function/alias) — only genuine entity under-linking trips it', () => {
+        // `agg` is a derived-table alias that maps to no entity; the only real source (orders) is linked → safe.
+        const sql = 'SELECT agg.total FROM (SELECT SUM(amount) AS total FROM __mj.orders) agg';
+        const v = mm.assess({ e1: orders }, ['e1'], sql);
         expect(v.safe).toBe(true);
     });
 
