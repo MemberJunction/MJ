@@ -1357,21 +1357,32 @@ export class ResolverBase {
   }
   
   /**
-   * Field-level security guard for the update path: removes client-sent values for fields the
-   * user cannot READ, from both the new values and the OldValues___ blob.
+   * Field-level security guard for the update path.
    *
-   * A read-denied field is stripped from every payload the client ever receives (RunView
-   * projection, MapFieldNamesToCodeNames), so whatever the client sends back for it is a
-   * fabrication — the transport's default / 0 / '' / null — never a value the user saw.
-   * Applying it via SetMany would either overwrite real data silently (read-denied +
-   * update-allowed) or make the field spuriously dirty and fail the save-time update guard on
-   * edits to UNRELATED fields (read-denied + update-denied). Stripping is silent narrowing,
-   * consistent with the output projection the client already experiences; rejection would
-   * leak nothing useful and break generic clients that round-trip whole records.
+   * With the not-loaded contract in place (Workstream D-2), the client OMITS fields it was
+   * never shown from the mutation input — so a value that IS present for a denied-READ field
+   * is a deliberate write, not transport fabrication. The guard therefore splits by the
+   * user's UPDATE permission on the field:
+   *
+   *  - **Denied-read + denied-update**: STRIPPED (new values and OldValues). Nothing
+   *    legitimate can write these, and a pre-D-2 (or non-MJ) client that still fabricates
+   *    values for every writable field would otherwise make them spuriously dirty and fail
+   *    the save-time guard on edits to UNRELATED fields. Silent narrowing, consistent with
+   *    the output projection the client already experiences.
+   *  - **Denied-read + update-ALLOWED (the write-only case, e.g. SSN capture)**: passed
+   *    through to the normal save path — an explicit blind set must save (R5's confirmed
+   *    design). Residual risk, accepted and bounded: a version-skewed pre-D-2 client
+   *    fabricates values for such fields and those fabrications now reach the column; the
+   *    window closes when the client bundle updates, and the configuration (write-only
+   *    fields) is rare.
+   *
+   * OldValues entries for EVERY denied-read field are still removed — the client cannot know
+   * a true old value for a field it cannot read, so any entry it sends is fiction that would
+   * pollute conflict detection.
    *
    * Returns true when the user has a non-empty denied-read set on this entity. The caller
    * must then hydrate the entity from the DATABASE (never from client OldValues), so denied
-   * fields hold true values that the stripped SetMany leaves untouched.
+   * fields hold true values that an omitted key leaves untouched.
    */
   protected StripDeniedReadFieldsFromClientInput(
     entityInfo: EntityInfo,
@@ -1382,23 +1393,30 @@ export class ResolverBase {
     if (!entityInfo.HasAnyFieldPermissions || !userInfo) {
       return false;
     }
-    const deniedNames = entityInfo.GetDeniedReadFields(userInfo);
-    if (deniedNames.size === 0) {
+    const deniedReadNames = entityInfo.GetDeniedReadFields(userInfo);
+    if (deniedReadNames.size === 0) {
       return false;
     }
+    const deniedUpdateNames = entityInfo.GetDeniedUpdateFields(userInfo);
 
-    // Input keys are entity CodeNames (post ReverseMapInputFieldNames); the denied set holds
+    // Input keys are entity CodeNames (post ReverseMapInputFieldNames); the denied sets hold
     // lowercased field Names — bridge via the field metadata once.
-    const deniedCodeNames = new Set<string>();
+    const deniedReadCodeNames = new Set<string>();
+    const strippableCodeNames = new Set<string>(); // denied-read ∩ denied-update
     for (const field of entityInfo.Fields) {
-      if (deniedNames.has(field.Name.trim().toLowerCase())) {
-        deniedCodeNames.add(field.CodeName.trim().toLowerCase());
+      const name = field.Name.trim().toLowerCase();
+      if (deniedReadNames.has(name)) {
+        const codeName = field.CodeName.trim().toLowerCase();
+        deniedReadCodeNames.add(codeName);
+        if (deniedUpdateNames.has(name)) {
+          strippableCodeNames.add(codeName);
+        }
       }
     }
 
     const stripped: string[] = [];
     for (const key of Object.keys(clientNewValues)) {
-      if (deniedCodeNames.has(key.trim().toLowerCase())) {
+      if (strippableCodeNames.has(key.trim().toLowerCase())) {
         delete clientNewValues[key];
         delete input[key];
         stripped.push(key);
@@ -1406,13 +1424,13 @@ export class ResolverBase {
     }
     if (Array.isArray(input.OldValues___)) {
       input.OldValues___ = input.OldValues___.filter(
-        (item) => !deniedCodeNames.has(String(item.Key).trim().toLowerCase())
+        (item) => !deniedReadCodeNames.has(String(item.Key).trim().toLowerCase())
       );
     }
     if (stripped.length > 0) {
       LogDebug(
         `[FieldSecurity] UpdateRecord on '${entityInfo.Name}' for user ${userInfo.Email}: ` +
-          `stripped client-sent value(s) for denied-read field(s) ${stripped.join(', ')}`
+          `stripped client-sent value(s) for denied-read+denied-update field(s) ${stripped.join(', ')}`
       );
     }
     return true;

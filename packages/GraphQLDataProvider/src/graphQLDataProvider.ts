@@ -1758,6 +1758,44 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
+    /**
+     * Field-level security, client side (Workstream D-2). The current user's denied-READ set is
+     * computable HERE because `EntityFieldPermission` records ship to clients with entity
+     * metadata (decision §1.7) — so the provider can (a) exclude denied fields from the
+     * selection sets it requests (a GraphQL response always contains every REQUESTED key, so
+     * key-omission — which drives `EntityField.NotLoaded` marking in the hydration paths —
+     * only happens for fields never requested; this also stops denied NOT-NULL columns from
+     * erroring response serialization for MJ clients), and (b) prune null-valued denied keys
+     * from payloads as the safety net for a stale local denied set. Empty for unrestricted
+     * users and non-FLS entities — zero behavior change there.
+     */
+    private GetDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
+        if (!entityInfo?.HasAnyFieldPermissions || !this.CurrentUser) {
+            return new Set<string>();
+        }
+        return entityInfo.GetDeniedReadFields(this.CurrentUser);
+    }
+
+    /**
+     * Deletes null-valued keys belonging to the current user's denied-read set from a
+     * server payload, so hydration sees genuine key-omission and marks the fields
+     * {@link EntityField.NotLoaded}. Only null values are pruned — a denied field can never
+     * legitimately arrive non-null, and a non-null value here means the local denied set is
+     * stale in the safe direction (the server actually allowed it).
+     */
+    private PruneDeniedNullFields<T>(entityInfo: EntityInfo, row: T): T {
+        if (!row || typeof row !== 'object') return row;
+        const denied = this.GetDeniedReadFieldNamesForCurrentUser(entityInfo);
+        if (denied.size === 0) return row;
+        const record = row as Record<string, unknown>;
+        for (const field of entityInfo.Fields) {
+            if (!denied.has(field.Name.trim().toLowerCase())) continue;
+            if (record[field.Name] === null) delete record[field.Name];
+            if (record[field.CodeName] === null) delete record[field.CodeName];
+        }
+        return row;
+    }
+
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
         // IS-A parent entity save: the full ORM pipeline (permissions, validation, events)
         // already ran in BaseEntity._InnerSave(). Skip the network call — the leaf entity's
@@ -1794,10 +1832,22 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
             const mutationName = `${type}${graphQLTypeName}`
 
-            // only pass along writable fields, AND the PKEY value if this is an update
-            const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved));
+            // only pass along writable fields, AND the PKEY value if this is an update.
+            // NotLoaded fields are OMITTED from the mutation input entirely (legal — the
+            // generated Update input types mark every non-PK field optional): their value is
+            // a construction artifact the user was never shown, and the NOT-NULL fabrication
+            // fallback below must never run for them. An explicitly (blind-)set field has its
+            // flag cleared and flows normally — the write-only case.
+            const filteredFields = entity.Fields.filter(f =>
+                (!f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved)) &&
+                (f.IsPrimaryKey || !f.NotLoaded));
+            // The RESPONSE selection excludes the user's denied-read fields: never-requested
+            // keys come back genuinely absent (driving NotLoaded marking on the refresh), and
+            // a denied NOT-NULL column no longer errors response serialization.
+            const deniedReadFields = this.GetDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
                 const inner = `                ${mutationName}(input: $input) {
-                ${entity.Fields.map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
+                ${entity.Fields.filter(f => !deniedReadFields.has(f.Name.trim().toLowerCase()))
+                    .map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
             }`
             const outer = gql`mutation ${type}${graphQLTypeName} ($input: ${mutationName}Input!) {
                 ${inner}
@@ -1869,6 +1919,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 options.SkipOldValuesCheck === false) {
                 const ov = [];
                 entity.Fields.forEach(f => {
+                    // A NotLoaded field has no real old value — sending a fabricated null
+                    // would feed the server's conflict detection fiction. Omit it entirely.
+                    if (f.NotLoaded && !f.IsPrimaryKey) return;
                     let val = null;
                     if (f.OldValue !== null && f.OldValue !== undefined) {
                         if (f.EntityFieldInfo.TSType === EntityFieldTSType.Date) 
@@ -1913,7 +1966,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         // got our data, send it back to the caller, which is the entity object
                         // and that object needs to update itself from this data.
                         result.Success = true;
-                        result.NewValues = this.ConvertBackToMJFields(results);
+                        // Prune stale-metadata nulls so the entity's post-save refresh
+                        // (finalizeSave) sees key-omission and marks NotLoaded correctly.
+                        result.NewValues = this.PruneDeniedNullFields(entity.EntityInfo, this.ConvertBackToMJFields(results));
                     }
                     else {
                         // the transaction failed, nothing to update, but we need to call Reject so the
@@ -1931,7 +1986,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 if (d && d[mutationName]) {
                     result.Success = true;
                     result.EndedAt = new Date();
-                    result.NewValues = this.ConvertBackToMJFields(d[mutationName]);
+                    // Prune stale-metadata nulls so finalizeSave's re-hydration sees
+                    // key-omission and marks NotLoaded correctly on the refresh.
+                    result.NewValues = this.PruneDeniedNullFields(entity.EntityInfo, this.ConvertBackToMJFields(d[mutationName]));
                     return result.NewValues;
                 }
                 else
@@ -1980,9 +2037,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
 
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
+            // Field security: never request the current user's denied-read fields — the keys
+            // come back genuinely absent, InnerLoad marks them NotLoaded (D-1), and a denied
+            // NOT-NULL column no longer nulls out the whole single-record response (the R6
+            // breakage) for MJ clients. Empty set for unrestricted users — no change.
+            const deniedReadFields = this.GetDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
                 const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
-                                    ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType)
+                                    ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType && !deniedReadFields.has(f.Name.trim().toLowerCase()))
                                       .map((f) => {
                                         if (f.EntityFieldInfo.Name.trim().toLowerCase().startsWith('__mj_')) {
                                           // fields that start with __mj_ need to be converted to _mj__ for the GraphQL query
@@ -2000,7 +2062,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const d = await this.ExecuteGQL(query, vars)
             if (d && d[graphQLTypeName]) {
                 // the resulting object has all the values in it, but we need to convert any elements that start with _mj__ back to __mj_
-                return this.ConvertBackToMJFields(d[graphQLTypeName]);
+                // (plus the stale-metadata null prune, so InnerLoad's key-omission marking is exact)
+                return this.PruneDeniedNullFields(entity.EntityInfo, this.ConvertBackToMJFields(d[graphQLTypeName]));
             }
             else
                 return null;
