@@ -26,6 +26,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Harnesses&Name=CapabilitySettings"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T05:49:49.917Z",
+            "checksum": "d5c63ce6fafbd4f2a26930ebabb7dc8a5f5697a4f942505f4588f32759a36c32"
           }
         }
       ]

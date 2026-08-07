@@ -760,8 +760,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return result;
         }
 
-        // Client-side: delegate to RunViews which uses the smart cache check
-        // (lightweight maxUpdatedAt + rowCount validation against the server)
+        // Delegate to RunViews, which uses the smart cache check (lightweight maxUpdatedAt +
+        // rowCount validation against the server).
+        //
+        // NOT client-only: the guard above also sends SERVER reads down here whenever BypassCache
+        // or AfterKey is set — so every page of a keyset sweep arrives as a size-1 batch. Any
+        // "single vs batch RunView" reasoning must treat this branch as carrying single RunViews
+        // too: in particular, batch telemetry fingerprints must include per-view pagination
+        // cursors, or every page of a sweep collapses onto one fingerprint and falsely fires the
+        // Duplicate analyzer.
         const results = await this.RunViews<T>([params], contextUser);
         return results[0];
     }
@@ -2368,11 +2375,34 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             'ProviderBase.RunViews',
             {
                 BatchSize: params.length,
-                Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID).filter(Boolean),
+                // '' placeholder (NOT .filter(Boolean)) for a view identified only by ViewEntity:
+                // Entities must stay index-parallel to Filters/OrderBys/StartRows/AfterKeys or the
+                // fingerprint attributes one view's filter/cursor to the next named entity.
+                // generateRunViewFingerprint skips falsy entries without disturbing the indexes.
+                Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID || ''),
                 // Per-view filter/orderBy parallel to Entities so the telemetry fingerprint can
                 // tell apart two batches over the same entity set but with different filters.
                 Filters: params.map(p => p.ExtraFilter as string | undefined),
                 OrderBys: params.map(p => p.OrderBy as string | undefined),
+                // Per-view pagination cursors, also parallel to Entities. Every page of a sweep
+                // shares the same entity+filter+orderBy and differs only here, so without these
+                // the pages collapse onto one fingerprint and the Duplicate analyzer fires from
+                // page 2 on. This path carries single RunViews too: RunView() delegates to
+                // RunViews([params]) whenever BypassCache or AfterKey is set (and always on the
+                // client), which is exactly what a keyset sweep does on every page.
+                StartRows: params.map(p => p.StartRow),
+                AfterKeys: params.map(p => p.AfterKey?.ToConcatenatedString()),
+                // Exemption was threaded through the DEPRECATED batch twin but not this one, so
+                // RunViewParams.Telemetry.Exempt was silently ineffective for every batch RunView —
+                // and, because RunView() delegates here whenever BypassCache or AfterKey is set,
+                // for those single reads too. A caller marking an intentional repeat got warned
+                // anyway, with no indication their exemption had been dropped.
+                //
+                // Exempt only when EVERY view in the batch is exempt: a batch is one telemetry
+                // event, so exempting it on the strength of one member would silently suppress
+                // findings about the others.
+                Exempt: params.length > 0 && params.every(p => p.Telemetry?.Exempt),
+                ExemptReason: params.find(p => p.Telemetry?.Reason)?.Telemetry?.Reason,
                 _fromEngine: fromEngine
             },
             contextUser?.ID
@@ -3476,11 +3506,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             'ProviderBase.RunViews',
             {
                 BatchSize: params.length,
-                Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID).filter(Boolean),
+                // '' placeholder (NOT .filter(Boolean)) — see PreRunViews: Entities must stay
+                // index-parallel to Filters/OrderBys/StartRows/AfterKeys.
+                Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID || ''),
                 // Per-view filter/orderBy parallel to Entities so the telemetry fingerprint can
                 // tell apart two batches over the same entity set but with different filters.
                 Filters: params.map(p => p.ExtraFilter as string | undefined),
                 OrderBys: params.map(p => p.OrderBy as string | undefined),
+                // Per-view pagination cursors — see PreRunViews: keeps each page of a sweep a
+                // distinct fingerprint instead of a false Duplicate RunView from page 2 onward.
+                StartRows: params.map(p => p.StartRow),
+                AfterKeys: params.map(p => p.AfterKey?.ToConcatenatedString()),
                 _fromEngine: fromEngine,
                 Exempt: batchExempt,
                 ExemptReason: params.find(p => p.Telemetry?.Reason)?.Telemetry?.Reason

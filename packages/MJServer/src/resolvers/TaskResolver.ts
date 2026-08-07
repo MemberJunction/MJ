@@ -1,148 +1,139 @@
-import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
+/**
+ * @fileoverview Thin GraphQL surface over task-graph submission.
+ *
+ * **`ExecuteTaskGraph` is gone (D12).** It awaited an entire multi-step workflow inside a single
+ * long-lived GraphQL request, which meant a page reload lost the awaited promise, a server restart
+ * orphaned every in-flight task, and no other channel could reach the substrate at all. Removing a
+ * public mutation is formally a breaking external-surface change; it is accepted deliberately in
+ * the open v6 window, and its sole known caller — the Explorer conversation client — is converted
+ * to an observer in this same phase.
+ *
+ * What replaces it is deliberately boring: submit returns as soon as the graph is durable, and the
+ * durable dispatcher executes it independently. Clients observe progress over the existing PubSub
+ * plumbing instead of holding a request open.
+ *
+ * These resolvers stay thin on purpose — all logic lives in `@memberjunction/task-graph`, so the
+ * same behavior is available to Slack, scheduled jobs, and headless callers that never touch
+ * GraphQL.
+ *
+ * @module @memberjunction/server
+ */
+import { Arg, Ctx, Field, Mutation, ObjectType, Resolver } from 'type-graphql';
+import { LogError } from '@memberjunction/core';
+import { TaskGraphService, type TaskGraphSpec, type TaskGraphSubmitContext } from '@memberjunction/task-graph';
 import { AppContext } from '../types.js';
-import { IMetadataProvider, LogError, LogStatus } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { TaskOrchestrator, TaskGraphResponse, TaskExecutionResult } from '../services/TaskOrchestrator.js';
-import { GetReadWriteProvider } from '../util.js';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 
 @ObjectType()
-export class TaskExecutionResultType {
-    @Field()
-    taskId: string;
-
+export class SubmitTaskGraphResult {
     @Field()
     success: boolean;
 
+    /** Handle for status, cancel and retry. Absent when submission was rejected. */
     @Field({ nullable: true })
-    output?: string;
+    parentTaskId?: string;
 
+    /** Populated on rejection with every validation failure, not just the first. */
     @Field({ nullable: true })
-    error?: string;
+    errorMessage?: string;
 }
 
 @ObjectType()
-export class ExecuteTaskGraphResult {
+export class TaskGraphActionResult {
     @Field()
     success: boolean;
 
     @Field({ nullable: true })
     errorMessage?: string;
-
-    @Field(() => [TaskExecutionResultType])
-    results: TaskExecutionResultType[];
 }
 
-/**
- * TaskOrchestrationResolver handles multi-step task orchestration.
- * This resolver is called when the Conversation Manager returns a task graph
- * for complex workflows that require multiple agents working in sequence or parallel.
- */
 @Resolver()
 export class TaskOrchestrationResolver extends ResolverBase {
     /**
-     * Execute a task graph from the Conversation Manager.
-     * This creates tasks in the database, manages dependencies, and executes them in proper order.
+     * Validates and persists a task graph, returning immediately.
      *
-     * @param taskGraphJson - JSON string containing the task graph from Conversation Manager
-     * @param conversationDetailId - ID of the conversation detail that triggered this workflow
-     * @param environmentId - Environment ID for the tasks
+     * The response means "this graph is durable and will run", not "this graph has run". That is
+     * the whole point of the split: the caller is freed the moment the work is safe.
      */
-    @Mutation(() => ExecuteTaskGraphResult)
-    async ExecuteTaskGraph(
+    @Mutation(() => SubmitTaskGraphResult)
+    async SubmitTaskGraph(
         @Arg('taskGraphJson') taskGraphJson: string,
-        @Arg('conversationDetailId') conversationDetailId: string,
         @Arg('environmentId') environmentId: string,
-        @Arg('sessionId') sessionId: string,
-        @PubSub() pubSub: PubSubEngine,
         @Ctx() { userPayload, providers }: AppContext,
-        @Arg('createNotifications', { nullable: true }) createNotifications?: boolean
-    ): Promise<ExecuteTaskGraphResult> {
-        // Check API key scope authorization for task execution
-        await this.CheckAPIKeyScopeAuthorization('task:execute', '*', userPayload);
+        @Arg('conversationDetailId', { nullable: true }) conversationDetailId?: string,
+    ): Promise<SubmitTaskGraphResult> {
+        await this.CheckAPIKeyScopeAuthorization('task:execute', undefined, userPayload);
 
         try {
-            LogStatus(`=== EXECUTING TASK GRAPH FOR CONVERSATION: ${conversationDetailId} ===`);
-
-            // Parse task graph
-            const taskGraph: TaskGraphResponse = JSON.parse(taskGraphJson);
-
-            // Validate task graph
-            if (!taskGraph.workflowName || !taskGraph.tasks || taskGraph.tasks.length === 0) {
-                throw new Error('Invalid task graph: must have workflowName and at least one task');
-            }
-
-            // Get current user
-            const currentUser = this.GetUserFromPayload(userPayload);
-            if (!currentUser) {
-                throw new Error('Unable to determine current user');
-            }
-
-            LogStatus(`Workflow: ${taskGraph.workflowName} (${taskGraph.tasks.length} tasks)`);
-            if (taskGraph.reasoning) {
-                LogStatus(`Reasoning: ${taskGraph.reasoning}`);
-            }
-
-            // Create task orchestrator with PubSub for progress updates
-            const provider = GetReadWriteProvider(providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
-            const orchestrator = new TaskOrchestrator(currentUser, pubSub, sessionId, userPayload, createNotifications || false, conversationDetailId, provider);
-
-            // Create parent task and child tasks with dependencies
-            const { parentTaskId, taskIdMap } = await orchestrator.createTasksFromGraph(
-                taskGraph,
-                conversationDetailId,
-                environmentId
-            );
-
-            LogStatus(`Created parent task ${parentTaskId} with ${taskIdMap.size} child tasks`);
-
-            // Execute tasks in proper order
-            const results = await orchestrator.executeTasksForParent(
-                parentTaskId
-            );
-
-            // Log results
-            const successCount = results.filter(r => r.success).length;
-            LogStatus(`Completed ${successCount} of ${results.length} tasks successfully`);
-
-            for (const result of results) {
-                if (result.success) {
-                    LogStatus(`✅ Task ${result.taskId} completed successfully`);
-                } else {
-                    LogError(`❌ Task ${result.taskId} failed: ${result.error}`);
-                }
-            }
-
-            // Convert results to GraphQL types
-            const graphqlResults: TaskExecutionResultType[] = results.map(r => ({
-                taskId: r.taskId,
-                success: r.success,
-                output: r.output ? JSON.stringify(r.output) : undefined,
-                error: r.error
-            }));
-
-            LogStatus(`=== TASK GRAPH EXECUTION COMPLETE ===`);
-
-            const result = {
-                success: true,
-                results: graphqlResults
-            };
-
-            LogStatus(`Returning ExecuteTaskGraph result: ${JSON.stringify({
-                success: result.success,
-                resultsCount: result.results.length,
-                firstResult: result.results[0]
-            })}`);
-
-            return result;
-
-        } catch (error) {
-            LogError(`Task graph execution failed:`, undefined, error);
-
+            const spec = JSON.parse(taskGraphJson) as TaskGraphSpec;
+            const context = this.buildContext(environmentId, conversationDetailId ?? null, userPayload, providers);
+            const result = await new TaskGraphService().Submit(spec, context);
             return {
-                success: false,
-                errorMessage: (error as Error).message || 'Unknown error occurred',
-                results: []
+                success: result.Success,
+                parentTaskId: result.ParentTaskID,
+                errorMessage: result.ErrorMessage,
             };
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            LogError(`[SubmitTaskGraph] ${message}`);
+            return { success: false, errorMessage: message };
         }
+    }
+
+    /** Cancels a graph and every task in it that has not already settled. */
+    @Mutation(() => TaskGraphActionResult)
+    async CancelTaskGraph(
+        @Arg('parentTaskId') parentTaskId: string,
+        @Arg('environmentId') environmentId: string,
+        @Ctx() { userPayload, providers }: AppContext,
+    ): Promise<TaskGraphActionResult> {
+        await this.CheckAPIKeyScopeAuthorization('task:execute', undefined, userPayload);
+        try {
+            const context = this.buildContext(environmentId, null, userPayload, providers);
+            return { success: await new TaskGraphService().Cancel(parentTaskId, context) };
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            LogError(`[CancelTaskGraph] ${message}`);
+            return { success: false, errorMessage: message };
+        }
+    }
+
+    /**
+     * Returns a failed task to `Pending` so the dispatcher runs it again, and unblocks whatever it
+     * had blocked — retrying a task while its dependents stay `Blocked` would leave the graph just
+     * as stuck as before.
+     */
+    @Mutation(() => TaskGraphActionResult)
+    async RetryTask(
+        @Arg('taskId') taskId: string,
+        @Arg('environmentId') environmentId: string,
+        @Ctx() { userPayload, providers }: AppContext,
+    ): Promise<TaskGraphActionResult> {
+        await this.CheckAPIKeyScopeAuthorization('task:execute', undefined, userPayload);
+        try {
+            const context = this.buildContext(environmentId, null, userPayload, providers);
+            return { success: await new TaskGraphService().Retry(taskId, context) };
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            LogError(`[RetryTask] ${message}`);
+            return { success: false, errorMessage: message };
+        }
+    }
+
+    private buildContext(
+        environmentId: string,
+        conversationDetailId: string | null,
+        userPayload: AppContext['userPayload'],
+        providers: AppContext['providers'],
+    ): TaskGraphSubmitContext {
+        const user = UserCache.Users.find((u) => u.Email?.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
+        if (!user) throw new Error(`Could not resolve the calling user (${userPayload.email}).`);
+        return {
+            EnvironmentID: environmentId,
+            ConversationDetailID: conversationDetailId,
+            ContextUser: user,
+            Provider: providers[0].provider,
+        };
     }
 }
