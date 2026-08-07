@@ -74,6 +74,30 @@ export interface MigrationRunOptions {
      * Defaults to `'sqlserver'` for backward compatibility.
      */
     Platform?: DatabasePlatform;
+    /**
+     * How migrations are wrapped in transactions:
+     *
+     * - `'per-migration'` (**default**) — each migration file runs and commits in its own
+     *   transaction. Flyway's semantics, and what MJCLI's `transactionMode` already
+     *   defaults to for `mj migrate`.
+     * - `'per-run'` — one transaction wraps the entire pending set (all or nothing).
+     *
+     * Defaults to `'per-migration'` because `'per-run'` cannot host every valid migration
+     * set. SQL Server cannot create a table type and instantiate a variable of that type
+     * in the same transaction: the CREATE TYPE's schema-modification lock is still held
+     * while TVP instantiation — which runs in a nested system transaction that does not
+     * share the session's lock ownership — requests schema-stability on it, so the session
+     * deadlocks against itself (error 1205). On a from-zero install every migration is
+     * pending, so under `'per-run'` the whole app is one transaction and no arrangement of
+     * migration files avoids it. `'per-run'` remains available opt-in.
+     *
+     * Callers relying on all-or-nothing must note that under `'per-migration'` a set that
+     * fails partway leaves earlier files committed and recorded in the app's history table.
+     * Undoing an install is therefore the caller's responsibility (the install orchestrator
+     * compensates by removing the app's metadata, running its declared teardown scripts, and
+     * dropping its schema) rather than the database's.
+     */
+    TransactionMode?: 'per-run' | 'per-migration';
 }
 
 /**
@@ -131,7 +155,17 @@ export interface MigrationRunResult {
  * @returns Migration result with applied file count
  */
 export async function RunAppMigrations(options: MigrationRunOptions): Promise<MigrationRunResult> {
-    const { MigrationsDir, SchemaName, DatabaseConfig, Verbose, MJCoreSchema, ExtraPlaceholders } = options;
+    const { MigrationsDir, SchemaName, DatabaseConfig, Verbose, MJCoreSchema, ExtraPlaceholders, TransactionMode } = options;
+    // The install path always supplies Platform (from the live provider's dialect), so this
+    // fallback is unreachable there. It is reachable by direct programmatic callers of this
+    // exported helper — exactly the population that could silently get SQL Server semantics
+    // against a PostgreSQL database. Keep the default (removing it would be breaking) but say so.
+    if (options.Platform === undefined) {
+        console.warn(
+            `RunAppMigrations: no Platform supplied for schema '${SchemaName}' — defaulting to 'sqlserver'. ` +
+                `Pass Platform explicitly (e.g. from your provider's Dialect.PlatformKey) to avoid running SQL Server semantics against another database.`,
+        );
+    }
     const platform: DatabasePlatform = options.Platform ?? 'sqlserver';
 
     let skyway: SkywayInstance | undefined;
@@ -142,7 +176,7 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
         // host process (e.g. MJCLI). Install the one matching the target platform.
         const skywayModuleId = '@memberjunction/skyway-core';
         const { Skyway } = await import(skywayModuleId);
-        const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders, platform);
+        const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders, platform, TransactionMode);
         // Skyway 0.6.x requires an explicit provider, selected by platform.
         config.Provider = await CreateSkywayProvider(platform, config.Database);
 
@@ -223,7 +257,8 @@ export function BuildSkywayConfig(
     dbConfig: SkywayDatabaseConfig,
     mjCoreSchema?: string,
     extraPlaceholders?: Record<string, string>,
-    platform: DatabasePlatform = 'sqlserver'
+    platform: DatabasePlatform = 'sqlserver',
+    transactionMode: 'per-run' | 'per-migration' = 'per-migration'
 ): SkywayConfig {
     const absoluteDir = path.isAbsolute(migrationsDir)
         ? migrationsDir
@@ -284,5 +319,8 @@ export function BuildSkywayConfig(
             mjSchema: mjCoreSchema ?? '__mj',
             ...(extraPlaceholders ?? {}),
         },
+        // Always set explicitly rather than left to Skyway's own 'per-run' default, so the
+        // app-install path and `mj migrate` agree. See MigrationRunOptions.TransactionMode.
+        TransactionMode: transactionMode,
     };
 }
