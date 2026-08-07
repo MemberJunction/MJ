@@ -166,3 +166,97 @@ describe('EntitySavePlan', () => {
         expect(calls[1].options).toBe(rootOptions);
     });
 });
+
+/**
+ * A keyed stand-in — identical to {@link makeEntity} but carrying a primary key, which is what the
+ * cycle guard keys on. Object identity is deliberately NOT the key: after a round trip the same row
+ * is a different instance, and that is exactly the shape a cycle takes.
+ */
+function makeKeyedEntity(name: string, pk: string, calls: Call[]): BaseEntity {
+    const entity = {
+        EntityInfo: { Name: name },
+        PrimaryKey: { ToString: () => pk },
+        LatestResult: { CompleteMessage: `${name} failed` },
+        async Save(options?: EntitySaveOptions): Promise<boolean> {
+            calls.push({ label: `${name}:${pk}`, op: 'Save', options });
+            return true;
+        },
+        async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+            calls.push({ label: `${name}:${pk}`, op: 'Delete', options });
+            return true;
+        },
+    };
+    return entity as unknown as BaseEntity;
+}
+
+describe('EntitySavePlan — cycle guard', () => {
+    it('refuses a child that is the same record as its own ancestor', async () => {
+        const calls: Call[] = [];
+        const agent = makeKeyedEntity('MJ: AI Agents', 'A1', calls);
+        // The self-referential shape: a SubAgents collection containing the agent itself.
+        const plan = new EntitySavePlan(agent);
+        plan.AddSave(agent, 'MJ: AI Agents', undefined, true);
+        plan.AddSave(makeKeyedEntity('MJ: AI Agents', 'A1', calls), 'SubAgents[0]');
+
+        const result = await ExecuteEntitySavePlan(plan, {});
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('Cycle detected');
+        expect(result.ErrorMessage).toContain('SubAgents[0]');
+        // The root ran; the cycling child never did.
+        expect(calls.map(c => c.label)).toEqual(['MJ: AI Agents:A1']);
+    });
+
+    it('allows a DIFFERENT record of the same entity as a child', async () => {
+        const calls: Call[] = [];
+        const parent = makeKeyedEntity('MJ: AI Agents', 'A1', calls);
+        const plan = new EntitySavePlan(parent);
+        plan.AddSave(parent, 'MJ: AI Agents', undefined, true);
+        plan.AddSave(makeKeyedEntity('MJ: AI Agents', 'A2', calls), 'SubAgents[0]');
+
+        const result = await ExecuteEntitySavePlan(plan, {});
+
+        expect(result.Success).toBe(true);
+        expect(calls.map(c => c.label)).toEqual(['MJ: AI Agents:A1', 'MJ: AI Agents:A2']);
+    });
+
+    it('exempts records with no primary key — a brand-new record cannot be its own ancestor', async () => {
+        const calls: Call[] = [];
+        const root = makeEntity('MJ: AI Agents', calls);
+        const plan = new EntitySavePlan(root);
+        plan.AddSave(root, 'MJ: AI Agents', undefined, true);
+        plan.AddSave(makeEntity('MJ: AI Agents', calls), 'SubAgents[0]');
+
+        const result = await ExecuteEntitySavePlan(plan, {});
+
+        expect(result.Success).toBe(true);
+        expect(calls).toHaveLength(2);
+    });
+
+    it('threads the visited set to child options so a nested graph sees its ancestors', async () => {
+        const calls: Call[] = [];
+        const root = makeKeyedEntity('MJ: AI Agents', 'A1', calls);
+        const visited = new Set<string>();
+        const plan = new EntitySavePlan(root);
+        plan.AddSave(root, 'MJ: AI Agents', undefined, true);
+        plan.AddSave(makeKeyedEntity('MJ: AI Agent Prompts', 'P1', calls), 'Prompts[0]');
+
+        await ExecuteEntitySavePlan(plan, { Visited: visited });
+
+        // Restored on the way out, so a sibling branch is not poisoned by this one's ancestors.
+        expect(visited.size).toBe(0);
+    });
+
+    it('leaves an inherited visited set exactly as it found it', async () => {
+        const calls: Call[] = [];
+        const root = makeKeyedEntity('MJ: AI Agents', 'A1', calls);
+        // Simulates being nested: an ancestor already registered this record.
+        const visited = new Set<string>(['MJ: AI Agents|A1']);
+        const plan = new EntitySavePlan(root);
+        plan.AddSave(root, 'MJ: AI Agents', undefined, true);
+
+        await ExecuteEntitySavePlan(plan, { Visited: visited });
+
+        expect([...visited]).toEqual(['MJ: AI Agents|A1']);
+    });
+});

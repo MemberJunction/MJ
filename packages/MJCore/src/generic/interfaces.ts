@@ -384,6 +384,19 @@ export class EntitySaveOptions {
      * sub-graph — which is how nesting (payment → line → allocation) works.
      */
     IsGraphNodeSave?: boolean = false;
+    /**
+     * Cycle guard: keys of the records already being persisted higher up in this unit of work.
+     *
+     * Set by the graph executor and threaded down through each child's `Save()` — that hop is why
+     * it lives on the options rather than staying inside the plan. A **self-referential** collection
+     * (`SubAgents` on `MJ: AI Agents` via `ParentID`, say) can otherwise recurse until the call
+     * stack dies, which surfaces as an unattributable crash instead of a fixable error.
+     *
+     * Not something callers set. Its lifetime is exactly one unit of work, which is deliberate — a
+     * process-global would be shared across concurrent requests and would report cycles that are
+     * really just two requests touching the same record at once.
+     */
+    GraphVisited?: Set<string>;
 }
 
 /**
@@ -424,6 +437,11 @@ export class EntityDeleteOptions {
      * root node.
      */
     IsGraphNodeDelete?: boolean = false;
+    /**
+     * Cycle guard for the delete graph. Delete-path counterpart of
+     * {@link EntitySaveOptions.GraphVisited}; see that member for why it is carried on the options.
+     */
+    GraphVisited?: Set<string>;
 }
 
 /**

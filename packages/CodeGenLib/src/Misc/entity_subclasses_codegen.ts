@@ -683,10 +683,16 @@ ${fields}
     config: RelatedRecordCollectionConfig,
   ): string {
     const name = config.Name.trim();
-    // RelatedEntityClassName is the generated subclass for the related entity. When metadata has
-    // not supplied one, fall back to BaseEntity so the declaration still compiles — untyped is a
-    // worse developer experience, but a build break is worse still.
-    const relatedClass = relationship.RelatedEntityClassName?.trim() || 'BaseEntity';
+    // `RelatedEntityClassName` is the entity's BASE class name (e.g. `MJActionParam`); the generated
+    // subclass this file actually emits is that plus the `Entity` suffix (`MJActionParamEntity`) —
+    // the same `${entity.ClassName}Entity` convention used where the classes are declared. Emitting
+    // the bare name produced a file that could not compile: `Cannot find name 'MJActionParam'`.
+    // Fixture-based generator tests cannot catch this, because nothing there resolves the symbol;
+    // it only surfaced on a real CodeGen run against real metadata.
+    const relatedBase = relationship.RelatedEntityClassName?.trim();
+    // When metadata has no class name, fall back to BaseEntity so the declaration still compiles —
+    // untyped is a worse developer experience, but a build break is worse still.
+    const relatedClass = relatedBase ? `${relatedBase}Entity` : 'BaseEntity';
 
     const lines: string[] = [
       `Name: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(name)}'`,

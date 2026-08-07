@@ -1547,6 +1547,75 @@ export abstract class BaseEntity<T = unknown> {
      * Called from {@link InnerLoad} only — deliberately **not** from {@link LoadFromData}. See
      * {@link RelatedRecordLoadMode} for why that distinction is load-bearing.
      */
+    /**
+     * Populates this record's declared related-record collections and resolves once they are all
+     * ready — the one call to `await` when you want a fully-hydrated record.
+     *
+     * The point is batching. Cache-sourced collections resolve synchronously against
+     * `BaseEngineRegistry` and cost nothing; every database-sourced collection is gathered into a
+     * **single `RunViews` call** rather than one `RunView` each. So a record with four declared
+     * collections costs one round trip, or zero when they all read from engine caches — instead of
+     * the four sequential queries a naive `for (…) await c.Load()` would issue.
+     *
+     * Collections declared `'never'` are skipped: that mode means write-only staging buffer.
+     *
+     * @param names - Collection names to load. Omit to load every declared collection.
+     *
+     * @example
+     * ```typescript
+     * await action.LoadRelatedRecords();              // Params, ResultCodes and Libraries, one trip
+     * await agent.LoadRelatedRecords('Prompts');      // just the one
+     * ```
+     */
+    public async LoadRelatedRecords(...names: string[]): Promise<void> {
+        const wanted = names.length > 0 ? new Set(names.map(n => n.trim().toLowerCase())) : null;
+        const collections = this.Companions.filter(
+            (c): c is RelatedRecordCollection =>
+                c instanceof RelatedRecordCollection &&
+                c.LoadMode !== 'never' &&
+                (!wanted || wanted.has(c.Name.trim().toLowerCase())),
+        );
+        if (collections.length === 0) {
+            return;
+        }
+
+        // Cache-backed ones first — synchronous, zero queries. Whatever misses falls through to the
+        // batched database load below, so a donor engine that is not loaded yet costs correctness
+        // nothing.
+        const needsDatabase: RelatedRecordCollection[] = [];
+        for (const collection of collections) {
+            if (!(await collection.TryLoadFromCache())) {
+                needsDatabase.push(collection);
+            }
+        }
+        if (needsDatabase.length === 0) {
+            return;
+        }
+
+        // One `RunViews` for all remaining collections — N declared collections cost one round trip,
+        // not N. Params are built per collection so each keeps its own filter and ordering.
+        const rv = new RunView(this.ProviderToUse as unknown as IRunViewProvider);
+        const results = await rv.RunViews(
+            needsDatabase.map(c => ({
+                EntityName: c.RelatedEntityName,
+                ExtraFilter: `${c.RelatedEntityJoinField} = '${this.FirstPrimaryKey?.Value}'`,
+                OrderBy: c.OrderByClause,
+                ResultType: 'entity_object' as const,
+            })),
+            this.ContextCurrentUser,
+        );
+        needsDatabase.forEach((collection, i) => {
+            const result = results?.[i];
+            if (result?.Success) {
+                collection.SetLoadedItems(result.Results ?? []);
+            } else {
+                LogError(
+                    `BaseEntity.LoadRelatedRecords: '${collection.Name}' failed — ${result?.ErrorMessage ?? 'no result'}`,
+                );
+            }
+        });
+    }
+
     private async loadEagerCompanions(): Promise<void> {
         if (!this.HasCompanions) {
             return;
@@ -1717,12 +1786,23 @@ export abstract class BaseEntity<T = unknown> {
         // routinely called with no arguments, so an inference would mislabel every such failure.
         const operation = operationKind;
 
+        // One cycle-guard set per unit of work: inherited when this graph is nested inside another
+        // (so a child sees its ancestors), created fresh when this graph is the outermost one.
+        // Child nodes must carry it on their own options, because a child node runs the child's
+        // `Save()`, which builds and executes a plan of its own.
+        const visited = saveOptions?.GraphVisited ?? deleteOptions?.GraphVisited ?? new Set<string>();
+        const childSaveOptions = Object.assign(new EntitySaveOptions(), saveOptions ?? {});
+        childSaveOptions.GraphVisited = visited;
+        const childDeleteOptions = Object.assign(new EntityDeleteOptions(), deleteOptions ?? {});
+        childDeleteOptions.GraphVisited = visited;
+
         try {
             const result = await ExecuteEntitySavePlan(plan, {
-                SaveOptions: saveOptions,
+                SaveOptions: childSaveOptions,
                 RootSaveOptions: this.buildRootSaveOptions(saveOptions),
-                DeleteOptions: deleteOptions,
+                DeleteOptions: childDeleteOptions,
                 RootDeleteOptions: this.buildRootDeleteOptions(deleteOptions),
+                Visited: visited,
             });
             if (!result.Success) {
                 await scope?.Rollback();

@@ -23,7 +23,10 @@
  * @module @memberjunction/core
  */
 
+import { UUIDsEqual } from '@memberjunction/global';
 import type { BaseEntity } from './baseEntity';
+import { BaseEngineRegistry } from './baseEngineRegistry';
+import { IsVerboseLoggingEnabled, LogStatus } from './logging';
 import { CompositeKey, KeyValuePair } from './compositeKey';
 import { EntityCompanion, EntityCompanionDeserializeMode } from './entityCompanion';
 import type { EntitySavePlan } from './entitySavePlan';
@@ -37,15 +40,34 @@ import { LogError } from './logging';
  * - `'explicit'` — **the default.** Nothing loads until the caller awaits `Load()`. Chosen as the
  *   default because the alternative is a performance trap: an eager collection on a widely-listed
  *   entity turns every grid into an N+1 storm.
- * - `'eager'` — populated automatically by `BaseEntity.Load()`. **Never** by `LoadFromData()`,
+ * - `'immediate'` — populated automatically by `BaseEntity.Load()`. **Never** by `LoadFromData()`,
  *   which is the per-row materialisation path for `RunView(ResultType:'entity_object')`. That
  *   exclusion is deliberate and is the structural fix for a live N+1 in production accounting code,
  *   where a `LoadFromData` override issued one child query per row of every view.
+ * - `'lazy'` — populated on first read of {@link RelatedRecordCollection.Items}. Requires
+ *   {@link RelatedRecordSource} `'cache'`: a property getter cannot await, so a lazy *database*
+ *   load could only ever silently fail to fill, and CodeGen refuses that combination. A cache
+ *   lookup is synchronous, so lazy works there — reproducing exactly the hand-written memoised
+ *   getters this mechanism replaces.
  * - `'never'` — the collection is a write-only staging buffer; `Load()` is a no-op. Matches how
  *   order lines are actually used: built up in memory and pushed down, never read back through the
  *   collection.
  */
-export type RelatedRecordLoadMode = 'explicit' | 'eager' | 'never';
+export type RelatedRecordLoadMode = 'explicit' | 'immediate' | 'lazy' | 'never';
+
+/**
+ * Where a collection's records come from.
+ *
+ * - `'database'` — a `RunView` filtered by the join field. Always fresh, costs a query. Correct for
+ *   transactional data where staleness is unacceptable.
+ * - `'cache'` — taken from whichever loaded `BaseEngine` already holds the entity, discovered
+ *   generically via `BaseEngineRegistry.FindCachedEntity()`. Costs **zero queries**, and falls back
+ *   to `'database'` when no loaded engine offers it, so a miss degrades rather than fails.
+ *
+ * Deliberately not `'query'`: in MemberJunction a *Query* is a stored, named artifact
+ * (`MJ: Queries`, `RunQuery`), so that word already means something else.
+ */
+export type RelatedRecordSource = 'database' | 'cache';
 
 /**
  * What happens to a child that is removed from the collection.
@@ -105,6 +127,14 @@ export type RelatedRecordCollectionOptions = {
     OrderBy?: string;
     /** When the collection populates itself. Defaults to `'explicit'`. */
     Load?: RelatedRecordLoadMode;
+    /** Where records come from. Defaults to `'database'`. */
+    Source?: RelatedRecordSource;
+    /**
+     * Whether the collection refuses mutation. Defaults to `false` — but to `true` when
+     * {@link Source} is `'cache'`, because a cache-sourced collection hands out the engine's own
+     * entity instances.
+     */
+    ReadOnly?: boolean;
     /** What removal means. Defaults to `'delete'`. */
     OnRemove?: RelatedRecordRemovalMode;
     /** Automatic sequence numbering, if the child has a sequence field. */
@@ -222,6 +252,22 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         return this.options.OnRemove ?? 'delete';
     }
 
+    /** Where this collection's records come from. Defaults to `'database'`. */
+    public get Source(): RelatedRecordSource {
+        return this.options.Source ?? 'database';
+    }
+
+    /**
+     * Whether this collection refuses mutation.
+     *
+     * Defaults to `false`, **except for a cache-sourced collection**, which defaults to `true`
+     * because its records are the engine's own shared instances. An explicit `ReadOnly: false`
+     * still wins — and switches the cache path to copying, so the engine's objects stay untouched.
+     */
+    public get IsReadOnly(): boolean {
+        return this.options.ReadOnly ?? this.Source === 'cache';
+    }
+
     /**
      * The retained children, in order.
      *
@@ -230,6 +276,13 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * reality. Handing out a mutable array would make all three impossible to guarantee.
      */
     public get Items(): readonly T[] {
+        // `'lazy'` populates on first read. This is a side-effecting getter, deliberately: it is
+        // exactly what the hand-written memoised getters it replaces did, and it is only reachable
+        // for cache-sourced collections, where filling is synchronous. A database-sourced lazy
+        // collection cannot exist — CodeGen refuses the combination — because a getter cannot await.
+        if (!this.loaded && this.LoadMode === 'lazy') {
+            this.populateFromCache();
+        }
         return this.items;
     }
 
@@ -257,6 +310,13 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * is pending.
      */
     public override get Dirty(): boolean {
+        // A read-only collection never reports dirty, and that is load-bearing rather than tidy:
+        // a cache-sourced collection holds the ENGINE's entity instances, so a record dirtied by
+        // some unrelated code path would otherwise make every parent holding it claim it needs
+        // saving. Read-only collections contribute no save work either — see ContributeSaveWork.
+        if (this.IsReadOnly) {
+            return false;
+        }
         if (this.removed.length > 0) {
             return true;
         }
@@ -273,6 +333,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * @returns The same child, for chaining.
      */
     public Add(item: T): T {
+        this.assertMutable('Add');
         if (!item) {
             throw new Error(`RelatedRecordCollection '${this.Name}': cannot add a null related record.`);
         }
@@ -291,6 +352,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * @returns The newly created child.
      */
     public async Create(): Promise<T> {
+        this.assertMutable('Create');
         const provider = this.Owner.ProviderToUse as unknown as IMetadataProvider;
         if (!provider) {
             throw new Error(`RelatedRecordCollection '${this.Name}': owner has no provider; cannot create a child.`);
@@ -310,6 +372,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * @throws When {@link RemovalMode} is `'refuse'`.
      */
     public Remove(itemOrIndex: T | number): void {
+        this.assertMutable('Remove');
         if (this.RemovalMode === 'refuse') {
             throw new Error(
                 `RelatedRecordCollection '${this.Name}' is declared OnRemove:'refuse' — children cannot be detached.`,
@@ -332,6 +395,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
 
     /** Removes every child. */
     public Clear(): void {
+        this.assertMutable('Clear');
         for (let i = this.items.length - 1; i >= 0; i--) {
             this.Remove(i);
         }
@@ -360,6 +424,16 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         }
         if (this.loaded && !force) {
             return;
+        }
+
+        // Cache first when declared. A hit costs zero queries; a miss falls straight through to the
+        // database load below, so a collection whose donor engine is not loaded yet still works.
+        if (this.Source === 'cache') {
+            const cached = this.findCachedRecords();
+            if (cached) {
+                this.SetLoadedItems(this.IsReadOnly ? cached : await this.copyRecords(cached));
+                return;
+            }
         }
 
         const provider = this.Owner.ProviderToUse as unknown as IRunViewProvider;
@@ -392,7 +466,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
 
     /** @inheritdoc */
     public override async LoadEager(): Promise<void> {
-        if (this.LoadMode === 'eager') {
+        if (this.LoadMode === 'immediate') {
             await this.Load();
         }
     }
@@ -409,6 +483,154 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         this.items = items ?? [];
         this.removed = [];
         this.loaded = true;
+    }
+
+    /**
+     * Throws when the collection is read-only. Called by every mutating entry point.
+     *
+     * @param operation - The attempted operation, named in the error.
+     */
+    private assertMutable(operation: string): void {
+        if (this.IsReadOnly) {
+            throw new Error(
+                `RelatedRecordCollection '${this.Name}' is read-only; ${operation} is not allowed. ` +
+                    (this.Source === 'cache'
+                        ? `It is sourced from a BaseEngine cache, so its records are shared instances owned by that ` +
+                          `engine. Declare ReadOnly: false to get copies you can safely modify, or Source: 'database'.`
+                        : `Declare ReadOnly: false to allow mutation.`),
+            );
+        }
+    }
+
+    /**
+     * Attempts to populate this collection from a `BaseEngine` cache without touching the database.
+     *
+     * Used by `BaseEntity.LoadRelatedRecords()` to resolve the free collections before batching
+     * whatever is left into a database round trip.
+     *
+     * @returns True when the collection was populated from a cache; false when the caller must load
+     *          it from the database.
+     */
+    public async TryLoadFromCache(): Promise<boolean> {
+        if (this.Source !== 'cache' || (this.loaded && this.LoadMode !== 'never')) {
+            return this.Source === 'cache' && this.loaded;
+        }
+        const cached = this.findCachedRecords();
+        if (!cached) {
+            return false;
+        }
+        this.SetLoadedItems(this.IsReadOnly ? cached : await this.copyRecords(cached));
+        return true;
+    }
+
+    /**
+     * Fills the collection from whichever loaded engine already caches the related entity.
+     *
+     * Synchronous by nature — a registry walk plus a `filter` — which is what makes `'lazy'`
+     * possible at all. Returns `false` when no loaded engine offers the entity, leaving the
+     * collection unloaded so `Load()` can fall back to a query.
+     *
+     * @returns True when the collection was populated from a cache.
+     */
+    private populateFromCache(): boolean {
+        // Sharing is the only synchronous option: copying needs `GetEntityObject`, which is async.
+        // So the sync path is read-only-only, and a writable cache-backed collection must go through
+        // the async `Load()`. CodeGen enforces the matching rule that `lazy` implies read-only.
+        if (!this.IsReadOnly) {
+            return false;
+        }
+        const cached = this.findCachedRecords();
+        if (!cached) {
+            return false;
+        }
+        this.SetLoadedItems(cached);
+        return true;
+    }
+
+    /**
+     * Finds this record's related rows in whichever loaded engine already caches the related entity.
+     *
+     * @returns The matching records in declared order, or `null` when no loaded engine offers the
+     *          entity — in which case the caller falls back to a database load.
+     */
+    private findCachedRecords(): T[] | null {
+        const parentKey = this.Owner.FirstPrimaryKey?.Value;
+        if (parentKey === null || parentKey === undefined || parentKey === '') {
+            return null; // an unsaved parent owns no persisted related records
+        }
+
+        // `unfilteredOnly` matters: a donor whose config carries a Filter holds a SUBSET, which
+        // would silently give us an incomplete collection. `simple` donors are excluded because
+        // these records must be real BaseEntity instances.
+        const matches = BaseEngineRegistry.Instance.FindCachedEntity<T>(this.RelatedEntityName, { unfilteredOnly: true });
+        const donor = matches.find(m => (m.config.ResultType ?? 'entity_object') !== 'simple');
+        if (!donor) {
+            if (IsVerboseLoggingEnabled()) {
+                LogStatus(
+                    `RelatedRecordCollection '${this.Name}': no loaded engine caches '${this.RelatedEntityName}' — ` +
+                        `falling back to a database load.`,
+                );
+            }
+            return null;
+        }
+
+        const joinField = this.RelatedEntityJoinField;
+        const mine = donor.records.filter(r => UUIDsEqual(String(r.Get(joinField) ?? ''), String(parentKey)));
+        return this.sortLikeOrderBy(mine);
+    }
+
+    /**
+     * Applies the declared `OrderBy` to cache-sourced records.
+     *
+     * Only single-field `FIELD [ASC|DESC]` clauses are honoured — the common case, and all that can
+     * be done in memory without reimplementing SQL. Anything more complex is left in donor order
+     * rather than half-applied, because a silently mis-ordered sequenced collection would renumber
+     * itself into that wrong order on the next mutation.
+     *
+     * @param records - The filtered records.
+     * @returns A new, ordered array.
+     */
+    private sortLikeOrderBy(records: T[]): T[] {
+        const clause = this.OrderByClause?.trim();
+        if (!clause) {
+            return [...records];
+        }
+        const parts = clause.split(/\s+/);
+        if (parts.length > 2 || clause.includes(',')) {
+            return [...records];
+        }
+        const [field, direction] = parts;
+        const sign = (direction ?? 'ASC').toUpperCase() === 'DESC' ? -1 : 1;
+        return [...records].sort((a, b) => {
+            const av = a.Get(field);
+            const bv = b.Get(field);
+            if (av === bv) return 0;
+            if (av === null || av === undefined) return -sign;
+            if (bv === null || bv === undefined) return sign;
+            return (av < bv ? -1 : 1) * sign;
+        });
+    }
+
+    /**
+     * Copies cached records into fresh entity instances, so a writable collection never hands out —
+     * or mutates — the engine's own objects. Saving a copy fires the ordinary `BaseEntity` save
+     * event that the engines already subscribe to, so their caches refresh themselves.
+     *
+     * @param records - The engine's cached records.
+     * @returns Detached copies carrying the same field values.
+     */
+    private async copyRecords(records: T[]): Promise<T[]> {
+        const provider = this.Owner.ProviderToUse as unknown as IMetadataProvider;
+        const copies: T[] = [];
+        for (const source of records) {
+            const copy = await provider?.GetEntityObject<T>(this.RelatedEntityName, this.Owner.ContextCurrentUser);
+            if (!copy) {
+                return records; // no factory available — sharing beats dropping the records
+            }
+            copy.LoadFromData(source.GetAll(), true);
+            copies.push(copy);
+        }
+        return copies;
     }
 
     /** @inheritdoc */
@@ -464,6 +686,11 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
 
     /** @inheritdoc */
     public override ContributeSaveWork(plan: EntitySavePlan): void {
+        // A read-only collection is a projection, not a unit of work. Contributing nothing is what
+        // makes it safe to point one at an engine's shared cache.
+        if (this.IsReadOnly) {
+            return;
+        }
         // Deletions first: a removed child may hold a unique key that a retained one is about to
         // take (a re-sequenced LineNumber, most commonly). Freeing it before the inserts run avoids
         // a spurious constraint violation on what is a perfectly legal edit.
@@ -481,6 +708,9 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
 
     /** @inheritdoc */
     public override ContributeDeleteWork(plan: EntitySavePlan): void {
+        if (this.IsReadOnly) {
+            return; // a projection never cascades a delete
+        }
         if (this.RemovalMode !== 'delete') {
             return; // aggregation, or refusal — the parent's removal does not imply the child's
         }

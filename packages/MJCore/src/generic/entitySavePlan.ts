@@ -196,7 +196,38 @@ export type EntitySavePlanExecuteOptions = {
     DeleteOptions?: EntityDeleteOptions;
     /** Options for the root delete node — must carry `IsGraphNodeDelete: true`. */
     RootDeleteOptions?: EntityDeleteOptions;
+    /**
+     * Keys of the records already being persisted higher up in this unit of work — the cycle guard.
+     *
+     * A child node runs the child's own `Save()`, which builds and executes the child's own plan.
+     * That is what makes nesting work (a payment's line's allocations all land in one transaction),
+     * but on a **self-referential** collection it is also what makes a cycle fatal: declare
+     * `SubAgents` on `MJ: AI Agents` via `ParentID`, then wire `a.SubAgents.Add(b)` and
+     * `b.SubAgents.Add(a)`, and the recursion only ends when the call stack does.
+     *
+     * The set is threaded through the options rather than held in a module-scoped variable
+     * deliberately. A process-global would be shared by every concurrent save in the process, so
+     * two unrelated requests saving the *same* record at the same time would report a cycle that
+     * does not exist. Carried on the options, its lifetime is exactly one unit of work.
+     */
+    Visited?: Set<string>;
 };
+
+/**
+ * Stable identity for cycle detection: the entity plus its primary key.
+ *
+ * Object identity is not enough — the same row can be represented by two different `BaseEntity`
+ * instances within one graph, which is precisely the shape a cycle takes after a round trip.
+ *
+ * @param entity - The record to key.
+ * @returns The key, or `null` for a record with no primary-key value yet (a brand-new record cannot
+ *          be its own ancestor, so it needs no guard).
+ */
+function GraphNodeKey(entity: BaseEntity): string | null {
+    const entityName = entity.EntityInfo?.Name;
+    const key = entity.PrimaryKey?.ToString();
+    return entityName && key ? `${entityName}|${key}` : null;
+}
 
 /**
  * Executes a plan's nodes in order, stopping at the first failure.
@@ -214,26 +245,58 @@ export async function ExecuteEntitySavePlan(
     options: EntitySavePlanExecuteOptions = {},
 ): Promise<EntitySavePlanResult> {
     const nodeResults: EntitySavePlanNodeResult[] = [];
+    const visited = options.Visited ?? new Set<string>();
 
-    for (const node of plan.Nodes) {
-        // Late-bind anything that depends on values produced by earlier nodes — most importantly a
-        // child's foreign key, which cannot exist until the parent row has been inserted.
-        if (node.Prepare) {
-            node.Prepare();
-        }
-
-        const outcome = await executePlanNode(node, options);
-        nodeResults.push(outcome);
-
-        if (!outcome.Success) {
-            // Stop immediately. The caller rolls the transaction back, so continuing would only
-            // pile up work that is about to be undone — and would let a later, more confusing
-            // failure mask the real one.
-            return { Success: false, NodeResults: nodeResults, ErrorMessage: outcome.ErrorMessage };
-        }
+    // The root is an ancestor of everything this plan will run, so it goes in before the loop.
+    // Its own node is `SelfOnly` and therefore exempt from the check below — it cannot recurse.
+    const rootKey = GraphNodeKey(plan.Root);
+    const rootWasAlreadyVisited = rootKey !== null && visited.has(rootKey);
+    if (rootKey && !rootWasAlreadyVisited) {
+        visited.add(rootKey);
     }
 
-    return { Success: true, NodeResults: nodeResults };
+    try {
+        for (const node of plan.Nodes) {
+            // A child node re-entering a record already in progress above it is a cycle. Detect it
+            // here rather than letting the recursion run until the stack overflows, which surfaces
+            // as an unattributable crash rather than a fixable message.
+            if (!node.SelfOnly) {
+                const key = GraphNodeKey(node.Entity);
+                if (key && visited.has(key)) {
+                    const message =
+                        `Cycle detected in the entity graph at ${node.Label} (${key}): this record is already ` +
+                        `being saved higher up in the same unit of work. A self-referential related-record ` +
+                        `collection cannot contain one of its own ancestors.`;
+                    LogError(message);
+                    return { Success: false, NodeResults: nodeResults, ErrorMessage: message };
+                }
+            }
+
+            // Late-bind anything that depends on values produced by earlier nodes — most importantly
+            // a child's foreign key, which cannot exist until the parent row has been inserted.
+            if (node.Prepare) {
+                node.Prepare();
+            }
+
+            const outcome = await executePlanNode(node, { ...options, Visited: visited });
+            nodeResults.push(outcome);
+
+            if (!outcome.Success) {
+                // Stop immediately. The caller rolls the transaction back, so continuing would only
+                // pile up work that is about to be undone — and would let a later, more confusing
+                // failure mask the real one.
+                return { Success: false, NodeResults: nodeResults, ErrorMessage: outcome.ErrorMessage };
+            }
+        }
+
+        return { Success: true, NodeResults: nodeResults };
+    } finally {
+        // Leave the set exactly as it was found, so sibling branches of the same graph are not
+        // poisoned by an ancestor this branch happened to add.
+        if (rootKey && !rootWasAlreadyVisited) {
+            visited.delete(rootKey);
+        }
+    }
 }
 
 /**

@@ -58,7 +58,7 @@ function makeRelationship(overrides: Record<string, unknown> = {}): EntityRelati
     return {
         RelatedEntity: 'MJ_BizApps_Orders: Order Lines',
         RelatedEntityJoinField: 'OrderHeaderID',
-        RelatedEntityClassName: 'OrderLineEntity',
+        RelatedEntityClassName: 'OrderLine',
         Type: 'One To Many',
         RelatedRecordCollection: JSON.stringify({ Name: 'Lines' }),
         ...overrides,
@@ -106,6 +106,19 @@ describe('GenerateRelatedRecordCollections — emission', () => {
 
         expect(out).toContain('public readonly Lines = this.DeclareRelatedRecords<OrderLineEntity>({');
         expect(out).toContain("Name: 'Lines'");
+    });
+
+    it('appends the Entity suffix — RelatedEntityClassName is the BASE name, not the generated class', () => {
+        // Regression. `EntityRelationship.RelatedEntityClassName` holds the base name (`MJActionParam`),
+        // while the class this generator emits alongside is `${ClassName}Entity` (`MJActionParamEntity`).
+        // Emitting the bare name produced a 100k-line file that could not compile —
+        // `Cannot find name 'MJActionParam'` — for all eight core collections at once. The original
+        // fixture hid it by pre-suffixing the input, which real metadata never does.
+        const relationship = makeRelationship({ RelatedEntityClassName: 'MJActionParam' });
+        const out = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(makeEntity([relationship]));
+
+        expect(out).toContain('this.DeclareRelatedRecords<MJActionParamEntity>({');
+        expect(out).not.toContain('DeclareRelatedRecords<MJActionParam>(');
     });
 
     it('takes RelatedEntity and RelatedEntityJoinField from the ROW, not the JSON', () => {
@@ -187,7 +200,7 @@ describe('GenerateRelatedRecordCollections — emission', () => {
             withConfig({ Name: 'Charges' }, {
                 RelatedEntity: 'MJ_BizApps_Orders: Order Charges',
                 RelatedEntityJoinField: 'OrderHeaderID',
-                RelatedEntityClassName: 'OrderChargeEntity',
+                RelatedEntityClassName: 'OrderCharge',
             }),
         ]);
         const out = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(entity);
@@ -276,7 +289,7 @@ describe('GenerateRelatedRecordCollections — invalid metadata is skipped, neve
             makeRelationship({ RelatedRecordCollection: '{ broken' }),
             withConfig({ Name: 'Charges' }, {
                 RelatedEntity: 'MJ_BizApps_Orders: Order Charges',
-                RelatedEntityClassName: 'OrderChargeEntity',
+                RelatedEntityClassName: 'OrderCharge',
             }),
         ]);
         const out = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(entity);

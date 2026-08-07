@@ -45128,6 +45128,41 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agents')
 export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
+
+  /**
+  * Related records: MJ: AI Agent Prompts
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Agents record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Agents → MJ: AI Agent Prompts' relationship; edit that row, not this file.
+  */
+  public readonly Prompts = this.DeclareRelatedRecords<MJAIAgentPromptEntity>({
+      Name: 'Prompts',
+        RelatedEntity: 'MJ: AI Agent Prompts',
+        RelatedEntityJoinField: 'AgentID',
+        OrderBy: 'ExecutionOrder ASC',
+        Load: 'explicit',
+        OnRemove: 'delete',
+        Sequence: { Field: 'ExecutionOrder', From: 0 },
+  });
+
+
+  /**
+  * Related records: MJ: AI Agents
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Agents record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Agents → MJ: AI Agents' relationship; edit that row, not this file.
+  */
+  public readonly SubAgents = this.DeclareRelatedRecords<MJAIAgentEntity>({
+      Name: 'SubAgents',
+        RelatedEntity: 'MJ: AI Agents',
+        RelatedEntityJoinField: 'ParentID',
+        OrderBy: 'ExecutionOrder ASC',
+        Load: 'explicit',
+        OnRemove: 'orphan',
+  });
+
     /**
     * Loads the MJ: AI Agents record from the database
     * @param ID: string - primary key value to load the MJ: AI Agents record.
@@ -52827,6 +52862,23 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompts')
 export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
+
+  /**
+  * Related records: MJ: AI Prompt Models
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Prompts record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Prompts → MJ: AI Prompt Models' relationship; edit that row, not this file.
+  */
+  public readonly Models = this.DeclareRelatedRecords<MJAIPromptModelEntity>({
+      Name: 'Models',
+        RelatedEntity: 'MJ: AI Prompt Models',
+        RelatedEntityJoinField: 'PromptID',
+        OrderBy: 'Priority ASC',
+        Load: 'explicit',
+        OnRemove: 'delete',
+  });
+
     /**
     * Loads the MJ: AI Prompts record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompts record.
@@ -56530,6 +56582,23 @@ export class MJAPIKeyUsageLogEntity extends BaseEntity<MJAPIKeyUsageLogEntityTyp
  */
 @RegisterClass(BaseEntity, 'MJ: API Keys')
 export class MJAPIKeyEntity extends BaseEntity<MJAPIKeyEntityType> {
+
+  /**
+  * Related records: MJ: API Key Scopes
+  *
+  * Loads, validates and persists as one unit with this MJ: API Keys record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: API Keys → MJ: API Key Scopes' relationship; edit that row, not this file.
+  */
+  public readonly Scopes = this.DeclareRelatedRecords<MJAPIKeyScopeEntity>({
+      Name: 'Scopes',
+        RelatedEntity: 'MJ: API Key Scopes',
+        RelatedEntityJoinField: 'APIKeyID',
+        OrderBy: 'Priority ASC',
+        Load: 'explicit',
+        OnRemove: 'delete',
+  });
+
     /**
     * Loads the MJ: API Keys record from the database
     * @param ID: string - primary key value to load the MJ: API Keys record.

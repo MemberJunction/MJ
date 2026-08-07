@@ -39,17 +39,66 @@ export interface IRelatedRecordCollectionConfig {
     Name: string;
 
     /**
-     * When the collection populates itself from the database. Defaults to `'explicit'`.
+     * Where the collection's records come from. Defaults to `'database'`.
      *
-     * - `'explicit'` — nothing loads until the caller awaits `Load()`. **The right default**: an
-     *   eager collection on a commonly-listed entity is a performance trap.
-     * - `'eager'` — populated automatically by `Load()`. Never by `LoadFromData()`, which is the
-     *   per-row materialisation path for `RunView(ResultType:'entity_object')` — loading children
-     *   there turns one view into N+1 queries. Use `RunView.IncludeRelatedRecords` for result sets,
-     *   which costs 1+K instead.
-     * - `'never'` — a write-only staging buffer; `Load()` is a no-op.
+     * - `'database'` — a `RunView` against the related entity, filtered by the join field. Always
+     *   correct, always fresh, costs a query. The right choice for transactional data (order lines,
+     *   journal entry lines) where staleness is unacceptable.
+     * - `'cache'` — the records are taken from whichever loaded `BaseEngine` already holds that
+     *   entity, discovered generically through `BaseEngineRegistry.FindCachedEntity()`. Costs **zero
+     *   queries**. The right choice for metadata-shaped data that an engine preloads anyway —
+     *   action params, prompt models, API key scopes. Falls back to `'database'` when no loaded
+     *   engine offers the entity, so a cache miss degrades instead of failing.
+     *
+     * Not called `'query'` deliberately: in MemberJunction a *Query* is a stored, named artifact
+     * (`MJ: Queries`, `RunQuery`), so `Source: 'query'` would read as "this comes from a stored
+     * Query" — a different thing entirely.
      */
-    Load?: 'explicit' | 'eager' | 'never';
+    Source?: 'database' | 'cache';
+
+    /**
+     * Whether the collection refuses mutation. Defaults to `false`, **except when
+     * {@link Source} is `'cache'`, where it defaults to `true`.**
+     *
+     * When `true`: `Add`, `Create`, `Remove` and `Clear` throw, the collection contributes nothing
+     * to a save plan, and `Dirty` stays `false`. That last part is not
+     * cosmetic — a cache-sourced collection holds the *engine's own entity instances*, so a record
+     * dirtied by some unrelated code path would otherwise make every parent holding it report dirty
+     * and try to save.
+     *
+     * **What this cannot enforce:** once you hold a `BaseEntity` you can set fields on it and call
+     * `Save()`. Read-only constrains the *collection*, not the records inside it. Which is why the
+     * source matters:
+     *
+     * - `'cache'` + read-only → you get the engine's shared instances. Zero allocation, and the
+     *   contract is "do not mutate these".
+     * - `'cache'` + writable → the records are **copied** into fresh entity objects on load, so the
+     *   engine's cache is never mutated in place. Saving a copy fires the ordinary `BaseEntity`
+     *   save event, which the engines already subscribe to, so their caches refresh themselves.
+     * - `'database'` → always fresh objects; none of this applies.
+     */
+    ReadOnly?: boolean;
+
+    /**
+     * When the collection populates itself. Defaults to `'explicit'`.
+     *
+     * - `'explicit'` — nothing loads until the caller awaits `Load()` or
+     *   `BaseEntity.LoadRelatedRecords()`. **The right default for `'database'`**: an
+     *   automatically-populated collection on a commonly-listed entity is a performance trap.
+     * - `'immediate'` — populated automatically by `Load()`. Never by `LoadFromData()`, which is the
+     *   per-row materialisation path for `RunView(ResultType:'entity_object')` — loading related
+     *   records there turns one view into N+1 queries. Use `RunView.IncludeRelatedRecords` for
+     *   result sets, which costs 1+K instead.
+     * - `'lazy'` — populated on first access to `Items`. **Requires `Source: 'cache'`**, and CodeGen
+     *   refuses the combination with `'database'`: a property getter cannot await, so a lazy
+     *   database load could only ever silently fail to fill. A cache lookup is synchronous, so lazy
+     *   works there — and reproduces exactly the hand-written memoised getters this replaces.
+     * - `'never'` — a write-only staging buffer; `Load()` is a no-op.
+     *
+     * Note that `'lazy'` makes reading `Items` a side-effecting operation: it populates the
+     * collection and flips `IsLoaded`. That is deliberate and matches the getters it supersedes.
+     */
+    Load?: 'explicit' | 'immediate' | 'lazy' | 'never';
 
     /**
      * What removing a record from the collection means. Defaults to `'delete'`.
