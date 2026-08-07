@@ -810,16 +810,6 @@ import {
     RecordComparisonCompareServerOperation,
 } from '@memberjunction/record-comparison';
 
-// @memberjunction/scheduling-actions (6 classes)
-import {
-    CreateScheduledJobAction,
-    DeleteScheduledJobAction,
-    ExecuteScheduledJobNowAction,
-    GetScheduledJobStatisticsAction,
-    QueryScheduledJobsAction,
-    UpdateScheduledJobAction,
-} from '@memberjunction/scheduling-actions';
-
 // @memberjunction/scheduling-engine-base (1 classes)
 import {
     MJScheduledJobEntityExtended,
@@ -1167,6 +1157,16 @@ import {
     WriteEntityFieldsAction,
     XMLParserAction,
 } from '@memberjunction/core-actions';
+
+// @memberjunction/scheduling-actions (6 classes)
+import {
+    CreateScheduledJobAction,
+    DeleteScheduledJobAction,
+    ExecuteScheduledJobNowAction,
+    GetScheduledJobStatisticsAction,
+    QueryScheduledJobsAction,
+    UpdateScheduledJobAction,
+} from '@memberjunction/scheduling-actions';
 
 // @memberjunction/testing-engine (1 classes)
 import {
@@ -1786,12 +1786,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     GoogleGeocodingProvider,
     HereGeocodingProvider,
     RecordComparisonCompareServerOperation,
-    CreateScheduledJobAction,
-    DeleteScheduledJobAction,
-    ExecuteScheduledJobNowAction,
-    GetScheduledJobStatisticsAction,
-    QueryScheduledJobsAction,
-    UpdateScheduledJobAction,
     MJScheduledJobEntityExtended,
     AzureAISearchProvider,
     BGEReRanker,
@@ -2072,6 +2066,12 @@ export const CLASS_REGISTRATIONS: any[] = [
     WebSearchAction,
     WriteEntityFieldsAction,
     XMLParserAction,
+    CreateScheduledJobAction,
+    DeleteScheduledJobAction,
+    ExecuteScheduledJobNowAction,
+    GetScheduledJobStatisticsAction,
+    QueryScheduledJobsAction,
+    UpdateScheduledJobAction,
     AgentEvalDriver,
 ];
 
@@ -2131,7 +2131,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/encryption',
     '@memberjunction/geo-core',
     '@memberjunction/record-comparison',
-    '@memberjunction/scheduling-actions',
     '@memberjunction/scheduling-engine-base',
     '@memberjunction/search-engine',
     '@memberjunction/tag-engine-base',
@@ -2149,5 +2148,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/scheduling-engine',
     '@memberjunction/core-entities-server',
     '@memberjunction/core-actions',
+    '@memberjunction/scheduling-actions',
     '@memberjunction/testing-engine',
 ] as const;
