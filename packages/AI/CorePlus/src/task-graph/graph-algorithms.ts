@@ -5,7 +5,7 @@
  * shapes rather than on `BaseEntity` instances, so they can be unit-tested exhaustively without a
  * database and reused unchanged by every executor.
  *
- * Phase 1 calls them from `TaskOrchestrator` (MJServer); Phase 2's durable `TaskGraphDispatcher`
+ * They are consumed by the durable `TaskGraphDispatcher`
  * (`@memberjunction/task-graph`) consumes the same functions rather than reimplementing eligibility
  * and propagation. That is the point of factoring them out now — the plan's Phase 1 note that "the
  * eligibility logic carries into the dispatcher unchanged" only holds if the logic has no host
