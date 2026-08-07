@@ -374,6 +374,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.1.0-edge.0
         version: link:../../MJGlobal
+      '@memberjunction/templates':
+        specifier: 6.1.0-edge.0
+        version: link:../../Templates/engine
     devDependencies:
       '@types/node':
         specifier: 24.10.11
@@ -3913,107 +3916,6 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/Actions/ScheduledActions:
-    dependencies:
-      '@memberjunction/actions':
-        specifier: 6.1.0-edge.0
-        version: link:../Engine
-      '@memberjunction/actions-base':
-        specifier: 6.1.0-edge.0
-        version: link:../Base
-      '@memberjunction/core':
-        specifier: 6.1.0-edge.0
-        version: link:../../MJCore
-      '@memberjunction/core-actions':
-        specifier: 6.1.0-edge.0
-        version: link:../CoreActions
-      '@memberjunction/core-entities':
-        specifier: 6.1.0-edge.0
-        version: link:../../MJCoreEntities
-      '@memberjunction/core-entities-server':
-        specifier: 6.1.0-edge.0
-        version: link:../../MJCoreEntitiesServer
-      '@memberjunction/generic-database-provider':
-        specifier: 6.1.0-edge.0
-        version: link:../../GenericDatabaseProvider
-      '@memberjunction/global':
-        specifier: 6.1.0-edge.0
-        version: link:../../MJGlobal
-      cron-parser:
-        specifier: ^4.9.0
-        version: 4.9.0
-    devDependencies:
-      ts-node-dev:
-        specifier: ^2.0.0
-        version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  packages/Actions/ScheduledActionsServer:
-    dependencies:
-      '@memberjunction/actions':
-        specifier: 6.1.0-edge.0
-        version: link:../Engine
-      '@memberjunction/actions-apollo':
-        specifier: 6.1.0-edge.0
-        version: link:../ApolloEnrichment
-      '@memberjunction/actions-content-autotag':
-        specifier: 6.1.0-edge.0
-        version: link:../ContentAutotag
-      '@memberjunction/ai':
-        specifier: 6.1.0-edge.0
-        version: link:../../AI/Core
-      '@memberjunction/ai-mistral':
-        specifier: 6.1.0-edge.0
-        version: link:../../AI/Providers/Mistral
-      '@memberjunction/ai-openai':
-        specifier: 6.1.0-edge.0
-        version: link:../../AI/Providers/OpenAI
-      '@memberjunction/ai-vector-sync':
-        specifier: 6.1.0-edge.0
-        version: link:../../AI/Vectors/Sync
-      '@memberjunction/ai-vectors-pinecone':
-        specifier: 6.1.0-edge.0
-        version: link:../../AI/Vectors/Providers/Pinecone
-      '@memberjunction/core':
-        specifier: 6.1.0-edge.0
-        version: link:../../MJCore
-      '@memberjunction/core-entities':
-        specifier: 6.1.0-edge.0
-        version: link:../../MJCoreEntities
-      '@memberjunction/scheduled-actions':
-        specifier: 6.1.0-edge.0
-        version: link:../ScheduledActions
-      '@memberjunction/sqlserver-dataprovider':
-        specifier: 6.1.0-edge.0
-        version: link:../../SQLServerDataProvider
-      dotenv:
-        specifier: ^17.2.4
-        version: 17.2.4
-      env-var:
-        specifier: ^7.3.0
-        version: 7.5.0
-      express:
-        specifier: ^5.2.1
-        version: 5.2.1
-      mssql:
-        specifier: ^12.2.0
-        version: 12.7.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-    devDependencies:
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
-      '@types/node':
-        specifier: 24.10.11
-        version: 24.10.11
-      rimraf:
-        specifier: ^5.0.10
-        version: 5.0.10
-
   packages/Angular/Bootstrap:
     dependencies:
       '@memberjunction/actions-base':
@@ -4643,6 +4545,9 @@ importers:
       '@memberjunction/ng-shared-generic':
         specifier: 6.1.0-edge.0
         version: link:../../Generic/shared
+      '@memberjunction/ng-tabstrip':
+        specifier: 6.1.0-edge.0
+        version: link:../../Generic/tab-strip
       '@memberjunction/ng-testing':
         specifier: 6.1.0-edge.0
         version: link:../../Generic/Testing
@@ -8519,6 +8424,9 @@ importers:
       '@memberjunction/ng-container-directives':
         specifier: 6.1.0-edge.0
         version: link:../container-directives
+      '@memberjunction/ng-ui-components':
+        specifier: 6.1.0-edge.0
+        version: link:../ui-components
       tslib:
         specifier: ^2.8.1
         version: 2.8.1
@@ -11379,6 +11287,9 @@ importers:
       '@auth0/auth0-angular':
         specifier: ^2.6.0
         version: 2.6.0(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/router@21.1.3(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2))
+      '@auth0/auth0-spa-js':
+        specifier: ^2.14.0
+        version: 2.14.0
       '@azure/msal-angular':
         specifier: ^5.0.3
         version: 5.0.3(@azure/msal-browser@5.17.0)(rxjs@7.8.2)
@@ -12111,6 +12022,9 @@ importers:
       '@memberjunction/tag-engine-base':
         specifier: 6.1.0-edge.0
         version: link:../AI/Knowledge/TagEngineBase
+      '@memberjunction/task-graph':
+        specifier: 6.1.0-edge.0
+        version: link:../TaskGraph
       '@memberjunction/templates':
         specifier: 6.1.0-edge.0
         version: link:../Templates/engine
@@ -12241,6 +12155,9 @@ importers:
       pkgroll:
         specifier: 2.23.0
         version: 2.23.0(typescript@5.9.3)(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+      rimraf:
+        specifier: ^5.0.10
+        version: 5.0.10
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -12406,6 +12323,9 @@ importers:
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.0
         version: link:../SQLServerDataProvider
+      '@memberjunction/task-graph':
+        specifier: 6.1.0-edge.0
+        version: link:../TaskGraph
       '@slack/socket-mode':
         specifier: ^2.0.3
         version: 2.0.6
@@ -13380,6 +13300,9 @@ importers:
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.0
         version: link:../../SQLServerDataProvider
+      '@memberjunction/task-graph':
+        specifier: 6.1.0-edge.0
+        version: link:../../TaskGraph
       '@memberjunction/templates':
         specifier: 6.1.0-edge.0
         version: link:../../Templates/engine
@@ -14087,6 +14010,34 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/TaskGraph:
+    dependencies:
+      '@memberjunction/ai-agents':
+        specifier: 6.1.0-edge.0
+        version: link:../AI/Agents
+      '@memberjunction/ai-core-plus':
+        specifier: 6.1.0-edge.0
+        version: link:../AI/CorePlus
+      '@memberjunction/core':
+        specifier: 6.1.0-edge.0
+        version: link:../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0-edge.0
+        version: link:../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.1.0-edge.0
+        version: link:../MJGlobal
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/Templates/base-types:
     dependencies:
       '@memberjunction/core':
@@ -14391,6 +14342,9 @@ importers:
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.0
         version: link:../../SQLServerDataProvider
+      '@memberjunction/task-graph':
+        specifier: 6.1.0-edge.0
+        version: link:../../TaskGraph
       '@memberjunction/templates':
         specifier: 6.1.0-edge.0
         version: link:../../Templates/engine

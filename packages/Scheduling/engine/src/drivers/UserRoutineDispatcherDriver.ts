@@ -13,15 +13,8 @@
  */
 
 import { RegisterClass, SafeJSONParse, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import {
-    ValidationResult,
-    ValidationErrorInfo,
-    ValidationErrorType,
-    UserInfo,
-    Metadata,
-    IMetadataProvider,
-    RunView,
-} from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, RunView, UserInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { DetectAndSubmitTaskGraph } from '@memberjunction/task-graph';
 import {
     MJConversationEntity,
     MJEnvironmentEntityExtended,
@@ -447,6 +440,13 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             ? (await runner.RunAgentInConversation(baseParams, { conversationId, userMessage })).agentResult
             : await runner.RunAgent(baseParams);
 
+        // A scheduled routine that emits a task graph previously had it silently discarded — the
+        // payload was serialized into the run record and nothing ever inspected it. Submitting here
+        // is what lets an unattended routine kick off durable multi-step work, and it costs the
+        // routine nothing: submission returns as soon as the graph is persisted, so the routine's
+        // own run still completes promptly.
+        await this.trySubmitTaskGraph(result, routine, contextUser);
+
         return {
             Success: result.success,
             ResultContent: result.payload != null ? JSON.stringify(result.payload) : '',
@@ -455,6 +455,40 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             PromptRunID: null,
             ActionExecutionLogID: null,
         };
+    }
+
+    /**
+     * Submits a task graph emitted by a scheduled routine, if one is present.
+     *
+     * Never throws — a malformed graph must not fail the routine run that produced it. The routine
+     * did its job; the graph is a secondary output and its rejection is logged with reasons.
+     */
+    private async trySubmitTaskGraph(
+        result: { payload?: unknown },
+        routine: MJUserRoutineEntity,
+        contextUser: UserInfo,
+    ): Promise<void> {
+        try {
+            const envResult = await new RunView().RunView<{ ID: string }>(
+                { EntityName: 'MJ: Environments', Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
+                contextUser,
+            );
+            const environmentID = envResult.Results?.[0]?.ID;
+            if (!environmentID) return;
+
+            await DetectAndSubmitTaskGraph(
+                result.payload,
+                {
+                    EnvironmentID: environmentID,
+                    ConversationDetailID: null,
+                    ContextUser: contextUser,
+                    Provider: Metadata.Provider, // global-provider-ok: the scheduler is a single-provider host
+                },
+                `scheduled-routine:${routine.Name}`,
+            );
+        } catch (e) {
+            LogError(`[UserRoutineDispatcherDriver] Task graph submission failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
     }
 
     /**

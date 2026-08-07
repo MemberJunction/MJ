@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseCliHarnessAdapter, HarnessCliRawEvent } from './BaseCliHarnessAdapter.js';
 import { BaseHarnessAdapter } from './BaseHarnessAdapter.js';
-import { HarnessCapabilities, HarnessTurnEvent } from '../types.js';
+import { HarnessCapabilities, HarnessPermissionPolicy, HarnessTurnEvent } from '../types.js';
 import { HarnessProcess } from '../sandbox/SandboxExecutor.js';
 
 /**
@@ -32,6 +32,72 @@ import { HarnessProcess } from '../sandbox/SandboxExecutor.js';
 @RegisterClass(BaseHarnessAdapter, 'ClaudeCodeCliAdapter')
 export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
     private executable = 'claude';
+    private systemPrompt: string | undefined;
+    private didResume = false;
+    private permissionArgs: string[] = [];
+
+    /**
+     * Maps MJ's posture onto Claude Code's permission vocabulary.
+     *
+     * Conservative at both ends, deliberately:
+     *
+     * - `strict` adds NOTHING, leaving Claude Code's default prompting in place. Headless, those
+     *   prompts have nowhere to go and every call denies — the correct outcome for a posture whose
+     *   contract is "no mutation without a human" when MJ has no approval channel yet. Observably
+     *   useless beats quietly permissive.
+     * - `auto` uses `acceptEdits`, NOT `bypassPermissions`. Edits inside the workspace proceed while
+     *   genuinely dangerous operations still gate; using bypass here would make `auto` and
+     *   `dangerous` the same setting under two names.
+     * - `dangerous` passes `--dangerously-skip-permissions`, which Claude Code's own help restricts
+     *   to sandboxes with no internet access. Pairing it with the LOCAL provider is a
+     *   misconfiguration — that provider does not contain the process at all.
+     *
+     * Allow/deny patterns pass through in Claude Code's own syntax, deny applied last so it wins:
+     * an overlapping policy must fail closed.
+     *
+     * ## Bash patterns are PREFIX-LITERAL — they are hygiene, not a boundary
+     *
+     * `Bash(git commit:*)` matches only commands that *begin* with `git commit`. Proven live: a
+     * `Bash(git:*)` allow paired with a `Bash(git commit:*)` deny let `git -C <path> commit` through,
+     * because any flag before the subcommand defeats the prefix. The run failed only because nothing
+     * happened to be staged.
+     *
+     * The consequence is a rule, not a caveat: **do not use a broad `Bash(<tool>:*)` allow and try to
+     * carve dangerous subcommands back out with denies.** Deny whole tool names (`Bash` — an exact
+     * name match, no prefix involved) or allow only fully-specified commands. Real containment comes
+     * from the sandbox provider; with the LOCAL provider there is none, so the policy is all there is.
+     */
+    public override ApplyPermissionPolicy(policy: HarnessPermissionPolicy): void {
+        const args: string[] = [];
+        switch (policy.Posture) {
+            case 'auto':
+                args.push('--permission-mode', 'acceptEdits');
+                break;
+            case 'dangerous':
+                args.push('--dangerously-skip-permissions');
+                break;
+            case 'strict':
+            default:
+                break;
+        }
+        if (policy.AllowedTools?.length) {
+            args.push('--allowedTools', ...policy.AllowedTools);
+        }
+        if (policy.DisallowedTools?.length) {
+            args.push('--disallowedTools', ...policy.DisallowedTools);
+        }
+        this.permissionArgs = args;
+    }
+
+    /** @inheritdoc */
+    public override get DidResumeSession(): boolean {
+        return this.didResume;
+    }
+
+    /** @inheritdoc */
+    public override SetSystemPrompt(systemPrompt: string): void {
+        this.systemPrompt = systemPrompt;
+    }
 
     protected get ExecutablePath(): string {
         return this.executable;
@@ -43,8 +109,15 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
             SessionResume: true,
             // Killing the process ends the turn immediately — the executor owns the process handle.
             MidTurnCancellation: true,
-            StructuredOutput: true,
+            // FALSE, deliberately. `--output-format stream-json` structures the TRANSPORT, not the
+            // model's content — nothing constrains what Claude actually writes inside a turn. Claiming
+            // true here told the runtime it need not compensate, and the harness spent five turns
+            // inventing step names (`complete`, `respond`, `undefined`) before BaseAgent's retry
+            // feedback taught it the Loop vocabulary. Same distinction PiAdapter already documents.
+            StructuredOutput: false,
             UsageReporting: true,
+            // ApplyPermissionPolicy below translates posture + allow/deny into real launch flags.
+            PermissionPolicy: true,
             // Claude Code CAN intercept permissions, but only through an MCP permission-prompt tool
             // that MJ has not stood up yet. Reported false until that exists: claiming interception
             // the adapter does not implement would let mutating operations through unreviewed while
@@ -59,12 +132,35 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
 
     protected BuildTurnArgs(input: string, isFirstTurn: boolean): string[] {
         const args = ['-p', input, '--output-format', 'stream-json', '--verbose'];
-        if (!isFirstTurn && this.sessionId) {
+        // Claude Code persists sessions to its own on-disk store, so resuming needs no live process
+        // — which is why this works at all despite the process dying after every turn. If the store
+        // has pruned the session the CLI starts fresh rather than failing, so an optimistic resume
+        // degrades to a cold session instead of breaking the run.
+        if (isFirstTurn && this.config?.ResumeSessionId) {
+            this.sessionId = this.config.ResumeSessionId;
+            this.didResume = true;
+        }
+        // APPEND rather than replace: Claude Code's own system prompt carries its tool definitions
+        // and sandbox conventions, and replacing it would break the harness to enforce our envelope.
+        // Appending puts MJ's contract at system level, where it outranks the conversational habit
+        // that was costing a retry on turn one.
+        if (isFirstTurn && this.systemPrompt) {
+            args.push('--append-system-prompt', this.systemPrompt);
+        }
+        // Pass --resume when continuing WITHIN a run (turn 2+) OR when continuing a PRIOR run's
+        // session on turn 1. Gating on `!isFirstTurn` alone silently defeated cross-run resume: the
+        // session id was looked up and assigned, the log said "Resuming...", and the flag was never
+        // actually passed — so Claude started cold and MapEvent overwrote the id with the new one.
+        // The run then recorded a different session than the one it claimed to resume.
+        if (this.sessionId && (!isFirstTurn || this.didResume)) {
             args.push('--resume', this.sessionId);
         }
         if (this.config?.Model) {
             args.push('--model', this.config.Model);
         }
+        // Per-invocation, not per-session: the process is new every turn, so a policy applied only
+        // at session start would silently lapse from turn 2 onward.
+        args.push(...this.permissionArgs);
         return args;
     }
 
@@ -76,6 +172,13 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
 
         switch (this.readString(raw, 'type')) {
             case 'assistant': {
+                // Claude reports the model it actually used on each assistant message. Capture it so
+                // accounting reflects reality rather than the model we assumed.
+                const message = this.readObject(raw, 'message');
+                const model = message ? this.readString(message, 'model') : undefined;
+                if (model) {
+                    this.reportedModel = model;
+                }
                 const text = this.extractAssistantText(raw);
                 return text ? { Type: 'assistant-text', Text: text } : null;
             }
@@ -141,6 +244,14 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
 
     /** Terminal event held back while its usage event is emitted first. */
     private pendingTerminal: HarnessTurnEvent | null = null;
+
+    /** The model Claude reported using on this turn. */
+    private reportedModel: string | undefined;
+
+    /** @inheritdoc */
+    public override get ReportedModel(): string | undefined {
+        return this.reportedModel;
+    }
 
     /**
      * Flushes the terminal event held back by {@link buildResultEvents}.

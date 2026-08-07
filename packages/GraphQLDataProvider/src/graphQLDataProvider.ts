@@ -10,7 +10,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
          ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError, LogStatus,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult,
+         EntityRecordNameResult, RecordDependency, RecordMergeRequest, RecordMergeResult,
          RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
          RunQueryParams, RunQueryEnrichment, BaseEntityResult, QueryExecutionSpec,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
@@ -160,10 +160,10 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
 
 // The GraphQLDataProvider implements both the IEntityDataProvider and IMetadataProvider interfaces.
 /**
- * The GraphQLDataProvider class is a data provider for MemberJunction that implements the IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider interfaces and connects to the
+ * The GraphQLDataProvider class is a data provider for MemberJunction that implements the IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunQueryProvider interfaces and connects to the
  * MJAPI server using GraphQL. This class is used to interact with the server to get and save data, as well as to get metadata about the entities and fields in the system.
  */
-export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunReportProvider {
+export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider {
     /**
      * Opt-in verbose logging for the real-time cache-invalidation subscription. Off by default — these
      * messages fire on every cross-server save/delete and flood the console. Set to `true` (e.g. from
@@ -465,36 +465,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-
-    /**************************************************************************/
-    // START ---- IRunReportProvider
-    /**************************************************************************/
-    public async RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult> {
-        const query = gql`
-        query GetReportDataQuery ($ReportID: String!) {
-            GetReportData(ReportID: $ReportID) {
-                Success
-                Results
-                RowCount
-                ExecutionTime
-                ErrorMessage
-            }
-        }`
-
-        const result = await this.ExecuteGQL(query, {ReportID: params.ReportID} );
-        if (result && result.GetReportData)
-            return {
-                ReportID: params.ReportID,
-                Success: result.GetReportData.Success,
-                Results: JSON.parse(result.GetReportData.Results),
-                RowCount: result.GetReportData.RowCount,
-                ExecutionTime: result.GetReportData.ExecutionTime,
-                ErrorMessage: result.GetReportData.ErrorMessage,
-            };
-    }
-    /**************************************************************************/
-    // END ---- IRunReportProvider
-    /**************************************************************************/
 
     /**************************************************************************/
     // START ---- IRunQueryProvider

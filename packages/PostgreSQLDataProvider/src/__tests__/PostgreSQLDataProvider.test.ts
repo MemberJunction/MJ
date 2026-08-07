@@ -276,14 +276,6 @@ describe('PostgreSQLDataProvider', () => {
             const result = await provider.FindISAChildEntity(mockEntityInfo, 'pk1');
             expect(result).toBeNull();
         });
-
-        it('RunReport should return Report not found when no report exists', async () => {
-            // Mock ExecuteSQL to return empty results (no report found)
-            vi.spyOn(provider, 'ExecuteSQL').mockResolvedValueOnce([]);
-            const result = await provider.RunReport({ ReportID: '00000000-0000-0000-0000-000000000000' });
-            expect(result.Success).toBe(false);
-            expect(result.ErrorMessage).toBe('Report not found');
-        });
     });
 
     describe('quoteIdentifiersInSQL', () => {

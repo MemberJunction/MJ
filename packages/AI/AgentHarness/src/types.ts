@@ -45,6 +45,21 @@ export interface HarnessSessionConfig {
     McpServerUrl?: string;
     /** Per-run, read-only, scope-limited MCP credential. Revoked at teardown on every exit path. */
     McpCredential?: string;
+    /**
+     * A prior session this run MAY continue, when one exists for the same agent and conversation.
+     *
+     * Offered, not imposed. Only adapters whose harness can genuinely resume should act on it, and
+     * they must report the outcome through {@link BaseHarnessAdapter.DidResumeSession} — because the
+     * caller sends a DIFFERENT turn input depending on whether the resume took. Guessing wrong in
+     * either direction is costly: assume resumed when it was not and the harness has no context;
+     * assume fresh when it did resume and it receives the conversation twice.
+     */
+    ResumeSessionId?: string;
+    /**
+     * What the agent may do inside the sandbox. Adapters translate this into their own flags via
+     * {@link BaseHarnessAdapter.ApplyPermissionPolicy}, or ignore it if they cannot enforce it.
+     */
+    PermissionPolicy?: HarnessPermissionPolicy;
     /** Model to request, when the harness honours one (`CapabilitySettings.ModelSelection`). */
     Model?: string;
     /** Aborts in-flight work; honoured mid-turn only when `CapabilitySettings.MidTurnCancellation`. */
@@ -88,6 +103,14 @@ export interface HarnessTurnResult {
     ErrorMessage?: string;
     /** Vendor session id, persisted to `AIAgentRun.ExternalSessionID` for resume and log correlation. */
     SessionId?: string;
+    /**
+     * The model the harness ACTUALLY used, as it reported it (e.g. `claude-opus-4-6`).
+     *
+     * Distinct from the model we asked for. A harness free to pick its own model will, and recording
+     * the one we assumed instead of the one it used makes cost attribution wrong — Opus and Sonnet
+     * are not the same price.
+     */
+    ReportedModel?: string;
 }
 
 /** Where a harness workspace lives and how long it survives. */
@@ -98,3 +121,45 @@ export type HarnessNetworkPolicy = 'none' | 'mcp-only' | 'allowlist' | 'open';
 
 /** How much in-sandbox autonomy the harness gets before MJ interposes a human. */
 export type HarnessPosture = 'strict' | 'auto' | 'dangerous';
+
+/**
+ * What the agent is permitted to do inside its sandbox, expressed in MJ's vocabulary rather than
+ * any harness's.
+ *
+ * ## Why this exists as an abstraction
+ *
+ * Every harness has its own permission mechanism and its own spelling — Claude Code has
+ * `--permission-mode` with six modes plus `--allowedTools` patterns, others have none at all. Left
+ * unabstracted, permissions would be configured per-harness, and switching harnesses would silently
+ * change what an agent may do. That is the opposite of the property this whole design exists for:
+ * MJ owns authority, the harness supplies reasoning.
+ *
+ * So the posture and tool patterns are declared ONCE in agent metadata, overridable per run, and
+ * each adapter translates them into its own flags — or ignores them and reports that it cannot
+ * enforce them.
+ *
+ * ## The postures
+ *
+ * - `strict` — nothing mutating without human approval. Honest today only where an adapter can
+ *   actually intercept; where it cannot, the harness's own prompts have nowhere to go in headless
+ *   mode and every tool call simply denies. That is a real, observed outcome, not a hypothetical:
+ *   an agent asked to run `git status` across repos had all 21 calls blocked and correctly stopped
+ *   to ask for permission MJ had no way to grant.
+ * - `auto` — the harness proceeds on its own for anything inside {@link AllowedTools}, and is
+ *   refused anything in {@link DisallowedTools}. The workable default until HITL lands.
+ * - `dangerous` — no gating at all. Only defensible inside a contained sandbox; the Docker provider
+ *   with a real network policy is the intended pairing, not the local provider.
+ */
+export interface HarnessPermissionPolicy {
+    /** How much autonomy the harness gets. See the posture notes above. */
+    Posture: HarnessPosture;
+    /**
+     * Tool patterns the agent may use without asking, in the harness's own pattern language
+     * (e.g. `Bash(git:*)`, `Read`, `Grep`). Deliberately passed through rather than normalised:
+     * inventing an MJ-wide tool taxonomy would be a lossy translation of every harness's model, and
+     * the patterns are the part operators actually reason about.
+     */
+    AllowedTools?: string[];
+    /** Tool patterns the agent must never use. Takes precedence over {@link AllowedTools}. */
+    DisallowedTools?: string[];
+}

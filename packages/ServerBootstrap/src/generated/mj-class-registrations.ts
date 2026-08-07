@@ -199,7 +199,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (413 classes)
+// @memberjunction/core-entities (401 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -484,7 +484,6 @@ import {
     MJOpenAppInstallHistoryEntity,
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
-    MJOutputTriggerTypeEntity,
     MJPermissionDomainEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
@@ -517,11 +516,6 @@ import {
     MJRecordProcessWatermarkEntity,
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
-    MJReportCategoryEntity,
-    MJReportEntity,
-    MJReportSnapshotEntity,
-    MJReportUserStateEntity,
-    MJReportVersionEntity,
     MJResourceLinkEntity,
     MJResourcePermissionEntity,
     MJResourcePermissionEntityExtended,
@@ -529,9 +523,6 @@ import {
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
     MJSQLDialectEntity,
-    MJScheduledActionEntity,
-    MJScheduledActionEntityExtended,
-    MJScheduledActionParamEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
@@ -607,9 +598,6 @@ import {
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
-    MJWorkflowEngineEntity,
-    MJWorkflowEntity,
-    MJWorkflowRunEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -1754,7 +1742,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJOpenAppInstallHistoryEntity,
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
-    MJOutputTriggerTypeEntity,
     MJPermissionDomainEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
@@ -1787,11 +1774,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJRecordProcessWatermarkEntity,
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
-    MJReportCategoryEntity,
-    MJReportEntity,
-    MJReportSnapshotEntity,
-    MJReportUserStateEntity,
-    MJReportVersionEntity,
     MJResourceLinkEntity,
     MJResourcePermissionEntity,
     MJResourcePermissionEntityExtended,
@@ -1799,9 +1781,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
     MJSQLDialectEntity,
-    MJScheduledActionEntity,
-    MJScheduledActionEntityExtended,
-    MJScheduledActionParamEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
@@ -1877,9 +1856,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
-    MJWorkflowEngineEntity,
-    MJWorkflowEntity,
-    MJWorkflowRunEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -2399,7 +2375,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 978;
+export const CLASS_REGISTRATIONS_COUNT = 966;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
