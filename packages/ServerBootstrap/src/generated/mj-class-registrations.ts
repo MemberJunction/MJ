@@ -884,6 +884,11 @@ import {
     ExternalDataSourceReadRouterImpl,
 } from '@memberjunction/external-data-sources';
 
+// @memberjunction/external-data-source-databricks (1 classes)
+import {
+    DatabricksExternalDataSourceDriver,
+} from '@memberjunction/external-data-source-databricks';
+
 // @memberjunction/external-data-source-mongodb (1 classes)
 import {
     MongoExternalDataSourceDriver,
@@ -2042,6 +2047,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     DropboxSignSignatureProvider,
     PandaDocSignatureProvider,
     ExternalDataSourceReadRouterImpl,
+    DatabricksExternalDataSourceDriver,
     MongoExternalDataSourceDriver,
     MySQLExternalDataSourceDriver,
     OracleExternalDataSourceDriver,
@@ -2461,6 +2467,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/esignature-dropboxsign',
     '@memberjunction/esignature-pandadoc',
     '@memberjunction/external-data-sources',
+    '@memberjunction/external-data-source-databricks',
     '@memberjunction/external-data-source-mongodb',
     '@memberjunction/external-data-source-mysql',
     '@memberjunction/external-data-source-oracle',
