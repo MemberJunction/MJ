@@ -1,7 +1,8 @@
 import { BaseEntitySaveQueue, LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
 import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionCategoryEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
-import { BaseSingleton, MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { BaseSingleton, MJGlobal, MJLruCache, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
+import { BaseActionFilter } from "./BaseActionFilter";
 import {
     ActionEngineBase,
     MJActionEntityExtended,
@@ -18,7 +19,22 @@ import type { BridgeHandlerMap } from "@memberjunction/code-execution";
  
 
 /**
- * Base class for executing actions. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the 
+ * Execution context handed to an Action Filter's `Code` when the engine evaluates it inline
+ * (i.e. when no {@link BaseActionFilter} subclass is registered for the filter). The code runs
+ * with this object bound as `ActionFilterContext` and signals its verdict either by returning
+ * a boolean or by assigning `ActionFilterContext.result`.
+ */
+export interface ActionFilterContext {
+   /** The full parameters of the action run being gated, including Action, Params, and ContextUser. */
+   params: RunActionParams;
+   /** The filter row being evaluated. */
+   filter: MJActionFilterEntity;
+   /** Alternative verdict channel: filter code may assign true (allow) / false (prevent) here instead of returning. */
+   result: boolean | null;
+}
+
+/**
+ * Base class for executing actions. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the
  * @RegisterClass decorator from the @memberjunction/global package to register your sub-class with the ClassFactory. This will cause your sub-class to be used instead of this base class when the Metadata object insantiates the ActionEngine.
  */
 export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
@@ -296,13 +312,71 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    }
 
    /**
-    * This method runs a single filter. Subclasses can override this method to provide custom filter logic.
-    * 
-    * @param filter 
+    * Bounded cache of compiled filter functions. Keyed by filter ID + row version so an edited
+    * filter's Code is recompiled on next use instead of serving the stale compilation.
+    */
+   private _filterCache = new MJLruCache<string, (context: ActionFilterContext) => Promise<unknown>>({ maxSize: 1000 });
+
+   /**
+    * Runs a single Action Filter and returns whether the action should proceed.
+    *
+    * Resolution order:
+    * 1. A {@link BaseActionFilter} subclass registered with the ClassFactory under the filter's ID
+    *    (the CodeGen / custom-subclass pattern documented on BaseActionFilter) wins when present.
+    * 2. Otherwise the filter's `Code` column — JavaScript that evaluates to true (allow) or
+    *    false (prevent), per the column contract — is compiled once per filter row version and
+    *    executed with an {@link ActionFilterContext} argument. The code may `return` its verdict
+    *    or assign `ActionFilterContext.result`.
+    *
+    * Failure semantics are FAIL-CLOSED: a filter that throws, yields a non-boolean, or has no
+    * evaluable logic prevents the action and logs the reason. A broken gate must not silently
+    * allow execution — silently allowing everything is precisely the pre-fix bug this replaces.
+    *
+    * Subclasses can still override this method entirely to provide custom filter logic.
     */
    protected async RunSingleFilter(params: RunActionParams, filter: MJActionFilterEntity): Promise<boolean> {
-      return true;
-      // temp stub above, replace with code that will run the filter      
+      try {
+         const registered = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseActionFilter, filter.ID);
+         if (registered && registered.length > 0) {
+            const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseActionFilter>(BaseActionFilter, filter.ID);
+            if (instance) {
+               return await instance.Run(params, filter) === true;
+            }
+         }
+
+         const code = filter.Code?.trim();
+         if (!code) {
+            LogError(`Action Filter ${filter.ID} has no Code and no registered BaseActionFilter subclass — failing closed, action prevented.`);
+            return false;
+         }
+
+         const cacheKey = `${filter.ID}:${filter.__mj_UpdatedAt instanceof Date ? filter.__mj_UpdatedAt.getTime() : ''}`;
+         let filterFunction = this._filterCache.Get(cacheKey);
+         if (!filterFunction) {
+            filterFunction = new Function('ActionFilterContext', `
+               return (async () => {
+                  ${code}
+               })();
+            `) as (context: ActionFilterContext) => Promise<unknown>;
+            this._filterCache.Set(cacheKey, filterFunction);
+         }
+
+         const context: ActionFilterContext = { params, filter, result: null };
+         const returned = await filterFunction(context);
+         const verdict = returned ?? context.result;
+         if (typeof verdict !== 'boolean') {
+            LogError(`Action Filter ${filter.ID} evaluated to a non-boolean verdict (${String(verdict)}) — failing closed, action prevented.`);
+            return false;
+         }
+         return verdict;
+      }
+      catch (e) {
+         LogErrorEx({
+            message: `Action Filter ${filter.ID} threw during evaluation — failing closed, action prevented.`,
+            error: e instanceof Error ? e : new Error(String(e))
+         });
+         return false;
+      }
    }
 
    protected async InternalRunAction(params: RunActionParams): Promise<ActionResult> {
