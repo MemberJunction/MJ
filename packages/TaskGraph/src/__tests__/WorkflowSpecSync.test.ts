@@ -10,7 +10,7 @@
  * tier. What is unit-testable is everything that decides *whether* to touch a substrate at all.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { WorkflowSpecSync, RUN_WORKFLOW_JOB_TYPE, WORKFLOW_OWNER_KEY, type WorkflowAgentWriter } from '../WorkflowSpecSync';
+import { WorkflowSpecSync, RUN_WORKFLOW_JOB_TYPE, WORKFLOW_OWNER_KEY, EXECUTE_AGENT_ACTION, type WorkflowAgentWriter } from '../WorkflowSpecSync';
 import type { WorkflowSpec } from '@memberjunction/ai-core-plus';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
@@ -118,12 +118,12 @@ describe('WorkflowSpecSync.Persist — guards run before anything is written', (
         expect(r.AgentID).toBe('agent-42');
     });
 
-    it('SURFACES a trigger it cannot yet reconcile rather than dropping it', async () => {
+    it('SURFACES a trigger that failed to bind rather than dropping it', async () => {
         // "Run this when an invoice changes" silently doing nothing is the failure a user cannot
-        // debug from the UI. Entity-change triggers land with Track D.
+        // debug from the UI, so a binding failure is reported on the result rather than swallowed.
         const sync = new WorkflowSpecSync(writerSpy());
         vi.spyOn(sync as unknown as { reconcileTriggers: () => Promise<unknown> }, 'reconcileTriggers')
-            .mockResolvedValue({ ScheduledJobIDs: [], Unreconciled: ['EntityEvent on Invoices — entity-change triggers are not yet wired'] });
+            .mockResolvedValue({ ScheduledJobIDs: [], Unreconciled: ['EntityEvent on Invoices: entity "Invoices" not found in metadata'] });
 
         const r = await sync.Persist(
             spec({ triggers: [{ type: 'EntityEvent', entityName: 'Invoices', invocationType: 'Update' }] }),
@@ -138,6 +138,14 @@ describe('reconciliation contract', () => {
     it('names the seeded job type it reconciles against', () => {
         // A rename here silently orphans every workflow's schedule, so it is pinned.
         expect(RUN_WORKFLOW_JOB_TYPE).toBe('Agent');
+    });
+
+    it('dispatches entity-change triggers through the existing Execute Agent action', () => {
+        // Entity-action INVOCATION was already fully wired — the save pipeline fires validate,
+        // before/after save and before/after delete through HandleEntityActions. What was missing
+        // was the binding row, not the machinery, so this reuses the action written for exactly
+        // this purpose rather than adding another.
+        expect(EXECUTE_AGENT_ACTION).toBe('Execute Agent');
     });
 
     it('marks owned rows by agent ID, so ownership survives a workflow rename', () => {

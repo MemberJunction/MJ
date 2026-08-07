@@ -22,11 +22,21 @@
  */
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { MJScheduledJobEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
+import {
+    MJActionEntity,
+    MJActionParamEntity,
+    MJEntityActionEntity,
+    MJEntityActionInvocationEntity,
+    MJEntityActionParamEntity,
+    MJEntityActionInvocationTypeEntity,
+    MJScheduledJobEntity,
+    MJScheduledJobTypeEntity,
+} from '@memberjunction/core-entities';
 import {
     FormatWorkflowValidationErrors,
     NormalizeTriggers,
     ValidateWorkflowSpec,
+    type WorkflowEntityEventTrigger,
     type WorkflowScheduleTrigger,
     type WorkflowSpec,
 } from '@memberjunction/ai-core-plus';
@@ -43,6 +53,17 @@ export const RUN_WORKFLOW_JOB_TYPE = 'Agent';
 
 /** Marker written into an owned row's `Configuration`, so ownership survives a rename. */
 export const WORKFLOW_OWNER_KEY = 'WorkflowAgentID';
+
+/**
+ * The Action an entity-change trigger dispatches to.
+ *
+ * `Execute Agent` already exists and was written for exactly this: "a concrete dispatch target for
+ * `AIAgent.ExposeAsAction`". Entity-action *invocation* is likewise already wired — the save pipeline
+ * fires validate / before-save / after-save / before-delete / after-delete through
+ * `HandleEntityActions`. So an entity-change trigger needs no new machinery at all; it needs a
+ * binding row, which is what this creates.
+ */
+export const EXECUTE_AGENT_ACTION = 'Execute Agent';
 
 /** Everything reconciliation needs beyond the spec itself. */
 export type WorkflowSyncContext = {
@@ -130,12 +151,17 @@ export class WorkflowSpecSync {
         const triggers = NormalizeTriggers(spec);
         const schedules = triggers.filter((t): t is WorkflowScheduleTrigger => t.type === 'Schedule');
 
-        // EntityEvent reconciliation needs the owned-Entity-Action binding from Track D item 1, which
-        // has not shipped. Reported rather than silently ignored: a user who asked for "run this when
-        // an invoice changes" and got a workflow that never fires has no way to discover why.
-        const unreconciled = triggers
-            .filter((t) => t.type === 'EntityEvent')
-            .map((t) => `EntityEvent on ${(t as { entityName: string }).entityName} — entity-change triggers are not yet wired`);
+        const events = triggers.filter((t): t is WorkflowEntityEventTrigger => t.type === 'EntityEvent');
+        const unreconciled: string[] = [];
+        for (const event of events) {
+            try {
+                await this.reconcileEntityEvent(event, agentID, context);
+            } catch (e) {
+                // Reported, never dropped: a user who asked for "run this when an invoice changes"
+                // and got a workflow that never fires has no way to discover why from the UI.
+                unreconciled.push(`EntityEvent on ${event.entityName}: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
 
         const typeID = await this.resolveJobTypeID(context);
         const owned = await this.findOwnedJobs(typeID, agentID, context);
@@ -172,6 +198,168 @@ export class WorkflowSpecSync {
     /** The same identity, read back off a persisted job. */
     private scheduleKeyOf(job: MJScheduledJobEntity): string | null {
         return job.CronExpression ? `${job.CronExpression}|${job.Timezone ?? ''}` : null;
+    }
+
+    /**
+     * Binds an entity-change trigger by creating the Entity Action rows the save pipeline already
+     * reads.
+     *
+     * Nothing here teaches the platform a new trick. `HandleEntityActions` has fired entity actions
+     * from the save pipeline all along; what was missing was a row saying "when an Invoice is
+     * updated, run Execute Agent with this agent". Three rows express that: the `EntityAction`
+     * (which entity, which action), the `EntityActionInvocation` (which change fires it), and an
+     * `EntityActionParam` carrying the agent to run.
+     *
+     * Idempotent by lookup rather than by delete-and-recreate: re-saving a workflow must not detach
+     * and re-attach a live trigger, because a change landing in that window would be missed.
+     */
+    private async reconcileEntityEvent(
+        trigger: WorkflowEntityEventTrigger,
+        agentID: string,
+        context: WorkflowSyncContext,
+    ): Promise<void> {
+        const rv = RunView.FromMetadataProvider(context.Provider);
+
+        const entity = context.Provider.EntityByName(trigger.entityName);
+        if (!entity) throw new Error(`entity "${trigger.entityName}" not found in metadata`);
+
+        const actionResult = await rv.RunView<MJActionEntity>(
+            { EntityName: 'MJ: Actions', ExtraFilter: `Name='${EXECUTE_AGENT_ACTION}'`, ResultType: 'entity_object' },
+            context.ContextUser,
+        );
+        const action = actionResult.Results?.[0];
+        if (!action) throw new Error(`the '${EXECUTE_AGENT_ACTION}' action is not present — has the metadata seed been pushed?`);
+
+        const invocationResult = await rv.RunView<MJEntityActionInvocationTypeEntity>(
+            {
+                EntityName: 'MJ: Entity Action Invocation Types',
+                ExtraFilter: `Name='${trigger.invocationType.replace(/'/g, "''")}'`,
+                ResultType: 'entity_object',
+            },
+            context.ContextUser,
+        );
+        const invocationType = invocationResult.Results?.[0];
+        if (!invocationType) throw new Error(`invocation type "${trigger.invocationType}" not found`);
+
+        const entityAction = await this.upsertEntityAction(entity.ID, action.ID, context);
+        await this.upsertInvocation(entityAction.ID, invocationType.ID, context);
+        await this.upsertAgentParam(entityAction.ID, action.ID, agentID, context);
+    }
+
+    /** Finds or creates the Entity Action binding this workflow needs. */
+    private async upsertEntityAction(
+        entityID: string,
+        actionID: string,
+        context: WorkflowSyncContext,
+    ): Promise<MJEntityActionEntity> {
+        const result = await RunView.FromMetadataProvider(context.Provider).RunView<MJEntityActionEntity>(
+            {
+                EntityName: 'MJ: Entity Actions',
+                ExtraFilter: `EntityID='${entityID}' AND ActionID='${actionID}'`,
+                ResultType: 'entity_object',
+            },
+            context.ContextUser,
+        );
+        const existing = result.Results?.[0];
+        if (existing) {
+            if (existing.Status !== 'Active') {
+                existing.Status = 'Active';
+                await existing.Save();
+            }
+            return existing;
+        }
+
+        const row = await context.Provider.GetEntityObject<MJEntityActionEntity>('MJ: Entity Actions', context.ContextUser);
+        row.NewRecord();
+        row.EntityID = entityID;
+        row.ActionID = actionID;
+        row.Status = 'Active';
+        if (!(await row.Save())) {
+            throw new Error(`could not create the entity-action binding: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return row;
+    }
+
+    /** Finds or creates the invocation row that says which change fires the action. */
+    private async upsertInvocation(
+        entityActionID: string,
+        invocationTypeID: string,
+        context: WorkflowSyncContext,
+    ): Promise<void> {
+        const result = await RunView.FromMetadataProvider(context.Provider).RunView<MJEntityActionInvocationEntity>(
+            {
+                EntityName: 'MJ: Entity Action Invocations',
+                ExtraFilter: `EntityActionID='${entityActionID}' AND InvocationTypeID='${invocationTypeID}'`,
+                ResultType: 'entity_object',
+            },
+            context.ContextUser,
+        );
+        const existing = result.Results?.[0];
+        if (existing) {
+            if (existing.Status !== 'Active') {
+                existing.Status = 'Active';
+                await existing.Save();
+            }
+            return;
+        }
+
+        const row = await context.Provider.GetEntityObject<MJEntityActionInvocationEntity>('MJ: Entity Action Invocations', context.ContextUser);
+        row.NewRecord();
+        row.EntityActionID = entityActionID;
+        row.InvocationTypeID = invocationTypeID;
+        row.Status = 'Active';
+        if (!(await row.Save())) {
+            throw new Error(`could not create the invocation binding: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+    }
+
+    /**
+     * Points the binding at this workflow's agent.
+     *
+     * A static value rather than a script: the agent is fixed for the life of the binding, and a
+     * script would be an expression evaluated on every save of every matching record for no gain.
+     */
+    private async upsertAgentParam(
+        entityActionID: string,
+        actionID: string,
+        agentID: string,
+        context: WorkflowSyncContext,
+    ): Promise<void> {
+        const rv = RunView.FromMetadataProvider(context.Provider);
+        const paramResult = await rv.RunView<MJActionParamEntity>(
+            {
+                EntityName: 'MJ: Action Params',
+                ExtraFilter: `ActionID='${actionID}' AND Name='AgentID'`,
+                ResultType: 'entity_object',
+            },
+            context.ContextUser,
+        );
+        const actionParam = paramResult.Results?.[0];
+        if (!actionParam) {
+            // Not fatal on its own — the binding still fires — but the agent would be unresolvable,
+            // so it is surfaced rather than left as a trigger that runs and does nothing.
+            throw new Error(`the '${EXECUTE_AGENT_ACTION}' action has no AgentID parameter to bind`);
+        }
+
+        const existingResult = await rv.RunView<MJEntityActionParamEntity>(
+            {
+                EntityName: 'MJ: Entity Action Params',
+                ExtraFilter: `EntityActionID='${entityActionID}' AND ActionParamID='${actionParam.ID}'`,
+                ResultType: 'entity_object',
+            },
+            context.ContextUser,
+        );
+        const row = existingResult.Results?.[0]
+            ?? await context.Provider.GetEntityObject<MJEntityActionParamEntity>('MJ: Entity Action Params', context.ContextUser);
+        if (!existingResult.Results?.[0]) row.NewRecord();
+
+        row.EntityActionID = entityActionID;
+        row.ActionParamID = actionParam.ID;
+        row.ValueType = 'Static';
+        row.Value = agentID;
+        if (!(await row.Save())) {
+            throw new Error(`could not bind the agent to the trigger: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
     }
 
     private async resolveJobTypeID(context: WorkflowSyncContext): Promise<string> {
