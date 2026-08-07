@@ -740,8 +740,10 @@ export class SQLServerDataProvider
       // live view would compare the client's snapshot cache against an unrelated source's rowCount/
       // maxUpdatedAt, yielding a meaningless current/stale verdict. (Materialized reads are normally kept
       // out of the client cache by runViewCacheEligible, so this is defense-in-depth for any caller that
-      // still supplies a materialized cacheStatus.)
-      const effectiveView = this.GetEffectiveBaseView(entityInfo, item.params);
+      // still supplies a materialized cacheStatus.) Use the status-gated resolveEffectiveBaseView (not the
+      // unconditional GetEffectiveBaseView) so a Building/DriftHold/Disabled/never-minted snapshot probes the
+      // LIVE base view — mirroring the read path — instead of a held or missing materialized_vw wrapper.
+      const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
       const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${effectiveView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
       sqlStatements.push(statusSQL);
     }
