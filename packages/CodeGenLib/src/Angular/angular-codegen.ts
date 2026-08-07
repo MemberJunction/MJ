@@ -1310,26 +1310,6 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
       }
 
       /**
-       * @deprecated Use innerCollapsiblePanelsHTML instead
-       * Generates the HTML for the tab strip containing all form sections
-       * @param additionalSections Array of field-based form sections
-       * @param relatedEntitySections Array of related entity sections
-       * @returns HTML string for the complete tab strip
-       */
-      protected innerTabStripHTML(additionalSections: AngularFormSectionInfo[], relatedEntitySections: AngularFormSectionInfo[]): string {
-        // come up with the overall order by looking for the tabs that have DisplayLocation === 'Before Field Tabs' and put those, in sequence order
-        // ahead of the additionalSections, then do the additionalSections, and then do the relatedEntitySections
-        const relatedEntityBeforeFieldTabs = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'Before Field Tabs');
-        const relatedEntityAfterFieldTabs = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'After Field Tabs');
-
-      return `                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
-                    ${relatedEntityBeforeFieldTabs ? relatedEntityBeforeFieldTabs.map(s => s.TabCode).join('\n') : ''}
-                    ${additionalSections ? additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top).map(s => s.TabCode).join('\n               ') : ''}
-                    ${relatedEntityAfterFieldTabs ? relatedEntityAfterFieldTabs.map(s => s.TabCode).join('\n') : ''}
-                </mj-tabstrip>`
-      }
-      
-      /**
        * Generates HTML without a splitter layout for entities without a top area
        * @param topArea HTML for the top area section (expected to be empty)
        * @param additionalSections Array of additional form sections
