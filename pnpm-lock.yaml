@@ -4322,6 +4322,9 @@ importers:
       '@memberjunction/ng-tabstrip':
         specifier: 6.1.0-edge.0
         version: link:../../Generic/tab-strip
+      '@memberjunction/ng-task-graph-editor':
+        specifier: 6.1.0-edge.0
+        version: link:../../Generic/task-graph-editor
       '@memberjunction/ng-testing':
         specifier: 6.1.0-edge.0
         version: link:../../Generic/Testing
@@ -6443,6 +6446,9 @@ importers:
       '@memberjunction/ng-shared-generic':
         specifier: 6.1.0-edge.0
         version: link:../shared
+      '@memberjunction/ng-task-graph-editor':
+        specifier: 6.1.0-edge.0
+        version: link:../task-graph-editor
       '@memberjunction/ng-tasks':
         specifier: 6.1.0-edge.0
         version: link:../tasks
@@ -8464,6 +8470,61 @@ importers:
       '@memberjunction/ng-test-utils':
         specifier: 6.1.0-edge.0
         version: link:../test-utils
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Angular/Generic/task-graph-editor:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.1.3
+        version: 21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.1.3
+        version: 21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/forms':
+        specifier: ^21.1.3
+        version: 21.1.3(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@angular/platform-browser':
+        specifier: ^21.1.3
+        version: 21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))
+      '@memberjunction/ai-core-plus':
+        specifier: 6.1.0-edge.0
+        version: link:../../../AI/CorePlus
+      '@memberjunction/core':
+        specifier: 6.1.0-edge.0
+        version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.1.0-edge.0
+        version: link:../../../MJGlobal
+      '@memberjunction/ng-base-types':
+        specifier: 6.1.0-edge.0
+        version: link:../base-types
+      '@memberjunction/ng-flow-editor':
+        specifier: 6.1.0-edge.0
+        version: link:../flow-editor
+      '@memberjunction/ng-ui-components':
+        specifier: 6.1.0-edge.0
+        version: link:../ui-components
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.1.3
+        version: 21.1.3
+      '@angular/compiler-cli':
+        specifier: 21.1.3
+        version: 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.1.0-edge.0
+        version: link:../test-utils
+      sass:
+        specifier: ^1.97.3
+        version: 1.97.3
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)

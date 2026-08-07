@@ -13,3 +13,4 @@ export * from './agent-spec-sync';
 export * from './agents/architect-agent';
 export * from './agents/builder-agent';
 export * from './agents/planning-designer-agent';
+export * from './workflow-agent-writer';

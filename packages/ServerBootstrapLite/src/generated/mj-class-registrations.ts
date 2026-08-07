@@ -908,11 +908,12 @@ import {
     StdioJsonAdapter,
 } from '@memberjunction/ai-agent-harness';
 
-// @memberjunction/ai-agent-manager (3 classes)
+// @memberjunction/ai-agent-manager (4 classes)
 import {
     AgentArchitectAgent,
     AgentBuilderAgent,
     PlanningDesignerAgent,
+    WorkflowAgentWriter,
 } from '@memberjunction/ai-agent-manager';
 
 // @memberjunction/ai-form-builder (3 classes)
@@ -951,13 +952,15 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
-// @memberjunction/task-graph (5 classes)
+// @memberjunction/task-graph (7 classes)
 import {
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphRetryTaskServerOperation,
     TaskGraphSubmitServerOperation,
+    WorkflowSaveServerOperation,
+    WorkflowValidateServerOperation,
 } from '@memberjunction/task-graph';
 
 // @memberjunction/scheduling-engine (8 classes)
@@ -1844,6 +1847,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     AgentArchitectAgent,
     AgentBuilderAgent,
     PlanningDesignerAgent,
+    WorkflowAgentWriter,
     FormBuilderAgent,
     FormBuilderBuilderAgent,
     FormBuilderDesignerAgent,
@@ -1873,6 +1877,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     TaskGraphGetStatusServerOperation,
     TaskGraphRetryTaskServerOperation,
     TaskGraphSubmitServerOperation,
+    WorkflowSaveServerOperation,
+    WorkflowValidateServerOperation,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
@@ -2073,7 +2079,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 891;
+export const CLASS_REGISTRATIONS_COUNT = 894;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
