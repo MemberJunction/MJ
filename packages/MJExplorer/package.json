@@ -61,6 +61,7 @@
     "@memberjunction/ng-base-forms": "6.1.0-edge.0",
     "@memberjunction/ng-bootstrap": "6.1.0-edge.0",
     "@memberjunction/ng-bootstrap-lite": "6.1.0-edge.0",
+    "@memberjunction/ng-container-directives": "6.1.0-edge.0",
     "@memberjunction/ng-core-entity-forms": "6.1.0-edge.0",
     "@memberjunction/ng-dashboards": "6.1.0-edge.0",
     "@memberjunction/ng-explorer-app": "6.1.0-edge.0",
@@ -136,7 +137,8 @@
     "@memberjunction/ng-entity-viewer": "6.1.0-edge.0",
     "@memberjunction/ng-shared-generic": "6.1.0-edge.0",
     "@memberjunction/ng-ui-components": "6.1.0-edge.0",
-    "@memberjunction/ng-explorer-service-worker": "6.1.0-edge.0"
+    "@memberjunction/ng-explorer-service-worker": "6.1.0-edge.0",
+    "@auth0/auth0-spa-js": "^2.14.0"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "21.1.3",

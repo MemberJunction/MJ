@@ -4,7 +4,6 @@ import { ApplicationInfo } from "./applicationInfo";
 import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { RunReportParams } from "./runReport";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
 import { RunQueryParams } from "./runQuery";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
@@ -1613,30 +1612,6 @@ export interface IRemoteOperationProvider {
      * @returns The operation result, including typed `Output` (sync) or a `Handle` (detached long-running).
      */
     RouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, input: TInput, options?: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>>;
-}
-
-/**
- * Result of executing a report.
- * Contains the report data and execution metadata.
- */
-export type RunReportResult = {
-    ReportID: string;
-    Success: boolean;
-    Results: any[];
-    RowCount: number;
-    ExecutionTime: number;
-    ErrorMessage: string;
-}
-
-/**
- * Interface for providers that execute reports.
- * Handles report generation with various output formats.
- * Reports combine data from multiple sources and apply formatting.
- */
-export interface IRunReportProvider {
-    Config(configData: ProviderConfigDataBase): Promise<boolean>
-
-    RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult>
 }
 
 /**

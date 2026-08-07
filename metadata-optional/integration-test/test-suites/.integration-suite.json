@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Integration Tests",
-      "Description": "Parent suite for the metadata-driven Integration Test TestType (graduated from packages/MJServer/integration-test-scripts). Tiering is expressed as sibling child suites: 'Integration Tests — Deterministic' is the credential-free, blocking tier; 'Integration Tests — Live Model' is the opt-in, token-costing tier. The mutation axis is NOT a separate suite — mutation checks live inside the deterministic suite's tests and are gated at runtime by the driver reading RUN_MUTATION_TESTS.",
+      "Description": "Parent suite for the metadata-driven Integration Test TestType (graduated from packages/MJServer/integration-test-scripts). Tiering is expressed as sibling child suites: 'Integration Tests \u2014 Deterministic' is the credential-free, blocking tier; 'Integration Tests \u2014 Live Model' is the opt-in, token-costing tier. The mutation axis is NOT a separate suite \u2014 mutation checks live inside the deterministic suite's tests and are gated at runtime by the driver reading RUN_MUTATION_TESTS.",
       "Status": "Active"
     },
     "primaryKey": {
@@ -15,9 +15,9 @@
   },
   {
     "fields": {
-      "Name": "Integration Tests — Deterministic",
+      "Name": "Integration Tests \u2014 Deterministic",
       "ParentID": "@lookup:MJ: Test Suites.Name=Integration Tests",
-      "Description": "The blocking, credential-free integration tier. Members run with no LLM credentials against a live DB/transport. Mutation-class checks (S17/S23/S24, C10) are ordinary members gated at runtime by RUN_MUTATION_TESTS — they appear here but only fire when the driver sees the env gate. IT03 (client/GraphQL) is seeded Skip until MJAPI is provisioned in CI (Phase 5). ORDERING INVARIANT: client-transport members are sequenced LAST — bootstrapIntegrationClient rebinds the process's global provider to GraphQL, so no server-transport member may run after the first client one.",
+      "Description": "The blocking, credential-free integration tier. Members run with no LLM credentials against a live DB/transport. Mutation-class checks (S17/S23/S24, C10) are ordinary members gated at runtime by RUN_MUTATION_TESTS \u2014 they appear here but only fire when the driver sees the env gate. IT03 (client/GraphQL) is seeded Skip until MJAPI is provisioned in CI (Phase 5). ORDERING INVARIANT: client-transport members are sequenced LAST \u2014 bootstrapIntegrationClient rebinds the process's global provider to GraphQL, so no server-transport member may run after the first client one.",
       "Status": "Active"
     },
     "relatedEntities": {
@@ -505,7 +505,7 @@
             "ID": "096429CB-F5BF-4DFF-A2C9-916E75BC6355"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.346Z",
+            "lastModified": "2026-08-05T22:40:18.062Z",
             "checksum": "741f607de725e0339af695349ae264647b087469acff4199ccedf2de09c10bf2"
           }
         },
@@ -520,7 +520,7 @@
             "ID": "42A5263E-E55F-40C6-85C9-0864CE17F09A"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.363Z",
+            "lastModified": "2026-08-05T22:40:18.075Z",
             "checksum": "3226f990a0c75ff6fc8683b418f8d31e82311112af9561a755503611522643ca"
           }
         },
@@ -535,7 +535,7 @@
             "ID": "DCF3FFDC-5304-423F-B8F2-F55EB7DB2B30"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.381Z",
+            "lastModified": "2026-08-05T22:40:18.087Z",
             "checksum": "9f1751844d9d851f876ff3902f67d6d348190f9442dbe496b3cbdb386a863d53"
           }
         },
@@ -550,7 +550,7 @@
             "ID": "D7EBE59F-E879-42F8-9E09-899340484DD7"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.397Z",
+            "lastModified": "2026-08-05T22:40:18.097Z",
             "checksum": "ed27ea3e5b453b5d0c90e43e3f77272876be75be1f52741b0fa140a79fc78205"
           }
         },
@@ -565,7 +565,7 @@
             "ID": "BC2A96AD-CC56-4B42-9ACA-AB28290EBDE8"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.414Z",
+            "lastModified": "2026-08-05T22:40:18.107Z",
             "checksum": "ccec34bf34b0c5b6d558cd6f1b9bd24549757c3a032a118e1c96077ed307cbd5"
           }
         },
@@ -580,7 +580,7 @@
             "ID": "20B1EED7-1B55-4129-A8EF-C1A2BA281CC2"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.431Z",
+            "lastModified": "2026-08-05T22:40:18.119Z",
             "checksum": "ae5233bfa8d97379daefbf9140c0349731e1320c04751529469cad586906d8d0"
           }
         },
@@ -595,7 +595,7 @@
             "ID": "5A354F75-94F6-40D0-9E3D-8751BE3B376C"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.447Z",
+            "lastModified": "2026-08-05T22:40:18.132Z",
             "checksum": "7b8fd74a17db1e86eb955faebf10072e59a21927e2ac80bab045d45b701a3839"
           }
         },
@@ -610,7 +610,7 @@
             "ID": "178D5D02-39B7-4A83-B752-D55051D94DC5"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.466Z",
+            "lastModified": "2026-08-05T22:40:18.145Z",
             "checksum": "195027250ff8119e1fbb1f63541b4ed753a3122ee0ee73b412f503b3bdcf9447"
           }
         },
@@ -625,7 +625,7 @@
             "ID": "2A0C6DF4-2D79-472F-9319-EFC6AED66E5E"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.488Z",
+            "lastModified": "2026-08-05T22:40:18.223Z",
             "checksum": "115e485a6bbbdd2264ca4debd08a009014525132e7452ad3b1a471fd272b070e"
           }
         },
@@ -640,7 +640,7 @@
             "ID": "1DE0D412-E499-4C7F-AD78-A3808C967BCA"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.504Z",
+            "lastModified": "2026-08-05T22:40:18.234Z",
             "checksum": "b60d307925163fd458f6fc7c322a321d6fd6858ce6d36bed20e8523798c7db2c"
           }
         },
@@ -655,7 +655,7 @@
             "ID": "CC88929F-11B2-4372-8548-DA7C708DC02F"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.520Z",
+            "lastModified": "2026-08-05T22:40:18.285Z",
             "checksum": "23ee54fe6105b5532a717f1a9e6d870a086e722f8faf4c627d24cf860b49f59b"
           }
         },
@@ -670,7 +670,7 @@
             "ID": "0D88E040-A656-44C5-951D-450A5F562613"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.536Z",
+            "lastModified": "2026-08-05T22:40:18.244Z",
             "checksum": "b41c5f9075ae1c30fe0cee40d465bb779cbdca1ed91883afbb8beee2173971db"
           }
         },
@@ -685,7 +685,7 @@
             "ID": "2A8BE4E4-141C-4158-A787-B72171C43F3D"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.551Z",
+            "lastModified": "2026-08-05T22:40:18.254Z",
             "checksum": "febd81849c04146fe407fcc949c67b6113f264edd9787c7090208461beebfcf5"
           }
         },
@@ -700,7 +700,7 @@
             "ID": "FB0673F6-BC43-4D30-BC25-5F9D76313057"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.567Z",
+            "lastModified": "2026-08-05T22:40:18.265Z",
             "checksum": "008324eb9ab69bbea43a69eda38a321955034f4c7bd6c278bf3c337332423d4e"
           }
         },
@@ -715,7 +715,7 @@
             "ID": "DE873D4D-D11F-4746-8F1F-912A1042DC0C"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.598Z",
+            "lastModified": "2026-08-05T22:40:18.275Z",
             "checksum": "8b74cf0a5891c7bf901d6fdc76222ec00572cb09870fa65eff29e732abc802c8"
           }
         },
@@ -730,7 +730,7 @@
             "ID": "435E0695-3A0F-4155-9F62-7A5C0FBF3CD4"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.584Z",
+            "lastModified": "2026-08-05T22:40:18.300Z",
             "checksum": "bef7975d2cb0ea824c191e477556bf7d6428cdd6f4f1cda0f3634d4d48630b6e"
           }
         },
@@ -745,7 +745,7 @@
             "ID": "BB859AA1-314C-4D30-9906-366EF1EF463B"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.614Z",
+            "lastModified": "2026-08-05T22:40:18.311Z",
             "checksum": "2a56fc4d7a5be8e86a1b3857aa8bb252d7587f578e08d2e6f194228ad47d1347"
           }
         },
@@ -760,7 +760,7 @@
             "ID": "0ECD532F-3586-4591-BCBB-34C778DE03D9"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.630Z",
+            "lastModified": "2026-08-05T22:40:18.322Z",
             "checksum": "3b0dd911ac76610922028e8905f2dbee62c85b03da7780a58e29a7ab0fa8c2f7"
           }
         },
@@ -775,7 +775,7 @@
             "ID": "2C88A91E-96C8-4B26-A654-7BB74D571A93"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.653Z",
+            "lastModified": "2026-08-05T22:40:18.386Z",
             "checksum": "fa7fa67543f7b791dce3ffaa637bc830552c58d9ddeaaf5f770f3919642e16d4"
           }
         },
@@ -827,23 +827,30 @@
             "ID": "3C334350-5AA5-4F9C-94DD-CACCF140D830"
           },
           "sync": {
-            "lastModified": "2026-08-06T04:58:00.684Z",
+            "lastModified": "2026-08-05T22:40:18.397Z",
             "checksum": "ff4f7cbf5fb8ba7e9b4a9186e278208023a081bb7bae7d6e0f4d668fdd0db660"
           }
         },
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT70 - Cache Immutability (freeze-on-write)",
+            "TestID": "@lookup:MJ: Tests.Name=IT70 - External Agent Harness",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7D2B4F91-3A68-4C05-B1E7-9F60A2C8D453"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT71 - Cache Immutability (freeze-on-write)",
             "Sequence": 33,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "CB7AAFCA-4913-4DCF-9D36-B6CD50E5BE96"
-          },
-          "sync": {
-            "lastModified": "2026-08-06T04:58:00.668Z",
-            "checksum": "c95f31711a9b4060b6e28e9919f042b57778fe219fa9fc18bee3c4408bd27549"
           }
         }
       ]
@@ -858,7 +865,7 @@
   },
   {
     "fields": {
-      "Name": "Integration Tests — Live Model",
+      "Name": "Integration Tests \u2014 Live Model",
       "ParentID": "@lookup:MJ: Test Suites.Name=Integration Tests",
       "Description": "The opt-in integration tier (RUN_AGENT_TESTS=1). Members are prompt/agent deep-verifier checks that incur LLM token cost and are never run by the default CI gate. Each is tier='live-model', so the driver skips-as-Passed unless RUN_AGENT_TESTS is set.",
       "Status": "Active"

@@ -1,6 +1,6 @@
 # @memberjunction/ai-agents
 
-Complete framework for building and executing AI agents in MemberJunction. Provides the `BaseAgent` execution engine, pluggable agent type system (Loop and Flow agents), hierarchical sub-agent orchestration, action execution, memory management with notes and examples, payload management, conversation context with message lifecycle management, and reranker integration.
+Complete framework for building and executing AI agents in MemberJunction. Provides the `BaseAgent` execution engine, pluggable agent type system (Loop, Flow, Realtime and Harness agents), hierarchical sub-agent orchestration, action execution, memory management with notes and examples, payload management, conversation context with message lifecycle management, and reranker integration.
 
 It also provides two capability layers any agent can opt into:
 
@@ -141,6 +141,18 @@ Conversational agent that runs in a loop: prompt -> decide -> act -> repeat. Bes
 #### FlowAgentType
 
 Step-based agent that follows a predefined flow graph. Each step has explicit paths to the next step based on conditions. Best for deterministic workflows where the execution path is known in advance.
+
+#### HarnessAgentType
+
+Runs an **external agent harness** — Claude Code, Codex CLI, OpenCode, Gemini CLI, Pi — as the reasoning substrate for an MJ agent, while MJ keeps identity, permissions, governed data access, payload contracts, HITL, cost control and run-level audit. Lives in [`@memberjunction/ai-agent-harness`](../AgentHarness/README.md).
+
+It is the **opposite** design choice from `RealtimeAgentType`: where Realtime is session-driven and bypasses the loop entirely (`IsSessionDriven`), Harness stays *inside* the loop. `HarnessAgentType extends LoopAgentType` and inherits `DetermineNextStep` wholesale, because **a harness turn is protocol-identical to a Loop prompt iteration** — the harness ends each turn by emitting the same next-step JSON envelope a Loop model emits. `HarnessAgentBase extends BaseAgent` overrides exactly one method, `executePrompt`, substituting a harness turn for the prompt call.
+
+That is why every existing guarantee still applies with no new enforcement code: next-step validation, per-action `MaxExecutionsPerRun`, skill gates, plan-mode blocking, `PayloadManager` ACLs, `checkExecutionGuardrails`, run-step recording. One authority channel, not two — which is also why the MCP loopback is read-only.
+
+The `'HarnessAgentType'` string is registered under **both** ClassFactory roots (`BaseAgentType` for the protocol, `BaseAgent` for the driver), so a single `AIAgentType.DriverClass` value selects both halves.
+
+See the [External Agent Harness Guide](../../../guides/AGENT_HARNESS_GUIDE.md).
 
 #### RealtimeAgentType
 

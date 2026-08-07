@@ -7,6 +7,7 @@
  * (repo-local), the vitest suites import bundles directly, and the special rigs under
  * rigs/ are standalone scripts, not entry paths.
  */
+export * from './checks/agent-external-harness.checks';
 export * from './checks/agent-runner.checks';
 export * from './checks/aggregates-cache.checks';
 export * from './checks/ai-skills.checks';
