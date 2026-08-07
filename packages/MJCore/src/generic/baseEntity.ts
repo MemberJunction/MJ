@@ -8,7 +8,7 @@ import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
 import { LogDebug, LogError, LogStatus } from './logging';
 import { CompositeKey, FieldValueCollection } from './compositeKey';
-import { ChildCollection, ChildCollectionOptions } from './childCollection';
+import { RelatedRecordCollection, RelatedRecordCollectionOptions } from './relatedRecordCollection';
 import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionPayload } from './entityCompanion';
 import { EntitySavePlan, ExecuteEntitySavePlan } from './entitySavePlan';
 import { EntityTransactionScope } from './entityTransactionScope';
@@ -999,19 +999,6 @@ export abstract class BaseEntity<T = unknown> {
     private _childEntities: { entityName: string }[] | null = null;
 
     /**
-     * Opaque provider-level transaction handle, passed to the provider as an explicit
-     * `connectionSource` when set.
-     *
-     * @deprecated Since 6.2 for IS-A orchestration. IS-A now uses the provider's ambient,
-     * depth-counted transaction via {@link IMetadataProvider.BeginEntityTransaction}, so this stays
-     * `null` on that path and the provider's shared transaction is picked up automatically by every
-     * `ExecuteSQL` call that supplies no explicit `connectionSource`. The property remains for
-     * external callers that route a specific record onto a specific transaction handle. See
-     * {@link EntityTransactionScope} for why the IS-A-specific transaction was removed.
-     */
-    private _providerTransaction: unknown = null;
-
-    /**
      * The active transaction scope owned by this entity, when it is the participant that opened (or
      * joined) one for a multi-record unit of work — an IS-A parent chain or a composite save graph.
      *
@@ -1028,20 +1015,6 @@ export abstract class BaseEntity<T = unknown> {
      * pay nothing for the feature, not even an empty Map per instance.
      */
     private _companions: Map<string, EntityCompanion> | null = null;
-
-    /**
-     * Gets the explicit provider transaction handle for this record, if one was set.
-     *
-     * @deprecated Since 6.2 for IS-A orchestration — see {@link _providerTransaction}.
-     */
-    get ProviderTransaction(): unknown { return this._providerTransaction; }
-
-    /**
-     * Sets an explicit provider transaction handle for this record.
-     *
-     * @deprecated Since 6.2 for IS-A orchestration — see {@link _providerTransaction}.
-     */
-    set ProviderTransaction(value: unknown) { this._providerTransaction = value; }
 
     /**
      * Returns the parent entity in the IS-A composition chain, or null if this
@@ -1337,28 +1310,10 @@ export abstract class BaseEntity<T = unknown> {
         this.SetMany(data, true, true, true);
     }
 
-    /**
-     * Propagates the ProviderTransaction handle down the IS-A parent chain so all
-     * entities in the chain execute on the same database transaction.
-     *
-     * @deprecated Since 6.2. No longer called by MJ core. IS-A chains now run inside the provider's
-     * ambient transaction obtained via {@link IMetadataProvider.BeginEntityTransaction}; because
-     * every `ExecuteSQL` call with no explicit `connectionSource` picks that transaction up, there
-     * is nothing left to propagate. Retained for external callers that hand-manage transaction
-     * handles. Will be removed in 7.0.
-     */
-    protected PropagateTransactionToParents(): void {
-        let current = this._parentEntity;
-        while (current) {
-            current.ProviderTransaction = this._providerTransaction;
-            current = current._parentEntity;
-        }
-    }
-
     // ─── Entity Companions ──────────────────────────────────────────────────────
     //
-    // Companions are named, serialisable side-channels attached to a record — most commonly child
-    // collections. See entityCompanion.ts for the full rationale and lifecycle.
+    // Companions are named, serialisable side-channels attached to a record — most commonly
+    // related-record collections. See entityCompanion.ts for the full rationale and lifecycle.
 
     /**
      * The companions registered on this entity, in declaration order.
@@ -1382,7 +1337,7 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Registers a companion on this entity. Called from a subclass constructor or field
-     * initialiser, normally via {@link DeclareChildren}.
+     * initialiser, normally via {@link DeclareRelatedRecords}.
      *
      * @typeParam TCompanion - The companion type.
      * @param companion - The companion to register.
@@ -1429,7 +1384,7 @@ export abstract class BaseEntity<T = unknown> {
      *
      * @example
      * ```typescript
-     * public readonly Lines = this.DeclareChildren<OrderLineEntity>({
+     * public readonly Lines = this.DeclareRelatedRecords<OrderLineEntity>({
      *     Name: 'Lines',
      *     ChildEntity: 'MJ_BizApps_Orders: Order Lines',
      *     ForeignKey: 'OrderHeaderID',
@@ -1438,10 +1393,10 @@ export abstract class BaseEntity<T = unknown> {
      * });
      * ```
      */
-    protected DeclareChildren<TChild extends BaseEntity = BaseEntity>(
-        options: ChildCollectionOptions,
-    ): ChildCollection<TChild> {
-        return this.RegisterCompanion(new ChildCollection<TChild>(this, options));
+    protected DeclareRelatedRecords<TChild extends BaseEntity = BaseEntity>(
+        options: RelatedRecordCollectionOptions,
+    ): RelatedRecordCollection<TChild> {
+        return this.RegisterCompanion(new RelatedRecordCollection<TChild>(this, options));
     }
 
     /**
@@ -1583,7 +1538,7 @@ export abstract class BaseEntity<T = unknown> {
      * Gives every eager companion a chance to populate itself.
      *
      * Called from {@link InnerLoad} only — deliberately **not** from {@link LoadFromData}. See
-     * {@link ChildCollectionLoadMode} for why that distinction is load-bearing.
+     * {@link RelatedRecordLoadMode} for why that distinction is load-bearing.
      */
     private async loadEagerCompanions(): Promise<void> {
         if (!this.HasCompanions) {

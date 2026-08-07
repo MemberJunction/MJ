@@ -264,10 +264,10 @@ the five defects every hand-rolled version in this codebase has shipped at least
 
 ```typescript
 // On a SHARED (client + server) entity subclass — not a server-only one
-public readonly Lines = this.DeclareChildren<OrderLineEntity>({
+public readonly Lines = this.DeclareRelatedRecords<OrderLineEntity>({
     Name: 'Lines',
-    ChildEntity: 'MJ_BizApps_Orders: Order Lines',
-    ForeignKey: 'OrderHeaderID',
+    RelatedEntity: 'MJ_BizApps_Orders: Order Lines',
+    RelatedEntityJoinField: 'OrderHeaderID',
     OrderBy: 'LineNumber ASC',
     Load: 'explicit',                        // 'eager' | 'explicit' | 'never'
     OnRemove: 'delete',                      // 'delete' | 'orphan' | 'refuse'
@@ -282,19 +282,19 @@ await order.Save();   // header + lines, atomically
 
 | Need | Use | Never use |
 |---|---|---|
-| Parent + its children | `DeclareChildren()` + `entity.Save()` | ❌ a TransactionGroup — saves are *deferred*, so the parent's PK is unavailable, there is no read-your-writes, and `Save()` returns `true` before anything persists |
+| Parent + its children | `DeclareRelatedRecords()` + `entity.Save()` | ❌ a TransactionGroup — saves are *deferred*, so the parent's PK is unavailable, there is no read-your-writes, and `Save()` returns `true` before anything persists |
 | Several server-side writes together | `RunInEntityTransaction(this.ProviderToUse, work)` | ❌ `ProviderToUse as DatabaseProviderBase` then `BeginTransaction()` — that cast is what makes a class server-only |
 | Unrelated records in one client round trip | TransactionGroup + `Submit()` | — |
 
 Other rules that follow from this:
 
 - **`Load: 'eager'` never fires from `LoadFromData()`.** For result sets use
-  `RunView({ ..., ResultType: 'entity_object', IncludeChildren: ['Lines'] })`, which costs `1 + K`
+  `RunView({ ..., ResultType: 'entity_object', IncludeRelatedRecords: ['Lines'] })`, which costs `1 + K`
   queries instead of N+1.
 - **Declare collections on a shared subclass**, with server-only behaviour in a class that extends
   it. `ClassFactory` priority auto-increments by load order, so the server subclass wins server-side
   with no configuration — and the browser still sees the collection.
-- **`BeginISATransaction()` is deprecated (6.2).** Use `BeginEntityTransaction()`.
+- **`BeginISATransaction()`, `ProviderTransaction` and `PropagateTransactionToParents()` were removed in 6.2.** Use `BeginEntityTransaction()` / `RunInEntityTransaction()`.
 
 Read [`guides/TRANSACTIONS_AND_BATCHING_GUIDE.md`](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md)
 before writing anything that saves more than one record together.

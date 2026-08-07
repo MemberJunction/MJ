@@ -28,7 +28,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { BaseEntity } from '../generic/baseEntity';
-import { ChildCollection } from '../generic/childCollection';
+import { RelatedRecordCollection } from '../generic/relatedRecordCollection';
 import { EntityInfo, ValidationErrorInfo, ValidationResult } from '../generic/entityInfo';
 import { Metadata } from '../generic/metadata';
 import { ProviderBase } from '../generic/providerBase';
@@ -109,10 +109,10 @@ function makeProvider() {
  * Composite test entity: declares one child collection using `Price` as the stand-in foreign key.
  */
 class TestCompositeEntity extends BaseEntity {
-    public readonly Lines = this.DeclareChildren<BaseEntity>({
+    public readonly Lines = this.DeclareRelatedRecords<BaseEntity>({
         Name: 'Lines',
-        ChildEntity: 'Products',
-        ForeignKey: 'Name',
+        RelatedEntity: 'Products',
+        RelatedEntityJoinField: 'Name',
         OnRemove: 'delete',
     });
 
@@ -181,7 +181,7 @@ describe('companion registration', () => {
 
         expect(parent.HasCompanions).toBe(true);
         expect(parent.Companions).toHaveLength(1);
-        expect(parent.GetCompanion<ChildCollection>('Lines')).toBe(parent.Lines);
+        expect(parent.GetCompanion<RelatedRecordCollection>('Lines')).toBe(parent.Lines);
     });
 
     it('reports no companions on a plain entity, keeping the hot path free', () => {
@@ -314,14 +314,14 @@ describe('validation ordering', () => {
     });
 });
 
-describe('ChildCollection mechanics', () => {
+describe('RelatedRecordCollection mechanics', () => {
     it('applies contiguous sequence numbers on add and re-sequences on remove', async () => {
         const provider = makeProvider();
         class SequencedEntity extends BaseEntity {
-            public readonly Lines = this.DeclareChildren<BaseEntity>({
+            public readonly Lines = this.DeclareRelatedRecords<BaseEntity>({
                 Name: 'Lines',
-                ChildEntity: 'Products',
-                ForeignKey: 'Name',
+                RelatedEntity: 'Products',
+                RelatedEntityJoinField: 'Name',
                 Sequence: { Field: 'Price', From: 1 },
             });
             public override CheckPermissions(): boolean {
@@ -355,10 +355,10 @@ describe('ChildCollection mechanics', () => {
     it('refuses removal when declared OnRemove:refuse', () => {
         const provider = makeProvider();
         class RefusingEntity extends BaseEntity {
-            public readonly Lines = this.DeclareChildren<BaseEntity>({
+            public readonly Lines = this.DeclareRelatedRecords<BaseEntity>({
                 Name: 'Lines',
-                ChildEntity: 'Products',
-                ForeignKey: 'Name',
+                RelatedEntity: 'Products',
+                RelatedEntityJoinField: 'Name',
                 OnRemove: 'refuse',
             });
         }
@@ -371,15 +371,15 @@ describe('ChildCollection mechanics', () => {
     it('rejects a duplicate companion name', () => {
         const provider = makeProvider();
         class DuplicateEntity extends BaseEntity {
-            public readonly A = this.DeclareChildren<BaseEntity>({
+            public readonly A = this.DeclareRelatedRecords<BaseEntity>({
                 Name: 'Lines',
-                ChildEntity: 'Products',
-                ForeignKey: 'Name',
+                RelatedEntity: 'Products',
+                RelatedEntityJoinField: 'Name',
             });
-            public readonly B = this.DeclareChildren<BaseEntity>({
+            public readonly B = this.DeclareRelatedRecords<BaseEntity>({
                 Name: 'Lines',
-                ChildEntity: 'Products',
-                ForeignKey: 'Name',
+                RelatedEntity: 'Products',
+                RelatedEntityJoinField: 'Name',
             });
         }
 

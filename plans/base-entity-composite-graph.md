@@ -90,7 +90,7 @@ EntityTransactionScope        provider capability — one arbiter for all transa
         ▲
 EntityCompanion               named, serialisable side-channel attached to a BaseEntity
         ▲
-ChildCollection<T>            the typed companion everyone actually writes
+RelatedRecordCollection<T>            the typed companion everyone actually writes
         ▲
 EntitySavePlan                ordered graph of nodes, built from companions
         ▲
@@ -147,7 +147,7 @@ Load needs *batching*, not relocation — the client can `RunView` children perf
 - `Load: 'eager'` — populated by `Load()` only, **never** by `LoadFromData()`. This is the
   structural fix for defect #2.
 - `Load: 'never'`.
-- `RunView.IncludeChildren` — one `WHERE FK IN (...)` per collection across all returned rows.
+- `RunView.IncludeRelatedRecords` — one `WHERE FK IN (...)` per collection across all returned rows.
 
 ### 3.7 Validation
 
@@ -171,11 +171,11 @@ notes.
 |---|---|---|
 | 1 | `EntityTransactionScope`; `BeginEntityTransaction` with join semantics; fold IS-A onto it | ✓ (bug fix #6) |
 | 2 | `EntityCompanion` + registration + serialise/deserialise round-trip | ✓ (no wire change) |
-| 3 | `ChildCollection<T>` | — |
+| 3 | `RelatedRecordCollection<T>` | — |
 | 4 | `EntitySavePlan` + `ExecuteGraphLocal` + validation fanout + dirty rollup + events | ✓ (server-side dedup) |
 | 5 | `MJ.SaveEntityGraph` + `ExecuteGraphRemote` + result-graph application + scope gating | ✓ (browser composites) |
 | 6 | Delete graph (reverse order) + eager/explicit load wiring | — |
-| 7 | `RunView.IncludeChildren` | ✓ (perf) |
+| 7 | `RunView.IncludeRelatedRecords` | ✓ (perf) |
 
 Phases 1 and 4 deliver the server-side deduplication on their own.
 
@@ -195,7 +195,7 @@ inside `Save()`, but the API-key ceiling does not check itself.
 - Repairing the dead `EntityRelationshipsToLoad` path (defect #7). Tracked separately; the design
   deliberately does not depend on it.
 - Metadata-driven declaration via CodeGen. Code-first needs no migration and can be adopted
-  immediately; metadata generation can emit the same `DeclareChildren` call later.
+  immediately; metadata generation can emit the same `DeclareRelatedRecords` call later.
 
 ---
 

@@ -1,5 +1,5 @@
 /**
- * @fileoverview `ChildCollection<T>` — a typed, transportable collection of child records that
+ * @fileoverview `RelatedRecordCollection<T>` — a typed, transportable collection of child records that
  * loads, validates and persists as one unit with its parent.
  *
  * ## The problem it replaces
@@ -16,7 +16,7 @@
  * | Re-sequences | ✗ | ✗ | ✓ |
  *
  * All three were server-only classes, because each cast the provider to `DatabaseProviderBase` to
- * reach `BeginTransaction()`. `ChildCollection` is tier-neutral: it never touches a provider
+ * reach `BeginTransaction()`. `RelatedRecordCollection` is tier-neutral: it never touches a provider
  * transaction itself, it only contributes nodes to an {@link EntitySavePlan}, and `BaseEntity`
  * decides where that plan runs.
  *
@@ -45,7 +45,7 @@ import { LogError } from './logging';
  *   order lines are actually used: built up in memory and pushed down, never read back through the
  *   collection.
  */
-export type ChildCollectionLoadMode = 'explicit' | 'eager' | 'never';
+export type RelatedRecordLoadMode = 'explicit' | 'eager' | 'never';
 
 /**
  * What happens to a child that is removed from the collection.
@@ -56,12 +56,12 @@ export type ChildCollectionLoadMode = 'explicit' | 'eager' | 'never';
  *   the child outlives the relationship.
  * - `'refuse'` — removal throws. For collections where detaching a child is always a bug.
  */
-export type ChildCollectionRemovalMode = 'delete' | 'orphan' | 'refuse';
+export type RelatedRecordRemovalMode = 'delete' | 'orphan' | 'refuse';
 
 /**
  * Automatic sequence numbering for a child collection.
  */
-export type ChildCollectionSequence = {
+export type RelatedRecordSequence = {
     /** The child field holding the sequence number (e.g. `'LineNumber'`). */
     Field: string;
     /** The value assigned to the first child. Defaults to 1. */
@@ -69,28 +69,46 @@ export type ChildCollectionSequence = {
 };
 
 /**
- * Declaration for a {@link ChildCollection}, supplied to `BaseEntity.DeclareChildren()`.
+ * Declaration for a {@link RelatedRecordCollection}, supplied to `BaseEntity.DeclareRelatedRecords()`.
  *
- * @typeParam T - The child entity type.
+ * @remarks
+ * **This shape deliberately mirrors `EntityRelationship` metadata**, so a declaration can be
+ * hand-written today and code-generated tomorrow from exactly the same information:
+ *
+ * | Option | Metadata source |
+ * |---|---|
+ * | {@link RelatedEntity} | `EntityRelationship.RelatedEntity` (column) |
+ * | {@link RelatedEntityJoinField} | `EntityRelationship.RelatedEntityJoinField` (column) |
+ * | everything else | `EntityRelationship.RelatedRecordCollection` (JSONType, `IRelatedRecordCollectionConfig`) |
+ *
+ * The two column-backed options are **not** repeated inside the JSON blob — one source of truth
+ * each. Keep this type and `metadata/entities/JSONType-interfaces/IRelatedRecordCollectionConfig.ts`
+ * in step when adding an option.
  */
-export type ChildCollectionOptions = {
+export type RelatedRecordCollectionOptions = {
     /**
      * The companion's stable name, and the property name callers will use. Also the wire key —
      * see {@link EntityCompanion.Name}.
      */
     Name: string;
-    /** The child entity's name in MJ metadata, e.g. `'MJ_BizApps_Orders: Order Lines'`. */
-    ChildEntity: string;
-    /** The child field holding the foreign key back to the parent, e.g. `'OrderHeaderID'`. */
-    ForeignKey: string;
+    /**
+     * The related entity's name in MJ metadata, e.g. `'MJ_BizApps_Orders: Order Lines'`.
+     * Mirrors `EntityRelationship.RelatedEntity`.
+     */
+    RelatedEntity: string;
+    /**
+     * The related entity's field holding the foreign key back to this record, e.g.
+     * `'OrderHeaderID'`. Mirrors `EntityRelationship.RelatedEntityJoinField`.
+     */
+    RelatedEntityJoinField: string;
     /** `OrderBy` clause used when loading. Strongly recommended for sequenced collections. */
     OrderBy?: string;
     /** When the collection populates itself. Defaults to `'explicit'`. */
-    Load?: ChildCollectionLoadMode;
+    Load?: RelatedRecordLoadMode;
     /** What removal means. Defaults to `'delete'`. */
-    OnRemove?: ChildCollectionRemovalMode;
+    OnRemove?: RelatedRecordRemovalMode;
     /** Automatic sequence numbering, if the child has a sequence field. */
-    Sequence?: ChildCollectionSequence;
+    Sequence?: RelatedRecordSequence;
     /**
      * Whether the collection clears itself after a successful save.
      *
@@ -104,7 +122,7 @@ export type ChildCollectionOptions = {
 /**
  * One retained child on the wire.
  */
-export type ChildCollectionWireItem = {
+export type RelatedRecordCollectionWireItem = {
     /** The child's field values, as produced by `GetAll()`. */
     Fields: Record<string, unknown>;
     /**
@@ -121,9 +139,9 @@ export type ChildCollectionWireItem = {
 /**
  * The wire shape of a serialised child collection.
  */
-export type ChildCollectionWire = {
+export type RelatedRecordCollectionWire = {
     /** Each retained child. */
-    Items: ChildCollectionWireItem[];
+    Items: RelatedRecordCollectionWireItem[];
     /** Primary-key field maps for children removed since load, when removal means deletion. */
     Removed: Record<string, unknown>[];
 };
@@ -131,7 +149,7 @@ export type ChildCollectionWire = {
 /**
  * A typed collection of child records that travels, validates and persists with its parent.
  *
- * Obtain one via `BaseEntity.DeclareChildren()` in a subclass constructor or field initialiser —
+ * Obtain one via `BaseEntity.DeclareRelatedRecords()` in a subclass constructor or field initialiser —
  * do not construct it directly, or it will not be registered as a companion and will be silently
  * ignored by load, validation and save.
  *
@@ -141,10 +159,10 @@ export type ChildCollectionWire = {
  * ```typescript
  * @RegisterClass(BaseEntity, 'MJ_BizApps_Accounting: Journal Entries')
  * export class JournalEntryEntity extends mjBizAppsAccountingJournalEntryEntity {
- *     public readonly Lines = this.DeclareChildren<JournalEntryLineEntity>({
+ *     public readonly Lines = this.DeclareRelatedRecords<JournalEntryLineEntity>({
  *         Name: 'Lines',
- *         ChildEntity: 'MJ_BizApps_Accounting: Journal Entry Lines',
- *         ForeignKey: 'JournalEntryID',
+ *         RelatedEntity: 'MJ_BizApps_Accounting: Journal Entry Lines',
+ *         RelatedEntityJoinField: 'JournalEntryID',
  *         OrderBy: 'LineNumber ASC',
  *         Load: 'explicit',
  *         OnRemove: 'delete',
@@ -159,17 +177,17 @@ export type ChildCollectionWire = {
  * }
  * ```
  */
-export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCompanion<ChildCollectionWire> {
+export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends EntityCompanion<RelatedRecordCollectionWire> {
     private items: T[] = [];
     private removed: T[] = [];
     private loaded = false;
-    private readonly options: ChildCollectionOptions;
+    private readonly options: RelatedRecordCollectionOptions;
 
     /**
      * @param owner - The parent entity.
      * @param options - The collection declaration.
      */
-    constructor(owner: BaseEntity, options: ChildCollectionOptions) {
+    constructor(owner: BaseEntity, options: RelatedRecordCollectionOptions) {
         super(owner);
         this.options = options;
     }
@@ -180,13 +198,13 @@ export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCo
     }
 
     /** The child entity's name in MJ metadata. */
-    public get ChildEntityName(): string {
-        return this.options.ChildEntity;
+    public get RelatedEntityName(): string {
+        return this.options.RelatedEntity;
     }
 
     /** The child field holding the foreign key back to the parent. */
-    public get ForeignKeyField(): string {
-        return this.options.ForeignKey;
+    public get RelatedEntityJoinField(): string {
+        return this.options.RelatedEntityJoinField;
     }
 
     /** The `OrderBy` clause applied when loading, if declared. */
@@ -195,12 +213,12 @@ export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCo
     }
 
     /** When this collection populates itself. */
-    public get LoadMode(): ChildCollectionLoadMode {
+    public get LoadMode(): RelatedRecordLoadMode {
         return this.options.Load ?? 'explicit';
     }
 
     /** What removal means for this collection. */
-    public get RemovalMode(): ChildCollectionRemovalMode {
+    public get RemovalMode(): RelatedRecordRemovalMode {
         return this.options.OnRemove ?? 'delete';
     }
 
@@ -256,7 +274,7 @@ export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCo
      */
     public Add(item: T): T {
         if (!item) {
-            throw new Error(`ChildCollection '${this.Name}': cannot add a null child.`);
+            throw new Error(`RelatedRecordCollection '${this.Name}': cannot add a null child.`);
         }
         this.items.push(item);
         this.applySequence();
@@ -274,9 +292,9 @@ export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCo
     public async Create(): Promise<T> {
         const provider = this.Owner.ProviderToUse as unknown as IMetadataProvider;
         if (!provider) {
-            throw new Error(`ChildCollection '${this.Name}': owner has no provider; cannot create a child.`);
+            throw new Error(`RelatedRecordCollection '${this.Name}': owner has no provider; cannot create a child.`);
         }
-        const child = await provider.GetEntityObject<T>(this.ChildEntityName, this.Owner.ContextCurrentUser);
+        const child = await provider.GetEntityObject<T>(this.RelatedEntityName, this.Owner.ContextCurrentUser);
         child.NewRecord();
         return this.Add(child);
     }
@@ -293,7 +311,7 @@ export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCo
     public Remove(itemOrIndex: T | number): void {
         if (this.RemovalMode === 'refuse') {
             throw new Error(
-                `ChildCollection '${this.Name}' is declared OnRemove:'refuse' — children cannot be detached.`,
+                `RelatedRecordCollection '${this.Name}' is declared OnRemove:'refuse' — children cannot be detached.`,
             );
         }
 
@@ -345,14 +363,14 @@ export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCo
 
         const provider = this.Owner.ProviderToUse as unknown as IRunViewProvider;
         if (!provider) {
-            throw new Error(`ChildCollection '${this.Name}': owner has no provider; cannot load.`);
+            throw new Error(`RelatedRecordCollection '${this.Name}': owner has no provider; cannot load.`);
         }
 
         const parentKey = this.Owner.FirstPrimaryKey?.Value;
         const result = await provider.RunView<T>(
             {
-                EntityName: this.ChildEntityName,
-                ExtraFilter: `${this.options.ForeignKey} = '${String(parentKey).replace(/'/g, "''")}'`,
+                EntityName: this.RelatedEntityName,
+                ExtraFilter: `${this.options.RelatedEntityJoinField} = '${String(parentKey).replace(/'/g, "''")}'`,
                 OrderBy: this.options.OrderBy,
                 ResultType: 'entity_object',
             },
@@ -361,7 +379,7 @@ export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCo
 
         if (!result.Success) {
             throw new Error(
-                `ChildCollection '${this.Name}': failed to load ${this.ChildEntityName} for ` +
+                `RelatedRecordCollection '${this.Name}': failed to load ${this.RelatedEntityName} for ` +
                 `${this.Owner.EntityInfo?.Name} ${String(parentKey)}: ${result.ErrorMessage ?? 'unknown error'}`,
             );
         }
@@ -449,7 +467,7 @@ export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCo
             plan.AddSave(child, `${this.Name}[${index}]`, () => {
                 // Stamped at execution time, not plan-build time: when the parent is new its
                 // primary key does not exist until its own node has run.
-                child.Set(this.options.ForeignKey, this.Owner.FirstPrimaryKey?.Value);
+                child.Set(this.options.RelatedEntityJoinField, this.Owner.FirstPrimaryKey?.Value);
             });
         }
     }
@@ -478,7 +496,7 @@ export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCo
     }
 
     /** @inheritdoc */
-    public override async Serialize(): Promise<ChildCollectionWire | null> {
+    public override async Serialize(): Promise<RelatedRecordCollectionWire | null> {
         // Nothing pending means nothing to ship. Sending an empty collection on every header-only
         // save would be pure overhead on the hot path.
         if (this.items.length === 0 && this.removed.length === 0) {
@@ -492,10 +510,10 @@ export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCo
     }
 
     /** @inheritdoc */
-    public override async Deserialize(data: ChildCollectionWire): Promise<void> {
+    public override async Deserialize(data: RelatedRecordCollectionWire): Promise<void> {
         const provider = this.Owner.ProviderToUse as unknown as IMetadataProvider;
         if (!provider) {
-            throw new Error(`ChildCollection '${this.Name}': owner has no provider; cannot deserialize.`);
+            throw new Error(`RelatedRecordCollection '${this.Name}': owner has no provider; cannot deserialize.`);
         }
 
         this.items = await this.rehydrateItems(provider, data?.Items ?? []);
@@ -514,10 +532,10 @@ export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCo
      * @param rows - Wire items.
      * @returns Rehydrated child entities.
      */
-    private async rehydrateItems(provider: IMetadataProvider, rows: ChildCollectionWireItem[]): Promise<T[]> {
+    private async rehydrateItems(provider: IMetadataProvider, rows: RelatedRecordCollectionWireItem[]): Promise<T[]> {
         const out: T[] = [];
         for (const row of rows) {
-            const child = await provider.GetEntityObject<T>(this.ChildEntityName, this.Owner.ContextCurrentUser);
+            const child = await provider.GetEntityObject<T>(this.RelatedEntityName, this.Owner.ContextCurrentUser);
 
             if (row.IsNew) {
                 child.NewRecord();
@@ -539,7 +557,7 @@ export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCo
                 const loaded = await child.InnerLoad(key);
                 if (!loaded) {
                     throw new Error(
-                        `ChildCollection '${this.Name}': cannot load existing ${this.ChildEntityName} ` +
+                        `RelatedRecordCollection '${this.Name}': cannot load existing ${this.RelatedEntityName} ` +
                         `record ${key.ToString()} referenced by the incoming payload.`,
                     );
                 }
@@ -564,7 +582,7 @@ export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCo
     private async rehydrateRemovals(provider: IMetadataProvider, rows: Record<string, unknown>[]): Promise<T[]> {
         const out: T[] = [];
         for (const row of rows) {
-            const child = await provider.GetEntityObject<T>(this.ChildEntityName, this.Owner.ContextCurrentUser);
+            const child = await provider.GetEntityObject<T>(this.RelatedEntityName, this.Owner.ContextCurrentUser);
             const key = new CompositeKey(
                 child.EntityInfo.PrimaryKeys.map(pk => new KeyValuePair(pk.Name, row[pk.Name])),
             );
@@ -611,8 +629,8 @@ export class ChildCollection<T extends BaseEntity = BaseEntity> extends EntityCo
                 // A misdeclared sequence field must not take the whole save down; surface it loudly
                 // and let validation report the real problem.
                 LogError(
-                    `ChildCollection '${this.Name}': cannot set sequence field '${seq.Field}' on ` +
-                    `${this.ChildEntityName}: ${e instanceof Error ? e.message : String(e)}`,
+                    `RelatedRecordCollection '${this.Name}': cannot set sequence field '${seq.Field}' on ` +
+                    `${this.RelatedEntityName}: ${e instanceof Error ? e.message : String(e)}`,
                 );
             }
         });

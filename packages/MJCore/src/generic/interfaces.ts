@@ -289,32 +289,6 @@ export interface IEntityDataProvider {
      *          `RunInEntityTransaction()` which does that for you.
      */
     BeginEntityTransaction?(): Promise<EntityTransactionScope>;
-
-    /**
-     * Begin an independent provider-level transaction for IS-A chain orchestration.
-     *
-     * @deprecated Since 6.2. Superseded by {@link BeginEntityTransaction}, which participates in
-     * the provider's depth-counted ambient transaction instead of opening a second, independent
-     * physical transaction on the same pool. The old behaviour caused torn writes whenever an IS-A
-     * save ran inside an application transaction: the two mechanisms were blind to each other, so
-     * rolling one back left the other committed. Retained only for external callers; MJ core no
-     * longer calls it. Will be removed in 7.0.
-     */
-    BeginISATransaction?(): Promise<unknown>;
-
-    /**
-     * Commit an IS-A chain transaction.
-     * @param txn The transaction object returned from BeginISATransaction()
-     * @deprecated Since 6.2. Use {@link BeginEntityTransaction} and `scope.Commit()`.
-     */
-    CommitISATransaction?(txn: unknown): Promise<void>;
-
-    /**
-     * Rollback an IS-A chain transaction.
-     * @param txn The transaction object returned from BeginISATransaction()
-     * @deprecated Since 6.2. Use {@link BeginEntityTransaction} and `scope.Rollback()`.
-     */
-    RollbackISATransaction?(txn: unknown): Promise<void>;
 }
 
 /**

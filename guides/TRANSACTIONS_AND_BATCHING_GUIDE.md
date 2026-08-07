@@ -63,9 +63,11 @@ An entity that hit both paths — an IS-A entity saved inside an application cas
 whose child is an IS-A leaf — wrote into **two independent physical transactions on the same pool**.
 Rolling one back left the other committed. No error was raised.
 
-The `BeginISATransaction` / `CommitISATransaction` / `RollbackISATransaction` trio is deprecated as
-of 6.2 and no longer called by MJ core. IS-A now uses the same `BeginEntityTransaction()` everything
-else does, which is why the two can no longer disagree.
+The `BeginISATransaction` / `CommitISATransaction` / `RollbackISATransaction` trio was **removed** in
+6.2, along with `BaseEntity.ProviderTransaction` and `PropagateTransactionToParents()`. IS-A now uses
+the same `BeginEntityTransaction()` everything else does, which is why the two can no longer
+disagree. If you called any of them, switch to `BeginEntityTransaction()` — or better,
+`RunInEntityTransaction()`.
 
 > **Concurrency note.** The ambient transaction lives on the *provider instance*, not a global.
 > MJServer builds per-request providers, so an ambient transaction is effectively request-scoped.
@@ -131,10 +133,10 @@ Declare the collection on a **shared (client + server)** subclass:
 ```typescript
 @RegisterClass(BaseEntity, 'MJ_BizApps_Accounting: Journal Entries')
 export class JournalEntryEntity extends mjBizAppsAccountingJournalEntryEntity {
-    public readonly Lines = this.DeclareChildren<JournalEntryLineEntity>({
+    public readonly Lines = this.DeclareRelatedRecords<JournalEntryLineEntity>({
         Name: 'Lines',
-        ChildEntity: 'MJ_BizApps_Accounting: Journal Entry Lines',
-        ForeignKey: 'JournalEntryID',
+        RelatedEntity: 'MJ_BizApps_Accounting: Journal Entry Lines',
+        RelatedEntityJoinField: 'JournalEntryID',
         OrderBy: 'LineNumber ASC',
         Load: 'explicit',                       // 'eager' | 'explicit' | 'never'
         OnRemove: 'delete',                     // 'delete' | 'orphan' | 'refuse'
@@ -195,15 +197,35 @@ const result = await rv.RunView<JournalEntryEntity>({
     EntityName: 'MJ_BizApps_Accounting: Journal Entries',
     ExtraFilter: `PeriodID = '${periodId}'`,
     ResultType: 'entity_object',
-    IncludeChildren: ['Lines'],   // 1 query for ALL entries' lines
+    IncludeRelatedRecords: ['Lines'],   // 1 query for ALL entries' lines
 });
 ```
 
 > **Why `eager` excludes `LoadFromData()`.** `LoadFromData()` is the per-row materialisation path for
 > `RunView(ResultType:'entity_object')`. Loading children there turns one view into N+1 queries. This
 > is a real defect that shipped: a `LoadFromData` override calling `LoadLines()` meant listing 500
-> journal entries issued 500 line queries plus 500 dimension queries. `IncludeChildren` costs
+> journal entries issued 500 line queries plus 500 dimension queries. `IncludeRelatedRecords` costs
 > `1 + K` regardless of row count.
+
+### Declaring in metadata instead of code
+
+The option shape deliberately mirrors `EntityRelationship`, so the same declaration can be driven
+from metadata rather than hand-written:
+
+| Option | Metadata source |
+|---|---|
+| `RelatedEntity` | `EntityRelationship.RelatedEntity` (column) |
+| `RelatedEntityJoinField` | `EntityRelationship.RelatedEntityJoinField` (column) |
+| `Name`, `Load`, `OnRemove`, `OrderBy`, `Sequence`, `ClearAfterSave` | `EntityRelationship.RelatedRecordCollection` (JSONType `IRelatedRecordCollectionConfig`) |
+
+The two column-backed values are **not** duplicated inside the JSON — one source of truth each.
+`NULL` means "this relationship is not a declared collection", which is the default for every
+existing row.
+
+The column and its type definition ship in 6.2; **CodeGen emission of `DeclareRelatedRecords(...)`
+from these rows is a follow-up**, so hand-written declarations remain the only working path for now.
+When adding an option, keep `RelatedRecordCollectionOptions` and
+`metadata/entities/JSONType-interfaces/IRelatedRecordCollectionConfig.ts` in step.
 
 ---
 
@@ -211,7 +233,7 @@ const result = await rv.RunView<JournalEntryEntity>({
 
 ```
 Do the records form a parent + its children?
-├── YES → Entity graph. Declare a ChildCollection; call entity.Save().
+├── YES → Entity graph. Declare a RelatedRecordCollection; call entity.Save().
 └── NO
     ├── Are you on the server, orchestrating writes yourself?
     │   └── YES → Provider transaction: RunInEntityTransaction(provider, work)
@@ -251,7 +273,7 @@ Deprecated since 6.2. It opens a second physical transaction blind to any alread
 `BeginEntityTransaction()`.
 
 **❌ Setting `Load: 'eager'` on a collection whose parent is commonly listed in grids.**
-Use `'explicit'` plus `IncludeChildren` on the specific views that need children.
+Use `'explicit'` plus `IncludeRelatedRecords` on the specific views that need children.
 
 ---
 
@@ -259,7 +281,7 @@ Use `'explicit'` plus `IncludeChildren` on the specific views that need children
 
 - [`packages/MJCore/src/generic/entityTransactionScope.ts`](../packages/MJCore/src/generic/entityTransactionScope.ts) — scope contract and the torn-write history
 - [`packages/MJCore/src/generic/entityCompanion.ts`](../packages/MJCore/src/generic/entityCompanion.ts) — the companion abstraction
-- [`packages/MJCore/src/generic/childCollection.ts`](../packages/MJCore/src/generic/childCollection.ts) — the typed collection
+- [`packages/MJCore/src/generic/relatedRecordCollection.ts`](../packages/MJCore/src/generic/relatedRecordCollection.ts) — the typed collection
 - [`packages/MJCore/src/generic/entitySavePlan.ts`](../packages/MJCore/src/generic/entitySavePlan.ts) — plan and executor
 - [`packages/MJCore/src/generic/saveEntityGraphOperation.ts`](../packages/MJCore/src/generic/saveEntityGraphOperation.ts) — the remote operation
 - [Remote Operations Guide](REMOTE_OPERATIONS_GUIDE.md) — the typed RPC substrate composites use

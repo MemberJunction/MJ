@@ -686,8 +686,9 @@ When you save or delete an entity that participates in an IS-A hierarchy, SQLSer
 > into **two independent physical transactions on the same pool**: rolling one back left the other
 > committed, and no error was raised. Unifying both onto `BeginEntityTransaction()` closes that.
 >
-> The three `*ISATransaction` methods remain for external callers and are slated for removal in 7.0.
-> New code should use `BeginEntityTransaction()` or `RunInEntityTransaction()`.
+> The three `*ISATransaction` methods were **removed** in 6.2 (6.x LTS had not shipped, so this is a
+> 6.x breaking change rather than deferred debt). Use `BeginEntityTransaction()` or
+> `RunInEntityTransaction()`.
 
 ### Transaction Lifecycle
 
@@ -712,7 +713,7 @@ const result = await meeting.Save();
 
 - `BeginEntityTransaction()` *(inherited from `DatabaseProviderBase`)*: returns a settle-once `EntityTransactionScope`. Starts a physical transaction, or joins one already in flight. **This is the primitive to use** — for IS-A chains, composite entity graphs and hand-written cascades alike.
 - `BeginTransaction()` / `CommitTransaction()` / `RollbackTransaction()`: the underlying depth-counted ambient transaction (savepoints at depth ≥ 2, serialization against an in-flight outermost begin). `BeginEntityTransaction()` is a thin wrapper over these; prefer the wrapper so the settle-once contract is enforced for you.
-- `BeginISATransaction()` / `CommitISATransaction()` / `RollbackISATransaction()`: **deprecated (6.2)**, no longer called by MJ core. See the warning above.
+- `BeginISATransaction()` / `CommitISATransaction()` / `RollbackISATransaction()`: **removed in 6.2**. See the warning above.
 
 > **Concurrency**: the ambient transaction is a field on the *provider instance*, not a global.
 > MJServer builds per-request providers (`createPerRequestProviders`), so an ambient transaction is

@@ -1,7 +1,7 @@
 /**
  * @fileoverview Batched child-collection loading for result sets.
  *
- * Populates a named {@link ChildCollection} across every row of a `RunView` result using **one**
+ * Populates a named {@link RelatedRecordCollection} across every row of a `RunView` result using **one**
  * query per collection, rather than one per row.
  *
  * ## The N+1 this exists to prevent
@@ -21,7 +21,7 @@
  */
 
 import type { BaseEntity } from './baseEntity';
-import { ChildCollection } from './childCollection';
+import { RelatedRecordCollection } from './relatedRecordCollection';
 import type { IRunViewProvider } from './interfaces';
 import type { UserInfo } from './securityInfo';
 import { LogError } from './logging';
@@ -39,7 +39,7 @@ import { LogError } from './logging';
  * @param provider - The provider used to issue the batched queries.
  * @param contextUser - The acting user, required server-side.
  */
-export async function LoadChildCollectionsBatched(
+export async function LoadRelatedRecordsBatched(
     parents: BaseEntity[],
     collectionNames: string[],
     provider: IRunViewProvider,
@@ -72,18 +72,18 @@ async function loadOneCollectionBatched(
     // in one result set are the same entity, but a mixed set (or a subclass that conditionally
     // declares) should not take the whole load down.
     const template = parents
-        .map(p => p.GetCompanion<ChildCollection>(collectionName))
-        .find((c): c is ChildCollection => c instanceof ChildCollection);
+        .map(p => p.GetCompanion<RelatedRecordCollection>(collectionName))
+        .find((c): c is RelatedRecordCollection => c instanceof RelatedRecordCollection);
 
     if (!template) {
         LogError(
-            `RunView.IncludeChildren: no ChildCollection named '${collectionName}' is declared on ` +
+            `RunView.IncludeRelatedRecords: no RelatedRecordCollection named '${collectionName}' is declared on ` +
             `${parents[0]?.EntityInfo?.Name ?? 'the returned entity'}; skipping.`,
         );
         return;
     }
 
-    const foreignKey = template.ForeignKeyField;
+    const foreignKey = template.RelatedEntityJoinField;
     const parentKeys = collectParentKeys(parents);
     if (parentKeys.length === 0) {
         return;
@@ -91,7 +91,7 @@ async function loadOneCollectionBatched(
 
     const result = await provider.RunView<BaseEntity>(
         {
-            EntityName: template.ChildEntityName,
+            EntityName: template.RelatedEntityName,
             ExtraFilter: `${foreignKey} IN (${parentKeys.map(k => `'${escapeSQLLiteral(k)}'`).join(',')})`,
             OrderBy: template.OrderByClause,
             ResultType: 'entity_object',
@@ -104,8 +104,8 @@ async function loadOneCollectionBatched(
         // and anything derived from that — a total, a reversal, a validation decision — is then
         // wrong in a way nothing downstream can detect.
         throw new Error(
-            `RunView.IncludeChildren: failed to batch-load '${collectionName}' ` +
-            `(${template.ChildEntityName}): ${result.ErrorMessage ?? 'unknown error'}`,
+            `RunView.IncludeRelatedRecords: failed to batch-load '${collectionName}' ` +
+            `(${template.RelatedEntityName}): ${result.ErrorMessage ?? 'unknown error'}`,
         );
     }
 
@@ -144,8 +144,8 @@ function distributeChildren(
     }
 
     for (const parent of parents) {
-        const collection = parent.GetCompanion<ChildCollection>(collectionName);
-        if (!(collection instanceof ChildCollection)) {
+        const collection = parent.GetCompanion<RelatedRecordCollection>(collectionName);
+        if (!(collection instanceof RelatedRecordCollection)) {
             continue;
         }
         const key = normalizeKey(parent.FirstPrimaryKey?.Value);

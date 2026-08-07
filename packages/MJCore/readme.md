@@ -133,8 +133,8 @@ flowchart LR
 | `transactionGroup.ts` | `TransactionGroupBase` — an *arbitrary batch* facility for shipping unrelated records in one atomic round trip (saves are deferred; not for parent/children) |
 | `entityTransactionScope.ts` | `EntityTransactionScope` + `RunInEntityTransaction()` — the one provider-arbitrated transaction primitive, shared by IS-A, composites and application cascades |
 | `entityCompanion.ts` | `EntityCompanion` — named, serialisable state attached to a record (the "bag") |
-| `childCollection.ts` | `ChildCollection<T>` — the typed parent/children companion |
-| `childCollectionBatchLoader.ts` | One batched child query per collection across a whole result set (`RunView.IncludeChildren`) |
+| `relatedRecordCollection.ts` | `RelatedRecordCollection<T>` — the typed parent/children companion |
+| `relatedRecordBatchLoader.ts` | One batched child query per collection across a whole result set (`RunView.IncludeRelatedRecords`) |
 | `entitySavePlan.ts` | `EntitySavePlan` + executor — the ordered unit of work a composite save produces |
 | `saveEntityGraphOperation.ts` | `MJ.SaveEntityGraph` — routes a whole composite save to the server from a client provider |
 | `baseEngine.ts` | `BaseEngine` abstract singleton for building services with auto-loaded data |
@@ -822,10 +822,10 @@ Declare a child collection on a **shared (client + server)** entity subclass:
 ```typescript
 @RegisterClass(BaseEntity, 'MJ_BizApps_Orders: Orders')
 export class OrderEntity extends mjBizAppsOrdersOrderEntity {
-    public readonly Lines = this.DeclareChildren<OrderLineEntity>({
+    public readonly Lines = this.DeclareRelatedRecords<OrderLineEntity>({
         Name: 'Lines',
-        ChildEntity: 'MJ_BizApps_Orders: Order Lines',
-        ForeignKey: 'OrderHeaderID',
+        RelatedEntity: 'MJ_BizApps_Orders: Order Lines',
+        RelatedEntityJoinField: 'OrderHeaderID',
         OrderBy: 'LineNumber ASC',
         Load: 'explicit',                        // 'eager' | 'explicit' | 'never'
         OnRemove: 'delete',                      // 'delete' | 'orphan' | 'refuse'
@@ -874,12 +874,12 @@ batched query per collection:
 const result = await rv.RunView<OrderEntity>({
     EntityName: 'MJ_BizApps_Orders: Orders',
     ResultType: 'entity_object',
-    IncludeChildren: ['Lines'],   // 1 query for ALL orders' lines, not one per order
+    IncludeRelatedRecords: ['Lines'],   // 1 query for ALL orders' lines, not one per order
 });
 ```
 
-**Key APIs:** `BaseEntity.DeclareChildren()`, `RegisterCompanion()`, `GetCompanion()`,
-`Companions`, `SerializeCompanions()`, `DeserializeCompanions()`; `ChildCollection<T>`
+**Key APIs:** `BaseEntity.DeclareRelatedRecords()`, `RegisterCompanion()`, `GetCompanion()`,
+`Companions`, `SerializeCompanions()`, `DeserializeCompanions()`; `RelatedRecordCollection<T>`
 (`Items`, `Removed`, `Add`, `Create`, `Remove`, `Load`, `Dirty`); `EntityCompanion` (subclass for a
 new *kind* of companion); `EntitySavePlan`.
 

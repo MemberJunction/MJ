@@ -931,8 +931,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         // ISA overlapping-subtype record-change propagation is DB-agnostic: if the save SQL
         // generation populated `overlappingChangeData` in extraData and the entity tracks
         // record changes across multiple subtypes, fan the change record out to siblings.
-        // The provider-specific transaction handle (if any) is passed through opaquely
-        // via `connectionSource`; each provider treats it as its native type downstream.
+        //
+        // No explicit `connectionSource` is supplied: the sibling writes must land in the same
+        // transaction as the save that triggered them, and that is exactly what happens by default
+        // — every ExecuteSQL call without an explicit source runs on the provider's ambient
+        // transaction, which BeginEntityTransaction() opened (or joined) for this unit of work.
         const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
             | { changesJSON: string; changesDescription: string }
             | undefined;
@@ -941,14 +944,12 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             entity.EntityInfo.AllowMultipleSubtypes &&
             entity.EntityInfo.TrackRecordChanges
         ) {
-            const transaction = entity.ProviderTransaction;
             await this.PropagateRecordChangesToSiblings(
                 entity.EntityInfo,
                 overlappingChangeData,
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
-                transaction ? { connectionSource: transaction } : undefined,
             );
         }
         return null;

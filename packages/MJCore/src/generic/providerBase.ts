@@ -20,7 +20,7 @@ import { RunView, RunViewParams } from "../views/runView";
 import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
 import { TransformSimpleObjectToEntityObject } from "./util";
-import { LoadChildCollectionsBatched } from "./childCollectionBatchLoader";
+import { LoadRelatedRecordsBatched } from "./relatedRecordBatchLoader";
 
 
 
@@ -3578,11 +3578,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Opt-in batched child loading: ONE query per named collection across the whole result
             // set, not one per row. Companion eager loading is deliberately kept out of
             // LoadFromData() (which is the per-row path above) precisely so that populating children
-            // for a view cannot degrade into N+1 — see childCollectionBatchLoader.ts.
-            if (param.IncludeChildren?.length) {
-                await LoadChildCollectionsBatched(
+            // for a view cannot degrade into N+1 — see relatedRecordBatchLoader.ts.
+            if (param.IncludeRelatedRecords?.length) {
+                await LoadRelatedRecordsBatched(
                     result.Results as BaseEntity[],
-                    param.IncludeChildren,
+                    param.IncludeRelatedRecords,
                     this,
                     contextUser,
                 );

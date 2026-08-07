@@ -235,7 +235,7 @@ held open across round trips. Two supported ways to get atomicity from the brows
 | Need | Use |
 |---|---|
 | Several **unrelated** records in one atomic round trip | **Transaction Group** (below) — batched into a single `ExecuteTransactionGroup` mutation that runs in one server-side SQL transaction |
-| A **parent and its children** saved together | **Entity graph** — declare a `ChildCollection` on a shared client+server subclass and call `entity.Save()`. `BaseEntity` detects that this provider cannot transact and routes the whole unit of work to the server via the `MJ.SaveEntityGraph` remote operation, which rebuilds the records as their **server-side** subclasses and executes the cascade there, inside a real transaction. |
+| A **parent and its children** saved together | **Entity graph** — declare a `RelatedRecordCollection` on a shared client+server subclass and call `entity.Save()`. `BaseEntity` detects that this provider cannot transact and routes the whole unit of work to the server via the `MJ.SaveEntityGraph` remote operation, which rebuilds the records as their **server-side** subclasses and executes the cascade there, inside a real transaction. |
 
 Do **not** reach for a Transaction Group to save a parent and its children: saves are deferred, so
 the parent's primary key is unavailable afterwards, there is no read-your-writes, and `Save()`

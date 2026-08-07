@@ -371,9 +371,13 @@ sequenceDiagram
 > transaction is picked up automatically by any `ExecuteSQL` call with no explicit
 > `connectionSource`, there is nothing left to propagate.
 >
-> `ProviderTransaction` and `PropagateTransactionToParents()` remain for external callers that
-> hand-manage transaction handles, but MJ core no longer sets or reads them on the IS-A path. The
-> three `*ISATransaction` provider methods are deprecated and slated for removal in 7.0.
+> **🚨 Removed, not deprecated.** 6.x LTS had not shipped, so the old surface was deleted outright
+> rather than carried as debt: the three `*ISATransaction` provider methods,
+> `BaseEntity.ProviderTransaction`, and `BaseEntity.PropagateTransactionToParents()` are all gone.
+> Nothing set the handle after the unification, and the provider reads that consumed it were already
+> dead — an `ExecuteSQL` call with no explicit `connectionSource` picks up the ambient transaction,
+> which is exactly what the scope opens. Callers that hand-managed a handle should open a scope
+> instead: `BeginEntityTransaction()`, or `RunInEntityTransaction(provider, work)`.
 >
 > See [Transactions, Batching & Entity Graphs](../../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md).
 

@@ -286,7 +286,7 @@ export class RunViewParams {
     ResultType?: 'simple' | 'entity_object' | 'count_only';
 
     /**
-     * Names of {@link ChildCollection} companions to populate on the returned entity objects, using
+     * Names of {@link RelatedRecordCollection} companions to populate on the returned entity objects, using
      * **one batched query per collection** across the entire result set.
      *
      * Requires `ResultType: 'entity_object'` — plain objects have no companions to populate.
@@ -305,7 +305,7 @@ export class RunViewParams {
      *     EntityName: 'MJ_BizApps_Accounting: Journal Entries',
      *     ExtraFilter: `PeriodID = '${periodId}'`,
      *     ResultType: 'entity_object',
-     *     IncludeChildren: ['Lines'],      // 1 query for ALL entries' lines, not one per entry
+     *     IncludeRelatedRecords: ['Lines'],      // 1 query for ALL entries' lines, not one per entry
      * });
      * ```
      *
@@ -315,7 +315,7 @@ export class RunViewParams {
      * Omitted by default. Nothing loads children unless you ask, which keeps grids and pickers —
      * the overwhelming majority of view usage — free of any child-loading cost.
      */
-    IncludeChildren?: string[];
+    IncludeRelatedRecords?: string[];
 
     /**
      * Internal flag set by BaseEngine when loading entity configurations.

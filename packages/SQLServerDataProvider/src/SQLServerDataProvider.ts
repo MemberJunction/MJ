@@ -1549,20 +1549,6 @@ export class SQLServerDataProvider
     return { dataSource: this._pool };
   }
 
-  protected override BuildSaveExecuteOptions(entity: BaseEntity, sqlDetails: SaveSQLResult): ExecuteSQLOptions {
-    const opts = super.BuildSaveExecuteOptions(entity, sqlDetails);
-    (opts as ExecuteSQLOptions).connectionSource =
-      (entity.ProviderTransaction as sql.Transaction) ?? undefined;
-    return opts;
-  }
-
-  protected override BuildDeleteExecuteOptions(entity: BaseEntity, sqlDetails: DeleteSQLResult): ExecuteSQLOptions {
-    const opts = super.BuildDeleteExecuteOptions(entity, sqlDetails);
-    (opts as ExecuteSQLOptions).connectionSource =
-      (entity.ProviderTransaction as sql.Transaction) ?? undefined;
-    return opts;
-  }
-
   protected override ValidateDeleteResult(
     entity: BaseEntity,
     rawResult: Record<string, unknown>[],
@@ -2180,39 +2166,6 @@ export class SQLServerDataProvider
       this._datetimeOffsetTestComplete = true;
     }
   }
-
-  /**
-   * Begin an independent transaction for IS-A chain orchestration.
-   * Returns a new sql.Transaction object that is NOT linked to the provider's
-   * internal transaction state (used by TransactionGroup). Each IS-A chain
-   * gets its own transaction to avoid interference with other operations.
-   */
-  public async BeginISATransaction(): Promise<unknown> {
-    const transaction = new sql.Transaction(this._pool);
-    await transaction.begin();
-    return transaction;
-  }
-
-  /**
-   * Commit an IS-A chain transaction.
-   * @param txn The sql.Transaction object returned from BeginISATransaction()
-   */
-  public async CommitISATransaction(txn: unknown): Promise<void> {
-    if (txn && txn instanceof sql.Transaction) {
-      await txn.commit();
-    }
-  }
-
-  /**
-   * Rollback an IS-A chain transaction.
-   * @param txn The sql.Transaction object returned from BeginISATransaction()
-   */
-  public async RollbackISATransaction(txn: unknown): Promise<void> {
-    if (txn && txn instanceof sql.Transaction) {
-      await txn.rollback();
-    }
-  }
-
 
   /**
    * Builds a UNION ALL query that probes each child entity's BaseView for a

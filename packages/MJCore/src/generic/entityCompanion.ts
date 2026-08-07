@@ -30,7 +30,7 @@
  * ## Lifecycle
  *
  * ```text
- * declare  →  subclass constructor calls RegisterCompanion() (usually via DeclareChildren())
+ * declare  →  subclass constructor calls RegisterCompanion() (usually via DeclareRelatedRecords())
  * load     →  BaseEntity.Load()/LoadFromData() gives eager companions a chance to populate
  * mutate   →  application code works with the typed companion API
  * validate →  BaseEntity.Validate()/ValidateAsync() fans out to every companion
@@ -72,7 +72,7 @@ export const COMPANION_PAYLOAD_KEY = 'Companions___';
  * Base class for all entity companions.
  *
  * Subclass this only when you need a genuinely new *kind* of companion. For the common case of a
- * parent/child collection, use `ChildCollection<T>` via `BaseEntity.DeclareChildren()` rather than
+ * parent/child collection, use `RelatedRecordCollection<T>` via `BaseEntity.DeclareRelatedRecords()` rather than
  * writing a companion by hand.
  *
  * @typeParam TWire - The JSON-safe shape this companion serialises to and from.
