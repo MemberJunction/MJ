@@ -80,6 +80,22 @@ describe('PostgreSQLCodeGenProvider — materialization DDL', () => {
             expect(sql).toContain('"Name" varchar(255) NOT NULL'); // nvarchar(255) -> varchar(255)
             expect(sql).toContain('"Notes" TEXT NULL'); // nvarchar(max) -> TEXT
         });
+
+        it('doubles embedded double-quotes in column/table/PK identifiers so an untrusted name cannot break out of its quoting (mint↔refresh parity)', () => {
+            // External-query column names arrive from untrusted remote-schema introspection. A `"` in a column,
+            // table, or PK-constraint name must be doubled (`"`→`""`) or it breaks out of the quoted identifier
+            // during a CodeGen-privileged CREATE TABLE. This mirrors MaterializationRefresher's escId/q/obj on
+            // the refresh side, closing the mint↔refresh escaping asymmetry.
+            const hostile: MaterializedColumnSpec[] = [
+                { Name: 'ev"il', SQLType: 'integer', Nullable: false, IsPrimaryKey: true },
+                { Name: 'a"b', SQLType: 'integer', Nullable: true, IsPrimaryKey: false },
+            ];
+            const sql = provider.generateMaterializedTableSQL('__mj', 'mat"tbl', hostile);
+            expect(sql).toContain('"ev""il" integer NOT NULL');
+            expect(sql).toContain('"a""b" integer NULL');
+            expect(sql).toContain('CREATE TABLE IF NOT EXISTS __mj."mat""tbl"');
+            expect(sql).toContain('CONSTRAINT "PK_mat""tbl" PRIMARY KEY ("ev""il")');
+        });
     });
 
     describe('generateMaterializedWrapperViewSQL', () => {
@@ -87,6 +103,12 @@ describe('PostgreSQLCodeGenProvider — materialization DDL', () => {
             const sql = provider.generateMaterializedWrapperViewSQL('__mj', 'materialized_vw_demo_summary', 'materialized_demo_summary');
             expect(sql).toContain('CREATE OR REPLACE VIEW __mj."materialized_vw_demo_summary"');
             expect(sql).toContain('SELECT * FROM __mj."materialized_demo_summary"');
+        });
+
+        it('doubles embedded double-quotes in the view and table names (untrusted-identifier hardening)', () => {
+            const sql = provider.generateMaterializedWrapperViewSQL('__mj', 'vw"x', 'tbl"y');
+            expect(sql).toContain('CREATE OR REPLACE VIEW __mj."vw""x"');
+            expect(sql).toContain('SELECT * FROM __mj."tbl""y"');
         });
     });
 
