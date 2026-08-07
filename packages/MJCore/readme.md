@@ -904,10 +904,18 @@ declaration asserts that one does.
 await action.LoadRelatedRecords();   // cache-backed free, database-backed batched into ONE RunViews
 ```
 
+```typescript
+for (const line of order.Lines) { … }   // the collection is ITERABLE
+const all = [...order.Lines];            // spread and destructuring work
+order.Lines.length                       // and length
+order.Lines.Items.map(l => l.Total)      // Items for map/filter/find — it is readonly, so nothing
+                                         // can push around the removal tracking and sequencing
+```
+
 **Key APIs:** `BaseEntity.DeclareRelatedRecords()`, `LoadRelatedRecords()`, `RegisterCompanion()`,
 `GetCompanion()`, `Companions`, `SerializeCompanions()`, `DeserializeCompanions()`;
-`RelatedRecordCollection<T>` (`Items`, `Removed`, `Count`, `Add`, `Create`, `Remove`, `Load`,
-`Dirty`, `Source`, `IsReadOnly`); `EntityCompanion` (subclass for a new *kind* of companion);
+`RelatedRecordCollection<T>` (iterable; `Items`, `Removed`, `Count`/`length`, `Add`, `Create`,
+`Remove`, `Clear`, `Load`, `Dirty`, `Source`, `IsReadOnly`, `LoadMode`, `RemovalMode`); `EntityCompanion` (subclass for a new *kind* of companion);
 `EntitySavePlan`.
 
 **Full guide — with flow diagrams for the local save and the network round trip:**

@@ -46,7 +46,7 @@ import { ValidationResult } from './entityInfo';
 import type { EntitySavePlan } from './entitySavePlan';
 
 /**
- * The serialised form of a single companion as it crosses the wire.
+ * The serialized form of a single companion as it crosses the wire.
  *
  * Deliberately minimal: a stable name plus an opaque JSON payload. Keeping the payload opaque is
  * what lets a new companion type ship without touching the transport, the resolvers, or CodeGen.
@@ -54,7 +54,7 @@ import type { EntitySavePlan } from './entitySavePlan';
 export type EntityCompanionPayload = {
     /** The companion's stable {@link EntityCompanion.Name}. */
     Name: string;
-    /** The companion's own serialised state, JSON-safe. */
+    /** The companion's own serialized state, JSON-safe. */
     Data: unknown;
 };
 
@@ -89,7 +89,7 @@ export type EntityCompanionDeserializeMode = 'request' | 'result';
  * parent/child collection, use `RelatedRecordCollection<T>` via `BaseEntity.DeclareRelatedRecords()` rather than
  * writing a companion by hand.
  *
- * @typeParam TWire - The JSON-safe shape this companion serialises to and from.
+ * @typeParam TWire - The JSON-safe shape this companion serializes to and from.
  *
  * @example Declaring a custom companion on a shared (client + server) entity subclass
  * ```typescript
@@ -122,8 +122,8 @@ export abstract class EntityCompanion<TWire = unknown> {
     /**
      * Stable identifier for this companion, unique within its owning entity.
      *
-     * This is the wire key: it appears in serialised payloads and is how the receiving tier finds
-     * the companion to deserialise into. **Treat it as a published contract** — renaming it breaks
+     * This is the wire key: it appears in serialized payloads and is how the receiving tier finds
+     * the companion to deserialize into. **Treat it as a published contract** — renaming it breaks
      * in-flight payloads and any persisted snapshot that captured them.
      */
     public abstract readonly Name: string;
@@ -227,7 +227,7 @@ export abstract class EntityCompanion<TWire = unknown> {
      * Populates this companion from the database, when it is configured to load eagerly.
      *
      * Called by `BaseEntity.Load()` after the record's own fields are populated. **Never** called
-     * from `LoadFromData()` — that is the row-materialisation path for
+     * from `LoadFromData()` — that is the row-materialization path for
      * `RunView(ResultType:'entity_object')`, so loading children there turns one view into an N+1
      * storm. Set-oriented eager loading is handled by `RunView`'s batched child loading instead.
      */

@@ -11,7 +11,7 @@
  *    row is written. A plan is the natural place to assert that.
  * 2. **One transaction decision.** The plan is built, then executed. The executor opens exactly one
  *    scope for the whole graph instead of each level guessing whether it should start one.
- * 3. **The remote path becomes trivial.** A plan is data. The client serialises the graph, the
+ * 3. **The remote path becomes trivial.** A plan is data. The client serializes the graph, the
  *    server rebuilds it and runs the *same* executor. There is one cascade implementation, placed
  *    in one of two locations — never two implementations to keep in sync.
  *
@@ -135,7 +135,7 @@ export class EntitySavePlan {
      * How many operations this plan will perform.
      *
      * A count of 1 means the plan is just the root record, and `BaseEntity` takes its ordinary
-     * single-record path — no plan execution, no transaction scope, byte-for-byte the behaviour
+     * single-record path — no plan execution, no transaction scope, byte-for-byte the behavior
      * that existed before companions. This is what keeps the overwhelmingly common case free of
      * any new cost or risk.
      */
@@ -300,7 +300,7 @@ export async function ExecuteEntitySavePlan(
 }
 
 /**
- * Runs a single plan node and normalises its outcome.
+ * Runs a single plan node and normalizes its outcome.
  *
  * `BaseEntity.Save()` / `.Delete()` signal logical failure by returning `false` rather than
  * throwing, so both shapes have to be handled: a `false` return and a genuine exception.

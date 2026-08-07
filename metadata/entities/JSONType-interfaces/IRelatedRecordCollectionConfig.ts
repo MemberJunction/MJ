@@ -23,7 +23,7 @@
  * them from the row's own columns.
  *
  * NULL means the relationship is not a declared collection. That is the default and reproduces
- * pre-6.2 behaviour exactly: nothing is generated and nothing loads eagerly.
+ * pre-6.2 behavior exactly: nothing is generated and nothing loads eagerly.
  *
  * @see guides/TRANSACTIONS_AND_BATCHING_GUIDE.md
  */
@@ -32,7 +32,7 @@ export interface IRelatedRecordCollectionConfig {
      * The property name generated on the entity subclass, and the companion's stable wire key —
      * e.g. `'Lines'` produces `order.Lines`.
      *
-     * **This is a published contract.** It appears in serialised composite payloads, so renaming it
+     * **This is a published contract.** It appears in serialized composite payloads, so renaming it
      * breaks in-flight requests and any persisted snapshot that captured one. Must be unique among
      * the collections declared on a single entity.
      */
@@ -86,13 +86,13 @@ export interface IRelatedRecordCollectionConfig {
      *   `BaseEntity.LoadRelatedRecords()`. **The right default for `'database'`**: an
      *   automatically-populated collection on a commonly-listed entity is a performance trap.
      * - `'immediate'` — populated automatically by `Load()`. Never by `LoadFromData()`, which is the
-     *   per-row materialisation path for `RunView(ResultType:'entity_object')` — loading related
+     *   per-row materialization path for `RunView(ResultType:'entity_object')` — loading related
      *   records there turns one view into N+1 queries. Use `RunView.IncludeRelatedRecords` for
      *   result sets, which costs 1+K instead.
      * - `'lazy'` — populated on first access to `Items`. **Requires `Source: 'cache'`**, and CodeGen
      *   refuses the combination with `'database'`: a property getter cannot await, so a lazy
      *   database load could only ever silently fail to fill. A cache lookup is synchronous, so lazy
-     *   works there — and reproduces exactly the hand-written memoised getters this replaces.
+     *   works there — and reproduces exactly the hand-written memoized getters this replaces.
      * - `'never'` — a write-only staging buffer; `Load()` is a no-op.
      *
      * Note that `'lazy'` makes reading `Items` a side-effecting operation: it populates the

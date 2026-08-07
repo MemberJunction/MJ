@@ -1400,7 +1400,7 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Serialises every registered companion that has something to send.
+     * Serializes every registered companion that has something to send.
      *
      * Companions returning `null` are omitted entirely, so a header-only save on a composite entity
      * ships no companion payload at all and costs nothing extra on the wire.
@@ -1716,12 +1716,12 @@ export abstract class BaseEntity<T = unknown> {
      * This is the single decision point for the whole feature:
      *
      * - **Provider supports entity transactions** (server): execute locally inside one transaction.
-     * - **It does not** (client): serialise the graph and hand the entire unit of work to the
+     * - **It does not** (client): serialize the graph and hand the entire unit of work to the
      *   server via the `MJ.SaveEntityGraph` remote operation, which rebuilds the records — as their
      *   *server-side* registered subclasses — and runs this very same local executor there.
      *
      * There is exactly one cascade implementation. The remote path relocates it; it never
-     * reimplements it. That is what keeps client and server behaviour from drifting.
+     * reimplements it. That is what keeps client and server behavior from drifting.
      *
      * Validation is not performed here: the root node's own `_InnerSave` runs `Validate()` (which
      * fans out to every companion, over the complete child set including pending removals) before
@@ -2689,7 +2689,7 @@ export abstract class BaseEntity<T = unknown> {
 
         // Companion payloads ride along under a reserved key, following the convention already set
         // by OldValues___ and RestoreContext___. This is what lets a composite cross the wire on any
-        // path that serialises via GetDataObject — including the TransactionGroup envelope, which
+        // path that serializes via GetDataObject — including the TransactionGroup envelope, which
         // carries whole records as EntityObjectJSON — with no change to the transport itself.
         if (this.HasCompanions) {
             const companions = await this.SerializeCompanions();
@@ -3583,7 +3583,7 @@ export abstract class BaseEntity<T = unknown> {
 
             // Companions declared Load:'eager' populate here — and ONLY here.
             //
-            // Deliberately not in LoadFromData(): that is the per-row materialisation path for
+            // Deliberately not in LoadFromData(): that is the per-row materialization path for
             // RunView(ResultType:'entity_object'), so an eager child query there becomes one query
             // per row of every view. That is a live N+1 in production accounting code today
             // (JournalEntryEntityServer.LoadFromData → LoadLines), and excluding it here is the

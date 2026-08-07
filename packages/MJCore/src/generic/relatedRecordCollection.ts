@@ -41,13 +41,13 @@ import { LogError } from './logging';
  *   default because the alternative is a performance trap: an eager collection on a widely-listed
  *   entity turns every grid into an N+1 storm.
  * - `'immediate'` — populated automatically by `BaseEntity.Load()`. **Never** by `LoadFromData()`,
- *   which is the per-row materialisation path for `RunView(ResultType:'entity_object')`. That
+ *   which is the per-row materialization path for `RunView(ResultType:'entity_object')`. That
  *   exclusion is deliberate and is the structural fix for a live N+1 in production accounting code,
  *   where a `LoadFromData` override issued one child query per row of every view.
  * - `'lazy'` — populated on first read of {@link RelatedRecordCollection.Items}. Requires
  *   {@link RelatedRecordSource} `'cache'`: a property getter cannot await, so a lazy *database*
  *   load could only ever silently fail to fill, and CodeGen refuses that combination. A cache
- *   lookup is synchronous, so lazy works there — reproducing exactly the hand-written memoised
+ *   lookup is synchronous, so lazy works there — reproducing exactly the hand-written memoized
  *   getters this mechanism replaces.
  * - `'never'` — the collection is a write-only staging buffer; `Load()` is a no-op. Matches how
  *   order lines are actually used: built up in memory and pushed down, never read back through the
@@ -144,7 +144,7 @@ export type RelatedRecordCollectionOptions = {
      *
      * `true` matches the order-line staging pattern, where the collection is a buffer for pending
      * inserts rather than a live view of persisted rows. Defaults to `false`, which keeps the
-     * saved children in memory with fresh primary keys — the behaviour most callers expect.
+     * saved children in memory with fresh primary keys — the behavior most callers expect.
      */
     ClearAfterSave?: boolean;
 };
@@ -167,7 +167,7 @@ export type RelatedRecordCollectionWireItem = {
 };
 
 /**
- * The wire shape of a serialised child collection.
+ * The wire shape of a serialized child collection.
  */
 export type RelatedRecordCollectionWire = {
     /** Each retained child. */
@@ -277,7 +277,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      */
     public get Items(): readonly T[] {
         // `'lazy'` populates on first read. This is a side-effecting getter, deliberately: it is
-        // exactly what the hand-written memoised getters it replaces did, and it is only reachable
+        // exactly what the hand-written memoized getters it replaces did, and it is only reachable
         // for cache-sourced collections, where filling is synchronous. A database-sourced lazy
         // collection cannot exist — CodeGen refuses the combination — because a getter cannot await.
         if (!this.loaded && this.LoadMode === 'lazy') {
@@ -285,6 +285,40 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         }
         this.refreshCacheViewIfStale();
         return this.items;
+    }
+
+    /**
+     * Iterates the retained records, so the collection works directly with `for…of`, spread and
+     * array destructuring:
+     *
+     * ```typescript
+     * for (const param of action.Params) { … }
+     * const all = [...action.Params];
+     * const [first, ...rest] = action.Params;
+     * ```
+     *
+     * This is the standard ES2015 iterable protocol — the same one `Map`, `Set` and `NodeList`
+     * implement — deliberately chosen over extending `Array`. Subclassing `Array` would inherit
+     * `push`, `splice`, `sort` and index assignment, every one of which bypasses the removal
+     * tracking, foreign-key stamping and sequence renumbering this class exists to guarantee; and
+     * `Symbol.species` would hand `map`/`filter` this constructor, which takes an owner and options
+     * rather than a length. Iterability adds the ergonomics without any of that.
+     *
+     * Use {@link Items} when you want the array itself — `map`, `filter`, `find` and indexing.
+     * It is `readonly`, which is what keeps a caller from mutating around the collection's back.
+     *
+     * @returns An iterator over the retained records, in collection order.
+     */
+    public [Symbol.iterator](): Iterator<T> {
+        return this.Items[Symbol.iterator]();
+    }
+
+    /**
+     * Alias for {@link Count}, so the collection reads like a collection in the places people expect
+     * `length`. Both go through {@link Items}, so both trigger a lazy fill and see a live cache view.
+     */
+    public get length(): number {
+        return this.Count;
     }
 
     /**
@@ -700,7 +734,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
     /**
      * Applies the declared `OrderBy` to cache-sourced records.
      *
-     * Only single-field `FIELD [ASC|DESC]` clauses are honoured — the common case, and all that can
+     * Only single-field `FIELD [ASC|DESC]` clauses are honored — the common case, and all that can
      * be done in memory without reimplementing SQL. Anything more complex is left in donor order
      * rather than half-applied, because a silently mis-ordered sequenced collection would renumber
      * itself into that wrong order on the next mutation.
@@ -740,7 +774,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * on the next mutation. This is in-memory ordering for cache-sourced collections only; a
      * database-sourced load passes the clause to SQL untouched.
      *
-     * @returns One term per field, or an empty array when the clause cannot be honoured in memory.
+     * @returns One term per field, or an empty array when the clause cannot be honored in memory.
      */
     private parseOrderBy(): { field: string; sign: number }[] {
         const clause = this.OrderByClause?.trim();
@@ -783,7 +817,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
                 // the caller asked for records it can modify WITHOUT touching the engine's cache,
                 // and handing back shared instances would let it corrupt that cache invisibly.
                 throw new Error(
-                    `RelatedRecordCollection '${this.Name}': cannot materialise copies of ` +
+                    `RelatedRecordCollection '${this.Name}': cannot materialize copies of ` +
                         `'${this.RelatedEntityName}' because no entity factory is available on the provider. ` +
                         `A writable cache-sourced collection must copy; declare ReadOnly: true to share the ` +
                         `engine's instances instead, or Source: 'database' to load fresh ones.`,
@@ -832,7 +866,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      *
      * @param errors - The child's raw validation errors.
      * @param index - The child's position in the collection.
-     * @returns Re-labelled errors.
+     * @returns Re-labeled errors.
      */
     private prefixErrors(errors: ValidationErrorInfo[], index: number): ValidationErrorInfo[] {
         return errors.map(

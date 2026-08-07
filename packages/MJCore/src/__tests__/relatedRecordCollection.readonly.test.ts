@@ -136,6 +136,53 @@ describe('RelatedRecordCollection — ReadOnly is inert in a save', () => {
     });
 });
 
+describe('RelatedRecordCollection — iterable', () => {
+    it('works with for…of', () => {
+        const collection = makeCollection();
+        collection.SetLoadedItems([makeRecord('p1'), makeRecord('p2')]);
+
+        const seen: string[] = [];
+        for (const record of collection) {
+            seen.push(String(record.Get('ID')));
+        }
+        expect(seen).toEqual(['p1', 'p2']);
+    });
+
+    it('spreads into an array', () => {
+        const collection = makeCollection();
+        collection.SetLoadedItems([makeRecord('p1'), makeRecord('p2')]);
+        expect([...collection].map(r => r.Get('ID'))).toEqual(['p1', 'p2']);
+    });
+
+    it('destructures', () => {
+        const collection = makeCollection();
+        collection.SetLoadedItems([makeRecord('p1'), makeRecord('p2'), makeRecord('p3')]);
+        const [first, ...rest] = collection;
+        expect(first.Get('ID')).toBe('p1');
+        expect(rest).toHaveLength(2);
+    });
+
+    it('reports length, matching Count', () => {
+        const collection = makeCollection();
+        collection.SetLoadedItems([makeRecord('p1'), makeRecord('p2')]);
+        expect(collection.length).toBe(2);
+        expect(collection.length).toBe(collection.Count);
+    });
+
+    it('is EMPTY-safe', () => {
+        const collection = makeCollection();
+        expect([...collection]).toEqual([]);
+        expect(collection.length).toBe(0);
+    });
+
+    it('does NOT expose array mutators — that is the whole reason it is not an Array subclass', () => {
+        const collection = makeCollection() as unknown as Record<string, unknown>;
+        for (const mutator of ['push', 'splice', 'sort', 'pop', 'shift', 'unshift', 'reverse']) {
+            expect(typeof collection[mutator]).not.toBe('function');
+        }
+    });
+});
+
 describe('RelatedRecordCollection — Source accessor', () => {
     it("defaults to 'database'", () => {
         expect(makeCollection().Source).toBe('database');

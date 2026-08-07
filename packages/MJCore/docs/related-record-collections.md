@@ -136,7 +136,7 @@ being evaluated after half of it has landed.
 
 The client provider cannot open a transaction; that single fact is why every hand-rolled composite
 in MJ was server-only. So on a non-transactional provider `BaseEntity` **relocates** the cascade
-instead of reimplementing it: it serialises the graph, ships it in one remote operation, and the
+instead of reimplementing it: it serializes the graph, ships it in one remote operation, and the
 server runs the *same* executor.
 
 ```mermaid
@@ -265,6 +265,263 @@ collections deliberately do **not** track, because those copies belong to you.
 
 ---
 
+## 4a. Shipped examples — what this looks like in MJ core
+
+Eight collections ship declared on core entities. **None of them required a line of TypeScript** —
+each is a `RelatedRecordCollection` blob on an `EntityRelationship` row, and CodeGen emitted the
+declaration onto the generated class.
+
+### Actions — three collections, zero queries
+
+```typescript
+const action = await md.GetEntityObject<MJActionEntity>('MJ: Actions', contextUser);
+await action.Load(actionId);            // ONE query — the action row
+
+// All three fill from ActionEngineBase's caches on first touch. No await, no round trip.
+action.Params.Items          // MJActionParamEntity[]  — ordered by Name
+action.ResultCodes.Items     // MJActionResultCodeEntity[]
+action.Libraries.Items       // MJActionLibraryEntity[]
+
+action.Params.Count          // also triggers the lazy fill — Count and Items never disagree
+```
+
+That is the whole thing. Before, each of those was a hand-written memoized getter on
+`MJActionEntityExtended` that filtered the engine's array by `ActionID`; the class carried three of
+them plus their backing fields. All three are gone — the declaration does it, and the browser gets
+them too, which the server-only subclass never could.
+
+```jsonc
+// EntityRelationship 'MJ: Actions → MJ: Action Params' . RelatedRecordCollection
+{ "Name": "Params", "Source": "cache", "Load": "lazy", "OrderBy": "Name ASC" }
+```
+
+### AI Agents — a cached hierarchy plus one writable collection
+
+```typescript
+const agent = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
+await agent.Load(agentId);
+
+agent.Actions.Items          // from BaseAIEngine's cache — zero queries
+agent.SubAgents.Items        // the ParentID hierarchy, also cached, ordered by ExecutionOrder
+
+// Prompts is the one child no engine caches, so it is database-sourced — and writable.
+await agent.Prompts.Load();
+const p = await agent.Prompts.Create();
+p.PromptID = somePromptId;   // ExecutionOrder is assigned for you, gap-free
+await agent.Save();          // header + prompts, one transaction
+```
+
+`BaseAIEngine` used to associate agent actions by hand — a loop filtering `_agentActions` by
+`AgentID` into every agent at config time. The collection does exactly that, generically, so the
+loop was deleted.
+
+### AI Prompts and API Keys
+
+```typescript
+prompt.Models.Items          // MJAIPromptModelEntity[] ordered by Priority — from cache
+apiKey.Scopes.Items          // MJAPIKeyScopeEntity[]  ordered by Priority — from cache
+```
+
+`Priority` on both is a *ranking*, not a line number, so neither declares a `Sequence` policy —
+renumbering would silently rewrite a deliberate preference. They order by it and leave the values
+alone.
+
+### Loading several at once
+
+```typescript
+await action.LoadRelatedRecords();   // Params + ResultCodes + Libraries
+```
+
+All three are cache-backed here, so that call issues **zero queries**. Had any been
+database-sourced, they would have gone out as a single `RunViews` rather than one query each.
+
+### What you get that a getter never did
+
+| | Hand-written getter | Declared collection |
+|---|---|---|
+| Available in the browser | ❌ server-only package | ✅ on the generated class |
+| Declared where the relationship lives | ❌ in TypeScript, far away | ✅ on the `EntityRelationship` row |
+| Refuses accidental mutation | ❌ returns a mutable array | ✅ `Add`/`Remove`/`Clear` throw |
+| Tracks the engine after first read | ❌ frozen on first access | ✅ live view |
+| Batched multi-collection load | ❌ | ✅ `LoadRelatedRecords()` |
+| Same API when you *do* need writes | ❌ different mechanism entirely | ✅ flip `Source`/`ReadOnly` |
+
+---
+
+## 4b. Working with a collection — every operation
+
+### Reading
+
+A collection is **iterable**, so it works directly with `for…of`, spread and destructuring. Use
+`Items` when you want the array itself for `map` / `filter` / `find` / indexing.
+
+```typescript
+for (const line of order.Lines) { … }        // iterate
+const all = [...order.Lines];                 // spread to a real array
+const [first, ...rest] = order.Lines;         // destructure
+order.Lines.length                            // 3
+order.Lines.Count                             // 3 — same thing, MJ-style casing
+
+order.Lines.Items.map(l => l.Total)           // array methods go through Items
+order.Lines.Items.filter(l => l.Quantity > 1)
+order.Lines.Items[0]
+order.Lines.IsLoaded                          // has it been populated?
+```
+
+> **Why `Items` rather than making the collection *be* an array?** Subclassing `Array` inherits
+> `push`, `splice`, `sort` and index assignment — every one of which bypasses the removal tracking,
+> FK stamping and sequence renumbering the collection exists to guarantee. `Items` is `readonly`,
+> which is what stops a caller mutating around its back. Iterability gives the ergonomics without
+> the hole.
+
+### Adding
+
+```typescript
+// Create() builds a new related record, already attached — the usual way.
+const line = await order.Lines.Create();
+line.ProductID = productId;
+line.Quantity  = 2;
+// You do NOT set OrderHeaderID — the collection stamps it.
+// You do NOT set LineNumber — Sequence assigns it.
+
+// Add() attaches a record you already have.
+const existing = await md.GetEntityObject<OrderLineEntity>('…: Order Lines', user);
+existing.NewRecord();
+existing.ProductID = otherId;
+order.Lines.Add(existing);
+
+await order.Save();     // header + both lines, one transaction
+```
+
+### Updating
+
+Just set fields on the record. The collection notices through the parent's `Dirty` rollup:
+
+```typescript
+await order.Lines.Load();
+order.Lines.Items[0].Quantity = 5;
+
+order.Dirty            // true — the ROLLUP: the header itself never changed
+await order.Save();    // the edited line is updated; untouched lines are skipped
+```
+
+That rollup is the fix for a real defect: before it, a clean parent with edited or new related
+records returned early from `Save()`, reported success, and wrote nothing.
+
+### Removing
+
+```typescript
+order.Lines.Remove(order.Lines.Items[1]);   // by record
+order.Lines.Remove(0);                       // or by index
+
+order.Lines.Count      // 1 — gone from the collection immediately
+order.Lines.Removed    // the pending removal, awaiting the save
+order.Dirty            // true
+
+await order.Save();    // OnRemove:'delete' → the row is DELETED; survivors renumbered 1..N
+```
+
+What `OnRemove` decides:
+
+| | Effect on save |
+|---|---|
+| `'delete'` | The row is deleted. True composition — the record has no meaning without its parent. |
+| `'orphan'` | The row survives, FK untouched. Aggregation — the record outlives the relationship. |
+| `'refuse'` | `Remove()` throws. For relationships where detaching is always a bug. |
+
+Removals execute **before** inserts, so a unique key freed by a removal (a re-sequenced
+`LineNumber`) is available to the record about to take it.
+
+### Clearing and replacing
+
+```typescript
+order.Lines.Clear();                    // removes ALL — each tracked per OnRemove
+for (const item of newItems) {
+    const line = await order.Lines.Create();
+    line.ProductID = item.ProductID;
+}
+await order.Save();                     // old rows deleted, new rows inserted, one transaction
+```
+
+### Deleting the parent
+
+```typescript
+await order.Delete();   // OnRemove:'delete' collections cascade — related records go FIRST,
+                        // then the parent, all inside one transaction
+```
+
+Records still go through their own `Delete()`, so soft-delete, Record Changes and entity actions
+all behave normally.
+
+### Validating across records
+
+```typescript
+public override Validate(): ValidationResult {
+    const result = super.Validate();        // fans out to every collection, incl. pending removals
+    const debits  = this.Lines.Items.reduce((s, l) => s + (l.Debit  ?? 0), 0);
+    const credits = this.Lines.Items.reduce((s, l) => s + (l.Credit ?? 0), 0);
+    if (Math.abs(debits - credits) > 0.004) {
+        result.Success = false;
+        result.Errors.push(new ValidationErrorInfo('Lines', 'Debits must equal credits', null,
+            ValidationErrorType.Failure));
+    }
+    return result;
+}
+```
+
+Runs **before any write**, over the complete set including removals — and because the declaration
+lives on a shared subclass, it runs in the browser too, so the user is told before a round trip.
+Errors from a related record are prefixed with their position (`Lines[3].Quantity`) rather than
+arriving unattributed.
+
+### Loading
+
+```typescript
+await order.Lines.Load();               // one collection
+await order.LoadRelatedRecords();       // all of them — cache free, database batched into ONE RunViews
+await order.LoadRelatedRecords('Lines');// just the named ones
+await order.Lines.Load(/* force */ true);
+
+// For a SET of parents, never loop — that is the N+1:
+const rv = new RunView();
+const result = await rv.RunView<OrderEntity>({
+    EntityName: 'MJ_BizApps_Orders: Orders',
+    ResultType: 'entity_object',
+    IncludeRelatedRecords: ['Lines'],   // 1 query for ALL orders' lines
+}, user);
+```
+
+### Read-only collections
+
+Cache-sourced collections default to read-only, and say so clearly when you try:
+
+```typescript
+action.Params.Items          // ✅ read freely
+action.Params.Add(param);    // ❌ throws: "…is read-only; Add is not allowed. It is sourced from a
+                             //    BaseEngine cache… Declare ReadOnly: false to get copies you can
+                             //    safely modify, or Source: 'database'."
+action.Dirty                 // false — a read-only collection never drags its parent into a save
+```
+
+To edit those records, work with them directly (`param.Save()`), or declare the collection
+`ReadOnly: false` so it hands you copies instead of the engine's instances.
+
+### Inspecting a collection
+
+```typescript
+order.Lines.Name                   // 'Lines'
+order.Lines.RelatedEntityName      // 'MJ_BizApps_Orders: Order Lines'
+order.Lines.RelatedEntityJoinField // 'OrderHeaderID'
+order.Lines.Source                 // 'database' | 'cache'
+order.Lines.IsReadOnly             // false
+order.Lines.LoadMode               // 'explicit' | 'immediate' | 'lazy' | 'never'
+order.Lines.RemovalMode            // 'delete' | 'orphan' | 'refuse'
+order.GetCompanion('Lines')        // the collection by name
+order.Companions                   // every companion on this record
+```
+
+---
+
 ## 5. `Load` — when it populates
 
 | Mode | Populates | Notes |
@@ -275,7 +532,7 @@ collections deliberately do **not** track, because those copies belong to you.
 | `never` | Never; `Load()` is a no-op | A write-only staging buffer |
 
 **`immediate` never fires from `LoadFromData()`**, and that exclusion is structural rather than
-stylistic. `LoadFromData` is the per-row materialisation path for
+stylistic. `LoadFromData` is the per-row materialization path for
 `RunView(ResultType:'entity_object')`, so populating there turns one view of 500 rows into 500
 queries. For result sets use `RunView({ IncludeRelatedRecords: ['Lines'] })`, which costs **1+K**.
 
@@ -334,7 +591,7 @@ same record cannot produce a phantom cycle.
 
 ---
 
-## 7. Behaviour changes for adopters
+## 7. Behavior changes for adopters
 
 Declaring a collection changes two things about the parent, both of them fixes:
 

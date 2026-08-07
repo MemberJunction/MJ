@@ -301,6 +301,9 @@ Other rules that follow from this:
   on a cache miss rather than returning an empty array.
 - **`await entity.LoadRelatedRecords()`** populates everything: cache-backed for free,
   database-backed batched into one `RunViews`.
+- **The collection is iterable** — `for (const l of order.Lines)`, `[...order.Lines]`,
+  `order.Lines.length` all work. Use `.Items` for `map`/`filter`/`find`; it is `readonly` on
+  purpose, so mutate through `Add`/`Create`/`Remove` and never by pushing at an array.
 - **Declare collections on a shared subclass**, with server-only behaviour in a class that extends
   it. `ClassFactory` priority auto-increments by load order, so the server subclass wins server-side
   with no configuration — and the browser still sees the collection.

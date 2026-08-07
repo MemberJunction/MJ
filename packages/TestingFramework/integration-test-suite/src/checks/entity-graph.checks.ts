@@ -182,12 +182,12 @@ export const EntityGraphChecks: NamedCheck[] = [
             const reloaded = await ctx.Provider.GetEntityObject<GraphTestListEntity>(LIST_ENTITY, ctx.User);
             Assert(await reloaded.Load(seeded.ID), 'EG3: reload failed');
             Assert(!reloaded.Details.IsLoaded, 'EG3: an explicit collection must NOT load with the parent');
-            AssertEqual(reloaded.Details.Count, 0, 'EG3: nothing should be materialised before Load()');
+            AssertEqual(reloaded.Details.Count, 0, 'EG3: nothing should be materialized before Load()');
 
             await reloaded.Details.Load();
             Assert(reloaded.Details.IsLoaded, 'EG3: the collection should report loaded');
             AssertEqual(reloaded.Details.Count, 2, 'EG3: both related records loaded');
-            AssertEqual(reloaded.Details.Items.map((d) => d.RecordID).join(','), 'one,two', 'EG3: OrderBy honoured');
+            AssertEqual(reloaded.Details.Items.map((d) => d.RecordID).join(','), 'one,two', 'EG3: OrderBy honored');
             Assert(!reloaded.Dirty, 'EG3: loading a collection must not dirty the graph');
         }
     },
