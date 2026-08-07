@@ -1,0 +1,17 @@
+---
+/**
+ * Starlight SiteTitle override: renders the default logo link, then appends the
+ * documented-line version pill from the landing mockup.
+ *
+ * The pill tracks the LINE the site documents, not the repo version in
+ * package.json — docs.memberjunction.org builds from `lts/5` (see the pinned
+ * ref in .github/workflows/docs.yml), so this stays "v5.x" until a new line
+ * certifies and that workflow ref moves.
+ */
+import Default from '@astrojs/starlight/components/SiteTitle.astro';
+
+const documentedLine = 'v5.x';
+---
+
+<Default><slot /></Default>
+<span class="mjd-version-pill" aria-label={`Documenting the ${documentedLine} line`}>{documentedLine}</span>
