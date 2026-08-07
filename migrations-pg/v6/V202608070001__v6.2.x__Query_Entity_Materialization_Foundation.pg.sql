@@ -136,7 +136,7 @@ COMMENT ON COLUMN __mj."Query"."MaterializedResultID" IS 'Back-link to the MJ: M
 
 /* ============================================================================
    Query & Entity Materialization — Phase 1 Foundation (Metadata)
-   v6.1.x
+   v6.2.x
 
    Companion plan: /plans/query-entity-materialization.md (design)
 

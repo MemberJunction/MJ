@@ -41,7 +41,7 @@ COMMENT ON COLUMN __mj."MaterializedResult"."BroadSQL" IS 'For a RowFilterBroad 
 
 /* ============================================================================
    Query Materialization — Phase 2d: Row-Filter Persistence
-   v6.1.x
+   v6.2.x
 
    Companion plan: /plans/query-entity-materialization.md (design, section 6.4 / 9)
 
