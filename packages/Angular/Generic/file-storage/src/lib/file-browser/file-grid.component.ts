@@ -743,7 +743,7 @@ export class FileGridComponent implements OnInit, OnChanges {
       console.log('[FileGrid] Got upload URL:', uploadData.uploadUrl);
 
       // Upload the file using XMLHttpRequest to track progress
-      await this.uploadFileToUrl(file, uploadData.uploadUrl);
+      await this.uploadFileToUrl(file, uploadData.uploadUrl, this.account?.provider?.ServerDriverKey);
 
       console.log('[FileGrid] File uploaded successfully:', file.name);
 
@@ -774,7 +774,7 @@ export class FileGridComponent implements OnInit, OnChanges {
   /**
    * Uploads file to the pre-authenticated URL with progress tracking
    */
-  private uploadFileToUrl(file: File, url: string): Promise<void> {
+  private uploadFileToUrl(file: File, url: string, driverKey?: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
 
@@ -800,11 +800,18 @@ export class FileGridComponent implements OnInit, OnChanges {
         reject(new Error('Upload cancelled'));
       });
 
-      // Use POST for Dropbox temporary upload links (required by Dropbox API)
-      // Use PUT for other providers like S3
-      // Dropbox requires POST with application/octet-stream
-      xhr.open('POST', url, true);
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      // Provider-specific upload semantics for the pre-authenticated URL:
+      //  - Dropbox temporary upload links require POST.
+      //  - Azure Blob "Put Blob" requires PUT and the `x-ms-blob-type: BlockBlob` header;
+      //    without the header Azure rejects the request and the upload silently no-ops.
+      //  - S3 and other pre-signed-PUT providers require PUT.
+      const isDropbox = driverKey === 'Dropbox Storage';
+      const isAzure = driverKey === 'Azure Blob Storage';
+      xhr.open(isDropbox ? 'POST' : 'PUT', url, true);
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+      if (isAzure) {
+        xhr.setRequestHeader('x-ms-blob-type', 'BlockBlob');
+      }
       xhr.send(file);
     });
   }
