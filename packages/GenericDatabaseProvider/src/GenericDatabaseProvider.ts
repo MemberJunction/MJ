@@ -3288,10 +3288,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     /**
      * Coerces a scalar row-filter value to its declared `MJ: Query Parameters`.Type for type-faithful binding
-     * (see {@link buildMaterializedReadQuery}). This MUST MIRROR the live path's parameter conversion in
-     * `@memberjunction/queryprocessor` `QueryParameterProcessor.validateParameters` EXACTLY — the materialized
-     * read has to bind the same value the live query renders, or the two silently diverge. Keep in sync with that
-     * switch. Returns `{ok:false}` only where live would ALSO reject the value (→ caller falls back to live).
+     * (see {@link buildMaterializedReadQuery}). This mirrors the TYPE-CONVERSION SWITCH of the live path's
+     * `@memberjunction/queryprocessor` `QueryParameterProcessor.validateParameters` (number/boolean/date/string),
+     * so the materialized read binds the same value the live query renders. Keep in sync with that switch. It does
+     * NOT replay the subsequent ValidationFilters chain: value-TRANSFORMING filters (trim/upper/lower/etc.) are
+     * already excluded from RowFilterBroad materialization at classify time (materializationParamClassifier's
+     * `isValuePassthrough`), so they never reach here. Pure VALIDATORS (min/max/email/...) are a documented low
+     * residual — they reject invalid input at runtime on the live path only, so an invalid caller value can make
+     * live error while the materialized read returns rows (divergence on the error path only; tracked as a
+     * follow-up to refuse validator-bearing row-filter params at classify time). Returns `{ok:false}` only where
+     * the live TYPE conversion would ALSO reject the value (→ caller falls back to live).
      *   - `number`  → `Number(value)` (JS trims); non-finite → refuse (live pushes a validation error → live).
      *   - `boolean` → live truthiness: ONLY 'true' (case-insensitive) or a real boolean `true` is true; everything
      *                 else is false (live never refuses a boolean). SQL Server binds BIT 1/0; PostgreSQL binds bool.

@@ -1144,10 +1144,13 @@ const activeSpec = (spec: unknown) => ({ Status: 'Active', ParamMode: 'RowFilter
 describe('GenericDatabaseProvider.tryBuildMaterializedQueryPlan (plan-level)', () => {
     const matParams = (Parameters: Record<string, unknown> = {}): RunQueryParams => ({ DataSource: 'Materialized', Parameters } as unknown as RunQueryParams);
 
-    it('FIX #2: the ordering guard reads GetPlatformSQL — a platform-variant ORDER BY forces live even when the base SQL has none', async () => {
+    it('FIX #2 (guard present): a platform-variant ORDER BY forces live even with an otherwise-valid Active materialization', async () => {
+        // Active row + matching param, so WITHOUT the ordering guard this would build a valid plan (non-null). The
+        // null therefore attributes ONLY to the guard — catches full removal of the ordering check.
         const p = new TestMatPlanProvider();
-        const q = matQuery({ SQL: 'SELECT ID FROM __mj.t', GetPlatformSQL: () => 'SELECT ID FROM __mj.t ORDER BY x' });
-        expect(await p.plan(q, matParams())).toBeNull();
+        p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]));
+        const q = matQuery({ SQL: 'SELECT ID, X FROM __mj.t', GetPlatformSQL: () => 'SELECT ID, X FROM __mj.t ORDER BY x', QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
+        expect(await p.plan(q, matParams({ x: 'a' }))).toBeNull();
     });
 
     it('FIX #2 (proof it is NOT reading base query.SQL): base SQL HAS ORDER BY but the platform variant does not → returns a plan', async () => {
@@ -1160,8 +1163,19 @@ describe('GenericDatabaseProvider.tryBuildMaterializedQueryPlan (plan-level)', (
     it('FIX #4: refuses (→ live) when the spec carries a param the query no longer has (over-filter guard)', async () => {
         const p = new TestMatPlanProvider();
         p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'ghost', kind: 'scalar' }]));
-        const q = matQuery({ QueryParameters: [] }); // spec references 'ghost', query has no params
-        expect(await p.plan(q, matParams())).toBeNull();
+        // Supply a VALUE for the phantom spec param so buildMaterializedReadQuery would happily build a plan —
+        // making the null attributable ONLY to the over-filter guard, not to a missing-value refusal.
+        const q = matQuery({ QueryParameters: [] }); // spec references 'ghost', query declares no params
+        expect(await p.plan(q, matParams({ ghost: 'x' }))).toBeNull();
+    });
+
+    it('FIX #4: refuses (→ live) when a query param is absent from the spec (under-filter guard)', async () => {
+        // spec only covers 'x', but the query also declares 'extra' — materializing would filter on X only while
+        // live filters on both, silently under-filtering. The guard must refuse.
+        const p = new TestMatPlanProvider();
+        p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]));
+        const q = matQuery({ QueryParameters: [{ Name: 'x', Type: 'string' }, { Name: 'extra', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
+        expect(await p.plan(q, matParams({ x: 'a', extra: 'b' }))).toBeNull();
     });
 
     it('FIX #4 control: query params exactly match the spec → returns a plan', async () => {
