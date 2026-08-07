@@ -8,7 +8,7 @@
  *
  * **What it deliberately does not do.** It does not decide graph semantics. Eligibility, failure
  * propagation, parent rollup and stall detection all come from the pure algorithms in
- * `@memberjunction/ai-core-plus` — the same functions Phase 1 wired into `TaskOrchestrator`. That is
+ * `@memberjunction/ai-core-plus` — the same functions the in-run executor consumes. That is
  * the whole reason those were factored out dependency-free: the in-run executor and the durable
  * executor cannot drift apart if neither owns the rules.
  *
@@ -31,12 +31,28 @@ import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memb
 import { IShutdownable, ShutdownRegistry } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
+import { DispatcherConditionEvaluator } from './DispatcherConditionEvaluator';
+import { NotificationEngine } from '@memberjunction/notifications';
+
+/** Metadata-seeded notification type for human tasks (metadata/notifications/.task-assignment-type.json). */
+const HUMAN_TASK_NOTIFICATION_TYPE = 'Task Assignment';
+
+/**
+ * Written to a human task's `ClaimedBy` once its assignee has been told it is ready.
+ *
+ * A human task has no executor, so the claim column is otherwise unused — which makes it the natural
+ * place to record a fact that must survive a restart. Reconciliation already exempts human tasks
+ * from reclamation, so this value is never mistaken for a live claim.
+ */
+const HUMAN_TASK_NOTIFIED_MARKER = '__human-notified__';
 import { IsReinvokeCapReached, MAX_REINVOKE_DEPTH, ParseTaskGraphParentMetadata, type TaskGraphParentMetadata } from './TaskGraphService';
 import {
     DEFAULT_DISPATCHER_CONFIG,
     ProviderFactory,
     TaskAgentRunner,
     TaskGraphDispatcherConfig,
+    type TaskContinuationDeliverer,
+    type TaskContinuationParams,
 } from './types';
 
 /** A graph's children + edges, in both algorithm shape and mutable-entity shape. */
@@ -49,6 +65,7 @@ type GraphState = {
 export class TaskGraphDispatcher implements IShutdownable {
     private readonly config: TaskGraphDispatcherConfig;
     private readonly claims: TaskClaimStore;
+    private readonly conditionEvaluator: DispatcherConditionEvaluator;
 
     private running = false;
     private pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -63,9 +80,16 @@ export class TaskGraphDispatcher implements IShutdownable {
         private readonly agentRunner: TaskAgentRunner,
         private readonly contextUser: UserInfo,
         config: Partial<TaskGraphDispatcherConfig> & Pick<TaskGraphDispatcherConfig, 'InstanceID'>,
+        /**
+         * Optional. Absent means a host that cannot post messages or start agent turns — a worker,
+         * a test. The dispatcher still records and logs every completion, so a graph's outcome is
+         * never lost; it simply is not announced.
+         */
+        private readonly continuationDeliverer?: TaskContinuationDeliverer,
     ) {
         this.config = { ...DEFAULT_DISPATCHER_CONFIG, ...config };
         this.claims = new TaskClaimStore(this.config.InstanceID, this.config.ClaimTTLSeconds);
+        this.conditionEvaluator = new DispatcherConditionEvaluator();
     }
 
     /**
@@ -337,14 +361,45 @@ export class TaskGraphDispatcher implements IShutdownable {
         if (mode === 'none') return;
 
         const summary = this.buildContinuationSummary(parent, graph);
-        // `message` is the only mode wired in this phase. `reinvoke` needs the agent framework,
-        // which would invert the dependency (task-graph -> ai-agents); it arrives with Phase 4's
-        // convergence work, where the dispatcher already holds an execution engine. Until then it
-        // degrades to `message` rather than silently doing nothing, so the results still land.
-        if (mode === 'reinvoke') {
-            LogStatus(`[TaskGraphDispatcher] Graph ${parent.ID}: 'reinvoke' not yet wired; delivering as a message.`);
-        }
         LogStatus(`[TaskGraphDispatcher] Graph ${parent.ID} finished — ${summary}`);
+
+        if (!this.continuationDeliverer) return;
+
+        const params: TaskContinuationParams = {
+            ParentTaskID: parent.ID,
+            WorkflowName: parent.Name,
+            ConversationDetailID: parent.ConversationDetailID ?? null,
+            SubmittedByAgentRunID: meta.submittedByAgentRunID,
+            ReinvokeDepth: meta.reinvokeDepth,
+            Tasks: [...graph.entityById.values()].map((t) => ({
+                TaskID: t.ID,
+                Name: t.Name,
+                Status: t.Status,
+                // A reference, not the payload. Inlining every task's output would swamp the
+                // continuation turn's context; the agent pulls what it needs by task ID.
+                Summary: t.OutputPayload ? `output available (${t.OutputPayload.length} chars)` : undefined,
+                ErrorMessage: t.ErrorMessage ?? undefined,
+            })),
+            Summary: summary,
+        };
+
+        try {
+            // Reinvoke degrades to a message when the host cannot start agent turns. Degrading is
+            // right rather than throwing: the work genuinely ran, and the user losing the results
+            // because nobody could start a follow-up turn would be the worse outcome.
+            if (mode === 'reinvoke' && this.continuationDeliverer.Reinvoke) {
+                await this.continuationDeliverer.Reinvoke(params);
+            } else {
+                if (mode === 'reinvoke') {
+                    LogStatus(`[TaskGraphDispatcher] Graph ${parent.ID}: host cannot reinvoke; delivering as a message.`);
+                }
+                await this.continuationDeliverer.PostMessage(params);
+            }
+        } catch (e) {
+            // Already marked delivered, so this will not retry. That is the deliberate trade stated
+            // on the marker: a missed notification visible in the record beats one repeated forever.
+            LogError(`[TaskGraphDispatcher] Continuation delivery failed for ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
+        }
     }
 
     /** Reads the parent's durable continuation metadata through the shared parser. */
@@ -385,6 +440,45 @@ export class TaskGraphDispatcher implements IShutdownable {
         return `"${parent.Name}": ${graph.nodes.length} task(s) — ${breakdown}.`;
     }
 
+    /**
+     * Tells the assignee that a human task is ready, exactly once.
+     *
+     * **Once** matters more than it looks: eligibility is recomputed on every poll, so a task parked
+     * on a person for three days would otherwise re-notify every five seconds until they acted. The
+     * marker is the task's own `ClaimedBy` — a human task has no executor to claim it, so the column
+     * is free, and reusing it means the "already notified" fact is as durable and as crash-safe as
+     * every other piece of graph state. A restart cannot resend.
+     *
+     * Best-effort by design. A notification that fails to send must not stop the graph or the poll
+     * loop; the task is still visible in the Tasks UI, so the work is discoverable even when the
+     * nudge does not arrive.
+     */
+    private async notifyHumanTaskReady(task: MJTaskEntity): Promise<void> {
+        if (task.ClaimedBy === HUMAN_TASK_NOTIFIED_MARKER) return;
+        if (!task.UserID) return; // unassigned human task — nobody to tell
+
+        try {
+            await NotificationEngine.Instance.Config(false, this.contextUser);
+            await NotificationEngine.Instance.SendNotification({
+                userId: task.UserID,
+                typeNameOrId: HUMAN_TASK_NOTIFICATION_TYPE,
+                title: `Action needed: ${task.Name}`,
+                message: task.Description || 'A workflow is waiting on you to complete this task.',
+                resourceConfiguration: { type: 'Task', taskId: task.ID, parentTaskId: task.ParentID ?? '' },
+            }, this.contextUser);
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not notify ${task.UserID} about task ${task.ID}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+
+        // Marked even when delivery threw. Retrying a notification on every five-second poll is a
+        // worse failure than one that was missed: the task remains visible in the Tasks UI either
+        // way, whereas a notification storm is not self-correcting.
+        task.ClaimedBy = HUMAN_TASK_NOTIFIED_MARKER;
+        if (!(await task.Save())) {
+            LogError(`[TaskGraphDispatcher] Could not mark task ${task.ID} as notified; it may notify again.`);
+        }
+    }
+
     /** Parent tasks that still have work to do. */
     private async findActiveGraphIDs(provider: IMetadataProvider): Promise<string[]> {
         const result = await RunView.FromMetadataProvider(provider).RunView<{ ParentID: string }>(
@@ -413,8 +507,19 @@ export class TaskGraphDispatcher implements IShutdownable {
             const graph = await this.loadGraphState(provider, parentID);
             for (const node of ComputeEligibleTasks(graph.nodes, graph.edges)) {
                 const entity = graph.entityById.get(node.id);
-                // Human tasks are never dispatched — they are completed by a person.
-                if (!entity || !entity.AgentID) continue;
+                if (!entity) continue;
+
+                // Human tasks are never dispatched — a person completes them. But "eligible" is the
+                // moment that person can finally act, and nothing else in the system knows it has
+                // arrived: the task sat Pending behind prerequisites, and no save touched it when
+                // they cleared. Without a notification here a workflow simply stops, waiting on
+                // someone who was never told. That silent stall is the failure mode this exists to
+                // prevent, so it happens on the eligibility check rather than at submission.
+                if (!entity.AgentID) {
+                    await this.notifyHumanTaskReady(entity);
+                    continue;
+                }
+
                 if (this.inFlight.has(entity.ID)) continue;
                 claimable.push(entity);
                 if (claimable.length >= limit) break;
@@ -440,15 +545,75 @@ export class TaskGraphDispatcher implements IShutdownable {
         );
         const deps = (depsResult.Success ? depsResult.Results : []) ?? [];
 
-        return {
-            nodes: children.map((c) => ({ id: c.ID, status: c.Status as TaskGraphNodeStatus })),
-            edges: deps.map((d) => ({
+        const entityById = new Map(children.map((c) => [c.ID, c]));
+
+        // Conditional edges are resolved HERE, before eligibility runs, by dropping edges whose
+        // condition does not hold. Expressing it as edge removal rather than as a second rule inside
+        // the eligibility algorithm is what keeps one definition of "ready": a task with no live
+        // incoming edges is ready for exactly the same reason a task with no edges at all is.
+        //
+        // An edge whose condition cannot be evaluated is KEPT, which is the opposite of the flow
+        // executor's choice and deliberately so. There, a broken condition means an edge is not
+        // followed and the graph moves on. Here it would mean a prerequisite silently disappears and
+        // the dependent task runs early — turning a typo into out-of-order execution. Keeping the
+        // edge instead stalls the graph, which the stall detector already reports loudly.
+        const liveEdges: TaskGraphEdge[] = [];
+        for (const d of deps) {
+            if (d.Condition?.trim()) {
+                const outcome = this.evaluateEdgeCondition(d, entityById);
+                if (outcome === 'drop') continue;
+            }
+            liveEdges.push({
                 taskId: d.TaskID,
                 dependsOnTaskId: d.DependsOnTaskID,
                 dependencyType: d.DependencyType as TaskGraphEdge['dependencyType'],
-            })),
-            entityById: new Map(children.map((c) => [c.ID, c])),
+            });
+        }
+
+        return {
+            nodes: children.map((c) => ({ id: c.ID, status: c.Status as TaskGraphNodeStatus })),
+            edges: liveEdges,
+            entityById,
         };
+    }
+
+    /**
+     * Decides whether a conditional dependency edge is live.
+     *
+     * The condition sees the upstream task's outcome — its status and parsed output — which is the
+     * only information a runtime graph has to branch on. Returns `'drop'` only on a definite false;
+     * an unevaluable condition keeps the edge for the reason stated at the call site.
+     */
+    private evaluateEdgeCondition(
+        dep: MJTaskDependencyEntity,
+        entityById: Map<string, MJTaskEntity>,
+    ): 'keep' | 'drop' {
+        const upstream = entityById.get(dep.DependsOnTaskID);
+        if (!upstream) return 'keep';
+
+        let output: unknown = null;
+        if (upstream.OutputPayload) {
+            try { output = JSON.parse(upstream.OutputPayload); }
+            catch { /* a malformed payload is not grounds to drop a prerequisite */ }
+        }
+
+        const result = this.conditionEvaluator.Evaluate(dep.Condition!, {
+            status: upstream.Status,
+            succeeded: upstream.Status === 'Complete',
+            failed: upstream.Status === 'Failed',
+            output,
+            errorMessage: upstream.ErrorMessage ?? null,
+        });
+
+        if (!result.Success) {
+            LogError(
+                `[TaskGraphDispatcher] Dependency ${dep.ID} has an unevaluable condition ` +
+                `(${result.ErrorMessage}); keeping the edge so the graph stalls visibly rather than ` +
+                `running ${dep.TaskID} out of order.`,
+            );
+            return 'keep';
+        }
+        return result.Value ? 'keep' : 'drop';
     }
 
     /** Parsed `OutputPayload` of each completed dependency, keyed by that task's ID. */

@@ -13290,11 +13290,11 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
-        * * Display Name: Source Entity Name
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     EntityDocument: z.string().nullable().describe(`
         * * Field Name: EntityDocument
-        * * Display Name: Entity Document Template Name
+        * * Display Name: Entity Document Name
         * * SQL Data Type: nvarchar(250)`),
     ScheduledJob: z.string().nullable().describe(`
         * * Field Name: ScheduledJob
@@ -29148,12 +29148,12 @@ export const MJTaskDependencySchema = z.object({
         * * Default Value: newsequentialid()`),
     TaskID: z.string().describe(`
         * * Field Name: TaskID
-        * * Display Name: Task ID
+        * * Display Name: Task
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)`),
     DependsOnTaskID: z.string().describe(`
         * * Field Name: DependsOnTaskID
-        * * Display Name: Depends On Task ID
+        * * Display Name: Depends On Task
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)`),
     DependencyType: z.union([z.literal('Corequisite'), z.literal('Optional'), z.literal('Prerequisite')]).describe(`
@@ -29177,13 +29177,18 @@ export const MJTaskDependencySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Condition: z.string().nullable().describe(`
+        * * Field Name: Condition
+        * * Display Name: Condition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional boolean expression gating this dependency edge. NULL (the default, and the value every pre-existing row carries) means the edge is unconditional, so adding this column changes the meaning of no existing graph. When present it is evaluated by the shared GraphTraversalEngine against the same context a design-time AIAgentStepPath.Condition sees, which is what lets a runtime task graph and a flow-editor graph be the same graph. A condition that evaluates false skips the edge; one that fails to evaluate ALSO skips it, but is reported distinctly so a graph stalled by a malformed expression cannot be mistaken for one that finished normally.`),
     Task: z.string().describe(`
         * * Field Name: Task
-        * * Display Name: Task
+        * * Display Name: Task Name
         * * SQL Data Type: nvarchar(255)`),
     DependsOnTask: z.string().describe(`
         * * Field Name: DependsOnTask
-        * * Display Name: Depends On Task
+        * * Display Name: Depends On Task Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -68431,7 +68436,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: Entity
-    * * Display Name: Source Entity Name
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string | null {
@@ -68440,7 +68445,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: EntityDocument
-    * * Display Name: Entity Document Template Name
+    * * Display Name: Entity Document Name
     * * SQL Data Type: nvarchar(250)
     */
     get EntityDocument(): string | null {
@@ -109351,7 +109356,7 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
 
     /**
     * * Field Name: TaskID
-    * * Display Name: Task ID
+    * * Display Name: Task
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
     */
@@ -109364,7 +109369,7 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
 
     /**
     * * Field Name: DependsOnTaskID
-    * * Display Name: Depends On Task ID
+    * * Display Name: Depends On Task
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
     */
@@ -109415,8 +109420,21 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
     }
 
     /**
+    * * Field Name: Condition
+    * * Display Name: Condition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional boolean expression gating this dependency edge. NULL (the default, and the value every pre-existing row carries) means the edge is unconditional, so adding this column changes the meaning of no existing graph. When present it is evaluated by the shared GraphTraversalEngine against the same context a design-time AIAgentStepPath.Condition sees, which is what lets a runtime task graph and a flow-editor graph be the same graph. A condition that evaluates false skips the edge; one that fails to evaluate ALSO skips it, but is reported distinctly so a graph stalled by a malformed expression cannot be mistaken for one that finished normally.
+    */
+    get Condition(): string | null {
+        return this.Get('Condition');
+    }
+    set Condition(value: string | null) {
+        this.Set('Condition', value);
+    }
+
+    /**
     * * Field Name: Task
-    * * Display Name: Task
+    * * Display Name: Task Name
     * * SQL Data Type: nvarchar(255)
     */
     get Task(): string {
@@ -109425,7 +109443,7 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
 
     /**
     * * Field Name: DependsOnTask
-    * * Display Name: Depends On Task
+    * * Display Name: Depends On Task Name
     * * SQL Data Type: nvarchar(255)
     */
     get DependsOnTask(): string {

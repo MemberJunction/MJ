@@ -84394,6 +84394,9 @@ export class MJTaskDependency_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Optional boolean expression gating this dependency edge. NULL (the default, and the value every pre-existing row carries) means the edge is unconditional, so adding this column changes the meaning of no existing graph. When present it is evaluated by the shared GraphTraversalEngine against the same context a design-time AIAgentStepPath.Condition sees, which is what lets a runtime task graph and a flow-editor graph be the same graph. A condition that evaluates false skips the edge; one that fails to evaluate ALSO skips it, but is reported distinctly so a graph stalled by a malformed expression cannot be mistaken for one that finished normally.`}) 
+    Condition?: string;
+        
     @Field() 
     @MaxLength(255)
     Task: string;
@@ -84421,6 +84424,9 @@ export class CreateMJTaskDependencyInput {
     @Field({ nullable: true })
     DependencyType?: string;
 
+    @Field({ nullable: true })
+    Condition: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -84442,6 +84448,9 @@ export class UpdateMJTaskDependencyInput {
 
     @Field({ nullable: true })
     DependencyType?: string;
+
+    @Field({ nullable: true })
+    Condition?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
