@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, O
 import { ConnectedPosition } from '@angular/cdk/overlay';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, Metadata } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine, UserInfoEngine, TaskGraphSubmitOperation, type TaskGraphSubmitInput } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, AppContextSnapshot } from "@memberjunction/ai-core-plus";
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
@@ -1898,7 +1898,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     conversationId: string,
     conversationManagerMessage: MJConversationDetailEntity
   ): Promise<void> {
-    const taskGraph = managerResult.payload?.taskGraph;
+    // `payload` is untyped by construction (an agent's payload shape is agent-specific), so pin the
+    // graph to the operation's own input contract at the boundary rather than letting it stay loose.
+    const taskGraph: TaskGraphSubmitInput['spec'] | undefined = managerResult.payload?.taskGraph;
     if (!taskGraph) return;
 
     const workflowName = taskGraph.workflowName || 'Workflow';
@@ -1921,26 +1923,16 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.streamingService.registerMessageCallback(taskExecutionMessage.ID, callback);
 
     try {
-      const mutation = `
-        mutation SubmitTaskGraph($taskGraphJson: String!, $environmentId: String!, $conversationDetailId: String) {
-          SubmitTaskGraph(
-            taskGraphJson: $taskGraphJson
-            environmentId: $environmentId
-            conversationDetailId: $conversationDetailId
-          ) {
-            success
-            parentTaskId
-            errorMessage
-          }
-        }
-      `;
-      const result = await GraphQLDataProvider.Instance.ExecuteGQL(mutation, {
-        taskGraphJson: JSON.stringify(taskGraph),
-        environmentId: MJEnvironmentEntityExtended.DefaultEnvironmentID,
-        conversationDetailId: taskExecutionMessage.ID,
+      // `TaskGraph.Submit` is a Remote Operation, not a bespoke mutation: the same call site is
+      // reachable from MCP, an Action wrapper, and this UI. `Execute` marshals over the generic
+      // `ExecuteRemoteOperation` transport, so there is no hand-written GraphQL document here.
+      const result = await new TaskGraphSubmitOperation().Execute({
+        spec: taskGraph,
+        environmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
+        conversationDetailID: taskExecutionMessage.ID,
       });
 
-      if (result?.SubmitTaskGraph?.success) {
+      if (result.Success && result.Output?.success) {
         // Deliberately NOT "completed" — submission means the work is durable and running, and
         // claiming completion here is exactly the lie the old await-everything path told when it
         // returned early. The dispatcher's progress frames update this message as tasks finish.
@@ -1950,7 +1942,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           'In-Progress'
         );
       } else {
-        const errorMsg = result?.SubmitTaskGraph?.errorMessage || 'Unknown error';
+        const errorMsg = result.Output?.errorMessage || result.ErrorMessage || 'Unknown error';
         console.error('Task graph submission rejected:', errorMsg);
         taskExecutionMessage.Error = errorMsg;
         await this.updateConversationDetail(taskExecutionMessage, `❌ **${workflowName}** rejected: ${errorMsg}`, 'Error');

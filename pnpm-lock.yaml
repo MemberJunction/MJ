@@ -13730,6 +13730,9 @@ importers:
       '@memberjunction/tag-engine-base':
         specifier: 6.1.0-edge.0
         version: link:../AI/Knowledge/TagEngineBase
+      '@memberjunction/task-graph':
+        specifier: 6.1.0-edge.0
+        version: link:../TaskGraph
       '@memberjunction/templates':
         specifier: 6.1.0-edge.0
         version: link:../Templates/engine
@@ -13965,6 +13968,9 @@ importers:
       '@memberjunction/tag-engine-base':
         specifier: 6.1.0-edge.0
         version: link:../AI/Knowledge/TagEngineBase
+      '@memberjunction/task-graph':
+        specifier: 6.1.0-edge.0
+        version: link:../TaskGraph
       '@memberjunction/templates':
         specifier: 6.1.0-edge.0
         version: link:../Templates/engine
