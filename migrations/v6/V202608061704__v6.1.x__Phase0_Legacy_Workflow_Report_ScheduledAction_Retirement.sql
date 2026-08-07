@@ -9,11 +9,11 @@
 
     ── What goes, and why ──────────────────────────────────────────────────────────────
 
-    1. Skip-era workflow schema: Workflow, WorkflowRun, WorkflowEngine.
+    1. Skip v1-era workflow schema: Workflow, WorkflowRun, WorkflowEngine.
        Zero non-generated readers/writers. The SubclassName-referenced `WorkflowBase`
        class does not exist anywhere in the repo. All three tables are empty.
 
-    2. Skip-era report artifact: Report, ReportCategory, ReportSnapshot, ReportUserState,
+    2. Skip v1-era report artifact: Report, ReportCategory, ReportSnapshot, ReportUserState,
        ReportVersion. Superseded by conversation artifacts. Every inbound ReportID FK is
        internal to the family (Snapshot/UserState/Version -> Report), so the cluster is
        self-contained. The renderer is already gone: the `Reports` resource type names a
@@ -249,7 +249,7 @@ GO
 DROP TABLE IF EXISTS [${flyway:defaultSchema}].[OutputTriggerType];
 GO
 
--- Skip-era workflow schema: WorkflowRun -> Workflow -> WorkflowEngine
+-- Skip v1-era workflow schema: WorkflowRun -> Workflow -> WorkflowEngine
 DROP TABLE IF EXISTS [${flyway:defaultSchema}].[WorkflowRun];
 DROP TABLE IF EXISTS [${flyway:defaultSchema}].[Workflow];
 DROP TABLE IF EXISTS [${flyway:defaultSchema}].[WorkflowEngine];
