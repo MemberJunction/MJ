@@ -457,25 +457,6 @@
   },
   {
     "_comments": [
-      "Report Snapshots - point-in-time report execution snapshots (added with search hygiene)"
-    ],
-    "fields": {
-      "Name": "MJ: Report Snapshots",
-      "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false,
-      "AllowUserSearchAPI": false,
-      "AutoUpdateAllowUserSearchAPI": false
-    },
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=MJ: Report Snapshots"
-    },
-    "sync": {
-      "lastModified": "2026-08-05T18:34:41.584Z",
-      "checksum": "45f782fe5d501db8e4e2b809d55968f8c94f72d759c940ef6c281d0013885b1b"
-    }
-  },
-  {
-    "_comments": [
       "Scheduled Job Runs - scheduled job execution history"
     ],
     "fields": {
@@ -709,22 +690,6 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User View Runs"
-    }
-  },
-  {
-    "_comments": [
-      "Workflow Runs - workflow execution history"
-    ],
-    "fields": {
-      "Name": "MJ: Workflow Runs",
-      "BaseView": "vwWorkflowRuns",
-      "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false,
-      "AllowUserSearchAPI": false,
-      "AutoUpdateAllowUserSearchAPI": false
-    },
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=MJ: Workflow Runs"
     }
   },
   {

@@ -98,7 +98,7 @@ Unit tests passing is necessary but **not sufficient** — the integration tier 
 ```bash
 pnpm run build            # all packages, from repo root
 pnpm run watch            # watch mode
-pnpm run start:api        # MJAPI (port 4001)
+pnpm run start:api        # MJAPI — port 4000 by default, override with GRAPHQL_PORT
 pnpm run start:explorer   # MJExplorer (port 4201)
 cd packages/PackageName && pnpm run build   # single package — use this, NOT turbo from root
 ```

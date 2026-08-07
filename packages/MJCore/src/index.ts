@@ -1,14 +1,12 @@
 import { BaseEntity } from "./generic/baseEntity";
 import { Metadata } from "./generic/metadata";
 import { RunQuery } from "./generic/runQuery";
-import { RunReport } from "./generic/runReport";
 import { RunView } from "./views/runView";
 
 export * from "./generic/metadata";
 export * from "./generic/baseInfo";
 export * from "./generic/baseEngine";
 export * from "./views/runView";
-export * from "./generic/runReport";
 export * from "./generic/runQuery";
 export * from "./generic/queryResultEnricher";
 export * from "./generic/interfaces";
@@ -61,7 +59,6 @@ export function SetProvider(provider) {
     Metadata.Provider = provider; // global-provider-ok: this IS the global provider setter
     BaseEntity.Provider = provider;
     RunView.Provider = provider;
-    RunReport.Provider = provider;
     RunQuery.Provider = provider;
 }
 
