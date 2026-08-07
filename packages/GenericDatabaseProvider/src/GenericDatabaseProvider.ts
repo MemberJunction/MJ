@@ -3301,6 +3301,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // Load the materialization metadata. matId is our own UUID (from committed metadata), so it is safe
         // to interpolate into ExtraFilter — it never carries caller input.
         const rv = new RunView(this);
+        // BypassCache is REQUIRED here (H6): this read gates whether we route to the materialized table, and the
+        // decisive column is Status. A refresher/CodeGen run can flip Status to 'DriftHold' or 'Disabled' out of
+        // band, but a cached 'Active' row would let this plan keep serving the held/disabled snapshot — the exact
+        // stale-serve the DriftHold mechanism exists to prevent. Reading straight from the DB guarantees we see
+        // the current terminal status. This is a single-row point lookup, so the bypass cost is negligible.
         const res = await rv.RunView<{ Status: string; ParamMode: string; ReadFilterSpec: string | null; SchemaName: string; ViewName: string }>(
             {
                 EntityName: 'MJ: Materialized Results',
@@ -3308,6 +3313,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Fields: ['Status', 'ParamMode', 'ReadFilterSpec', 'SchemaName', 'ViewName'],
                 ResultType: 'simple',
                 MaxRows: 1,
+                BypassCache: true,
             },
             contextUser,
         );
