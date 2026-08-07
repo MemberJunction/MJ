@@ -1,6 +1,79 @@
 [
   {
     "_comments": [
+      "MJ: Actions — the three collections that replace MJActionEntityExtended's hand-written getters.",
+      "Those getters were memoized filters over ActionEngineBase's preloaded caches, which is exactly",
+      "Source 'cache' + Load 'lazy': fill on first read, from RAM, zero queries.",
+      "",
+      "ReadOnly is left to its default (true, because Source is cache), so the records handed out ARE",
+      "the engine's own instances — same as the getters did — and the collection itself refuses",
+      "Add/Remove/Clear, contributes nothing to a save, and never reports dirty.",
+      "",
+      "OnRemove is therefore absent: a read-only collection has no removal semantics."
+    ],
+    "fields": {
+      "Name": "MJ: Actions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Params",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "Name ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Action Params&RelatedEntityJoinField=ActionID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:46:05.577Z",
+            "checksum": "e247a48c2cda0205c803d70da558bfb2b6b32d9b8d2631d22c47c697f69e4323"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "ResultCodes",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "ResultCode ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Action Result Codes&RelatedEntityJoinField=ActionID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:46:05.613Z",
+            "checksum": "4d6151598c55d1e996bb91b86813a57b91c80e71ff864bcf06612d63bb8d78d3"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Libraries",
+              "Source": "cache",
+              "Load": "lazy"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Action Libraries&RelatedEntityJoinField=ActionID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:46:05.596Z",
+            "checksum": "8bfdba3906a2e514c65bdeb316dba3745d7223121283a3f9557ca4e80fa22f58"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Actions"
+    }
+  },
+  {
+    "_comments": [
       "MJ: AI Agents — three collections, one of which is self-referential and needs care.",
       "",
       "Prompts: AgentID is NOT NULL and ExecutionOrder is genuinely positional (which prompt runs",
@@ -27,6 +100,22 @@
         {
           "fields": {
             "RelatedRecordCollection": {
+              "Name": "Actions",
+              "Source": "cache",
+              "Load": "lazy"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Actions&RelatedEntityJoinField=AgentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:46:05.629Z",
+            "checksum": "f3fc07fe5585228c6e23e6728b8891ac85b0ea17c53f8d3d7ec227691f2f1a06"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
               "Name": "Prompts",
               "Load": "explicit",
               "OnRemove": "delete",
@@ -39,6 +128,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Prompts&RelatedEntityJoinField=AgentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:46:05.646Z",
+            "checksum": "d2aac8859b3d2de3481352549fd3c3793eb5c7e3e38164064fd308e3e1ba784d"
           }
         },
         {
@@ -52,6 +145,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityJoinField=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:46:05.665Z",
+            "checksum": "2619b9933b559ea4d6219d141169a746660415be87002976f97ac5cca86b439d"
           }
         }
       ]
@@ -85,6 +182,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Prompts&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Prompt Models&RelatedEntityJoinField=PromptID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:46:05.682Z",
+            "checksum": "84cf64ee8be5cc9430fcb8de37cea1b899d176da0d2f3a828eb224407359fbcd"
           }
         }
       ]
@@ -121,6 +222,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: API Keys&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: API Key Scopes&RelatedEntityJoinField=APIKeyID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:46:05.696Z",
+            "checksum": "3f217465f9b1b551d3b94107b32b2d0c137fe4a90f9ab91048d80c83e3c8025b"
           }
         }
       ]
