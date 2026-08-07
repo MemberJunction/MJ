@@ -65,3 +65,17 @@ no "donor management app," no "volunteer scheduling app." Each is a generic prim
 + scoring engine, an annotation + summarization layer, a code-generation + testing-framework fix)
 that any app built on MJ, in any domain, can use. The association/nonprofit framing is the
 motivating research lens, not the deliverable's scope.
+
+## Outcome (decision record, 2026-08-07)
+
+Reviewed 2026-08-07. Decision: **Idea 3 (Accessibility-by-Default Framework Layer) is selected
+for implementation** and proceeds in its own follow-up PR — detailed implementation plan plus
+end-to-end build of the CodeGen template fixes and the `AccessibilityOracle`/`check:a11y` gate.
+MattC-BC and CaelebB-BC will test and finalize that PR.
+
+Ideas 1 (Relationship Graph & Engagement Signal Engine) and 2 (Decision Provenance Layer &
+AI-Generated Handoff Briefs) were both well received — idea 2 in particular remains a strong
+candidate for a future cycle, with one noted refinement: agent-assisted extraction of decision
+rationale from existing Conversations/Communications should be considered ahead of (or alongside)
+manual "Log a Decision" entry, so the capture step doesn't depend on voluntary form-filling.
+Neither is scheduled at this time.
