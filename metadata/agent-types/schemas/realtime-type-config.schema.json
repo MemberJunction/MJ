@@ -22,7 +22,8 @@
               "additionalProperties": false,
               "properties": {
                 "tone": { "type": "string", "description": "Spoken tone folded into the session system prompt (e.g. 'warm, unhurried')." },
-                "speakingStyle": { "type": "string", "description": "Speaking style folded into the session system prompt (e.g. 'concise, plain language')." }
+                "speakingStyle": { "type": "string", "description": "Speaking style folded into the session system prompt (e.g. 'concise, plain language')." },
+                "voice": { "type": "string", "description": "Provider-AGNOSTIC voice id, used whichever vendor ends up running the session (every realtime driver reads the neutral 'voice' key). Set this to author a voice without knowing the vendor. Wins over a 'providers.<key>.voice' entry; the matching provider bag still contributes its other settings." }
               }
             },
             "providers": {
@@ -33,7 +34,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "voice": { "type": "string", "description": "Provider voice name/preset (e.g. 'alloy')." },
-                  "voiceId": { "type": "string", "description": "Provider voice identifier where voices are ID-addressed (e.g. ElevenLabs)." }
+                  "voiceId": { "type": "string", "description": "DEPRECATED — never read by any driver; authoring it does nothing. The whole realtime driver family (including ElevenLabs, which maps it to tts.voice_id on the wire) reads the neutral 'voice' key. Retained only so configurations that already carry it still validate; use 'voice' instead." }
                 }
               }
             }
