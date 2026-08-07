@@ -37,7 +37,6 @@ import {
   LogError,
   EntityRecordNameInput,
   EntityRecordNameResult,
-  IRunReportProvider,
   RecordDependency,
   EntityDependency,
   LogStatus,
@@ -262,7 +261,7 @@ async function executeSQLCore(
  */
 export class SQLServerDataProvider
   extends GenericDatabaseProvider
-  implements IEntityDataProvider, IMetadataProvider, IRunReportProvider, IColocatedVectorHost
+  implements IEntityDataProvider, IMetadataProvider, IColocatedVectorHost
 {
   /**************************************************************************/
   // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
@@ -304,6 +303,12 @@ export class SQLServerDataProvider
   // Instance transaction properties
   private _transaction: sql.Transaction;
   private _transactionDepth: number = 0;
+  /**
+   * Set while an OUTERMOST `BeginTransaction` is awaiting `sql.Transaction.begin()`. Concurrent
+   * `BeginTransaction` callers await this first so they cannot take the nested-savepoint branch
+   * before `_transaction` exists. Null whenever no begin is in flight.
+   */
+  private _beginInFlight: Promise<void> | null = null;
   private _savepointCounter: number = 0;
   private _savepointStack: string[] = [];
 
@@ -2305,16 +2310,48 @@ IF ${varName} IS NOT NULL
   }
 
   public async BeginTransaction() {
+    // Serialize against an outermost begin that is still in flight. Without this, a second caller
+    // arriving during that window takes the depth-2 savepoint branch and issues
+    // `SAVE TRANSACTION` while `this._transaction` is still null — which silently runs it on the
+    // POOL, outside the transaction it is supposed to be marking. Swallow the in-flight begin's
+    // own rejection: if it failed, the depth is back to 0 and this caller must try its own begin.
+    while (this._beginInFlight) {
+      await this._beginInFlight.catch(() => undefined);
+    }
     try {
       this._transactionDepth++;
 
       if (this._transactionDepth === 1) {
-        // First transaction - actually begin using mssql Transaction object
-        this._transaction = new sql.Transaction(this._pool);
-        await this._transaction.begin();
-        
-        // Emit transaction state change
-        this._transactionState$.next(true);
+        // First transaction - actually begin using mssql Transaction object.
+        //
+        // 🚨 BEGIN LOCALLY, PUBLISH AFTER. `this._transaction` is a SHARED provider field that
+        // every ExecuteSQL call with no explicit connectionSource picks up (see ~1768). Assigning
+        // it before `begin()` resolves publishes an UN-BEGUN transaction to the whole process, and
+        // any concurrent query in that window dies with mssql's
+        //   "Transaction has not begun. Call begin() first."
+        // Worse, if `begin()` THROWS, the old code's catch block restored the depth but left the
+        // un-begun object assigned — poisoning the provider PERMANENTLY, so every later save on it
+        // failed with that same message until the process restarted.
+        //
+        // Found during the 6.1 release: it silently destroyed AI agent run persistence. Agent-run,
+        // step, prompt-run and heartbeat saves all failed ("Failed to create agent run record",
+        // "N step record save(s) failed"), leaving IT56/IT57's live checks with no steps to read.
+        // They therefore reported `model-noncompliance:` — byte-identically across every run and
+        // every model tier — for a defect that had nothing to do with the model.
+        const begun = (async () => {
+          const transaction = new sql.Transaction(this._pool);
+          await transaction.begin();
+          this._transaction = transaction;
+
+          // Emit transaction state change
+          this._transactionState$.next(true);
+        })();
+        this._beginInFlight = begun;
+        try {
+          await begun;
+        } finally {
+          this._beginInFlight = null;
+        }
       } else {
         // Nested transaction - create a savepoint
         const savepointName = `SavePoint_${++this._savepointCounter}`;
@@ -2328,6 +2365,14 @@ IF ${varName} IS NOT NULL
       }
     } catch (e) {
       this._transactionDepth--; // Restore depth on error
+      // Never leave a transaction object published once the depth is back to 0 — a non-null
+      // `_transaction` with no live transaction behind it poisons every subsequent ExecuteSQL on
+      // this provider. The publish-after-begin above already prevents the common case; this is the
+      // backstop that keeps the invariant true no matter how the begin failed.
+      if (this._transactionDepth === 0) {
+        this._transaction = null;
+        this._transactionState$.next(false);
+      }
       LogError(e);
       throw e; // force caller to handle
     }

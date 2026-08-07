@@ -208,7 +208,27 @@ export async function readPromptRunsForAgent(
         ResultType: 'simple',
         BypassCache: true
     }, user);
-    return RequireRows(r, `prompt-run read for agent ${agentId}`);
+    const rows = RequireRows(r, `prompt-run read for agent ${agentId}`);
+    // 🚨 DRIFT GUARD — a dead read surface must never masquerade as model variance.
+    //
+    // The run tree resolved prompt runs, so the agent demonstrably ran inference; if the AgentID
+    // narrowing then removes ALL of them, this function is reading a column nothing populates and
+    // every caller downstream silently sees "the model did nothing". That is precisely what
+    // happened before 6.1: nothing in the product ever set `AIPromptRun.AgentID` (340 rows in the
+    // release database, zero non-null), so six of IT56's checks retried three times each and
+    // reported `model-noncompliance:` — for a defect the model had no part in.
+    //
+    // Throw instead. A thrown error propagates out of runWithCompliance uncaught, so §4.6 triage
+    // sees a real defect rather than acceptable variance.
+    if (rows.length === 0) {
+        throw new Error(
+            `harness-read-surface-dead: resolved ${promptRunIds.length} prompt run(s) from the run ` +
+            `tree, but NONE carry AgentID='${agentId}'. The agent ran inference; the attribution ` +
+            `column is not populated. Either the product stopped stamping AIPromptRun.AgentID ` +
+            `(BaseAgent sets AIPromptParams.agentId) or this narrowing is wrong. Do NOT reclassify ` +
+            `this as model-noncompliance — the model is not involved.`);
+    }
+    return rows;
 }
 
 /** BFS the ParentRunID tree from a root, returning every run ID (root first). Bounded to avoid cycles. */
@@ -329,8 +349,20 @@ export async function runWithCompliance(
     scenario: () => Promise<string | undefined>,
     isCompliant: (rootRunId: string) => Promise<boolean>,
     label: string,
-    maxAttempts = 3
+    maxAttempts = 3,
+    /**
+     * Optional evidence dump for the FINAL failed attempt, appended to the thrown message.
+     *
+     * A bare `model-noncompliance:` says only "the model didn't do it" — and the fixtures are
+     * purged at teardown, so nothing can be re-queried afterwards to find out WHY. Without this,
+     * "the model declined" is indistinguishable from "the tool was never advertised" or "the
+     * response came back empty", which is precisely how three real product defects hid behind this
+     * prefix during the 6.1 release. Must never throw: a failing diagnostic must not replace the
+     * failure it is describing.
+     */
+    diagnose?: (rootRunId: string) => Promise<string>
 ): Promise<string> {
+    let lastRunId: string | undefined;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const runId = await scenario();
         // No run landed at all = an EXECUTION failure (harness or product), NOT model variance.
@@ -349,7 +381,18 @@ export async function runWithCompliance(
             if (attempt > 1) console.warn(`  ↻ ${label} — model complied on attempt ${attempt}/${maxAttempts}`);
             return runId;
         }
+        lastRunId = runId;
         console.warn(`  ↻ ${label} — attempt ${attempt}/${maxAttempts} non-compliant (runId=${runId})`);
     }
-    throw new Error(`model-noncompliance: ${label} — the model never took the instructed action after ${maxAttempts} attempts. Fix the prompt, not the check.`);
+    let evidence = '';
+    if (diagnose && lastRunId) {
+        try {
+            evidence = `\n  last attempt (runId=${lastRunId}):\n${await diagnose(lastRunId)}`;
+        } catch (e) {
+            evidence = `\n  (diagnostic for runId=${lastRunId} failed: ${e instanceof Error ? e.message : String(e)})`;
+        }
+    }
+    throw new Error(
+        `model-noncompliance: ${label} — the model never took the instructed action after ${maxAttempts} attempts. ` +
+        `Fix the prompt, not the check.${evidence}`);
 }
