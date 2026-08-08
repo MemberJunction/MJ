@@ -1656,12 +1656,33 @@ DROP INDEX IF EXISTS __mj."IDX_AUTO_MJ_FKEY_ContentSource_ScheduledActionID";
 -- 4. Drop the tables, children before parents
 -- ════════════════════════════════════════════════════════════════════════════════════
 
+-- The converter emitted these section comments but DROPPED every statement under them, so the
+-- eleven retired tables survived on PostgreSQL while SQL Server dropped them. The migration
+-- still applied cleanly — an empty section always does — and was only caught by SS<->PG table
+-- parity (376 vs 387). Restored below, children before parents, matching the SQL Server order.
+--
+-- CASCADE: the generated base views and CRUD functions for these entities are dropped with the
+-- tables. The T-SQL original drops those objects explicitly in section 3, which the converter
+-- also emptied; cascading here reaches the same end state in one step.
+
 -- Scheduled actions: ScheduledActionParam -> ScheduledAction
+DROP TABLE IF EXISTS __mj."ScheduledActionParam" CASCADE;
+DROP TABLE IF EXISTS __mj."ScheduledAction" CASCADE;
 
 -- Reports: Snapshot/UserState/Version -> Report -> ReportCategory.
 -- Report also carries the FKs to Workflow and OutputTriggerType, so it must precede both.
+DROP TABLE IF EXISTS __mj."ReportSnapshot" CASCADE;
+DROP TABLE IF EXISTS __mj."ReportUserState" CASCADE;
+DROP TABLE IF EXISTS __mj."ReportVersion" CASCADE;
+DROP TABLE IF EXISTS __mj."Report" CASCADE;
+DROP TABLE IF EXISTS __mj."ReportCategory" CASCADE;
+
+DROP TABLE IF EXISTS __mj."OutputTriggerType" CASCADE;
 
 -- Skip v1-era workflow schema: WorkflowRun -> Workflow -> WorkflowEngine
+DROP TABLE IF EXISTS __mj."WorkflowRun" CASCADE;
+DROP TABLE IF EXISTS __mj."Workflow" CASCADE;
+DROP TABLE IF EXISTS __mj."WorkflowEngine" CASCADE;
 
 /*
 ================================================================================================
