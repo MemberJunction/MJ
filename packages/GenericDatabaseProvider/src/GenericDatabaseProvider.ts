@@ -99,7 +99,7 @@ import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
 import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
 import { ScoredCandidate } from '@memberjunction/core';
 import { QueueManager } from '@memberjunction/queue';
-import { EntityActionEngineServer } from '@memberjunction/actions';
+import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
@@ -448,12 +448,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Handles entity actions (non-AI) for save, delete, or validate operations.
      * Uses EntityActionEngineServer to discover and run active actions.
+     *
+     * **After-hooks run under `EntityActionDispatchGuard`; before-hooks and Validate do not.**
+     * The guard suppresses an action re-entering itself on the same record (the enrich-and-write-back
+     * loop) and coalesces a burst of saves into one pending rerun. Neither belongs on the
+     * synchronous half of the pipeline: `Validate` and `Before*` participate in the save and can
+     * abort it, so skipping one would let a record through that should have been refused, and
+     * deferring one would decide the save's outcome after it had already happened.
      */
     protected override async HandleEntityActions(
         entity: BaseEntity,
         baseType: 'save' | 'delete' | 'validate',
         before: boolean,
         user: UserInfo,
+        originatingEntityActionIDs?: string[],
     ): Promise<ActionResult[]> {
         try {
             const engine = EntityActionEngineServer.Instance;
@@ -467,19 +475,40 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 return [];
             }
 
+            // Only the after-hooks are guarded — they are the fire-and-forget half, and the only
+            // half an action's own write-back can re-enter.
+            const guarded = baseType !== 'validate' && !before;
             const activeActions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType, 'Active');
             const results: ActionResult[] = [];
             for (const a of activeActions) {
-                const result = await engine.RunEntityAction({
-                    EntityAction: a,
-                    EntityObject: entity,
-                    InvocationType: invocationTypeEntity,
-                    ContextUser: user,
-                });
-                // null means the binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls
-                // outside it — the action never ran, so there is no result to report.
-                if (result) {
-                    results.push(result);
+                if (guarded && originatingEntityActionIDs?.some((id) => UUIDsEqual(id, a.ID))) {
+                    // The caller declared this save IS this action's write-back. Used by work that
+                    // detached from the async context the guard tracks — see
+                    // EntitySaveOptions.OriginatingEntityActionIDs.
+                    continue;
+                }
+
+                const runOnce = async () => {
+                    const result = await engine.RunEntityAction({
+                        EntityAction: a,
+                        EntityObject: entity,
+                        InvocationType: invocationTypeEntity,
+                        ContextUser: user,
+                    });
+                    // null means the binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls
+                    // outside it — the action never ran, so there is no result to report.
+                    if (result) {
+                        results.push(result);
+                    }
+                };
+
+                if (guarded) {
+                    await EntityActionDispatchGuard.Instance.Dispatch(
+                        BuildEntityActionDispatchKey(a.ID, entity.EntityInfo.ID, entity.PrimaryKey.ToString()),
+                        runOnce,
+                    );
+                } else {
+                    await runOnce();
                 }
             }
             return results;
@@ -565,7 +594,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     protected override async OnBeforeSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<void> {
         if (options.SkipEntityActions !== true)
-            await this.HandleEntityActions(entity, 'save', true, user);
+            await this.HandleEntityActions(entity, 'save', true, user, options.OriginatingEntityActionIDs);
         if (options.SkipEntityAIActions !== true)
             await this.HandleEntityAIActions(entity, 'save', true, user);
 
@@ -585,7 +614,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (options.SkipEntityAIActions !== true)
             this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
         if (options.SkipEntityActions !== true)
-            this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
+            this.HandleEntityActions(entity, 'save', false, user, options.OriginatingEntityActionIDs); // NO AWAIT INTENTIONALLY
     }
 
     protected override async OnSaveCompleted(entity: BaseEntity, saveSQLResult: SaveSQLResult, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<Record<string, unknown> | null> {
@@ -614,13 +643,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             entity.EntityInfo.AllowMultipleSubtypes &&
             entity.EntityInfo.TrackRecordChanges
         )
+            // No explicit connectionSource: sibling writes must land in the same transaction as the
+            // save that triggered them, which is what happens by default — ExecuteSQL runs on the
+            // provider's ambient transaction when no source is given.
             ? this.PropagateRecordChangesToSiblings(
                 entity.EntityInfo,
                 overlappingChangeData,
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
-                entity.ProviderTransaction ? { connectionSource: entity.ProviderTransaction } : undefined,
             )
             : null;
 
@@ -649,14 +680,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     protected override async OnBeforeDeleteExecute(entity: BaseEntity, user: UserInfo, options: EntityDeleteOptions): Promise<void> {
         if (false === options?.SkipEntityActions)
-            await this.HandleEntityActions(entity, 'delete', true, user);
+            await this.HandleEntityActions(entity, 'delete', true, user, options?.OriginatingEntityActionIDs);
         if (false === options?.SkipEntityAIActions)
             await this.HandleEntityAIActions(entity, 'delete', true, user);
     }
 
     protected override OnAfterDeleteExecute(entity: BaseEntity, user: UserInfo, options: EntityDeleteOptions): void {
         if (false === options?.SkipEntityActions)
-            this.HandleEntityActions(entity, 'delete', false, user);
+            this.HandleEntityActions(entity, 'delete', false, user, options?.OriginatingEntityActionIDs);
         if (false === options?.SkipEntityAIActions)
             this.HandleEntityAIActions(entity, 'delete', false, user);
 

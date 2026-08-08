@@ -296,6 +296,38 @@ export class RunViewParams {
     ResultType?: 'simple' | 'entity_object' | 'count_only';
 
     /**
+     * Names of {@link RelatedRecordCollection} companions to populate on the returned entity objects, using
+     * **one batched query per collection** across the entire result set.
+     *
+     * Requires `ResultType: 'entity_object'` — plain objects have no companions to populate.
+     *
+     * ## Why this exists rather than eager loading per row
+     *
+     * The obvious implementation of "load an entity's children automatically" is to do it in
+     * `LoadFromData()`. That is also the path every row of every `RunView(ResultType:'entity_object')`
+     * goes through, so it turns one view into N+1 queries — a real defect found in production
+     * accounting code, where listing 500 journal entries issued 500 line queries plus 500 dimension
+     * queries. Companion eager loading is therefore deliberately excluded from `LoadFromData()`, and
+     * set-oriented loading is served here instead:
+     *
+     * ```typescript
+     * const result = await rv.RunView<JournalEntryEntity>({
+     *     EntityName: 'MJ_BizApps_Accounting: Journal Entries',
+     *     ExtraFilter: `PeriodID = '${periodId}'`,
+     *     ResultType: 'entity_object',
+     *     IncludeRelatedRecords: ['Lines'],      // 1 query for ALL entries' lines, not one per entry
+     * });
+     * ```
+     *
+     * Cost is `1 + K` queries for K named collections, regardless of row count.
+     *
+     * @remarks
+     * Omitted by default. Nothing loads children unless you ask, which keeps grids and pickers —
+     * the overwhelming majority of view usage — free of any child-loading cost.
+     */
+    IncludeRelatedRecords?: string[];
+
+    /**
      * Internal flag set by BaseEngine when loading entity configurations.
      * When true, telemetry analyzers will skip false-positive warnings about
      * "entity already loaded by engine" since the engine IS the one calling RunView.

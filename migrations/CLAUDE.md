@@ -148,7 +148,8 @@ So a database built from **migrations alone** carries whatever JSONType definiti
 shipped with. CodeGen faithfully regenerates the TypeScript from those stale definitions and
 **silently deletes** any properties added since — the generated interface simply comes back smaller.
 
-Correct order after any migration touching an entity that has a JSONType field:
+Correct order after any migration touching an entity that has a JSONType field on a column that
+**already exists**:
 
 ```bash
 mj migrate                 # schema
@@ -159,6 +160,44 @@ mj codegen                 # now regenerates from current definitions
 **Why this bites:** the failure is silent. It surfaced once only because a downstream package failed
 to compile against the shrunken interface; on an entity nothing imports, the truncated types would
 have been committed unnoticed and shipped as a breaking change to consumers.
+
+#### 🚨 A **NEW** column needs four steps, not three — `sync push` cannot run second
+
+The order above assumes the field's `EntityField` row already exists. For a column this migration is
+*adding*, it does not: **CodeGen is what creates the `EntityField` row.** A metadata file that
+declares a JSONType on that new field resolves it with a lookup —
+`@lookup:MJ: Entity Fields.EntityID=...&Name=YourNewColumn` — so running `sync push` before CodeGen
+fails outright:
+
+```
+Lookup failed: No record found in 'MJ: Entity Fields' where EntityID='…' AND Name='YourNewColumn'
+```
+
+That is not a metadata bug. It means CodeGen has not run yet.
+
+```bash
+mj migrate                 # 1. schema
+mj codegen --skipfiles     # 2. DB side only: creates the EntityField row, rebuilds views/procs,
+                           #    and emits the CodeGen_Run_*.sql you will append to the migration
+mj sync push --dir=metadata --ci   # 3. now the lookup resolves; JSONTypeDefinition lands in the DB
+mj codegen --skipdb        # 4. files only: regenerates TS from complete metadata, including the
+                           #    typed `<Field>Object` accessor that step 3 made possible
+```
+
+**Never run a full `mj codegen` at step 2.** File generation reads whatever metadata the database
+currently holds, and a database built from migrations alone has *no seeded metadata yet* — the rows
+that `mj sync push` is about to supply. A full run at that point regenerates
+`packages/MJCoreEntities/src/generated/remote_operations.ts` from the empty set and **deletes every
+remote-operation class from it**. That file is a build input for the CLI itself, so the next
+`mj sync push` dies at import time with
+`SyntaxError: The requested module '@memberjunction/core-entities' does not provide an export named
+'…Operation'` — and you cannot run step 3 to fix it without first restoring the file
+(`git show HEAD:<path> > <path>`) and rebuilding MJCoreEntities. `--skipfiles` avoids the whole trap.
+
+**How you find out you got this wrong:** you don't, locally. The migration looks complete because
+your dev database already had the `EntityField` row from your own CodeGen run. CI builds from
+migrations alone, so it is the *deterministic integration tier* that fails, at the `mj sync push`
+step, long after the PR looks green locally.
 
 Two related points:
 

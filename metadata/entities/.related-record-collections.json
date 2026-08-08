@@ -1,0 +1,132 @@
+[
+  {
+    "_comments": [
+      "MJ: AI Agents — three collections, one of which is self-referential and needs care.",
+      "",
+      "Prompts: AgentID is NOT NULL and ExecutionOrder is genuinely positional (which prompt runs",
+      "first), so it gets the Sequence policy. From is 0 because the column defaults to 0, not 1.",
+      "",
+      "Actions: AgentID is NULLABLE on this junction, but OnRemove is still 'delete' — an",
+      "AIAgentAction row with a null AgentID is not a valid detached record, it is garbage.",
+      "",
+      "SubAgents: OnRemove is 'orphan', NOT 'delete'. ParentID is nullable, and detaching a",
+      "sub-agent should demote it to a root agent — deleting it would destroy an entire agent",
+      "together with its own prompts, actions and run history because someone reorganised a",
+      "hierarchy. No Sequence policy either: renumbering ExecutionOrder here would rewrite the",
+      "agent records themselves, so the column is used for ordering only.",
+      "",
+      "NOTE: MJ: AI Agents has a SECOND self-relationship (DefaultCoAgentID) which is deliberately",
+      "NOT declared — hence RelatedEntityJoinField in every lookup below, which is what keeps these",
+      "two rows apart."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agents"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Prompts",
+              "Load": "explicit",
+              "OnRemove": "delete",
+              "OrderBy": "ExecutionOrder ASC",
+              "Sequence": {
+                "Field": "ExecutionOrder",
+                "From": 0
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Prompts&RelatedEntityJoinField=AgentID"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "SubAgents",
+              "Load": "explicit",
+              "OnRemove": "orphan",
+              "OrderBy": "ExecutionOrder ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityJoinField=ParentID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agents"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: AI Prompts -> MJ: AI Prompt Models. PromptID is NOT NULL, Hard delete.",
+      "",
+      "Deliberately NO Sequence policy despite Priority being an integer: Priority is a SEMANTIC",
+      "ranking (which model to prefer), not a positional line number. Auto-renumbering it on every",
+      "save would silently rewrite a deliberate preference — a sequence policy suits line numbers,",
+      "not rankings. OrderBy alone gives the read ordering without touching the values."
+    ],
+    "fields": {
+      "Name": "MJ: AI Prompts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Models",
+              "Load": "explicit",
+              "OnRemove": "delete",
+              "OrderBy": "Priority ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Prompts&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Prompt Models&RelatedEntityJoinField=PromptID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompts"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: API Keys -> MJ: API Key Scopes. APIKeyID is NOT NULL, Hard delete. Priority is a",
+      "ranking, so no Sequence policy (same reasoning as AI Prompt Models above).",
+      "",
+      "BEHAVIOUR CHANGE WORTH KNOWING: MJAPIKeyScopeEntityServer overrides ValidateAsync to check",
+      "the scope's row filter, and that override is governed by DefaultSkipAsyncValidation — which",
+      "defaults to true, so today it is effectively dead. Companion validation runs each child's",
+      "ValidateAsync UNCONDITIONALLY, so declaring this collection turns that check on for every",
+      "scope on every API Key save. That is the intended rollup and a security-relevant improvement,",
+      "but a pre-existing malformed row filter will start failing saves."
+    ],
+    "fields": {
+      "Name": "MJ: API Keys"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Scopes",
+              "Load": "explicit",
+              "OnRemove": "delete",
+              "OrderBy": "Priority ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: API Keys&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: API Key Scopes&RelatedEntityJoinField=APIKeyID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: API Keys"
+    }
+  }
+]

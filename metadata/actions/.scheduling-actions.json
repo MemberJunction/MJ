@@ -795,7 +795,7 @@
   {
     "fields": {
       "Name": "Execute Scheduled Job Now",
-      "Description": "Trigger immediate execution of a scheduled job, bypassing its normal schedule. Creates a job run record for the scheduling engine to pick up",
+      "Description": "Run a scheduled job immediately, bypassing its cron schedule. Executes through the scheduling engine — lock acquisition, the job's plugin, the run record, statistics and notifications — and reports the job's actual outcome. Set Wait=false to start it and return without waiting.",
       "CategoryID": "@lookup:MJ: Action Categories.Name=System&ParentID=null",
       "DriverClass": "Execute Scheduled Job Now",
       "Type": "Custom",
@@ -830,15 +830,52 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "ID of the created job run",
-            "IsRequired": true
+            "Description": "ID of the job run that was executed. Not set when Wait=false.",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "2E945B72-92B6-468A-BF55-293658169D0E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:27.742Z",
-            "checksum": "4c01bc8d6a746f938da1953083bdb99a8f3233f3d46de9713a6c8808adedb16c"
+            "lastModified": "2026-08-07T21:00:33.914Z",
+            "checksum": "8a5fc0fc5e5fbd4f6f964cf31cd02db6e8397ba4e772d65b71a602886b1e0046"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Wait",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Wait for the job to finish and report its real outcome (default true). False starts it and returns immediately, so the result only says it started.",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "8D439749-2784-47BA-A686-27B84332635A"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T21:00:33.949Z",
+            "checksum": "81c38e533a1bd163aa036ade85de8013b96b7a4aeb8f859d33170d3996168016"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RunStatus",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Final status of the job run (Completed, Failed, Cancelled, Timeout). Not set when Wait=false.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FFC9FCA4-EFAB-408D-8E26-D65F028CD63C"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T21:00:33.975Z",
+            "checksum": "9856e1eb8a0d6769325dae986386fdb7eb1d102dd3436120934c89f2ccfe4755"
           }
         }
       ],
@@ -848,14 +885,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Job execution queued successfully"
+            "Description": "The job ran and completed successfully"
           },
           "primaryKey": {
             "ID": "AE8EABE0-D3F9-4F2D-85BB-AC7014F49D6D"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:27.745Z",
-            "checksum": "88f7ae0cc8bc27493ba09611fbbee8ab9dec5988ec9eedd0987bc3ac0da08182"
+            "lastModified": "2026-08-07T21:00:34.006Z",
+            "checksum": "1ed1529be2182542c25c57b60a1b8788940738cd79af5f64fdc838c753615234"
           }
         },
         {
@@ -893,14 +930,59 @@
             "ActionID": "@parent:ID",
             "ResultCode": "FAILED",
             "IsSuccess": false,
-            "Description": "Failed to queue job execution"
+            "Description": "The job could not be started"
           },
           "primaryKey": {
             "ID": "7C52A905-D8FC-4700-98C8-99FF7E344876"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:27.753Z",
-            "checksum": "3b8c710289e106b3e9e38472d3ac9264f4be332201a5da308e5c0da148532852"
+            "lastModified": "2026-08-07T21:00:34.021Z",
+            "checksum": "0e8cc267614055930327a15861fd10687a852cbcebfcedd948e937d9e3c556ac"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "JOB_FAILED",
+            "IsSuccess": false,
+            "Description": "The job ran but did not complete successfully — see RunStatus and the job run record"
+          },
+          "primaryKey": {
+            "ID": "E16CE11C-0D35-4D91-B38C-12E80B139AEF"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T21:00:34.045Z",
+            "checksum": "a2a8c91de39e794c991b6026443a47452928d84df0bd3609cc5179ab48aa1207"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LOCKED",
+            "IsSuccess": false,
+            "Description": "The job is already running — retry once it finishes"
+          },
+          "primaryKey": {
+            "ID": "73816F66-C56B-4483-930E-DFDCE4E3FD2D"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T21:00:34.067Z",
+            "checksum": "1cbc7aedb92a32f9c90463abf429055c510d344c0ab937e220133538934cd786"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "STARTED",
+            "IsSuccess": true,
+            "Description": "The job was started without waiting (Wait=false) — its outcome is on the job run record"
+          },
+          "primaryKey": {
+            "ID": "2F2968C2-E3E3-4F60-9936-6A158978F6AE"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T21:00:34.082Z",
+            "checksum": "6e1e7905cfcbda33deffc61a77e482d931001a155c5d5f8dfce1e4443046eb08"
           }
         }
       ]
@@ -909,8 +991,8 @@
       "ID": "8C985369-A876-43D3-9A56-848E7AC28CFA"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:12.254Z",
-      "checksum": "0f56368c95c888e19192b55e559ee19520d343d76fa2b29edd81315c9fc34f9d"
+      "lastModified": "2026-08-07T21:00:33.844Z",
+      "checksum": "ef63e7aa8eb3b07c3bb3557e7932e2a901373284101893c2867c49cc4e359256"
     }
   },
   {

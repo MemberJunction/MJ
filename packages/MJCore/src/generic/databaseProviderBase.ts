@@ -6,6 +6,7 @@ import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDu
 import { dispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
+import { EntityTransactionScope } from "./entityTransactionScope";
 import { LogError } from "./logging";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
@@ -160,6 +161,62 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public get IsInTransaction(): boolean {
         return false;
+    }
+
+    /**
+     * Database providers execute multi-record units of work atomically, in-process.
+     *
+     * @see ProviderBase.SupportsEntityTransactions for why the base default is `false`.
+     */
+    public override get SupportsEntityTransactions(): boolean {
+        return true;
+    }
+
+    /**
+     * Begins a transaction scope, or joins one already in flight on this provider.
+     *
+     * This is the single transaction primitive for all multi-record entity work — IS-A parent
+     * chains, composite save graphs and hand-written application cascades. It delegates to the
+     * provider's existing depth-counted {@link BeginTransaction} / {@link CommitTransaction} /
+     * {@link RollbackTransaction}, which already implement the join semantics: the outermost call
+     * issues a physical `BEGIN`, nested calls create savepoints, and only the outermost commit
+     * commits for real.
+     *
+     * Routing IS-A through here is what closed the torn-write bug described in
+     * {@link EntityTransactionScope} — the previous `BeginISATransaction()` opened a *second*
+     * physical transaction on the same pool, blind to any transaction the caller had already
+     * started.
+     *
+     * The returned scope is **settle-once**: the first `Commit()` or `Rollback()` wins and later
+     * calls are no-ops, so `try { ...; Commit() } catch { Rollback() }` is safe even when the work
+     * already unwound its own scope.
+     *
+     * @returns A scope bound to this provider's ambient transaction.
+     */
+    public async BeginEntityTransaction(): Promise<EntityTransactionScope> {
+        // Capture nesting BEFORE beginning: once BeginTransaction() returns we are, by definition,
+        // in a transaction, so asking afterwards would always answer "nested".
+        const isNested = this.IsInTransaction;
+        await this.BeginTransaction();
+
+        let settled = false;
+        const settle = async (commit: boolean): Promise<void> => {
+            if (settled) {
+                return; // settle-once: the first outcome wins
+            }
+            settled = true;
+            if (commit) {
+                await this.CommitTransaction();
+            } else {
+                await this.RollbackTransaction();
+            }
+        };
+
+        return {
+            IsNested: isNested,
+            Commit: () => settle(true),
+            Rollback: () => settle(false),
+        };
     }
 
     /**
@@ -874,8 +931,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         // ISA overlapping-subtype record-change propagation is DB-agnostic: if the save SQL
         // generation populated `overlappingChangeData` in extraData and the entity tracks
         // record changes across multiple subtypes, fan the change record out to siblings.
-        // The provider-specific transaction handle (if any) is passed through opaquely
-        // via `connectionSource`; each provider treats it as its native type downstream.
+        //
+        // No explicit `connectionSource` is supplied: the sibling writes must land in the same
+        // transaction as the save that triggered them, and that is exactly what happens by default
+        // — every ExecuteSQL call without an explicit source runs on the provider's ambient
+        // transaction, which BeginEntityTransaction() opened (or joined) for this unit of work.
         const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
             | { changesJSON: string; changesDescription: string }
             | undefined;
@@ -884,14 +944,12 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             entity.EntityInfo.AllowMultipleSubtypes &&
             entity.EntityInfo.TrackRecordChanges
         ) {
-            const transaction = entity.ProviderTransaction;
             await this.PropagateRecordChangesToSiblings(
                 entity.EntityInfo,
                 overlappingChangeData,
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
-                transaction ? { connectionSource: transaction } : undefined,
             );
         }
         return null;
@@ -1733,13 +1791,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @param baseType The operation type
      * @param before True for before-hooks, false for after-hooks
      * @param user The acting user
+     * @param originatingEntityActionIDs Entity Actions that caused this save/delete, from
+     *        `EntitySaveOptions.OriginatingEntityActionIDs`. After-hooks skip them, so an action
+     *        writing back on the record that triggered it does not re-fire itself.
      * @returns Array of action results (empty by default)
      */
     protected async HandleEntityActions(
         _entity: BaseEntity,
         _baseType: 'save' | 'delete' | 'validate',
         _before: boolean,
-        _user: UserInfo
+        _user: UserInfo,
+        _originatingEntityActionIDs?: string[]
     ): Promise<{ Success: boolean; Message?: string }[]> {
         return [];
     }

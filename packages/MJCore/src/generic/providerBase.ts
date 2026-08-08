@@ -20,6 +20,7 @@ import { RunView, RunViewParams, IsMaterializedDataSource } from "../views/runVi
 import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
 import { TransformSimpleObjectToEntityObject } from "./util";
+import { LoadRelatedRecordsBatched } from "./relatedRecordBatchLoader";
 
 
 
@@ -244,6 +245,22 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
  * Subclasses must implement abstract methods for provider-specific operations.
  */
 export abstract class ProviderBase implements IMetadataProvider, IRunViewProvider, IRunQueryProvider, IRemoteOperationProvider {
+    /**
+     * Whether this provider can execute a multi-record unit of work atomically, in-process.
+     *
+     * Defaults to `false` — the correct answer for every provider that is not talking directly to a
+     * database, most importantly the client-side `GraphQLDataProvider`. `DatabaseProviderBase`
+     * overrides this to `true` and supplies {@link DatabaseProviderBase.BeginEntityTransaction}.
+     *
+     * `BaseEntity` reads this to decide whether a multi-node save graph runs locally inside a
+     * transaction or is routed to the server as a single unit of work. Defaulting to `false` is the
+     * safe direction: a provider that has not opted in never has non-atomic work mistaken for
+     * atomic work.
+     */
+    public get SupportsEntityTransactions(): boolean {
+        return false;
+    }
+
     private _ConfigData: ProviderConfigDataBase;
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
@@ -3589,6 +3606,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected async TransformSimpleObjectToEntityObject(param: RunViewParams, result: RunViewResult, contextUser?: UserInfo) {
         if (param.ResultType === 'entity_object' && result && result.Success && result.Results?.length > 0) {
             result.Results = await TransformSimpleObjectToEntityObject(this, param.EntityName, result.Results, contextUser);
+
+            // Opt-in batched child loading: ONE query per named collection across the whole result
+            // set, not one per row. Companion eager loading is deliberately kept out of
+            // LoadFromData() (which is the per-row path above) precisely so that populating children
+            // for a view cannot degrade into N+1 — see relatedRecordBatchLoader.ts.
+            if (param.IncludeRelatedRecords?.length) {
+                await LoadRelatedRecordsBatched(
+                    result.Results as BaseEntity[],
+                    param.IncludeRelatedRecords,
+                    this,
+                    contextUser,
+                );
+            }
         }
     }
 

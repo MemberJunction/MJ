@@ -148,6 +148,33 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     prefs: MJUserNotificationPreferenceEntity | null,
     type: MJUserNotificationTypeEntity,
   ): DeliveryChannels {
+    return this.applyChannelCeiling(this.resolvePreferredChannels(params, prefs, type), params.allowedDeliveryChannels);
+  }
+
+  /**
+   * Apply a caller-supplied ceiling to already-resolved channels.
+   *
+   * Subtractive only: an explicit `false` turns a channel off, anything else leaves it alone. That
+   * asymmetry is the point — a caller composing its own channel toggles with the recipient's
+   * preferences must not be able to turn a channel back ON that the recipient declined.
+   */
+  private applyChannelCeiling(channels: DeliveryChannels, ceiling?: Partial<DeliveryChannels>): DeliveryChannels {
+    if (!ceiling) {
+      return channels;
+    }
+    return {
+      inApp: channels.inApp && ceiling.inApp !== false,
+      email: channels.email && ceiling.email !== false,
+      sms: channels.sms && ceiling.sms !== false,
+    };
+  }
+
+  /** Channel resolution from force / preferences / type defaults, before any ceiling is applied. */
+  private resolvePreferredChannels(
+    params: SendNotificationParams,
+    prefs: MJUserNotificationPreferenceEntity | null,
+    type: MJUserNotificationTypeEntity,
+  ): DeliveryChannels {
     // If forceDeliveryChannels is specified, use it directly
     if (params.forceDeliveryChannels) {
       return params.forceDeliveryChannels;

@@ -13290,11 +13290,11 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
-        * * Display Name: Source Entity Name
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     EntityDocument: z.string().nullable().describe(`
         * * Field Name: EntityDocument
-        * * Display Name: Entity Document Template Name
+        * * Display Name: Entity Document Name
         * * SQL Data Type: nvarchar(250)`),
     ScheduledJob: z.string().nullable().describe(`
         * * Field Name: ScheduledJob
@@ -18631,11 +18631,12 @@ export type MJEntityRelationshipDisplayComponentEntityType = z.infer<typeof MJEn
 export const MJEntityRelationshipSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     Sequence: z.number().describe(`
@@ -18646,7 +18647,7 @@ export const MJEntityRelationshipSchema = z.object({
         * * Description: Used for display order in generated forms and in other places in the UI where relationships for an entity are shown`),
     RelatedEntityID: z.string().describe(`
         * * Field Name: RelatedEntityID
-        * * Display Name: Related Entity ID
+        * * Display Name: Related Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     BundleInAPI: z.boolean().describe(`
@@ -18657,12 +18658,13 @@ export const MJEntityRelationshipSchema = z.object({
         * * Description: Whether to include related records when fetching the parent entity via API.`),
     IncludeInParentAllQuery: z.boolean().describe(`
         * * Field Name: IncludeInParentAllQuery
-        * * Display Name: Include In Parent All Query
+        * * Display Name: Include In Parent Query
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether to include this relationship when querying all fields of the parent entity.`),
     Type: z.union([z.literal('Many To Many'), z.literal('One To Many')]).describe(`
         * * Field Name: Type
+        * * Display Name: Relationship Type
         * * SQL Data Type: nchar(20)
         * * Default Value: One To Many
     * * Value List Type: List
@@ -18734,48 +18736,55 @@ export const MJEntityRelationshipSchema = z.object({
         * * Description: If specified, the icon `),
     DisplayUserViewID: z.string().nullable().describe(`
         * * Field Name: DisplayUserViewID
-        * * Display Name: Display User View ID
+        * * Display Name: Display User View
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)`),
     DisplayComponentID: z.string().nullable().describe(`
         * * Field Name: DisplayComponentID
-        * * Display Name: Display Component ID
+        * * Display Name: Display Component
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Relationship Display Components (vwEntityRelationshipDisplayComponents.ID)`),
     DisplayComponentConfiguration: z.string().nullable().describe(`
         * * Field Name: DisplayComponentConfiguration
-        * * Display Name: Display Component Configuration
+        * * Display Name: Display Component Config
         * * SQL Data Type: nvarchar(MAX)
         * * Description: If DisplayComponentID is specified, this field can optionally be used to track component-specific and relationship-specific configuration details that will be used by CodeGen to provide to the display component selected.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     AutoUpdateFromSchema: z.boolean().describe(`
         * * Field Name: AutoUpdateFromSchema
-        * * Display Name: Auto Update From Schema
+        * * Display Name: Auto-Update From Schema
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to 1.`),
     AdditionalFieldsToInclude: z.string().nullable().describe(`
         * * Field Name: AdditionalFieldsToInclude
-        * * Display Name: Additional Fields To Include
+        * * Display Name: Additional Fields
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of additional field names to include when joining through this relationship (for junction tables, e.g., ["RoleName", "UserEmail"])`),
     AutoUpdateAdditionalFieldsToInclude: z.boolean().describe(`
         * * Field Name: AutoUpdateAdditionalFieldsToInclude
-        * * Display Name: Auto Update Additional Fields To Include
+        * * Display Name: Auto-Update Additional Fields
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When 1, allows system/LLM to auto-update AdditionalFieldsToInclude; when 0, user has locked this field`),
+    RelatedRecordCollection: z.any().nullable().describe(`
+        * * Field Name: RelatedRecordCollection
+        * * Display Name: Related Record Collection Policy
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJEntityRelationshipEntity_IRelatedRecordCollectionConfig
+        * * Description: Optional JSON policy object that declares this relationship as a first-class related-record collection, so CodeGen can emit a typed DeclareRelatedRecords(...) declaration on the entity subclass. Shape is IRelatedRecordCollectionConfig: Name (the generated property name, e.g. "Lines"), Load ('explicit' | 'eager' | 'never'), OnRemove ('delete' | 'orphan' | 'refuse'), OrderBy, Sequence ({ Field, From }), and ClearAfterSave. RelatedEntity and RelatedEntityJoinField are NOT repeated here — they are read from this row's own columns. NULL means the relationship is not a declared collection, which is the default and reproduces pre-6.2 behaviour exactly.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     EntityBaseTable: z.string().describe(`
         * * Field Name: EntityBaseTable
@@ -18787,7 +18796,7 @@ export const MJEntityRelationshipSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntity: z.string().describe(`
         * * Field Name: RelatedEntity
-        * * Display Name: Related Entity
+        * * Display Name: Related Entity Name
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntityBaseTable: z.string().describe(`
         * * Field Name: RelatedEntityBaseTable
@@ -21751,11 +21760,6 @@ export const MJMaterializedResultSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Count of consecutive incremental (Incremental/DirtyGroupRecompute) refreshes since the last full rebuild. The refresher forces a full rebuild once this reaches its threshold, reconciling drift that a balanced delete+insert (net-zero source row-count change) leaves uncaught by the delete-detection guard. Reset to 0 on every full rebuild; incremented on every incremental refresh.`),
-    ReadFilterSpec: z.string().nullable().describe(`
-        * * Field Name: ReadFilterSpec
-        * * Display Name: Read Filter Spec
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: For a RowFilterBroad materialization, a JSON array of read-time filter predicates — each { column, operator, paramName, kind } — that the runtime provider injects against the broad materialized table when a caller runs the query with DataSource=Materialized. operator is one of the read-time-safe set (=, !=, <>, <, >, <=, >=, IN, NOT IN); kind is scalar or list. Values are always bound as SQL parameters, never interpolated. NULL for non-row-filter materializations.`),
     SourceQuery: z.string().nullable().describe(`
         * * Field Name: SourceQuery
         * * Display Name: Source Query
@@ -34707,6 +34711,86 @@ export interface MJActionEntity_IRuntimeLibraryReference {
  */
 @RegisterClass(BaseEntity, 'MJ: Actions')
 export class MJActionEntity extends BaseEntity<MJActionEntityType> {
+
+  /**
+  * Related records: MJ: Action Params
+  *
+  * Loads, validates and persists as one unit with this MJ: Actions record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Actions → MJ: Action Params' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Action Params', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Action Params', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Params = this.DeclareRelatedRecords<MJActionParamEntity>({
+      Name: 'Params',
+        RelatedEntity: 'MJ: Action Params',
+        RelatedEntityJoinField: 'ActionID',
+        OrderBy: 'Name ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: Action Libraries
+  *
+  * Loads, validates and persists as one unit with this MJ: Actions record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Actions → MJ: Action Libraries' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Action Libraries', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Action Libraries', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Libraries = this.DeclareRelatedRecords<MJActionLibraryEntity>({
+      Name: 'Libraries',
+        RelatedEntity: 'MJ: Action Libraries',
+        RelatedEntityJoinField: 'ActionID',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: Action Result Codes
+  *
+  * Loads, validates and persists as one unit with this MJ: Actions record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Actions → MJ: Action Result Codes' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Action Result Codes', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Action Result Codes', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly ResultCodes = this.DeclareRelatedRecords<MJActionResultCodeEntity>({
+      Name: 'ResultCodes',
+        RelatedEntity: 'MJ: Action Result Codes',
+        RelatedEntityJoinField: 'ActionID',
+        OrderBy: 'ResultCode ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
     /**
     * Loads the MJ: Actions record from the database
     * @param ID: string - primary key value to load the MJ: Actions record.
@@ -45124,6 +45208,80 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agents')
 export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
+
+  /**
+  * Related records: MJ: AI Agent Actions
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Agents record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Agents → MJ: AI Agent Actions' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: AI Agent Actions', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: AI Agent Actions', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Actions = this.DeclareRelatedRecords<MJAIAgentActionEntity>({
+      Name: 'Actions',
+        RelatedEntity: 'MJ: AI Agent Actions',
+        RelatedEntityJoinField: 'AgentID',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: AI Agent Prompts
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Agents record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Agents → MJ: AI Agent Prompts' relationship; edit that row, not this file.
+  *
+  */
+  public readonly Prompts = this.DeclareRelatedRecords<MJAIAgentPromptEntity>({
+      Name: 'Prompts',
+        RelatedEntity: 'MJ: AI Agent Prompts',
+        RelatedEntityJoinField: 'AgentID',
+        OrderBy: 'ExecutionOrder ASC',
+        Load: 'explicit',
+        OnRemove: 'delete',
+        Source: 'database',
+        ReadOnly: false,
+        Sequence: { Field: 'ExecutionOrder', From: 0 },
+  });
+
+
+  /**
+  * Related records: MJ: AI Agents
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Agents record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Agents → MJ: AI Agents' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: AI Agents', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: AI Agents', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly SubAgents = this.DeclareRelatedRecords<MJAIAgentEntity>({
+      Name: 'SubAgents',
+        RelatedEntity: 'MJ: AI Agents',
+        RelatedEntityJoinField: 'ParentID',
+        OrderBy: 'ExecutionOrder ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
     /**
     * Loads the MJ: AI Agents record from the database
     * @param ID: string - primary key value to load the MJ: AI Agents record.
@@ -52823,6 +52981,33 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompts')
 export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
+
+  /**
+  * Related records: MJ: AI Prompt Models
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Prompts record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Prompts → MJ: AI Prompt Models' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: AI Prompt Models', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: AI Prompt Models', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Models = this.DeclareRelatedRecords<MJAIPromptModelEntity>({
+      Name: 'Models',
+        RelatedEntity: 'MJ: AI Prompt Models',
+        RelatedEntityJoinField: 'PromptID',
+        OrderBy: 'Priority ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
     /**
     * Loads the MJ: AI Prompts record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompts record.
@@ -56526,6 +56711,33 @@ export class MJAPIKeyUsageLogEntity extends BaseEntity<MJAPIKeyUsageLogEntityTyp
  */
 @RegisterClass(BaseEntity, 'MJ: API Keys')
 export class MJAPIKeyEntity extends BaseEntity<MJAPIKeyEntityType> {
+
+  /**
+  * Related records: MJ: API Key Scopes
+  *
+  * Loads, validates and persists as one unit with this MJ: API Keys record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: API Keys → MJ: API Key Scopes' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: API Key Scopes', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: API Key Scopes', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Scopes = this.DeclareRelatedRecords<MJAPIKeyScopeEntity>({
+      Name: 'Scopes',
+        RelatedEntity: 'MJ: API Key Scopes',
+        RelatedEntityJoinField: 'APIKeyID',
+        OrderBy: 'Priority ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
     /**
     * Loads the MJ: API Keys record from the database
     * @param ID: string - primary key value to load the MJ: API Keys record.
@@ -68627,7 +68839,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: Entity
-    * * Display Name: Source Entity Name
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string | null {
@@ -68636,7 +68848,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: EntityDocument
-    * * Display Name: Entity Document Template Name
+    * * Display Name: Entity Document Name
     * * SQL Data Type: nvarchar(250)
     */
     get EntityDocument(): string | null {
@@ -82653,6 +82865,143 @@ export class MJEntityRelationshipDisplayComponentEntity extends BaseEntity<MJEnt
 
 
 /**
+ * Declares an `EntityRelationship` as a first-class **related-record collection** — a set of child
+ * rows that load, validate and persist as one unit with their parent.
+ *
+ * Stored in the `RelatedRecordCollection` column of the `MJ: Entity Relationships` entity. When
+ * non-null, CodeGen emits a typed declaration onto the generated entity subclass:
+ *
+ * ```typescript
+ * public readonly Lines = this.DeclareRelatedRecords<OrderLineEntity>({
+ *     Name: 'Lines',
+ *     RelatedEntity: 'MJ_BizApps_Orders: Order Lines',   // from EntityRelationship.RelatedEntity
+ *     RelatedEntityJoinField: 'OrderHeaderID',           // from EntityRelationship.RelatedEntityJoinField
+ *     OrderBy: 'LineNumber ASC',
+ *     Load: 'explicit',
+ *     OnRemove: 'delete',
+ *     Sequence: { Field: 'LineNumber', From: 1 },
+ * });
+ * ```
+ *
+ * **`RelatedEntity` and `RelatedEntityJoinField` are deliberately absent from this interface.** They
+ * already exist as columns on the same `EntityRelationship` row, and duplicating them here would
+ * create two sources of truth that can disagree — with the JSON copy winning silently. CodeGen reads
+ * them from the row's own columns.
+ *
+ * NULL means the relationship is not a declared collection. That is the default and reproduces
+ * pre-6.2 behaviour exactly: nothing is generated and nothing loads eagerly.
+ *
+ * @see guides/TRANSACTIONS_AND_BATCHING_GUIDE.md
+ */
+export interface MJEntityRelationshipEntity_IRelatedRecordCollectionConfig {
+    /**
+     * The property name generated on the entity subclass, and the companion's stable wire key —
+     * e.g. `'Lines'` produces `order.Lines`.
+     *
+     * **This is a published contract.** It appears in serialised composite payloads, so renaming it
+     * breaks in-flight requests and any persisted snapshot that captured one. Must be unique among
+     * the collections declared on a single entity.
+     */
+    Name: string;
+
+    /**
+     * Where the collection's records come from. Defaults to `'database'`.
+     *
+     * - `'database'` — a `RunView` against the related entity, filtered by the join field. Always
+     *   correct, always fresh, costs a query. The right choice for transactional data (order lines,
+     *   journal entry lines) where staleness is unacceptable.
+     * - `'cache'` — the records are taken from whichever loaded `BaseEngine` already holds that
+     *   entity, discovered generically through `BaseEngineRegistry.FindCachedEntity()`. Costs **zero
+     *   queries**. The right choice for metadata-shaped data that an engine preloads anyway —
+     *   action params, prompt models, API key scopes. Falls back to `'database'` when no loaded
+     *   engine offers the entity, so a cache miss degrades instead of failing.
+     *
+     * Not called `'query'` deliberately: in MemberJunction a *Query* is a stored, named artifact
+     * (`MJ: Queries`, `RunQuery`), so `Source: 'query'` would read as "this comes from a stored
+     * Query" — a different thing entirely.
+     */
+    Source?: 'database' | 'cache';
+
+    /**
+     * Whether the collection refuses mutation. Defaults to `false`, **except when
+     * {@link Source} is `'cache'`, where it defaults to `true`.**
+     *
+     * When `true`: `Add`, `Create`, `Remove` and `Clear` throw, the collection contributes nothing
+     * to a save plan, and `Dirty` stays `false`. That last part is not
+     * cosmetic — a cache-sourced collection holds the *engine's own entity instances*, so a record
+     * dirtied by some unrelated code path would otherwise make every parent holding it report dirty
+     * and try to save.
+     *
+     * **What this cannot enforce:** once you hold a `BaseEntity` you can set fields on it and call
+     * `Save()`. Read-only constrains the *collection*, not the records inside it. Which is why the
+     * source matters:
+     *
+     * - `'cache'` + read-only → you get the engine's shared instances. Zero allocation, and the
+     *   contract is "do not mutate these".
+     * - `'cache'` + writable → the records are **copied** into fresh entity objects on load, so the
+     *   engine's cache is never mutated in place. Saving a copy fires the ordinary `BaseEntity`
+     *   save event, which the engines already subscribe to, so their caches refresh themselves.
+     * - `'database'` → always fresh objects; none of this applies.
+     */
+    ReadOnly?: boolean;
+
+    /**
+     * When the collection populates itself. Defaults to `'explicit'`.
+     *
+     * - `'explicit'` — nothing loads until the caller awaits `Load()` or
+     *   `BaseEntity.LoadRelatedRecords()`. **The right default for `'database'`**: an
+     *   automatically-populated collection on a commonly-listed entity is a performance trap.
+     * - `'immediate'` — populated automatically by `Load()`. Never by `LoadFromData()`, which is the
+     *   per-row materialisation path for `RunView(ResultType:'entity_object')` — loading related
+     *   records there turns one view into N+1 queries. Use `RunView.IncludeRelatedRecords` for
+     *   result sets, which costs 1+K instead.
+     * - `'lazy'` — populated on first access to `Items`. **Requires `Source: 'cache'`**, and CodeGen
+     *   refuses the combination with `'database'`: a property getter cannot await, so a lazy
+     *   database load could only ever silently fail to fill. A cache lookup is synchronous, so lazy
+     *   works there — and reproduces exactly the hand-written memoised getters this replaces.
+     * - `'never'` — a write-only staging buffer; `Load()` is a no-op.
+     *
+     * Note that `'lazy'` makes reading `Items` a side-effecting operation: it populates the
+     * collection and flips `IsLoaded`. That is deliberate and matches the getters it supersedes.
+     */
+    Load?: 'explicit' | 'immediate' | 'lazy' | 'never';
+
+    /**
+     * What removing a record from the collection means. Defaults to `'delete'`.
+     *
+     * - `'delete'` — the row is deleted when the parent saves. Correct for true composition, where
+     *   the related record has no meaning without its parent (order lines, journal entry lines).
+     * - `'orphan'` — the row is left in place, foreign key untouched. Correct for aggregation.
+     * - `'refuse'` — removal throws. For collections where detaching is always a bug.
+     */
+    OnRemove?: 'delete' | 'orphan' | 'refuse';
+
+    /**
+     * `OrderBy` clause applied when loading, e.g. `'LineNumber ASC'`. Strongly recommended whenever
+     * {@link Sequence} is set — a sequenced collection loaded in arbitrary order will be renumbered
+     * into that arbitrary order on the next mutation.
+     */
+    OrderBy?: string;
+
+    /** Automatic, gap-free sequence numbering maintained across adds and removals. */
+    Sequence?: {
+        /** The related entity's sequence field, e.g. `'LineNumber'`. */
+        Field: string;
+        /** Value assigned to the first record. Defaults to 1. */
+        From?: number;
+    };
+
+    /**
+     * Whether the collection empties itself after a successful save. Defaults to `false`.
+     *
+     * `true` models a staging buffer for pending inserts rather than a live view of persisted rows —
+     * the shape order-line entry uses today. `false` keeps saved records in memory with their
+     * server-assigned keys, which is what most callers expect.
+     */
+    ClearAfterSave?: boolean;
+}
+
+/**
  * MJ: Entity Relationships - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: EntityRelationship
@@ -82684,6 +83033,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -82696,7 +83046,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -82723,7 +83073,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: RelatedEntityID
-    * * Display Name: Related Entity ID
+    * * Display Name: Related Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -82750,7 +83100,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: IncludeInParentAllQuery
-    * * Display Name: Include In Parent All Query
+    * * Display Name: Include In Parent Query
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether to include this relationship when querying all fields of the parent entity.
@@ -82764,6 +83114,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: Type
+    * * Display Name: Relationship Type
     * * SQL Data Type: nchar(20)
     * * Default Value: One To Many
     * * Value List Type: List
@@ -82923,7 +83274,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: DisplayUserViewID
-    * * Display Name: Display User View ID
+    * * Display Name: Display User View
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
     */
@@ -82933,7 +83284,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: DisplayComponentID
-    * * Display Name: Display Component ID
+    * * Display Name: Display Component
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Relationship Display Components (vwEntityRelationshipDisplayComponents.ID)
     */
@@ -82946,7 +83297,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: DisplayComponentConfiguration
-    * * Display Name: Display Component Configuration
+    * * Display Name: Display Component Config
     * * SQL Data Type: nvarchar(MAX)
     * * Description: If DisplayComponentID is specified, this field can optionally be used to track component-specific and relationship-specific configuration details that will be used by CodeGen to provide to the display component selected.
     */
@@ -82959,7 +83310,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -82969,7 +83320,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -82979,7 +83330,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: AutoUpdateFromSchema
-    * * Display Name: Auto Update From Schema
+    * * Display Name: Auto-Update From Schema
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to 1.
@@ -82993,7 +83344,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: AdditionalFieldsToInclude
-    * * Display Name: Additional Fields To Include
+    * * Display Name: Additional Fields
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of additional field names to include when joining through this relationship (for junction tables, e.g., ["RoleName", "UserEmail"])
     */
@@ -83006,7 +83357,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: AutoUpdateAdditionalFieldsToInclude
-    * * Display Name: Auto Update Additional Fields To Include
+    * * Display Name: Auto-Update Additional Fields
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When 1, allows system/LLM to auto-update AdditionalFieldsToInclude; when 0, user has locked this field
@@ -83019,7 +83370,43 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
     }
 
     /**
+    * * Field Name: RelatedRecordCollection
+    * * Display Name: Related Record Collection Policy
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJEntityRelationshipEntity_IRelatedRecordCollectionConfig
+    * * Description: Optional JSON policy object that declares this relationship as a first-class related-record collection, so CodeGen can emit a typed DeclareRelatedRecords(...) declaration on the entity subclass. Shape is IRelatedRecordCollectionConfig: Name (the generated property name, e.g. "Lines"), Load ('explicit' | 'eager' | 'never'), OnRemove ('delete' | 'orphan' | 'refuse'), OrderBy, Sequence ({ Field, From }), and ClearAfterSave. RelatedEntity and RelatedEntityJoinField are NOT repeated here — they are read from this row's own columns. NULL means the relationship is not a declared collection, which is the default and reproduces pre-6.2 behaviour exactly.
+    */
+    get RelatedRecordCollection(): string | null {
+        return this.Get('RelatedRecordCollection');
+    }
+    set RelatedRecordCollection(value: string | null) {
+        this.Set('RelatedRecordCollection', value);
+    }
+
+    private _RelatedRecordCollectionObject_cached: MJEntityRelationshipEntity_IRelatedRecordCollectionConfig | null | undefined = undefined;
+    private _RelatedRecordCollectionObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for RelatedRecordCollection — returns parsed JSON as MJEntityRelationshipEntity_IRelatedRecordCollectionConfig.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get RelatedRecordCollectionObject(): MJEntityRelationshipEntity_IRelatedRecordCollectionConfig | null {
+        const raw = this.RelatedRecordCollection;
+        if (raw !== this._RelatedRecordCollectionObject_lastRaw) {
+            this._RelatedRecordCollectionObject_cached = raw ? JSON.parse(raw) : null;
+            this._RelatedRecordCollectionObject_lastRaw = raw;
+        }
+        return this._RelatedRecordCollectionObject_cached!;
+    }
+    set RelatedRecordCollectionObject(value: MJEntityRelationshipEntity_IRelatedRecordCollectionConfig | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.RelatedRecordCollection = raw;
+        this._RelatedRecordCollectionObject_cached = value;
+        this._RelatedRecordCollectionObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -83046,7 +83433,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: RelatedEntity
-    * * Display Name: Related Entity
+    * * Display Name: Related Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntity(): string {
@@ -90474,19 +90861,6 @@ export class MJMaterializedResultEntity extends BaseEntity<MJMaterializedResultE
     }
     set RefreshesSinceFullRebuild(value: number) {
         this.Set('RefreshesSinceFullRebuild', value);
-    }
-
-    /**
-    * * Field Name: ReadFilterSpec
-    * * Display Name: Read Filter Spec
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: For a RowFilterBroad materialization, a JSON array of read-time filter predicates — each { column, operator, paramName, kind } — that the runtime provider injects against the broad materialized table when a caller runs the query with DataSource=Materialized. operator is one of the read-time-safe set (=, !=, <>, <, >, <=, >=, IN, NOT IN); kind is scalar or list. Values are always bound as SQL parameters, never interpolated. NULL for non-row-filter materializations.
-    */
-    get ReadFilterSpec(): string | null {
-        return this.Get('ReadFilterSpec');
-    }
-    set ReadFilterSpec(value: string | null) {
-        this.Set('ReadFilterSpec', value);
     }
 
     /**

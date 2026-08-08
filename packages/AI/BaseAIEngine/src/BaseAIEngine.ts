@@ -465,14 +465,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             });
         }
 
-        // handle association agent actions, models, and notes with agents
+        // Agent ACTIONS are no longer associated here. `agent.Actions` is a generated
+        // related-record collection declared `Source: 'cache'` / `Load: 'lazy'`, so it filters this
+        // same engine's cached AI Agent Actions by AgentID on first read — generically, and without
+        // this loop having to know the shape. Notes have no collection declared, so they still are.
         for(const agent of this._agents){
-            this._agentActions.filter((action: MJAIAgentActionEntity) => {
-                return UUIDsEqual(action.AgentID, agent.ID);
-            }).forEach((action: MJAIAgentActionEntity) => {
-                agent.Actions.push(action);
-            });
-
             this._agentNotes.filter((note: MJAIAgentNoteEntity) => {
                 return UUIDsEqual(note.AgentID, agent.ID);
             }).forEach((note: MJAIAgentNoteEntity) => {
