@@ -45114,6 +45114,8 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
         OrderBy: 'ExecutionOrder ASC',
         Load: 'explicit',
         OnRemove: 'delete',
+        Source: 'database',
+        ReadOnly: false,
         Sequence: { Field: 'ExecutionOrder', From: 0 },
   });
 

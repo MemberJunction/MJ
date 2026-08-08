@@ -78,6 +78,9 @@
       "",
       "Prompts: AgentID is NOT NULL and ExecutionOrder is genuinely positional (which prompt runs",
       "first), so it gets the Sequence policy. From is 0 because the column defaults to 0, not 1.",
+      "Source 'database' and ReadOnly false are the defaults, but they are stated explicitly here",
+      "because this is the ONE writable collection among the eight — leaving them implicit makes it",
+      "read as an oversight next to its cache/lazy siblings, and it is the opposite.",
       "",
       "Actions: AgentID is NULLABLE on this junction, but OnRemove is still 'delete' — an",
       "AIAgentAction row with a null AgentID is not a valid detached record, it is garbage.",
@@ -117,6 +120,8 @@
           "fields": {
             "RelatedRecordCollection": {
               "Name": "Prompts",
+              "Source": "database",
+              "ReadOnly": false,
               "Load": "explicit",
               "OnRemove": "delete",
               "OrderBy": "ExecutionOrder ASC",
@@ -130,8 +135,8 @@
             "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Prompts&RelatedEntityJoinField=AgentID"
           },
           "sync": {
-            "lastModified": "2026-08-07T23:58:30.003Z",
-            "checksum": "d2aac8859b3d2de3481352549fd3c3793eb5c7e3e38164064fd308e3e1ba784d"
+            "lastModified": "2026-08-08T00:34:35.197Z",
+            "checksum": "893b9c9db081e3ddf06d917057171e39367d9f89100a46495275e97d47a02875"
           }
         },
         {
