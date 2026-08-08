@@ -39,45 +39,14 @@ import {
  * unit-testable with hand-written SQL pairs.
  */
 
-/** Comparison operator of a proven row filter, normalized so it always reads `column <op> value`. */
-export type FilterOperator = '=' | '!=' | '<>' | '<' | '>' | '<=' | '>=' | 'IN' | 'NOT IN' | 'LIKE' | 'NOT LIKE' | 'IS' | 'IS NOT' | 'BETWEEN' | 'NOT BETWEEN';
-
-/** Shape of a proven row-filter value: a single scalar vs. an all-literal list bag (`IN`/`NOT IN`). */
-export type FilterKind = 'scalar' | 'list';
-
 /** The verifier's verdict for a single parameter. */
 export interface VerifiedParamRole {
     /** Proven role under the §10 asymmetric-risk posture. */
     role: ParamRole;
     /** For `RowFilter`: the single column the value filters on (as written in the predicate). */
     filterColumn?: string;
-    /**
-     * For `RowFilter`: the comparison operator, **normalized to the `column <op> value` reading** — if the
-     * predicate was written `value < column`, the operator is flipped (`>`) so read-time injection can emit
-     * `column > value` faithfully. This is the Phase-2 metadata that `filterColumn` alone cannot supply
-     * (`Score >= x` vs `Score = x` are otherwise indistinguishable). Absent for non-RowFilter verdicts.
-     */
-    filterOperator?: FilterOperator;
-    /** For `RowFilter`: whether the value is a single scalar or an `IN`/`NOT IN` list bag. */
-    filterKind?: FilterKind;
     /** Human-readable justification (logged; never guessed past). */
     reason: string;
-}
-
-/** Flips a scalar comparison operator so a `value <op> column` predicate reads canonically as `column <flip> value`. */
-function flipOperator(op: string): string {
-    switch (op) {
-        case '<': return '>';
-        case '>': return '<';
-        case '<=': return '>=';
-        case '>=': return '<=';
-        // =, !=, <> are symmetric so need no flip. IN/BETWEEN/IS never appear as `value <op> column`.
-        // NOTE: LIKE is NOT symmetric (`value LIKE column` ≠ `column LIKE value`), so this default would
-        // MIS-normalize a column-on-right LIKE — safe only because LIKE is excluded from
-        // SAFE_READ_FILTER_OPERATORS (refused → live-only) and never reaches read-time injection. If LIKE
-        // (or any non-symmetric op) is ever whitelisted, handle its column-on-right form explicitly here.
-        default: return op;
-    }
 }
 
 // AST-walking primitives (AstNode/AstObject, LITERAL_NODE_TYPES, COMPARISON_OPS, isObject, nodeType,
@@ -93,18 +62,12 @@ interface WalkCtx {
     conjClean: boolean;
     /** When set, we are the *value* operand of a `column <op> value` predicate on this column. */
     predColumn: string | null;
-    /** The comparison operator of the enclosing predicate, normalized to the `column <op> value` reading. */
-    predOperator: string | null;
 }
 
 /** A literal (or all-literal `IN`/`BETWEEN` bag) whose value differs between two variants. */
 interface VaryingSite {
     /** Bound column when the site is a clean top-level conjunctive WHERE predicate; null = tainted. */
     column: string | null;
-    /** Normalized `column <op> value` operator for a clean site; null when tainted. */
-    operator: string | null;
-    /** Whether the varying value is a scalar literal or an all-literal list bag. */
-    kind: FilterKind;
 }
 
 interface PairDiff {
@@ -119,20 +82,6 @@ interface PairDiff {
 /** The column attributed to a varying site, given the context it was found in. */
 function siteColumn(ctx: WalkCtx): string | null {
     return ctx.topWhere && ctx.conjClean ? ctx.predColumn : null;
-}
-
-/**
- * Builds a varying site from the walk context. A site is *clean* (read-time-filterable) only inside the
- * top-level conjunctive WHERE as the value operand of a `column <op> value` predicate; otherwise its
- * column/operator are null (tainted → the parameter becomes Unbounded). `kind` records scalar vs list bag.
- */
-function makeSite(ctx: WalkCtx, kind: FilterKind): VaryingSite {
-    const clean = ctx.topWhere && ctx.conjClean;
-    return {
-        column: clean ? ctx.predColumn : null,
-        operator: clean ? ctx.predOperator : null,
-        kind,
-    };
 }
 
 /** Whether a bag's literal contents differ (length or any element value) between two variants. */
@@ -192,7 +141,7 @@ function walk(a: AstNode, b: AstNode, ctx: WalkCtx, sites: VaryingSite[]): boole
 
 /** A context for any subtree that cannot host a clean read-time filter (resets all flags). */
 function plainSubtreeCtx(): WalkCtx {
-    return { topWhere: false, conjClean: false, predColumn: null, predOperator: null };
+    return { topWhere: false, conjClean: false, predColumn: null };
 }
 
 function walkArray(a: AstNode, b: AstNode, ctx: WalkCtx, sites: VaryingSite[]): boolean {
@@ -211,7 +160,7 @@ function walkLiteral(a: AstObject, b: AstObject, ctx: WalkCtx, sites: VaryingSit
         return false; // literal category changed (string ↔ number) — treat as structural
     }
     if (a.value !== b.value) {
-        sites.push(makeSite(ctx, 'scalar'));
+        sites.push({ column: siteColumn(ctx) });
     }
     return true;
 }
@@ -219,24 +168,24 @@ function walkLiteral(a: AstObject, b: AstObject, ctx: WalkCtx, sites: VaryingSit
 function walkBag(a: AstObject, b: AstObject, ctx: WalkCtx, sites: VaryingSite[]): boolean {
     // Collapse the bag: a differing length/content is allowed *literal* variation, not a shape change.
     if (bagVaries(a, b)) {
-        sites.push(makeSite(ctx, 'list'));
+        sites.push({ column: siteColumn(ctx) });
     }
     return true;
 }
 
-/** Context for the value operand of a clean comparison: keep AND/where flags, attach the column + normalized operator. */
-function valueOperandCtx(ctx: WalkCtx, column: string, operator: string | null): WalkCtx {
-    return { topWhere: ctx.topWhere, conjClean: ctx.conjClean, predColumn: column, predOperator: operator };
+/** Context for the value operand of a clean comparison: keep AND/where flags, attach the column. */
+function valueOperandCtx(ctx: WalkCtx, column: string): WalkCtx {
+    return { topWhere: ctx.topWhere, conjClean: ctx.conjClean, predColumn: column };
 }
 
-/** Context for the column operand (and any non-value child): keep flags, no predicate column/operator. */
+/** Context for the column operand (and any non-value child): keep flags, no predicate column. */
 function plainOperandCtx(ctx: WalkCtx): WalkCtx {
-    return { topWhere: ctx.topWhere, conjClean: ctx.conjClean, predColumn: null, predOperator: null };
+    return { topWhere: ctx.topWhere, conjClean: ctx.conjClean, predColumn: null };
 }
 
 /** Context below a non-AND combinator (`OR`, etc.): still in where, but no longer conjunctive-clean. */
 function disjunctiveCtx(ctx: WalkCtx): WalkCtx {
-    return { topWhere: ctx.topWhere, conjClean: false, predColumn: null, predOperator: null };
+    return { topWhere: ctx.topWhere, conjClean: false, predColumn: null };
 }
 
 function walkBinaryExpr(a: AstObject, b: AstObject, ctx: WalkCtx, sites: VaryingSite[]): boolean {
@@ -261,19 +210,15 @@ function walkBinaryExpr(a: AstObject, b: AstObject, ctx: WalkCtx, sites: Varying
 }
 
 function walkComparison(a: AstObject, b: AstObject, ctx: WalkCtx, sites: VaryingSite[]): boolean {
-    const op = typeof a.operator === 'string' ? a.operator : null;
     const leftCol = columnName(a.left);
     const rightCol = columnName(a.right);
     let leftCtx = plainOperandCtx(ctx);
     let rightCtx = plainOperandCtx(ctx);
-    // Attach the predicate column + operator to the *value* side only when exactly one side is a plain
-    // column_ref. Normalize the operator to the `column <op> value` reading: when the column is on the
-    // RIGHT (`value < column`), flip it so read-time injection emits `column > value` — an un-flipped
-    // operator here would invert the predicate and silently over/under-scope the materialized read.
+    // Attach the predicate column to the *value* side only when exactly one side is a plain column_ref.
     if (leftCol && !rightCol) {
-        rightCtx = valueOperandCtx(ctx, leftCol, op); // column on left → operator as written
+        rightCtx = valueOperandCtx(ctx, leftCol);
     } else if (rightCol && !leftCol) {
-        leftCtx = valueOperandCtx(ctx, rightCol, op == null ? null : flipOperator(op));
+        leftCtx = valueOperandCtx(ctx, rightCol);
     }
     const left = walk(a.left, b.left, leftCtx, sites);
     const right = walk(a.right, b.right, rightCtx, sites);
@@ -320,7 +265,7 @@ function walkRoot(a: AstNode, b: AstNode, sites: VaryingSite[]): boolean {
         for (const k of keys) {
             const ctx: WalkCtx =
                 k === 'where'
-                    ? { topWhere: true, conjClean: true, predColumn: null, predOperator: null }
+                    ? { topWhere: true, conjClean: true, predColumn: null }
                     : plainSubtreeCtx();
             ok = walk(a[k], b[k], ctx, sites) && ok;
         }
@@ -411,16 +356,5 @@ export function verifyParamRole(variants: string[], dialect: SQLParserDialect): 
     }
 
     const filterColumn = [...distinct.values()][0];
-
-    // Derive the single operator + kind for read-time reconstruction (Phase 2). All clean sites for one
-    // parameter must agree — a single parameter can only occupy one predicate position, so >1 distinct
-    // operator/kind means our AST reading is ambiguous → refuse under uncertainty (§10) rather than guess.
-    const distinctOps = new Set(allSites.map((s) => s.operator).filter((o): o is string => o != null));
-    const distinctKinds = new Set(allSites.map((s) => s.kind));
-    if (distinctOps.size !== 1 || distinctKinds.size !== 1) {
-        return { role: 'Unbounded', reason: `value varies on "${filterColumn}" but the predicate operator/shape is ambiguous (ops: [${[...distinctOps].join(', ')}], kinds: [${[...distinctKinds].join(', ')}]) — refusing under uncertainty` };
-    }
-    const filterOperator = [...distinctOps][0] as FilterOperator;
-    const filterKind = [...distinctKinds][0];
-    return { role: 'RowFilter', filterColumn, filterOperator, filterKind, reason: `value varies only a literal at a clean top-level WHERE predicate "${filterColumn} ${filterOperator} <value>" (${filterKind})` };
+    return { role: 'RowFilter', filterColumn, reason: `value varies only a literal at a clean top-level WHERE predicate on "${filterColumn}"` };
 }

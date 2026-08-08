@@ -13,7 +13,6 @@ import {
     RunQueryParams,
     RunQueryResult,
     RunViewParams,
-    RunViewResult,
     EntityInfo,
     BaseEntity,
     EntitySaveOptions,
@@ -1099,105 +1098,5 @@ describe('GenericDatabaseProvider — DataSource (Live vs Materialized) read rou
 
     it("routes to the materialized wrapper view (materialized_vw<CodeName>) when DataSource is 'Materialized'", () => {
         expect(provider.testGetEffectiveBaseView(entity, { DataSource: 'Materialized' } as RunViewParams)).toBe('materialized_vwDemoCustomers');
-    });
-});
-
-/**
- * Plan-level tests for `tryBuildMaterializedQueryPlan` — the phase-2 read-redirect orchestration that the pure
- * `buildMaterializedReadQuery`/`queryHasTopLevelOrderBy` static tests do NOT cover. Subclasses the complete
- * TestPipelineProvider stub and adds two seams: a settable PlatformKey and a canned "MJ: Materialized Results"
- * status row (the method reads it via `new RunView(this).RunView(...)`, which proxies to this provider's RunView).
- * Locks: FIX #2 (ordering guard reads GetPlatformSQL, not base query.SQL), FIX #4 (bidirectional coverage), the
- * paramTypes → coercion threading, and the Active status gate.
- */
-class TestMatPlanProvider extends TestPipelineProvider {
-    private _pk: 'sqlserver' | 'postgresql' = 'sqlserver';
-    public override get PlatformKey() { return this._pk; }
-    public setPlatform(pk: 'sqlserver' | 'postgresql') { this._pk = pk; }
-
-    private _matRow: Record<string, unknown> | null = null;
-    public setMatRow(row: Record<string, unknown> | null) { this._matRow = row; }
-
-    /** Intercept the status read (`new RunView(this).RunView(...)` proxies here) and return the canned row. */
-    public override async RunView<T = unknown>(params: RunViewParams, _contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        if (params.EntityName === 'MJ: Materialized Results') {
-            const Results = (this._matRow ? [this._matRow] : []) as T[];
-            return { Success: true, Results, RowCount: Results.length, TotalRowCount: Results.length, ErrorMessage: '' } as unknown as RunViewResult<T>;
-        }
-        return { Success: false, Results: [] as T[], RowCount: 0, TotalRowCount: 0, ErrorMessage: 'unexpected entity' } as unknown as RunViewResult<T>;
-    }
-
-    public plan(query: MJQueryEntityExtended, params: RunQueryParams, user?: UserInfo) {
-        return this.tryBuildMaterializedQueryPlan(query, params, user);
-    }
-}
-
-const matQuery = (over: Record<string, unknown>): MJQueryEntityExtended => ({
-    ID: 'q1', Name: 'Q', ExternalDataSourceID: null, MaterializedResultID: 'm1',
-    SQL: 'SELECT ID FROM __mj.t', GetPlatformSQL: () => 'SELECT ID FROM __mj.t',
-    QueryParameters: [], QueryFields: [{ Name: 'ID' }],
-    ...over,
-} as unknown as MJQueryEntityExtended);
-
-const activeSpec = (spec: unknown) => ({ Status: 'Active', ParamMode: 'RowFilterBroad', ReadFilterSpec: JSON.stringify(spec), SchemaName: '__mj', ViewName: 'materialized_vwT' });
-
-describe('GenericDatabaseProvider.tryBuildMaterializedQueryPlan (plan-level)', () => {
-    const matParams = (Parameters: Record<string, unknown> = {}): RunQueryParams => ({ DataSource: 'Materialized', Parameters } as unknown as RunQueryParams);
-
-    it('FIX #2 (guard present): a platform-variant ORDER BY forces live even with an otherwise-valid Active materialization', async () => {
-        // Active row + matching param, so WITHOUT the ordering guard this would build a valid plan (non-null). The
-        // null therefore attributes ONLY to the guard — catches full removal of the ordering check.
-        const p = new TestMatPlanProvider();
-        p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]));
-        const q = matQuery({ SQL: 'SELECT ID, X FROM __mj.t', GetPlatformSQL: () => 'SELECT ID, X FROM __mj.t ORDER BY x', QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
-        expect(await p.plan(q, matParams({ x: 'a' }))).toBeNull();
-    });
-
-    it('FIX #2 (proof it is NOT reading base query.SQL): base SQL HAS ORDER BY but the platform variant does not → returns a plan', async () => {
-        const p = new TestMatPlanProvider();
-        p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]));
-        const q = matQuery({ SQL: 'SELECT ID, X FROM __mj.t ORDER BY x', GetPlatformSQL: () => 'SELECT ID, X FROM __mj.t', QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
-        expect(await p.plan(q, matParams({ x: 'a' }))).not.toBeNull();
-    });
-
-    it('FIX #4: refuses (→ live) when the spec carries a param the query no longer has (over-filter guard)', async () => {
-        const p = new TestMatPlanProvider();
-        p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'ghost', kind: 'scalar' }]));
-        // Supply a VALUE for the phantom spec param so buildMaterializedReadQuery would happily build a plan —
-        // making the null attributable ONLY to the over-filter guard, not to a missing-value refusal.
-        const q = matQuery({ QueryParameters: [] }); // spec references 'ghost', query declares no params
-        expect(await p.plan(q, matParams({ ghost: 'x' }))).toBeNull();
-    });
-
-    it('FIX #4: refuses (→ live) when a query param is absent from the spec (under-filter guard)', async () => {
-        // spec only covers 'x', but the query also declares 'extra' — materializing would filter on X only while
-        // live filters on both, silently under-filtering. The guard must refuse.
-        const p = new TestMatPlanProvider();
-        p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]));
-        const q = matQuery({ QueryParameters: [{ Name: 'x', Type: 'string' }, { Name: 'extra', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
-        expect(await p.plan(q, matParams({ x: 'a', extra: 'b' }))).toBeNull();
-    });
-
-    it('FIX #4 control: query params exactly match the spec → returns a plan', async () => {
-        const p = new TestMatPlanProvider();
-        p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]));
-        const q = matQuery({ QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
-        expect(await p.plan(q, matParams({ x: 'a' }))).not.toBeNull();
-    });
-
-    it('paramTypes from QueryParameters reach coercion: a number param binds as a JS number, not the raw string', async () => {
-        const p = new TestMatPlanProvider();
-        p.setMatRow(activeSpec([{ column: 'Amount', operator: '=', paramName: 'amt', kind: 'scalar' }]));
-        const q = matQuery({ QueryParameters: [{ Name: 'amt', Type: 'number' }], QueryFields: [{ Name: 'ID' }, { Name: 'Amount' }] });
-        const r = await p.plan(q, matParams({ amt: '42' }));
-        expect(r).not.toBeNull();
-        expect(r!.parameters).toEqual([42]);
-    });
-
-    it('status gate: a non-Active (DriftHold) materialization → null (serve live)', async () => {
-        const p = new TestMatPlanProvider();
-        p.setMatRow({ ...activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]), Status: 'DriftHold' });
-        const q = matQuery({ QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
-        expect(await p.plan(q, matParams({ x: 'a' }))).toBeNull();
     });
 });

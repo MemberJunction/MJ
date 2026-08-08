@@ -10,66 +10,40 @@ describe('qualifyParameterizedQuery', () => {
 
     it('no params → mode None, qualifies', () => {
         const r = qualifyParameterizedQuery({ queryName: 'Q', params: [], outputColumns: out });
-        expect(r).toEqual({ qualifies: true, paramMode: 'None', rowFilterColumns: [], readFilterSpec: [] });
+        expect(r).toEqual({ qualifies: true, paramMode: 'None', rowFilterColumns: [] });
     });
 
-    it('single row-filter on a present output column → RowFilterBroad + that column + read-filter spec', () => {
-        const params: ParamClassification[] = [{ name: 'chapterId', role: 'RowFilter', filterColumn: 'ChapterID', filterOperator: '=', filterKind: 'scalar' }];
+    it('single row-filter on a present output column → RowFilterBroad + that column', () => {
+        const params: ParamClassification[] = [{ name: 'chapterId', role: 'RowFilter', filterColumn: 'ChapterID' }];
         const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true });
         expect(r.qualifies).toBe(true);
         expect(r.paramMode).toBe('RowFilterBroad');
         expect(r.rowFilterColumns).toEqual(['ChapterID']);
-        expect(r.readFilterSpec).toEqual([{ column: 'ChapterID', operator: '=', paramName: 'chapterId', kind: 'scalar' }]);
     });
 
-    it('multiple row-filters, all columns present → RowFilterBroad with all columns + spec entries', () => {
+    it('multiple row-filters, all columns present → RowFilterBroad with all columns', () => {
         const params: ParamClassification[] = [
-            { name: 'chapterId', role: 'RowFilter', filterColumn: 'ChapterID', filterOperator: '>=', filterKind: 'scalar' },
-            { name: 'regions', role: 'RowFilter', filterColumn: 'Region', filterOperator: 'IN', filterKind: 'list' },
+            { name: 'chapterId', role: 'RowFilter', filterColumn: 'ChapterID' },
+            { name: 'region', role: 'RowFilter', filterColumn: 'Region' },
         ];
         const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true });
         expect(r.paramMode).toBe('RowFilterBroad');
         expect(r.rowFilterColumns).toEqual(['ChapterID', 'Region']);
-        expect(r.readFilterSpec).toEqual([
-            { column: 'ChapterID', operator: '>=', paramName: 'chapterId', kind: 'scalar' },
-            { column: 'Region', operator: 'IN', paramName: 'regions', kind: 'list' },
-        ]);
     });
 
     it('row-filter column matched case-insensitively', () => {
-        const params: ParamClassification[] = [{ name: 'c', role: 'RowFilter', filterColumn: 'chapterid', filterOperator: '=', filterKind: 'scalar' }];
+        const params: ParamClassification[] = [{ name: 'c', role: 'RowFilter', filterColumn: 'chapterid' }];
         const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true });
         expect(r.qualifies).toBe(true);
         expect(r.paramMode).toBe('RowFilterBroad');
     });
 
-    it('row-filter refuses BY DEFAULT (RowFilterBroad enablement switch off)', () => {
-        const params: ParamClassification[] = [{ name: 'chapterId', role: 'RowFilter', filterColumn: 'ChapterID', filterOperator: '=', filterKind: 'scalar' }];
+    it('row-filter refuses BY DEFAULT (RowFilterBroad disabled — Phase 2 not shipped)', () => {
+        const params: ParamClassification[] = [{ name: 'chapterId', role: 'RowFilter', filterColumn: 'ChapterID' }];
         const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out }); // allowRowFilterBroad omitted → false
         expect(r.qualifies).toBe(false);
         expect(r.paramMode).toBe('None');
-        expect(r.reason).toMatch(/not enabled in this build/i);
-    });
-
-    it('row-filter with an UNSAFE operator (LIKE) → refuse (stays live-only), even when enabled', () => {
-        const params: ParamClassification[] = [{ name: 'q', role: 'RowFilter', filterColumn: 'Region', filterOperator: 'LIKE', filterKind: 'scalar' }];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true });
-        expect(r.qualifies).toBe(false);
-        expect(r.reason).toMatch(/read-time-safe operator set/i);
-    });
-
-    it('row-filter with operator/value-shape mismatch (IN but scalar kind) → refuse under uncertainty', () => {
-        const params: ParamClassification[] = [{ name: 'x', role: 'RowFilter', filterColumn: 'Region', filterOperator: 'IN', filterKind: 'scalar' }];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true });
-        expect(r.qualifies).toBe(false);
-        expect(r.reason).toMatch(/expects a list value/i);
-    });
-
-    it('row-filter with an unresolved operator → refuse (cannot reconstruct the predicate)', () => {
-        const params: ParamClassification[] = [{ name: 'x', role: 'RowFilter', filterColumn: 'ChapterID' }]; // no operator
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true });
-        expect(r.qualifies).toBe(false);
-        expect(r.reason).toMatch(/read-time-safe operator set/i);
+        expect(r.reason).toMatch(/deferred to Phase 2|not enabled in this build/i);
     });
 
     it('row-filter on a column NOT in the output → refuse (unsound to filter a projected-away column)', () => {
@@ -116,7 +90,7 @@ describe('qualifyParameterizedQuery', () => {
 
     it('mix of row-filter and structural params → refuse (not modeled in v1)', () => {
         const params: ParamClassification[] = [
-            { name: 'chapterId', role: 'RowFilter', filterColumn: 'ChapterID', filterOperator: '=', filterKind: 'scalar' },
+            { name: 'chapterId', role: 'RowFilter', filterColumn: 'ChapterID' },
             { name: 'reportType', role: 'Structural', boundedDomain: ['a'] },
         ];
         const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowPerValueCache: true });
