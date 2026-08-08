@@ -31,7 +31,7 @@ import { CompositeKey, KeyValuePair } from './compositeKey';
 import { EntityCompanion, EntityCompanionDeserializeMode } from './entityCompanion';
 import type { EntitySavePlan } from './entitySavePlan';
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
-import type { IMetadataProvider, IRunViewProvider } from './interfaces';
+import type { EntitySaveOptions, IMetadataProvider, IRunViewProvider } from './interfaces';
 import { LogError } from './logging';
 
 /**
@@ -220,6 +220,37 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
     constructor(owner: BaseEntity, options: RelatedRecordCollectionOptions) {
         super(owner);
         this.options = options;
+        this.assertDeclarationInvariants();
+    }
+
+    /**
+     * Rejects declarations whose combination of options cannot work, at declaration time.
+     *
+     * CodeGen already refuses these combinations for metadata-declared collections; enforcing them
+     * here as well means a hand-written declaration fails immediately with an accurate message,
+     * instead of at first read with a misleading one (`populateFromCache` bails on `!IsReadOnly`
+     * before ever consulting the donor, so a writable lazy collection used to throw "engine is not
+     * loaded yet" even when the engine was fully loaded).
+     */
+    private assertDeclarationInvariants(): void {
+        if ((this.options.Load ?? 'explicit') !== 'lazy') {
+            return;
+        }
+        if ((this.options.Source ?? 'database') !== 'cache') {
+            throw new Error(
+                `RelatedRecordCollection '${this.options.Name}': Load: 'lazy' requires Source: 'cache'. A lazy ` +
+                `fill happens inside a synchronous property getter, which cannot await a database load. ` +
+                `Declare Source: 'cache', or use Load: 'explicit' with an awaited Load().`,
+            );
+        }
+        if (this.options.ReadOnly === false) {
+            throw new Error(
+                `RelatedRecordCollection '${this.options.Name}': Load: 'lazy' requires a read-only collection. ` +
+                `A writable cache collection copies records via the async GetEntityObject, which a synchronous ` +
+                `getter cannot await. Omit ReadOnly (cache-sourced collections default to read-only), or use ` +
+                `Load: 'explicit'.`,
+            );
+        }
     }
 
     /** @inheritdoc */
@@ -649,12 +680,46 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
             );
         }
 
-        // Nothing anywhere caches this entity, so lazy can never work for it. A design error.
+        // No REGISTERED engine declares the entity. This code cannot tell two very different
+        // situations apart, because engines only enter the registry once their Config() BEGINS:
+        // either the engine that caches this entity simply has not started loading yet (the common
+        // bootstrap ordering race — a component reads the collection before anything Config()s the
+        // engine), or nothing anywhere caches the entity and lazy can never work (a design error).
+        // Name both, with each fix — an error that diagnoses only one of them prescribes the wrong
+        // remedy half the time.
         throw new Error(
-            `${prefix}, but no registered BaseEngine caches '${this.RelatedEntityName}'. Lazy loading reads ` +
-                `exclusively from engine caches. Declare Source: 'database' with Load: 'explicit', or add an ` +
-                `entity config for '${this.RelatedEntityName}' to an engine.`,
+            `${prefix}, but no registered BaseEngine declares '${this.RelatedEntityName}'. Two possible causes: ` +
+                `(1) the engine that caches it has not STARTED loading yet — engines register only once their ` +
+                `Config() begins, so await that engine's Config() before reading '${this.Name}' (this read is ` +
+                `safe to retry after it loads); or (2) nothing caches this entity at all — declare ` +
+                `Source: 'database' with Load: 'explicit', or add an entity config for ` +
+                `'${this.RelatedEntityName}' to an engine.`,
         );
+    }
+
+    /**
+     * Non-throwing counterpart of {@link Items}, for display-tier code.
+     *
+     * A lazy collection's {@link Items} getter **throws** when its donor engine is not available —
+     * deliberately, because a silently empty array is how the bug this feature replaced went
+     * unnoticed for years. That is the right default for business logic, but a template or widget
+     * rendering during bootstrap (before anything has awaited the engine's `Config()`) wants "not
+     * available yet", not an aborted render — and the null-check pattern templates reach for
+     * (`@if (entity.Params && …)`) cannot help, because the collection property itself is never
+     * null; it is the read that throws.
+     *
+     * @returns The records when available — already populated, or populatable synchronously right
+     *          now — or `null` when a lazy collection's donor engine is not available yet. Never
+     *          triggers a database load and never throws for the lazy-miss case.
+     */
+    public TryItems(): readonly T[] | null {
+        if (!this.loaded && this.LoadMode === 'lazy') {
+            if (!this.populateFromCache() && this.Owner.IsSaved) {
+                return null; // donor not available yet — Items would throw here
+            }
+        }
+        this.refreshCacheViewIfStale();
+        return this.items;
     }
 
     /**
@@ -823,7 +888,25 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
                         `engine's instances instead, or Source: 'database' to load fresh ones.`,
                 );
             }
-            copy.LoadFromData(source.GetAll(), true);
+            if (IsVerboseLoggingEnabled() && source.Dirty) {
+                // A copy adopts the source's CURRENT values as its clean baseline, so uncommitted
+                // edits made to the cached instance by unrelated code silently become "persisted
+                // state" from the copy's point of view. Rare, but worth a witness.
+                LogStatus(
+                    `RelatedRecordCollection '${this.Name}': copying a '${this.RelatedEntityName}' record that has ` +
+                    `unsaved changes in the engine cache — the copy treats those uncommitted values as saved.`,
+                );
+            }
+            const data = source.GetAll();
+            for (const key of Object.keys(data)) {
+                // GetAll() passes existing Date instances through BY REFERENCE. Without cloning,
+                // the "detached" copy would alias the engine cache's Date objects, and an in-place
+                // mutation (setHours and friends) would leak across the copy boundary.
+                if (data[key] instanceof Date) {
+                    data[key] = new Date(data[key].getTime());
+                }
+            }
+            await copy.LoadFromData(data, true);
             copies.push(copy);
         }
         return copies;
@@ -831,6 +914,17 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
 
     /** @inheritdoc */
     public override Validate(result: ValidationResult): void {
+        // A read-only collection is a projection over records this parent does not own — most
+        // commonly a BaseEngine cache's shared instances. It contributes no save work (see
+        // ContributeSaveWork), so it must not contribute validation failures either: an invalid
+        // record sitting in an engine cache is not this parent's problem, and blocking the parent's
+        // save on it would block a write the parent is not even attempting. More importantly,
+        // stampParentKey() below MUTATES the records — on shared cache instances that dirties them
+        // for every holder in the process whenever the stored key differs (UUID casing, most
+        // commonly), which is exactly the corruption the read-only contract exists to prevent.
+        if (this.IsReadOnly) {
+            return;
+        }
         // Stamp the foreign key BEFORE validating. Most MJ primary keys are UUIDs generated by
         // NewRecord(), so the parent's key exists well before its row does — but the related record
         // has not been told about it yet. Validating first would fail every `NOT NULL` foreign key
@@ -848,6 +942,9 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
 
     /** @inheritdoc */
     public override async ValidateAsync(result: ValidationResult): Promise<void> {
+        if (this.IsReadOnly) {
+            return; // see the note in Validate() — a projection neither validates nor mutates
+        }
         this.stampParentKey(); // see the note in Validate()
         for (const [index, child] of this.items.entries()) {
             const childResult = await child.ValidateAsync();
@@ -881,10 +978,11 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
     }
 
     /** @inheritdoc */
-    public override ContributeSaveWork(plan: EntitySavePlan): void {
+    public override ContributeSaveWork(plan: EntitySavePlan, options?: EntitySaveOptions): void {
         // A read-only collection is a projection, not a unit of work. Contributing nothing is what
         // makes it safe to point one at an engine's shared cache.
         if (this.IsReadOnly) {
+            this.warnIfReadOnlyHoldsDirtyItems();
             return;
         }
         // Deletions first: a removed child may hold a unique key that a retained one is about to
@@ -895,10 +993,43 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         }
 
         for (const [index, child] of this.items.entries()) {
+            // A clean, already-persisted child contributes no work. Enqueueing it anyway turned a
+            // header-only edit on a parent with 50 loaded lines into a 51-node graph — locally 50
+            // no-op saves inside a needless transaction, and on the remote path 50 rows shipped,
+            // server-side re-loaded one query each, and shipped back, all for zero writes. Safe to
+            // skip because renumbered children are already dirty when the plan is built
+            // (applySequence runs at Add/Remove time) and removals contribute via `removed` above.
+            // IgnoreDirtyState demands a full write-out, so it re-enqueues everything.
+            if (child.IsSaved && !child.Dirty && !options?.IgnoreDirtyState) {
+                continue;
+            }
             // Re-stamp at EXECUTION time as well as at add/validate time. For UUID keys the value
             // is already there; for identity/auto-increment keys the parent's key does not exist
             // until its own node has run, and this is the first moment it does.
             plan.AddSave(child, `${this.Name}[${index}]`, () => this.stampParentKey());
+        }
+    }
+
+    /**
+     * Leaves the exact breadcrumb a developer debugging "my edit vanished" needs.
+     *
+     * Mutating a record obtained from a read-only collection and then saving the PARENT succeeds
+     * while persisting nothing — the collection contributes no save work by design, and `Dirty`
+     * deliberately excludes it. That is correct, documented behavior, but it emits no runtime
+     * signal at all; this verbose-mode log is the one witness. Save the record directly
+     * (`record.Save()`), or declare the collection writable, to persist such edits.
+     */
+    private warnIfReadOnlyHoldsDirtyItems(): void {
+        if (!IsVerboseLoggingEnabled()) {
+            return;
+        }
+        if (this.items.some(i => i.Dirty)) {
+            LogStatus(
+                `RelatedRecordCollection '${this.Name}' on ${this.Owner.EntityInfo?.Name} is read-only but holds ` +
+                `dirty record(s). A read-only collection never saves its records with the parent, so those edits ` +
+                `will NOT persist via the parent's Save(). Save each record directly, or declare the collection ` +
+                `ReadOnly: false (copies) or Source: 'database' (fresh rows) to make it writable.`,
+            );
         }
     }
 
@@ -930,6 +1061,15 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
 
     /** @inheritdoc */
     public override async Serialize(): Promise<RelatedRecordCollectionWire | null> {
+        // A read-only collection ships nothing, for the same reason it contributes no save work:
+        // it is a projection over records this parent does not own. Serializing it put the donor
+        // engine's ENTIRE cached child set on the wire with every graph save and TransactionGroup
+        // envelope, and the receiving tier's 'request'-mode Deserialize then re-loaded every one of
+        // those rows from the database — one query each — and failed the whole save if any cached
+        // row had been concurrently deleted. All of it for records the save will never write.
+        if (this.IsReadOnly) {
+            return null;
+        }
         // Nothing pending means nothing to ship. Sending an empty collection on every header-only
         // save would be pure overhead on the hot path.
         if (this.items.length === 0 && this.removed.length === 0) {

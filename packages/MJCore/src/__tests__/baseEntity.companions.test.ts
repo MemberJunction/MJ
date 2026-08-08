@@ -30,9 +30,11 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { BaseEntity } from '../generic/baseEntity';
 import { RelatedRecordCollection } from '../generic/relatedRecordCollection';
 import { EntityInfo, ValidationErrorInfo, ValidationResult } from '../generic/entityInfo';
+import { EntitySaveOptions } from '../generic/interfaces';
 import { Metadata } from '../generic/metadata';
 import { ProviderBase } from '../generic/providerBase';
 import type { IEntityDataProvider, IMetadataProvider } from '../generic/interfaces';
+import type { TransactionGroupBase } from '../generic/transactionGroup';
 import { ALL_ENTITY_DATA, PRODUCT_ENTITY_ID } from './mocks/MockEntityData';
 
 const MOCK_USER = { ID: 'u-1', Name: 'T', Email: 't@t', UserRoles: [] };
@@ -44,6 +46,10 @@ let saveLog: { name: string; price: unknown }[] = [];
 let supportsTransactions = true;
 /** Records provider transaction calls. */
 let txnLog: string[] = [];
+/** Batched RunViews calls received by the provider (LoadRelatedRecords tests). */
+let runViewsLog: unknown[] = [];
+/** Canned result for RouteOperation (remote graph-save tests). */
+let routeOperationResult: unknown = null;
 
 /**
  * Provider stand-in. Supplies just enough surface for `Save()`, companion `Create()` and the
@@ -92,6 +98,13 @@ function makeProvider() {
         },
         async Delete(): Promise<boolean> {
             return true;
+        },
+        async RunViews(params: unknown[]): Promise<{ Success: boolean; Results: BaseEntity[] }[]> {
+            runViewsLog.push(params);
+            return (params as unknown[]).map(() => ({ Success: true, Results: [] }));
+        },
+        async RouteOperation(_key: string, _input: unknown): Promise<unknown> {
+            return routeOperationResult;
         },
         // Record-name caching is exercised by the real LoadFromData path; no-ops keep the fixture
         // focused on companion behaviour.
@@ -152,6 +165,8 @@ beforeEach(() => {
     saveLog = [];
     txnLog = [];
     supportsTransactions = true;
+    runViewsLog = [];
+    routeOperationResult = null;
 });
 
 /** Builds a saved parent with `count` new children attached. */
@@ -455,5 +470,258 @@ describe('serialization round trip', () => {
 
         expect(obj['Companions___']).toBeDefined();
         expect(obj['Companions___'][0].Name).toBe('Lines');
+    });
+});
+
+describe('graph routing guards', () => {
+    it('shares one in-flight save between concurrent Save() calls', async () => {
+        // Regression: graph routing used to run BEFORE the in-flight-save debounce, so a
+        // double-click (or autosave racing a manual save) built and executed TWO full graphs —
+        // double-inserting root and children — while plain single-row entities kept the protection.
+        const { parent, provider } = await makeParentWithChildren(2);
+        const originalSave = provider.Save.bind(provider);
+        provider.Save = async (entity: BaseEntity) => {
+            await new Promise(resolve => setTimeout(resolve, 1));
+            return originalSave(entity);
+        };
+
+        const [first, second] = await Promise.all([parent.Save(), parent.Save()]);
+
+        expect(first).toBe(true);
+        expect(second).toBe(true);
+        // ONE graph execution: the parent and both children, each written exactly once.
+        expect(saveLog).toHaveLength(3);
+        expect(txnLog).toEqual(['begin', 'commit']);
+    });
+
+    it('refuses a composite graph while enrolled in a TransactionGroup', async () => {
+        // A TransactionGroup defers the parent's own write until Submit(), while a graph persists
+        // (or ships) its child nodes immediately — children would land against a parent row that
+        // does not exist yet, and the remote path would commit before the group ever submits.
+        const { parent } = await makeParentWithChildren(1);
+        parent.TransactionGroup = {} as unknown as TransactionGroupBase;
+
+        await expect(parent.Save()).rejects.toThrow(/TransactionGroup/);
+        expect(saveLog).toHaveLength(0); // nothing was written anywhere
+    });
+});
+
+describe('clean-child skip at plan level', () => {
+    it('keeps a header-only edit on the single-row path when the children are clean', async () => {
+        // Enqueueing clean, already-persisted children turned a header-only edit into a full graph:
+        // a needless transaction locally, and the whole child set shipped + re-loaded server-side
+        // on the remote path — for zero child writes.
+        const { parent } = await makeParentWithChildren(2);
+        await parent.Save();
+        saveLog = [];
+        txnLog = [];
+
+        parent.Set('Price', 123);
+        const ok = await parent.Save();
+
+        expect(ok).toBe(true);
+        expect(saveLog).toHaveLength(1); // the header row only
+        expect(txnLog).toEqual([]);      // single-node plan — no transaction scope opened
+    });
+
+    it('re-enqueues clean children when IgnoreDirtyState demands a full write-out', async () => {
+        const { parent } = await makeParentWithChildren(2);
+        await parent.Save();
+        saveLog = [];
+        txnLog = [];
+
+        const options = new EntitySaveOptions();
+        options.IgnoreDirtyState = true;
+        const ok = await parent.Save(options);
+
+        expect(ok).toBe(true);
+        expect(saveLog).toHaveLength(3); // parent AND both clean children forced through
+        expect(txnLog).toEqual(['begin', 'commit']);
+    });
+});
+
+describe('read-only collections are projections', () => {
+    class ReadOnlyLinesEntity extends BaseEntity {
+        public readonly Lines = this.DeclareRelatedRecords<BaseEntity>({
+            Name: 'Lines',
+            RelatedEntity: 'Products',
+            RelatedEntityJoinField: 'Name',
+            ReadOnly: true,
+        });
+        public override CheckPermissions(): boolean {
+            return true;
+        }
+    }
+
+    class AlwaysInvalidEntity extends TestCompositeEntity {
+        public override Validate(): ValidationResult {
+            const result = super.Validate();
+            result.Success = false;
+            result.Errors.push(new ValidationErrorInfo('X', 'always invalid', null));
+            return result;
+        }
+    }
+
+    function makeReadOnlyParent() {
+        const provider = makeProvider();
+        const parent = new ReadOnlyLinesEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
+        parent.NewRecord();
+        parent.Set('Name', 'Parent');
+        return { parent, provider };
+    }
+
+    it('never blocks the parent on an invalid record it will not write, and never stamps the FK', async () => {
+        // A read-only collection's records belong to someone else (typically an engine cache).
+        // Validating them would (a) fail the parent's save on records the save will never touch and
+        // (b) MUTATE them via foreign-key stamping — dirtying shared instances process-wide.
+        const { parent, provider } = makeReadOnlyParent();
+        const shared = new AlwaysInvalidEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
+        shared.NewRecord();
+        parent.Lines.SetLoadedItems([shared]);
+
+        const result = parent.Validate();
+
+        expect(result.Success).toBe(true);
+        expect(shared.Get('Name')).toBeFalsy(); // the parent key was NOT stamped onto the shared record
+    });
+
+    it('serializes to nothing — the projection never rides the wire', async () => {
+        // Serializing a read-only collection shipped the donor engine's whole cached child set with
+        // every graph save, and the receiving tier re-loaded every row (one query each), failing
+        // the entire save if any cached row had been concurrently deleted.
+        const { parent, provider } = makeReadOnlyParent();
+        const shared = new TestCompositeEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
+        shared.NewRecord();
+        shared.Set('Name', 'cached-record');
+        parent.Lines.SetLoadedItems([shared]);
+
+        expect(await parent.SerializeCompanions()).toEqual([]);
+    });
+});
+
+describe('remote graph save result labeling', () => {
+    it('labels a remote CREATE as create, not update', async () => {
+        // applyGraphResult used to hardcode 'update', so every remote composite CREATE misreported
+        // itself to the result history and to every 'save' event subscriber.
+        supportsTransactions = false;
+        const { parent } = await makeParentWithChildren(1);
+        routeOperationResult = {
+            Success: true,
+            ResultCode: 'SUCCESS',
+            Output: { Success: true, Fields: parent.GetAll(), Companions: [] },
+        };
+
+        const ok = await parent.Save();
+
+        expect(ok).toBe(true);
+        expect(parent.IsSaved).toBe(true);
+        expect(parent.LatestResult?.Type).toBe('create');
+    });
+});
+
+describe('lazy declaration invariants', () => {
+    it('rejects lazy + database at declaration time, with an accurate message', () => {
+        const provider = makeProvider();
+        class LazyDatabaseEntity extends BaseEntity {
+            public readonly Lines = this.DeclareRelatedRecords<BaseEntity>({
+                Name: 'Lines',
+                RelatedEntity: 'Products',
+                RelatedEntityJoinField: 'Name',
+                Load: 'lazy',
+            });
+        }
+
+        expect(
+            () => new LazyDatabaseEntity(productEntityInfo, provider as unknown as IEntityDataProvider),
+        ).toThrow(/Source: 'cache'/);
+    });
+
+    it('rejects lazy + writable at declaration time', () => {
+        const provider = makeProvider();
+        class LazyWritableEntity extends BaseEntity {
+            public readonly Lines = this.DeclareRelatedRecords<BaseEntity>({
+                Name: 'Lines',
+                RelatedEntity: 'Products',
+                RelatedEntityJoinField: 'Name',
+                Load: 'lazy',
+                Source: 'cache',
+                ReadOnly: false,
+            });
+        }
+
+        expect(
+            () => new LazyWritableEntity(productEntityInfo, provider as unknown as IEntityDataProvider),
+        ).toThrow(/read-only/);
+    });
+});
+
+describe('TryItems — the non-throwing display-tier probe', () => {
+    class LazyCacheEntity extends BaseEntity {
+        public readonly Lines = this.DeclareRelatedRecords<BaseEntity>({
+            Name: 'Lines',
+            RelatedEntity: 'Products',
+            RelatedEntityJoinField: 'Name',
+            Load: 'lazy',
+            Source: 'cache',
+        });
+        public override CheckPermissions(): boolean {
+            return true;
+        }
+        public MarkSaved(): void {
+            (this as unknown as { _everSaved: boolean })._everSaved = true;
+        }
+    }
+
+    it('returns null where Items would throw (lazy donor engine unavailable)', () => {
+        const provider = makeProvider();
+        const parent = new LazyCacheEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
+        parent.NewRecord();
+        parent.MarkSaved(); // a "loaded" record whose donor engine has not been Config()'d
+
+        expect(() => parent.Lines.Items).toThrow(/no registered BaseEngine/);
+        expect(parent.Lines.TryItems()).toBeNull();
+    });
+
+    it('returns an empty view for an unsaved parent, matching Items', () => {
+        const provider = makeProvider();
+        const parent = new LazyCacheEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
+        parent.NewRecord(); // unsaved — legitimately owns no persisted related records
+
+        expect(parent.Lines.TryItems()).toEqual([]);
+        expect(parent.Lines.Count).toBe(0); // the Items path does not throw either
+    });
+});
+
+describe('LoadRelatedRecords guards', () => {
+    it('does not wipe staged children on a new parent', async () => {
+        // Regression: the unguarded version queried by the new parent's pre-generated UUID, got
+        // zero rows, and SetLoadedItems([]) silently discarded every staged child.
+        const { parent } = await makeParentWithChildren(2);
+
+        await parent.LoadRelatedRecords();
+
+        expect(parent.Lines.Count).toBe(2); // staged children survive
+        expect(runViewsLog).toHaveLength(0); // and no query was issued
+    });
+
+    it('leaves a collection holding unsaved edits alone on a saved parent', async () => {
+        const { parent } = await makeParentWithChildren(1);
+        await parent.Save();
+
+        parent.Lines.Items[0].Set('Price', 999);
+        await parent.LoadRelatedRecords();
+
+        expect(parent.Lines.Items[0].Get('Price')).toBe(999);
+        expect(runViewsLog).toHaveLength(0);
+    });
+
+    it('hydrates a clean, unloaded collection from the database in one batched call', async () => {
+        const { parent } = await makeParentWithChildren(0);
+        await parent.Save();
+
+        await parent.LoadRelatedRecords();
+
+        expect(runViewsLog).toHaveLength(1);
+        expect(parent.Lines.IsLoaded).toBe(true);
     });
 });

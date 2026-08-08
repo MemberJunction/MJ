@@ -1,19 +1,84 @@
 [
   {
     "_comments": [
-      "MJ: AI Agents — three collections, one of which is self-referential and needs care.",
+      "MJ: Actions — three read-only cache projections over ActionEngineBase's caches. These replace",
+      "the memoized Params/ResultCodes/Libraries getters that MJActionEntityExtended used to hand-write:",
+      "cache + lazy + (default) read-only reproduces exactly what those getters did, generically.",
       "",
-      "Prompts: AgentID is NOT NULL and ExecutionOrder is genuinely positional (which prompt runs",
-      "first), so it gets the Sequence policy. From is 0 because the column defaults to 0, not 1.",
+      "These rows are LOAD-BEARING: ActionEngine, base-agent and MJActionEntityServer all consume",
+      "action.Params.Items / action.ResultCodes.Items from the GENERATED classes, and the hand-written",
+      "getters were deleted when these collections shipped. An environment whose EntityRelationship",
+      "rows lack these configs regenerates entity_subclasses.ts without the properties and the",
+      "workspace stops compiling — which is why every collection the code depends on must be seeded",
+      "here, not only in a developer database."
+    ],
+    "fields": {
+      "Name": "MJ: Actions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Params",
+              "Load": "lazy",
+              "Source": "cache",
+              "OrderBy": "Name ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Action Params&RelatedEntityJoinField=ActionID"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Libraries",
+              "Load": "lazy",
+              "Source": "cache"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Action Libraries&RelatedEntityJoinField=ActionID"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "ResultCodes",
+              "Load": "lazy",
+              "Source": "cache",
+              "OrderBy": "ResultCode ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Action Result Codes&RelatedEntityJoinField=ActionID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Actions"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: AI Agents — three collections, one writable and two read-only cache projections.",
       "",
-      "Actions: AgentID is NULLABLE on this junction, but OnRemove is still 'delete' — an",
-      "AIAgentAction row with a null AgentID is not a valid detached record, it is garbage.",
+      "Prompts: the one related entity no engine caches, so it is database-sourced and writable.",
+      "AgentID is NOT NULL and ExecutionOrder is genuinely positional (which prompt runs first), so",
+      "it gets the Sequence policy. From is 0 because the column defaults to 0, not 1. Source and",
+      "ReadOnly are spelled out explicitly so the generated declaration is self-documenting next to",
+      "its cache-sourced siblings.",
       "",
-      "SubAgents: OnRemove is 'orphan', NOT 'delete'. ParentID is nullable, and detaching a",
-      "sub-agent should demote it to a root agent — deleting it would destroy an entire agent",
-      "together with its own prompts, actions and run history because someone reorganised a",
-      "hierarchy. No Sequence policy either: renumbering ExecutionOrder here would rewrite the",
-      "agent records themselves, so the column is used for ordering only.",
+      "Actions: a read-only lazy view over BaseAIEngine's agent-action cache — this replaced both",
+      "MJAIAgentEntityExtended's hand-written getter and BaseAIEngine's manual association loop.",
+      "",
+      "SubAgents: also a read-only lazy cache view (the ParentID hierarchy, ordered by",
+      "ExecutionOrder). Read-only means Add/Remove throw, so no OnRemove policy applies — nobody can",
+      "detach a sub-agent through this collection, which is the safe default for a self-referential",
+      "hierarchy where a careless 'delete' would destroy a whole agent. No Sequence policy either:",
+      "renumbering ExecutionOrder would rewrite the agent records themselves.",
       "",
       "NOTE: MJ: AI Agents has a SECOND self-relationship (DefaultCoAgentID) which is deliberately",
       "NOT declared — hence RelatedEntityJoinField in every lookup below, which is what keeps these",
@@ -30,6 +95,8 @@
               "Name": "Prompts",
               "Load": "explicit",
               "OnRemove": "delete",
+              "Source": "database",
+              "ReadOnly": false,
               "OrderBy": "ExecutionOrder ASC",
               "Sequence": {
                 "Field": "ExecutionOrder",
@@ -44,9 +111,21 @@
         {
           "fields": {
             "RelatedRecordCollection": {
+              "Name": "Actions",
+              "Load": "lazy",
+              "Source": "cache"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Actions&RelatedEntityJoinField=AgentID"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
               "Name": "SubAgents",
-              "Load": "explicit",
-              "OnRemove": "orphan",
+              "Load": "lazy",
+              "Source": "cache",
               "OrderBy": "ExecutionOrder ASC"
             }
           },
@@ -62,12 +141,12 @@
   },
   {
     "_comments": [
-      "MJ: AI Prompts -> MJ: AI Prompt Models. PromptID is NOT NULL, Hard delete.",
+      "MJ: AI Prompts -> MJ: AI Prompt Models. A read-only lazy view over BaseAIEngine's prompt-model",
+      "cache — zero queries on read, matching how prompt models are actually consumed.",
       "",
       "Deliberately NO Sequence policy despite Priority being an integer: Priority is a SEMANTIC",
-      "ranking (which model to prefer), not a positional line number. Auto-renumbering it on every",
-      "save would silently rewrite a deliberate preference — a sequence policy suits line numbers,",
-      "not rankings. OrderBy alone gives the read ordering without touching the values."
+      "ranking (which model to prefer), not a positional line number — and the collection is",
+      "read-only besides. OrderBy alone gives the read ordering without touching the values."
     ],
     "fields": {
       "Name": "MJ: AI Prompts"
@@ -78,8 +157,8 @@
           "fields": {
             "RelatedRecordCollection": {
               "Name": "Models",
-              "Load": "explicit",
-              "OnRemove": "delete",
+              "Load": "lazy",
+              "Source": "cache",
               "OrderBy": "Priority ASC"
             }
           },
@@ -95,15 +174,14 @@
   },
   {
     "_comments": [
-      "MJ: API Keys -> MJ: API Key Scopes. APIKeyID is NOT NULL, Hard delete. Priority is a",
-      "ranking, so no Sequence policy (same reasoning as AI Prompt Models above).",
+      "MJ: API Keys -> MJ: API Key Scopes. A read-only lazy view over the APIKeyEngine cache.",
+      "Priority is a ranking, so no Sequence policy (same reasoning as AI Prompt Models above).",
       "",
-      "BEHAVIOUR CHANGE WORTH KNOWING: MJAPIKeyScopeEntityServer overrides ValidateAsync to check",
-      "the scope's row filter, and that override is governed by DefaultSkipAsyncValidation — which",
-      "defaults to true, so today it is effectively dead. Companion validation runs each child's",
-      "ValidateAsync UNCONDITIONALLY, so declaring this collection turns that check on for every",
-      "scope on every API Key save. That is the intended rollup and a security-relevant improvement,",
-      "but a pre-existing malformed row filter will start failing saves."
+      "NOTE: because this collection is read-only, companion validation deliberately skips it — a",
+      "projection contributes no save work, so it contributes no validation either, and validating",
+      "would mutate the engine's shared instances via foreign-key stamping. Scope row-filter checks",
+      "(MJAPIKeyScopeEntityServer.ValidateAsync) therefore run when a scope record itself is saved,",
+      "not as a side effect of saving its API Key."
     ],
     "fields": {
       "Name": "MJ: API Keys"
@@ -114,8 +192,8 @@
           "fields": {
             "RelatedRecordCollection": {
               "Name": "Scopes",
-              "Load": "explicit",
-              "OnRemove": "delete",
+              "Load": "lazy",
+              "Source": "cache",
               "OrderBy": "Priority ASC"
             }
           },

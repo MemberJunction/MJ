@@ -59,6 +59,8 @@
  * @module @memberjunction/core
  */
 
+import { LogError } from './logging';
+
 /**
  * A handle to a unit of work that will either commit or roll back as a whole.
  *
@@ -143,7 +145,18 @@ export async function RunInEntityTransaction<T>(
         await scope.Commit();
         return result;
     } catch (e) {
-        await scope.Rollback();
+        // Rollback failures are logged and swallowed so the CALLER'S error survives: this is the
+        // failure path, and a doomed transaction (savepoint rollback refused, connection gone)
+        // throwing here would replace the error that explains what actually went wrong with a
+        // secondary one that explains less. Mirrors BaseEntity's own scope helper.
+        try {
+            await scope.Rollback();
+        } catch (rollbackError) {
+            LogError(
+                `RunInEntityTransaction: rollback failed after the work threw — reporting the original error. ` +
+                `Rollback failure: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+            );
+        }
         throw e;
     }
 }
