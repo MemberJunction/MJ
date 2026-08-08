@@ -26,7 +26,7 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Relationships&Name=RelatedRecordCollection"
           },
           "sync": {
-            "lastModified": "2026-08-08T08:37:58.703Z",
+            "lastModified": "2026-08-08T15:49:55.190Z",
             "checksum": "d3b14cec0ce7e5e035d75074efb970a94f2359adafe30d74c4dde94693b1b2af"
           }
         }
