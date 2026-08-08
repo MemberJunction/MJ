@@ -1,5 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
+import { AIModelConfiguration, ParseModelConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
@@ -1069,6 +1070,39 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get ModelTypes(): MJAIModelTypeEntity[] {
         return this.GetConfigData<MJAIModelTypeEntity>('_modelTypes');
+    }
+
+    /**
+     * Resolves the EFFECTIVE {@link AIModelConfiguration} for a model (optionally scoped to one of
+     * its vendor rows) by walking the catalog cascade base-first:
+     *
+     * `AIModelType.ModelConfiguration` < `AIModel.ModelConfiguration` < `AIModelVendor.ModelConfiguration`
+     *
+     * Each layer's JSON column is parsed TOLERANTLY (a malformed/absent layer contributes nothing)
+     * and the layers deep-merge per key, so a vendor row overriding one knob inherits everything
+     * else from its model and type. This is the ONE canonical read path for model-catalog
+     * configuration — realtime session builders, prompt runners, and any future modality consumer
+     * call this rather than re-implementing the cascade.
+     *
+     * @param modelID The `MJ: AI Models` ID.
+     * @param vendorModelVendorID Optional `MJ: AI Model Vendors` ID (the model-vendor ROW id, not
+     *   the vendor id) — supplies the most-specific layer when the caller has resolved a vendor.
+     * @returns The merged configuration, or `null` when no layer contributes anything.
+     */
+    public GetEffectiveModelConfiguration(modelID: string, vendorModelVendorID?: string): AIModelConfiguration | null {
+        const model = this.ModelsByID.get(NormalizeUUID(modelID));
+        if (!model) {
+            return null;
+        }
+        const modelType = model.AIModelTypeID ? this.ModelTypesByID.get(NormalizeUUID(model.AIModelTypeID)) : undefined;
+        const vendor = vendorModelVendorID
+            ? (this.ModelVendorsByModelID.get(NormalizeUUID(model.ID)) ?? []).find(mv => UUIDsEqual(mv.ID, vendorModelVendorID))
+            : undefined;
+        return ResolveEffectiveModelConfiguration(
+            ParseModelConfiguration(modelType?.ModelConfiguration),
+            ParseModelConfiguration(model.ModelConfiguration),
+            ParseModelConfiguration(vendor?.ModelConfiguration),
+        );
     }
 
     public get Prompts(): MJAIPromptEntityExtended[] {

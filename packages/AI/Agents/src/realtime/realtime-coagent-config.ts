@@ -42,6 +42,10 @@
 export const REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION = 'Realtime: Advanced Session Controls';
 
 /** A plain JSON object (string-keyed bag of JSON values). */
+// Type-only import from the pure @memberjunction/ai model layer — erased at runtime, so the
+// module keeps its framework-free / pure-transformation contract.
+import type { AIModelConfiguration, RealtimeTurnDetectionSettings } from '@memberjunction/ai';
+
 export type JSONObjectLike = Record<string, unknown>;
 
 /** The default voice persona — folded into the session system prompt at mint. */
@@ -253,6 +257,14 @@ export interface RealtimeSessionTuningConfig {
     mcpTools?: JSONObjectLike[];
     /** Per-session input-transcription model override (OpenAI-protocol providers). */
     inputTranscriptionModel?: string;
+    /**
+     * Normalized turn-detection override (mode/eagerness/threshold/silence). Layers ABOVE the
+     * model catalog's `ModelConfiguration.Realtime.TurnDetection` default and BELOW the runtime
+     * bag — agents/apps refine what the catalog declares. Profiles translate the normalized
+     * vocabulary to their native wire block and fall back (with a diag log) on unsupported modes,
+     * so a shared config stays safe on every provider.
+     */
+    turnDetection?: RealtimeTurnDetectionSettings;
 }
 
 /**
@@ -282,7 +294,32 @@ export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | 
     if (typeof tuning.inputTranscriptionModel === 'string' && tuning.inputTranscriptionModel.trim().length > 0) {
         bag['inputTranscriptionModel'] = tuning.inputTranscriptionModel.trim();
     }
+    if (isPlainObject(tuning.turnDetection)) {
+        bag['turnDetection'] = { ...tuning.turnDetection } as JSONObjectLike;
+    }
     return Object.keys(bag).length > 0 ? bag : null;
+}
+
+/**
+ * Projects an EFFECTIVE model-catalog configuration (the resolved
+ * `AIModelType < AIModel < AIModelVendor` cascade — see
+ * `AIEngine.GetEffectiveModelConfiguration`) onto the flat Config-bag keys the realtime drivers
+ * consume. The result merges as the BASE layer of the session bag — below the agent/app
+ * `realtime.session` tuning and the runtime bag — so the catalog supplies defaults that every
+ * higher layer may refine.
+ *
+ * Currently projected: `Realtime.TurnDetection` → the `turnDetection` bag key. New catalog-driven
+ * session knobs project here — one function, both topologies.
+ *
+ * @param config The effective model configuration (or `null`/`undefined` when none).
+ * @returns The flat bag layer, or `null` when the catalog contributes nothing.
+ */
+export function GetModelCatalogSessionSettings(config: AIModelConfiguration | null | undefined): JSONObjectLike | null {
+    const turnDetection = config?.Realtime?.TurnDetection;
+    if (!isPlainObject(turnDetection)) {
+        return null;
+    }
+    return { turnDetection: { ...turnDetection } as JSONObjectLike };
 }
 
 /** The fully-normalized effective configuration for a Realtime co-agent. */
@@ -687,7 +724,40 @@ function normalizeSession(raw: unknown): RealtimeSessionTuningConfig | undefined
         tuning.inputTranscriptionModel = itModel.trim();
     }
 
+    const turnDetection = normalizeTurnDetection(raw['turnDetection']);
+    if (turnDetection) {
+        tuning.turnDetection = turnDetection;
+    }
+
     return Object.keys(tuning).length > 0 ? tuning : undefined;
+}
+
+/**
+ * Normalizes the `session.turnDetection` block — only the recognized, correctly-typed knobs of the
+ * MJ-normalized turn-detection vocabulary survive. Returns `undefined` when nothing valid is
+ * present (tolerant, like every other cascade input). The drivers re-validate on extraction, so
+ * this is belt-and-braces plus a typed authoring surface.
+ */
+function normalizeTurnDetection(raw: unknown): RealtimeTurnDetectionSettings | undefined {
+    if (!isPlainObject(raw)) {
+        return undefined;
+    }
+    const result: RealtimeTurnDetectionSettings = {};
+    const mode = raw['Mode'];
+    if (mode === 'default' || mode === 'serverVad' || mode === 'semanticVad' || mode === 'native') {
+        result.Mode = mode;
+    }
+    const eagerness = raw['Eagerness'];
+    if (eagerness === 'low' || eagerness === 'auto' || eagerness === 'high') {
+        result.Eagerness = eagerness;
+    }
+    if (typeof raw['Threshold'] === 'number' && Number.isFinite(raw['Threshold'])) {
+        result.Threshold = raw['Threshold'];
+    }
+    if (typeof raw['SilenceDurationMs'] === 'number' && Number.isFinite(raw['SilenceDurationMs'])) {
+        result.SilenceDurationMs = raw['SilenceDurationMs'];
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
 }
 
 /** Normalizes the `turnTaking` block (participation mode + room moderator); returns `null` when nothing usable survives. */

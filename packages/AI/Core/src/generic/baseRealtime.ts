@@ -202,6 +202,7 @@ export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'inputTranscriptionModel',
     'voice',
     'disableAutoResponse',
+    'turnDetection',
     'endpoint',
     'sampleRate',
     'proxyBaseUrl',

@@ -19710,7 +19710,15 @@
       "SpeedRank": 8,
       "CostRank": 8,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT Realtime 2"
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "ModelConfiguration": {
+        "Realtime": {
+          "TurnDetection": {
+            "Mode": "semanticVad",
+            "Eagerness": "auto"
+          }
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -19801,7 +19809,15 @@
       "IsActive": true,
       "SpeedRank": 9,
       "CostRank": 10,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Realtime": {
+          "TurnDetection": {
+            "Mode": "semanticVad",
+            "Eagerness": "auto"
+          }
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
