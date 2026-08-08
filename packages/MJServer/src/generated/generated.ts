@@ -1051,10 +1051,6 @@ export class MJActionExecutionLog_ {
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(425)
-    EntityAction?: string;
-        
-    @Field({nullable: true}) 
     @MaxLength(255)
     EntityActionInvocationType?: string;
         
@@ -48625,10 +48621,6 @@ export class MJEntityActionFilter_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(425)
-    EntityAction: string;
-        
-    @Field() 
     ActionFilter: string;
         
 }
@@ -48988,10 +48980,6 @@ export class MJEntityActionInvocation_ {
     RuntimeUXDriverClass?: string;
         
     @Field() 
-    @MaxLength(425)
-    EntityAction: string;
-        
-    @Field() 
     @MaxLength(255)
     InvocationType: string;
         
@@ -49170,10 +49158,6 @@ export class MJEntityActionParam_ {
         
     @Field(() => Boolean, {nullable: true, description: `Optional per-binding override of ActionParam.LogValue. NULL (the default) inherits the parameter definition. Set to 0 when this particular binding passes something sensitive through a parameter that is ordinarily safe to log - a message body through a generic Text parameter, for instance. Cannot re-enable logging for a value type the hard rule suppresses.`}) 
     LogValue?: boolean;
-        
-    @Field() 
-    @MaxLength(425)
-    EntityAction: string;
         
     @Field() 
     @MaxLength(255)
