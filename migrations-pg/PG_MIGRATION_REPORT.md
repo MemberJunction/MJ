@@ -16,15 +16,55 @@
 | `mj sync push` (metadata reseed on PG) | ❌ blocked — PG context-user permission, see Open Issues |
 | PG content + delete-parity gate | ✅ PASS — 218 counterparts, **0 suspect**, 0 delete mismatches |
 | Committed ledger immutability (Rule 1) | ✅ byte-for-byte intact — only new files added |
+| SS↔PG schema parity (layer 2) | ✅ PASS — **after fixing a defect it caught**: tables 376 = 376, FKs 792 = 792 |
+| View equivalence (layer 3) | ✅ PASS — 44 differences, all in two documented-benign buckets |
+| CRUD oracle (layer 4) | ✅ PASS — 369 pass / 4 fail, all 4 pre-existing (v5.46–v5.49) |
 
-The deploy gate is the load-bearing proof: every one of the eight new migrations applies
-cleanly to a **fresh** PostgreSQL 16.14 database, in order, with no errors.
+The deploy gate is necessary but was **not** sufficient. Layer 2 caught a defect that applies
+cleanly and is therefore invisible to the deploy gate — see "The defect layer 2 caught" below.
+With all four layers run, every one of the eight new migrations applies cleanly to a **fresh**
+PostgreSQL 16.14 database, in order, with no errors, and the resulting schema matches SQL Server.
+
+## The defect layer 2 caught — 11 silently dropped `DROP TABLE` statements
+
+The Phase0 retirement migration drops 11 retired tables. The converter **kept the section
+comments and dropped every statement under them**, so the PG counterpart announced the retirement
+and then did nothing. Table counts: SQL Server 376, PostgreSQL 387.
+
+This is the important class of defect, because **nothing upstream of layer 2 can see it**:
+
+- the deploy gate passes — a migration that drops nothing applies perfectly cleanly;
+- content/delete parity passes — it compares counterpart *existence* and delete statements, and
+  the file did contain the surrounding DDL;
+- size-diffing vs source passes — the file is not suspiciously small, since only 11 lines are gone.
+
+Only a direct SQL Server ↔ PostgreSQL object-count comparison surfaces it. All 11 `DROP TABLE …
+CASCADE` statements were restored and the counts now agree exactly (376 = 376, FKs 792 = 792).
+
+**Process consequence:** the deploy gate alone is not a sufficient release gate for a PG
+conversion. Layers 2–4 are not optional polish — layer 2 is the only thing standing between a
+converter that silently omits statements and a PostgreSQL install whose schema has quietly
+diverged from SQL Server.
+
+## Layers 3 and 4 detail
+
+**Layer 3 — view equivalence.** 44 views differ between the two dialects. Every one falls into a
+bucket already documented as benign:
+
+| Bucket | Count | Why benign |
+|---|---|---|
+| Self-referencing FK join aliases | 37 | The converter names self-join aliases differently; the join graph and output columns are identical |
+| Alias letter-casing | 7 | PG folds unquoted identifiers to lowercase; the projected column set is the same |
+
+**Layer 4 — CRUD oracle.** 369 pass, 4 fail. All four failures reproduce against migrations from
+**v5.46–v5.49** and are unrelated to this release's eight migrations — they are pre-existing, not
+regressions introduced here.
 
 ## Files converted
 
 | Migration | SS lines | PG lines | Route |
 |---|---|---|---|
-| `V202608050724__AI_Agent_Harness_Foundation` | 8,105 | 8,398 | legacy converter |
+| `V202608052200__AI_Agent_Harness_Foundation` | 8,105 | 8,398 | legacy converter |
 | `V202608061704__Phase0_Legacy_Workflow_Report_ScheduledAction_Retirement` | 2,014 | 1,696 | legacy + 5 hand fixes |
 | `V202608061930__Phase1_Task_Payload_And_Claim_Columns` | 4,054 | 4,395 | legacy + 4 hand fixes |
 | `V202608071100__EntityRelationship_RelatedRecordCollection` | 979 | 948 | legacy converter |
@@ -107,6 +147,12 @@ All against **new, uncommitted** files. No committed `.pg.sql` was edited.
 - ✅ Size-diff vs source (DEPLOYMENT.md §8) — no counterpart suspiciously small
 - ✅ Metadata-sync statement parity — create/update/delete counts equal on both sides
 - ✅ Rule 1 — committed ledger unmodified
-- ⏸️ Schema parity vs SQL Server, view equivalence, CRUD oracle — not run (time); the deploy gate
-  and content parity are the blocking gates and both pass
-- ⏸️ Phases 4 / 4b — blocked on container auth (above)
+- ✅ Layer 2 — SS↔PG schema parity: tables 376 = 376, FKs 792 = 792 (**caught the 11 missing
+  `DROP TABLE` statements**; the counts agree only after that fix)
+- ✅ Layer 3 — view equivalence: 44 differences, all in the two documented-benign buckets
+- ✅ Layer 4 — CRUD oracle: 369 pass / 4 fail, all four pre-existing (v5.46–v5.49)
+- ✅ Migration ordering — `AI_Agent_Harness_Foundation` retimestamped `202608050724` →
+  `202608052200` so it sorts **after** the edge.0 ceiling (`202608052115`). `outOfOrder` defaults
+  to `false`, so under the original timestamp Flyway would silently skip it on every database
+  upgrading from edge.0 — fresh installs would get the harness schema and upgraders would not.
+  The SS and PG filenames were renamed together (the pairing is required).
