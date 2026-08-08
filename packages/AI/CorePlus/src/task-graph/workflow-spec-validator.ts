@@ -15,7 +15,6 @@ import { FormatValidationErrors, ValidateTaskGraphSpec } from './task-graph-vali
 import {
     ENTITY_INVOCATION_TYPES,
     IsAfterInvocationType,
-    IsTriggerFilterParseable,
     NormalizeInvocationType,
     NormalizeTriggers,
     TriggerKey,
@@ -24,6 +23,7 @@ import {
     type WorkflowSpecValidationError,
     type WorkflowSpecValidationResult,
 } from './workflow-spec';
+import { IsChangeFilterParseable } from '@memberjunction/actions-base';
 
 /**
  * Validates a workflow's structure and its triggers.
@@ -103,7 +103,7 @@ export function ValidateWorkflowSpec(spec: WorkflowSpec): WorkflowSpecValidation
                     // runtime, so an expression that does not parse becomes a trigger that silently
                     // never fires — indistinguishable, from the author's seat, from a workflow that
                     // simply has nothing to do.
-                    const parse = IsTriggerFilterParseable(trigger.filter);
+                    const parse = IsChangeFilterParseable(trigger.filter);
                     if (!parse.Parseable) {
                         errors.push({
                             Code: 'InvalidFilter',

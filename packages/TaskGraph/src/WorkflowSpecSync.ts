@@ -34,8 +34,8 @@ import {
     MJScheduledJobEntity,
     MJScheduledJobTypeEntity,
 } from '@memberjunction/core-entities';
+import { BuildChangeFilterCode } from '@memberjunction/actions-base';
 import {
-    BuildTriggerFilterCode,
     FormatWorkflowValidationErrors,
     NormalizeInvocationType,
     NormalizeTriggers,
@@ -367,7 +367,7 @@ export class WorkflowSpecSync {
             row.NewRecord();
         }
 
-        row.Code = BuildTriggerFilterCode(expression);
+        row.Code = BuildChangeFilterCode(expression);
         row.UserDescription = expression;
         row.CodeExplanation =
             'Generated from a workflow trigger filter. The expression is evaluated against the record change ' +

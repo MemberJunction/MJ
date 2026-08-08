@@ -148,3 +148,46 @@ export function BuildEntityChangeContext(entity: ChangeTrackedEntity): EntityCha
 
     return { OldValues: oldValues, NewValues: newValues, ChangedFields: changed, IsCreate: isCreate };
 }
+
+/**
+ * Wraps a filter expression as the body of an `ActionFilter.Code`.
+ *
+ * Two different authoring surfaces reach this: a workflow's `WorkflowEntityEventTrigger.filter` and
+ * a Record Process's `OnChangeFilter`. Both mean the same thing — "only fire when this is true of
+ * the change" — so both compile to one shape rather than each inventing its own dialect, and a user
+ * who learns one has learned the other.
+ *
+ * It also lives on both sides of the check/store divide: the validator compiles the result to prove
+ * it parses, and the reconciler persists exactly that string. Anything less than a shared function
+ * admits the failure where a spec validates and then fails closed forever at runtime.
+ *
+ * The shorthands are destructured from the context rather than injected as separate function
+ * arguments, so an author's expression sees exactly the names the field's documentation promises
+ * and nothing else leaks in.
+ */
+export function BuildChangeFilterCode(filter: string): string {
+    return [
+        '// Generated from a change-filter expression. Edit the definition that owns this row,',
+        '// not the row itself — re-saving the owner overwrites this code.',
+        'const { OldValues, NewValues, DidFieldChange, DidFieldChangeToValue } = ActionFilterContext;',
+        `return (${filter.trim()});`,
+    ].join('\n');
+}
+
+/**
+ * Whether a filter expression parses.
+ *
+ * Compiles but never invokes, so nothing in the expression can run here. `EvalError` is treated as
+ * "cannot tell" rather than "invalid": under a Content-Security-Policy that forbids `new Function`,
+ * every filter would otherwise be reported as broken in the browser while working perfectly on the
+ * server that actually evaluates it.
+ */
+export function IsChangeFilterParseable(filter: string): { Parseable: boolean; Message?: string } {
+    try {
+        new Function('ActionFilterContext', BuildChangeFilterCode(filter));
+        return { Parseable: true };
+    } catch (e) {
+        if (e instanceof EvalError) return { Parseable: true };
+        return { Parseable: false, Message: e instanceof Error ? e.message : String(e) };
+    }
+}
