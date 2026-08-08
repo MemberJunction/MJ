@@ -13,23 +13,26 @@
  * @module @memberjunction/server
  */
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { AgentRunner } from '@memberjunction/ai-agents';
+import { ChatMessageRole } from '@memberjunction/ai';
 import type { ProviderFactory, TaskContinuationDeliverer, TaskContinuationParams } from '@memberjunction/task-graph';
 
 /** How many per-task lines a posted summary shows before collapsing the rest into a count. */
 const MAX_LISTED_TASKS = 20;
 
 /**
- * Posts a finished graph's outcome back into the conversation that asked for it.
+ * Delivers a finished graph's outcome — as a conversation message, or by starting the submitting
+ * agent a fresh turn.
  *
- * **Why there is no `Reinvoke` here.** The seam is optional and the dispatcher degrades to
- * `PostMessage`, which is the right behavior for now: a safe reinvoke needs the *new* agent run to
- * remember it was a continuation at depth N, so a graph that run submits inherits depth + 1 and
- * `MAX_REINVOKE_DEPTH` can actually stop the chain. Nothing durable records that today —
- * `TaskGraphService.Submit` reads `ReinvokeDepth` from its caller, and a reinvoked agent has no way
- * to know its own. Shipping `Reinvoke` without it would produce chains whose cap never trips, which
- * is worse than degrading to a message. Closing it is a schema question (a durable
- * continuation-depth marker on the agent run), so it is recorded rather than guessed at.
+ * **The chain is bounded, and that is what took a schema change to make true.** A graph may declare
+ * `continuation: 'reinvoke'`, and the agent it restarts can emit another graph, which can reinvoke
+ * again. The guard for that (`MAX_REINVOKE_DEPTH`) shipped in Phase 3, but the number it compared
+ * was permanently zero: `TaskGraphService.Submit` reads `ReinvokeDepth` from its caller, and a
+ * reinvoked agent had no way to know it *was* a continuation. `AIAgentRun.ContinuationDepth` closes
+ * that loop — this stamps depth + 1 on the run it starts, `BaseAgent` passes it into any graph that
+ * run submits, and the cap finally compares against something real.
  */
 export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer {
     /**
@@ -84,6 +87,55 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
             }
         } catch (e) {
             LogError(`[TaskGraphContinuationDeliverer] Posting the outcome of "${params.WorkflowName}" threw`, undefined, e);
+        }
+    }
+
+    /**
+     * Starts the submitting agent a fresh turn carrying the graph's outcome.
+     *
+     * Never throws, for the same reason `PostMessage` does not: the dispatcher calls this inside the
+     * compare-and-swap that marks a completion delivered.
+     *
+     * The new run records `ReinvokeDepth + 1` so the chain is bounded. The dispatcher has already
+     * refused to call this when the cap is reached — it degrades to `PostMessage` — so arriving here
+     * means there is budget left, and stamping the depth is what keeps that true for the next hop.
+     */
+    public async Reinvoke(params: TaskContinuationParams): Promise<void> {
+        try {
+            if (!params.SubmittedByAgentRunID) {
+                // Nothing to restart. A graph with no submitting run came from a schedule or a
+                // trigger, where "continue the conversation" has no meaning.
+                LogStatus(`[TaskGraphContinuationDeliverer] "${params.WorkflowName}" asked to reinvoke but records no submitting agent run — posting instead.`);
+                await this.PostMessage(params);
+                return;
+            }
+
+            const provider = await this.providerFactory.CreateProvider();
+            const priorRun = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+            if (!(await priorRun.Load(params.SubmittedByAgentRunID))) {
+                LogError(`[TaskGraphContinuationDeliverer] Submitting run ${params.SubmittedByAgentRunID} could not be loaded — posting "${params.WorkflowName}" instead.`);
+                await this.PostMessage(params);
+                return;
+            }
+
+            const agent = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', this.contextUser);
+            if (!(await agent.Load(priorRun.AgentID))) {
+                LogError(`[TaskGraphContinuationDeliverer] Agent ${priorRun.AgentID} could not be loaded — posting "${params.WorkflowName}" instead.`);
+                await this.PostMessage(params);
+                return;
+            }
+
+            await new AgentRunner().RunAgent({
+                agent,
+                conversationMessages: [{ role: ChatMessageRole.user, content: this.renderMessage(params) }],
+                contextUser: this.contextUser,
+                conversationDetailId: params.ConversationDetailID ?? undefined,
+                // The load-bearing value: without it the next graph this run submits restarts the
+                // chain at zero and the cap never fires.
+                continuationDepth: params.ReinvokeDepth + 1,
+            });
+        } catch (e) {
+            LogError(`[TaskGraphContinuationDeliverer] Reinvoking for "${params.WorkflowName}" threw`, undefined, e);
         }
     }
 

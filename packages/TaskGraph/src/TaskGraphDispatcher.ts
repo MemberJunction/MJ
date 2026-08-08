@@ -53,6 +53,8 @@ import {
     TaskGraphDispatcherConfig,
     type TaskContinuationDeliverer,
     type TaskContinuationParams,
+    type TaskGraphFrame,
+    type TaskGraphObserver,
 } from './types';
 
 /** A graph's children + edges, in both algorithm shape and mutable-entity shape. */
@@ -75,6 +77,9 @@ export class TaskGraphDispatcher implements IShutdownable {
     /** Guards against a slow poll overlapping the next tick. */
     private polling = false;
 
+    /** Graph → owning user, from the parent's durable metadata. Ownership never changes, so this never goes stale. */
+    private readonly ownerByParentID = new Map<string, string | null>();
+
     constructor(
         private readonly providerFactory: ProviderFactory,
         private readonly agentRunner: TaskAgentRunner,
@@ -86,10 +91,62 @@ export class TaskGraphDispatcher implements IShutdownable {
          * never lost; it simply is not announced.
          */
         private readonly continuationDeliverer?: TaskContinuationDeliverer,
+        /**
+         * Optional. Absent means nobody is watching — the dispatcher behaves identically, it just
+         * announces nothing.
+         */
+        private readonly observer?: TaskGraphObserver,
     ) {
         this.config = { ...DEFAULT_DISPATCHER_CONFIG, ...config };
         this.claims = new TaskClaimStore(this.config.InstanceID, this.config.ClaimTTLSeconds);
         this.conditionEvaluator = new DispatcherConditionEvaluator();
+    }
+
+    /**
+     * Announce something that happened, and never let the announcement matter.
+     *
+     * A frame is commentary on work, never a step of it, so an observer that throws must not be able
+     * to fail a task or stall a graph. Swallowing here rather than asking every implementation to be
+     * careful means one place enforces it.
+     */
+    private emit(frame: TaskGraphFrame): void {
+        if (!this.observer) return;
+        try {
+            this.observer.OnFrame(frame);
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Observer threw on ${frame.Kind} (ignored): ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * Who a graph belongs to, memoized for the process's lifetime.
+     *
+     * Read from the parent's durable metadata rather than a column, because `Task.UserID` means
+     * "the person this task is waiting on" — setting it on a parent would make every graph look
+     * like a human task. Memoized because frames are emitted per step: without the cache, watching
+     * a run would cost one query per event, and observability that scales with work is the thing a
+     * push mechanism exists to avoid. Ownership never changes for a given graph, so the cache can
+     * never go stale.
+     *
+     * Skipped entirely when nobody is observing — the lookup exists only to address frames.
+     */
+    private async resolveOwner(provider: IMetadataProvider, parentTaskID: string): Promise<string | null> {
+        if (!this.observer) return null;
+
+        const cached = this.ownerByParentID.get(parentTaskID);
+        if (cached !== undefined) return cached;
+
+        let owner: string | null = null;
+        try {
+            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+            if (await parent.Load(parentTaskID)) {
+                owner = this.readParentMetadata(parent).submittedByUserID ?? null;
+            }
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not resolve owner for graph ${parentTaskID}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        this.ownerByParentID.set(parentTaskID, owner);
+        return owner;
     }
 
     /**
@@ -235,6 +292,12 @@ export class TaskGraphDispatcher implements IShutdownable {
                 });
             }, this.config.HeartbeatIntervalSeconds * 1000);
 
+            // Emitted after the claim is held, not before: a frame saying "started" for work another
+            // instance actually took would be a lie a viewer cannot detect.
+            const graphID = task.ParentID ?? taskID;
+            const ownerUserID = await this.resolveOwner(provider, graphID);
+            this.emit({ Kind: 'TaskStarted', ParentTaskID: graphID, OwnerUserID: ownerUserID, TaskID: taskID, TaskName: task.Name, Status: 'In Progress' });
+
             const dependencyOutputs = await this.loadDependencyOutputs(provider, taskID);
             let inputPayload: unknown = null;
             if (task.InputPayload) {
@@ -267,6 +330,18 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // or reclaimed). Deferring to whoever owns it now is correct — overwriting would
                 // undo a newer, deliberate decision.
                 LogError(`[TaskGraphDispatcher] Could not record outcome for ${taskID}; the task is no longer owned by this instance.`);
+            } else {
+                // Only announced when the guarded write actually landed. Announcing an outcome we
+                // failed to persist would show a viewer a completion the database never recorded.
+                this.emit({
+                    Kind: result.Success ? 'TaskCompleted' : 'TaskFailed',
+                    ParentTaskID: graphID,
+                    OwnerUserID: ownerUserID,
+                    TaskID: taskID,
+                    TaskName: task.Name,
+                    Status: result.Success ? 'Complete' : 'Failed',
+                    ErrorMessage: result.Success ? undefined : (result.ErrorMessage ?? undefined),
+                });
             }
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Execution failed for ${taskID}: ${e instanceof Error ? e.message : String(e)}`);
@@ -300,6 +375,16 @@ export class TaskGraphDispatcher implements IShutdownable {
                 entity.Status = 'Blocked';
                 if (await entity.Save()) {
                     LogStatus(`[TaskGraphDispatcher] Blocked '${entity.Name}' (${taskID}) — a dependency can never be satisfied.`);
+                    // Worth announcing on its own: a blocked step is the one outcome a viewer would
+                    // otherwise see as a task that simply never starts.
+                    this.emit({
+                        Kind: 'TaskBlocked',
+                        ParentTaskID: parentID,
+                        OwnerUserID: await this.resolveOwner(provider, parentID),
+                        TaskID: taskID,
+                        TaskName: entity.Name,
+                        Status: 'Blocked',
+                    });
                 }
             }
 
@@ -319,6 +404,17 @@ export class TaskGraphDispatcher implements IShutdownable {
             }
 
             if (rollup.isTerminal) {
+                // Emitted before the continuation is delivered, and outside its once-only guard: a
+                // viewer watching the run should learn it finished whether or not this instance is
+                // the one that wins the delivery CAS.
+                this.emit({
+                    Kind: 'GraphSettled',
+                    ParentTaskID: parentID,
+                    OwnerUserID: await this.resolveOwner(provider, parentID),
+                    Status: rollup.status,
+                    CompletedCount: fresh.nodes.filter((n) => n.status === 'Complete').length,
+                    TotalCount: fresh.nodes.length,
+                });
                 await this.deliverContinuation(provider, parent, fresh);
             }
         }
@@ -453,7 +549,7 @@ export class TaskGraphDispatcher implements IShutdownable {
      * loop; the task is still visible in the Tasks UI, so the work is discoverable even when the
      * nudge does not arrive.
      */
-    private async notifyHumanTaskReady(task: MJTaskEntity): Promise<void> {
+    private async notifyHumanTaskReady(task: MJTaskEntity, provider: IMetadataProvider): Promise<void> {
         if (task.ClaimedBy === HUMAN_TASK_NOTIFIED_MARKER) return;
         if (!task.UserID) return; // unassigned human task — nobody to tell
 
@@ -477,6 +573,18 @@ export class TaskGraphDispatcher implements IShutdownable {
         if (!(await task.Save())) {
             LogError(`[TaskGraphDispatcher] Could not mark task ${task.ID} as notified; it may notify again.`);
         }
+
+        // Emitted once, alongside the marker, so a viewer sees the graph stop on a person rather
+        // than appearing to stall for no reason.
+        this.emit({
+            Kind: 'TaskAwaitingHuman',
+            ParentTaskID: task.ParentID ?? task.ID,
+            OwnerUserID: await this.resolveOwner(provider, task.ParentID ?? task.ID),
+            TaskID: task.ID,
+            TaskName: task.Name,
+            Status: task.Status,
+            AssignedUserID: task.UserID,
+        });
     }
 
     /** Parent tasks that still have work to do. */
@@ -516,7 +624,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // someone who was never told. That silent stall is the failure mode this exists to
                 // prevent, so it happens on the eligibility check rather than at submission.
                 if (!entity.AgentID) {
-                    await this.notifyHumanTaskReady(entity);
+                    await this.notifyHumanTaskReady(entity, provider);
                     continue;
                 }
 

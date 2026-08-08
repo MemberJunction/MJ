@@ -61,6 +61,17 @@ export type TaskGraphParentMetadata = {
     reinvokeDepth: number;
     submittedByAgentRunID: string | null;
     /**
+     * Who the graph belongs to.
+     *
+     * Stored here rather than on a Task column because `Task.UserID` already means something else —
+     * it designates a *human* task, the assignee the graph waits on — so setting it on a parent
+     * would make every graph look like work waiting on a person. It is durable for the same reason
+     * everything else in this bag is: the instance that needs it is routinely not the one that wrote
+     * it. Consumed by the live-frame layer, which cannot authorize a viewer without knowing whose
+     * run they are watching.
+     */
+    submittedByUserID?: string | null;
+    /**
      * Set once the completion handler has delivered. Written with a compare-and-swap guard, which is
      * what turns at-least-once delivery into effectively-once: a crash between "graph complete" and
      * "continuation delivered" leaves this unset, so the next sweep retries, and two instances
@@ -85,6 +96,7 @@ const DEFAULT_PARENT_METADATA: TaskGraphParentMetadata = {
     continuation: 'message',
     reinvokeDepth: 0,
     submittedByAgentRunID: null,
+    submittedByUserID: null,
 };
 
 /**
@@ -324,6 +336,7 @@ export class TaskGraphService {
             continuation: spec.continuation ?? 'message',
             reinvokeDepth: context.ReinvokeDepth ?? 0,
             submittedByAgentRunID: context.AgentRunID ?? null,
+            submittedByUserID: context.ContextUser?.ID ?? null,
         } satisfies TaskGraphParentMetadata);
         if (!(await parent.Save())) {
             throw new Error(`Could not create parent task: ${parent.LatestResult?.CompleteMessage ?? 'unknown error'}`);

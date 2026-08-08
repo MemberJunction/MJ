@@ -26,8 +26,23 @@ describe('ParseTaskGraphParentMetadata', () => {
             continuation: 'reinvoke',
             reinvokeDepth: 2,
             submittedByAgentRunID: 'run-1',
+            submittedByUserID: 'user-1',
         };
         expect(ParseTaskGraphParentMetadata(JSON.stringify(written))).toEqual(written);
+    });
+
+    it('defaults the owner to null for a graph written before ownership was recorded', () => {
+        // Read by the live-frame layer, which cannot authorize a viewer without knowing whose run
+        // they are watching — so it must fail closed rather than see `undefined` and broadcast.
+        const raw = JSON.stringify({ continuation: 'message', reinvokeDepth: 0, submittedByAgentRunID: null });
+        expect(ParseTaskGraphParentMetadata(raw).submittedByUserID).toBeNull();
+    });
+
+    it('preserves the owner, which is what addresses a graph\'s frames', () => {
+        const raw = JSON.stringify({
+            continuation: 'message', reinvokeDepth: 0, submittedByAgentRunID: null, submittedByUserID: 'user-9',
+        });
+        expect(ParseTaskGraphParentMetadata(raw).submittedByUserID).toBe('user-9');
     });
 
     it('preserves the delivery marker', () => {

@@ -22,6 +22,8 @@ import sql from 'mssql';
 import { CreateTaskGraphProviderFactory } from './TaskGraphProviderFactory.js';
 import { TaskGraphAgentRunner } from './TaskGraphAgentRunner.js';
 import { TaskGraphContinuationDeliverer } from './TaskGraphContinuationDeliverer.js';
+import { PubSubManager } from '../generic/PubSubManager.js';
+import { TaskGraphFrameBroadcaster } from '../resolvers/TaskGraphFrameResolver.js';
 
 /**
  * Starts one dispatcher for this process and returns it.
@@ -41,6 +43,7 @@ export async function StartTaskGraphDispatcher(
     LoadTaskGraphOperations();
 
     const providerFactory = CreateTaskGraphProviderFactory(pool);
+    const pubSub = PubSubManager.Instance.PubSubEngine;
     const dispatcher = new TaskGraphDispatcher(
         providerFactory,
         new TaskGraphAgentRunner(),
@@ -49,6 +52,9 @@ export async function StartTaskGraphDispatcher(
         // Without this the dispatcher had nowhere to deliver: a finished graph logged its outcome,
         // marked itself delivered, and said nothing to the conversation that asked for it.
         new TaskGraphContinuationDeliverer(providerFactory, contextUser),
+        // Live signal. Supplied only when a PubSub engine exists — in a worker or a test there is
+        // nobody to publish to, and the dispatcher runs identically without one.
+        pubSub ? new TaskGraphFrameBroadcaster(pubSub) : undefined,
     );
     await dispatcher.Start();
     return dispatcher;
