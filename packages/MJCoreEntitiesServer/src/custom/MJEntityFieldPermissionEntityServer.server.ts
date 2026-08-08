@@ -8,6 +8,7 @@ import {
 } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJEntityFieldPermissionEntity } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 
 /**
  * Server-side `MJ: Entity Field Permissions` entity — the save-time half of the
@@ -48,8 +49,55 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
             }
         }
 
+        const roleRejection = MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(this.RoleID);
+        if (roleRejection) {
+            result.Errors.push(new ValidationErrorInfo('RoleID', roleRejection, this.RoleID, ValidationErrorType.Failure));
+        }
+
         result.Success = result.Success && result.Errors.length === 0;
         return result;
+    }
+
+    /**
+     * Why this rule may not target this role, or null when it may.
+     *
+     * Refuses a rule aimed at a role the MJ **system user** holds. The system user is what the
+     * server runs background work as: it pre-warms the shared engine caches at startup, and in
+     * task mode (job and agent runners) whichever caller touches an engine first configures it
+     * for the whole process. Restricting that account does not just restrict it — engines cache
+     * their data process-wide, so a partially loaded engine would then serve incomplete records
+     * to every user afterward. The damage is silent and nowhere near the rule that caused it.
+     *
+     * This is a guard on CONFIGURATION, not a runtime exemption. Field security still has no
+     * user who is exempt from a Deny — that stands. What is refused here is the arrangement
+     * that would make the server unable to do its own work. Take the role off the system user
+     * and the rule saves.
+     *
+     * The database tier already refuses the equivalent arrangement: CodeGen skips a column DENY
+     * for any role a service login belongs to, and warns. This is the same rule for the
+     * application tier.
+     */
+    public static SystemUserRoleRejectionReason(roleID: string | null): string | null {
+        if (!roleID) {
+            return null;
+        }
+        // UserCache is populated on the server; a client-side save (or a cold cache) simply
+        // skips the check rather than blocking an administrator on missing state.
+        const systemUser = UserCache.Instance?.GetSystemUser?.();
+        if (!systemUser?.UserRoles?.length) {
+            return null;
+        }
+        const holdsRole = systemUser.UserRoles.some(ur => UUIDsEqual(ur.RoleID, roleID));
+        if (!holdsRole) {
+            return null;
+        }
+        const roleName = systemUser.UserRoles.find(ur => UUIDsEqual(ur.RoleID, roleID))?.Role ?? roleID;
+        return (
+            `Role '${roleName}' is held by the MJ system user, so it cannot carry field-level permissions. ` +
+            `The server runs background work as that account and shares one engine cache across all users — ` +
+            `restricting it would let partially loaded records reach everyone. ` +
+            `Remove the role from the system user first, or apply this rule to a different role.`
+        );
     }
 
     /**
