@@ -623,6 +623,44 @@ export interface TemplateRunOutput {
     executionTimeMs?: number;
 }
 
+/** Input for `Workflow.Draft`. */
+export interface WorkflowDraftInput {
+    /** What the person wants done, in their own words. */
+    description: string;
+    /** What to call the workflow. Carried through to the draft's `workflowName`. */
+    workflowName: string;
+}
+
+/** Output of `Workflow.Draft`. */
+export interface WorkflowDraftOutput {
+    /** True when a structurally valid draft came back. */
+    success: boolean;
+    /**
+     * The drafted graph, in the same `TaskGraphSpec` shape the canvas and `Workflow.Save` use.
+     *
+     * A DRAFT — nothing is persisted. The author reviews it on the canvas and commits with
+     * `Workflow.Save`, which is what makes "nothing is saved until you approve it" true rather than
+     * merely promised.
+     */
+    graph?: {
+        workflowName: string;
+        reasoning?: string;
+        tasks: Array<{
+            tempId: string;
+            name: string;
+            description: string;
+            agentName?: string;
+            assignToUser?: boolean;
+            dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional' }>;
+            inputPayload?: Record<string, unknown>;
+        }>;
+        continuation?: 'message' | 'reinvoke' | 'none';
+        durable?: boolean;
+    };
+    /** Why drafting failed, or why the model's output was rejected. */
+    errorMessage?: string;
+}
+
 /** Input for `Workflow.Save`. */
 export interface WorkflowSaveInput {
     /** The workflow to save, as a `WorkflowSpec`. */
@@ -990,6 +1028,22 @@ export class TemplateRunOperation extends BaseRemotableOperation<TemplateRunInpu
     public readonly OperationKey = "Template.Run";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "template:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// Workflow.Draft — Draft Workflow
+// ============================================================
+/**
+ * Draft Workflow
+ * Draft a workflow's steps from a plain-English description. Returns a TaskGraphSpec and persists NOTHING — the draft goes to the canvas for the author to review, and only Workflow.Save commits it, which is what makes the front door's "nothing is saved until you approve it" promise true rather than merely stated. Constrained to agents that actually exist on the instance, because a workflow referencing an unknown agent cannot be saved and a draft that cannot be saved wastes the author's time. Validated with the SAME ValidateTaskGraphSpec the canvas and Workflow.Save run, so a draft that comes back cannot be rejected later for a reason drafting never checked. Implemented by WorkflowDraftServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Workflow.Draft'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkflowDraftOperation extends BaseRemotableOperation<WorkflowDraftInput, WorkflowDraftOutput> {
+    public readonly OperationKey = "Workflow.Draft";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
 }
 

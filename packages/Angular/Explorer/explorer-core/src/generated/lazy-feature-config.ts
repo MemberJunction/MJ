@@ -107,6 +107,12 @@ const loadNgDashboardsTestingDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/testing-dashboards.module').then(() => {})
 };
 
+// --- @memberjunction/ng-dashboards → ./workflows-dashboards.module (2 entries) ---
+const loadNgDashboardsWorkflowsDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/workflows-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/workflows-dashboards.module').then(() => {})
+};
+
 // --- @memberjunction/ng-explorer-settings → ./settings.module (6 entries) ---
 const loadNgExplorerSettingsSettingsModule = {
   chunkId: '@memberjunction/ng-explorer-settings/settings.module',
@@ -267,6 +273,10 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::TestingReviewResource': loadNgDashboardsTestingDashboardsModule,
   'BaseResourceComponent::TestingRunsResource': loadNgDashboardsTestingDashboardsModule,
 
+  // @memberjunction/ng-dashboards → ./workflows-dashboards.module
+  'BaseDashboard::WorkflowsDashboard': loadNgDashboardsWorkflowsDashboardsModule,
+  'BaseResourceComponent::WorkflowsResource': loadNgDashboardsWorkflowsDashboardsModule,
+
   // @memberjunction/ng-explorer-settings → ./settings.module
   'BaseDashboard::ApplicationManagement': loadNgExplorerSettingsSettingsModule,
   'BaseDashboard::EntityPermissions': loadNgExplorerSettingsSettingsModule,
@@ -283,4 +293,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 115;
+export const LAZY_FEATURE_CONFIG_COUNT = 117;
