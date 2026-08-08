@@ -27,7 +27,7 @@
  */
 import { BaseRemotableOperation, RunView } from '@memberjunction/core';
 import type { TaskGraphSpec, WorkflowSpec } from '@memberjunction/ai-core-plus';
-import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
+import { MJScheduledJobEntity, MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { EXECUTE_AGENT_ACTION, LoadTaskGraphOperations, LoadWorkflowOperations, RUN_WORKFLOW_JOB_TYPE, TaskGraphService, WorkflowSpecSync, type WorkflowAgentWriter } from '@memberjunction/task-graph';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
@@ -81,6 +81,7 @@ const CREATED_PARENT_IDS: string[] = [];
 /** Agents and entity-action rows created by the workflow check; torn down FK-safe. */
 const CREATED_WORKFLOW_AGENT_IDS: string[] = [];
 const CREATED_ENTITY_ACTION_IDS: string[] = [];
+const CREATED_SCHEDULED_JOB_IDS: string[] = [];
 
 /**
  * Stands in for the host's `AgentSpecSync`-backed writer.
@@ -868,6 +869,91 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
             console.log('      → two workflows on one entity kept separate bindings and separate agents');
         }
     },
+
+    {
+        Id: 'task-graph-orchestration.TG17',
+        Name: 'TG17: the schema backing the trigger mechanisms exists and round-trips',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // Three mechanisms landed together, each depending on a column CodeGen had to emit
+            // before any of the TypeScript above could compile. Asserting the metadata AND a
+            // round-trip is what separates "the migration ran" from "the ORM and the database
+            // agree" — the pair that drifted apart in Phase 4 when a migration was applied but
+            // CodeGen ran against a stale definition.
+            const job = ctx.Provider.EntityByName('MJ: Scheduled Jobs');
+            Assert(!!job, 'MJ: Scheduled Jobs not found in metadata');
+            const missedRun = job!.Fields.find((f) => f.Name === 'MissedRunPolicy');
+            Assert(!!missedRun, 'ScheduledJob.MissedRunPolicy is missing — the missed-run policy has nowhere to live');
+            AssertEqual(
+                missedRun!.DefaultValue?.replace(/[N'()]/g, ''),
+                'RunOnce',
+                'the default must be RunOnce — it is what the engine already did, and Skip would silently stop every existing job from catching up',
+            );
+
+            const run = ctx.Provider.EntityByName('MJ: AI Agent Runs');
+            Assert(!!run, 'MJ: AI Agent Runs not found in metadata');
+            Assert(
+                !!run!.Fields.find((f) => f.Name === 'ContinuationDepth'),
+                'AIAgentRun.ContinuationDepth is missing — without it MAX_REINVOKE_DEPTH compares against a permanent zero and can never fire',
+            );
+
+            // 'Expired' is the status the one-shot story depends on. It was declared long before
+            // anything set it, which is exactly why it is worth asserting rather than assuming.
+            const status = job!.Fields.find((f) => f.Name === 'Status');
+            Assert(!!status, 'ScheduledJob.Status is missing');
+            Assert(
+                (status!.EntityFieldValues ?? []).some((v) => v.Value === 'Expired'),
+                'ScheduledJob.Status must permit Expired — the engine now retires jobs past their EndAt',
+            );
+
+            console.log('      → MissedRunPolicy (default RunOnce), ContinuationDepth, and the Expired status are all present');
+        }
+    },
+
+    {
+        Id: 'task-graph-orchestration.TG18',
+        Name: 'TG18: a scheduled job round-trips its missed-run policy',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // The value-list is a CHECK constraint, so a mismatch between what the engine writes and
+            // what the database accepts is a save that fails at runtime rather than at build time.
+            const typeRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+                { EntityName: 'MJ: Scheduled Job Types', Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
+                ctx.User,
+            );
+            const jobTypeID = typeRes.Results?.[0]?.ID;
+            Assert(!!jobTypeID, 'no Scheduled Job Type available to attach a test job to');
+
+            const job = await ctx.Provider.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', ctx.User);
+            job.NewRecord();
+            job.Name = 'mj-integration-test-missed-run (safe to delete)';
+            job.JobTypeID = jobTypeID!;
+            job.CronExpression = '0 9 * * *';
+            job.Timezone = 'UTC';
+            job.Status = 'Paused'; // never dispatches — this check is about persistence, not execution
+            job.MissedRunPolicy = 'RunAll';
+            Assert(await job.Save(), `could not save the test job: ${job.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            CREATED_SCHEDULED_JOB_IDS.push(job.ID);
+
+            const reloaded = await ctx.Provider.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', ctx.User);
+            Assert(await reloaded.Load(job.ID), 'the test job could not be reloaded');
+            AssertEqual(reloaded.MissedRunPolicy, 'RunAll', 'MissedRunPolicy must survive a round trip');
+
+            // And the default applies to a job that never states one — the property that keeps every
+            // existing job behaving exactly as it did before the column existed.
+            const plain = await ctx.Provider.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', ctx.User);
+            plain.NewRecord();
+            plain.Name = 'mj-integration-test-missed-run-default (safe to delete)';
+            plain.JobTypeID = jobTypeID!;
+            plain.CronExpression = '0 9 * * *';
+            plain.Timezone = 'UTC';
+            plain.Status = 'Paused';
+            Assert(await plain.Save(), `could not save the default-policy job: ${plain.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            CREATED_SCHEDULED_JOB_IDS.push(plain.ID);
+            AssertEqual(plain.MissedRunPolicy, 'RunOnce', 'a job that states no policy must default to RunOnce');
+
+            console.log('      → MissedRunPolicy round-trips, and defaults to RunOnce');
+        }
+    },
 ];
 
 for (const check of TaskGraphOrchestrationChecks) {
@@ -939,6 +1025,16 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('task-graph-orchestration', 
             for (const row of eaRes.Results ?? []) await row.Delete();
         }
         CREATED_ENTITY_ACTION_IDS.length = 0;
+
+        // Scheduled Jobs created directly by TG18 — removed by ID, never by name.
+        for (const id of CREATED_SCHEDULED_JOB_IDS) {
+            const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJScheduledJobEntity>(
+                { EntityName: 'MJ: Scheduled Jobs', ExtraFilter: `ID='${id}'`, ResultType: 'entity_object' }, ctx.User,
+            );
+            const row = res.Results?.[0];
+            if (row) await row.Delete();
+        }
+        CREATED_SCHEDULED_JOB_IDS.length = 0;
 
         // Scheduled Jobs the workflow save may have created, matched by the same ownership marker
         // the reconciler writes — never by name, for the same reason the reconciler doesn't.

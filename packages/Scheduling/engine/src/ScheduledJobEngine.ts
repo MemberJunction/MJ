@@ -22,6 +22,7 @@ import { BaseSingleton, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ScheduledJobResult, NotificationChannel } from '@memberjunction/scheduling-base-types';
 import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from './BaseScheduledJob';
+import { DecideMissedRun } from './MissedRunPolicy';
 import { CronExpressionHelper } from './CronExpressionHelper';
 import { NotificationManager } from './NotificationManager';
 
@@ -656,6 +657,11 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             console.log(`  - ${job.Name}: NextRunAt=${job.NextRunAt?.toISOString() || 'NULL'}, Status=${job.Status}`);
 
             if (this.isJobDue(job, evalTime)) {
+                if (this.shouldSkipMissedRun(job, evalTime)) {
+                    console.log(`    ⏭ Missed run skipped per MissedRunPolicy`);
+                    await this.advancePastMissedRuns(job, evalTime);
+                    continue;
+                }
                 console.log(`    ✓ Job is due, attempting to acquire lock...`);
                 try {
                     const lockResult = await this.tryAcquireLock(job.ID, job.MaxRuntimeMinutes);
@@ -770,6 +776,14 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         for (const job of this.ScheduledJobs) {
             if (!this.isJobDue(job, evalTime)) continue;
 
+            // A job whose fire time passed while nothing was running asks a question the schedule
+            // alone cannot answer — should the missed occurrences happen now? Its policy decides,
+            // and 'Skip' answers by advancing past them without running.
+            if (this.shouldSkipMissedRun(job, evalTime)) {
+                await this.advancePastMissedRuns(job, evalTime);
+                continue;
+            }
+
             if (this.inflightJobPromises.size >= this.MaxConcurrentJobs) {
                 skippedAtCapacity++;
                 continue;
@@ -813,6 +827,13 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         }
 
         this.UpdatePollingInterval();
+        // PHASE 3: retire jobs whose window has closed. Deliberately AFTER dispatch rather than
+        // before it: `isJobDue` already refuses a job past its EndAt, so retirement changes nothing
+        // about what runs this tick — it is bookkeeping. Putting it in front of the loop added an
+        // await that let the sweep's fire-and-forget orphan cleanup interleave differently, which is
+        // a real hazard for anything that shares ordering with dispatch, not just for tests.
+        await this.expireFinishedJobs(contextUser, evalTime);
+
         return { swept, dispatched, lockedOut, skippedAtCapacity };
     }
 
@@ -1007,7 +1028,12 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         _runId: string
     ): Promise<void> {
         const now = new Date();
-        const nextRun = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone);
+        // Where the NEXT occurrence is measured from depends on the job's missed-run policy.
+        // 'RunAll' measures from the occurrence just consumed, so a backlog is walked one step per
+        // tick; everything else measures from now, which collapses a backlog into the single
+        // catch-up run the engine has always performed.
+        const advanceFrom = job.MissedRunPolicy === 'RunAll' && job.NextRunAt ? job.NextRunAt : undefined;
+        const nextRun = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone, advanceFrom);
 
         // Update in-memory entity so callers reading job.RunCount/job.NextRunAt
         // immediately after see the new values without a Load round-trip.
@@ -1067,6 +1093,112 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         } catch (cacheError) {
             this.logError('Cache invalidation after stats update failed (non-fatal)', cacheError);
         }
+    }
+
+    /**
+     * Apply the job's missed-run policy, advancing past the missed occurrences when it says Skip.
+     *
+     * Only reached for a job that is already due, so the "merely due" case costs one cron
+     * computation and always runs. Whether anything was actually *missed* is decided
+     * cron-relatively — a later occurrence has also come due — rather than against a grace window,
+     * which would misjudge a per-minute job after a short pause and a monthly job that is a week
+     * late in opposite directions.
+     *
+     * **Synchronous on purpose.** It runs inside the dispatch loop, immediately before lock
+     * acquisition; making it async would insert a microtask exactly where ordering against the
+     * sweep's fire-and-forget cleanup matters. The decision needs no I/O — only the skip branch
+     * writes, and that is awaited separately once the answer is known.
+     *
+     * @returns true when the job should NOT run this tick.
+     */
+    private shouldSkipMissedRun(job: MJScheduledJobEntity, evalTime: Date): boolean {
+        if (!job.NextRunAt) {
+            return false;
+        }
+
+        // Fails OPEN throughout: this check can only ever *withhold* a run the schedule already
+        // said was due, so anything it cannot evaluate must let the job through. An unparseable
+        // cron is a configuration problem the execution path reports far better than a silent skip,
+        // and a helper that returns something other than a date is a bug that must not become a job
+        // that quietly stops running.
+        let followingOccurrence: Date | undefined;
+        try {
+            followingOccurrence = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone, job.NextRunAt);
+        } catch (error) {
+            this.logError(`Could not evaluate the missed-run policy for "${job.Name}"; running it`, error);
+            return false;
+        }
+        if (!(followingOccurrence instanceof Date) || Number.isNaN(followingOccurrence.getTime())) {
+            return false;
+        }
+
+        return DecideMissedRun(job.MissedRunPolicy, job.NextRunAt, followingOccurrence, evalTime).Action === 'SkipAndAdvance';
+    }
+
+    /**
+     * Move a skipped job past the occurrences it missed, so it rejoins its schedule instead of
+     * being re-evaluated as missed on every subsequent poll.
+     *
+     * Best-effort: a failed advance is logged and retried next tick, never propagated.
+     */
+    private async advancePastMissedRuns(job: MJScheduledJobEntity, evalTime: Date): Promise<void> {
+        try {
+            const resumeAt = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone, evalTime);
+            job.NextRunAt = resumeAt;
+            if (await job.Save()) {
+                this.log(`Job "${job.Name}" skipped its missed run(s) per MissedRunPolicy=Skip; next run ${resumeAt.toISOString()}.`);
+            } else {
+                this.logError(`Could not advance "${job.Name}" past its missed runs: ${job.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        } catch (error) {
+            this.logError(`Advancing "${job.Name}" past its missed runs threw (non-fatal)`, error);
+        }
+    }
+
+    /**
+     * Move jobs past their `EndAt` to `Status='Expired'`.
+     *
+     * **`Expired` has always been a declared status that nothing ever set.** `isJobDue` already
+     * refuses a job whose `EndAt` has passed, so such a job stops running on its own — but it stays
+     * `Active` forever, permanently inert, and keeps counting toward `UpdatePollingInterval`. A
+     * one-shot expressed as "cron at T plus `EndAt` just after T" therefore left the whole scheduler
+     * polling at that job's cadence for a job that will never run again.
+     *
+     * That makes this the one-shot story rather than a new schedule shape: "run once at T" is
+     * already expressible with the columns that exist, and what was missing was the retirement.
+     *
+     * Deliberately narrow. It only transitions `Active`/`Pending` — a `Paused` or `Disabled` job was
+     * put there by a person, and quietly rewriting their decision to `Expired` would lose it. And it
+     * only fires on `EndAt`, never on "the cron has no future occurrence": a cron always has one, so
+     * inferring exhaustion would be guessing.
+     *
+     * Best-effort: a failed transition is logged and retried on the next poll, never propagated —
+     * retiring a finished job must not be able to stop live ones from dispatching.
+     */
+    private async expireFinishedJobs(contextUser: UserInfo, evalTime: Date): Promise<void> {
+        for (const job of this.ScheduledJobs) {
+            if (!job.EndAt || evalTime <= job.EndAt) {
+                continue;
+            }
+            if (job.Status !== 'Active' && job.Status !== 'Pending') {
+                continue;
+            }
+
+            try {
+                job.Status = 'Expired';
+                if (await job.Save()) {
+                    this.log(`Job "${job.Name}" passed its EndAt (${job.EndAt.toISOString()}) — marked Expired.`);
+                } else {
+                    this.logError(`Could not mark job "${job.Name}" Expired: ${job.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            } catch (error) {
+                this.logError(`Expiring job "${job.Name}" threw (non-fatal)`, error);
+            }
+        }
+
+        // The active set may have shrunk, and the polling cadence is derived from it — an expired
+        // job must stop driving how often every other job is checked.
+        this.UpdatePollingInterval();
     }
 
     /**

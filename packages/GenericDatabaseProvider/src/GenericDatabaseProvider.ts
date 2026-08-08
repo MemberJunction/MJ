@@ -3401,80 +3401,81 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         params: RunQueryParams,
         contextUser?: UserInfo,
     ): Promise<{ sql: string; parameters: unknown[] } | null> {
-        if (!IsMaterializedDataSource(params.DataSource)) return null; // not opted in → live
-        if (query.ExternalDataSourceID) return null;                   // external source → materialized table is local; live
-        const matId = query.MaterializedResultID;
-        if (!matId) return null;                                       // query not materialized → live
-        // Ordering fidelity: buildMaterializedReadQuery emits no ORDER BY, and the snapshot was built with the
-        // source's top-level ORDER BY stripped (it has no inherent order). A query that carries a top-level ORDER
-        // BY would therefore page differently from the live query. Refuse → live (which preserves the ordering)
-        // rather than serve a divergent page order — consistent with this method's "any uncertainty → live".
-        // Check the PLATFORM-resolved SQL (the exact SQL the live path executes — GetPlatformSQL, line ~3642),
-        // not the base query.SQL: a per-platform QuerySQL variant (e.g. a PostgreSQL variant) may add a top-level
-        // ORDER BY the base SQL lacks, and parsing the base SQL would miss it and serve mis-ordered snapshot pages.
-        if (GenericDatabaseProvider.queryHasTopLevelOrderBy(query.GetPlatformSQL(this.PlatformKey) ?? '', this.PlatformKey)) return null;
+        return null
+        // if (!IsMaterializedDataSource(params.DataSource)) return null; // not opted in → live
+        // if (query.ExternalDataSourceID) return null;                   // external source → materialized table is local; live
+        // const matId = query.MaterializedResultID;
+        // if (!matId) return null;                                       // query not materialized → live
+        // // Ordering fidelity: buildMaterializedReadQuery emits no ORDER BY, and the snapshot was built with the
+        // // source's top-level ORDER BY stripped (it has no inherent order). A query that carries a top-level ORDER
+        // // BY would therefore page differently from the live query. Refuse → live (which preserves the ordering)
+        // // rather than serve a divergent page order — consistent with this method's "any uncertainty → live".
+        // // Check the PLATFORM-resolved SQL (the exact SQL the live path executes — GetPlatformSQL, line ~3642),
+        // // not the base query.SQL: a per-platform QuerySQL variant (e.g. a PostgreSQL variant) may add a top-level
+        // // ORDER BY the base SQL lacks, and parsing the base SQL would miss it and serve mis-ordered snapshot pages.
+        // if (GenericDatabaseProvider.queryHasTopLevelOrderBy(query.GetPlatformSQL(this.PlatformKey) ?? '', this.PlatformKey)) return null;
 
-        // Load the materialization metadata. matId is our own UUID (from committed metadata), so it is safe
-        // to interpolate into ExtraFilter — it never carries caller input.
-        const rv = new RunView(this);
-        // BypassCache is REQUIRED here (H6): this read gates whether we route to the materialized table, and the
-        // decisive column is Status. A refresher/CodeGen run can flip Status to 'DriftHold' or 'Disabled' out of
-        // band, but a cached 'Active' row would let this plan keep serving the held/disabled snapshot — the exact
-        // stale-serve the DriftHold mechanism exists to prevent. Reading straight from the DB guarantees we see
-        // the current terminal status. This is a single-row point lookup, so the bypass cost is negligible.
-        const res = await rv.RunView<{ Status: string; ParamMode: string; ReadFilterSpec: string | null; SchemaName: string; ViewName: string }>(
-            {
-                EntityName: 'MJ: Materialized Results',
-                ExtraFilter: `ID='${matId}'`,
-                Fields: ['Status', 'ParamMode', 'ReadFilterSpec', 'SchemaName', 'ViewName'],
-                ResultType: 'simple',
-                MaxRows: 1,
-                BypassCache: true,
-            },
-            contextUser,
-        );
-        if (!res.Success || !res.Results || res.Results.length === 0) return null;
-        const mat = res.Results[0];
-        if (mat.Status !== 'Active') return null;                 // Building / DriftHold / stale → live
-        if (mat.ParamMode !== 'RowFilterBroad') return null;      // None / PerValueCache → live (this path only serves Bucket 1)
-        if (!mat.ReadFilterSpec) return null;
+        // // Load the materialization metadata. matId is our own UUID (from committed metadata), so it is safe
+        // // to interpolate into ExtraFilter — it never carries caller input.
+        // const rv = new RunView(this);
+        // // BypassCache is REQUIRED here (H6): this read gates whether we route to the materialized table, and the
+        // // decisive column is Status. A refresher/CodeGen run can flip Status to 'DriftHold' or 'Disabled' out of
+        // // band, but a cached 'Active' row would let this plan keep serving the held/disabled snapshot — the exact
+        // // stale-serve the DriftHold mechanism exists to prevent. Reading straight from the DB guarantees we see
+        // // the current terminal status. This is a single-row point lookup, so the bypass cost is negligible.
+        // const res = await rv.RunView<{ Status: string; ParamMode: string; ReadFilterSpec: string | null; SchemaName: string; ViewName: string }>(
+        //     {
+        //         EntityName: 'MJ: Materialized Results',
+        //         ExtraFilter: `ID='${matId}'`,
+        //         Fields: ['Status', 'ParamMode', 'ReadFilterSpec', 'SchemaName', 'ViewName'],
+        //         ResultType: 'simple',
+        //         MaxRows: 1,
+        //         BypassCache: true,
+        //     },
+        //     contextUser,
+        // );
+        // if (!res.Success || !res.Results || res.Results.length === 0) return null;
+        // const mat = res.Results[0];
+        // if (mat.Status !== 'Active') return null;                 // Building / DriftHold / stale → live
+        // if (mat.ParamMode !== 'RowFilterBroad') return null;      // None / PerValueCache → live (this path only serves Bucket 1)
+        // if (!mat.ReadFilterSpec) return null;
 
-        let spec: Array<{ column: string; operator: string; paramName: string; kind: 'scalar' | 'list' }>;
-        try {
-            spec = JSON.parse(mat.ReadFilterSpec);
-        } catch {
-            return null; // malformed spec → live
-        }
-        if (!Array.isArray(spec) || spec.length === 0) return null;
+        // let spec: Array<{ column: string; operator: string; paramName: string; kind: 'scalar' | 'list' }>;
+        // try {
+        //     spec = JSON.parse(mat.ReadFilterSpec);
+        // } catch {
+        //     return null; // malformed spec → live
+        // }
+        // if (!Array.isArray(spec) || spec.length === 0) return null;
 
-        // Coverage invariant (BOTH directions): a RowFilterBroad query's parameters are ALL row-filters (a mix
-        // refuses at classify time), so the query's parameter set and the persisted spec's parameter set MUST be
-        // identical. A query param missing from the spec → we would UNDER-filter; a spec param the query no longer
-        // has (stale metadata after an out-of-band edit — the same window H6 guards against) → we would OVER-filter
-        // vs. live, silently returning fewer rows. Either mismatch means the spec is inconsistent → refuse to live.
-        const specNames = new Set(spec.map((s) => s.paramName));
-        const queryParamNames = (query.QueryParameters ?? []).map((p) => p.Name);
-        const queryParamNameSet = new Set(queryParamNames);
-        if (queryParamNames.some((n) => !specNames.has(n))) return null;        // query param not in spec → under-filter
-        if (spec.some((s) => !queryParamNameSet.has(s.paramName))) return null;  // spec param not in query → over-filter
+        // // Coverage invariant (BOTH directions): a RowFilterBroad query's parameters are ALL row-filters (a mix
+        // // refuses at classify time), so the query's parameter set and the persisted spec's parameter set MUST be
+        // // identical. A query param missing from the spec → we would UNDER-filter; a spec param the query no longer
+        // // has (stale metadata after an out-of-band edit — the same window H6 guards against) → we would OVER-filter
+        // // vs. live, silently returning fewer rows. Either mismatch means the spec is inconsistent → refuse to live.
+        // const specNames = new Set(spec.map((s) => s.paramName));
+        // const queryParamNames = (query.QueryParameters ?? []).map((p) => p.Name);
+        // const queryParamNameSet = new Set(queryParamNames);
+        // if (queryParamNames.some((n) => !specNames.has(n))) return null;        // query param not in spec → under-filter
+        // if (spec.some((s) => !queryParamNameSet.has(s.paramName))) return null;  // spec param not in query → over-filter
 
-        const outputColumns = (query.QueryFields ?? []).map((f) => f.Name).filter((n): n is string => !!n);
-        if (outputColumns.length === 0) return null;
+        // const outputColumns = (query.QueryFields ?? []).map((f) => f.Name).filter((n): n is string => !!n);
+        // if (outputColumns.length === 0) return null;
 
-        // Declared parameter types (name → Type) so the row-filter values bind type-faithfully (see
-        // buildMaterializedReadQuery / coerceMaterializedScalarValue), matching the live path's typed literals.
-        const paramTypes: Record<string, string> = {};
-        for (const p of query.QueryParameters ?? []) paramTypes[p.Name] = p.Type;
+        // // Declared parameter types (name → Type) so the row-filter values bind type-faithfully (see
+        // // buildMaterializedReadQuery / coerceMaterializedScalarValue), matching the live path's typed literals.
+        // const paramTypes: Record<string, string> = {};
+        // for (const p of query.QueryParameters ?? []) paramTypes[p.Name] = p.Type;
 
-        return GenericDatabaseProvider.buildMaterializedReadQuery({
-            outputColumns,
-            schemaName: mat.SchemaName,
-            viewName: mat.ViewName,
-            spec,
-            paramValues: params.Parameters,
-            paramTypes,
-            isPostgres: this.PlatformKey === 'postgresql',
-        });
+        // return GenericDatabaseProvider.buildMaterializedReadQuery({
+        //     outputColumns,
+        //     schemaName: mat.SchemaName,
+        //     viewName: mat.ViewName,
+        //     spec,
+        //     paramValues: params.Parameters,
+        //     paramTypes,
+        //     isPostgres: this.PlatformKey === 'postgresql',
+        // });
     }
 
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
