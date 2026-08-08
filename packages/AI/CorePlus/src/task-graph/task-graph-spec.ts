@@ -50,12 +50,22 @@ export type TaskGraphSpecNode = {
     name: string;
     description: string;
 
-    /** Agent that executes this node. Mutually exclusive with `assignToUser`. */
+    /** Agent that executes this node. Mutually exclusive with `assignToUser` and `actionName`. */
     agentName?: string;
 
     /**
-     * Marks this as a human task (Phase 4). Mutually exclusive with `agentName`. Mirrors the
-     * `UserID`-xor-`AgentID` constraint the Task table already enforces.
+     * Action that executes this node. Mutually exclusive with `agentName` and `assignToUser`.
+     *
+     * The third assignment shape, added for durable After* entity-action dispatch (D14): "run this
+     * action durably, with restart recovery" is a single-node graph, not a new queue. Named rather
+     * than identified by ID for the same reason `agentName` is — a producer authoring a graph knows
+     * names, and resolution to an ID is the service's job.
+     */
+    actionName?: string;
+
+    /**
+     * Marks this as a human task (Phase 4). Mutually exclusive with `agentName` and `actionName`.
+     * Mirrors the assignment exclusivity the Task table enforces.
      */
     assignToUser?: boolean;
 

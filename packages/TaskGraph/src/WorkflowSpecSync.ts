@@ -24,14 +24,17 @@ import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memb
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     MJActionEntity,
+    MJActionFilterEntity,
     MJActionParamEntity,
     MJEntityActionEntity,
+    MJEntityActionFilterEntity,
     MJEntityActionInvocationEntity,
     MJEntityActionParamEntity,
     MJEntityActionInvocationTypeEntity,
     MJScheduledJobEntity,
     MJScheduledJobTypeEntity,
 } from '@memberjunction/core-entities';
+import { BuildChangeFilterCode } from '@memberjunction/actions-base';
 import {
     FormatWorkflowValidationErrors,
     NormalizeInvocationType,
@@ -225,8 +228,8 @@ export class WorkflowSpecSync {
      * **Scope reconciles onto the binding's own `ScopeEntityID`/`ScopeRecordID`.** Those columns and
      * the engine's scope resolver already exist for exactly this; leaving them unset while the spec
      * declared a scope produced a workflow firing on every record of the entity while its author
-     * believed it was watching one. `filter` is refused upstream by `ValidateWorkflowSpec` for the
-     * same reason — it cannot be honored yet, so it must not be quietly accepted.
+     * believed it was watching one. `filter` reconciles the same way — onto an `ActionFilter` bound
+     * through `EntityActionFilter`, the row the invocation path already consults.
      */
     private async reconcileEntityEvent(
         trigger: WorkflowEntityEventTrigger,
@@ -275,6 +278,104 @@ export class WorkflowSpecSync {
         // BaseEntity serializes to `{}` because its fields are getters, not enumerable own
         // properties, so the live instance would arrive empty. `GetAll()` is what survives the wire.
         await this.upsertActionParam(entityAction.ID, action.ID, 'Data', 'Entity Object Data', null, context);
+
+        await this.reconcileTriggerFilter(entityAction.ID, trigger.filter ?? null, context);
+    }
+
+    /**
+     * Brings the binding's filter row in line with the trigger's predicate.
+     *
+     * The trigger's `filter` is an expression; what the platform evaluates is an `ActionFilter.Code`
+     * bound through `EntityActionFilter`. That indirection is what lets a workflow narrow *when* it
+     * fires without the workflow layer inventing an evaluator of its own — `RunSingleFilter` already
+     * compiles, caches and fail-closes this code, and the change context it hands the expression is
+     * the same one every other entity action sees.
+     *
+     * **Removing a filter disables the binding rather than deleting the row.** The `ActionFilter`
+     * survives with its code intact, so re-adding the predicate is recoverable and the audit trail of
+     * what this trigger used to be narrowed by does not evaporate on a save. A `Disabled` binding is
+     * genuinely inert — {@link EntityActionInvocationSingleRecord.ResolveFilters} skips it, which
+     * matters because filters fail closed, so a disabled-but-honored filter would not be a no-op, it
+     * would be a permanent block.
+     */
+    private async reconcileTriggerFilter(
+        entityActionID: string,
+        filter: string | null,
+        context: WorkflowSyncContext,
+    ): Promise<void> {
+        const rv = RunView.FromMetadataProvider(context.Provider);
+        const bindingResult = await rv.RunView<MJEntityActionFilterEntity>(
+            {
+                EntityName: 'MJ: Entity Action Filters',
+                ExtraFilter: `EntityActionID='${entityActionID}'`,
+                OrderBy: 'Sequence ASC',
+                ResultType: 'entity_object',
+            },
+            context.ContextUser,
+        );
+        const binding = bindingResult.Results?.[0] ?? null;
+        const expression = filter?.trim() ?? '';
+
+        if (!expression) {
+            if (binding && binding.Status !== 'Disabled') {
+                binding.Status = 'Disabled';
+                if (!(await binding.Save())) {
+                    throw new Error(
+                        `could not clear the trigger's filter: ${binding.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    );
+                }
+            }
+            return;
+        }
+
+        const filterRow = await this.upsertActionFilter(binding?.ActionFilterID ?? null, expression, context);
+
+        const row = binding
+            ?? await context.Provider.GetEntityObject<MJEntityActionFilterEntity>('MJ: Entity Action Filters', context.ContextUser);
+        if (!binding) row.NewRecord();
+        row.EntityActionID = entityActionID;
+        row.ActionFilterID = filterRow.ID;
+        row.Sequence = 1;
+        row.Status = 'Active';
+        if (!(await row.Save())) {
+            throw new Error(`could not bind the trigger's filter: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+    }
+
+    /**
+     * Writes the filter row holding the generated predicate.
+     *
+     * Reuses the row the binding already points at, so editing a workflow's filter edits one row
+     * rather than accumulating an orphan per save. `UserDescription` keeps the author's expression
+     * verbatim next to the generated code — without it, reading the row back tells you what the
+     * machine produced but not what the person asked for.
+     */
+    private async upsertActionFilter(
+        existingID: string | null,
+        expression: string,
+        context: WorkflowSyncContext,
+    ): Promise<MJActionFilterEntity> {
+        const row = await context.Provider.GetEntityObject<MJActionFilterEntity>('MJ: Action Filters', context.ContextUser);
+        if (existingID) {
+            if (!(await row.Load(existingID))) {
+                // The binding pointed at a row that is gone. Falling back to a fresh row is right:
+                // the alternative is refusing to save a workflow because of a dangling reference the
+                // author never created and cannot see.
+                row.NewRecord();
+            }
+        } else {
+            row.NewRecord();
+        }
+
+        row.Code = BuildChangeFilterCode(expression);
+        row.UserDescription = expression;
+        row.CodeExplanation =
+            'Generated from a workflow trigger filter. The expression is evaluated against the record change ' +
+            'that fired the trigger; the run proceeds only when it is true.';
+        if (!(await row.Save())) {
+            throw new Error(`could not save the trigger's filter: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return row;
     }
 
     /**

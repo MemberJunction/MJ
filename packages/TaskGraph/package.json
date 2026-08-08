@@ -16,6 +16,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
+    "@memberjunction/actions-base": "6.1.0-edge.0",
     "@memberjunction/ai-agents": "6.1.0-edge.0",
     "@memberjunction/ai-core-plus": "6.1.0-edge.0",
     "@memberjunction/core": "6.1.0-edge.0",
