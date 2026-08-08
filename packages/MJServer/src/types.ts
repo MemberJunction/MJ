@@ -107,12 +107,6 @@ export type RunViewGenericParams = {
    * happens. Propagated to `RunViewParams.BypassCache`.
    */
   bypassCache?: boolean;
-  /**
-   * Optional source-of-truth selector for entities that have a base-view materialization.
-   * 'Materialized' routes the read to the entity's materialized wrapper view; defaults to 'Live'.
-   * Propagated to `RunViewParams.DataSource`.
-   */
-  dataSource?: 'Live' | 'Materialized';
 };
 
 
