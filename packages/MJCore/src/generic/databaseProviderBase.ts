@@ -1073,8 +1073,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @returns true if the clause is safe, false if it contains forbidden patterns
      */
     protected ValidateUserProvidedSQLClause(clause: string): boolean {
-        // Remove string literals to avoid false positives
-        const stringLiteralPattern = /(['"])(?:(?=(\\?))\2[\s\S])*?\1/g;
+        // Remove string literals to avoid false positives.
+        //
+        // SECURITY: this MUST match how SQL Server / PostgreSQL (with the default
+        // standard_conforming_strings=on) actually parse string literals — a literal is closed by
+        // the next single quote and `''` is an embedded quote; a backslash is an ORDINARY character
+        // and does NOT escape the closing quote. An earlier version honored backslash escaping
+        // (`\'`), which let an attacker write `x\'; DROP TABLE ...; --` : the whole payload was
+        // swallowed as one "string literal" and stripped, so the injected statement bypassed the
+        // keyword denylist below while the database still terminated the literal at the real quote.
+        // Do NOT reintroduce backslash-escape handling here.
+        const stringLiteralPattern = /'(?:[^']|'')*'|"(?:[^"]|"")*"/g;
         const clauseWithoutStrings = clause.replace(stringLiteralPattern, '');
         const lowerClause = clauseWithoutStrings.toLowerCase();
 

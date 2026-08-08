@@ -217,13 +217,19 @@ export const verifyUserRecord = async (
       let passesDomainCheck: boolean =
         configInfo.userHandling.newUserLimitedToAuthorizedDomains ===
         false; /*in this first condition, we are set up to NOT care about domain */
-      if (!passesDomainCheck && requestDomain) {
-        /*in this second condition, we check the domain against authorized domains*/
-        passesDomainCheck = configInfo.userHandling.newUserAuthorizedDomains.some((pattern) => {
-          // Convert wildcard domain patterns to regular expressions
-          const regex = new RegExp('^' + pattern.toLowerCase().trim().replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
-          return regex.test(requestDomain?.toLowerCase().trim());
-        });
+      if (!passesDomainCheck) {
+        // SECURITY: authorize against the EMAIL DOMAIN of the cryptographically-verified identity,
+        // NOT the request `Origin` header. Origin is trivially spoofable on non-browser / bearer-token
+        // requests, so gating on it let a holder of any valid IdP token auto-provision an account under
+        // an authorized domain by sending a forged Origin. The email comes from the verified JWT.
+        const emailDomain = email.split('@')[1]?.toLowerCase().trim() ?? '';
+        passesDomainCheck =
+          emailDomain.length > 0 &&
+          configInfo.userHandling.newUserAuthorizedDomains.some((pattern) => {
+            // Convert wildcard domain patterns to regular expressions
+            const regex = new RegExp('^' + pattern.toLowerCase().trim().replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+            return regex.test(emailDomain);
+          });
       }
 
       if (passesDomainCheck) {

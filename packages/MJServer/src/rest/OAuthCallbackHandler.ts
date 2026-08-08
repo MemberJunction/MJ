@@ -18,6 +18,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { OAuthManager, MCPClientManager } from '@memberjunction/ai-mcp-client';
 import type { MCPServerOAuthConfig } from '@memberjunction/ai-mcp-client';
+import { configInfo } from '../config.js';
 
 /** Entity name for MCP Server Connections */
 const ENTITY_MCP_SERVER_CONNECTIONS = 'MJ: MCP Server Connections';
@@ -368,6 +369,17 @@ export class OAuthCallbackHandler {
             return;
         }
 
+        // connectionId is a record ID (UUID). Reject anything else at the boundary so it can never
+        // reach a SQL filter or downstream consumer as injectable input.
+        if (!/^[0-9a-fA-F-]{36}$/.test(String(connectionId))) {
+            res.status(400).json({
+                success: false,
+                errorCode: 'invalid_request',
+                errorMessage: 'connectionId must be a valid record identifier'
+            });
+            return;
+        }
+
         try {
             // Load connection and server config
             const config = await this.loadConnectionConfig(connectionId, contextUser);
@@ -644,10 +656,13 @@ export class OAuthCallbackHandler {
         try {
             const rv = new RunView();
 
-            // Get connection to get server ID
+            // Get connection to get server ID.
+            // connectionId is caller-supplied (POST /oauth/initiate body). MJ ExtraFilter is a raw
+            // SQL fragment, so single quotes MUST be doubled to prevent injection — matching the
+            // escaping used for stateParameter in loadAuthorizationState().
             const connResult = await rv.RunView<{ MCPServerID: string }>({
                 EntityName: ENTITY_MCP_SERVER_CONNECTIONS,
-                ExtraFilter: `ID='${connectionId}'`,
+                ExtraFilter: `ID='${connectionId.replace(/'/g, "''")}'`,
                 Fields: ['MCPServerID'],
                 ResultType: 'simple'
             }, contextUser);
@@ -697,6 +712,35 @@ export class OAuthCallbackHandler {
     }
 
     /**
+     * Validates that a caller-supplied frontend return URL points at an allowed origin, so the
+     * OAuth callback cannot be turned into an open redirect from the trusted MJAPI origin.
+     *
+     * Allowed when: CORS is configured "allow all" (`['*']`, the backward-compatible default),
+     * the URL's origin is in `cors.allowedOrigins`, or it matches the origin of a built-in
+     * success/error redirect URL. Anything else is rejected and the caller falls back to the
+     * default redirect page.
+     */
+    private isFrontendReturnUrlAllowed(url: URL): boolean {
+        const allowed = configInfo.cors?.allowedOrigins ?? ['*'];
+        if (allowed.includes('*')) {
+            return true;
+        }
+        if (allowed.includes(url.origin)) {
+            return true;
+        }
+        for (const builtIn of [this.options.successRedirectUrl, this.options.errorRedirectUrl]) {
+            try {
+                if (builtIn && new URL(builtIn).origin === url.origin) {
+                    return true;
+                }
+            } catch {
+                // Ignore an unparseable built-in URL and keep checking.
+            }
+        }
+        return false;
+    }
+
+    /**
      * Redirects to success page with state info.
      * If a frontend return URL is provided, redirects there instead of the default success page.
      */
@@ -705,6 +749,10 @@ export class OAuthCallbackHandler {
         if (frontendReturnUrl) {
             try {
                 const url = new URL(frontendReturnUrl);
+                if (!this.isFrontendReturnUrlAllowed(url)) {
+                    LogError(`[OAuth Callback] frontend return URL '${frontendReturnUrl}' origin not allowed, falling back to default`);
+                    throw new Error('frontend return URL origin not allowed');
+                }
                 url.searchParams.set('oauth', 'success');
                 url.searchParams.set('state', state);
                 url.searchParams.set('connectionId', connectionId);
@@ -733,6 +781,10 @@ export class OAuthCallbackHandler {
         if (frontendReturnUrl) {
             try {
                 const url = new URL(frontendReturnUrl);
+                if (!this.isFrontendReturnUrlAllowed(url)) {
+                    LogError(`[OAuth Callback] frontend return URL '${frontendReturnUrl}' origin not allowed, falling back to default`);
+                    throw new Error('frontend return URL origin not allowed');
+                }
                 url.searchParams.set('oauth', 'error');
                 url.searchParams.set('error', errorCode);
                 url.searchParams.set('error_description', errorMessage);
