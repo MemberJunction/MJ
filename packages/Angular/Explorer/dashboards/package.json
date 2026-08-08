@@ -29,6 +29,10 @@
       "types": "./dist/scheduling-dashboards.module.d.ts",
       "default": "./dist/scheduling-dashboards.module.js"
     },
+    "./workflows-dashboards.module": {
+      "types": "./dist/workflows-dashboards.module.d.ts",
+      "default": "./dist/workflows-dashboards.module.js"
+    },
     "./communication-dashboards.module": {
       "types": "./dist/communication-dashboards.module.d.ts",
       "default": "./dist/communication-dashboards.module.js"
