@@ -8,6 +8,8 @@ import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
  */
 describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
     const build = GenericDatabaseProvider.buildMaterializedReadQuery;
+    /** The builder's `spec` parameter type, derived from the source so malformed doubles cast without `any`. */
+    type SpecArg = Parameters<typeof build>[0]['spec'];
     const base = {
         outputColumns: ['ID', 'Status', 'ChapterID'],
         schemaName: '__mj',
@@ -197,7 +199,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
         });
 
         it('a malformed spec element (missing/non-string column, operator, or paramName) → null, never throws', () => {
-            const bad = [
+            const bad: unknown[] = [
                 [{ operator: '=', paramName: 'status', kind: 'scalar' }],            // missing column
                 [{ column: 'Status', paramName: 'status', kind: 'scalar' }],         // missing operator
                 [{ column: 'Status', operator: '=', kind: 'scalar' }],               // missing paramName
@@ -205,8 +207,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 [null],                                                              // null element
             ];
             for (const s of bad) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                expect(build({ ...base, spec: s as any, paramValues: { status: 'x' }, isPostgres: false })).toBeNull();
+                expect(build({ ...base, spec: s as SpecArg, paramValues: { status: 'x' }, isPostgres: false })).toBeNull();
             }
         });
     });
