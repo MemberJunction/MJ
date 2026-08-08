@@ -80,7 +80,7 @@ vi.mock('../generic/ActionEngine', () => ({
     ActionEngineServer: {
         Instance: {
             Config: vi.fn().mockResolvedValue(undefined),
-            Actions: [{ ID: 'ACTION-1', Name: 'Notify', Params: [{ ID: 'p1', Name: 'Record', Type: 'Input' }] }],
+            Actions: [{ ID: 'ACTION-1', Name: 'Notify', Params: { Items: [{ ID: 'p1', Name: 'Record', Type: 'Input' }] } }],
             ActionFilters: [],
             RunAction: mockRunAction
         }
@@ -123,7 +123,9 @@ function invocationParams(overrides: Record<string, unknown> = {}): EntityAction
             EntityID: TARGET_ENTITY_ID,
             LoggingMode: 'All',
             Filters: [],
-            Params: [{ ActionParamID: 'p1', ValueType: 'Entity Object Data', Value: '' }]
+            Params: [{ ActionParamID: 'p1', ValueType: 'Entity Object Data', Value: '' }],
+            // Read with .map() on the dispatch path; an absent array is not the same as an empty one.
+            Filters: []
         },
         InvocationType: { ID: INVOCATION_TYPE_ID, Name: 'Single Record' },
         ContextUser: { ID: 'test-user' },

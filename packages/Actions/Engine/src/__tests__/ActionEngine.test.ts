@@ -456,7 +456,7 @@ describe('ActionEngineServer', () => {
         it('should map Scalar ValueType to default value directly', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Scalar', DefaultValue: 'hello', Type: 'Input' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'Scalar', DefaultValue: 'hello', Type: 'Input' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -466,7 +466,7 @@ describe('ActionEngineServer', () => {
         it('should parse JSON for Simple Object ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: '{"key":"val"}', Type: 'Input' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: '{"key":"val"}', Type: 'Input' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -476,7 +476,7 @@ describe('ActionEngineServer', () => {
         it('should use raw string for Simple Object when JSON parse fails', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: 'not-json', Type: 'Input' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: 'not-json', Type: 'Input' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -486,7 +486,7 @@ describe('ActionEngineServer', () => {
         it('should pass through BaseEntity Sub-Class ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'BaseEntity Sub-Class', DefaultValue: 'entity-ref', Type: 'Input' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'BaseEntity Sub-Class', DefaultValue: 'entity-ref', Type: 'Input' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -496,7 +496,7 @@ describe('ActionEngineServer', () => {
         it('should pass through Other ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Other', DefaultValue: 'other-val', Type: 'Both' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'Other', DefaultValue: 'other-val', Type: 'Both' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -506,7 +506,7 @@ describe('ActionEngineServer', () => {
         it('should log error and use default for unknown ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'UnknownType', DefaultValue: 'fallback', Type: 'Output' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'UnknownType', DefaultValue: 'fallback', Type: 'Output' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -517,10 +517,10 @@ describe('ActionEngineServer', () => {
         it('should handle multiple params', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [
+                Params: { Items: [
                     { Name: 'p1', ValueType: 'Scalar', DefaultValue: 'a', Type: 'Input' },
                     { Name: 'p2', ValueType: 'Scalar', DefaultValue: 'b', Type: 'Output' },
-                ],
+                ] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -530,7 +530,7 @@ describe('ActionEngineServer', () => {
         });
 
         it('should handle empty params array', () => {
-            const action = { Name: 'TestAction', Params: [] };
+            const action = { Name: 'TestAction', Params: { Items: [] } };
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
             expect(result).toEqual([]);
         });

@@ -8,7 +8,16 @@ import { ActionEngineServer } from "../generic/ActionEngine";
  * Base class for invocation of any entity action invocation type
  */
 export abstract class EntityActionInvocationBase {
-    public abstract InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult>
+    /**
+     * Runs the action for this invocation type.
+     *
+     * **Returns null when the action did not run at all** — the binding is scoped
+     * (`ScopeEntityID`/`ScopeRecordID`) and this record falls outside it, or a filter refused it.
+     * That is an ordinary outcome, not a failure: there is simply no result to report. The type
+     * says so because callers were dereferencing it — `HandleEntityActions` guards correctly, the
+     * GraphQL resolver did not, and an out-of-scope binding surfaced to clients as a server error.
+     */
+    public abstract InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult | null>
 
     /**
      * Case insensitive helper method to find a param by valueType
@@ -161,7 +170,7 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
         return true;
     }
 
-    public async InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult> {
+    public async InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult | null> {
         // for this type of invocation we need to validate that the EntityObject is not null
         if (this.ValidateParams(params)) {
             // A binding narrowed to one configuration record (ScopeEntityID/ScopeRecordID) only fires for
@@ -225,7 +234,7 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
            return true;
     }
 
-    public async InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult> {
+    public async InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult | null> {
         // for this type of invocation we need to validate that we have either a list or a view 
         if (this.ValidateParams(params)) {
             // now do the work
@@ -343,32 +352,23 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
 }
 
 /**
- * This class handles the invocation type of Validate and uses Entity Actions to validate a record and provide the results back to the caller
+ * Handles the `Validate` invocation type.
+ *
+ * **Deliberately has no `InvokeAction` of its own.** It used to override the single-record
+ * implementation with a near-copy that had drifted into a strict subset: same parameter mapping,
+ * same filters, but missing two things the parent does.
+ *
+ * 1. **Scope resolution.** The override never called `IsEntityActionInScope`, so a binding narrowed
+ *    to one record via `ScopeEntityID`/`ScopeRecordID` ran `Validate` against *every* record of the
+ *    entity — the same class of bug as a workflow trigger that claims to be scoped and is not.
+ * 2. **Provenance.** `RunAction` was called without it, so logging and redaction could not see which
+ *    binding produced the run — meaning a whole-record `Validate` parameter was logged raw, ignoring
+ *    the binding's `LogValue` rows and its `LoggingMode`.
+ *
+ * Inheriting is what keeps those two facts true for `Validate` forever, rather than until the next
+ * time the two copies drift. The class remains because `@RegisterClass` needs a distinct type to
+ * resolve the `Validate` key.
  */
 @RegisterClass(EntityActionInvocationBase, 'Validate')
 export class EntityActionInvocationValidate extends EntityActionInvocationSingleRecord {
-    public override async InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult> {
-        // for this type of invocation we need to validate that the EntityObject is not null
-        if (this.ValidateParams(params)) {
-            // make sure the action engine is good to go, the below won't do anything if it was already configured
-            await ActionEngineServer.Instance.Config(false, params.ContextUser);
-
-            const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, params.EntityAction.ActionID));
-            const internalParams = await this.MapParams([...action.Params.Items], params.EntityAction.Params, params.EntityObject);
-            
-            const result = await ActionEngineServer.Instance.RunAction({
-                Action: action,
-                ContextUser: params.ContextUser,
-                Filters: params.EntityAction.Filters.map(f => {
-                    const filter = ActionEngineServer.Instance.ActionFilters.find(fi => UUIDsEqual(fi.ID, f.ActionFilterID));
-                    return filter;
-                }),
-                Params: internalParams
-            })
-
-            return result 
-        }
-        else
-            return null;
-    }
 }
