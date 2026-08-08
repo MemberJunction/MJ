@@ -51,6 +51,7 @@ export * from './checks/templates.checks';
 export * from './checks/actions-pipeline.checks';
 export * from './checks/entity-server-invariants.checks';
 export * from './checks/entity-graph.checks';
+export * from './checks/entity-graph-client.checks';
 export * from './checks/scheduling-concurrency.checks';
 export * from './checks/communication.checks';
 export * from './checks/ai-cost.checks';
