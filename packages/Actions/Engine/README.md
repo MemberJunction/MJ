@@ -316,6 +316,17 @@ Three behaviours worth knowing:
   rather than consulted: a disabled gate that was still evaluated would not be inert, it would block
   the action permanently.
 
+**A prevented run still writes an `ActionExecutionLog` row**, carrying
+`ACTION_PREVENTED_BY_FILTER_MESSAGE` as its `Message`. That is deliberate — an operator needs to see
+that a filter refused, rather than wondering why nothing happened. It does mean *"a log row exists"*
+is not the same question as *"the action ran"*, and code (or a test) that conflates the two will
+report a working filter as a failure to gate.
+
+> **Behaviour change.** Until this release the refusal branch logged that row and then executed the
+> action anyway, so filters recorded preventing things they did not prevent. They now genuinely
+> prevent. If you have `ActionFilter` rows configured, actions that were firing despite them will
+> stop — which is what the rows always asked for.
+
 ### Durable dispatch — `After*` work that survives a restart
 
 `After*` entity actions are dispatched fire-and-forget so a user's save is not held open by work that

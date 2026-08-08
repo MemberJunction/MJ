@@ -12,6 +12,17 @@
 The entity-action substrate finishes what its schema has been promising. Seven pieces, all of which
 share a failure shape: a column, a flag or a field that read as configured and did nothing.
 
+**Action Filters now actually prevent execution.** `RunAction`'s filter-refusal branch built its
+result, logged it, and then fell through to run the action anyway — there was no `return`. Every
+Action Filter has therefore recorded that it prevented something while preventing nothing, since the
+mechanism shipped. The refusal row is why it went unnoticed: the observable said "prevented" and the
+side effect happened regardless, so #3606's claim that filters fail closed described evaluation,
+which landed, rather than enforcement, which did not. **Anyone relying on an Action Filter to gate an
+action has been getting the action anyway; after this it stops, which is the configured behaviour but
+a visible change.** A prevented run still writes a log row, deliberately — an operator should be able
+to see that a filter refused rather than wonder why nothing happened — so its `Message` is now an
+exported constant, since that is the only thing distinguishing a prevented run from an executed one.
+
 **Transition filters.** An entity action could see a record's current state and nothing else, so
 "when Status *becomes* Approved" was indistinguishable from "when Status *is* Approved" — which is
 true on every subsequent save too. `EntityChangeContext` now carries both sides of the save to where
@@ -57,6 +68,12 @@ submitter is registered or submission fails, the work runs **inline**: `Durable`
 be harder to lose, so dropping it would make opting in less reliable than leaving it off. New
 `Task.ActionID` widens the assignment exclusivity to three ways, and `TaskGraphSpecNode.actionName`
 joins `agentName`/`assignToUser`.
+
+Durability replaces *execution*, not *dispatch*: `RunActionParams.DeferExecution` is called by
+`RunAction` in place of running the action, after validation and filters have passed, so a durable
+binding is gated by exactly what an inline one is gated by. Submitting at dispatch time instead —
+which is where this first landed — would have fired a scoped durable trigger for every record of the
+entity and a filtered one on every save.
 
 **Execution-log retention.** `Action.RetentionPeriod` and `ActionExecutionLog.RetentionPeriod` shipped
 with descriptions and no reader anywhere in the codebase; the log grew forever while the schema
