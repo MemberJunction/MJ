@@ -61,6 +61,17 @@ export type TaskGraphParentMetadata = {
     reinvokeDepth: number;
     submittedByAgentRunID: string | null;
     /**
+     * Who the graph belongs to.
+     *
+     * Stored here rather than on a Task column because `Task.UserID` already means something else —
+     * it designates a *human* task, the assignee the graph waits on — so setting it on a parent
+     * would make every graph look like work waiting on a person. It is durable for the same reason
+     * everything else in this bag is: the instance that needs it is routinely not the one that wrote
+     * it. Consumed by the live-frame layer, which cannot authorize a viewer without knowing whose
+     * run they are watching.
+     */
+    submittedByUserID?: string | null;
+    /**
      * Set once the completion handler has delivered. Written with a compare-and-swap guard, which is
      * what turns at-least-once delivery into effectively-once: a crash between "graph complete" and
      * "continuation delivered" leaves this unset, so the next sweep retries, and two instances
@@ -85,6 +96,7 @@ const DEFAULT_PARENT_METADATA: TaskGraphParentMetadata = {
     continuation: 'message',
     reinvokeDepth: 0,
     submittedByAgentRunID: null,
+    submittedByUserID: null,
 };
 
 /**
@@ -156,12 +168,16 @@ export class TaskGraphService {
         }
 
         try {
-            // 2. Resolve every agent BEFORE writing anything. An unresolvable agent is a hard
-            //    error, not a skipped node: silently dropping a task executes the graph with holes
-            //    where the caller's work should have been.
+            // 2. Resolve every agent and action BEFORE writing anything. An unresolvable name is a
+            //    hard error, not a skipped node: silently dropping a task executes the graph with
+            //    holes where the caller's work should have been.
             const agentIDsByName = await this.resolveAgents(spec, context);
             if (!agentIDsByName.Success) {
                 return { Success: false, ErrorMessage: agentIDsByName.ErrorMessage };
+            }
+            const actionIDsByName = await this.resolveActions(spec, context);
+            if (!actionIDsByName.Success) {
+                return { Success: false, ErrorMessage: actionIDsByName.ErrorMessage };
             }
 
             const taskTypeID = await this.ensureTaskType(context);
@@ -169,7 +185,9 @@ export class TaskGraphService {
             // 3. Persist. Parent first so children have a ParentID, then children, then edges —
             //    edges last because they reference two child IDs that must both exist.
             const parentTaskID = await this.persistParent(spec, taskTypeID, context);
-            const taskIDMap = await this.persistChildren(spec, parentTaskID, taskTypeID, agentIDsByName.Map!, context);
+            const taskIDMap = await this.persistChildren(
+                spec, parentTaskID, taskTypeID, agentIDsByName.Map!, actionIDsByName.Map!, context,
+            );
             await this.persistDependencies(spec, taskIDMap, context);
 
             LogStatus(
@@ -286,6 +304,39 @@ export class TaskGraphService {
         return { Success: true, Map: found };
     }
 
+    /**
+     * Maps every referenced action name to its ID, or reports all unresolvable names at once.
+     *
+     * Deliberately a mirror of {@link resolveAgents} rather than a generalization of it: the two
+     * read different entities and produce different error prose, and the shared shape is three
+     * lines. Collapsing them would trade a readable failure message for a parameterized lookup.
+     */
+    private async resolveActions(
+        spec: TaskGraphSpec,
+        context: TaskGraphSubmitContext,
+    ): Promise<{ Success: boolean; Map?: Map<string, string>; ErrorMessage?: string }> {
+        const names = [...new Set(spec.tasks.filter((t) => !!t.actionName).map((t) => t.actionName!))];
+        if (names.length === 0) return { Success: true, Map: new Map() };
+
+        const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
+        const result = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
+            { EntityName: 'MJ: Actions', ExtraFilter: `Name IN (${quoted})`, Fields: ['ID', 'Name'], ResultType: 'simple' },
+            context.ContextUser,
+        );
+
+        const found = new Map((result.Results ?? []).map((r) => [r.Name, r.ID]));
+        const missing = names.filter((n) => !found.has(n));
+        if (missing.length > 0) {
+            return {
+                Success: false,
+                ErrorMessage:
+                    `Task graph "${spec.workflowName}" references ${missing.length} unknown action(s): ${missing.join(', ')}. ` +
+                    `Submitting would execute the graph with holes where those tasks should be.`,
+            };
+        }
+        return { Success: true, Map: found };
+    }
+
     /** Finds or creates the task type used for orchestrated graphs. */
     private async ensureTaskType(context: TaskGraphSubmitContext): Promise<string> {
         const existing = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string }>(
@@ -324,6 +375,7 @@ export class TaskGraphService {
             continuation: spec.continuation ?? 'message',
             reinvokeDepth: context.ReinvokeDepth ?? 0,
             submittedByAgentRunID: context.AgentRunID ?? null,
+            submittedByUserID: context.ContextUser?.ID ?? null,
         } satisfies TaskGraphParentMetadata);
         if (!(await parent.Save())) {
             throw new Error(`Could not create parent task: ${parent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -337,6 +389,7 @@ export class TaskGraphService {
         parentTaskID: string,
         taskTypeID: string,
         agentIDsByName: Map<string, string>,
+        actionIDsByName: Map<string, string>,
         context: TaskGraphSubmitContext,
     ): Promise<Map<string, string>> {
         const map = new Map<string, string>();
@@ -354,6 +407,8 @@ export class TaskGraphService {
 
             if (node.agentName) {
                 task.AgentID = agentIDsByName.get(node.agentName)!;
+            } else if (node.actionName) {
+                task.ActionID = actionIDsByName.get(node.actionName)!;
             } else {
                 // Human task. Assigned to the submitting user only — cross-user assignment stays
                 // rejected until the authorization model in #3524 lands.

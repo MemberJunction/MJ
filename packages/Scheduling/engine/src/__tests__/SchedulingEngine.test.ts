@@ -366,6 +366,96 @@ describe('SchedulingEngine', () => {
         });
     });
 
+    describe('expireFinishedJobs — retiring a job whose window has closed', () => {
+        // `Expired` has been a declared ScheduledJobStatus that NOTHING ever set. isJobDue already
+        // refuses a job past its EndAt, so such a job stops running on its own — but it stayed
+        // Active forever, permanently inert, and kept driving UpdatePollingInterval. That is why
+        // "run once at T" (cron at T + EndAt just after T) left the whole scheduler polling at that
+        // job's cadence for a job that would never run again.
+        const expire = (evalTime: Date) =>
+            (engine as unknown as { expireFinishedJobs(u: unknown, t: Date): Promise<void> })
+                .expireFinishedJobs({ ID: 'user-1' }, evalTime);
+
+        const job = (over: Record<string, unknown> = {}) => ({
+            ID: 'job-1',
+            Name: 'One-shot',
+            Status: 'Active',
+            EndAt: new Date('2026-08-08T10:00:00Z'),
+            Save: vi.fn().mockResolvedValue(true),
+            LatestResult: null,
+            ...over,
+        });
+
+        it('marks a job past its EndAt as Expired', async () => {
+            const j = job();
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2026-08-08T11:00:00Z'));
+
+            expect(j.Status).toBe('Expired');
+            expect(j.Save).toHaveBeenCalled();
+        });
+
+        it('leaves a job whose window is still open alone', async () => {
+            const j = job();
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2026-08-08T09:00:00Z'));
+
+            expect(j.Status).toBe('Active');
+            expect(j.Save).not.toHaveBeenCalled();
+        });
+
+        it('ignores a job with no EndAt — an open-ended schedule never expires', async () => {
+            const j = job({ EndAt: null });
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2030-01-01T00:00:00Z'));
+
+            expect(j.Status).toBe('Active');
+            expect(j.Save).not.toHaveBeenCalled();
+        });
+
+        it.each(['Paused', 'Disabled'])('does NOT overwrite a %s job a person set', async (status) => {
+            // Rewriting a deliberate human decision to Expired would lose it, and the two states
+            // mean different things: Paused is "resume this later".
+            const j = job({ Status: status });
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2026-08-08T11:00:00Z'));
+
+            expect(j.Status).toBe(status);
+            expect(j.Save).not.toHaveBeenCalled();
+        });
+
+        it('expires a Pending job too — it never ran and never will', async () => {
+            const j = job({ Status: 'Pending' });
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2026-08-08T11:00:00Z'));
+
+            expect(j.Status).toBe('Expired');
+        });
+
+        it('keeps going when one job fails to save', async () => {
+            // Retiring a finished job must never stop live ones from being considered.
+            const bad = job({ ID: 'bad', Save: vi.fn().mockResolvedValue(false), LatestResult: { CompleteMessage: 'locked' } });
+            const good = job({ ID: 'good' });
+            mockBase.ScheduledJobs = [bad, good];
+
+            await expire(new Date('2026-08-08T11:00:00Z'));
+
+            expect(good.Save).toHaveBeenCalled();
+        });
+
+        it('does not throw when a save blows up', async () => {
+            const j = job({ Save: vi.fn().mockRejectedValue(new Error('deadlock')) });
+            mockBase.ScheduledJobs = [j];
+
+            await expect(expire(new Date('2026-08-08T11:00:00Z'))).resolves.toBeUndefined();
+        });
+    });
+
     describe('initializeNextRunTimes — RunImmediatelyIfNeverRun', () => {
         // Helper to build a minimal job object matching the MJScheduledJobEntity mock shape
         const buildJob = (overrides: Partial<Record<string, unknown>>): Record<string, unknown> => ({

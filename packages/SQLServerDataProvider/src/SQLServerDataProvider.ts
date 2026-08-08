@@ -392,6 +392,15 @@ export class SQLServerDataProvider
     // Request-specific depth should be accessed via getTransactionContext
     return this._transactionDepth;
   }
+
+  /**
+   * Feeds real nesting depth to the entity-transaction machinery (`IsNested`, out-of-order settle
+   * detection). Deliberately separate from `IsInTransaction`, which this provider leaves `false`
+   * so `RunMaybeSerial` keeps fanning out — see the note in `packages/MJCore/src/generic/util.ts`.
+   */
+  protected override get CurrentTransactionDepth(): number {
+    return this._transactionDepth;
+  }
   
   /**
    * Checks if we're currently in a transaction (at any depth)
@@ -732,18 +741,8 @@ export class SQLServerDataProvider
 
     // Build array of SQL statements for batch execution
     const sqlStatements: string[] = [];
-    for (const { entityInfo, whereSQL, item } of items) {
-      // The freshness probe MUST target the same physical view the read targets. For a
-      // DataSource:'Materialized' read that's the materialized_vw<CodeName> wrapper (a full SELECT *
-      // snapshot of the base view, so it carries __mj_UpdatedAt) — NOT the live base view. Probing the
-      // live view would compare the client's snapshot cache against an unrelated source's rowCount/
-      // maxUpdatedAt, yielding a meaningless current/stale verdict. (Materialized reads are normally kept
-      // out of the client cache by runViewCacheEligible, so this is defense-in-depth for any caller that
-      // still supplies a materialized cacheStatus.) Use the status-gated resolveEffectiveBaseView (not the
-      // unconditional GetEffectiveBaseView) so a Building/DriftHold/Disabled/never-minted snapshot probes the
-      // LIVE base view — mirroring the read path — instead of a held or missing materialized_vw wrapper.
-      const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
-      const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${effectiveView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+    for (const { entityInfo, whereSQL } of items) {
+      const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
       sqlStatements.push(statusSQL);
     }
 
@@ -780,23 +779,20 @@ export class SQLServerDataProvider
 
   protected override async executeSQLForUserViewRunLogging(
     viewId: number,
-    entityInfo: EntityInfo,
-    effectiveBaseView: string,
+    entityBaseView: string,
     whereSQL: string,
     orderBySQL: string,
     user: UserInfo,
   ): Promise<{ executeViewSQL: string; runID: string }> {
-    // entityInfo + effectiveBaseView are passed in (no reverse-lookup by base-view name) so the logged
-    // read honors DataSource:'Materialized' — effectiveBaseView is the materialized wrapper view then,
-    // and the entity's live base view otherwise.
+    const entityInfo = this.Entities.find((e) => e.BaseView.trim().toLowerCase() === entityBaseView.trim().toLowerCase());
     const sSQL = `
             DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
-            INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE (${whereSQL}))
+            INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
     const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
-    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
+    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ` ORDER BY ${orderBySQL}` : ''}`;
     return { executeViewSQL: sRetSQL, runID };
@@ -2432,14 +2428,47 @@ IF ${varName} IS NOT NULL
         if (!savepointName) {
           throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
         }
-        
-        await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
-          description: `Rolling back to savepoint ${savepointName}`,
-          ignoreLogging: true
-        });
-        
-        this._savepointStack.pop();
-        this._transactionDepth--;
+
+        try {
+          await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
+            description: `Rolling back to savepoint ${savepointName}`,
+            ignoreLogging: true
+          });
+
+          this._savepointStack.pop();
+          this._transactionDepth--;
+        } catch (savepointError) {
+          // SQL Server dooms the ENTIRE transaction (XACT_STATE() = -1) on deadlock-victim,
+          // batch-aborting and XACT_ABORT errors. In that state `ROLLBACK TRANSACTION <savepoint>`
+          // is illegal (Msg 3931) and throws — and leaving the depth/stack untouched would strand
+          // a dead physical transaction that every subsequent statement on this provider silently
+          // joins, with nested Commit calls "succeeding" against a transaction that can never
+          // commit. The only recovery is a FULL rollback plus a complete state reset; the outer
+          // scopes' own settles then fail loudly against depth 0 instead of pretending to work.
+          // (The old per-chain BeginISATransaction never hit this — sql.Transaction.rollback() is
+          // legal on an aborted transaction — so this hazard is specific to savepoint joining.)
+          LogError(
+            `Savepoint rollback to ${savepointName} failed — the transaction is likely doomed ` +
+            `(XACT_STATE() = -1). Performing a full rollback and resetting transaction state.`
+          );
+          try {
+            await this._transaction.rollback();
+          } catch (fullRollbackError) {
+            LogError('Full rollback after savepoint rollback failure also failed:', undefined, fullRollbackError);
+          } finally {
+            this._transaction = null;
+            this._transactionDepth = 0;
+            this._savepointStack = [];
+            this._savepointCounter = 0;
+            this._transactionState$.next(false);
+            const deferredCount = this._deferredTasks.length;
+            this._deferredTasks = [];
+            if (deferredCount > 0) {
+              LogStatus(`Cleared ${deferredCount} deferred tasks after doomed-transaction recovery`);
+            }
+          }
+          throw savepointError; // the caller's unit of work still failed — report it
+        }
       }
     } catch (e) {
       // On error in outer transaction, reset everything
@@ -2450,7 +2479,7 @@ IF ${varName} IS NOT NULL
         this._savepointCounter = 0;
         this._transactionState$.next(false);
       }
-      
+
       LogError(e);
       throw e; // force caller to handle
     }

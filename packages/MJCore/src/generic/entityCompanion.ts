@@ -44,6 +44,7 @@
 import { BaseEntity } from './baseEntity';
 import { ValidationResult } from './entityInfo';
 import type { EntitySavePlan } from './entitySavePlan';
+import type { EntitySaveOptions } from './interfaces';
 
 /**
  * The serialized form of a single companion as it crosses the wire.
@@ -205,8 +206,11 @@ export abstract class EntityCompanion<TWire = unknown> {
      * empty contribution keeps the save on the fast single-row path.
      *
      * @param _plan - The plan being assembled for this unit of work.
+     * @param _options - The caller's save options. Implementations that decide what counts as work
+     *                   (skipping clean children, most importantly) must honor flags such as
+     *                   `IgnoreDirtyState` that demand a full write-out.
      */
-    public ContributeSaveWork(_plan: EntitySavePlan): void {
+    public ContributeSaveWork(_plan: EntitySavePlan, _options?: EntitySaveOptions): void {
         /* no-op by default */
     }
 

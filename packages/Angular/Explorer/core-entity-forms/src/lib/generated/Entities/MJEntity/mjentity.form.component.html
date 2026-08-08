@@ -2514,31 +2514,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Materialized Results (Source Entity ID) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJMaterializedResultsSourceEntityID"
-        SectionName="Materialized Results (Source Entity ID)"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJMaterializedResultsSourceEntityID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Materialized Results','SourceEntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Materialized Results')"
-                [AllowLoad]="IsSectionExpanded('mJMaterializedResultsSourceEntityID')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJMaterializedResultsSourceEntityID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Entity Actions (Scope Entity ID) Section -->
     <mj-collapsible-panel
         SectionKey="mJEntityActionsScopeEntityID"
@@ -2558,31 +2533,6 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityActionsScopeEntityID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Materialized Results (Generated Entity ID) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJMaterializedResultsGeneratedEntityID"
-        SectionName="Materialized Results (Generated Entity ID)"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJMaterializedResultsGeneratedEntityID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Materialized Results','GeneratedEntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Materialized Results')"
-                [AllowLoad]="IsSectionExpanded('mJMaterializedResultsGeneratedEntityID')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJMaterializedResultsGeneratedEntityID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

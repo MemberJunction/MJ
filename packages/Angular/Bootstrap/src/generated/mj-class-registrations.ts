@@ -32,7 +32,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (401 classes)
+// @memberjunction/core-entities (400 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -307,7 +307,6 @@ import {
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
-    MJMaterializedResultEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -587,7 +586,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (103 classes)
+// @memberjunction/ng-dashboards (105 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -692,6 +691,8 @@ import {
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
     VisualizeResourceComponent,
+    WorkflowsDashboardComponent,
+    WorkflowsResourceComponent,
 } from '@memberjunction/ng-dashboards';
 
 // @memberjunction/ng-explorer-core (13 classes)
@@ -999,7 +1000,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
-    MJMaterializedResultEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -1316,6 +1316,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
     VisualizeResourceComponent,
+    WorkflowsDashboardComponent,
+    WorkflowsResourceComponent,
     ArtifactResource,
     ChatConversationsResource,
     ConversationFeedbackResource,
@@ -1335,7 +1337,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 612;
+export const CLASS_REGISTRATIONS_COUNT = 613;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

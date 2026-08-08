@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-openai",
   "type": "module",
-  "version": "6.1.0-edge.0",
+  "version": "6.1.0-edge.1",
   "description": "MemberJunction Wrapper for OpenAI AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,8 +22,8 @@
     "@memberjunction/unit-testing": "6.1.0-edge.0"
   },
   "dependencies": {
-    "@memberjunction/ai": "6.1.0-edge.0",
-    "@memberjunction/global": "6.1.0-edge.0",
+    "@memberjunction/ai": "6.1.0-edge.1",
+    "@memberjunction/global": "6.1.0-edge.1",
     "openai": "6.18.0"
   },
   "repository": {

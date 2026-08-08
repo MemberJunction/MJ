@@ -37,14 +37,33 @@ describe('TaskGraphEditorComponent (DOM)', () => {
     }
     const host = (f: ComponentFixture<TaskGraphEditorComponent>) => f.nativeElement as HTMLElement;
 
-    it('shows the empty state, not a canvas, when there are no steps', () => {
-        const f = render({ Spec: spec({ tasks: [] }) });
+    it('shows the empty state, not a canvas, when there are no steps AND it is read-only', () => {
+        // Read-only + empty is genuinely nothing to show: there is no palette to offer, because
+        // there is nothing the viewer is allowed to add.
+        const f = render({ Spec: spec({ tasks: [] }), ReadOnly: true });
         expect(host(f).querySelector('mj-empty-state')).toBeTruthy();
         expect(host(f).querySelector('mj-flow-editor')).toBeNull();
     });
 
-    it('uses the caller-supplied empty-state message', () => {
+    it('STILL renders the canvas when empty and editable — the palette is the only way to add a step', () => {
+        // The regression this replaces: an editable empty graph rendered a bare empty state whose
+        // message said "Add one to start building this workflow" while removing the palette that was
+        // the only way to add one. The advice was unfollowable and the screen was a dead end.
+        const f = render({ Spec: spec({ tasks: [] }) });
+        // The flow editor renders, so the palette is reachable. It shows its OWN empty state inside
+        // the canvas, which is fine — what matters is that the editor exists at all, because the
+        // previous behaviour replaced it wholesale and left nothing to add a step with.
+        expect(host(f).querySelector('mj-flow-editor')).toBeTruthy();
+    });
+
+    it('still says what to do on an empty editable canvas, as a hint rather than a wall', () => {
         const f = render({ Spec: spec({ tasks: [] }), EmptyStateMessage: 'Nothing to run.' });
+        expect(host(f).textContent).toContain('Nothing to run.');
+        expect(host(f).querySelector('.mj-tge__empty-hint')).toBeTruthy();
+    });
+
+    it('uses the caller-supplied empty-state message when read-only too', () => {
+        const f = render({ Spec: spec({ tasks: [] }), ReadOnly: true, EmptyStateMessage: 'Nothing to run.' });
         expect(host(f).textContent).toContain('Nothing to run.');
     });
 

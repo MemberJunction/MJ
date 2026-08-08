@@ -30,6 +30,15 @@ export type TaskGraphSubmitRequest = {
     ConversationDetailID?: string | null;
     /** The agent run that emitted the graph, for provenance and continuation routing. */
     AgentRunID?: string | null;
+    /**
+     * How many task-graph continuations led to the run that is submitting this graph.
+     *
+     * Carried so a `reinvoke` chain is bounded: a graph submitted by an agent that was itself
+     * started by a finished graph inherits that graph's depth + 1, and `MAX_REINVOKE_DEPTH` compares
+     * against a real number instead of a permanent zero. Omitted means an ordinary submission at
+     * depth 0 — which is every submission that is not part of a continuation chain.
+     */
+    ReinvokeDepth?: number;
     ContextUser: UserInfo;
     Provider: IMetadataProvider;
 };

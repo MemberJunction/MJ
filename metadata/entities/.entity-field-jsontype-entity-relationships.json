@@ -24,6 +24,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Relationships&Name=RelatedRecordCollection"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:58:29.823Z",
+            "checksum": "d3b14cec0ce7e5e035d75074efb970a94f2359adafe30d74c4dde94693b1b2af"
           }
         }
       ]

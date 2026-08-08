@@ -18,6 +18,15 @@ vi.mock('@memberjunction/core', () => ({
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJConversationDetailEntity: class {},
+    MJAIAgentRunEntity: class {},
+}));
+
+vi.mock('@memberjunction/ai-core-plus', () => ({ MJAIAgentEntityExtended: class {} }));
+vi.mock('@memberjunction/ai', () => ({ ChatMessageRole: { user: 'user' } }));
+
+const runAgent = vi.fn().mockResolvedValue({ success: true });
+vi.mock('@memberjunction/ai-agents', () => ({
+    AgentRunner: class { RunAgent = runAgent; },
 }));
 
 import { TaskGraphContinuationDeliverer } from '../services/TaskGraphContinuationDeliverer';
@@ -158,12 +167,83 @@ describe('it never throws — the dispatcher marks delivery inside a CAS guard',
     });
 });
 
-describe('Reinvoke', () => {
-    it('is deliberately absent, so the dispatcher degrades to a message', () => {
-        // A safe reinvoke needs the NEW agent run to remember it was a continuation at depth N, so a
-        // graph it submits inherits depth + 1 and MAX_REINVOKE_DEPTH can stop the chain. Nothing
-        // durable records that yet, and a cap that never trips is worse than degrading.
-        const h = harness();
-        expect((h.deliverer as { Reinvoke?: unknown }).Reinvoke).toBeUndefined();
+describe('Reinvoke — restarting the submitting agent', () => {
+    /** A provider that hands out loadable agent-run and agent rows, then the reply detail. */
+    function reinvokeHarness(over: { runLoads?: boolean; agentLoads?: boolean } = {}) {
+        const { runLoads = true, agentLoads = true } = over;
+        const rows: Array<Record<string, unknown>> = [];
+        let call = 0;
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async () => {
+                call++;
+                if (call === 1) {
+                    const run = { AgentID: 'agent-1', Load: vi.fn().mockResolvedValue(runLoads) };
+                    rows.push(run);
+                    return run;
+                }
+                if (call === 2) {
+                    const agent = { ID: 'agent-1', Load: vi.fn().mockResolvedValue(agentLoads) };
+                    rows.push(agent);
+                    return agent;
+                }
+                const detail = detailRow();
+                rows.push(detail as unknown as Record<string, unknown>);
+                return detail;
+            }),
+        };
+        const deliverer = new TaskGraphContinuationDeliverer(
+            { CreateProvider: vi.fn().mockResolvedValue(provider) } as never,
+            { ID: 'user-1' } as UserInfo,
+        );
+        return { deliverer, provider, rows };
+    }
+
+    it('starts the submitting agent a fresh turn carrying the outcome', async () => {
+        const h = reinvokeHarness();
+        await h.deliverer.Reinvoke(params());
+
+        expect(runAgent).toHaveBeenCalledTimes(1);
+        const call = runAgent.mock.calls[0][0];
+        expect(call.agent.ID).toBe('agent-1');
+        expect(call.conversationMessages[0].content).toContain('Weekly digest');
+    });
+
+    it('stamps depth + 1 — the value that makes MAX_REINVOKE_DEPTH real', async () => {
+        // Without this the next graph the restarted run submits begins the chain at zero again, and
+        // the cap can never fire. It is the whole reason ContinuationDepth exists as a column.
+        const h = reinvokeHarness();
+        await h.deliverer.Reinvoke(params({ ReinvokeDepth: 3 }));
+        expect(runAgent.mock.calls[0][0].continuationDepth).toBe(4);
+    });
+
+    it('starts a chain at 1, not 0 — depth 0 is "not a continuation"', async () => {
+        const h = reinvokeHarness();
+        await h.deliverer.Reinvoke(params({ ReinvokeDepth: 0 }));
+        expect(runAgent.mock.calls[0][0].continuationDepth).toBe(1);
+    });
+
+    it('falls back to posting when the graph records no submitting run', async () => {
+        // A schedule- or trigger-started graph has no turn to continue.
+        const h = reinvokeHarness();
+        await h.deliverer.Reinvoke(params({ SubmittedByAgentRunID: null }));
+        expect(runAgent).not.toHaveBeenCalled();
+    });
+
+    it('falls back to posting when the submitting run cannot be loaded', async () => {
+        const h = reinvokeHarness({ runLoads: false });
+        await h.deliverer.Reinvoke(params());
+        expect(runAgent).not.toHaveBeenCalled();
+    });
+
+    it('falls back to posting when the agent cannot be loaded', async () => {
+        const h = reinvokeHarness({ agentLoads: false });
+        await h.deliverer.Reinvoke(params());
+        expect(runAgent).not.toHaveBeenCalled();
+    });
+
+    it('never throws — the dispatcher marks delivery inside a CAS guard', async () => {
+        runAgent.mockRejectedValueOnce(new Error('agent exploded'));
+        const h = reinvokeHarness();
+        await expect(h.deliverer.Reinvoke(params())).resolves.toBeUndefined();
     });
 });

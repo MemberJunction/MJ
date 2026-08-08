@@ -69,6 +69,7 @@ import {
     BuildVoiceMannerSection,
     BuildAppRealtimeOverridesJson,
     DeepMergeConfigs,
+    GetModelCatalogSessionSettings,
     GetDisclosureForTarget,
     GetNarrationPaceMs,
     GetProviderVoiceSettings,
@@ -314,6 +315,11 @@ export interface RealtimeModelResolution {
     ModelID: string;
     /** The chosen vendor id. */
     VendorID: string;
+    /**
+     * The chosen `MJ: AI Model Vendors` ROW id (not the vendor id) — the most-specific layer of
+     * the model-catalog `ModelConfiguration` cascade. Optional for back-compat with test seams.
+     */
+    ModelVendorID?: string;
     /** The vendor API name passed to the provider as the model id. */
     APIName: string;
     /** The model's display name (`MJ: AI Models.Name`). Optional for back-compat with test seams. */
@@ -668,6 +674,7 @@ export class RealtimeClientSessionService {
 
         const sessionParams = await this.buildSessionParams(
             input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
+            resolution.ModelID, resolution.ModelVendorID,
         );
 
         return { Success: true, CoAgent: coAgent, Resolution: resolution, EffectiveConfig: effectiveConfig, SessionParams: sessionParams };
@@ -1595,6 +1602,7 @@ export class RealtimeClientSessionService {
             Model: instance,
             ModelID: model.ID,
             VendorID: vendor.VendorID,
+            ModelVendorID: vendor.ModelVendorID,
             APIName: vendor.APIName,
             ModelName: model.Name,
             DriverClass: vendor.DriverClass
@@ -1646,14 +1654,14 @@ export class RealtimeClientSessionService {
      * @param modelID The chosen model's id.
      * @returns The vendor driver/api identifiers, or `null` when none has a usable key.
      */
-    protected selectRealtimeVendor(modelID: string): { VendorID: string; DriverClass: string; APIName: string } | null {
+    protected selectRealtimeVendor(modelID: string): { VendorID: string; ModelVendorID: string; DriverClass: string; APIName: string } | null {
         const vendors = AIEngine.Instance.ModelVendors
             .filter(mv => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
             .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
 
         for (const v of vendors) {
             if (this.getAPIKeyForDriver(v.DriverClass!)) {
-                return { VendorID: v.VendorID ?? '', DriverClass: v.DriverClass!, APIName: v.APIName ?? '' };
+                return { VendorID: v.VendorID ?? '', ModelVendorID: v.ID, DriverClass: v.DriverClass!, APIName: v.APIName ?? '' };
             }
         }
         return null;
@@ -1685,6 +1693,8 @@ export class RealtimeClientSessionService {
      * @param provider The request-scoped metadata provider.
      * @param effectiveConfig The resolved effective configuration (voice persona + provider settings).
      * @param driverClass The resolved vendor's DriverClass — matches per-provider voice settings.
+     * @param modelID The resolved `MJ: AI Models` id — keys the model-catalog `ModelConfiguration` cascade.
+     * @param modelVendorID The resolved `MJ: AI Model Vendors` ROW id — the cascade's most-specific layer.
      * @returns The assembled session params.
      */
     protected async buildSessionParams(
@@ -1694,7 +1704,9 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider,
         effectiveConfig?: RealtimeCoAgentConfig,
-        driverClass?: string
+        driverClass?: string,
+        modelID?: string,
+        modelVendorID?: string
     ): Promise<RealtimeSessionParams> {
         const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
@@ -1715,7 +1727,7 @@ export class RealtimeClientSessionService {
             SystemPrompt: systemPrompt,
             Tools: tools,
             InitialContext: memoryContext || undefined,
-            Config: this.buildSessionConfigBag(input, effectiveConfig, driverClass),
+            Config: this.buildSessionConfigBag(input, effectiveConfig, driverClass, modelID, modelVendorID),
             // Server-authoritative duration ceiling (public web-widget voice cap). Drivers that can
             // bound the provider session/token apply min(default, this); the janitor enforces it
             // regardless of driver support via the session deadline stamped by the transport layer.
@@ -1736,20 +1748,30 @@ export class RealtimeClientSessionService {
      * @param input The prepare-session input (carries the runtime config bag).
      * @param effectiveConfig The resolved effective configuration.
      * @param driverClass The resolved vendor's DriverClass.
+     * @param modelID The resolved model id — keys the model-catalog `ModelConfiguration` cascade.
+     * @param modelVendorID The resolved model-vendor ROW id — the cascade's most-specific layer.
      * @returns The merged config bag, or `undefined` when nothing contributes.
      */
     protected buildSessionConfigBag(
         input: PrepareClientSessionInput,
         effectiveConfig?: RealtimeCoAgentConfig,
-        driverClass?: string
+        driverClass?: string,
+        modelID?: string,
+        modelVendorID?: string
     ): JSONObject | undefined {
         const providerVoice = GetProviderVoiceSettings(effectiveConfig, driverClass ?? null);
+        // Model-catalog defaults (AIModelType < AIModel < AIModelVendor ModelConfiguration cascade,
+        // resolved by AIEngine) are the BASE layer: the catalog declares what the model supports
+        // (e.g. Realtime.TurnDetection), and every layer above may refine it.
+        const catalogSettings = modelID
+            ? GetModelCatalogSessionSettings(AIEngine.Instance.GetEffectiveModelConfiguration(modelID, modelVendorID))
+            : null;
         // Session-tuning knobs (realtime.session: effortLevel / parallelToolCalls / mcpTools /
-        // inputTranscriptionModel) merge UNDER the provider voice UNDER the runtime bag — the
-        // exact cascade precedence every other config entry follows (runtime wins per key).
+        // inputTranscriptionModel / turnDetection) merge UNDER the provider voice UNDER the runtime
+        // bag — the exact cascade precedence every other config entry follows (runtime wins per key).
         const sessionTuning = GetSessionTuningSettings(effectiveConfig);
-        let bag: JSONObject | undefined = (sessionTuning || providerVoice)
-            ? (DeepMergeConfigs(sessionTuning, providerVoice, input.Config as JSONObjectLike | undefined) as JSONObject)
+        let bag: JSONObject | undefined = (catalogSettings || sessionTuning || providerVoice)
+            ? (DeepMergeConfigs(catalogSettings, sessionTuning, providerVoice, input.Config as JSONObjectLike | undefined) as JSONObject)
             : input.Config;
         // Multi-agent meeting: carry the host-NEUTRAL disable-auto-response flag in the open config bag so
         // each provider translates it its own way (OpenAI → turn_detection.create_response=false) — the

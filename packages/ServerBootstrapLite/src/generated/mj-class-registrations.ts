@@ -187,7 +187,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (401 classes)
+// @memberjunction/core-entities (400 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -462,7 +462,6 @@ import {
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
-    MJMaterializedResultEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -947,25 +946,26 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
-// @memberjunction/task-graph (7 classes)
+// @memberjunction/task-graph (8 classes)
 import {
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphRetryTaskServerOperation,
     TaskGraphSubmitServerOperation,
+    WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
 } from '@memberjunction/task-graph';
 
 // @memberjunction/scheduling-engine (8 classes)
 import {
+    ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
-    MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
@@ -1505,7 +1505,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
-    MJMaterializedResultEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -1877,14 +1876,15 @@ export const CLASS_REGISTRATIONS: any[] = [
     TaskGraphGetStatusServerOperation,
     TaskGraphRetryTaskServerOperation,
     TaskGraphSubmitServerOperation,
+    WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
+    ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
-    MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
     UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,

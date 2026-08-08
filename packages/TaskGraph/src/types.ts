@@ -32,6 +32,111 @@ export type TaskAgentRunner = {
     RunAgentForTask(params: TaskAgentRunParams): Promise<TaskAgentRunResult>;
 };
 
+/** Everything running one action for one task node needs. */
+export type TaskActionRunParams = {
+    TaskID: string;
+    ActionID: string;
+    /** Structured input from `Task.InputPayload` — for durable entity-action dispatch, the redacted params. */
+    InputPayload: unknown;
+    /** Outputs of this node's satisfied prerequisites, in the same shape agent nodes receive. */
+    DependencyOutputs: Map<string, unknown>;
+    Provider: IMetadataProvider;
+    ContextUser: UserInfo;
+};
+
+/** The outcome of one action node. */
+export type TaskActionRunResult = {
+    Success: boolean;
+    Output?: unknown;
+    ErrorMessage?: string;
+};
+
+/**
+ * Runs one action for one task node.
+ *
+ * The third execution shape, beside agents and people. Abstracted for the same reason
+ * {@link TaskAgentRunner} is: the dispatcher must stay unit-testable without standing up the action
+ * engine, and this package must not import it — `@memberjunction/actions` depends on the entity
+ * layer this one also builds on, and reaching for it here would make every consumer of durable
+ * execution load the action engine too.
+ *
+ * **A host with no action runner is not broken, it is limited.** Action nodes stay Pending on it,
+ * which is visible in the Tasks UI, rather than being marked failed — a task nobody in this
+ * deployment can run is not the same as a task that ran and did not work.
+ */
+export type TaskActionRunner = {
+    RunActionForTask(params: TaskActionRunParams): Promise<TaskActionRunResult>;
+};
+
+/** What happened to a task or a graph, as a closed set a consumer can branch on. */
+export type TaskGraphFrameKind =
+    /** A task was claimed by an instance and is about to run. */
+    | 'TaskStarted'
+    /** A task finished successfully. */
+    | 'TaskCompleted'
+    /** A task failed. `ErrorMessage` says why. */
+    | 'TaskFailed'
+    /** A task was blocked because a prerequisite failed or became unreachable. */
+    | 'TaskBlocked'
+    /** A human task became actionable and is waiting on its assignee. */
+    | 'TaskAwaitingHuman'
+    /** Every node has reached a terminal state; `Status` is the graph's rolled-up outcome. */
+    | 'GraphSettled';
+
+/**
+ * One thing that happened, addressed by the graph it happened in.
+ *
+ * **Addressed by `ParentTaskID`, deliberately not by session.** A durable graph outlives the tab
+ * that submitted it — it may be started by a schedule with no session at all, and a user who
+ * refreshes mid-run should still see the rest. Keying on the graph means "watch this workflow run"
+ * works for anyone permitted to read it, whenever they arrive.
+ *
+ * Frames are **semantic, not cache invalidations**: a consumer renders "step 3 of 7 running" from
+ * the frame itself rather than re-reading rows and diffing them to guess what changed.
+ */
+export type TaskGraphFrame = {
+    Kind: TaskGraphFrameKind;
+    /** The graph this happened in — the subscription key. */
+    ParentTaskID: string;
+    /**
+     * Who the graph belongs to, from the parent's durable metadata.
+     *
+     * Carried on the frame rather than looked up by the consumer because a consumer's delivery
+     * filter runs per frame and synchronously — a database round trip there would make watching a
+     * run cost more than running it. Absent means the graph predates ownership being recorded, and
+     * a consumer that authorizes on it should fail closed rather than broadcast.
+     */
+    OwnerUserID?: string | null;
+    /** The node it happened to. Absent on `GraphSettled`, which is about the graph itself. */
+    TaskID?: string;
+    /** Node name, so a consumer can label the frame without loading the row. */
+    TaskName?: string;
+    /** The task's (or, for `GraphSettled`, the graph's) status after the event. */
+    Status?: string;
+    /** Failure detail on `TaskFailed`. */
+    ErrorMessage?: string;
+    /** For a human task, who it is waiting on. */
+    AssignedUserID?: string;
+    /** How many nodes have reached a terminal state, and out of how many. */
+    CompletedCount?: number;
+    TotalCount?: number;
+};
+
+/**
+ * Receives dispatcher lifecycle frames.
+ *
+ * Optional, and a host that supplies none loses nothing but visibility — the dispatcher's behavior
+ * is identical either way. Abstracted for the same reason execution and continuation are: publishing
+ * to subscribers is a transport concern, and this package must not acquire a dependency on the
+ * transport layer to gain observability.
+ *
+ * Implementations MUST NOT throw and MUST NOT block: a frame is an announcement about work, never a
+ * step of it, so a broken observer must not be able to stall or fail a graph.
+ */
+export type TaskGraphObserver = {
+    OnFrame(frame: TaskGraphFrame): void;
+};
+
 /** Everything an executor needs to run a single task node. */
 export type TaskAgentRunParams = {
     /** The task row being executed. */
@@ -133,6 +238,17 @@ export type TaskGraphDispatcherConfig = {
     /** Maximum tasks executed concurrently by this instance. */
     MaxConcurrentTasks: number;
 
+    /**
+     * How often to look for claimable work.
+     *
+     * Five seconds is the right production default — a graph's steps are agent runs measured in
+     * seconds to minutes, so polling faster buys latency nobody perceives and costs a query per
+     * instance per tick. It is configurable rather than fixed because the correct value genuinely
+     * differs by host: a test harness driving a graph to completion should not wait five seconds per
+     * node, and a deployment running many short tasks may want tighter latency.
+     */
+    PollIntervalSeconds: number;
+
     /** How often the reconciliation sweep runs. */
     ReconciliationIntervalSeconds: number;
 };
@@ -142,6 +258,7 @@ export const DEFAULT_DISPATCHER_CONFIG: Omit<TaskGraphDispatcherConfig, 'Instanc
     ClaimTTLSeconds: 300,
     HeartbeatIntervalSeconds: 60,
     MaxConcurrentTasks: 5,
+    PollIntervalSeconds: 5,
     ReconciliationIntervalSeconds: 120,
 };
 

@@ -19,9 +19,14 @@
 import { UserInfo } from '@memberjunction/core';
 import { LoadTaskGraphOperations, TaskGraphDispatcher } from '@memberjunction/task-graph';
 import sql from 'mssql';
+import { DurableEntityActionRegistry } from '@memberjunction/actions-base';
 import { CreateTaskGraphProviderFactory } from './TaskGraphProviderFactory.js';
+import { TaskGraphActionRunner } from './TaskGraphActionRunner.js';
 import { TaskGraphAgentRunner } from './TaskGraphAgentRunner.js';
+import { DurableEntityActionTaskSubmitter } from './DurableEntityActionTaskSubmitter.js';
 import { TaskGraphContinuationDeliverer } from './TaskGraphContinuationDeliverer.js';
+import { PubSubManager } from '../generic/PubSubManager.js';
+import { TaskGraphFrameBroadcaster } from '../resolvers/TaskGraphFrameResolver.js';
 
 /**
  * Starts one dispatcher for this process and returns it.
@@ -41,6 +46,7 @@ export async function StartTaskGraphDispatcher(
     LoadTaskGraphOperations();
 
     const providerFactory = CreateTaskGraphProviderFactory(pool);
+    const pubSub = PubSubManager.Instance.PubSubEngine;
     const dispatcher = new TaskGraphDispatcher(
         providerFactory,
         new TaskGraphAgentRunner(),
@@ -49,7 +55,19 @@ export async function StartTaskGraphDispatcher(
         // Without this the dispatcher had nowhere to deliver: a finished graph logged its outcome,
         // marked itself delivered, and said nothing to the conversation that asked for it.
         new TaskGraphContinuationDeliverer(providerFactory, contextUser),
+        // Live signal. Supplied only when a PubSub engine exists — in a worker or a test there is
+        // nobody to publish to, and the dispatcher runs identically without one.
+        pubSub ? new TaskGraphFrameBroadcaster(pubSub) : undefined,
+        // Action nodes — the third execution shape, beside agents and people. Durable After* entity
+        // actions land as these.
+        new TaskGraphActionRunner(),
     );
     await dispatcher.Start();
+
+    // Registered only AFTER the dispatcher is running, and only here. A submitter without a
+    // dispatcher writes Task rows nobody picks up — strictly worse than staying inline, because the
+    // work is now both undone and invisible in the place it used to be logged.
+    DurableEntityActionRegistry.Instance.Register(new DurableEntityActionTaskSubmitter(providerFactory));
+
     return dispatcher;
 }

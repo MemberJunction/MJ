@@ -64,21 +64,24 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
         }
         seen.add(task.tempId);
 
-        // Mirrors the Task table's UserID-xor-AgentID constraint, caught here so the producer gets
-        // a useful message instead of a constraint violation at persist time.
-        const hasAgent = !!task.agentName;
-        const hasUser = task.assignToUser === true;
-        if (hasAgent && hasUser) {
+        // Mirrors the Task table's assignment exclusivity, caught here so the producer gets a useful
+        // message instead of a constraint violation at persist time.
+        const assignments = [
+            task.agentName ? 'agentName' : null,
+            task.actionName ? 'actionName' : null,
+            task.assignToUser === true ? 'assignToUser' : null,
+        ].filter((a): a is string => a !== null);
+        if (assignments.length > 1) {
             errors.push({
                 Code: 'AssignmentConflict',
-                Message: `Task "${task.tempId}" sets both agentName and assignToUser; a task is executed by an agent OR a person, never both.`,
+                Message: `Task "${task.tempId}" sets ${assignments.join(' and ')}; a task is executed by an agent, by an action, OR by a person — never more than one.`,
                 TempId: task.tempId,
             });
         }
-        if (!hasAgent && !hasUser) {
+        if (assignments.length === 0) {
             errors.push({
                 Code: 'NoAssignment',
-                Message: `Task "${task.tempId}" has neither agentName nor assignToUser; nothing would execute it.`,
+                Message: `Task "${task.tempId}" has no agentName, actionName or assignToUser; nothing would execute it.`,
                 TempId: task.tempId,
             });
         }
