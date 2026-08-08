@@ -189,6 +189,26 @@ GO
 
 /* SQL text to insert 2 new entity field(s) */
 
+/* HAND CORRECTION TO THE GENERATED SQL BELOW.
+
+   CodeGen emitted LITERAL Sequence values here (100025 / 100057 / 100066) — the numbers that were
+   free on the database CodeGen happened to run against. Those numbers are TEMPORARY placeholders
+   (MAX + 100000 + ordinal) that spUpdateExistingEntityFieldsFromSchema renumbers moments later,
+   which is why they always look right locally.
+
+   They are not right on a database built only from migrations. Flyway runs every versioned
+   migration BEFORE any repeatable script, so R__RefreshMetadata's renumber never runs in between —
+   and 100025 already belongs to EntityAction.ScopeEntity there. The INSERT then violates
+   UQ_EntityField_EntityID_Sequence, and because this script does not SET XACT_ABORT ON, that aborts
+   only the STATEMENT. Execution continues and the run dies further down on a FOREIGN KEY error
+   against EntityFieldValue, whose rows point at the RunMode field that was never inserted — an
+   error that says nothing about the actual cause.
+
+   Each literal is therefore replaced with the next free sequence computed AT APPLY TIME, which
+   cannot collide on any database in any order. CodeGen now emits this same form
+   (manage-metadata.ts, getPendingEntityFieldINSERTSQL), so future blocks need no hand correction.
+   Guard rail: .github/scripts/check-migration-entityfield-sequence.sh. */
+
       IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'da98df59-65aa-469a-b44a-8059aa839366' OR (EntityID = '34248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'RunMode')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
@@ -224,7 +244,7 @@ GO
          (
             'da98df59-65aa-469a-b44a-8059aa839366',
             '34248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Entity Actions
-            100026,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '34248F34-2837-EF11-86D4-6045BDEE16E6'), -- was: 100025
             'RunMode',
             'Run Mode',
             'How an After* dispatch of this binding executes. Inline (the default) runs it fire-and-forget in the saving process, which is fast but lost if that process dies. Durable submits a single-node task graph instead, so the work survives a restart and is reclaimed by the dispatcher — at the cost of a Task row, a dispatcher hop of latency, and the action''s parameters being persisted (redacted) at rest. Ignored for Validate and Before* invocations, which run inside the save and cannot be deferred without changing whether the save succeeds.',
@@ -287,7 +307,7 @@ GO
          (
             '24ee08a4-b3a0-45d6-8b08-1cf6750b17eb',
             '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
-            100057,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1'), -- was: 100057
             'ActionID',
             'Action ID',
             'The Action this task executes, when the node is action-assigned rather than agent-assigned or awaiting a person. Mutually exclusive with UserID and AgentID (CK_Task_Assignment). Set by durable entity-action dispatch, where a single-node graph carries one action to run with restart recovery.',
@@ -4095,7 +4115,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
          (
             '65d3238c-157a-47ef-af55-84bf199b7522',
             '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
-            100066,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1'), -- was: 100066
             'Action',
             'Action',
             NULL,
