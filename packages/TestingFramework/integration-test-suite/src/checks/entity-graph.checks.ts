@@ -30,7 +30,7 @@
  * FK-safe (details before lists) by Teardown; no pre-existing record is ever mutated.
  */
 import { BaseEntity, RunView } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJListEntity, MJListDetailEntity, MJActionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -110,11 +110,11 @@ async function readDetails(ctx: IntegrationCheckContext, listId: string): Promis
 /** Records every id the graph just persisted so Teardown can sweep them even if a later check throws. */
 function trackGraph(list: GraphTestListEntity): void {
     const f = fixture!;
-    if (list.ID && !f.ListIds.includes(list.ID)) {
+    if (list.ID && !f.ListIds.some((id) => UUIDsEqual(id, list.ID))) {
         f.ListIds.push(list.ID);
     }
     for (const detail of list.Details.Items) {
-        if (detail.ID && !f.ListDetailIds.includes(detail.ID)) {
+        if (detail.ID && !f.ListDetailIds.some((id) => UUIDsEqual(id, detail.ID))) {
             f.ListDetailIds.push(detail.ID);
         }
     }
@@ -160,7 +160,7 @@ export const EntityGraphChecks: NamedCheck[] = [
             const rows = await readDetails(ctx, list.ID);
             AssertEqual(rows.length, 3, 'EG2: related rows persisted');
             // The FK was never assigned by the check — the collection stamps it from the parent's key.
-            Assert(rows.every((r) => r.ListID === list.ID), 'EG2: every related row must carry the parent FK');
+            Assert(rows.every((r) => UUIDsEqual(r.ListID, list.ID)), 'EG2: every related row must carry the parent FK');
             AssertEqual(rows.map((r) => r.Sequence).join(','), '1,2,3', 'EG2: sequence assigned from 1');
             AssertEqual(rows.map((r) => r.RecordID).join(','), 'alpha,bravo,charlie', 'EG2: order preserved');
             Assert(!list.Dirty, 'EG2: the whole graph must be clean after a successful save');
@@ -326,7 +326,7 @@ export const EntityGraphChecks: NamedCheck[] = [
             for (const list of result.Results) {
                 Assert(list.Details.IsLoaded, `EG8: ${list.Name} did not get its collection hydrated`);
                 AssertEqual(list.Details.Count, 2, `EG8: ${list.Name} should carry two related records`);
-                Assert(list.Details.Items.every((d) => d.ListID === list.ID),
+                Assert(list.Details.Items.every((d) => UUIDsEqual(d.ListID, list.ID)),
                     `EG8: ${list.Name} was hydrated with another list's rows — the batch was mis-distributed`);
             }
             // Hydration must not look like pending work, or every view row would try to save itself.
