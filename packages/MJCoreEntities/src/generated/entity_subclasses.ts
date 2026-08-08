@@ -110408,6 +110408,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     /**
     * Validate() method override for MJ: Tasks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * PercentComplete: This rule ensures that if a percent complete value is provided, it must be between 0 and 100 inclusive.
+    * * Table-Level: An entity can be associated with at most one of a User, an Agent, or an Action. Having multiple of these fields populated simultaneously is not allowed.
     * @public
     * @method
     * @override
@@ -110415,6 +110416,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidatePercentCompleteWithinZeroAndOneHundred(result);
+        this.ValidateMutuallyExclusiveAssociations(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -110430,6 +110432,34 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     	if (this.PercentComplete != null && (this.PercentComplete < 0 || this.PercentComplete > 100)) {
     		result.Errors.push(new ValidationErrorInfo("PercentComplete", "PercentComplete must be between 0 and 100 if specified.", this.PercentComplete, ValidationErrorType.Failure));
     	}
+    }
+
+    /**
+    * An entity can be associated with at most one of a User, an Agent, or an Action. Having multiple of these fields populated simultaneously is not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMutuallyExclusiveAssociations(result: ValidationResult) {
+        let count = 0;
+        if (this.UserID != null) {
+            count++;
+        }
+        if (this.AgentID != null) {
+            count++;
+        }
+        if (this.ActionID != null) {
+            count++;
+        }
+    
+        if (count > 1) {
+            result.Errors.push(new ValidationErrorInfo(
+                "UserID",
+                "Only one of User, Agent, or Action can be specified for this record.",
+                this.UserID,
+                ValidationErrorType.Failure
+            ));
+        }
     }
 
     /**

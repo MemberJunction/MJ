@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/external-data-source-databricks",
-  "version": "6.1.0-edge.0",
+  "version": "6.1.0-edge.1",
   "description": "Databricks SQL Warehouse driver for the MemberJunction External Data Sources primitive. Registers a BaseExternalDataSourceDriver implementation via @RegisterClass(BaseExternalDataSourceDriver, 'DatabricksExternalDriver') using the official @databricks/sql SDK for live, read-only proxied access to a Databricks SQL warehouse over Unity Catalog.",
   "type": "module",
   "main": "dist/index.js",
@@ -15,10 +15,10 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.0",
-    "@memberjunction/global": "6.1.0-edge.0",
-    "@memberjunction/core-entities": "6.1.0-edge.0",
-    "@memberjunction/external-data-sources": "6.1.0-edge.0"
+    "@memberjunction/core": "6.1.0-edge.1",
+    "@memberjunction/global": "6.1.0-edge.1",
+    "@memberjunction/core-entities": "6.1.0-edge.1",
+    "@memberjunction/external-data-sources": "6.1.0-edge.1"
   },
   "peerDependencies": {
     "@databricks/sql": "^1.8.0"

@@ -1,5 +1,30 @@
 # Change Log - @memberjunction/ng-data-context
 
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ng-ui-components@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ng-base-types@6.1.0-edge.1
+  - @memberjunction/ng-container-directives@6.1.0-edge.1
+  - @memberjunction/ng-shared-generic@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

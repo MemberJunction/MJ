@@ -1,4 +1,4 @@
-import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { BaseRealtimeClient, RealtimeClientState } from './baseRealtimeClient';
 import { base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
@@ -65,14 +65,30 @@ export interface OAIProtocolSessionCreated {
     type: 'session.created';
 }
 
+/** The usage payload carried by a `response.done` frame — per-response DELTAS on every provider. */
+export interface OAIProtocolUsage {
+    input_tokens?: number;
+    output_tokens?: number;
+    [detail: string]: unknown;
+}
+
 /**
  * A full response (turn) completed — carries the usage payload for THIS response
  * (`input_tokens` / `output_tokens`), i.e. per-response DELTAS, exactly the `OnUsage`
  * contract shape.
+ *
+ * **The payload's LOCATION is provider-specific**, which is why both slots are declared:
+ * - OpenAI (`gpt-realtime`) populates `response.usage` and sends no top-level `usage`.
+ * - xAI (Grok Voice) populates a TOP-LEVEL `usage` and sends `response.usage` as an EMPTY
+ *   object — captured live off `wss://api.x.ai/v1/realtime`.
+ *
+ * {@link ResolveResponseDoneUsage} picks whichever slot actually carries token counts.
  */
 export interface OAIProtocolResponseDone {
     type: 'response.done';
-    response?: { usage?: { input_tokens?: number; output_tokens?: number; [detail: string]: unknown } };
+    response?: { usage?: OAIProtocolUsage };
+    /** xAI puts usage HERE, as a sibling of `response`. */
+    usage?: OAIProtocolUsage;
 }
 
 /**
@@ -650,7 +666,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * contract's preferred shape). Frames without a usage payload emit nothing.
      */
     private emitResponseUsage(event: OAIProtocolResponseDone): void {
-        const usage = event.response?.usage;
+        const usage = ResolveResponseDoneUsage(event);
         if (!usage) {
             return;
         }
