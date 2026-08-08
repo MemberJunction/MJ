@@ -867,6 +867,17 @@
           "primaryKey": {
             "ID": "B4FE6167-1F8A-4B5C-A565-A008CE03BFD8"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT73 - Entity Graph (client transport)",
+            "Sequence": 53,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0E1289E0-2D35-4F05-A032-9E6EB09E0990"
+          }
         }
       ]
     },

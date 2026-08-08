@@ -40,6 +40,7 @@ import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
 import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.checks';
 import { EntityGraphChecks } from '../checks/entity-graph.checks';
+import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -129,6 +130,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['content-vectorization', ContentVectorizationChecks, 6], // CV1-CV6 content vectorization pipeline (IT67)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 5], // SA1-SA5 scoped-anonymous elevation permission contract (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
+        ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
