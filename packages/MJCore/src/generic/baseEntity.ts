@@ -3245,11 +3245,29 @@ export abstract class BaseEntity<T = unknown> {
                         // First run synchronous validation
                         valResult = this.Validate();
 
-                        // Determine if we should run async validation:
-                        // 1. Explicitly set in options, OR
-                        // 2. Use the subclass's default if not specified in options
-                        const skipAsyncValidation = _options.SkipAsyncValidation !== undefined ?
-                            _options.SkipAsyncValidation : this.DefaultSkipAsyncValidation;
+                        // Determine if we should run async validation, in order of authority:
+                        //   1. An explicit SkipAsyncValidation in the options.
+                        //   2. An explicit DefaultSkipAsyncValidation override on the subclass.
+                        //   3. Neither: run it if — and only if — a subclass wrote a ValidateAsync
+                        //      to run. Overriding the method IS the request to run it.
+                        //
+                        // Case 3 is the fix for a silent no-op. The default is `true`, and the base
+                        // ValidateAsync just returns success, so skipping costs a subclass that did
+                        // not override it precisely nothing. The flag's only reachable effect was
+                        // therefore to disable the async rules of subclasses that WROTE async rules
+                        // and never learned a second, separate getter had to be overridden too —
+                        // which the ValidateAsync docstring did not mention while promising the
+                        // method was "automatically called by Save()".
+                        //
+                        // That is how OrderEntityServer.ValidateAsync — holding both the "cannot
+                        // confirm an order with no lines" guard and an entire per-line validation
+                        // loop — was dead on every save in production, and it is the same reasoning
+                        // that already exempts companions below.
+                        const skipAsyncValidation = _options.SkipAsyncValidation !== undefined
+                            ? _options.SkipAsyncValidation
+                            : BaseEntity.isOverridden(this, 'DefaultSkipAsyncValidation')
+                                ? this.DefaultSkipAsyncValidation
+                                : !BaseEntity.isOverridden(this, 'ValidateAsync');
 
                         // If not skipping async validation, run it - even if sync validation failed
                         // This ensures all validation errors (sync and async) are collected
@@ -3941,13 +3959,76 @@ export abstract class BaseEntity<T = unknown> {
     }
     
     /**
+     * Cache for {@link isOverridden}, keyed by the constructor that was asked about. The answer is
+     * a property of the class, not the instance, and a save path should not walk a prototype chain
+     * per record.
+     */
+    private static __overrideCache = new WeakMap<Function, Map<string, boolean>>();
+
+    /**
+     * Whether a subclass replaced `member` somewhere between `instance` and `BaseEntity`.
+     *
+     * @remarks
+     * Used to tell "the author made no choice" apart from "the author chose the default value",
+     * which a getter cannot express on its own — `DefaultSkipAsyncValidation` returning `true` looks
+     * identical whether a subclass deliberately opted out or never knew the flag existed. Comparing
+     * property descriptors against `BaseEntity.prototype` distinguishes them.
+     *
+     * Handles both methods (`value`) and accessors (`get`), so it works for `ValidateAsync` and for
+     * `DefaultSkipAsyncValidation` alike, and finds overrides declared anywhere in a multi-level
+     * chain — a generated class, an app subclass, a server subclass on top of it.
+     *
+     * @param instance - The object whose class chain is inspected.
+     * @param member - The property name to look for.
+     * @returns True when some class below `BaseEntity` declares it.
+     */
+    private static isOverridden(instance: object, member: string): boolean {
+        const ctor = instance?.constructor;
+        if (!ctor) {
+            return false;
+        }
+        let perClass = BaseEntity.__overrideCache.get(ctor);
+        if (perClass?.has(member)) {
+            return perClass.get(member)!;
+        }
+        if (!perClass) {
+            perClass = new Map<string, boolean>();
+            BaseEntity.__overrideCache.set(ctor, perClass);
+        }
+
+        const base = Object.getOwnPropertyDescriptor(BaseEntity.prototype, member);
+        let answer = false;
+        if (base) {
+            let proto = Object.getPrototypeOf(instance);
+            while (proto && proto !== BaseEntity.prototype) {
+                const own = Object.getOwnPropertyDescriptor(proto, member);
+                if (own && (own.get !== base.get || own.value !== base.value)) {
+                    answer = true;
+                    break;
+                }
+                proto = Object.getPrototypeOf(proto);
+            }
+        }
+        perClass.set(member, answer);
+        return answer;
+    }
+
+    /**
      * Default value for whether async validation should be skipped.
-     * Subclasses can override this property to enable async validation by default.
-     * When the options object is passed to Save(), and it includes a value for the 
-     * SkipAsyncValidation property, that value will take precedence over this default.
-     * 
+     *
+     * @remarks
+     * Override this to state a policy explicitly; an explicit override always wins over the
+     * inference described below. When the options object passed to `Save()` includes
+     * `SkipAsyncValidation`, that value takes precedence over both.
+     *
+     * **If no subclass overrides this getter**, the answer is inferred instead: async validation
+     * runs when a subclass has overridden {@link ValidateAsync}, and is skipped when none has.
+     * Reading the literal `true` below as "async validation is off unless you find this getter"
+     * made every hand-written `ValidateAsync` a silent no-op — see the note on that method.
+     *
      * @see {@link Save}
-     * 
+     * @see {@link ValidateAsync}
+     *
      * @protected
      */
     public get DefaultSkipAsyncValidation(): boolean {
@@ -3957,11 +4038,20 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Asynchronous validation method that can be overridden by subclasses to add custom async validation logic.
      * This method is automatically called by Save() AFTER the synchronous Validate() passes.
-     * 
-     * IMPORTANT: 
+     *
+     * IMPORTANT:
      * 1. This should NEVER be called INSTEAD of the synchronous Validate() method
      * 2. This is meant to be overridden by subclasses that need to perform async validations
      * 3. The base implementation just returns success - no actual validation is performed
+     * 4. Overriding this method is what turns it on. You do NOT also have to override
+     *    {@link DefaultSkipAsyncValidation} — that getter is for stating a policy explicitly, and
+     *    an explicit override of it (either value) still wins. To suppress async validation for one
+     *    call, pass `SkipAsyncValidation: true` in the save options.
+     *
+     * Point 4 used to be the opposite, and it was not discoverable: `DefaultSkipAsyncValidation`
+     * defaults to `true`, so an override written against this docstring alone never ran. It reads
+     * as enforced, reviews as enforced, and was not — the failure mode that let an order confirm
+     * with no lines in production.
      * 
      * Subclasses should override this to add complex validations that require database queries 
      * or other async operations that cannot be performed in the synchronous Validate() method.
