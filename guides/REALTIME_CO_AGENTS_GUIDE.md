@@ -753,6 +753,19 @@ The effective co-agent config gained a `session` sub-section that flows into the
 
 `GetSessionTuningSettings` projects the section onto the flat bag keys; each driver translates a key to its native wire field **only when its profile confirms support** and scrubs it otherwise — a shared config is safe on every provider (Gemini additionally warns on scrubbed foreign keys via `REALTIME_SHARED_CONFIG_KEYS`). Grok's GA gates are OFF pending xAI docs; flipping them is a one-line profile change.
 
+### Turn detection — catalog-driven, per model (`ModelConfiguration`)
+
+Turn detection is configurable through the same pact, with an extra base layer sourced from the **model catalog** (see [`plans/model-configuration.md`](../plans/model-configuration.md)). The `ModelConfiguration` JSONType column exists on `MJ: AI Model Types` < `MJ: AI Models` < `MJ: AI Model Vendors` (inherit-with-override, deep-merged per key by `AIEngine.GetEffectiveModelConfiguration`), and its `Realtime.TurnDetection` section is folded into the session Config bag as the normalized `turnDetection` key on **both** topologies. Full precedence, lowest to highest:
+
+```
+profile hard default
+  < ModelConfiguration cascade (type < model < model-vendor)   ← the catalog declares what the model supports
+  < realtime.session.turnDetection (agent/app config cascade)  ← agents/apps refine it
+  < runtime configOverridesJson (raw audio.input.turn_detection — auth-gated escape hatch, unchanged)
+```
+
+The normalized shape is `{ Mode: 'default' | 'serverVad' | 'semanticVad' | 'native', Eagerness?, Threshold?, SilenceDurationMs? }`. Each OpenAI-protocol profile declares its `supportedTurnModes` and maps the vocabulary via `MapNormalizedTurnDetection`; an unsupported mode is **diag-logged and falls back to the profile default** — a shared catalog never rejects a session. `'native'` is the deliberate forward slot: when a provider documents a smarter full-duplex turn mode (e.g. for the Grok Voice Think Fast family), its profile adds `'native'` + the mapping once, and the catalog opts models in via metadata with no further driver changes. Meeting mode (`disableAutoResponse`) composes on top of whatever mode wins — `create_response`/`interrupt_response` always reflect the bridge's floor control, and a live `Reconfigure` rebuilds the session's actual mode (it no longer hardcodes `server_vad`). GPT Realtime 2.1 / 2.1-mini are seeded to `semanticVad` in `metadata/ai-models/.ai-models.json`; delete that seed to return to the provider default.
+
 ### Multi-channel cost attribution
 `RealtimeUsage` now carries per-modality token detail (`InputTokenDetails`/`OutputTokenDetails`: text/audio/image/cached). The OpenAI driver maps the GA `response.done` detail blocks, the session runner accumulates them field-wise across turns, and the checkpoint persists the detail as JSON on the realtime `AIPromptRun.Result` — so audio-vs-text pricing (audio-in ~8× text-in on GPT Realtime 2.1) is attributable instead of blended.
 

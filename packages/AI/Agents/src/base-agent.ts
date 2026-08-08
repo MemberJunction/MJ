@@ -38,6 +38,7 @@ import {
     GetNarrationPaceMs,
     GetProviderVoiceSettings,
     GetSessionTuningSettings,
+    GetModelCatalogSessionSettings,
     DeepMergeConfigs,
     RealtimeCoAgentConfig,
     ResolveEffectiveRealtimeConfig
@@ -1993,7 +1994,7 @@ export class BaseAgent {
     protected async resolveRealtimeModel(
         params: ExecuteAgentParams,
         overrideModelID?: string
-    ): Promise<{ model: BaseRealtimeModel; modelID: string; vendorID: string; apiName: string; driverClass?: string } | null> {
+    ): Promise<{ model: BaseRealtimeModel; modelID: string; vendorID: string; modelVendorID?: string; apiName: string; driverClass?: string } | null> {
         // Walk candidates in resolution order (preference first, then highest PowerRank), returning the
         // FIRST that FULLY resolves (active vendor + resolvable API key + ClassFactory driver). Single-pick
         // would dead-end whenever the top model lacked a key — e.g. a power-11 model with no env key
@@ -2017,7 +2018,7 @@ export class BaseAgent {
             if (!instance) {
                 continue;
             }
-            return { model: instance, modelID: model.ID, vendorID: vendor.vendorID, apiName: vendor.apiName, driverClass: vendor.driverClass };
+            return { model: instance, modelID: model.ID, vendorID: vendor.vendorID, modelVendorID: vendor.modelVendorID, apiName: vendor.apiName, driverClass: vendor.driverClass };
         }
         return null;
     }
@@ -2100,14 +2101,14 @@ export class BaseAgent {
      * @param modelID The chosen model's ID.
      * @returns The vendor driver/api identifiers, or `null` when none has a usable key.
      */
-    private selectRealtimeVendor(modelID: string): { vendorID: string; driverClass: string; apiName: string } | null {
+    private selectRealtimeVendor(modelID: string): { vendorID: string; modelVendorID: string; driverClass: string; apiName: string } | null {
         const vendors = AIEngine.Instance.ModelVendors
             .filter(mv => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
             .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
 
         for (const v of vendors) {
             if (GetAIAPIKey(v.DriverClass!)) {
-                return { vendorID: v.VendorID ?? '', driverClass: v.DriverClass!, apiName: v.APIName ?? '' };
+                return { vendorID: v.VendorID ?? '', modelVendorID: v.ID, driverClass: v.DriverClass!, apiName: v.APIName ?? '' };
             }
         }
         return null;
@@ -2178,12 +2179,13 @@ export class BaseAgent {
     protected async buildRealtimeSessionDeps(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
-        modelResolution: { model: BaseRealtimeModel; apiName: string; driverClass?: string },
+        modelResolution: { model: BaseRealtimeModel; apiName: string; driverClass?: string; modelID?: string; modelVendorID?: string },
         promptRun: MJAIPromptRunEntityExtended | null
     ): Promise<RealtimeSessionRunnerDeps> {
         const effectiveConfig = this.resolveRealtimeEffectiveConfig(params.agent);
         const sessionParams = await this.buildRealtimeSessionParams(
             params, config, modelResolution.apiName, effectiveConfig, modelResolution.driverClass,
+            modelResolution.modelID, modelResolution.modelVendorID,
         );
 
         return {
@@ -2229,7 +2231,9 @@ export class BaseAgent {
         config: AgentConfiguration,
         modelApiName: string,
         effectiveConfig?: RealtimeCoAgentConfig,
-        driverClass?: string
+        driverClass?: string,
+        modelID?: string,
+        modelVendorID?: string
     ): Promise<RealtimeSessionParams> {
         // Identity framing comes from the ONE shared producer so the agent speaks first-person AS the
         // TARGET (Sage / Marketing Agent / …), identical to every other realtime host — not as the co-agent.
@@ -2246,13 +2250,18 @@ export class BaseAgent {
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
 
-        // Provider-matched voice settings (realtime.voice.providers.<provider>) AND session-tuning
-        // knobs (realtime.session) flow into the driver's open Config bag — the same pact every
-        // other config entry rides, mirroring the client-direct builder's cascade exactly.
+        // Model-catalog defaults (the AIModelType < AIModel < AIModelVendor ModelConfiguration
+        // cascade) merge as the BASE layer, then provider-matched voice settings
+        // (realtime.voice.providers.<provider>) AND session-tuning knobs (realtime.session) flow
+        // into the driver's open Config bag — the same pact every other config entry rides,
+        // mirroring the client-direct builder's cascade exactly.
+        const catalogSettings = modelID
+            ? GetModelCatalogSessionSettings(AIEngine.Instance.GetEffectiveModelConfiguration(modelID, modelVendorID))
+            : null;
         const providerVoice = GetProviderVoiceSettings(effectiveConfig, driverClass ?? null);
         const sessionTuning = GetSessionTuningSettings(effectiveConfig);
-        const configBag = (sessionTuning || providerVoice)
-            ? (DeepMergeConfigs(sessionTuning, providerVoice) as JSONObject)
+        const configBag = (catalogSettings || sessionTuning || providerVoice)
+            ? (DeepMergeConfigs(catalogSettings, sessionTuning, providerVoice) as JSONObject)
             : undefined;
 
         return {

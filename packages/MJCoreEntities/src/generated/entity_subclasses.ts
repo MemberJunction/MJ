@@ -6152,6 +6152,12 @@ export const MJAIModelTypeSchema = z.object({
         * * Display Name: Prefill Fallback Text
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Default fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Use {{prefill}} as a placeholder for the actual prefill text. Example: "IMPORTANT: You must begin your response with exactly: {{prefill}}". Individual AI Model Vendor records can override this. If null, a generic fallback is used.`),
+    ModelConfiguration: z.any().nullable().describe(`
+        * * Field Name: ModelConfiguration
+        * * Display Name: Model Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIModelTypeEntity_IAIModelConfiguration
+        * * Description: Type-wide default of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the ModelConfiguration cascade — AIModel and AIModelVendor rows inherit from it per key and may override. NULL = contributes nothing.`),
     DefaultInputModality: z.string().describe(`
         * * Field Name: DefaultInputModality
         * * Display Name: Default Input Modality Name
@@ -6256,7 +6262,7 @@ export const MJAIModelVendorSchema = z.object({
         * * Default Value: getutcdate()`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type
+        * * Display Name: Vendor Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
         * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)`),
@@ -6270,6 +6276,12 @@ export const MJAIModelVendorSchema = z.object({
         * * Display Name: Prefill Fallback Text
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Model-specific fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default. Use {{prefill}} as a placeholder. Allows tuning the fallback instruction per model since different models respond better to different phrasing.`),
+    ModelConfiguration: z.any().nullable().describe(`
+        * * Field Name: ModelConfiguration
+        * * Display Name: Model Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIModelVendorEntity_IAIModelConfiguration
+        * * Description: Most-specific layer of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape) — configuration for THIS model on THIS provider. Deep-merges per key over the model and type layers. NULL = inherit the merged model/type configuration unchanged.`),
     Model: z.string().describe(`
         * * Field Name: Model
         * * Display Name: Model Name
@@ -6280,7 +6292,7 @@ export const MJAIModelVendorSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type Name
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -6305,7 +6317,7 @@ export const MJAIModelSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     AIModelTypeID: z.string().describe(`
         * * Field Name: AIModelTypeID
-        * * Display Name: AI Model Type
+        * * Display Name: AI Model Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Model Types (vwAIModelTypes.ID)`),
     PowerRank: z.number().nullable().describe(`
@@ -6316,7 +6328,7 @@ export const MJAIModelSchema = z.object({
         * * Description: Optional column that ranks the power of the AI model. Default is 0 and should be non-negative.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Controls whether this AI model is available for use in the system.`),
@@ -6369,9 +6381,15 @@ export const MJAIModelSchema = z.object({
         * * Display Name: Prefill Fallback Text
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Model-level fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default, can be further overridden per-vendor in AI Model Vendor. Use {{prefill}} as a placeholder.`),
+    ModelConfiguration: z.any().nullable().describe(`
+        * * Field Name: ModelConfiguration
+        * * Display Name: Model Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIModelEntity_IAIModelConfiguration
+        * * Description: Per-model layer of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape). Deep-merges per key over the AIModelType default; AIModelVendor rows may override per key on top. NULL = inherit the type default unchanged.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
-        * * Display Name: Model Type Name
+        * * Display Name: AI Model Type
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
@@ -49699,6 +49717,76 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
 
 
 /**
+ * The per-modality model-configuration bag, stored as JSON in the `ModelConfiguration` column of
+ * THREE catalog entities — the same type at every level, forming an inherit-with-override cascade
+ * resolved base-first (deep-merged per key by `ResolveEffectiveModelConfiguration` in
+ * `@memberjunction/ai`):
+ *
+ * ```
+ * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
+ *   < MJ: AI Models . ModelConfiguration      (per-model)
+ *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ * ```
+ *
+ * CodeGen emits a strongly-typed `ModelConfigurationObject` accessor on all three generated
+ * entities from this definition.
+ *
+ * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
+ * `AIModelConfiguration` in `@memberjunction/ai` (`packages/AI/Core/src/generic/modelConfiguration.ts`),
+ * which runtime code compiles against. Keep the two in step when adding a section or property —
+ * the same pact `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ *
+ * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN
+ * (`PowerRank`, `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag);
+ * anything a driver consumes at session/call time belongs HERE. New capability knobs go in this
+ * bag — do not add a new capability column per knob.
+ */
+export interface MJAIModelTypeEntity_IAIModelConfiguration {
+    /**
+     * Text-generation knobs. Reserved — no consumers yet. Candidate contents: per-model
+     * effort-level defaults, response-format quirks, tool-calling behavior flags. Existing
+     * capability COLUMNS (`SupportsEffortLevel`, `SupportsStreaming`, …) are NOT migrating here —
+     * new knobs only.
+     */
+    LLM?: Record<string, unknown> | null;
+
+    /** Realtime (speech-to-speech) knobs — the first live section. */
+    Realtime?: {
+        /**
+         * Catalog-level turn-detection default for this model. Folded into the realtime session
+         * Config bag as the `turnDetection` key BELOW the agent/app config cascade
+         * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
+         * default, agents/apps/callers refine it. Provider profiles translate the normalized
+         * vocabulary to their native wire block; an unsupported Mode is diag-logged and falls back
+         * to the profile default (never rejects a session).
+         */
+        TurnDetection?: {
+            /**
+             * - 'default' — let the provider profile decide (today's behavior).
+             * - 'serverVad' — classic silence-based server VAD.
+             * - 'semanticVad' — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+             * - 'native' — this model's smartest documented turn/duplex mode, whatever the profile
+             *   maps it to; the forward slot for full-duplex reasoning voice models (e.g. the
+             *   Grok Voice Think Fast family).
+             */
+            Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+            /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+            Eagerness?: 'low' | 'auto' | 'high' | null;
+            /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+            Threshold?: number | null;
+            /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+            SilenceDurationMs?: number | null;
+        } | null;
+    } | null;
+
+    /** Vision knobs. Reserved. */
+    Vision?: Record<string, unknown> | null;
+
+    /** Audio (TTS/STT) knobs. Reserved. */
+    Audio?: Record<string, unknown> | null;
+}
+
+/**
  * MJ: AI Model Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIModelType
@@ -49841,6 +49929,41 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
     }
 
     /**
+    * * Field Name: ModelConfiguration
+    * * Display Name: Model Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIModelTypeEntity_IAIModelConfiguration
+    * * Description: Type-wide default of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the ModelConfiguration cascade — AIModel and AIModelVendor rows inherit from it per key and may override. NULL = contributes nothing.
+    */
+    get ModelConfiguration(): string | null {
+        return this.Get('ModelConfiguration');
+    }
+    set ModelConfiguration(value: string | null) {
+        this.Set('ModelConfiguration', value);
+    }
+
+    private _ModelConfigurationObject_cached: MJAIModelTypeEntity_IAIModelConfiguration | null | undefined = undefined;
+    private _ModelConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for ModelConfiguration — returns parsed JSON as MJAIModelTypeEntity_IAIModelConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ModelConfigurationObject(): MJAIModelTypeEntity_IAIModelConfiguration | null {
+        const raw = this.ModelConfiguration;
+        if (raw !== this._ModelConfigurationObject_lastRaw) {
+            this._ModelConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ModelConfigurationObject_lastRaw = raw;
+        }
+        return this._ModelConfigurationObject_cached!;
+    }
+    set ModelConfigurationObject(value: MJAIModelTypeEntity_IAIModelConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.ModelConfiguration = raw;
+        this._ModelConfigurationObject_cached = value;
+        this._ModelConfigurationObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: DefaultInputModality
     * * Display Name: Default Input Modality Name
     * * SQL Data Type: nvarchar(50)
@@ -49859,6 +49982,76 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
     }
 }
 
+
+/**
+ * The per-modality model-configuration bag, stored as JSON in the `ModelConfiguration` column of
+ * THREE catalog entities — the same type at every level, forming an inherit-with-override cascade
+ * resolved base-first (deep-merged per key by `ResolveEffectiveModelConfiguration` in
+ * `@memberjunction/ai`):
+ *
+ * ```
+ * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
+ *   < MJ: AI Models . ModelConfiguration      (per-model)
+ *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ * ```
+ *
+ * CodeGen emits a strongly-typed `ModelConfigurationObject` accessor on all three generated
+ * entities from this definition.
+ *
+ * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
+ * `AIModelConfiguration` in `@memberjunction/ai` (`packages/AI/Core/src/generic/modelConfiguration.ts`),
+ * which runtime code compiles against. Keep the two in step when adding a section or property —
+ * the same pact `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ *
+ * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN
+ * (`PowerRank`, `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag);
+ * anything a driver consumes at session/call time belongs HERE. New capability knobs go in this
+ * bag — do not add a new capability column per knob.
+ */
+export interface MJAIModelVendorEntity_IAIModelConfiguration {
+    /**
+     * Text-generation knobs. Reserved — no consumers yet. Candidate contents: per-model
+     * effort-level defaults, response-format quirks, tool-calling behavior flags. Existing
+     * capability COLUMNS (`SupportsEffortLevel`, `SupportsStreaming`, …) are NOT migrating here —
+     * new knobs only.
+     */
+    LLM?: Record<string, unknown> | null;
+
+    /** Realtime (speech-to-speech) knobs — the first live section. */
+    Realtime?: {
+        /**
+         * Catalog-level turn-detection default for this model. Folded into the realtime session
+         * Config bag as the `turnDetection` key BELOW the agent/app config cascade
+         * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
+         * default, agents/apps/callers refine it. Provider profiles translate the normalized
+         * vocabulary to their native wire block; an unsupported Mode is diag-logged and falls back
+         * to the profile default (never rejects a session).
+         */
+        TurnDetection?: {
+            /**
+             * - 'default' — let the provider profile decide (today's behavior).
+             * - 'serverVad' — classic silence-based server VAD.
+             * - 'semanticVad' — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+             * - 'native' — this model's smartest documented turn/duplex mode, whatever the profile
+             *   maps it to; the forward slot for full-duplex reasoning voice models (e.g. the
+             *   Grok Voice Think Fast family).
+             */
+            Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+            /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+            Eagerness?: 'low' | 'auto' | 'high' | null;
+            /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+            Threshold?: number | null;
+            /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+            SilenceDurationMs?: number | null;
+        } | null;
+    } | null;
+
+    /** Vision knobs. Reserved. */
+    Vision?: Record<string, unknown> | null;
+
+    /** Audio (TTS/STT) knobs. Reserved. */
+    Audio?: Record<string, unknown> | null;
+}
 
 /**
  * MJ: AI Model Vendors - strongly typed entity sub-class
@@ -50147,7 +50340,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type
+    * * Display Name: Vendor Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
     * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)
@@ -50186,6 +50379,41 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
     }
 
     /**
+    * * Field Name: ModelConfiguration
+    * * Display Name: Model Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIModelVendorEntity_IAIModelConfiguration
+    * * Description: Most-specific layer of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape) — configuration for THIS model on THIS provider. Deep-merges per key over the model and type layers. NULL = inherit the merged model/type configuration unchanged.
+    */
+    get ModelConfiguration(): string | null {
+        return this.Get('ModelConfiguration');
+    }
+    set ModelConfiguration(value: string | null) {
+        this.Set('ModelConfiguration', value);
+    }
+
+    private _ModelConfigurationObject_cached: MJAIModelVendorEntity_IAIModelConfiguration | null | undefined = undefined;
+    private _ModelConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for ModelConfiguration — returns parsed JSON as MJAIModelVendorEntity_IAIModelConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ModelConfigurationObject(): MJAIModelVendorEntity_IAIModelConfiguration | null {
+        const raw = this.ModelConfiguration;
+        if (raw !== this._ModelConfigurationObject_lastRaw) {
+            this._ModelConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ModelConfigurationObject_lastRaw = raw;
+        }
+        return this._ModelConfigurationObject_cached!;
+    }
+    set ModelConfigurationObject(value: MJAIModelVendorEntity_IAIModelConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.ModelConfiguration = raw;
+        this._ModelConfigurationObject_cached = value;
+        this._ModelConfigurationObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: Model
     * * Display Name: Model Name
     * * SQL Data Type: nvarchar(50)
@@ -50205,7 +50433,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
     /**
     * * Field Name: Type
-    * * Display Name: Type Name
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(50)
     */
     get Type(): string {
@@ -50213,6 +50441,76 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
     }
 }
 
+
+/**
+ * The per-modality model-configuration bag, stored as JSON in the `ModelConfiguration` column of
+ * THREE catalog entities — the same type at every level, forming an inherit-with-override cascade
+ * resolved base-first (deep-merged per key by `ResolveEffectiveModelConfiguration` in
+ * `@memberjunction/ai`):
+ *
+ * ```
+ * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
+ *   < MJ: AI Models . ModelConfiguration      (per-model)
+ *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ * ```
+ *
+ * CodeGen emits a strongly-typed `ModelConfigurationObject` accessor on all three generated
+ * entities from this definition.
+ *
+ * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
+ * `AIModelConfiguration` in `@memberjunction/ai` (`packages/AI/Core/src/generic/modelConfiguration.ts`),
+ * which runtime code compiles against. Keep the two in step when adding a section or property —
+ * the same pact `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ *
+ * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN
+ * (`PowerRank`, `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag);
+ * anything a driver consumes at session/call time belongs HERE. New capability knobs go in this
+ * bag — do not add a new capability column per knob.
+ */
+export interface MJAIModelEntity_IAIModelConfiguration {
+    /**
+     * Text-generation knobs. Reserved — no consumers yet. Candidate contents: per-model
+     * effort-level defaults, response-format quirks, tool-calling behavior flags. Existing
+     * capability COLUMNS (`SupportsEffortLevel`, `SupportsStreaming`, …) are NOT migrating here —
+     * new knobs only.
+     */
+    LLM?: Record<string, unknown> | null;
+
+    /** Realtime (speech-to-speech) knobs — the first live section. */
+    Realtime?: {
+        /**
+         * Catalog-level turn-detection default for this model. Folded into the realtime session
+         * Config bag as the `turnDetection` key BELOW the agent/app config cascade
+         * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
+         * default, agents/apps/callers refine it. Provider profiles translate the normalized
+         * vocabulary to their native wire block; an unsupported Mode is diag-logged and falls back
+         * to the profile default (never rejects a session).
+         */
+        TurnDetection?: {
+            /**
+             * - 'default' — let the provider profile decide (today's behavior).
+             * - 'serverVad' — classic silence-based server VAD.
+             * - 'semanticVad' — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+             * - 'native' — this model's smartest documented turn/duplex mode, whatever the profile
+             *   maps it to; the forward slot for full-duplex reasoning voice models (e.g. the
+             *   Grok Voice Think Fast family).
+             */
+            Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+            /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+            Eagerness?: 'low' | 'auto' | 'high' | null;
+            /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+            Threshold?: number | null;
+            /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+            SilenceDurationMs?: number | null;
+        } | null;
+    } | null;
+
+    /** Vision knobs. Reserved. */
+    Vision?: Record<string, unknown> | null;
+
+    /** Audio (TTS/STT) knobs. Reserved. */
+    Audio?: Record<string, unknown> | null;
+}
 
 /**
  * MJ: AI Models - strongly typed entity sub-class
@@ -50338,7 +50636,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
 
     /**
     * * Field Name: AIModelTypeID
-    * * Display Name: AI Model Type
+    * * Display Name: AI Model Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Types (vwAIModelTypes.ID)
     */
@@ -50365,7 +50663,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Controls whether this AI model is available for use in the system.
@@ -50493,8 +50791,43 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     }
 
     /**
+    * * Field Name: ModelConfiguration
+    * * Display Name: Model Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIModelEntity_IAIModelConfiguration
+    * * Description: Per-model layer of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape). Deep-merges per key over the AIModelType default; AIModelVendor rows may override per key on top. NULL = inherit the type default unchanged.
+    */
+    get ModelConfiguration(): string | null {
+        return this.Get('ModelConfiguration');
+    }
+    set ModelConfiguration(value: string | null) {
+        this.Set('ModelConfiguration', value);
+    }
+
+    private _ModelConfigurationObject_cached: MJAIModelEntity_IAIModelConfiguration | null | undefined = undefined;
+    private _ModelConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for ModelConfiguration — returns parsed JSON as MJAIModelEntity_IAIModelConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ModelConfigurationObject(): MJAIModelEntity_IAIModelConfiguration | null {
+        const raw = this.ModelConfiguration;
+        if (raw !== this._ModelConfigurationObject_lastRaw) {
+            this._ModelConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ModelConfigurationObject_lastRaw = raw;
+        }
+        return this._ModelConfigurationObject_cached!;
+    }
+    set ModelConfigurationObject(value: MJAIModelEntity_IAIModelConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.ModelConfiguration = raw;
+        this._ModelConfigurationObject_cached = value;
+        this._ModelConfigurationObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: AIModelType
-    * * Display Name: Model Type Name
+    * * Display Name: AI Model Type
     * * SQL Data Type: nvarchar(50)
     */
     get AIModelType(): string {
