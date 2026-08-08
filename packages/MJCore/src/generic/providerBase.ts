@@ -1384,7 +1384,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (memoized) {
             return memoized;
         }
-        const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+        // The fls: segment participates in CLIENT slot identity too, keyed on the ALLOWED list
+        // (see ComputeClientFLSAllowedKey). Without it, a user whose field access is TIGHTENED
+        // keeps being served their persisted IndexedDB slot: the currency check compares only
+        // maxUpdatedAt and rowCount, neither of which notices a column, so the server answers
+        // "current" and the browser shows a column that was just taken away — until the rows
+        // change. Empty for unrestricted users, whose fingerprints are unchanged.
+        const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(
+            param, this.InstanceConnectionString, undefined, this.ComputeClientFLSAllowedKey(param)
+        );
         // Normalize a FULL-COVERAGE field list to '*' — in the FINGERPRINT only (B44).
         //
         // entity_object params get widened to an explicit list of every entity field
@@ -2244,6 +2252,47 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * The CLIENT's field-security cache key: a canonical list of the fields this user MAY read.
+     *
+     * Why the client keys on the ALLOWED set while the server keys on the DENIED set — they
+     * answer to different constraints, and the caches are looked up independently, so they do
+     * not need to agree:
+     *
+     *  - The server holds complete metadata. The denied set is what it already computes per
+     *     request, it is empty for unrestricted users (so their fingerprints stay byte-identical
+     *     and keep sharing slots), and it does not churn when a column is added to an entity.
+     *  - The client will not always be able to compute a denied set. Once metadata ships to
+     *     browsers filtered to what a user may see (issue #3485), a denied field simply will not
+     *     appear in the client's field list — so its denied set would be EMPTY and the segment
+     *     would silently vanish, taking the segmentation with it. The allowed list is the one
+     *     thing the client can still observe, and it visibly shrinks when access is removed.
+     *  - It also resolves an ambiguity the client already has: the client key carries a
+     *     projection segment that collapses to `f:*` for a full-width request. After #3485
+     *     "full width" means different columns for different users, so two users with different
+     *     access would produce the same `f:*` and collide on one slot.
+     *
+     * Returns '' when the entity has no field security or the user is denied nothing, so
+     * unrestricted users keep exactly the fingerprints they have today.
+     *
+     * Note this only takes effect once the client's metadata refreshes. A client running on
+     * stale metadata computes a stale key; the backstop is that the server strips denied
+     * columns from every fresh fetch regardless.
+     */
+    protected ComputeClientFLSAllowedKey(params: RunViewParams): string {
+        const user = this.CurrentUser;
+        if (!user || !params.EntityName) return '';
+        const entity = this.EntityByName(params.EntityName);
+        if (!entity?.HasAnyFieldPermissions) return '';
+        const denied = entity.GetDeniedReadFields(user);
+        if (denied.size === 0) return '';
+        return entity.Fields
+            .map(f => f.Name.trim().toLowerCase())
+            .filter(n => !denied.has(n))
+            .sort()
+            .join(',');
+    }
+
+    /**
      * The fetch-widening field list for a cache-eligible request: ALL entity fields for
      * unrestricted users (the long-standing universal-superset contract), or the user's ALLOWED
      * set (all fields minus their denied-read set) when field security restricts them. PKs and
@@ -2264,21 +2313,35 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * True when this request must be exempted from the RunView cache entirely: an
-     * `entity_object` request by a user with a non-empty denied-read set on the entity.
+     * `entity_object` request by a user with a non-empty denied-read set on the entity, on a
+     * provider whose cache is SHARED ACROSS USERS.
      *
-     * Why a full bypass rather than a narrower fix: entity objects must hydrate from EVERY
-     * column (a partially hydrated entity destroys data on save — see
-     * {@link ApplyFieldSecurityProjection}), but a restricted user's cache slots hold
-     * allowed-width rows. Serving such a slot to an entity_object request would hydrate partial
-     * entities; storing the full-width entity_object fetch under the same fingerprint would put
-     * denied columns into a slot the projection must then guard forever. Exempting the (rare)
-     * restricted-user entity_object request from the cache removes both directions of the
-     * hazard: its data path is a direct full-width fetch, nothing is stored, nothing is served.
-     * An FLS-restricted contextUser driving server-internal engines is warn-don't-support
-     * territory; losing caching there is an accepted cost.
+     * Why a full bypass on the server: its cache serves every user from one store. A restricted
+     * user's slots hold allowed-width rows, so serving one to an entity_object request would
+     * hydrate a partial entity, while storing a full-width entity_object fetch under the same
+     * fingerprint would put denied columns into a slot the projection must then guard forever.
+     * Exempting the (rare) restricted-user entity_object request removes both directions:
+     * nothing is stored, nothing is served. An FLS-restricted contextUser driving server-internal
+     * engines is warn-don't-support territory, so losing caching there is an accepted cost.
+     *
+     * Why the CLIENT is deliberately NOT exempt — and why that is not a compromise:
+     *  - A browser hosts ONE principal, so there is no other user to cross-serve.
+     *  - Its slots can only ever hold allowed-width rows anyway: the server strips denied
+     *    columns on the wire, so a full-width client fetch does not exist to be stored.
+     *  - Partial entities are no longer dangerous. The not-loaded flag means a hydrated entity
+     *    knows which fields it never received, saves skip them, and the stored values survive.
+     *    That was the whole reason this exemption had to be so blunt.
+     *  - Slot identity already separates permission classes client-side via the `fls:` segment
+     *    keyed on the allowed list, so a permission change lands on a fresh slot.
+     *
+     * Exempting the client would cost far more than it protects: engines default to
+     * `entity_object` and many enable `CacheLocal`, so every restricted signed-in user would
+     * lose client-side engine caching entirely and refetch over the network on each page load —
+     * a permanent performance penalty aimed squarely at the users an administrator restricted.
      */
     protected flsCacheExemptEntityObjectRequest(params: RunViewParams, contextUser?: UserInfo): boolean {
         if (params.ResultType !== 'entity_object') return false;
+        if (!this.TrustLocalCacheCompletely) return false; // client: single principal, keep caching
         return this.ComputeRunViewFLSDeniedKey(params, contextUser).length > 0;
     }
 

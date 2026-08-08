@@ -4,6 +4,7 @@ import { IMetadataProvider } from "./interfaces"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
+import { WellKnownUserSource } from "./wellKnownUserSource"
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
@@ -1067,6 +1068,11 @@ export class EntityFieldInfo extends BaseInfo {
      *   for specific roles is an opt-in whitelist, so a user outside it gets nothing.
      * - **Records match** → the Allow-minus-Deny aggregate.
      *
+     * The whitelist flip above is what makes the SYSTEM-USER EXEMPTION below necessary, and it
+     * surprises people: the first record on a field closes that field for everyone who is not
+     * explicitly allowed — including users no record ever mentions. Securing a field means
+     * listing who MAY read it; there is no "everyone except role X" form.
+     *
      * PERFORMANCE: this is the per-FIELD primitive. Enforcement points must never call it
      * inside a per-row loop — `MapFieldNamesToCodeNames` runs once per row, so a naive call
      * site costs `fields x rows` aggregations. Compute the denied-field Set once per
@@ -1075,6 +1081,31 @@ export class EntityFieldInfo extends BaseInfo {
     public GetUserFieldPermissions(user: UserInfo): EntityFieldUserPermissionInfo {
         // Cheapest check first, and the overwhelmingly common case.
         if (!this.HasFieldPermissions) {
+            return { CanRead: true, CanUpdate: true };
+        }
+
+        // ── The system user is exempt ──────────────────────────────────────────────────
+        // This is the ONE exemption in field-level security, and it is narrower than it looks.
+        // The system user is not a person: it is the account the server runs its own work as
+        // (engine pre-warm, job and agent runners, background sweeps).
+        //
+        // Why it is REQUIRED rather than convenient: the whitelist flip described above closes
+        // a field for everyone without an explicit Allow, so the very first rule an admin
+        // writes — on any role, even a brand-new one the system user has nothing to do with —
+        // silently strips that field from the server itself. Engines then cache partially
+        // loaded records process-wide and hand them to every user. The failure is silent and
+        // lands nowhere near the rule that caused it.
+        //
+        // Why it does NOT weaken the feature: the server reaches the database through a single
+        // service login that can already read every column. Denying the system user at this
+        // layer protects nothing — the data is readable by the process regardless — it only
+        // breaks the server's ability to do its own work. Whoever can act AS the system user
+        // (the system API key, gated by @RequireSystemUser) is already full-trust by design.
+        //
+        // What still stands: no HUMAN is exempt. There is no admin or Owner bypass — that was
+        // decision 1 and it is unchanged. See also the configuration guards that refuse to
+        // entangle the system user with restricted roles in the first place.
+        if (WellKnownUserSource.Instance.IsSystemUser(user)) {
             return { CanRead: true, CanUpdate: true };
         }
 

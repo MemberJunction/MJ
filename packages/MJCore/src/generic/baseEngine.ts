@@ -15,6 +15,7 @@ import { BaseEngineRegistry } from "./baseEngineRegistry";
 import { IStartupSink } from "./RegisterForStartup";
 import { CacheChangedEvent, LocalCacheManager } from "./localCacheManager";
 import { ProviderBase } from "./providerBase";
+import { WellKnownUserSource } from "./wellKnownUserSource";
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
  */
@@ -245,6 +246,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
     private _contextUser: UserInfo;
+    /**
+     * True once {@link ResolveContextUser} has put this engine on the MJ system user. Makes the
+     * server-side identity sticky (a later caller cannot displace it) and memoizes the lookup so
+     * repeated `Config(forceRefresh, …)` on hot paths does not re-query. A plain flag rather than
+     * an ID comparison, so BaseEngine never needs to know WHICH account is the system user —
+     * that knowledge stays entirely inside the registered {@link WellKnownUserSource}.
+     */
+    private _systemUserApplied: boolean = false;
     private _metadataConfigs: BaseEnginePropertyConfig[] = [];
     private _dynamicConfigs: Map<string, BaseEnginePropertyConfig> = new Map();
     private _dataMap: Map<string, EngineDataMapEntry> = new Map();
@@ -440,6 +449,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         return this._provider || Metadata.Provider; // global-provider-ok: explicit fallback in BaseEngine accessor
     }
 
+
     /**
      * Returns the RunView provider to use for the engine. This is the same underlying object as the @property ProviderTouse, but cast to IRunViewProvider. 
      * If a provider is set via the Config method, that provider will be used, otherwise the default provider will be used.
@@ -568,13 +578,17 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             this._loadingSubject.next(true);
             try {
                 this.SetProvider(provider);
-                this._contextUser = contextUser;
+
+                // Decide which identity this engine acts as — the system user on a server, the
+                // caller on a client. Sets _contextUser. Must run AFTER SetProvider (so it asks
+                // the provider this engine is bound to) and BEFORE any load.
+                await this.ResolveContextUser(contextUser);
 
                 // Register with the engine registry
                 BaseEngineRegistry.Instance.RegisterEngine(this);
 
-                await this.LoadConfigs(configs, contextUser, forceRefresh);
-                await this.AdditionalLoading(contextUser); // Call the additional loading method
+                await this.LoadConfigs(configs, this._contextUser, forceRefresh);
+                await this.AdditionalLoading(this._contextUser); // Call the additional loading method
                 await this.SetupGlobalEventListener();
 
                 // Only mark as loaded if all configs loaded successfully.
@@ -597,6 +611,76 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 this._loadingSubject.next(false);
                 TelemetryManager.Instance.EndEvent(eventId);
             }
+        }
+    }
+
+    /**
+     * Engine classes that have already warned that the system user could not be resolved, so a
+     * misconfigured deployment says so once per class instead of on every load.
+     */
+    private static _systemUserFallbackWarned: Set<string> = new Set();
+
+    /**
+     * Decides which identity this engine acts as and stores it in {@link _contextUser}.
+     *
+     * Server-side (`ProviderType.Database`), an engine acts as the MJ system user — full stop.
+     * Engine data is infrastructure: the cache is process-wide and shared by every user of the
+     * process, so its contents must not depend on whichever caller reached `Config()` first. A
+     * caller carrying entity-permission denials, RLS row scoping, or field-level denials would
+     * otherwise seal a partial, empty, or permission-constrained cache that then serves everyone
+     * until the process restarts. Restricting what any given user may SEE stays where it
+     * belongs — at the point data is served to them, not at the point it is cached.
+     *
+     * There is deliberately only ONE identity here rather than a separate load-user: every load,
+     * refresh, hydration and attribution path reads `_contextUser`, so a single field makes the
+     * rule structurally impossible to violate — a refresh path added later cannot forget to use
+     * the right one. The cost is that {@link ContextUser} reports the system user on a server;
+     * see its docs.
+     *
+     * Client-side (`ProviderType.Network`) this is a plain assignment: a browser hosts one
+     * signed-in principal, and the server already strips whatever that user may not see.
+     *
+     * Degrades, never fails. When no system user can be resolved — no server-side
+     * {@link WellKnownUserSource} registered, no such row in this database, a failed lookup —
+     * the engine simply acts as the caller, exactly as it did before this existed.
+     */
+    protected async ResolveContextUser(contextUser: UserInfo | undefined): Promise<void> {
+        const provider = this.ProviderToUse;
+        if (provider?.ProviderType !== ProviderType.Database) {
+            this._contextUser = contextUser; // client — the caller is the only identity there is
+            return;
+        }
+
+        // Once a server-side engine is acting as the system user it STAYS that way. A later
+        // caller — including `Config(forceRefresh, someUser)` — must not pull the shared cache
+        // back under their own permissions. This doubles as the lookup memo: hot paths that
+        // force-refresh per request (RunTemplateResolver renders, for one) would otherwise put a
+        // database round trip on every call to re-derive an identity that never changes.
+        if (this._systemUserApplied) {
+            return;
+        }
+
+        this._contextUser = contextUser;
+
+        let systemUser: UserInfo | null = null;
+        try {
+            const source = MJGlobal.Instance.ClassFactory.CreateInstance<WellKnownUserSource>(WellKnownUserSource);
+            systemUser = (await source?.GetSystemUser(provider)) ?? null;
+        } catch (e) {
+            // The contract says implementations never throw; don't take their word for it.
+            LogError(e);
+        }
+
+        if (systemUser) {
+            this._contextUser = systemUser;
+            this._systemUserApplied = true;
+        } else if (!BaseEngine._systemUserFallbackWarned.has(this.constructor.name)) {
+            BaseEngine._systemUserFallbackWarned.add(this.constructor.name);
+            LogStatus(
+                `${this.constructor.name}: could not resolve the MJ system user for server-side loading — ` +
+                `falling back to the calling user. This engine's data will reflect that user's permissions ` +
+                `and is cached process-wide, so a restricted caller can leave incomplete data cached for everyone.`
+            );
         }
     }
 
@@ -2175,7 +2259,20 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
-     * Returns the context user set for the object, this is set via the Config() method.
+     * The identity this engine acts as — set during `Config()` by {@link ResolveContextUser}.
+     *
+     * **On a server (`ProviderType.Database`) this is the MJ system user, NOT the caller.**
+     * Engine caches are process-wide and shared by every user of the process, so an engine acts
+     * as the platform rather than as whoever happened to configure it first. Once resolved it
+     * does not change for the life of the engine, even across `Config(forceRefresh, someUser)`.
+     *
+     * On a client it is the caller, which is the same thing — a browser hosts one principal.
+     *
+     * Consequences worth knowing when reading this for attribution (`UserID` stamps on rows an
+     * engine writes, run and log ownership): server-side those record the system user. That was
+     * already true wherever engines are pre-warmed at startup; it is now true consistently
+     * rather than depending on which caller arrived first. Code that needs the *acting* user for
+     * a specific operation should take it as a parameter, not read it from the engine.
      */
     public get ContextUser(): UserInfo {
         return this._contextUser;

@@ -31,12 +31,36 @@ import { RunQueryResult } from '../generic/runQuery';
 import { QueryExecutionSpec } from '../generic/queryExecutionSpec';
 import { CompositeKey } from '../generic/compositeKey';
 import { UserInfo, UserRoleInfo, RecordDependency } from '../generic/securityInfo';
+import { WellKnownUserSource } from '../generic/wellKnownUserSource';
+
 import { EntityInfo, RecordMergeRequest, RecordMergeResult } from '../generic/entityInfo';
 import { TransactionGroupBase } from '../generic/transactionGroup';
 import { RunViewParams } from '../views/runView';
 import { BaseEntity } from '../generic/baseEntity';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 import { ClearAllDataHooks } from '../generic/dataHooks';
+import { RegisterClassEx, UUIDsEqual } from '@memberjunction/global';
+
+/**
+ * The system-user GUID. Declared locally: the canonical constant moved to
+ * `@memberjunction/generic-database-provider` (a server-side package MJCore must not depend on),
+ * and shared code now asks `WellKnownUserSource.Instance.IsSystemUser()` instead.
+ */
+const SystemUserID = 'ecafccec-6a37-ef11-86d4-000d3a4e707e';
+
+/**
+ * Stands in for the server-side source. The field-security exemption resolves the system user
+ * through the class factory, so MJCore tests must register one — which is itself the contract:
+ * with no server-side source loaded (a browser), NO user is the system user and the exemption
+ * correctly never fires.
+ */
+@RegisterClassEx(WellKnownUserSource, { priority: 10, skipNullKeyWarning: true })
+class TestFieldSecurityWellKnownUserSource extends WellKnownUserSource {
+    public override IsSystemUser(user: UserInfo | null | undefined): boolean {
+        return !!user?.ID && UUIDsEqual(user.ID, SystemUserID);
+    }
+}
+WellKnownUserSource.ResetInstance();
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
@@ -200,6 +224,64 @@ describe('EntityInfo denied-field sets (per-request precompute)', () => {
         const intern = buildUser([INTERN_ROLE_ID]);
         expect(entity.GetDeniedReadFields(intern).size).toBe(0);
         expect([...entity.GetDeniedUpdateFields(intern)]).toEqual(['salary']);
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 1b. The system-user exemption — the ONE exemption, and why it exists
+//
+// The whitelist flip means the FIRST rule on a field closes it for everyone without an
+// explicit Allow — including users no rule ever mentions. Left alone that silently strips
+// the field from the server's own account, whose engines then cache partial records
+// process-wide for every user. It costs nothing security-wise: the server reads the
+// database through one service login that can already see every column.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('System-user exemption', () => {
+    /** The system user, holding no roles at all — the shape that gets caught by the flip. */
+    const systemUser = (): UserInfo => buildUser([], SystemUserID);
+
+    it('is exempt from a Deny that would otherwise catch it', () => {
+        const entity = new EntityInfo(employeeEntityInit(hrOnlySalary));
+        expect(entity.GetDeniedReadFields(systemUser()).size).toBe(0);
+        expect(entity.GetDeniedUpdateFields(systemUser()).size).toBe(0);
+    });
+
+    it('reads and updates a secured field even holding NO matching role (the whitelist flip)', () => {
+        const entity = new EntityInfo(employeeEntityInit(hrOnlySalary));
+        const perms = entity.Fields.find(f => f.Name === 'Salary')!.GetUserFieldPermissions(systemUser());
+        expect(perms.CanRead).toBe(true);
+        expect(perms.CanUpdate).toBe(true);
+    });
+
+    it('is exempt even from an explicit Deny row aimed at a role it holds', () => {
+        const denyIntern = [
+            ...hrOnlySalary,
+            { ID: 'p2', EntityFieldID: 'f-salary', RoleID: INTERN_ROLE_ID, Type: 'Deny', CanRead: true, CanUpdate: true },
+        ];
+        const entity = new EntityInfo(employeeEntityInit(denyIntern));
+        const sysWithRole = buildUser([INTERN_ROLE_ID], SystemUserID);
+        expect(entity.GetDeniedReadFields(sysWithRole).size).toBe(0);
+    });
+
+    it('does NOT exempt anyone else — no human bypass, including a role-less user', () => {
+        const entity = new EntityInfo(employeeEntityInit(hrOnlySalary));
+        expect([...entity.GetDeniedReadFields(buildUser([INTERN_ROLE_ID]))]).toEqual(['salary']);
+        expect([...entity.GetDeniedReadFields(buildUser([], 'some-other-user'))]).toEqual(['salary']);
+    });
+
+    it('recognizes the system user case-insensitively and is null-safe', () => {
+        const source = WellKnownUserSource.Instance;
+        expect(source.IsSystemUser(buildUser([], SystemUserID.toUpperCase()))).toBe(true);
+        expect(source.IsSystemUser(buildUser([], 'not-the-system-user'))).toBe(false);
+        expect(source.IsSystemUser(null)).toBe(false);
+        expect(source.IsSystemUser(undefined)).toBe(false);
+    });
+
+    it('does not exempt anyone when no server-side source is registered (the browser case)', () => {
+        // The base source says there are no well-known users, so the exemption cannot fire —
+        // which is correct on a client, where there is no system account at all.
+        expect(new WellKnownUserSource().IsSystemUser(buildUser([], SystemUserID))).toBe(false);
     });
 });
 

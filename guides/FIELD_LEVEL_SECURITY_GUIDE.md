@@ -33,12 +33,52 @@ each mapping an entity **field** to a **role** with access flags:
   field. Adding the first row to a field is therefore a deployment-visible event — see §5.
 - **Across a user's roles**: Allow flags OR together; Deny flags OR together; result =
   `Allow AND NOT Deny`. **A single Deny row on any of the user's roles beats every Allow.**
-- **Nothing overrides a Deny.** There is no per-user exemption, no admin bypass, no Owner
-  carve-out — deliberately. A feature whose purpose is confidentiality cannot ship with a role
-  that quietly reads everything. (Administering FLS never requires reading the secured
-  *values*; the admin UI edits permission rows, not the data.)
+- **No person is ever exempt.** There is no admin bypass and no Owner carve-out — deliberately.
+  A feature whose purpose is confidentiality cannot ship with a role that quietly reads
+  everything. (Administering FLS never requires reading the secured *values*; the admin UI
+  edits permission rows, not the data.) **The one exemption is the MJ system user**, which is
+  not a person — see §1.1.
 - `CanRead` and `CanUpdate` aggregate **independently**. Read-denied + update-allowed is a
   legal configuration (a write-only field, e.g. SSN capture); so is readable + update-denied.
+
+### 1.1 The one thing that surprises everyone: the first rule closes the field
+
+Read this before you add your first rule to any field.
+
+The open-by-default behavior is a property of the **field**, not of the user. So:
+
+- A field with **no** rules is readable by everyone.
+- A field with **one** rule is readable only by roles that have an explicit Allow. Everyone
+  else gets nothing — **including users no rule ever mentions.**
+
+That means adding a single Deny rule for one role does two things at once. It denies that
+role, and it closes the field for every user who does not hold an Allow. People expect a Deny
+list; what they get is an allow list that switches on the moment any rule exists.
+
+**There is no "everyone except role X" form.** Securing a field means listing who *may* read
+it. If four roles should keep access and one should lose it, write four Allow rows — not one
+Deny row.
+
+**Practical rule:** when you secure a field, add the Allow rows for every role that should keep
+access **in the same change**. Otherwise working users lose the field at the next metadata
+refresh.
+
+### The system user is exempt
+
+The MJ system user — the account the server runs its own work as — is exempt from field
+security. It is the only exemption, and it exists because of the flip above: the first rule an
+admin writes, on any role at all, would otherwise strip that field from the server itself.
+Engines then cache partially loaded records process-wide and serve them to every user, with
+nothing at the point of failure pointing back at the rule that caused it.
+
+It costs nothing in protection. The server reads the database through a single service login
+that can already see every column, so denying the system user at this layer protects no data —
+it only stops the server from doing its own work. Anyone who can act as the system user (the
+system API key) is already fully trusted by design.
+
+MJ also refuses to entangle that account with restricted roles in the first place: you cannot
+save a field rule aimed at a role the system user holds, and you cannot give the system user a
+role that already carries field rules.
 
 ### Unrestrictable targets
 
@@ -126,31 +166,80 @@ query's SQL against your FLS posture *when granting run access*.
 
 ### 3.4 Server-internal code sees full values
 
-Entity objects loaded server-side (engines, agents, actions running under a `contextUser`)
-retain every column in memory — the trust boundary is the API output, exactly as with
-encrypted fields. An FLS-restricted `contextUser` driving a server-side engine is a
-configuration to avoid, not a supported isolation mechanism.
+Entity objects loaded server-side retain every column in memory — the trust boundary is the
+API output, exactly as with encrypted fields. Engines are no longer a concern here: on a
+server, `BaseEngine` always loads its shared caches as the MJ system user regardless of who
+triggered the load, so engine data cannot be narrowed by a restricted caller. For NON-engine
+server code (an action or agent step holding a restricted `contextUser`), single-record loads
+fetch only the caller's allowed columns; anything beyond that remains code the server trusts.
 
-## 4. Direct database connections (DB tier) — summary
+## 4. Direct database connections (the DB tier)
 
-> Full documentation ships with the DB-tier enforcement work (CodeGen-emitted column DENYs).
-> The load-bearing facts, which are true today:
+Everything in §2 protects users who come through the API. This section is about the other
+door: a person or tool that connects to the database directly with SQL credentials — most
+often a BI tool such as Power BI.
 
-- **The API service login is the only database principal MJ uses.** Everything in §2 is
-  API-tier enforcement; it does not depend on database-level permissions, and database-level
-  permissions cannot see API users.
-- **Direct SQL connections** (e.g. BI tools like Power BI) are a separate perimeter:
-  - **SQL Server**: column-level `DENY`s will be emitted for **custom (DBA-created) roles
-    only** — the standard UI/Developer/Integration roles never receive DB-tier DENYs (an FLS
-    row against a standard role is enforced at the API tier only).
-  - **PostgreSQL**: **no automatic FLS at the database tier at all** (PG has no DENY, so MJ's
-    Deny-wins semantics cannot be expressed there). Direct PG connections see every column.
-  - **Row-level security does not apply to direct connections on either platform** — MJ RLS
-    is API-tier WHERE-clause injection. Column protection without row protection.
-  - **BI roles must be SELECT-only.** A direct user with EXECUTE on the CRUD procs can read
-    full rows from proc output, bypassing column DENYs.
-  - A denied column produces a **hard error** (not a narrowed result) for direct users,
-    including `SELECT *` — direct consumers must enumerate their allowed columns.
+**These are two separate perimeters, and neither replaces the other.** MJ's API talks to the
+database as one fixed service login. The MJ user is application state, never a database
+account. So database permissions cannot see API users, and API-tier rules cannot see direct
+connections. Configure both if you have both.
+
+### 4.1 What MJ emits, per platform
+
+**SQL Server.** CodeGen writes `DENY SELECT ([Column]) ON [schema].[BaseView] TO [role]` into
+each entity's generated permissions file, which runs on every CodeGen pass. A DENY is emitted
+only when all of these hold:
+
+1. There is an `EntityFieldPermission` row with `Type = 'Deny'` and `CanRead` set. MJ never
+   invents a DENY from a missing Allow — the database tier is a conservative subset of the
+   app tier, not a copy of it.
+2. The role is a **custom role you created** and gave a `SQLName`. The three standard roles
+   (UI, Developer, Integration) never get DENYs, because the API service login belongs to
+   them and a DENY beats every grant — the API would lose the column for everyone.
+3. No protected service login belongs to the role. CodeGen checks this each run and, if one
+   does, **skips the DENY and prints a warning**. Take the service login out of the role if
+   you want database-level enforcement for it.
+
+A Deny row aimed at a standard role still works normally at the API tier. It just gets no
+database mirror. The same is true for any role with a blank `SQLName` — that means
+"application only" on purpose, and CodeGen now logs one line per such role so you can tell
+the difference between "configured that way" and "not working."
+
+**PostgreSQL emits nothing.** PostgreSQL has no DENY at all; its privileges only add up. MJ's
+"a Deny always wins" rule cannot be expressed there, and shipping an approximation with
+different behavior would be worse than shipping none. **A direct PostgreSQL connection gets no
+automatic field security.** Protect those connections another way, or keep them off the
+database.
+
+### 4.2 What a direct user experiences
+
+- **A denied column is an error, not a hidden column.** `SELECT *` fails, and so does naming
+  the column. Your BI modeler has to list the allowed columns instead. In Power BI the
+  navigator still shows column names — the values are what's blocked.
+- **Rows are not protected at all.** MJ's row-level security is a WHERE clause added by the
+  API, so a direct connection bypasses it completely. Direct users get column protection with
+  no row protection. Say this plainly to anyone requesting direct access.
+- **BI roles must be SELECT-only.** Do not grant EXECUTE on the CRUD stored procedures. Those
+  procedures return the full row when they finish, and that path does not go through the
+  column DENY — an EXECUTE grant hands back exactly what the DENY was hiding.
+- **A shared account defeats per-user rules.** If everyone connects through one gateway
+  account, everyone sees that account's access. Per-user enforcement needs per-user
+  credentials or SSO passthrough.
+
+### 4.3 Changing your mind is now safe
+
+CodeGen used to only ever add grants. Deleting a permission record stopped MJ from writing it
+again, but the grant already in the database stayed until the view happened to be rebuilt.
+
+CodeGen now reads the live permission state each run and re-asserts the current configuration.
+Deleting a Deny row removes the DENY on the next run; deleting an `EntityPermission` row
+removes that role's access to the view. Hand-made changes inside the area CodeGen manages
+(its views, CRUD procedures and search functions, for roles with a `SQLName`) are reset to
+match the metadata, so the metadata is the source of truth. Grants to anything else — DBA
+roles, `db_datareader`, accounts MJ does not know about — are never touched.
+
+**Run CodeGen after changing field permissions** if you rely on database-tier enforcement.
+Until it runs, only the API tier reflects the change.
 
 ## 5. Operational notes
 

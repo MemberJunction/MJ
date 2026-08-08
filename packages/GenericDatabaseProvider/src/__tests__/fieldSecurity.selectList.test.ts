@@ -72,6 +72,9 @@ class FlsSelectTestProvider extends GenericDatabaseProvider {
     public fieldString(params: RunViewParams, viewEntity: MJUserViewEntityExtended | null, user?: UserInfo): string {
         return this.getRunTimeViewFieldString(params, viewEntity, user);
     }
+    public loadSelectList(entityInfo: EntityInfo, user?: UserInfo): string {
+        return this.buildFieldSecuritySelectList(entityInfo, user);
+    }
     public searchSQL(entityInfo: EntityInfo, term: string, user?: UserInfo): string {
         return this.createViewUserSearchSQL(entityInfo, term, user);
     }
@@ -261,6 +264,39 @@ describe('getRunTimeViewFieldString — field security intersection', () => {
     it('leaves an unrestricted user\'s explicit Fields list untouched', () => {
         const { provider } = setup();
         expect(provider.fieldString(params({ Fields: ['Name', 'Salary'] }), null, hr())).toBe('[ID],[Name],[Salary]');
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 1b. Single-record Load — the SELECT list
+//
+// An agent running under a restricted service account calls Load() on one record. Before
+// this, that issued `SELECT *` and pulled denied values into server memory. Now it names
+// only the allowed columns; the omitted keys mark those fields not-loaded on the entity,
+// so the next save skips them.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('buildFieldSecuritySelectList — single-record Load', () => {
+    it('names only the allowed columns for a restricted user', () => {
+        const { provider, entity } = setup();
+        expect(provider.loadSelectList(entity, intern())).toBe('[ID], [Name], [Notes]');
+    });
+
+    it('keeps the literal SELECT * for an unrestricted user (byte-identical SQL, no plan churn)', () => {
+        const { provider, entity } = setup();
+        expect(provider.loadSelectList(entity, hr())).toBe('*');
+    });
+
+    it('keeps SELECT * on entities with no field security, and with no user', () => {
+        const { provider: p1, entity: e1 } = setup({ fls: false });
+        expect(p1.loadSelectList(e1, intern())).toBe('*');
+        const { provider: p2, entity: e2 } = setup();
+        expect(p2.loadSelectList(e2, undefined)).toBe('*');
+    });
+
+    it('always keeps the primary key', () => {
+        const { provider, entity } = setup();
+        expect(provider.loadSelectList(entity, intern())).toContain('[ID]');
     });
 });
 

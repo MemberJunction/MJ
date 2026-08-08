@@ -40,6 +40,7 @@ export * from './custom/MJAPIKeyScopeEntityServer.server';
 export * from './custom/MJAPIApplicationScopeEntityServer.server';
 export * from './custom/MJRowLevelSecurityFilterEntityServer.server';
 export * from './custom/MJEntityFieldPermissionEntityServer.server';
+export * from './custom/MJUserRoleEntityServer.server';
 export * from './custom/rowFilterValidation';
 export * from './custom/json-schema-lite';
 export * from './custom/IntegrationLLMPKCallback';

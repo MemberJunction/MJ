@@ -113,6 +113,17 @@ class TestProvider extends ProviderBase {
     public flsCacheExempt(params: RunViewParams, user?: UserInfo): boolean {
         return this['flsCacheExemptEntityObjectRequest'](params, user);
     }
+    /** Server providers share one cache across users; clients do not. Default here: server. */
+    private _sharedCache = true;
+    public setSharedCache(shared: boolean): void { this._sharedCache = shared; }
+    protected override get TrustLocalCacheCompletely(): boolean { return this._sharedCache; }
+    public clientAllowedKey(params: RunViewParams): string {
+        return this['ComputeClientFLSAllowedKey'](params);
+    }
+    /** ProviderBase.CurrentUser is what the client-side key reads. */
+    private _asUser: UserInfo | undefined;
+    public setCurrentUser(u: UserInfo | undefined): void { this._asUser = u; }
+    public override get CurrentUser(): UserInfo { return this._asUser as UserInfo; }
 
     override get PlatformKey() { return 'sqlserver' as const; }
     protected get AllowRefresh(): boolean { return false; }
@@ -281,13 +292,72 @@ describe('ProviderBase.ComputeRunViewFetchFields', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 3b. The CLIENT key — hashed on the ALLOWED list, not the denied list
+//
+// The client keys on what the user MAY read, because once metadata ships filtered
+// (issue #3485) a denied field will not appear in the client's field list at all — a
+// denied-set key would be empty and would silently stop segmenting anything.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ProviderBase.ComputeClientFLSAllowedKey', () => {
+    const keyFor = (roles: string[], perms = standardPermissions): string => {
+        const provider = setupProvider(perms);
+        provider.setCurrentUser(roles.length ? buildUser(roles) : undefined);
+        return provider.clientAllowedKey(viewParams());
+    };
+
+    it('lists the fields the user MAY read, sorted and lowercased', () => {
+        expect(keyFor([INTERN_ROLE_ID])).toBe('id,name,notes');
+        expect(keyFor([FINANCE_ROLE_ID])).toBe('bonus,id,name,notes');
+    });
+
+    it('is empty for an unrestricted user, so their client fingerprints are unchanged', () => {
+        expect(keyFor([HR_ROLE_ID])).toBe('');
+    });
+
+    it('is empty on entities with no field security, and with no user', () => {
+        expect(keyFor([INTERN_ROLE_ID], {})).toBe('');
+        expect(keyFor([])).toBe('');
+    });
+
+    it('separates permission classes that a denied-set key could not once metadata is filtered', () => {
+        // The point of the allowed-set choice: after #3485 a client cannot see denied fields,
+        // so both users below would compute an EMPTY denied set and collide. Their allowed
+        // lists still differ, which is what keeps their slots apart.
+        expect(keyFor([INTERN_ROLE_ID])).not.toBe(keyFor([FINANCE_ROLE_ID]));
+    });
+
+    it('changes when access is taken away — the tightening case that strands a persisted slot', () => {
+        const before = keyFor([FINANCE_ROLE_ID]);                       // Bonus readable
+        const after = keyFor([FINANCE_ROLE_ID], {                        // Bonus revoked
+            ...standardPermissions,
+            bonus: [{ ID: 'p2', EntityFieldID: 'f-bonus', RoleID: HR_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: true }],
+        });
+        expect(before).not.toBe(after);
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 4. entity_object cache exemption
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('ProviderBase.flsCacheExemptEntityObjectRequest', () => {
-    it('exempts a restricted user\'s entity_object request (both hazard directions)', () => {
+    it('exempts a restricted user\'s entity_object request on a SHARED (server) cache', () => {
         const provider = setupProvider();
         expect(provider.flsCacheExempt(viewParams({ ResultType: 'entity_object' }), buildUser([INTERN_ROLE_ID]))).toBe(true);
+    });
+
+    it('does NOT exempt on a CLIENT cache — a browser hosts one principal, and engines depend on it', () => {
+        // Engines default to entity_object and many enable CacheLocal. Exempting the client
+        // would strip client-side engine caching from every restricted signed-in user, forcing
+        // a network refetch on each page load — a permanent penalty on exactly the users an
+        // administrator restricted. Nothing is gained: a client slot can only hold
+        // allowed-width rows (the server strips denied columns on the wire), partial entities
+        // are safe now that hydration marks not-loaded fields, and the client `fls:` segment
+        // already keys permission classes apart.
+        const provider = setupProvider();
+        provider.setSharedCache(false);
+        expect(provider.flsCacheExempt(viewParams({ ResultType: 'entity_object' }), buildUser([INTERN_ROLE_ID]))).toBe(false);
     });
 
     it('does NOT exempt a restricted user\'s simple request — it gets its own fls: slot instead', () => {
