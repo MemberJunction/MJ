@@ -1,0 +1,158 @@
+[
+  {
+    "_comments": [
+      "Registry of external agent harnesses this installation can launch. A row makes a harness",
+      "AVAILABLE; an agent opts in by naming it in AIAgent.TypeConfiguration ({ \"harnessName\": ... }).",
+      "",
+      "STATUS is 'Inactive' for every row by default. These harnesses are external binaries that must",
+      "be installed and authenticated on whatever host (or in whatever sandbox image) will run them,",
+      "so shipping them Active would mean a fresh install advertises harnesses it cannot launch.",
+      "Flip a row to Active once its binary is present.",
+      "",
+      "CapabilitySettings declares what each ADAPTER implements, not what the vendor advertises — the",
+      "runtime emulates what is missing, so an over-claim becomes a silent behavioural gap.",
+      "",
+      "PermissionPolicy vs PermissionHooks are different questions and were once conflated:",
+      "  · PermissionPolicy — the adapter translates MJ's posture and allow/deny lists into flags the",
+      "    harness honours. FALSE means a configured policy is INERT and the runtime logs an error.",
+      "    True only for Claude Code and Pi, whose flags were verified against real installs; the",
+      "    others stay false until someone verifies theirs rather than guessing.",
+      "  · PermissionHooks — the adapter can intercept a permission prompt mid-turn and route it to a",
+      "    human. False everywhere: MJ's MCP permission-prompt tool does not exist yet.",
+      "",
+      "Note on Claude Code's Bash patterns: they are PREFIX-LITERAL, so `Bash(git commit:*)` does not",
+      "match `git -C <path> commit`. Deny whole tool names; do not try to carve subcommands out of a",
+      "broad allow. Real containment comes from the sandbox provider."
+    ],
+    "fields": {
+      "Name": "Claude Code",
+      "Description": "Anthropic's Claude Code, driven through its headless CLI (`claude -p --output-format stream-json`). Resumes sessions natively, so context stays server-side rather than being replayed each turn. Requires the `claude` binary on PATH (or set ExecutablePath) and an ANTHROPIC_API_KEY reaching the sandbox via MJ: AI Agent Credentials.",
+      "DriverClass": "ClaudeCodeCliAdapter",
+      "AIVendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+      "CapabilitySettings": {
+        "SessionResume": true,
+        "MidTurnCancellation": true,
+        "StructuredOutput": false,
+        "UsageReporting": true,
+        "PermissionPolicy": true,
+        "PermissionHooks": false,
+        "McpClient": true,
+        "WorkspaceScoping": true,
+        "ModelSelection": true
+      },
+      "Status": "Inactive",
+      "AIModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5",
+      "DefaultModel": "claude-sonnet-5"
+    },
+    "primaryKey": {
+      "ID": "454E8374-BF0F-447F-99A5-125FDE37DE7A"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T15:49:55.601Z",
+      "checksum": "a8d2e96fd21b904eff2c8db4cd3b887053f3443800ef5032b8cb11d8976f37ba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Codex CLI",
+      "Description": "OpenAI's Codex CLI, driven through `codex exec --json`. Ships as a CLI only — the npm package exposes a bin and no library entry point. Requires the `codex` binary and an OPENAI_API_KEY reaching the sandbox.",
+      "DriverClass": "CodexAdapter",
+      "AIVendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "CapabilitySettings": {
+        "SessionResume": true,
+        "StructuredOutput": false,
+        "UsageReporting": true,
+        "PermissionPolicy": false,
+        "PermissionHooks": false,
+        "McpClient": true,
+        "WorkspaceScoping": true,
+        "ModelSelection": true
+      },
+      "Status": "Inactive"
+    },
+    "primaryKey": {
+      "ID": "4BD7C8C4-7603-4C12-983D-8A57DA28389D"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T15:49:55.614Z",
+      "checksum": "1a81d0a2b742be24dcb6234539386c3471f28267db0eadeb8cffec095ed43b7c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OpenCode",
+      "Description": "OpenCode in non-interactive run mode. The published @opencode-ai/sdk exposes no main or types entry, so the CLI is the dependable contract. Requires the `opencode` binary.",
+      "DriverClass": "OpenCodeAdapter",
+      "CapabilitySettings": {
+        "SessionResume": true,
+        "StructuredOutput": false,
+        "UsageReporting": true,
+        "PermissionPolicy": false,
+        "PermissionHooks": false,
+        "McpClient": true,
+        "WorkspaceScoping": true,
+        "ModelSelection": true
+      },
+      "Status": "Inactive"
+    },
+    "primaryKey": {
+      "ID": "622975D7-CB3A-4944-B76F-53C96D105C34"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T15:49:55.626Z",
+      "checksum": "2bf32e4b1154c431456695e64180a553494202bc119493896d69ffb5c3b9c2fe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini CLI",
+      "Description": "Google's Gemini CLI. Built around one-shot invocations, so it does NOT resume sessions — the runtime replays accumulated context into every turn and budgets the extra tokens against the run's guardrails. Uses the CLI rather than @google/gemini-cli-core, which is internals with no stability contract. Requires the `gemini` binary and a GEMINI_API_KEY.",
+      "DriverClass": "GeminiCliAdapter",
+      "AIVendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "CapabilitySettings": {
+        "SessionResume": false,
+        "StructuredOutput": false,
+        "UsageReporting": true,
+        "PermissionPolicy": false,
+        "PermissionHooks": false,
+        "McpClient": true,
+        "WorkspaceScoping": true,
+        "ModelSelection": true
+      },
+      "Status": "Inactive"
+    },
+    "primaryKey": {
+      "ID": "DA433068-6608-4ADB-BE26-8AF0D9D6F456"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T15:49:55.639Z",
+      "checksum": "e7c6399dfdd3bce699c8d0d898d7757e21624d4c9be692aaa687e946f585a244"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pi",
+      "Description": "Pi (@earendil-works/pi-coding-agent), driven through its non-interactive CLI: `pi -p --mode json --session-id <id>`. Verified against a real install (0.83.0) rather than inferred — MJ supplies the session id up front, so turns resume instead of replaying context. Authenticates from environment variables or its own `pi /login`; the local executor passes HOME through, so a developer who has already logged in needs no credential row.",
+      "DriverClass": "PiAdapter",
+      "CapabilitySettings": {
+        "SessionResume": true,
+        "MidTurnCancellation": true,
+        "StructuredOutput": false,
+        "UsageReporting": true,
+        "PermissionPolicy": true,
+        "PermissionHooks": false,
+        "McpClient": false,
+        "WorkspaceScoping": true,
+        "ModelSelection": true
+      },
+      "Status": "Inactive"
+    },
+    "primaryKey": {
+      "ID": "8B333510-B1ED-475C-B721-1F2315C53568"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T15:49:55.651Z",
+      "checksum": "8cc18c694906c87b5982030bc3551d4d56a2563cb821fb3e921c137c255daecd"
+    }
+  }
+]

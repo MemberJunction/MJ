@@ -102,12 +102,32 @@ jobs:
         run: |
           CURRENT_VERSION="${{ steps.get_version.outputs.CURRENT_VERSION }}"
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
-          NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 ))"
-          EXPECTED_STRING="__v$NEXT_MINOR_VERSION"
+
+          # Which line are migrations building toward?
+          #
+          # Outside pre-mode the version is the LAST release (e.g. 5.50.0), so the next one bumps
+          # the minor and migrations carry v5.51.x.
+          #
+          # In pre-mode the version is 6.1.0-edge.N and the stream is still building toward line
+          # 6.1 — every subsequent edge release stays on 6.1 — so migrations keep v6.1.x. This
+          # matches DEPLOYMENT.md: "use the tuple the Edge stream is building toward — while
+          # `next` streams 6.1.0-edge.N, name it v6.1.x".
+          #
+          # The old unconditional minor+1 only happened to work for the FIRST edge release of a
+          # line (6.0.x -> v6.1.x). On the second (6.1.0-edge.0 -> 6.1.0-edge.1) it demanded
+          # v6.2.x and rejected every correctly-named migration in the release.
+          if [[ "$CURRENT_VERSION" == *-* ]]; then
+            TARGET_LINE="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}"
+            echo "Pre-release version $CURRENT_VERSION — migrations target the line being built toward: v$TARGET_LINE"
+          else
+            TARGET_LINE="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 ))"
+            echo "Released version $CURRENT_VERSION — migrations target the next minor: v$TARGET_LINE"
+          fi
+          EXPECTED_STRING="__v$TARGET_LINE"
 
           git diff --name-only --diff-filter=A ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
             if [[ ! "$file" =~ $EXPECTED_STRING ]]; then
-              echo "::error file=$file::Migration filename doesn't match the next minor version (v$NEXT_MINOR_VERSION)"
+              echo "::error file=$file::Migration filename doesn't match the target line (v$TARGET_LINE)"
               exit 1
             fi
             if [[ ! "$file" =~ "V" ]]; then

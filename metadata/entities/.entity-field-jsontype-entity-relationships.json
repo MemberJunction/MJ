@@ -1,0 +1,39 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on EntityRelationship.RelatedRecordCollection so CodeGen emits a",
+      "strongly-typed RelatedRecordCollectionObject accessor. The column declares a relationship as a",
+      "first-class related-record collection — the policy half of a DeclareRelatedRecords(...) call.",
+      "RelatedEntity and RelatedEntityJoinField are NOT part of the JSON shape: they are already",
+      "columns on the same row, and duplicating them would create two sources of truth.",
+      "Added by migration V202608071100__v6.1.x__EntityRelationship_RelatedRecordCollection.sql."
+    ],
+    "fields": {
+      "Name": "MJ: Entity Relationships"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IRelatedRecordCollectionConfig",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IRelatedRecordCollectionConfig.ts"
+          },
+          "_comments": [
+            "RelatedRecordCollection — Name, Load, OnRemove, OrderBy, Sequence, ClearAfterSave"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Relationships&Name=RelatedRecordCollection"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:55.190Z",
+            "checksum": "d3b14cec0ce7e5e035d75074efb970a94f2359adafe30d74c4dde94693b1b2af"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Relationships"
+    }
+  }
+]

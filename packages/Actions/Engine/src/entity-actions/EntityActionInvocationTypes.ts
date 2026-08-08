@@ -179,7 +179,7 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
 
             // prepare the variables for the action
             const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, params.EntityAction.ActionID));
-            const internalParams = await this.MapParams(action.Params, params.EntityAction.Params, params.EntityObject);
+            const internalParams = await this.MapParams([...action.Params.Items], params.EntityAction.Params, params.EntityObject);
             const filters = params.EntityAction.Filters.map(f => {
                 const filter = ActionEngineServer.Instance.ActionFilters.find(fi => UUIDsEqual(fi.ID, f.ActionFilterID));
                 return filter;
@@ -354,7 +354,7 @@ export class EntityActionInvocationValidate extends EntityActionInvocationSingle
             await ActionEngineServer.Instance.Config(false, params.ContextUser);
 
             const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, params.EntityAction.ActionID));
-            const internalParams = await this.MapParams(action.Params, params.EntityAction.Params, params.EntityObject);
+            const internalParams = await this.MapParams([...action.Params.Items], params.EntityAction.Params, params.EntityObject);
             
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,

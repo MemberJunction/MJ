@@ -70,9 +70,24 @@ const INTENTIONALLY_NO_PG_COUNTERPART = new Set([
  * into a permanent exemption.
  */
 const PENDING_CONVERSION = new Map([
-    // EMPTY — and it should stay that way. The four 6.x-era gaps this ratchet was
-    // introduced to hold (#3471) were all closed on 2026-08-05. Parity is now whole:
-    // every T-SQL V-migration has a committed counterpart or a documented exclusion.
+    // The four 6.x-era gaps this ratchet was introduced to hold (#3471) were all closed
+    // on 2026-08-05, and the list was empty.
+    //
+    // Phase 0 of the unified-workflow program (plan #3456) was then added here, since that
+    // program's ruling was to perfect its migrations on SQL Server only and handle PostgreSQL
+    // parity separately (#3545). Its counterpart landed in the v6.1.0-edge.1 release build, so
+    // the entry is removed per this list's own rule — "each entry is removed by the PR that
+    // lands its counterpart".
+    //
+    // Why it was converted rather than left deferred: DEPLOYMENT.md Step 8 requires every new
+    // SS migration to have a committed, verified counterpart BEFORE the release that carries
+    // it — "otherwise PostgreSQL deployments of the release are missing migrations". Deferring
+    // parity is viable while a migration sits on `next`; it stops being viable the moment a
+    // release ships that migration, because PG installs would take the SS schema change and
+    // silently miss it. The counterpart applies cleanly to a fresh PG 16 database (all eight
+    // of the release's migrations recorded success = t).
+    //
+    // The list may only ever SHRINK; it is now empty again.
 ]);
 
 function readDirOrExit(path, label) {

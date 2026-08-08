@@ -23,7 +23,8 @@
     "@memberjunction/actions-base": "6.1.0-edge.0",
     "@memberjunction/scheduling-base-types": "6.1.0-edge.0",
     "cron-parser": "^4.9.0",
-    "luxon": "^3.2.1"
+    "luxon": "^3.2.1",
+    "@memberjunction/scheduling-engine": "6.1.0-edge.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

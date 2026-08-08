@@ -37,7 +37,6 @@ import {
   LogError,
   EntityRecordNameInput,
   EntityRecordNameResult,
-  IRunReportProvider,
   RecordDependency,
   EntityDependency,
   LogStatus,
@@ -262,7 +261,7 @@ async function executeSQLCore(
  */
 export class SQLServerDataProvider
   extends GenericDatabaseProvider
-  implements IEntityDataProvider, IMetadataProvider, IRunReportProvider, IColocatedVectorHost
+  implements IEntityDataProvider, IMetadataProvider, IColocatedVectorHost
 {
   /**************************************************************************/
   // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
@@ -391,6 +390,15 @@ export class SQLServerDataProvider
    */
   public get transactionDepth(): number {
     // Request-specific depth should be accessed via getTransactionContext
+    return this._transactionDepth;
+  }
+
+  /**
+   * Feeds real nesting depth to the entity-transaction machinery (`IsNested`, out-of-order settle
+   * detection). Deliberately separate from `IsInTransaction`, which this provider leaves `false`
+   * so `RunMaybeSerial` keeps fanning out — see the note in `packages/MJCore/src/generic/util.ts`.
+   */
+  protected override get CurrentTransactionDepth(): number {
     return this._transactionDepth;
   }
   
@@ -1550,20 +1558,6 @@ export class SQLServerDataProvider
     return { dataSource: this._pool };
   }
 
-  protected override BuildSaveExecuteOptions(entity: BaseEntity, sqlDetails: SaveSQLResult): ExecuteSQLOptions {
-    const opts = super.BuildSaveExecuteOptions(entity, sqlDetails);
-    (opts as ExecuteSQLOptions).connectionSource =
-      (entity.ProviderTransaction as sql.Transaction) ?? undefined;
-    return opts;
-  }
-
-  protected override BuildDeleteExecuteOptions(entity: BaseEntity, sqlDetails: DeleteSQLResult): ExecuteSQLOptions {
-    const opts = super.BuildDeleteExecuteOptions(entity, sqlDetails);
-    (opts as ExecuteSQLOptions).connectionSource =
-      (entity.ProviderTransaction as sql.Transaction) ?? undefined;
-    return opts;
-  }
-
   protected override ValidateDeleteResult(
     entity: BaseEntity,
     rawResult: Record<string, unknown>[],
@@ -2183,39 +2177,6 @@ export class SQLServerDataProvider
   }
 
   /**
-   * Begin an independent transaction for IS-A chain orchestration.
-   * Returns a new sql.Transaction object that is NOT linked to the provider's
-   * internal transaction state (used by TransactionGroup). Each IS-A chain
-   * gets its own transaction to avoid interference with other operations.
-   */
-  public async BeginISATransaction(): Promise<unknown> {
-    const transaction = new sql.Transaction(this._pool);
-    await transaction.begin();
-    return transaction;
-  }
-
-  /**
-   * Commit an IS-A chain transaction.
-   * @param txn The sql.Transaction object returned from BeginISATransaction()
-   */
-  public async CommitISATransaction(txn: unknown): Promise<void> {
-    if (txn && txn instanceof sql.Transaction) {
-      await txn.commit();
-    }
-  }
-
-  /**
-   * Rollback an IS-A chain transaction.
-   * @param txn The sql.Transaction object returned from BeginISATransaction()
-   */
-  public async RollbackISATransaction(txn: unknown): Promise<void> {
-    if (txn && txn instanceof sql.Transaction) {
-      await txn.rollback();
-    }
-  }
-
-
-  /**
    * Builds a UNION ALL query that probes each child entity's BaseView for a
    * record with the given primary key. Returns the first match (disjoint
    * subtypes guarantee at most one result) unless used with overlapping
@@ -2467,14 +2428,47 @@ IF ${varName} IS NOT NULL
         if (!savepointName) {
           throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
         }
-        
-        await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
-          description: `Rolling back to savepoint ${savepointName}`,
-          ignoreLogging: true
-        });
-        
-        this._savepointStack.pop();
-        this._transactionDepth--;
+
+        try {
+          await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
+            description: `Rolling back to savepoint ${savepointName}`,
+            ignoreLogging: true
+          });
+
+          this._savepointStack.pop();
+          this._transactionDepth--;
+        } catch (savepointError) {
+          // SQL Server dooms the ENTIRE transaction (XACT_STATE() = -1) on deadlock-victim,
+          // batch-aborting and XACT_ABORT errors. In that state `ROLLBACK TRANSACTION <savepoint>`
+          // is illegal (Msg 3931) and throws — and leaving the depth/stack untouched would strand
+          // a dead physical transaction that every subsequent statement on this provider silently
+          // joins, with nested Commit calls "succeeding" against a transaction that can never
+          // commit. The only recovery is a FULL rollback plus a complete state reset; the outer
+          // scopes' own settles then fail loudly against depth 0 instead of pretending to work.
+          // (The old per-chain BeginISATransaction never hit this — sql.Transaction.rollback() is
+          // legal on an aborted transaction — so this hazard is specific to savepoint joining.)
+          LogError(
+            `Savepoint rollback to ${savepointName} failed — the transaction is likely doomed ` +
+            `(XACT_STATE() = -1). Performing a full rollback and resetting transaction state.`
+          );
+          try {
+            await this._transaction.rollback();
+          } catch (fullRollbackError) {
+            LogError('Full rollback after savepoint rollback failure also failed:', undefined, fullRollbackError);
+          } finally {
+            this._transaction = null;
+            this._transactionDepth = 0;
+            this._savepointStack = [];
+            this._savepointCounter = 0;
+            this._transactionState$.next(false);
+            const deferredCount = this._deferredTasks.length;
+            this._deferredTasks = [];
+            if (deferredCount > 0) {
+              LogStatus(`Cleared ${deferredCount} deferred tasks after doomed-transaction recovery`);
+            }
+          }
+          throw savepointError; // the caller's unit of work still failed — report it
+        }
       }
     } catch (e) {
       // On error in outer transaction, reset everything
@@ -2485,7 +2479,7 @@ IF ${varName} IS NOT NULL
         this._savepointCounter = 0;
         this._transactionState$.next(false);
       }
-      
+
       LogError(e);
       throw e; // force caller to handle
     }

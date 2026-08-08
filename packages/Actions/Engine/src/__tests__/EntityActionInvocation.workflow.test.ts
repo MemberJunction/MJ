@@ -80,7 +80,14 @@ vi.mock('../generic/ActionEngine', () => ({
     ActionEngineServer: {
         Instance: {
             Config: vi.fn().mockResolvedValue(undefined),
-            Actions: [{ ID: 'ACTION-1', Name: 'Notify', Params: [{ ID: 'p1', Name: 'Record', Type: 'Input' }] }],
+            // `Action.Params` is a `DeclareRelatedRecords` collection, not an array: InvokeAction
+            // reads it as `[...action.Params.Items]`, so the mock has to expose `.Items` and stay
+            // iterable. A bare array here fails with `action.Params.Items is not iterable`.
+            Actions: [{
+                ID: 'ACTION-1',
+                Name: 'Notify',
+                Params: { Items: [{ ID: 'p1', Name: 'Record', Type: 'Input' }] }
+            }],
             ActionFilters: [],
             RunAction: mockRunAction
         }

@@ -7,6 +7,7 @@
  * (repo-local), the vitest suites import bundles directly, and the special rigs under
  * rigs/ are standalone scripts, not entry paths.
  */
+export * from './checks/agent-external-harness.checks';
 export * from './checks/agent-runner.checks';
 export * from './checks/aggregates-cache.checks';
 export * from './checks/ai-skills.checks';
@@ -26,6 +27,8 @@ export * from './checks/permission-engine.checks';
 export * from './checks/predictive-studio.checks';
 export * from './checks/prompt-runner.checks';
 export * from './checks/record-process-facade.checks';
+export * from './checks/task-graph-execution.checks';
+export * from './checks/task-graph-orchestration.checks';
 export * from './checks/record-process.checks';
 export * from './checks/remote-op-ai-authoring.checks';
 export * from './checks/remote-op-wire-progress.checks';
@@ -48,6 +51,8 @@ export * from './checks/subscription-isolation.checks';
 export * from './checks/templates.checks';
 export * from './checks/actions-pipeline.checks';
 export * from './checks/entity-server-invariants.checks';
+export * from './checks/entity-graph.checks';
+export * from './checks/entity-graph-client.checks';
 export * from './checks/scheduling-concurrency.checks';
 export * from './checks/communication.checks';
 export * from './checks/ai-cost.checks';

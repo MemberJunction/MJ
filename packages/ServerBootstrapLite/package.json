@@ -41,6 +41,7 @@
     "@memberjunction/actions-bizapps-formbuilders": "6.1.0-edge.0",
     "@memberjunction/actions-bizapps-lms": "6.1.0-edge.0",
     "@memberjunction/actions-bizapps-social": "6.1.0-edge.0",
+    "@memberjunction/ai-agent-harness": "6.1.0-edge.0",
     "@memberjunction/ai-agent-manager": "6.1.0-edge.0",
     "@memberjunction/ai-agents": "6.1.0-edge.0",
     "@memberjunction/ai-anthropic": "6.1.0-edge.0",
@@ -103,6 +104,7 @@
     "@memberjunction/search-engine": "6.1.0-edge.0",
     "@memberjunction/storage": "6.1.0-edge.0",
     "@memberjunction/tag-engine-base": "6.1.0-edge.0",
+    "@memberjunction/task-graph": "6.1.0-edge.0",
     "@memberjunction/templates": "6.1.0-edge.0",
     "@memberjunction/testing-engine": "6.1.0-edge.0"
   },

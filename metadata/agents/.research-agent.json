@@ -9,7 +9,10 @@
       "ModelSelectionMode": "Agent",
       "ExposeAsAction": false,
       "InvocationMode": "Sub-Agent",
-      "IconClass": "fa-solid fa-database"
+      "IconClass": "fa-solid fa-database",
+      "AgentTypePromptParams": {
+        "enableTaskGraphs": true
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
@@ -193,8 +196,8 @@
       "ID": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
     },
     "sync": {
-      "lastModified": "2026-03-13T19:10:49.854Z",
-      "checksum": "d34ffb323a3d69bf7b020f2f9be62bc63b79a1ccbb42c557b1dd73e419efe914"
+      "lastModified": "2026-08-08T15:49:53.757Z",
+      "checksum": "8fbb1f306cb9efc2f8c07d99fc9549dca4ad8dc95a57c2a51900ef18a4772ec3"
     }
   },
   {
@@ -207,7 +210,10 @@
       "ModelSelectionMode": "Agent",
       "InvocationMode": "Sub-Agent",
       "ExposeAsAction": false,
-      "IconClass": "fa-solid fa-folder-open"
+      "IconClass": "fa-solid fa-folder-open",
+      "AgentTypePromptParams": {
+        "enableTaskGraphs": true
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
@@ -354,8 +360,8 @@
       "ID": "63070640-7E8E-4953-B13C-9F840D6BDD81"
     },
     "sync": {
-      "lastModified": "2026-03-13T19:10:49.875Z",
-      "checksum": "d7c0be78b50d239b8dfd77c39dd7abe4f3fdf6621cf4f8681e0cf7d23283c3e2"
+      "lastModified": "2026-08-08T15:49:53.692Z",
+      "checksum": "6cd8f51d4dded600439162078e096c49e09b82839d5196167e132b613979d323"
     }
   },
   {
@@ -368,7 +374,10 @@
       "ModelSelectionMode": "Agent",
       "InvocationMode": "Sub-Agent",
       "ExposeAsAction": false,
-      "IconClass": "fa-solid fa-globe"
+      "IconClass": "fa-solid fa-globe",
+      "AgentTypePromptParams": {
+        "enableTaskGraphs": true
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
@@ -445,8 +454,8 @@
       "ID": "5DDF4F5D-B977-42B0-BED5-4A2F0021BC58"
     },
     "sync": {
-      "lastModified": "2026-03-13T19:10:49.892Z",
-      "checksum": "6aaa50d25ccf883913e0e4dbdfd0259666608a33a9a89cf28ac76d8418a3d732"
+      "lastModified": "2026-08-08T15:49:53.725Z",
+      "checksum": "ae8ebbd7c0a94e7d7303367e7af39d6f7579e7cd0ddaa1770737334451b9243a"
     }
   },
   {
@@ -473,7 +482,10 @@
       ],
       "FinalPayloadValidation": "@file:validation/research-agent-validation.json",
       "FinalPayloadValidationMode": "Retry",
-      "FinalPayloadValidationMaxRetries": 3
+      "FinalPayloadValidationMaxRetries": 3,
+      "AgentTypePromptParams": {
+        "enableTaskGraphs": true
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
@@ -528,7 +540,10 @@
               "synthesis.*",
               "report.*",
               "visualizations.*"
-            ]
+            ],
+            "AgentTypePromptParams": {
+              "enableTaskGraphs": true
+            }
           },
           "relatedEntities": {
             "MJ: AI Agent Prompts": [
@@ -695,8 +710,8 @@
             "ID": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
           },
           "sync": {
-            "lastModified": "2026-03-13T19:10:50.255Z",
-            "checksum": "eb7f907d6895c8460da771ea6d7095bdd877fd8eb2684d2bf0e81cbce2d1dfbd"
+            "lastModified": "2026-08-08T15:49:53.842Z",
+            "checksum": "9b18921ec5ff2811e2901d114fa199d8a850f7908d6a9e0ea8bf9278ab7fa3f6"
           }
         }
       ],
@@ -846,8 +861,8 @@
       "ID": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
     },
     "sync": {
-      "lastModified": "2026-07-07T15:18:38.953Z",
-      "checksum": "ad8c6b8a11df2da6e4eb6b9017cb3d5f9ce8e3578188c5f7367cd91b258b70ba"
+      "lastModified": "2026-08-08T15:49:53.783Z",
+      "checksum": "6ae771fbef62e753c923698b029202b5f4322604923fb6fac03e8d5fdad74f87"
     }
   }
 ]

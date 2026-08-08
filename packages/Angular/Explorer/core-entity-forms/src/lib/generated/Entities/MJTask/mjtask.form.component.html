@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="relationshipsOwnership"
         SectionName="Relationships & Ownership"
-        Icon="fa fa-users"
+        Icon="fa fa-truck"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -95,7 +95,7 @@
     <mj-collapsible-panel
         SectionKey="taskDetails"
         SectionName="Task Details"
-        Icon="fa fa-tasks"
+        Icon="fa fa-align-left"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -137,7 +137,7 @@
     <mj-collapsible-panel
         SectionKey="timelineMilestones"
         SectionName="Timeline & Milestones"
-        Icon="fa fa-calendar-alt"
+        Icon="fa fa-calendar"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -160,6 +160,65 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="CompletedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Task Execution Data Section -->
+    <mj-collapsible-panel
+        SectionKey="taskExecutionData"
+        SectionName="Task Execution Data"
+        Icon="fa fa-terminal"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="InputPayload"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="OutputPayload"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ErrorMessage"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AgentRunID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ClaimedBy"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ClaimExpiresAt"
             Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -199,10 +258,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Task Dependencies (Task ID) Section -->
+    <!-- Task Dependencies (Task) Section -->
     <mj-collapsible-panel
         SectionKey="mJTaskDependenciesTaskID"
-        SectionName="Task Dependencies (Task ID)"
+        SectionName="Task Dependencies (Task)"
         Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"
@@ -224,10 +283,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Task Dependencies (Depends On Task ID) Section -->
+    <!-- Task Dependencies (Depends On Task) Section -->
     <mj-collapsible-panel
         SectionKey="mJTaskDependenciesDependsOnTaskID"
-        SectionName="Task Dependencies (Depends On Task ID)"
+        SectionName="Task Dependencies (Depends On Task)"
         Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"

@@ -754,6 +754,10 @@ Builds and pushes multi-platform Docker images (`linux/amd64`, `linux/arm64`):
 
 Installs the workspace (`pnpm install --frozen-lockfile` — the workflow auto-detects npm vs pnpm per branch, since `lts/5` predates the cutover) → `pnpm run build` → `npx typedoc` → installs and unit-tests [`docs-site/`](docs-site) (its own npm package with its own lockfile) → ingest + Astro build → copies the TypeDoc output to `dist/api` → deploys to GitHub Pages. Publishes **https://docs.memberjunction.org** (custom domain via [`docs-site/public/CNAME`](docs-site/public/CNAME), served at the domain root with `DOCS_BASE: /`; the old `memberjunction.github.io/MJ/` now redirects here). The API reference for every shipped package (`typedoc.json` `entryPoints: ["packages/**"]`, excluding CLI/CodeGen/MJAPI/MJExplorer and generated packages) is attached at **https://docs.memberjunction.org/api**.
 
+> 🔒 **It does not build the ref that triggered it — it builds `lts/5`.** The checkout step pins `ref: ${{ github.event.inputs.ref || 'lts/5' }}`, so every trigger except a manual dispatch with an explicit `ref` publishes the **certified LTS line**, whatever fired it. That is deliberate: without the pin, `workflow_run` events check out the repo *default* branch (`next`), which during the 6.x era would publish Edge dev content as the public docs.
+>
+> **The trap is that it still reports green.** A push to `main` touching `releases/**`, `guides/**` or this file fires a deploy that succeeds — having rebuilt lts/5 and ignored your change. So **6.x content does not reach the public site at all right now**, including Edge release notes (Step 11). To publish a change during the Edge era it must reach `lts/5`; to preview one, dispatch manually with `ref` set. Remove the pin when versioned docs (`/v5`, `/v6`) land — the long-standing fix is to resolve the ref from [`release-lines.json`](release-lines.json) rather than hardcode it.
+
 **The site is compiled from the repo — there is no site to edit.** [`docs-site/scripts/ingest.mjs`](docs-site/scripts/ingest.mjs) turns every `guides/*.md`, every `packages/**/README.md`, and five root docs (this file among them) into pages; repo-relative links are rewritten to site links when the target is itself a page and to commit-pinned GitHub links otherwise. Nothing here is a per-release step — but it does mean **a stale README ships as stale public documentation**, and that copy-pasting prose into `docs-site/` is always the wrong fix. Correct the source file instead.
 
 > This workflow failed silently on every release from v5.45.1 through v5.48.0 — the published docs sat weeks stale while each release otherwise looked green, because `docs.yml` is downstream of the tag and nobody checks it. **Look at its result, not just `publish.yml`'s.**
@@ -768,9 +772,10 @@ Installs the workspace (`pnpm install --frozen-lockfile` — the workflow auto-d
 - [ ] **Dist-tags landed on the right channel**: `npm view @memberjunction/core dist-tags` — `edge` moved to the new version, **`latest` did not move** (it moves only at certification)
 - [ ] **GitHub Release exists** for the new tag, notes auto-generated, marked prerelease (edge) and **not** latest
 - [ ] `docker.yml` behaved for the channel: on an **Edge** release its `api` job is **skipped** (correct — Docker `:latest` tracks certified builds); on a certified build dispatched manually, images pushed
-- [ ] `docs.yml` completes successfully (https://docs.memberjunction.org rebuilt, `/api` included)
+- [ ] `docs.yml` completes successfully (https://docs.memberjunction.org rebuilt, `/api` included). **Green here means "the LTS site rebuilt"** — it builds `lts/5`, not your release, so it is not evidence that any 6.x doc change went live (see 10c)
 - [ ] `main` auto-merged back into `next` (includes the `pnpm-lock.yaml` refresh). If it **aborted** on a conflict, the release still succeeded — finish the back-merge by hand per 10a step 9
 - [ ] **`next` branch build passes** after the auto-merge — the lockfile and version updates can sometimes cause issues, so always verify `build.yml` passes on `next` after a release
+- [ ] **Canonical release notes written** — `releases/v<version>.md` committed to `next` via `/notes` (Step 11). Nothing produces this file automatically, and no check fails without it
 
 ---
 
@@ -784,12 +789,26 @@ Installs the workspace (`pnpm install --frozen-lockfile` — the workflow auto-d
 
 ### Step 11: Release record & comms
 
-**Routine Edge releases need no manual changelog work.** The release record is created automatically, in two layers:
+The release record has three layers. **Two are automatic. The third is hand-written, is the canonical one, and is the only part of this step that is actual work.**
 
 1. **Per-package `CHANGELOG.md`** — `changeset version` (inside `publish.yml`) turns each PR's `.changeset/*.md` summary into changelog bullets in every affected package.
 2. **The GitHub Release** — `publish.yml` runs `gh release create --generate-notes`, so GitHub compiles a "What's Changed" list from every merged PR since the previous tag. Edge builds are flagged prerelease and never marked latest.
+3. **[`releases/v<version>.md`](releases/) — the canonical release notes.** Not optional, and not produced by any workflow.
 
-Your only job here is the verification already in the Post-Merge Checklist — and remembering the consequence: **release-note quality is exactly PR-title quality plus changeset-summary quality.** Nobody edits notes at release time, so a lazy PR title ships verbatim in the public notes.
+**Why the automatic layers don't cover it.** Both are machine-compiled from PR titles, so their quality is exactly PR-title quality plus changeset-summary quality — a lazy PR title ships verbatim. [`releases/README.md`](releases/README.md) names the markdown file, not the GitHub Release, as *"the canonical release notes … this directory is the record"*, and [`docs-site/scripts/ingest.mjs`](docs-site/scripts/ingest.mjs) renders every file in that directory at **/releases/**, newest-first with an auto-generated index, no site change needed.
+
+**Write it after `publish.yml` succeeds, not during prep.** The filename carries the published version and `changeset version` doesn't compute that until publish time. It lands as a small PR into `next`:
+
+```bash
+npm view @memberjunction/core dist-tags     # the version that actually shipped
+# then, in Claude Code:  /notes
+```
+
+The `/notes` skill ([`.claude/commands/notes.md`](.claude/commands/notes.md)) builds the file from the diff, the commit messages and the `.changeset/` entries; its H1 (a 6–10 word summary) becomes part of the page title — `v6.1.0-edge.0: <summary>`. Template lives in [`releases/README.md`](releases/README.md). It writes the file but does not commit — review it, then commit and PR it yourself.
+
+> **During the Edge era this file will not appear on the public site, and that is expected — write it anyway.** `docs.yml` checks out `lts/5` on every trigger except a manual dispatch with an explicit `ref`, so the push to `main` touching `releases/**` fires a deploy that goes **green while rebuilding the LTS site**. The 6.x notes are committed but unpublished until versioned docs (`/v5`, `/v6`) land or the pin moves; they render retroactively when that happens. See 10c.
+>
+> **Line releases are the opposite case.** `lts/5` *is* what the site builds, so a line release's notes go live on push — but they must reach the line branch to do it (PR into `next`, then the `backport lts/5` label). Notes that stop at `next` publish nothing.
 
 **Certified builds get the human layer.** At certification (runbook op. 4): the certified build's GitHub Release is marked **latest**, retitled with "(LTS)", and linked to its scorecard (`certifications/<version>.md`); the certification announcement follows process doc Appendix A.3. That is a certification step, not a per-release one.
 
@@ -813,7 +832,7 @@ Your only job here is the verification already in the Post-Merge Checklist — a
 | `release-lines-guard.yml` | PRs touching, and pushes changing, `release-lines.json` | Status-transition legality; direct pushes may change mechanical fields only |
 | `release-test.yml` | Manual dispatch | Release validation suite against a chosen branch |
 | `docker.yml` | After `publish.yml` | Build & push Docker images |
-| `docs.yml` | After `publish.yml`, doc pushes to `main`, manual dispatch | Build & deploy docs.memberjunction.org (site + `/api`) |
+| `docs.yml` | After `publish.yml`, doc pushes to `main`, manual dispatch | Build & deploy docs.memberjunction.org (site + `/api`). **Always builds `lts/5`**, not the triggering ref — see 10c |
 | `docs-site-ci.yml` | PR touching a docs source | Fast (~2 min) "does the docs site still build" check |
 | `generate-release-notes.yml` | PR to `main` | Auto-generate PR description |
 | `integration.yml` | PR to `next` + push to `next` | Deterministic integration tier against a fresh SQL Server |
@@ -822,7 +841,8 @@ Your only job here is the verification already in the Post-Merge Checklist — a
 
 | Artifact | Location | Produced by |
 |---|---|---|
-| **Release notes** | The GitHub Release body (auto-generated "What's Changed" from merged PRs) | `publish.yml` (`gh release create --generate-notes`); on the manual-PR path, `generate-release-notes.yml` additionally writes structured notes into the PR body |
+| **Release notes (canonical)** | [`releases/v<version>.md`](releases/) in this repo — rendered at [docs.memberjunction.org/releases/](https://docs.memberjunction.org/releases/) | **Hand-written via `/notes` in Step 11.** No workflow produces it |
+| Release notes (auto, secondary) | The GitHub Release body (auto-generated "What's Changed" from merged PRs) | `publish.yml` (`gh release create --generate-notes`); `generate-release-notes.yml` additionally writes structured notes into the release PR body |
 | Per-package changelogs | `packages/*/CHANGELOG.md` | changesets, in the `RELEASING: Releasing N package(s)` commit, from each PR's changeset summary |
 | npm packages | `edge` / `lts-<line>` dist-tags — **`latest` moves only at certification** | `publish.yml` / `publish-lts.yml`; `ci/dist-tag-all.mjs` at certification |
 | Git tag `vX.Y.Z[-edge.N]` | repo tags | `ci/commit_push.mjs` |
@@ -832,7 +852,8 @@ Your only job here is the verification already in the Post-Merge Checklist — a
 | Certification scorecards | `certifications/<version>.md`, linked from the certified GitHub Release | Certification owner |
 
 ```bash
-gh release view v6.1.0-edge.0 --json body --jq .body   # the release notes
+cat releases/v6.1.0-edge.0.md                          # the canonical release notes
+gh release view v6.1.0-edge.0 --json body --jq .body   # the auto-generated GitHub Release body
 git show <releasing-commit>:packages/MJCore/CHANGELOG.md | head -40
 git log v5.50.0..v5.51.0 --oneline | wc -l              # raw commit count for a release
 ```

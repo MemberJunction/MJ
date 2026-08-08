@@ -1,0 +1,29 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT72 - Entity Graph (related-record collections)",
+    "Description": "Live-database proof of DeclareRelatedRecords / RelatedRecordCollection composite graph saves, against the MJ: Lists -> MJ: List Details header/lines pair (NOT NULL ListID FK plus a numeric Sequence column, so one pair covers FK stamping, ordering and sequence renumbering). The feature's unit coverage runs entirely against a mock provider and can only prove the save PLAN is built correctly; these checks prove the plan reaches a real database. EG1: a declared-but-empty collection is inert — the parent still takes the ordinary single-row path on both insert and update, which is what makes the declaration safe to register process-wide. EG2: parent plus three new related records persist from ONE Save() with the FK stamped from the parent's key and Sequence assigned 1,2,3. EG3: Load 'explicit' does not populate with the parent and materialises in OrderBy order when asked. EG4: an edit to an EXISTING related record persists (the old==new dirty-tracking regression that silently dropped edits). EG5: OnRemove 'delete' deletes the row and renumbers the survivors from 1. EG6: a CLEAN parent with a new related record still saves — the Dirty rollup, without which _InnerSave returned success and wrote nothing. EG7: a related record that cannot be written rolls the WHOLE graph back including the parent's committed field change, which is the atomicity claim a mock provider cannot test. EG8: RunView IncludeRelatedRecords hydrates every returned row with one batched query per collection, correctly distributed per parent and leaving nothing dirty. All eight mutate and carry RequiresMutation; this bundle opts them in via runMutationTests because the bundle creates and tears down its own prefixed, tagged MJ: Lists / MJ: List Details rows in FK-safe order and never touches a pre-existing record — so the mutating checks bind in CI's throwaway database rather than passing vacuously. RUN_MUTATION_TESTS=1 still gates them for any bundle that does not opt in.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Empty collections stay inert; a parent and its related records persist, load, edit, remove, renumber and roll back as one unit; batched hydration is 1+K and distributes correctly."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "entity-graph",
+          "runMutationTests": true
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "1C47D181-BCBB-47F9-9C76-6961F5E81438"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.662Z",
+    "checksum": "a22171c858a4feec1f7e0360acdc06dcf1ff290ef68083b8c541058aff3442e4"
+  }
+}

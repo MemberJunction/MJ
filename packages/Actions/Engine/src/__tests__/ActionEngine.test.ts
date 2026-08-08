@@ -374,17 +374,101 @@ describe('ActionEngineServer', () => {
     });
 
     describe('RunSingleFilter', () => {
-        it('should return true (stub implementation)', async () => {
-            const result = await (engine as unknown as Record<string, Function>)['RunSingleFilter']({} as never, {} as unknown as Record<string, Function>);
-            expect(result).toBe(true);
+        // Minimal filter-row shape the engine reads: ID, Code, __mj_UpdatedAt.
+        const makeFilter = (code: string, id = 'filter-1') => ({
+            ID: id,
+            Code: code,
+            __mj_UpdatedAt: new Date('2026-01-01T00:00:00Z'),
+        });
+        const runFilter = (filter: Record<string, unknown>, params: Record<string, unknown> = {}) =>
+            (engine as unknown as Record<string, Function>)['RunSingleFilter'](params, filter);
+
+        it('should allow the action when filter code returns true', async () => {
+            await expect(runFilter(makeFilter('return true;'))).resolves.toBe(true);
+        });
+
+        it('should prevent the action when filter code returns false', async () => {
+            await expect(runFilter(makeFilter('return false;'))).resolves.toBe(false);
+        });
+
+        it('should read the verdict from ActionFilterContext.result when code does not return', async () => {
+            await expect(runFilter(makeFilter('ActionFilterContext.result = true;'))).resolves.toBe(true);
+        });
+
+        it('should expose params and filter on the execution context', async () => {
+            const params = { Action: { Name: 'Test Action' } };
+            const code = 'return ActionFilterContext.params.Action.Name === "Test Action" && ActionFilterContext.filter.ID === "filter-1";';
+            await expect(runFilter(makeFilter(code), params)).resolves.toBe(true);
+        });
+
+        it('should support async filter code', async () => {
+            await expect(runFilter(makeFilter('return await Promise.resolve(true);'))).resolves.toBe(true);
+        });
+
+        it('should fail closed and log when filter code throws', async () => {
+            await expect(runFilter(makeFilter('throw new Error("boom");'))).resolves.toBe(false);
+            expect(LogErrorEx).toHaveBeenCalled();
+        });
+
+        it('should fail closed and log on a non-boolean verdict', async () => {
+            await expect(runFilter(makeFilter('return "yes";'))).resolves.toBe(false);
+            expect(LogError).toHaveBeenCalled();
+        });
+
+        it('should fail closed and log when Code is empty and no subclass is registered', async () => {
+            await expect(runFilter(makeFilter('   '))).resolves.toBe(false);
+            expect(LogError).toHaveBeenCalled();
+        });
+
+        it('should recompile when the filter row version changes', async () => {
+            const first = makeFilter('return true;', 'filter-2');
+            await expect(runFilter(first)).resolves.toBe(true);
+            const edited = { ...first, Code: 'return false;', __mj_UpdatedAt: new Date('2026-02-01T00:00:00Z') };
+            await expect(runFilter(edited)).resolves.toBe(false);
+        });
+
+        it('should serve the cached compilation for an unchanged row version', async () => {
+            const filter = makeFilter('return true;', 'filter-3');
+            await expect(runFilter(filter)).resolves.toBe(true);
+            // Same ID + same __mj_UpdatedAt → the cached compilation runs even though Code text changed.
+            const sameVersion = { ...filter, Code: 'return false;' };
+            await expect(runFilter(sameVersion)).resolves.toBe(true);
+        });
+
+        it('should let a registered BaseActionFilter subclass win over inline Code', async () => {
+            const subclassRun = vi.fn().mockResolvedValue(false);
+            mockClassFactory.GetAllRegistrations.mockReturnValueOnce([{ SubClass: class {} }]);
+            mockClassFactory.CreateInstance.mockReturnValueOnce({ Run: subclassRun });
+
+            await expect(runFilter(makeFilter('return true;', 'filter-4'))).resolves.toBe(false);
+            expect(subclassRun).toHaveBeenCalled();
+        });
+
+        it('should coerce a non-boolean subclass verdict to false', async () => {
+            mockClassFactory.GetAllRegistrations.mockReturnValueOnce([{ SubClass: class {} }]);
+            mockClassFactory.CreateInstance.mockReturnValueOnce({ Run: vi.fn().mockResolvedValue('truthy') });
+
+            await expect(runFilter(makeFilter('return true;', 'filter-5'))).resolves.toBe(false);
         });
     });
+
+    /**
+     * Mocks a generated related-record collection.
+     *
+     * `MJActionEntityExtended.Params` is no longer a plain array — it is a `DeclareRelatedRecords`
+     * collection read through `.Items` (and itself iterable, which callers that spread
+     * `[...action.Params.Items]` rely on). Mocking it as a bare array is what made these tests fail
+     * with `Cannot read properties of undefined (reading 'map')` once the engine moved to `.Items`.
+     */
+    function relatedRecords<T>(items: T[]): { Items: T[]; length: number; [Symbol.iterator](): Iterator<T> } {
+        return { Items: items, length: items.length, [Symbol.iterator]: () => items[Symbol.iterator]() };
+    }
 
     describe('GetActionParamsForAction', () => {
         it('should map Scalar ValueType to default value directly', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Scalar', DefaultValue: 'hello', Type: 'Input' }],
+                Params: relatedRecords([{ Name: 'param1', ValueType: 'Scalar', DefaultValue: 'hello', Type: 'Input' }]),
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -394,7 +478,7 @@ describe('ActionEngineServer', () => {
         it('should parse JSON for Simple Object ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: '{"key":"val"}', Type: 'Input' }],
+                Params: relatedRecords([{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: '{"key":"val"}', Type: 'Input' }]),
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -404,7 +488,7 @@ describe('ActionEngineServer', () => {
         it('should use raw string for Simple Object when JSON parse fails', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: 'not-json', Type: 'Input' }],
+                Params: relatedRecords([{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: 'not-json', Type: 'Input' }]),
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -414,7 +498,7 @@ describe('ActionEngineServer', () => {
         it('should pass through BaseEntity Sub-Class ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'BaseEntity Sub-Class', DefaultValue: 'entity-ref', Type: 'Input' }],
+                Params: relatedRecords([{ Name: 'param1', ValueType: 'BaseEntity Sub-Class', DefaultValue: 'entity-ref', Type: 'Input' }]),
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -424,7 +508,7 @@ describe('ActionEngineServer', () => {
         it('should pass through Other ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Other', DefaultValue: 'other-val', Type: 'Both' }],
+                Params: relatedRecords([{ Name: 'param1', ValueType: 'Other', DefaultValue: 'other-val', Type: 'Both' }]),
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -434,7 +518,7 @@ describe('ActionEngineServer', () => {
         it('should log error and use default for unknown ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'UnknownType', DefaultValue: 'fallback', Type: 'Output' }],
+                Params: relatedRecords([{ Name: 'param1', ValueType: 'UnknownType', DefaultValue: 'fallback', Type: 'Output' }]),
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -445,10 +529,10 @@ describe('ActionEngineServer', () => {
         it('should handle multiple params', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [
+                Params: relatedRecords([
                     { Name: 'p1', ValueType: 'Scalar', DefaultValue: 'a', Type: 'Input' },
                     { Name: 'p2', ValueType: 'Scalar', DefaultValue: 'b', Type: 'Output' },
-                ],
+                ]),
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -458,7 +542,7 @@ describe('ActionEngineServer', () => {
         });
 
         it('should handle empty params array', () => {
-            const action = { Name: 'TestAction', Params: [] };
+            const action = { Name: 'TestAction', Params: relatedRecords([]) };
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
             expect(result).toEqual([]);
         });

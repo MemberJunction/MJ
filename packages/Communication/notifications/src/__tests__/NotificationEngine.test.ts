@@ -297,4 +297,66 @@ describe('NotificationEngine', () => {
       expect(result.deliveryChannels.sms).toBe(false);
     });
   });
+
+  describe('SendNotification - allowedDeliveryChannels (the ceiling)', () => {
+    // For callers that carry their own per-record channel toggles — a Scheduled Job's
+    // NotifyViaEmail/NotifyViaInApp — where the job's author and the recipient BOTH have a say.
+    // The delivered set has to be the intersection of the two.
+
+    // vi.clearAllMocks() clears CALLS but not implementations, so a preference set by one test
+    // leaks into the next. Start each of these from "no preference recorded".
+    beforeEach(() => {
+      mockUserInfoEngineInstance.GetUserPreferenceForType.mockReturnValue(null);
+    });
+
+    const send = (allowedDeliveryChannels: SendNotificationParams['allowedDeliveryChannels']) =>
+      engine.SendNotification(
+        { userId: 'user-1', typeNameOrId: 'System Alert', title: 'Alert!', message: 'System message', allowedDeliveryChannels },
+        contextUser,
+      );
+
+    it('subtracts a channel the caller closed, even though the type defaults it on', async () => {
+      // System Alert defaults email ON; a job configured with NotifyViaEmail=false must not email.
+      const result = await send({ inApp: true, email: false, sms: false });
+      expect(result.deliveryChannels.inApp).toBe(true);
+      expect(result.deliveryChannels.email).toBe(false);
+    });
+
+    it('CANNOT escalate — an open ceiling never turns a channel back on', async () => {
+      // The property that makes this safe to expose: a caller cannot use it to bypass an opt-out.
+      mockUserInfoEngineInstance.GetUserPreferenceForType.mockReturnValue({
+        Enabled: false, InAppEnabled: null, EmailEnabled: null, SMSEnabled: null,
+      });
+
+      const result = await send({ inApp: true, email: true, sms: true });
+      expect(result.deliveryChannels).toEqual({ inApp: false, email: false, sms: false });
+    });
+
+    it('applies over forceDeliveryChannels too — a ceiling is a ceiling', async () => {
+      const result = await engine.SendNotification({
+        userId: 'user-1',
+        typeNameOrId: 'Agent Completion',
+        title: 'Test',
+        message: 'Test',
+        forceDeliveryChannels: { inApp: true, email: true, sms: true },
+        allowedDeliveryChannels: { email: false },
+      }, contextUser);
+
+      expect(result.deliveryChannels.inApp).toBe(true);
+      expect(result.deliveryChannels.email).toBe(false);
+      expect(result.deliveryChannels.sms).toBe(true);
+    });
+
+    it('leaves an omitted channel to normal resolution', async () => {
+      // Partial means "no opinion", not "off" — otherwise every caller would have to restate
+      // channels it does not care about.
+      const result = await send({ email: false });
+      expect(result.deliveryChannels.inApp).toBe(true);
+    });
+
+    it('changes nothing when absent', async () => {
+      const result = await send(undefined);
+      expect(result.deliveryChannels).toEqual({ inApp: true, email: true, sms: false });
+    });
+  });
 });

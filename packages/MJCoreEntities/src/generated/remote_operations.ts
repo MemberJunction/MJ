@@ -535,6 +535,78 @@ export interface RecordProcessRunNowOutput {
     errorMessage?: string;
 }
 
+/** Input for the task-graph control operations. */
+export interface TaskGraphControlInput {
+    /** Parent task ID identifying the graph. */
+    parentTaskID: string;
+}
+
+/** Output of the task-graph control operations — the graph's status after the action. */
+export interface TaskGraphControlOutput {
+    success: boolean;
+    /** The parent task's status after the action. */
+    status?: string;
+    errorMessage?: string;
+}
+
+/** Output of `TaskGraph.GetStatus`. */
+export interface TaskGraphStatusOutput {
+    success: boolean;
+    /** Rolled-up parent status: In Progress | Complete | Failed | Blocked | Cancelled. */
+    status?: string;
+    /** Percent complete, counting only tasks that actually completed. */
+    percentComplete?: number;
+    /** Per-task snapshot. */
+    tasks?: Array<{
+        taskID: string;
+        name: string;
+        status: string;
+        agentRunID?: string;
+        errorMessage?: string;
+    }>;
+    errorMessage?: string;
+}
+
+/** Input for `TaskGraph.RetryTask`. */
+export interface TaskGraphRetryInput {
+    /** The failed task to retry. */
+    taskID: string;
+}
+
+/** Input for `TaskGraph.Submit`. */
+export interface TaskGraphSubmitInput {
+    /** The graph to submit, as a `TaskGraphSpec`. */
+    spec: {
+        workflowName: string;
+        reasoning?: string;
+        tasks: Array<{
+            tempId: string;
+            name: string;
+            description: string;
+            agentName?: string;
+            assignToUser?: boolean;
+            dependsOn: string[];
+            inputPayload?: Record<string, unknown>;
+        }>;
+        continuation?: 'message' | 'reinvoke' | 'none';
+        durable?: boolean;
+    };
+    /** Environment the tasks belong to. */
+    environmentID: string;
+    /** Conversation this graph answers, when submitted from a conversational channel. */
+    conversationDetailID?: string;
+}
+
+/** Output of `TaskGraph.Submit`. */
+export interface TaskGraphSubmitOutput {
+    /** True when the graph was validated and persisted. */
+    success: boolean;
+    /** Parent task representing the whole graph — the handle for status, cancel and retry. */
+    parentTaskID?: string;
+    /** Every validation failure, not just the first, when the graph was rejected. */
+    errorMessage?: string;
+}
+
 /** Input for `Template.Run`. */
 export interface TemplateRunInput {
     /** The `MJ: Templates` ID to render. */
@@ -549,6 +621,57 @@ export interface TemplateRunOutput {
     output: string;
     /** Wall-clock render time in milliseconds. */
     executionTimeMs?: number;
+}
+
+/** Input for `Workflow.Save`. */
+export interface WorkflowSaveInput {
+    /** The workflow to save, as a `WorkflowSpec`. */
+    spec: {
+        name: string;
+        description?: string;
+        status: 'Active' | 'Paused' | 'Draft';
+        graph: {
+            workflowName: string;
+            reasoning?: string;
+            tasks: Array<{
+                tempId: string;
+                name: string;
+                description: string;
+                agentName?: string;
+                assignToUser?: boolean;
+                dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional' }>;
+                inputPayload?: Record<string, unknown>;
+            }>;
+            continuation?: 'message' | 'reinvoke' | 'none';
+            durable?: boolean;
+        };
+        triggers: Array<
+            | { type: 'EntityEvent'; entityName: string; invocationType: string; filter?: string; scopeEntityName?: string; scopeRecordID?: string }
+            | { type: 'Schedule'; cron: string; timezone?: string }
+            | { type: 'OnDemand' }>;
+        notifications?: { condition: 'Always' | 'OnFailure' | 'OnChange'; recipients: string[] };
+    };
+}
+
+/** Output of `Workflow.Save`. */
+export interface WorkflowSaveOutput {
+    /** True when the workflow was validated and every substrate reconciled. */
+    success: boolean;
+    /** The Flow agent the workflow's graph persisted as — the handle for everything downstream. */
+    agentID?: string;
+    /** Scheduled Jobs created, updated or disabled by this save. */
+    scheduledJobIDs?: string[];
+    /** Triggers the spec asked for that this build cannot yet reconcile, stated rather than dropped. */
+    unreconciled?: string[];
+    /** Every validation failure, not just the first, when the workflow was rejected. */
+    errorMessage?: string;
+}
+
+/** Output of `Workflow.Validate`. */
+export interface WorkflowValidateOutput {
+    valid: boolean;
+    /** One entry per problem, each carrying a machine-readable code. */
+    errors?: Array<{ code: string; message: string; triggerIndex?: number }>;
 }
 
 // ============================================================
@@ -791,6 +914,70 @@ export class RecordProcessRunNowOperation extends BaseRemotableOperation<RecordP
 }
 
 // ============================================================
+// TaskGraph.Cancel — Cancel Task Graph
+// ============================================================
+/**
+ * Cancel Task Graph
+ * Cancel a task graph and every task in it that has not already settled. Children are cancelled before the parent so the dispatcher cannot pick up pending work mid-cancel. Terminal tasks are left untouched. Implemented by TaskGraphCancelOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.Cancel'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphCancelOperation extends BaseRemotableOperation<TaskGraphControlInput, TaskGraphControlOutput> {
+    public readonly OperationKey = "TaskGraph.Cancel";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.GetStatus — Get Task Graph Status
+// ============================================================
+/**
+ * Get Task Graph Status
+ * Return a snapshot of a task graph's progress — the parent's rolled-up status and per-task states — without waiting for anything. This is how a client, an agent, or an external caller observes a running graph now that execution is durable and nobody holds a request open. Implemented by TaskGraphGetStatusOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.GetStatus'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphGetStatusOperation extends BaseRemotableOperation<TaskGraphControlInput, TaskGraphStatusOutput> {
+    public readonly OperationKey = "TaskGraph.GetStatus";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.RetryTask — Retry Task
+// ============================================================
+/**
+ * Retry Task
+ * Return a failed task to Pending so the dispatcher runs it again, and clear any dependents it had Blocked. Unblocking is not optional: retrying a task while its dependents stay Blocked leaves the graph exactly as stuck as before. Implemented by TaskGraphRetryTaskOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.RetryTask'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphRetryTaskOperation extends BaseRemotableOperation<TaskGraphRetryInput, TaskGraphControlOutput> {
+    public readonly OperationKey = "TaskGraph.RetryTask";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.Submit — Submit Task Graph
+// ============================================================
+/**
+ * Submit Task Graph
+ * Validate and durably persist a dependency-ordered task graph, returning as soon as it is safe. Does NOT wait for execution: the durable dispatcher runs the graph independently, so a submitted graph outlives the submitting request, agent run, and server. Producer-agnostic — an agent, deterministic code, or a UI can all submit. Implemented by TaskGraphSubmitOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.Submit'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphSubmitOperation extends BaseRemotableOperation<TaskGraphSubmitInput, TaskGraphSubmitOutput> {
+    public readonly OperationKey = "TaskGraph.Submit";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
 // Template.Run — Run Template
 // ============================================================
 /**
@@ -803,6 +990,38 @@ export class TemplateRunOperation extends BaseRemotableOperation<TemplateRunInpu
     public readonly OperationKey = "Template.Run";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "template:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// Workflow.Save — Save Workflow
+// ============================================================
+/**
+ * Save Workflow
+ * Validate and persist a workflow — its graph of steps AND the triggers that fire it — by reconciling the substrates that already exist (a Flow agent for the graph, Scheduled Jobs for schedules). Creates no new storage: there is no Workflow table, because a second definition of a scheduled thing would give the scheduler two masters. Producer-agnostic — an agent over MCP, an Action, or the workflow editor all call this. Implemented by WorkflowSaveServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Workflow.Save'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkflowSaveOperation extends BaseRemotableOperation<WorkflowSaveInput, WorkflowSaveOutput> {
+    public readonly OperationKey = "Workflow.Save";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workflow:write";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// Workflow.Validate — Validate Workflow
+// ============================================================
+/**
+ * Validate Workflow
+ * Check a workflow for problems without saving it. Runs the identical validation Workflow.Save runs, so a workflow that validates here cannot be rejected for a different reason on save. Exists so an agent drafting a workflow can iterate before committing anything — the draft-then-confirm shape dry-run and Plan Mode already established. Implemented by WorkflowValidateServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Workflow.Validate'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkflowValidateOperation extends BaseRemotableOperation<WorkflowSaveInput, WorkflowValidateOutput> {
+    public readonly OperationKey = "Workflow.Validate";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
 }
 
