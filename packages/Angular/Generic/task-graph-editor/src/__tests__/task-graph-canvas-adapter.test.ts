@@ -54,6 +54,37 @@ const diamond = (): TaskGraphSpec => spec({
     ],
 });
 
+describe('SpecToNodes — geometry the spec cannot hold', () => {
+    // TaskGraphSpec is an execution contract with no layout field. Before this, every projection
+    // reset each node to the origin, so the component had to re-run auto-layout after EVERY edit —
+    // and auto-layout ends in zoom-to-fit, which is why adding a step yanked the viewport. These
+    // tests pin the carrier that makes arranging-once possible.
+    it('honours a caller-supplied position', () => {
+        const positions = new Map([['a', { X: 120, Y: 40 }]]);
+        const node = SpecToNodes(spec(), undefined, positions).find((n) => n.ID === 'a')!;
+        expect(node.Position).toEqual({ X: 120, Y: 40 });
+    });
+
+    it('falls back to the origin for a task it has never seen', () => {
+        const positions = new Map([['a', { X: 120, Y: 40 }]]);
+        const node = SpecToNodes(spec(), undefined, positions).find((n) => n.ID === 'b')!;
+        expect(node.Position).toEqual({ X: 0, Y: 0 });
+    });
+
+    it('copies the position rather than aliasing the caller’s object', () => {
+        // The canvas mutates node.Position in place during a drag; sharing the reference would let
+        // that write back into the map and quietly defeat the next projection's comparison.
+        const shared = { X: 5, Y: 5 };
+        const node = SpecToNodes(spec(), undefined, new Map([['a', shared]])).find((n) => n.ID === 'a')!;
+        node.Position.X = 999;
+        expect(shared.X).toBe(5);
+    });
+
+    it('still projects at the origin when no positions are supplied', () => {
+        expect(SpecToNodes(spec()).every((n) => n.Position.X === 0 && n.Position.Y === 0)).toBe(true);
+    });
+});
+
 describe('SpecToNodes', () => {
     it('projects one node per task', () => {
         expect(SpecToNodes(spec())).toHaveLength(2);

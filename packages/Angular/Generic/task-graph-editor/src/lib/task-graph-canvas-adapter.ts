@@ -21,7 +21,7 @@ import {
     type TaskGraphSpecNode,
     type TaskGraphDependency,
 } from '@memberjunction/ai-core-plus';
-import type { FlowConnection, FlowNode, FlowNodeStatus, FlowNodeTypeConfig } from '@memberjunction/ng-flow-editor';
+import type { FlowConnection, FlowNode, FlowNodeStatus, FlowNodeTypeConfig, FlowPosition } from '@memberjunction/ng-flow-editor';
 
 /**
  * The kinds of step a `TaskGraphSpec` can express.
@@ -200,11 +200,25 @@ function edgeId(fromTempId: string, toTempId: string): string {
  * geometry precisely because a task graph is a *logical* structure. An agent that emitted one never
  * had an opinion about where the boxes go.
  */
-export function SpecToNodes(spec: TaskGraphSpec, runtime?: TaskGraphRuntimeStatus): FlowNode[] {
+/**
+ * Projects the spec onto canvas nodes.
+ *
+ * `positions` carries geometry the spec cannot hold. `TaskGraphSpec` is an execution contract with
+ * no layout field, so without a caller-held map every re-projection would return every node to the
+ * origin — which is what previously forced a full re-arrange (and a viewport re-zoom) after every
+ * single edit. Unknown ids fall back to the origin, which is also the correct starting state for a
+ * graph that has never been laid out.
+ */
+export function SpecToNodes(
+    spec: TaskGraphSpec,
+    runtime?: TaskGraphRuntimeStatus,
+    positions?: ReadonlyMap<string, FlowPosition>,
+): FlowNode[] {
     const entryIds = new Set(GetEntryTempIds(spec));
 
     return (spec.tasks ?? []).map((task) => {
         const type = GetTaskNodeType(task);
+        const known = positions?.get(task.tempId);
         return {
             ID: task.tempId,
             Type: type,
@@ -214,7 +228,7 @@ export function SpecToNodes(spec: TaskGraphSpec, runtime?: TaskGraphRuntimeStatu
             Status: RuntimeStateToNodeStatus(runtime?.[task.tempId]),
             StatusMessage: task.description,
             IsStartNode: entryIds.has(task.tempId),
-            Position: { X: 0, Y: 0 },
+            Position: known ? { ...known } : { X: 0, Y: 0 },
             Ports: [
                 { ID: 'in', Direction: 'input', Side: 'top', Multiple: true },
                 { ID: 'out', Direction: 'output', Side: 'bottom', Multiple: true },
