@@ -6,10 +6,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * scope gate that stops a narrowed binding from firing on records outside its scope.
  */
 
-const { mockClassFactory, mockIsEntityActionInScope, mockRunAction } = vi.hoisted(() => ({
+const { mockClassFactory, mockIsEntityActionInScope, mockRunAction, actionFilters } = vi.hoisted(() => ({
     mockClassFactory: { CreateInstance: vi.fn(), GetAllRegistrations: vi.fn().mockReturnValue([]) },
     mockIsEntityActionInScope: vi.fn(),
-    mockRunAction: vi.fn()
+    mockRunAction: vi.fn(),
+    // Mutable so a test can populate the engine's filter cache and then assert what the invocation
+    // layer resolved out of it.
+    actionFilters: [] as Array<{ ID: string; Code: string }>
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => ({
@@ -81,7 +84,7 @@ vi.mock('../generic/ActionEngine', () => ({
         Instance: {
             Config: vi.fn().mockResolvedValue(undefined),
             Actions: [{ ID: 'ACTION-1', Name: 'Notify', Params: { Items: [{ ID: 'p1', Name: 'Record', Type: 'Input' }] } }],
-            ActionFilters: [],
+            ActionFilters: actionFilters,
             RunAction: mockRunAction
         }
     }
@@ -122,9 +125,8 @@ function invocationParams(overrides: Record<string, unknown> = {}): EntityAction
             ActionID: 'ACTION-1',
             EntityID: TARGET_ENTITY_ID,
             LoggingMode: 'All',
-            Filters: [],
             Params: [{ ActionParamID: 'p1', ValueType: 'Entity Object Data', Value: '' }],
-            // Read with .map() on the dispatch path; an absent array is not the same as an empty one.
+            // Read on the dispatch path; an absent array is not the same as an empty one.
             Filters: []
         },
         InvocationType: { ID: INVOCATION_TYPE_ID, Name: 'Single Record' },
@@ -135,6 +137,7 @@ function invocationParams(overrides: Record<string, unknown> = {}): EntityAction
 }
 
 beforeEach(() => {
+    actionFilters.length = 0;
     mockIsEntityActionInScope.mockReset();
     mockIsEntityActionInScope.mockResolvedValue(true);
     mockRunAction.mockReset();
@@ -268,5 +271,97 @@ describe('InvokeAction — scope gate', () => {
         const [binding, subject] = mockIsEntityActionInScope.mock.calls[0];
         expect(binding).toBe(params.EntityAction);
         expect(subject).toBe(params.EntityObject);
+    });
+});
+
+// ── Filter resolution ────────────────────────────────────────────────────────────────────────────
+
+describe('ResolveFilters — which gates actually gate', () => {
+    const invocation = new EntityActionInvocationSingleRecord();
+
+    const binding = (over: Record<string, unknown> = {}) => ({
+        ID: 'B1', EntityActionID: ENTITY_ACTION_ID, ActionFilterID: 'F1', Sequence: 1, Status: 'Active', ...over
+    });
+
+    it('resolves an active binding to its filter row', async () => {
+        actionFilters.push({ ID: 'F1', Code: 'return true;' });
+        await invocation.InvokeAction(invocationParams({
+            EntityAction: { ...invocationParams().EntityAction, Filters: [binding()] }
+        }));
+
+        const runArgs = mockRunAction.mock.calls[0][0] as { Filters: Array<{ ID: string }> };
+        expect(runArgs.Filters.map((f) => f.ID)).toEqual(['F1']);
+    });
+
+    it('SKIPS a Disabled binding', async () => {
+        // Not a cosmetic detail: filters fail closed, so honouring a disabled binding would not make
+        // it inert — it would permanently block the action, and the only symptom is a trigger that
+        // quietly stopped firing.
+        actionFilters.push({ ID: 'F1', Code: 'return true;' });
+        await invocation.InvokeAction(invocationParams({
+            EntityAction: { ...invocationParams().EntityAction, Filters: [binding({ Status: 'Disabled' })] }
+        }));
+
+        const runArgs = mockRunAction.mock.calls[0][0] as { Filters: unknown[] };
+        expect(runArgs.Filters).toEqual([]);
+    });
+
+    it('still honours a Pending binding — Pending is the column default', () => {
+        // Treating the default as inert would silently open every gate nobody explicitly activated.
+        actionFilters.push({ ID: 'F1', Code: 'return true;' });
+        const resolved = invocation.ResolveFilters(invocationParams({
+            EntityAction: { ...invocationParams().EntityAction, Filters: [binding({ Status: 'Pending' })] }
+        }));
+        expect(resolved.Filters.map((f) => f.ID)).toEqual(['F1']);
+    });
+
+    it('orders filters by Sequence, not by however the rows came back', () => {
+        actionFilters.push({ ID: 'F1', Code: 'return true;' }, { ID: 'F2', Code: 'return true;' });
+        const resolved = invocation.ResolveFilters(invocationParams({
+            EntityAction: {
+                ...invocationParams().EntityAction,
+                Filters: [binding({ ID: 'B2', ActionFilterID: 'F2', Sequence: 2 }), binding({ Sequence: 1 })]
+            }
+        }));
+        expect(resolved.Filters.map((f) => f.ID)).toEqual(['F1', 'F2']);
+    });
+
+    it('REFUSES to run when a binding points at a filter the engine cannot see', async () => {
+        // Running unfiltered would ignore the narrowing the row exists to express — the worst
+        // available reading of a misconfiguration.
+        const result = await invocation.InvokeAction(invocationParams({
+            EntityAction: { ...invocationParams().EntityAction, Filters: [binding({ ActionFilterID: 'GHOST' })] }
+        }));
+
+        expect(mockRunAction).not.toHaveBeenCalled();
+        expect(result?.Success).toBe(false);
+        expect(result?.Message).toContain('GHOST');
+    });
+});
+
+// ── Change context ───────────────────────────────────────────────────────────────────────────────
+
+describe('InvokeAction — the change context reaches the filter layer', () => {
+    const invocation = new EntityActionInvocationSingleRecord();
+
+    it('threads EntityChange into RunAction', async () => {
+        // Filters decide on the transition, not the end state, and only the dispatcher can capture
+        // it — by the time a filter runs, the entity has been reloaded and its OldValues reset.
+        const change = {
+            OldValues: { Status: 'Pending' },
+            NewValues: { Status: 'Approved' },
+            ChangedFields: ['Status'],
+            IsCreate: false
+        };
+        await invocation.InvokeAction(invocationParams({ EntityChange: change }));
+
+        const runArgs = mockRunAction.mock.calls[0][0] as { EntityChange: typeof change };
+        expect(runArgs.EntityChange).toBe(change);
+    });
+
+    it('passes undefined when there is no save behind the invocation', async () => {
+        await invocation.InvokeAction(invocationParams());
+        const runArgs = mockRunAction.mock.calls[0][0] as { EntityChange?: unknown };
+        expect(runArgs.EntityChange).toBeUndefined();
     });
 });

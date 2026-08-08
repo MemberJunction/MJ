@@ -98,7 +98,7 @@ import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
 import { ScoredCandidate } from '@memberjunction/core';
 import { QueueManager } from '@memberjunction/queue';
 import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
-import { ActionResult } from '@memberjunction/actions-base';
+import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -461,10 +461,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         user: UserInfo,
         originatingEntityActionIDs?: string[],
     ): Promise<ActionResult[]> {
+        // FIRST STATEMENT, and deliberately before the first `await`. After-hooks are dispatched
+        // fire-and-forget, and the moment this method yields, the save completes and `finalizeSave()`
+        // reloads the entity — resetting every field's OldValue to its new value. A change context
+        // built any later would report that nothing changed. Everything below this line may yield;
+        // nothing above it does.
+        const entityChange = BuildEntityChangeContext(entity);
         try {
             const engine = EntityActionEngineServer.Instance;
             await engine.Config(false, user);
-            const newRecord = entity.IsSaved ? false : true;
+            const newRecord = entityChange.IsCreate;
             const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';
             const invocationType = baseType === 'validate' ? 'Validate' : before ? 'Before' + baseTypeType : 'After' + baseTypeType;
             const invocationTypeEntity = engine.InvocationTypes.find((i) => i.Name === invocationType);
@@ -492,6 +498,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         EntityObject: entity,
                         InvocationType: invocationTypeEntity,
                         ContextUser: user,
+                        EntityChange: entityChange,
                     });
                     // null means the binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls
                     // outside it — the action never ran, so there is no result to report.

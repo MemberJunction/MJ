@@ -12,7 +12,10 @@ import {
     RunActionParams,
     RuntimeActionConfigurationSchema,
     RuntimeActionBridgeBuilder,
-    RedactParamsToJSON
+    RedactParamsToJSON,
+    EntityChangeContext,
+    DidFieldChange,
+    DidFieldChangeToValue
 } from "@memberjunction/actions-base";
 import { RuntimeActionExecutor } from "@memberjunction/action-runtime";
 import type { BridgeHandlerMap } from "@memberjunction/code-execution";
@@ -32,6 +35,38 @@ export interface ActionFilterContext {
    filter: MJActionFilterEntity;
    /** Alternative verdict channel: filter code may assign true (allow) / false (prevent) here instead of returning. */
    result: boolean | null;
+
+   /**
+    * What changed about the record, when the run came from an entity lifecycle event.
+    *
+    * `undefined` for a run with no save behind it — a direct invocation, a View/List fan-out, an
+    * agent calling the action. Filter code must therefore treat absence as "I cannot tell", which
+    * the helpers below already do by returning false.
+    */
+   change?: EntityChangeContext;
+
+   /** Field values as they were before the change. Empty object when there is no change context. */
+   OldValues: Readonly<Record<string, unknown>>;
+   /** Field values as they are now. Empty object when there is no change context. */
+   NewValues: Readonly<Record<string, unknown>>;
+
+   /**
+    * `true` when the named field's value actually differs across this save.
+    *
+    * Bound to the run's change context so filter code reads as the question it is asking:
+    * `return ActionFilterContext.DidFieldChange('Status')`. False on a create — a field that was
+    * never anything else did not *change* to what it is.
+    */
+   DidFieldChange(fieldName: string): boolean;
+
+   /**
+    * `true` when the named field changed AND its new value equals `value`.
+    *
+    * The transition predicate — "when Status becomes Approved" — as opposed to the state predicate
+    * "when Status is Approved", which fires on every subsequent save too. Comparison is loose across
+    * the string boundary metadata forces, so `'1'`, `1` and `true` compare equal.
+    */
+   DidFieldChangeToValue(fieldName: string, value: unknown): boolean;
 }
 
 /**
@@ -366,7 +401,17 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             this._filterCache.Set(cacheKey, filterFunction);
          }
 
-         const context: ActionFilterContext = { params, filter, result: null };
+         const change = params.EntityChange;
+         const context: ActionFilterContext = {
+            params,
+            filter,
+            result: null,
+            change,
+            OldValues: change?.OldValues ?? {},
+            NewValues: change?.NewValues ?? {},
+            DidFieldChange: (fieldName) => DidFieldChange(change, fieldName),
+            DidFieldChangeToValue: (fieldName, value) => DidFieldChangeToValue(change, fieldName, value),
+         };
          const returned = await filterFunction(context);
          const verdict = returned ?? context.result;
          if (typeof verdict !== 'boolean') {

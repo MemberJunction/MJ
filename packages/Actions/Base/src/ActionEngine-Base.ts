@@ -1,4 +1,5 @@
 import { BaseEngine, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
+import { EntityChangeContext } from './EntityChangeContext';
 import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { MJActionEntityExtended } from "./MJActionEntityExtended";
 
@@ -269,6 +270,15 @@ export class RunActionParams<TContext = any> {
     * Optional, the input and output parameters as defined in the metadata for the action.
     */
    public Params: ActionParam[];
+
+   /**
+    * What changed about the record, when this run was dispatched by an entity action.
+    *
+    * Present only on the entity-action path — a directly invoked action has no record transition to
+    * describe. This is what makes a *transition* filter possible ("when Status becomes Approved"),
+    * as opposed to a state filter over current values, which was all a filter could see before.
+    */
+   public EntityChange?: EntityChangeContext;
 
    /**
     * Optional context object that provides runtime-specific information to the action.

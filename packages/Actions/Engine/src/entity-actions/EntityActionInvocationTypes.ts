@@ -1,6 +1,6 @@
 import { MJGlobal, MJLruCache, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
-import { MJActionParamEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
-import { BaseEntity, Metadata, RunView } from "@memberjunction/core";
+import { MJActionFilterEntity, MJActionParamEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
+import { BaseEntity, LogError, Metadata, RunView } from "@memberjunction/core";
 import { ActionInvocationProvenance, ActionParam, ActionResult, EntityActionInvocationParams, EntityActionResult, IsEntityActionInScope, ResolveEntityActionScopeResolver } from "@memberjunction/actions-base";
 import { ActionEngineServer } from "../generic/ActionEngine";
 
@@ -170,6 +170,40 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
         return true;
     }
 
+    /**
+     * The filter rows that gate this binding, in the order the binding declares.
+     *
+     * Two things this does beyond the obvious lookup:
+     *
+     * 1. **`Disabled` bindings are skipped.** Filters fail closed by design, so a disabled binding
+     *    that still gated would not merely be inert — it would *prevent* the action, and the only
+     *    visible symptom is a trigger that silently stopped firing. `Pending` still gates: it is the
+     *    column default, so treating it as inert would open every gate that was never explicitly
+     *    activated.
+     * 2. **An unresolvable filter is reported separately, and prevents the run.** A binding pointing
+     *    at an `ActionFilter` the engine cannot see is a misconfiguration; running unfiltered would be
+     *    the worst possible reading of it, since the whole point of the row is to narrow when this
+     *    fires. Previously the undefined entry reached the evaluator and threw there — fail-closed by
+     *    accident, with no usable reason in the log.
+     */
+    protected ResolveFilters(params: EntityActionInvocationParams): { Filters: MJActionFilterEntity[]; Unresolved: string[] } {
+        const bindings = [...params.EntityAction.Filters]
+            .filter(f => f.Status !== 'Disabled')
+            .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0));
+
+        const Filters: MJActionFilterEntity[] = [];
+        const Unresolved: string[] = [];
+        for (const binding of bindings) {
+            const filter = ActionEngineServer.Instance.ActionFilters.find(fi => UUIDsEqual(fi.ID, binding.ActionFilterID));
+            if (filter) {
+                Filters.push(filter);
+            } else {
+                Unresolved.push(binding.ActionFilterID);
+            }
+        }
+        return { Filters, Unresolved };
+    }
+
     public async InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult | null> {
         // for this type of invocation we need to validate that the EntityObject is not null
         if (this.ValidateParams(params)) {
@@ -189,16 +223,24 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
             // prepare the variables for the action
             const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, params.EntityAction.ActionID));
             const internalParams = await this.MapParams([...action.Params.Items], params.EntityAction.Params, params.EntityObject);
-            const filters = params.EntityAction.Filters.map(f => {
-                const filter = ActionEngineServer.Instance.ActionFilters.find(fi => UUIDsEqual(fi.ID, f.ActionFilterID));
-                return filter;
-            })
+            const { Filters: filters, Unresolved } = this.ResolveFilters(params);
+            if (Unresolved.length > 0) {
+                const message =
+                    `This entity action is gated by ${Unresolved.length === 1 ? 'a filter' : 'filters'} the engine cannot ` +
+                    `resolve (${Unresolved.join(', ')}), so it did not run. Filters fail closed by design — running ` +
+                    `unfiltered would ignore the narrowing the binding exists to express.`;
+                LogError(`Entity Action ${params.EntityAction.ID}: ${message}`);
+                return { Success: false, Message: message, RunParams: null, LogEntry: null };
+            }
             
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,
                 ContextUser: params.ContextUser,
                 Filters: filters,
                 Params: internalParams,
+                // Carried so a filter can decide on the transition rather than only the end state.
+                // Captured by the dispatcher before the save finished; see EntityChangeContext.
+                EntityChange: params.EntityChange,
                 Provenance: this.BuildProvenance(params, params.EntityObject)
             });
 

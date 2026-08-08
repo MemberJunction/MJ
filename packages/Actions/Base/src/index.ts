@@ -1,4 +1,5 @@
 export * from './ActionEngine-Base';
+export * from './EntityChangeContext';
 export * from './ParamRedaction';
 export * from './EntityActionScopeResolver';
 export * from './MJActionEntityExtended';

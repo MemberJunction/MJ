@@ -52,12 +52,22 @@ export type WorkflowEntityEventTrigger = {
     /**
      * Optional predicate narrowing which changes fire the trigger.
      *
-     * **Not yet honored — a spec carrying one is rejected rather than saved unfiltered.** Deciding
-     * "this invoice crossed 90 days" needs the before/after values of the change, a contract that
-     * does not exist yet. Accepting the field and ignoring it would produce a workflow firing on
-     * every save while its author believed it was narrowed — and since a workflow runs an agent,
-     * over-firing costs real money. Rejecting now and accepting later is the additive direction;
-     * the reverse would break specs already published against it.
+     * A **JavaScript boolean expression** evaluated against the change, reconciled onto an
+     * `ActionFilter` row bound to the trigger's own binding. The names in scope are the ones an
+     * Action Filter always has, plus the change contract:
+     *
+     * - `DidFieldChange('Status')` — the field's value actually differs across this save
+     * - `DidFieldChangeToValue('Status', 'Approved')` — *and* its new value is that one
+     * - `OldValues` / `NewValues` — both sides, by field name
+     * - `ActionFilterContext` — the full context, for anything the shorthands do not cover
+     *
+     * Write the transition, not the state: `Status === 'Approved'` is true on every subsequent save
+     * too, whereas `DidFieldChangeToValue('Status','Approved')` fires once, when it becomes that.
+     *
+     * Evaluation is **fail-closed** — a predicate that throws prevents the run rather than allowing
+     * it, because a workflow runs an agent and over-firing costs real money. The expression is
+     * syntax-checked at validation time so that failure surfaces while authoring, not as a trigger
+     * that silently never fires.
      */
     filter?: string;
     /** Narrow to one entity's records. */
@@ -124,7 +134,7 @@ export type WorkflowSpecValidationError = {
         | 'MissingInvocationType'
         | 'UnknownInvocationType'
         | 'UnsupportedInvocationType'
-        | 'UnsupportedFilter'
+        | 'InvalidFilter'
         | 'MissingCron'
         | 'DuplicateTrigger'
         | 'ScopeWithoutEntity';
@@ -226,4 +236,42 @@ export function TriggerKey(trigger: WorkflowTrigger): string {
 /** True when the workflow should be firing right now. */
 export function IsWorkflowLive(spec: WorkflowSpec): boolean {
     return spec.status === 'Active';
+}
+
+/**
+ * Wraps a trigger's filter expression as the body of an `ActionFilter.Code`.
+ *
+ * Shared by the validator (which compiles the result to prove it parses) and by the reconciler
+ * (which persists it), so the thing checked and the thing stored can never be two different
+ * programs — the failure mode where a spec validates and then fails closed forever at runtime.
+ *
+ * The shorthands are destructured from the context rather than injected as separate function
+ * arguments, so an author's expression sees exactly the names the field's documentation promises
+ * and nothing else leaks in.
+ */
+export function BuildTriggerFilterCode(filter: string): string {
+    return [
+        '// Generated from a workflow trigger filter. Edit the workflow, not this row —',
+        '// re-saving the workflow overwrites this code.',
+        'const { OldValues, NewValues, DidFieldChange, DidFieldChangeToValue } = ActionFilterContext;',
+        `return (${filter.trim()});`,
+    ].join('\n');
+}
+
+/**
+ * Whether a trigger's filter expression parses.
+ *
+ * Compiles but never invokes, so nothing in the expression can run here. `EvalError` is treated as
+ * "cannot tell" rather than "invalid": under a Content-Security-Policy that forbids `new Function`,
+ * every filter would otherwise be reported as broken in the browser while working perfectly on the
+ * server that actually evaluates it.
+ */
+export function IsTriggerFilterParseable(filter: string): { Parseable: boolean; Message?: string } {
+    try {
+        new Function('ActionFilterContext', BuildTriggerFilterCode(filter));
+        return { Parseable: true };
+    } catch (e) {
+        if (e instanceof EvalError) return { Parseable: true };
+        return { Parseable: false, Message: e instanceof Error ? e.message : String(e) };
+    }
 }
