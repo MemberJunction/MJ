@@ -13,6 +13,7 @@ import {
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { TaskGraphEditorModule } from '@memberjunction/ng-task-graph-editor';
 
 import { WorkflowsDashboardComponent } from './Workflows/workflows-dashboard.component';
 import { CreateWorkflowComponent } from './Workflows/components/create-workflow.component';
@@ -45,6 +46,7 @@ import { WorkflowsResourceComponent } from './Workflows/components/workflows-res
         MJStatBadgeComponent,
         ContainerDirectivesModule,
         SharedGenericModule,
+        TaskGraphEditorModule,
     ],
     exports: [
         WorkflowsDashboardComponent,

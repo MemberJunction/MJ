@@ -1,10 +1,22 @@
 import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component } from '@angular/core';
-import { RunView } from '@memberjunction/core';
+import { CompositeKey, RunView } from '@memberjunction/core';
 import { MJAIAgentEntity, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboard } from '@memberjunction/ng-shared';
-import { NavigationService } from '@memberjunction/ng-explorer-core';
+import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import type { WorkflowDraftRequest, WorkflowListItem } from './workflows.types';
+
+/**
+ * Local alias for the client-tool shape `NavigationService.SetAgentClientTools` accepts. Declared
+ * here rather than imported, matching the Scheduling dashboard, so this file adds no re-export
+ * across packages.
+ */
+type WorkflowsAgentTool = {
+    Name: string;
+    Description: string;
+    ParameterSchema: Record<string, unknown>;
+    Handler: (params: Record<string, unknown>) => Promise<unknown>;
+};
 
 /**
  * The Workflows app — a workflow list and the Create Workflow front door.
@@ -33,7 +45,16 @@ export class WorkflowsDashboardComponent extends BaseDashboard implements AfterV
     /** True while the front door is open over the list. */
     public IsCreating = false;
 
-    constructor(private cdr: ChangeDetectorRef, private navigationService: NavigationService) {
+    /**
+     * The draft being edited on the canvas, or null when the list is showing.
+     *
+     * Held here rather than persisted, because the front door's middle tile promises "Nothing is
+     * saved until you approve it" — approval happens on the canvas, so until then the workflow
+     * exists only as this value.
+     */
+    public DraftSpec: TaskGraphSpec | null = null;
+
+    constructor(private cdr: ChangeDetectorRef) {
         super();
     }
 
@@ -77,7 +98,9 @@ export class WorkflowsDashboardComponent extends BaseDashboard implements AfterV
             }
             this.Workflows = (result.Results ?? []).map((a) => ({
                 ID: a.ID,
-                Name: a.Name,
+                // Name is nullable on the entity. A row with no label is unfindable, so it says so
+                // rather than rendering blank — the ID is still there to open it by.
+                Name: a.Name ?? '(unnamed workflow)',
                 Description: a.Description,
                 Status: a.Status,
                 // Until the trigger reconciler is asked, everything reads as On demand — which is the
@@ -109,22 +132,42 @@ export class WorkflowsDashboardComponent extends BaseDashboard implements AfterV
     /**
      * Takes the author from the front door to the canvas.
      *
-     * The draft is carried as navigation state rather than written first — the middle tile promises
-     * "Nothing is saved until you approve it", and approval happens on the canvas.
+     * The canvas is EMBEDDED rather than routed to. It is a widgets-layer component that
+     * deliberately refuses to know about routing, and this app is what supplies the shell around it
+     * — which is exactly the arrangement the plan calls for. Routing would also need a resource that
+     * does not exist; inventing one to navigate to would be a link to nowhere.
+     *
+     * An empty graph for `blank`; for the other two doors the steps arrive later — drafted from the
+     * brief, or projected from the run being promoted — and the canvas is where the author reviews
+     * them either way.
      */
     public OnCreated(request: WorkflowDraftRequest): void {
         this.IsCreating = false;
+        this.DraftSpec = {
+            workflowName: request.Name,
+            reasoning: request.Description,
+            tasks: [],
+        };
+        this.publishAgentContext();
         this.cdr.markForCheck();
-        this.navigationService.NavigateToResource('Workflow Editor', undefined, {
-            mode: request.Mode,
-            name: request.Name,
-            description: request.Description ?? '',
-            sourceRunId: request.SourceRunID ?? '',
-        });
     }
 
+    /** Leaves the canvas without saving. The draft is discarded — nothing was ever written. */
+    public OnCloseCanvas(): void {
+        this.DraftSpec = null;
+        this.publishAgentContext();
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Opens a saved workflow.
+     *
+     * A workflow IS a Flow agent, so this opens that record — the substrate D18 renames rather than
+     * replaces. The dedicated editor surface is Phase 5's canvas work; until it has its own route,
+     * the record form is the honest destination rather than a link to nothing.
+     */
     public OnOpenWorkflow(item: WorkflowListItem): void {
-        this.navigationService.NavigateToResource('Workflow Editor', item.ID);
+        this.navigationService.OpenEntityRecord('MJ: AI Agents', CompositeKey.FromID(item.ID));
     }
 
     /** Reports surface state and registers the operations an agent may drive here. */
@@ -132,11 +175,13 @@ export class WorkflowsDashboardComponent extends BaseDashboard implements AfterV
         this.navigationService.SetAgentContext(this, {
             Surface: 'Workflows',
             IsCreating: this.IsCreating,
+            IsEditingDraft: !!this.DraftSpec,
+            DraftName: this.DraftSpec?.workflowName ?? null,
             WorkflowCount: this.Workflows.length,
             WorkflowNames: this.Workflows.slice(0, 10).map((w) => w.Name),
         });
 
-        this.navigationService.SetAgentClientTools(this, [
+        const tools: WorkflowsAgentTool[] = [
             {
                 Name: 'OpenCreateWorkflow',
                 Description: 'Open the Create Workflow front door',
@@ -154,7 +199,7 @@ export class WorkflowsDashboardComponent extends BaseDashboard implements AfterV
                     properties: { name: { type: 'string' } },
                     required: ['name'],
                 },
-                Handler: async (params) => {
+                Handler: async (params: Record<string, unknown>) => {
                     const wanted = String(params['name'] ?? '').trim().toLowerCase();
                     const match = this.Workflows.find((w) => w.Name.trim().toLowerCase() === wanted);
                     if (!match) {
@@ -164,6 +209,7 @@ export class WorkflowsDashboardComponent extends BaseDashboard implements AfterV
                     return { Success: true };
                 },
             },
-        ]);
+        ];
+        this.navigationService.SetAgentClientTools(this, tools);
     }
 }

@@ -71,13 +71,16 @@ describe('D18 vocabulary — end users see "Workflow", never the substrate', () 
         for (const { word, re } of forbidden) {
             it(`${name} never says "${word}"`, () => {
                 const text = fs.readFileSync(file, 'utf-8');
-                // Strip Angular bindings and attribute names — the rule is about what a person
-                // READS, and a class or property name is neither shown nor spoken.
+                // The rule is about what a person READS. Comments, bindings, attribute values and
+                // TAG NAMES are markup — `<mj-task-graph-editor>` is the name of a component, not a
+                // word shown to anyone. Everything left after these strips is copy.
                 const visible = text
                     .replace(/<!--[\s\S]*?-->/g, '')
                     .replace(/\[[^\]]*\]="[^"]*"/g, '')
                     .replace(/\([^)]*\)="[^"]*"/g, '')
-                    .replace(/\b(?:class|ngClass|id|for|role|type|Icon)="[^"]*"/g, '');
+                    .replace(/\b(?:class|ngClass|id|for|role|type|Icon)="[^"]*"/g, '')
+                    // Tag names, opening and closing, including the Angular selector prefix.
+                    .replace(/<\/?[a-zA-Z][\w-]*/g, '<');
                 expect(visible).not.toMatch(re);
             });
         }

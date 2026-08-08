@@ -75,3 +75,10 @@
 .wf-row-status-active {
   color: var(--mj-color-success);
 }
+
+/* The embedded canvas fills the body — it is the whole working surface while a draft is open. */
+.wf-canvas {
+  display: block;
+  height: 100%;
+  min-height: 480px;
+}

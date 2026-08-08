@@ -11,7 +11,11 @@
     </div>
 
     <div actions>
-      @if (IsCreating) {
+      @if (DraftSpec) {
+        <button mjButton variant="secondary" size="sm" (click)="OnCloseCanvas()">
+          <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to workflows
+        </button>
+      } @else if (IsCreating) {
         <button mjButton variant="secondary" size="sm" (click)="OnCancelCreate()">
           <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to workflows
         </button>
@@ -25,7 +29,18 @@
   </mj-page-header>
 
   <mj-page-body>
-    @if (IsCreating) {
+    @if (DraftSpec) {
+      <!-- The canvas is EMBEDDED, not routed to: it is a widgets-layer component that refuses to
+           know about routing, and this app supplies the shell around it. -->
+      <mj-task-graph-editor
+        class="wf-canvas"
+        [Spec]="DraftSpec"
+        [ShowToolbar]="true"
+        [ShowPalette]="true"
+        [ShowMinimap]="true"
+        EmptyStateMessage="No steps yet. Add one to start building this workflow.">
+      </mj-task-graph-editor>
+    } @else if (IsCreating) {
       <mj-create-workflow
         [Provider]="ProviderToUse"
         (Created)="OnCreated($event)"
