@@ -23,6 +23,8 @@
  * New capability knobs go in this bag — do not add a new capability column per knob.
  */
 
+import { IsPlainObject } from '@memberjunction/global';
+
 import { JSONObject, JSONValue } from './baseRealtime';
 
 /**
@@ -94,11 +96,6 @@ export interface AIModelConfiguration {
     Audio?: JSONObject;
 }
 
-/** True for a plain JSON object (not null, not an array). */
-function isPlainObject(value: unknown): value is JSONObject {
-    return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
 /**
  * TOLERANTLY parses one `ModelConfiguration` column value. Returns `null` — never throws — for
  * absent, blank, malformed, or non-object payloads, so a bad catalog row contributes nothing to
@@ -113,7 +110,7 @@ export function ParseModelConfiguration(json: string | null | undefined): AIMode
     }
     try {
         const parsed: unknown = JSON.parse(json);
-        return isPlainObject(parsed) ? (parsed as AIModelConfiguration) : null;
+        return IsPlainObject(parsed) ? (parsed as AIModelConfiguration) : null;
     } catch {
         return null;
     }
@@ -138,7 +135,7 @@ export function ResolveEffectiveModelConfiguration(
 ): AIModelConfiguration | null {
     const result: JSONObject = {};
     for (const layer of layers) {
-        if (!isPlainObject(layer)) {
+        if (!IsPlainObject(layer)) {
             continue;
         }
         mergeInto(result, layer as unknown as JSONObject);
@@ -154,9 +151,9 @@ function mergeInto(target: JSONObject, source: JSONObject): void {
             continue;
         }
         const existing = target[key];
-        if (isPlainObject(existing) && isPlainObject(incoming)) {
+        if (IsPlainObject(existing) && IsPlainObject(incoming)) {
             mergeInto(existing, incoming);
-        } else if (isPlainObject(incoming)) {
+        } else if (IsPlainObject(incoming)) {
             const copy: JSONObject = {};
             mergeInto(copy, incoming);
             target[key] = copy;

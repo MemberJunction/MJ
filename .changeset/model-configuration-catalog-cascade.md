@@ -1,4 +1,5 @@
 ---
+"@memberjunction/global": minor
 "@memberjunction/ai": minor
 "@memberjunction/ai-engine-base": minor
 "@memberjunction/aiengine": minor
