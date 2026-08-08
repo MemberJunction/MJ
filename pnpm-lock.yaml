@@ -14109,6 +14109,12 @@ importers:
       '@memberjunction/ai-core-plus':
         specifier: 6.1.0-edge.0
         version: link:../AI/CorePlus
+      '@memberjunction/ai-prompts':
+        specifier: 6.1.0-edge.0
+        version: link:../AI/Prompts
+      '@memberjunction/aiengine':
+        specifier: 6.1.0-edge.0
+        version: link:../AI/Engine
       '@memberjunction/core':
         specifier: 6.1.0-edge.0
         version: link:../MJCore

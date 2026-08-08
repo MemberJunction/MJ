@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, Output } from '@angular/core';
-import { IMetadataProvider, RunView } from '@memberjunction/core';
-import { MJTaskEntity } from '@memberjunction/core-entities';
+import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { MJTaskEntity, WorkflowDraftOperation } from '@memberjunction/core-entities';
+import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import {
     DEFAULT_WORKFLOW_START_MODE,
     WORKFLOW_START_OPTIONS,
@@ -38,6 +39,9 @@ export class CreateWorkflowComponent {
     /** Provider to read past runs through — supplied by the host, never resolved globally. */
     @Input() Provider!: IMetadataProvider;
 
+    /** The user to run the drafting operation as. */
+    @Input() CurrentUser: UserInfo | null = null;
+
     /** Emitted when the author commits. The host routes to the canvas. */
     @Output() Created = new EventEmitter<WorkflowDraftRequest>();
     /** Emitted when the author backs out. */
@@ -53,6 +57,15 @@ export class CreateWorkflowComponent {
     public PastRuns: PromotableRun[] = [];
     public IsLoadingRuns = false;
     public RunsError: string | null = null;
+
+    /**
+     * True while an agent is drafting the steps.
+     *
+     * Its own flag rather than a generic `busy`, because the wait is long enough to need explaining:
+     * a spinner with no words reads as a hang, and this one can take several seconds.
+     */
+    public IsDrafting = false;
+    public DraftError: string | null = null;
 
     constructor(private cdr: ChangeDetectorRef) {}
 
@@ -104,16 +117,65 @@ export class CreateWorkflowComponent {
         this.cdr.markForCheck();
     }
 
-    public OnCreate(): void {
-        if (!this.CanCreate) {
+    public async OnCreate(): Promise<void> {
+        if (!this.CanCreate || this.IsDrafting) {
             return;
         }
-        this.Created.emit({
+        const request: WorkflowDraftRequest = {
             Mode: this.SelectedMode,
             Name: this.WorkflowName.trim(),
             Description: this.SelectedMode === 'describe' ? this.Description.trim() : undefined,
             SourceRunID: this.SelectedMode === 'past-run' ? this.SelectedRunID ?? undefined : undefined,
-        });
+        };
+
+        // Only the "Describe it" door drafts. Blank canvas has nothing to draft FROM, and promoting a
+        // past run is a projection of a graph that already exists rather than an act of authorship.
+        if (request.Mode !== 'describe') {
+            this.Created.emit(request);
+            return;
+        }
+
+        this.IsDrafting = true;
+        this.DraftError = null;
+        this.cdr.markForCheck();
+        try {
+            const draft = await this.draftSteps(request);
+            // A failed draft does NOT block the author. They described what they wanted and are
+            // entitled to get to the canvas; drafting is a head start, not a gate. The error stays
+            // on screen so the failure is not silent.
+            this.Created.emit({ ...request, Draft: draft ?? undefined });
+        } finally {
+            this.IsDrafting = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /**
+     * Asks the server to draft the steps.
+     *
+     * A Remote Operation rather than a bespoke mutation, per the program's standing rule — the same
+     * call is reachable from MCP and an Action, so an agent can draft a workflow the same way this
+     * screen does.
+     */
+    private async draftSteps(request: WorkflowDraftRequest): Promise<TaskGraphSpec | null> {
+        try {
+            const op = new WorkflowDraftOperation();
+            const result = await op.Execute(
+                { description: request.Description ?? '', workflowName: request.Name },
+                { provider: this.Provider ?? undefined, user: this.CurrentUser ?? undefined },
+            );
+            if (result.Success && result.Output?.success && result.Output.graph) {
+                return result.Output.graph as TaskGraphSpec;
+            }
+            this.DraftError =
+                result.Output?.errorMessage ??
+                result.ErrorMessage ??
+                'The steps could not be drafted. You can still build this workflow yourself.';
+            return null;
+        } catch (e) {
+            this.DraftError = e instanceof Error ? e.message : String(e);
+            return null;
+        }
     }
 
     public OnCancel(): void {

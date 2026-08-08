@@ -186,3 +186,49 @@
   gap: var(--mj-space-2);
   margin-top: var(--mj-space-5);
 }
+
+/* ── drafting ──────────────────────────────────────────────────────────────── */
+
+.cw-drafting {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3) var(--mj-space-4);
+  border: 1px solid var(--mj-color-primary);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-color-primary-subtle);
+  margin-bottom: var(--mj-space-3);
+}
+
+.cw-drafting b {
+  display: block;
+  font-size: var(--mj-font-size-sm);
+  color: var(--mj-text-primary);
+}
+
+.cw-drafting small {
+  display: block;
+  margin-top: var(--mj-space-1);
+  font-size: var(--mj-font-size-xs);
+  color: var(--mj-text-secondary);
+  line-height: var(--mj-line-height-relaxed);
+}
+
+/* A slow, calm pulse — this is a wait to sit through, not an alarm. */
+.cw-drafting-icon {
+  color: var(--mj-color-primary);
+  font-size: var(--mj-font-size-lg);
+  animation: cw-pulse 1.8s ease-in-out infinite;
+  flex: none;
+  margin-top: 2px;
+}
+
+@keyframes cw-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.94); }
+  50%      { opacity: 1;    transform: scale(1.06); }
+}
+
+/* Respects a user who asked the OS for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .cw-drafting-icon { animation: none; opacity: 1; }
+}

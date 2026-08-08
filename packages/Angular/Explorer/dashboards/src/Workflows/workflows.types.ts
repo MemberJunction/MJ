@@ -109,4 +109,11 @@ export type WorkflowDraftRequest = {
     Description?: string;
     /** The run being promoted, for `past-run`. */
     SourceRunID?: string;
+    /**
+     * Steps an agent drafted from {@link Description}, when drafting succeeded.
+     *
+     * Typed loosely as the graph contract rather than imported here so this file stays free of a
+     * dependency on the AI package — the host passes it straight to the canvas.
+     */
+    Draft?: { workflowName: string; reasoning?: string; tasks: unknown[] };
 };

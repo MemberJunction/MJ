@@ -24,9 +24,27 @@
         <textarea
           id="cw-description"
           rows="3"
+          [disabled]="IsDrafting"
           [(ngModel)]="Description"
           placeholder="e.g. Every Monday, pull last week's support tickets, summarise the themes, and email the team lead."></textarea>
       </div>
+
+      @if (IsDrafting) {
+        <!-- Named, not a bare spinner: this wait can run several seconds, and an unexplained one
+             reads as a hang. -->
+        <div class="cw-drafting" role="status" aria-live="polite">
+          <i class="fa-solid fa-wand-magic-sparkles cw-drafting-icon" aria-hidden="true"></i>
+          <span>
+            <b>Drafting your steps…</b>
+            <small>Reading what you wrote and sketching a route. You will review every step before anything runs.</small>
+          </span>
+        </div>
+      }
+
+      @if (DraftError) {
+        <!-- A failed draft is not a dead end: the author still reaches the canvas. -->
+        <mj-alert Variant="warning" [Message]="DraftError"></mj-alert>
+      }
     }
 
     @case ('past-run') {
@@ -81,9 +99,9 @@
   </p>
 
   <div class="cw-actions">
-    <button mjButton variant="primary" size="sm" [disabled]="!CanCreate" (click)="OnCreate()">
-      Create
+    <button mjButton variant="primary" size="sm" [disabled]="!CanCreate || IsDrafting" (click)="OnCreate()">
+      @if (IsDrafting) { Drafting… } @else { Create }
     </button>
-    <button mjButton variant="secondary" size="sm" (click)="OnCancel()">Cancel</button>
+    <button mjButton variant="secondary" size="sm" [disabled]="IsDrafting" (click)="OnCancel()">Cancel</button>
   </div>
 </div>

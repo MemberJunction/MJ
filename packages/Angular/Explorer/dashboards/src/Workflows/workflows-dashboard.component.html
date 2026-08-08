@@ -43,6 +43,7 @@
     } @else if (IsCreating) {
       <mj-create-workflow
         [Provider]="ProviderToUse"
+        [CurrentUser]="ProviderToUse.CurrentUser"
         (Created)="OnCreated($event)"
         (Cancelled)="OnCancelCreate()">
       </mj-create-workflow>

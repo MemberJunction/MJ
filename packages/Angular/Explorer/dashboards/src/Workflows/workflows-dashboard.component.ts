@@ -143,7 +143,9 @@ export class WorkflowsDashboardComponent extends BaseDashboard implements AfterV
      */
     public OnCreated(request: WorkflowDraftRequest): void {
         this.IsCreating = false;
-        this.DraftSpec = {
+        // The drafted steps when an agent produced them; an empty canvas otherwise — which is the
+        // right outcome for "Blank canvas", and an honest one when drafting failed or was skipped.
+        this.DraftSpec = (request.Draft as TaskGraphSpec | undefined) ?? {
             workflowName: request.Name,
             reasoning: request.Description,
             tasks: [],
