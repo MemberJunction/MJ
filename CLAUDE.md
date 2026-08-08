@@ -158,7 +158,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 
 ### Skills — load only when invoked
 
-`debug-build-failures` (package won't build / Turbo / circular deps), `playwright-cli` (browser automation + the MJ dev-server loop), `scaffold-mj-dashboard` (new Explorer dashboard).
+`debug-build-failures` (package won't build / Turbo / circular deps), `playwright-cli` (browser automation + the MJ dev-server loop), `scaffold-mj-dashboard` (new Explorer dashboard), `bootstrap-clean-db` (build a DB from scratch on a private name — clean-room verification, or just a database no other agent is using).
 
 ### Project-wide standards
 
