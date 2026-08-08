@@ -682,6 +682,12 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       // merged set to ResultParams instead. `inputSnapshot` is supplied by RunAction; the fallback
       // covers callers that reach StartActionLog directly.
       logEntity.Params = inputSnapshot ?? this.SnapshotInputParams(params);
+      // Stamped at write time, from the action's own policy, so the row is self-describing. Reading
+      // Action.RetentionPeriod at purge time instead would make an edit to that column retroactive:
+      // tightening retention would delete history that was written under the old policy, which is
+      // not what someone changing a going-forward setting is asking for. NULL stays NULL — a purge
+      // must never invent a lifetime nobody configured.
+      logEntity.RetentionPeriod = params.Action.RetentionPeriod;
 
       this.StampProvenance(logEntity, params);
 
