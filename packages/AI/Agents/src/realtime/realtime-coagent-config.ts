@@ -34,6 +34,10 @@
  * @author MemberJunction.com
  */
 
+// Type-only import from the pure @memberjunction/ai model layer — erased at runtime, so the
+// module keeps its framework-free / pure-transformation contract.
+import type { AIModelConfiguration, RealtimeTurnDetectionSettings } from '@memberjunction/ai';
+
 /**
  * The MJ Authorization name that gates RUNTIME overrides on realtime session start:
  * `configOverridesJson` and explicit realtime-model selection that deviates from the
@@ -42,10 +46,6 @@
 export const REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION = 'Realtime: Advanced Session Controls';
 
 /** A plain JSON object (string-keyed bag of JSON values). */
-// Type-only import from the pure @memberjunction/ai model layer — erased at runtime, so the
-// module keeps its framework-free / pure-transformation contract.
-import type { AIModelConfiguration, RealtimeTurnDetectionSettings } from '@memberjunction/ai';
-
 export type JSONObjectLike = Record<string, unknown>;
 
 /** The default voice persona — folded into the session system prompt at mint. */

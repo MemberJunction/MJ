@@ -37,7 +37,7 @@ vi.mock('openai', () => ({
     }),
 }));
 
-import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection, MapEffortLevelToOpenAIRealtime, OPENAI_REALTIME_PROFILE, MapUsageModalityDetail } from '../models/openAIRealtime';
+import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection, MapEffortLevelToOpenAIRealtime, OPENAI_REALTIME_PROFILE, MapUsageModalityDetail, MapNormalizedTurnDetection, ExtractRealtimeFeatures } from '../models/openAIRealtime';
 import type { OpenAIRealtimeError } from 'openai/realtime/index';
 import type { RealtimeServerEvent, RealtimeClientEvent } from 'openai/resources/realtime/realtime';
 import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'openai/resources/realtime/client-secrets';
@@ -1421,6 +1421,181 @@ describe('SEAM-4: config-tuning bag → driver session payload (end-to-end shape
             expect(audio.input?.transcription?.model).toBe('whisper-1');
         } else {
             throw new Error('expected realtime session.update');
+        }
+    });
+});
+
+/**
+ * Catalog-driven turn detection: the normalized `turnDetection` bag key (sourced from the
+ * `ModelConfiguration` cascade and/or the agent/app `realtime.session` cascade) translated onto
+ * the OpenAI-protocol wire block, gated by each profile's declared `supportedTurnModes`.
+ */
+describe('MapNormalizedTurnDetection — normalized vocabulary → wire block', () => {
+    const openaiProfile = { providerKey: OPENAI_REALTIME_PROFILE.providerKey, supportedTurnModes: OPENAI_REALTIME_PROFILE.supportedTurnModes };
+
+    it('returns undefined when nothing is requested, so the caller applies its own default', () => {
+        expect(MapNormalizedTurnDetection(openaiProfile, false, undefined)).toBeUndefined();
+        expect(MapNormalizedTurnDetection(openaiProfile, false, {})).toBeUndefined();
+    });
+
+    it("treats Mode 'default' as 'no request' (byte-for-byte the pre-catalog behavior)", () => {
+        expect(MapNormalizedTurnDetection(openaiProfile, false, { Mode: 'default', Eagerness: 'high' })).toBeUndefined();
+    });
+
+    it('maps semanticVad with its eagerness tuning', () => {
+        expect(MapNormalizedTurnDetection(openaiProfile, false, { Mode: 'semanticVad', Eagerness: 'auto' })).toEqual({
+            type: 'semantic_vad',
+            eagerness: 'auto',
+            create_response: true,
+            interrupt_response: true,
+        });
+    });
+
+    it('omits eagerness when the catalog did not specify one', () => {
+        expect(MapNormalizedTurnDetection(openaiProfile, false, { Mode: 'semanticVad' })).toEqual({
+            type: 'semantic_vad',
+            create_response: true,
+            interrupt_response: true,
+        });
+    });
+
+    it('maps serverVad with threshold + silence tuning', () => {
+        expect(MapNormalizedTurnDetection(openaiProfile, false, { Mode: 'serverVad', Threshold: 0.65, SilenceDurationMs: 900 })).toEqual({
+            type: 'server_vad',
+            threshold: 0.65,
+            silence_duration_ms: 900,
+            create_response: true,
+            interrupt_response: true,
+        });
+    });
+
+    it('ignores server-VAD tuning that does not apply to the chosen mode', () => {
+        // Threshold is meaningless for semantic VAD — it must not leak onto the wire block.
+        expect(MapNormalizedTurnDetection(openaiProfile, false, { Mode: 'semanticVad', Threshold: 0.4 })).toEqual({
+            type: 'semantic_vad',
+            create_response: true,
+            interrupt_response: true,
+        });
+    });
+
+    it('composes meeting mode on top of whatever mode wins (the bridge keeps floor control)', () => {
+        expect(MapNormalizedTurnDetection(openaiProfile, true, { Mode: 'semanticVad', Eagerness: 'low' })).toEqual({
+            type: 'semantic_vad',
+            eagerness: 'low',
+            create_response: false,
+            interrupt_response: true,
+        });
+        expect(MapNormalizedTurnDetection(openaiProfile, true, { Mode: 'serverVad' })).toEqual({
+            type: 'server_vad',
+            create_response: false,
+            interrupt_response: true,
+        });
+    });
+
+    it('falls back (never rejects) when the profile does not support the requested mode', () => {
+        // A SHARED catalog must be safe on every provider: an inherited semanticVad reaching a
+        // server_vad-only profile degrades to that profile's default rather than failing the session.
+        const serverVadOnly = { providerKey: 'xai', supportedTurnModes: ['serverVad'] as const };
+        expect(MapNormalizedTurnDetection(serverVadOnly, false, { Mode: 'semanticVad' })).toBeUndefined();
+
+        const noModes = { providerKey: 'huggingface', supportedTurnModes: [] as const };
+        expect(MapNormalizedTurnDetection(noModes, false, { Mode: 'serverVad' })).toBeUndefined();
+    });
+
+    it("falls back for 'native' when a profile declares it supported but ships no mapping", () => {
+        const declaresNative = { providerKey: 'xai', supportedTurnModes: ['serverVad', 'native'] as const };
+        expect(MapNormalizedTurnDetection(declaresNative, false, { Mode: 'native' })).toBeUndefined();
+    });
+});
+
+describe('ExtractRealtimeFeatures — turnDetection is normalized and ALWAYS scrubbed', () => {
+    it('extracts a well-formed request and removes it from the passthrough bag', () => {
+        const features = ExtractRealtimeFeatures({ turnDetection: { Mode: 'semanticVad', Eagerness: 'high' }, someWireField: 1 });
+        expect(features.turnDetection).toEqual({ Mode: 'semanticVad', Eagerness: 'high' });
+        // The normalized shape is MJ vocabulary — it is not a wire field on any provider.
+        expect(features.rest.turnDetection).toBeUndefined();
+        expect(features.rest.someWireField).toBe(1);
+    });
+
+    it('drops unrecognized and wrong-typed knobs, keeping the valid remainder', () => {
+        const features = ExtractRealtimeFeatures({
+            turnDetection: { Mode: 'notAMode', Eagerness: 'nuclear', Threshold: 'high', SilenceDurationMs: 700, Bogus: true },
+        });
+        expect(features.turnDetection).toEqual({ SilenceDurationMs: 700 });
+    });
+
+    it('yields undefined for absent / non-object / empty-after-validation values, and still scrubs', () => {
+        expect(ExtractRealtimeFeatures({}).turnDetection).toBeUndefined();
+        expect(ExtractRealtimeFeatures({ turnDetection: null }).turnDetection).toBeUndefined();
+        expect(ExtractRealtimeFeatures({ turnDetection: 'serverVad' }).turnDetection).toBeUndefined();
+        expect(ExtractRealtimeFeatures({ turnDetection: [{ Mode: 'serverVad' }] }).turnDetection).toBeUndefined();
+
+        const garbage = ExtractRealtimeFeatures({ turnDetection: { Mode: 42 } });
+        expect(garbage.turnDetection).toBeUndefined();
+        expect(garbage.rest.turnDetection).toBeUndefined();
+    });
+
+    it('rejects non-finite numeric tuning', () => {
+        expect(ExtractRealtimeFeatures({ turnDetection: { Threshold: Number.NaN } }).turnDetection).toBeUndefined();
+        expect(ExtractRealtimeFeatures({ turnDetection: { SilenceDurationMs: Number.POSITIVE_INFINITY } }).turnDetection).toBeUndefined();
+    });
+});
+
+describe('catalog turn detection end-to-end through the session', () => {
+    it('a catalog semanticVad request reaches the wire as semantic_vad', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        await driver.StartSession({
+            Model: 'gpt-realtime-2.1',
+            SystemPrompt: 'sys',
+            Config: { turnDetection: { Mode: 'semanticVad', Eagerness: 'auto' } },
+        });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            const session = update.session as Record<string, unknown>;
+            // The normalized key must never survive onto the wire.
+            expect(session.turnDetection).toBeUndefined();
+            const td = (session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+            expect(td).toMatchObject({ type: 'semantic_vad', eagerness: 'auto', create_response: true });
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+    });
+
+    it('a live Reconfigure PRESERVES the resolved mode instead of downgrading to server_vad', async () => {
+        // Regression: Reconfigure used to hardcode server_vad, so a meeting-mode flip silently
+        // downgraded a semantic session's turn detection.
+        const driver = new TestableOpenAIRealtime('k');
+        const session = await driver.StartSession({
+            Model: 'gpt-realtime-2.1',
+            SystemPrompt: 'sys',
+            Config: { turnDetection: { Mode: 'semanticVad', Eagerness: 'auto' } },
+        });
+
+        session.Reconfigure?.({ DisableAutoResponse: true });
+
+        const updates = driver.Fake.Sent.filter((e) => e.type === 'session.update');
+        const last = updates[updates.length - 1];
+        if (last?.type === 'session.update' && last.session.type === 'realtime') {
+            const td = (last.session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+            expect(td).toMatchObject({ type: 'semantic_vad', eagerness: 'auto', create_response: false, interrupt_response: true });
+        } else {
+            throw new Error('expected realtime session.update from Reconfigure');
+        }
+    });
+
+    it('a session with no catalog request still reconfigures to explicit server_vad (unchanged behavior)', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        const session = await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+
+        session.Reconfigure?.({ DisableAutoResponse: true });
+
+        const updates = driver.Fake.Sent.filter((e) => e.type === 'session.update');
+        const last = updates[updates.length - 1];
+        if (last?.type === 'session.update' && last.session.type === 'realtime') {
+            const td = (last.session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+            expect(td).toMatchObject({ type: 'server_vad', create_response: false, interrupt_response: true });
+        } else {
+            throw new Error('expected realtime session.update from Reconfigure');
         }
     });
 });

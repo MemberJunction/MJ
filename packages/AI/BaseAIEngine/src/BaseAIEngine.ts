@@ -83,6 +83,37 @@ const DEFAULT_MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 const DEFAULT_MAX_COUNT_PER_MESSAGE = 10;
 const DEFAULT_MAX_DIMENSION = 4096;
 
+/**
+ * The client+server AI metadata engine — the base of the AI catalog surface (models, model types,
+ * vendors, prompts, agents, modalities) and the home of every metadata-only helper.
+ *
+ * 🚨 **ADDING A PUBLIC MEMBER HERE IS ONLY HALF THE JOB — PROXY IT IN `AIEngine`.**
+ *
+ * `AIEngine` (`@memberjunction/aiengine`, `packages/AI/Engine/src/AIEngine.ts`) is the SERVER-SIDE
+ * engine, and it deliberately **does NOT extend this class**. It is a `BaseSingleton` facade that
+ * holds `AIEngineBase.Instance` as {@link AIEngine.Base} and re-exposes the base surface member by
+ * member. That is intentional: the two engines have different load profiles and dependency graphs
+ * (the server engine pulls in actions/sub-agent domain objects this class must not depend on, so it
+ * stays usable in the browser), and composition keeps the server-only concerns from leaking down.
+ *
+ * The cost of that design is that inheritance does **not** carry new members across. A getter or
+ * method added here is invisible to every caller that reaches the engine as `AIEngine.Instance` —
+ * and most server-side callers do. It fails at COMPILE time, not at runtime
+ * (`Property 'X' does not exist on type 'AIEngine'`), so it is cheap to catch but easy to be
+ * surprised by if you assumed a subclass relationship.
+ *
+ * So when you add a public member to this class, add the one-line delegate alongside the others in
+ * `AIEngine`:
+ *
+ * ```typescript
+ * // in packages/AI/Engine/src/AIEngine.ts
+ * public get MyNewThing(): MyType[] { return this.Base.MyNewThing; }
+ * public MyNewHelper(id: string): MyResult | null { return this.Base.MyNewHelper(id); }
+ * ```
+ *
+ * (Members intended to be reached ONLY through `AIEngineBase.Instance` — e.g. internals another
+ * base-layer package consumes — need no delegate; the rule is about the server-side call path.)
+ */
 @RegisterForStartup()
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _models: MJAIModelEntityExtended[] = [];
