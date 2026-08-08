@@ -97,8 +97,21 @@ import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
 import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
 import { ScoredCandidate } from '@memberjunction/core';
 import { QueueManager } from '@memberjunction/queue';
-import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
-import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
+import {
+    ActionEngineServer,
+    BuildEntityActionDispatchKey,
+    EntityActionDispatchGuard,
+    EntityActionEngineServer,
+    EntityActionInvocationBase,
+} from '@memberjunction/actions';
+import type { MJEntityActionEntityExtended } from '@memberjunction/actions-base';
+import {
+    ActionResult,
+    BuildEntityChangeContext,
+    DurableDispatchOutcome,
+    DurableEntityActionRegistry,
+    RedactParamsToJSON,
+} from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -453,6 +466,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * synchronous half of the pipeline: `Validate` and `Before*` participate in the save and can
      * abort it, so skipping one would let a record through that should have been refused, and
      * deferring one would decide the save's outcome after it had already happened.
+     *
+     * **An After-hook binding may also ask to run durably** (`EntityAction.RunMode = 'Durable'`).
+     * After-hooks are dispatched fire-and-forget, so a process that dies mid-flight loses the work
+     * with nothing to retry it; durable dispatch hands it to the task-graph substrate instead (D14).
+     * `Validate` and `Before*` ignore RunMode entirely — deferring work that decides whether the
+     * save succeeds is not a durability improvement, it is a different feature.
      */
     protected override async HandleEntityActions(
         entity: BaseEntity,
@@ -493,6 +512,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 }
 
                 const runOnce = async () => {
+                    // A durable binding is handed off instead of run here — but only from the guarded
+                    // (After*) half, and only when a submitter is registered. Every other path falls
+                    // through to the inline run below.
+                    if (guarded && a.RunMode === 'Durable') {
+                        const outcome = await this.SubmitDurableEntityAction(a, entity, invocationType, user);
+                        if (outcome.Kind === 'Submitted') {
+                            return;
+                        }
+                        LogError(
+                            `Entity Action ${a.ID} asked for durable dispatch but ran inline instead: ${outcome.Reason}`,
+                        );
+                    }
+
                     const result = await engine.RunEntityAction({
                         EntityAction: a,
                         EntityObject: entity,
@@ -520,6 +552,76 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         } catch (e) {
             LogError(e);
             return [];
+        }
+    }
+
+    /**
+     * Hands one After-hook dispatch to the durable substrate, if this host has one.
+     *
+     * **The fallback is to run inline, never to drop.** `RunMode='Durable'` is a request that the
+     * work be harder to lose; refusing to run it on a host with no dispatcher — a CLI, a test, a
+     * client-side provider — would make opting in *less* reliable than leaving it off. Every refusal
+     * path therefore returns `RunInline` with a reason the caller logs.
+     *
+     * **Parameters are redacted before they leave.** `Task.InputPayload` is persistent, user-visible
+     * storage, so this is the same boundary `ActionExecutionLog.Params` sits behind, and it is
+     * crossed through the same helper — the per-binding `LogValue` rows and the action's own param
+     * definitions decide what survives.
+     *
+     * **The self-trigger guard does not follow the work.** `EntityActionDispatchGuard` tracks origin
+     * through an `AsyncLocalStorage` context, which a dispatcher picking the task up in another
+     * process (or after a restart) is definitionally outside of. That is what
+     * `EntitySaveOptions.OriginatingEntityActionIDs` exists for, and the durable runner is
+     * responsible for setting it on any write-back — the explicit channel for work that detached
+     * from the ambient one.
+     */
+    protected async SubmitDurableEntityAction(
+        binding: MJEntityActionEntityExtended,
+        entity: BaseEntity,
+        invocationType: string,
+        user: UserInfo,
+    ): Promise<DurableDispatchOutcome> {
+        const submitter = DurableEntityActionRegistry.Instance.Submitter;
+        if (!submitter) {
+            return { Kind: 'RunInline', Reason: 'no durable submitter is registered on this host' };
+        }
+
+        try {
+            const action = ActionEngineServer.Instance.Actions.find((x) => UUIDsEqual(x.ID, binding.ActionID));
+            if (!action) {
+                return { Kind: 'RunInline', Reason: `action ${binding.ActionID} is not in the engine's metadata` };
+            }
+
+            // Mapped through the ordinary invocation path so a durable dispatch and an inline one
+            // compute the SAME parameters — a second mapping here would be a second contract, free
+            // to drift from the one every other dispatch uses.
+            const invocation = MJGlobal.Instance.ClassFactory.CreateInstance<EntityActionInvocationBase>(
+                EntityActionInvocationBase,
+                'SingleRecord',
+            );
+            if (!invocation) {
+                return { Kind: 'RunInline', Reason: 'the single-record invocation class could not be created' };
+            }
+            const params = await invocation.MapParams([...action.Params.Items], binding.Params, entity);
+
+            const submission = await submitter.Submit({
+                EntityActionID: binding.ID,
+                ActionID: action.ID,
+                ActionName: action.Name,
+                EntityID: entity.EntityInfo.ID,
+                EntityName: entity.EntityInfo.Name,
+                RecordID: entity.PrimaryKey.ToConcatenatedString(),
+                InvocationType: invocationType,
+                RedactedParams: JSON.parse(
+                    RedactParamsToJSON(params, [...action.Params.Items], binding.Params),
+                ) as Record<string, unknown>,
+                ContextUser: user,
+            });
+            return submission.Success
+                ? { Kind: 'Submitted', ParentTaskID: submission.ParentTaskID }
+                : { Kind: 'RunInline', Reason: submission.ErrorMessage ?? 'the durable submission failed' };
+        } catch (e) {
+            return { Kind: 'RunInline', Reason: e instanceof Error ? e.message : String(e) };
         }
     }
 
