@@ -655,7 +655,7 @@ describe('lazy declaration invariants', () => {
     });
 });
 
-describe('TryItems — the non-throwing display-tier probe', () => {
+describe('IsAvailable — the non-throwing display-tier guard', () => {
     class LazyCacheEntity extends BaseEntity {
         public readonly Lines = this.DeclareRelatedRecords<BaseEntity>({
             Name: 'Lines',
@@ -672,23 +672,56 @@ describe('TryItems — the non-throwing display-tier probe', () => {
         }
     }
 
-    it('returns null where Items would throw (lazy donor engine unavailable)', () => {
+    it('is false exactly where Items would throw (lazy donor engine unavailable)', () => {
         const provider = makeProvider();
         const parent = new LazyCacheEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
         parent.NewRecord();
         parent.MarkSaved(); // a "loaded" record whose donor engine has not been Config()'d
 
+        expect(parent.Lines.IsAvailable).toBe(false);
         expect(() => parent.Lines.Items).toThrow(/no registered BaseEngine/);
-        expect(parent.Lines.TryItems()).toBeNull();
     });
 
-    it('returns an empty view for an unsaved parent, matching Items', () => {
+    it('does not throw when it reports unavailable — that is the whole point', () => {
+        const provider = makeProvider();
+        const parent = new LazyCacheEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
+        parent.NewRecord();
+        parent.MarkSaved();
+
+        expect(() => parent.Lines.IsAvailable).not.toThrow();
+    });
+
+    it('is true for an unsaved parent, because Items answers [] rather than throwing', () => {
         const provider = makeProvider();
         const parent = new LazyCacheEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
         parent.NewRecord(); // unsaved — legitimately owns no persisted related records
 
-        expect(parent.Lines.TryItems()).toEqual([]);
-        expect(parent.Lines.Count).toBe(0); // the Items path does not throw either
+        expect(parent.Lines.IsAvailable).toBe(true);
+        expect(parent.Lines.Items).toEqual([]);
+        expect(parent.Lines.Count).toBe(0);
+    });
+
+    it('is true for a non-lazy collection, whose Items never throws', () => {
+        const provider = makeProvider();
+        const parent = new LazyCacheEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
+        parent.NewRecord();
+        parent.MarkSaved();
+
+        // A database-backed explicit collection has no donor to miss.
+        class ExplicitEntity extends BaseEntity {
+            public readonly Lines = this.DeclareRelatedRecords<BaseEntity>({
+                Name: 'Lines',
+                RelatedEntity: 'Products',
+                RelatedEntityJoinField: 'Name',
+                Load: 'explicit',
+            });
+            public override CheckPermissions(): boolean {
+                return true;
+            }
+        }
+        const explicitParent = new ExplicitEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
+        explicitParent.NewRecord();
+        expect(explicitParent.Lines.IsAvailable).toBe(true);
     });
 });
 

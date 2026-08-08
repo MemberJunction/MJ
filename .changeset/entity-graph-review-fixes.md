@@ -12,6 +12,6 @@ fix(core): post-merge review fixes for entity companions / related-record collec
 - Skip clean, already-persisted children at save-plan level so header-only edits stay on the single-row path (`IgnoreDirtyState` still forces a full write-out)
 - Label remote graph CREATEs as `create` (result history + `save` event subtype)
 - Await `LoadFromData` in `copyRecords`, clone `Date` values into copies
-- Enforce lazy ⇒ cache ⇒ read-only at declaration time; accurate lazy-miss diagnostic; new non-throwing `TryItems()` probe for display-tier code
+- Enforce lazy ⇒ cache ⇒ read-only at declaration time; accurate lazy-miss diagnostic; new non-throwing `IsAvailable` guard for display-tier code (one read path, no null-vs-empty ambiguity)
 - SQL Server: recover from doomed-transaction savepoint rollback failures (full rollback + state reset); report real nesting via `CurrentTransactionDepth`; detect out-of-order scope settlement on shared providers
 - `RunInEntityTransaction` preserves the original error when rollback also fails

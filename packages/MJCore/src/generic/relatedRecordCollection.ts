@@ -698,28 +698,40 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
     }
 
     /**
-     * Non-throwing counterpart of {@link Items}, for display-tier code.
+     * Whether reading {@link Items} right now will succeed — the guard for display-tier code.
      *
-     * A lazy collection's {@link Items} getter **throws** when its donor engine is not available —
-     * deliberately, because a silently empty array is how the bug this feature replaced went
-     * unnoticed for years. That is the right default for business logic, but a template or widget
-     * rendering during bootstrap (before anything has awaited the engine's `Config()`) wants "not
-     * available yet", not an aborted render — and the null-check pattern templates reach for
-     * (`@if (entity.Params && …)`) cannot help, because the collection property itself is never
-     * null; it is the read that throws.
+     * A lazy collection's {@link Items} getter **throws** when its donor engine is not available,
+     * deliberately: a silently empty array is how the bug this feature replaced went unnoticed for
+     * years. That is the right default for business logic, but a template or widget rendering
+     * during bootstrap (before anything has awaited the engine's `Config()`) wants "not yet",
+     * not an aborted render — and the null-check templates reach for (`@if (entity.Params && …)`)
+     * cannot help, because the collection property itself is never null; it is the *read* that
+     * throws.
      *
-     * @returns The records when available — already populated, or populatable synchronously right
-     *          now — or `null` when a lazy collection's donor engine is not available yet. Never
-     *          triggers a database load and never throws for the lazy-miss case.
+     * ```html
+     * @if (action.Params.IsAvailable) {
+     *   @for (p of action.Params.Items; track p.ID) { … }
+     * }
+     * ```
+     *
+     * **This is a predicate, not a second way to read.** There is exactly one accessor — `Items` —
+     * so there is no `null`-versus-`[]` ambiguity for a caller to get wrong, and no quiet path that
+     * can drift into business logic and re-create the silent-empty bug. `true` here means the very
+     * next `Items` read is safe *and already populated*, because deciding the answer requires
+     * consulting the donor, and consulting it is what fills the collection.
+     *
+     * Never triggers a database load, and never throws.
      */
-    public TryItems(): readonly T[] | null {
-        if (!this.loaded && this.LoadMode === 'lazy') {
-            if (!this.populateFromCache() && this.Owner.IsSaved) {
-                return null; // donor not available yet — Items would throw here
-            }
+    public get IsAvailable(): boolean {
+        if (this.loaded || this.LoadMode !== 'lazy') {
+            return true; // Items cannot throw on these paths
         }
-        this.refreshCacheViewIfStale();
-        return this.items;
+        if (this.populateFromCache()) {
+            return true;
+        }
+        // An unsaved parent owns no persisted related records, so Items legitimately answers []
+        // rather than throwing — the donor being absent is irrelevant to it.
+        return !this.Owner.IsSaved;
     }
 
     /**

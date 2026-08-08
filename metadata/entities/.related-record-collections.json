@@ -204,12 +204,17 @@
       "MJ: API Keys -> MJ: API Key Scopes. APIKeyID is NOT NULL, Hard delete. Priority is a",
       "ranking, so no Sequence policy (same reasoning as AI Prompt Models above).",
       "",
-      "BEHAVIOUR CHANGE WORTH KNOWING: MJAPIKeyScopeEntityServer overrides ValidateAsync to check",
-      "the scope's row filter, and that override is governed by DefaultSkipAsyncValidation — which",
-      "defaults to true, so today it is effectively dead. Companion validation runs each child's",
-      "ValidateAsync UNCONDITIONALLY, so declaring this collection turns that check on for every",
-      "scope on every API Key save. That is the intended rollup and a security-relevant improvement,",
-      "but a pre-existing malformed row filter will start failing saves."
+      "NO VALIDATION ROLLUP HERE — and that is deliberate. An earlier version of this comment",
+      "claimed that declaring this collection would switch on MJAPIKeyScopeEntityServer's",
+      "row-filter ValidateAsync (dead today, because DefaultSkipAsyncValidation is true) for every",
+      "scope on every API Key save. That is NOT what happens. Scopes is cache-sourced and therefore",
+      "read-only, and a read-only collection is a projection: it contributes no save work, so it",
+      "must contribute no validation either. Validating it would block the parent's save on records",
+      "the save will never write, and — worse — the FK stamping that precedes validation would",
+      "MUTATE the engine's shared cached instances, dirtying them for every holder in the process.",
+      "",
+      "If the row-filter check is wanted, it belongs on the scope's own save path, not smuggled in",
+      "through a parent's validation pass."
     ],
     "fields": {
       "Name": "MJ: API Keys"
