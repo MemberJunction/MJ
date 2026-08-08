@@ -62,6 +62,11 @@ type GraphState = {
     nodes: TaskGraphNode[];
     edges: TaskGraphEdge[];
     entityById: Map<string, MJTaskEntity>;
+    /**
+     * Tasks whose only route in was a condition that evaluated definitively false — the branch was
+     * not taken, so they can never legitimately run.
+     */
+    unreachableTaskIDs: Set<string>;
 };
 
 export class TaskGraphDispatcher implements IShutdownable {
@@ -168,7 +173,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         LogStatus(`[TaskGraphDispatcher] Starting as instance '${this.config.InstanceID}'.`);
         await this.Reconcile();
 
-        this.pollTimer = setInterval(() => { void this.pollOnce(); }, 5_000);
+        this.pollTimer = setInterval(() => { void this.pollOnce(); }, this.config.PollIntervalSeconds * 1000);
         this.reconcileTimer = setInterval(
             () => { void this.Reconcile(); },
             this.config.ReconciliationIntervalSeconds * 1000,
@@ -369,7 +374,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             const graph = await this.loadGraphState(provider, parentID);
             if (graph.nodes.length === 0) continue;
 
-            for (const taskID of ComputeTasksToBlock(graph.nodes, graph.edges)) {
+            const toBlock = new Set([...ComputeTasksToBlock(graph.nodes, graph.edges), ...graph.unreachableTaskIDs]);
+            for (const taskID of toBlock) {
                 const entity = graph.entityById.get(taskID);
                 if (!entity) continue;
                 entity.Status = 'Blocked';
@@ -393,6 +399,11 @@ export class TaskGraphDispatcher implements IShutdownable {
             }
 
             const fresh = await this.loadGraphState(provider, parentID);
+            // ComputeParentRollup treats an empty child set as Complete-and-terminal, which is right
+            // for a graph that genuinely has no children and catastrophic for one whose reload came
+            // back empty transiently — it would mark live work finished and fire its continuation.
+            // The outer guard covered the first load only.
+            if (fresh.nodes.length === 0) continue;
             const rollup = ComputeParentRollup(fresh.nodes);
             const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
             if (!(await parent.Load(parentID))) continue;
@@ -587,18 +598,58 @@ export class TaskGraphDispatcher implements IShutdownable {
         });
     }
 
-    /** Parent tasks that still have work to do. */
+    /**
+     * Parent tasks that still have work to do.
+     *
+     * `BypassCache` for the reason the caching guide names explicitly: **the claim protocol mutates
+     * these rows through direct SQL**, because the CAS guarantee IS the database's atomicity and a
+     * `BaseEntity.Save()` cannot express a guarded UPDATE. Direct DML fires no invalidation event,
+     * so a cached read of this query is stale the instant any task is claimed or completed — and
+     * the dispatcher would then be reading its own work queue through a cache its own writes never
+     * invalidate. Left cached, a completed task keeps reading as `In Progress` and the graph never
+     * rolls up: submitted work simply never settles.
+     */
     private async findActiveGraphIDs(provider: IMetadataProvider): Promise<string[]> {
-        const result = await RunView.FromMetadataProvider(provider).RunView<{ ParentID: string }>(
+        const rv = RunView.FromMetadataProvider(provider);
+
+        // TWO queries, because "has work left to do" and "needs attention" are not the same set.
+        //
+        // Selecting only graphs with non-terminal CHILDREN looks right and is subtly fatal: the
+        // moment the last child completes, the graph leaves that set — so the pass that would have
+        // rolled the parent up never sees it. A graph whose tasks all succeed therefore stays
+        // In Progress forever and its continuation never fires. (A graph that FAILS happened to
+        // survive this, because blocking its dependents left them non-terminal for one more pass —
+        // which is why the bug hid behind a passing failure-path test.)
+        //
+        // The second query closes it: a parent that is itself non-terminal still needs looking at,
+        // whatever its children are doing.
+        const [withPendingWork, unsettledParents] = await rv.RunViews([
             {
                 EntityName: 'MJ: Tasks',
                 ExtraFilter: `ParentID IS NOT NULL AND Status IN ('Pending','In Progress')`,
                 Fields: ['ParentID'],
                 ResultType: 'simple',
+                BypassCache: true,
             },
-            this.contextUser,
-        );
-        return [...new Set((result.Results ?? []).map((r) => r.ParentID).filter(Boolean))];
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `ParentID IS NULL AND Status IN ('Pending','In Progress')`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            },
+        ], this.contextUser);
+
+        const ids = new Set<string>();
+        for (const r of (withPendingWork?.Results ?? []) as Array<{ ParentID: string }>) {
+            if (r.ParentID) ids.add(r.ParentID);
+        }
+        // Childless tasks match the second query too; propagateAndRollup skips anything with no
+        // nodes, so they cost one empty load and nothing else.
+        for (const r of (unsettledParents?.Results ?? []) as Array<{ ID: string }>) {
+            if (r.ID) ids.add(r.ID);
+        }
+        return [...ids];
     }
 
     /**
@@ -639,16 +690,18 @@ export class TaskGraphDispatcher implements IShutdownable {
     /** Loads a graph's children and edges in the shapes both the algorithms and mutation need. */
     private async loadGraphState(provider: IMetadataProvider, parentTaskID: string): Promise<GraphState> {
         const rv = RunView.FromMetadataProvider(provider);
+        // BypassCache throughout: task status is written by the claim protocol's direct SQL, which
+        // fires no cache invalidation. See findActiveGraphIDs.
         const childrenResult = await rv.RunView<MJTaskEntity>(
-            { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentTaskID}'`, ResultType: 'entity_object' },
+            { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentTaskID}'`, ResultType: 'entity_object', BypassCache: true },
             this.contextUser,
         );
         const children = (childrenResult.Success ? childrenResult.Results : []) ?? [];
-        if (children.length === 0) return { nodes: [], edges: [], entityById: new Map() };
+        if (children.length === 0) return { nodes: [], edges: [], entityById: new Map(), unreachableTaskIDs: new Set() };
 
         const idList = children.map((c) => `'${c.ID}'`).join(',');
         const depsResult = await rv.RunView<MJTaskDependencyEntity>(
-            { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${idList})`, ResultType: 'entity_object' },
+            { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${idList})`, ResultType: 'entity_object', BypassCache: true },
             this.contextUser,
         );
         const deps = (depsResult.Success ? depsResult.Results : []) ?? [];
@@ -666,11 +719,18 @@ export class TaskGraphDispatcher implements IShutdownable {
         // the dependent task runs early — turning a typo into out-of-order execution. Keeping the
         // edge instead stalls the graph, which the stall detector already reports loudly.
         const liveEdges: TaskGraphEdge[] = [];
+        // A definitely-false edge must not merely disappear. Removing a task's only prerequisite
+        // makes it eligible in the very next wave — so "this branch was not taken" would execute the
+        // branch, potentially before the node that gated it. The dependent is recorded as
+        // unreachable instead, and blocked before anything can claim it.
+        const droppedInto = new Set<string>();
+        const stillReachable = new Set<string>();
         for (const d of deps) {
             if (d.Condition?.trim()) {
                 const outcome = this.evaluateEdgeCondition(d, entityById);
-                if (outcome === 'drop') continue;
+                if (outcome === 'drop') { droppedInto.add(d.TaskID); continue; }
             }
+            stillReachable.add(d.TaskID);
             liveEdges.push({
                 taskId: d.TaskID,
                 dependsOnTaskId: d.DependsOnTaskID,
@@ -678,10 +738,15 @@ export class TaskGraphDispatcher implements IShutdownable {
             });
         }
 
+        // Only unreachable when EVERY route in was cut. A node still holding a live edge is simply
+        // waiting on it, and a node reached by an alternate branch is genuinely reachable.
+        const unreachableTaskIDs = new Set([...droppedInto].filter((id) => !stillReachable.has(id)));
+
         return {
             nodes: children.map((c) => ({ id: c.ID, status: c.Status as TaskGraphNodeStatus })),
             edges: liveEdges,
             entityById,
+            unreachableTaskIDs,
         };
     }
 
@@ -728,8 +793,10 @@ export class TaskGraphDispatcher implements IShutdownable {
     private async loadDependencyOutputs(provider: IMetadataProvider, taskID: string): Promise<Map<string, unknown>> {
         const outputs = new Map<string, unknown>();
         const rv = RunView.FromMetadataProvider(provider);
+        // BypassCache: an upstream task's OutputPayload is written on the completion path, so a
+        // cached read here can hand a dependent task the previous run's output — or none at all.
         const deps = await rv.RunView<MJTaskDependencyEntity>(
-            { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID='${taskID}'`, ResultType: 'entity_object' },
+            { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID='${taskID}'`, ResultType: 'entity_object', BypassCache: true },
             this.contextUser,
         );
         for (const dep of (deps.Success ? deps.Results : []) ?? []) {

@@ -846,15 +846,15 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT71 - Task Graph Orchestration",
-            "Sequence": 34,
+            "Sequence": 33,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "03B972BB-3EC8-463C-A982-140153E65ACC"
           },
           "sync": {
-            "lastModified": "2026-08-07T18:02:58.170Z",
-            "checksum": "c502c3b56c8b5c21b27f0f89fcf7eb394de74646099129c045538ee469e05821"
+            "lastModified": "2026-08-08T05:12:29.167Z",
+            "checksum": "1507265d2d71dc30e94c9029245664fd0653798aff251b78ca928b8c19765ac5"
           }
         },
         {
@@ -866,6 +866,36 @@
           },
           "primaryKey": {
             "ID": "B4FE6167-1F8A-4B5C-A565-A008CE03BFD8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT73 - Entity Graph (client transport)",
+            "Sequence": 53,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0E1289E0-2D35-4F05-A032-9E6EB09E0990"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T05:04:01.987Z",
+            "checksum": "2ce90ebc9e5d1134013c5803c8cf2ed7d423f0a0aa7e0906b6d2334eca5cbca9"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT74 - Task Graph Execution",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CA15CEC9-DB0B-45D2-917D-E83589CB32FC"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T05:12:29.179Z",
+            "checksum": "f8a85bfb96880d982ef4d84741c96fab3e08a9b3be217aa517a9b138e3c529fc"
           }
         }
       ]

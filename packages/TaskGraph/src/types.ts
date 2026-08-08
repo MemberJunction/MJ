@@ -202,6 +202,17 @@ export type TaskGraphDispatcherConfig = {
     /** Maximum tasks executed concurrently by this instance. */
     MaxConcurrentTasks: number;
 
+    /**
+     * How often to look for claimable work.
+     *
+     * Five seconds is the right production default — a graph's steps are agent runs measured in
+     * seconds to minutes, so polling faster buys latency nobody perceives and costs a query per
+     * instance per tick. It is configurable rather than fixed because the correct value genuinely
+     * differs by host: a test harness driving a graph to completion should not wait five seconds per
+     * node, and a deployment running many short tasks may want tighter latency.
+     */
+    PollIntervalSeconds: number;
+
     /** How often the reconciliation sweep runs. */
     ReconciliationIntervalSeconds: number;
 };
@@ -211,6 +222,7 @@ export const DEFAULT_DISPATCHER_CONFIG: Omit<TaskGraphDispatcherConfig, 'Instanc
     ClaimTTLSeconds: 300,
     HeartbeatIntervalSeconds: 60,
     MaxConcurrentTasks: 5,
+    PollIntervalSeconds: 5,
     ReconciliationIntervalSeconds: 120,
 };
 
