@@ -1,8 +1,30 @@
 import { MJGlobal, MJLruCache, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { MJActionFilterEntity, MJActionParamEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { BaseEntity, LogError, Metadata, RunView } from "@memberjunction/core";
-import { ActionInvocationProvenance, ActionParam, ActionResult, EntityActionInvocationParams, EntityActionResult, IsEntityActionInScope, ResolveEntityActionScopeResolver } from "@memberjunction/actions-base";
+import {
+    ActionInvocationProvenance,
+    ActionParam,
+    ActionResult,
+    ActionResultSimple,
+    DurableEntityActionRegistry,
+    EntityActionInvocationParams,
+    EntityActionResult,
+    IsEntityActionInScope,
+    MJActionEntityExtended,
+    RedactParamsToJSON,
+    ResolveEntityActionScopeResolver,
+    RunActionParams,
+} from "@memberjunction/actions-base";
 import { ActionEngineServer } from "../generic/ActionEngine";
+
+/**
+ * Lifecycle events a durable binding may defer.
+ *
+ * Duplicated from the workflow layer's list rather than imported, because importing it would give
+ * the action engine a dependency on `@memberjunction/ai-core-plus` — which itself depends on
+ * `actions-base`, so the edge would run the wrong way through the graph for three string literals.
+ */
+const AFTER_INVOCATION_TYPES: readonly string[] = ['AfterCreate', 'AfterUpdate', 'AfterDelete'];
 
 /**
  * Base class for invocation of any entity action invocation type
@@ -171,6 +193,68 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
     }
 
     /**
+     * The deferral that hands this run to the durable substrate, or `undefined` to execute normally.
+     *
+     * Returns undefined for every case that must stay inline: a binding that did not opt in, a
+     * lifecycle event that participates in the save, or a host with no submitter registered. The
+     * last is a fallback rather than a refusal — `RunMode='Durable'` asks for the work to be harder
+     * to lose, so declining to run it where the durable path is unavailable would make the opt-in
+     * less reliable than leaving it off.
+     */
+    protected BuildDurableDeferral(
+        params: EntityActionInvocationParams,
+        action: MJActionEntityExtended,
+    ): ((runParams: RunActionParams) => Promise<ActionResultSimple | null>) | undefined {
+        if (params.EntityAction.RunMode !== 'Durable') {
+            return undefined;
+        }
+        // Validate and Before* run inside the save and can abort it. Deferring one would decide the
+        // save's outcome after it had already happened, which is a different feature, not durability.
+        if (!AFTER_INVOCATION_TYPES.includes(params.InvocationType?.Name)) {
+            return undefined;
+        }
+        const submitter = DurableEntityActionRegistry.Instance.Submitter;
+        if (!submitter) {
+            return undefined;
+        }
+
+        return async (runParams: RunActionParams): Promise<ActionResultSimple | null> => {
+            const submission = await submitter.Submit({
+                EntityActionID: params.EntityAction.ID,
+                ActionID: action.ID,
+                ActionName: action.Name,
+                EntityID: params.EntityObject.EntityInfo.ID,
+                EntityName: params.EntityObject.EntityInfo.Name,
+                RecordID: params.EntityObject.PrimaryKey.ToConcatenatedString(),
+                InvocationType: params.InvocationType.Name,
+                // Persistent, user-visible storage: nothing writes a raw ActionParam[] there. Redacted
+                // through the same helper ActionExecutionLog.Params goes through, so the binding's
+                // LogValue rows decide what survives.
+                RedactedParams: SafeJSONParse<Record<string, unknown>>(
+                    RedactParamsToJSON(runParams.Params, [...action.Params.Items], params.EntityAction.Params),
+                ) ?? {},
+                ContextUser: params.ContextUser,
+            });
+
+            if (submission.Success) {
+                return {
+                    Success: true,
+                    ResultCode: 'SUBMITTED',
+                    Message: `Submitted for durable execution as task graph ${submission.ParentTaskID ?? '(unknown)'}.`,
+                };
+            }
+
+            // Declining the deferral runs the action normally. See the doc comment above: dropping
+            // the work would make opting into durability worse than not opting in.
+            LogError(
+                `Entity Action ${params.EntityAction.ID} asked for durable dispatch but ran inline instead: ` +
+                `${submission.ErrorMessage ?? 'the durable submission failed'}`,
+            );
+            return null;
+        };
+    }
+
+    /**
      * The filter rows that gate this binding, in the order the binding declares.
      *
      * Two things this does beyond the obvious lookup:
@@ -241,6 +325,11 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
                 // Carried so a filter can decide on the transition rather than only the end state.
                 // Captured by the dispatcher before the save finished; see EntityChangeContext.
                 EntityChange: params.EntityChange,
+                // Durability replaces EXECUTION, not the gates. Passed as a deferral so scope (above)
+                // and the binding's filters (inside RunAction) both decide first — submitting earlier
+                // would fire a scoped durable trigger for every record and a filtered one on every
+                // save, which is the opposite of what those rows were configured to do.
+                DeferExecution: this.BuildDurableDeferral(params, action),
                 Provenance: this.BuildProvenance(params, params.EntityObject)
             });
 

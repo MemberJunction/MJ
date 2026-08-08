@@ -23,6 +23,16 @@ import type { BridgeHandlerMap } from "@memberjunction/code-execution";
  
 
 /**
+ * The `Message` on a run that a filter prevented.
+ *
+ * Exported because it is the only thing distinguishing a prevented run from an executed one in
+ * `ActionExecutionLog` — both write a row, deliberately, so an operator can see that a filter
+ * refused rather than wondering why nothing happened.
+ */
+export const ACTION_PREVENTED_BY_FILTER_MESSAGE =
+   'Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.';
+
+/**
  * Execution context handed to an Action Filter's `Code` when the engine evaluates it inline
  * (i.e. when no {@link BaseActionFilter} subclass is registered for the filter). The code runs
  * with this object bound as `ActionFilterContext` and signals its verdict either by returning
@@ -187,7 +197,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          // filters indicated we should NOT run this action
          const result: ActionResult = {
             Success: true,
-            Message: "Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.",
+            Message: ACTION_PREVENTED_BY_FILTER_MESSAGE,
             LogEntry: null, // initially null
             Params: params.Params,
             RunParams: params
@@ -196,6 +206,13 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          if(this.ShouldLogOutcome(params, result)){
             result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
          }
+
+         // RETURNING here is the entire point of a filter. Without it this block logged a refusal
+         // and then fell through to run the action anyway — so every filter recorded that it had
+         // prevented something while preventing nothing. The refusal row made it look like the
+         // mechanism worked, which is why it survived: the observable said "prevented" and the side
+         // effect happened regardless.
+         return result;
       }
 
       return await this.RunActionWithTimeout(params, inputSnapshot);
@@ -442,10 +459,17 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          // Branch by Action.Type. Runtime actions go through the sandboxed
          // RuntimeActionExecutor; Custom / Generated (and legacy rows where
          // Type may be null) flow through the existing ClassFactory path.
-         const simpleResult: ActionResultSimple =
+         // A deferral takes the place of execution, never of the gates above it — validation and
+         // filters have already run by the time control reaches here. A deferral that returns null
+         // declined, so the action runs normally.
+         const deferred: ActionResultSimple | null = params.DeferExecution
+            ? await params.DeferExecution(params)
+            : null;
+         const simpleResult: ActionResultSimple = deferred ?? (
             params.Action.Type === 'Runtime'
                ? await this.RunRuntimeAction(params)
-               : await this.RunClassBasedAction(params);
+               : await this.RunClassBasedAction(params)
+         );
 
          const resultCodeEntity: MJActionResultCodeEntity | undefined = this.ActionResultCodes.find(r => UUIDsEqual(r.ActionID, params.Action.ID) &&
                                                                r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());

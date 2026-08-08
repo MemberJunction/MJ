@@ -208,7 +208,7 @@ vi.mock('@memberjunction/actions-base', () => {
 // ============================================================================
 // Now import the modules under test
 // ============================================================================
-import { ActionEngineServer } from '../generic/ActionEngine';
+import { ACTION_PREVENTED_BY_FILTER_MESSAGE, ActionEngineServer } from '../generic/ActionEngine';
 import { BaseAction } from '../generic/BaseAction';
 import { Metadata, LogError, LogErrorEx } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
@@ -322,6 +322,55 @@ describe('ActionEngineServer', () => {
             // mutate its params — here an empty param set, so the redacted JSON is "[]".
             expect(internalSpy).toHaveBeenCalledWith(params, '[]');
             expect(result.Success).toBe(true);
+        });
+
+        it('must NOT run the action when filters refuse', async () => {
+            // The regression this exists for: the refusal branch built a result, logged it, and then
+            // fell through to execute the action anyway. Every filter recorded that it had prevented
+            // something while preventing nothing — and the log row made the mechanism look like it
+            // worked, which is exactly why it survived. Asserting on the returned message alone would
+            // NOT have caught it; the assertion that matters is that execution never happened.
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(false as never);
+            const internalSpy = vi.spyOn(engine as never, 'InternalRunAction' as never);
+            const timeoutSpy = vi.spyOn(engine as never, 'RunActionWithTimeout' as never);
+
+            const params = {
+                Action: { ID: 'action-1', Name: 'Test Action', DriverClass: 'TestDriver' },
+                ContextUser: { ID: 'user-1', Name: 'Test' },
+                Filters: [{ ID: 'f1' }],
+                Params: [],
+                SkipActionLog: true,
+            };
+
+            const result = await engine.RunAction(params as unknown as Record<string, Function>);
+
+            expect(internalSpy).not.toHaveBeenCalled();
+            expect(timeoutSpy).not.toHaveBeenCalled();
+            // Prevented is a SUCCESS: a filter saying "not this time" is the mechanism working, not
+            // an error, and callers must not treat it as a failure to retry.
+            expect(result.Success).toBe(true);
+            expect(result.Message).toBe(ACTION_PREVENTED_BY_FILTER_MESSAGE);
+        });
+
+        it('runs a deferral in place of the action, but only after filters pass', async () => {
+            // Durable dispatch hangs on this seam. If a deferral could run before the gates, a scoped
+            // or filtered durable binding would fire on every record and every save.
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(false as never);
+            const defer = vi.fn().mockResolvedValue({ Success: true, ResultCode: 'SUBMITTED', Message: 'submitted' });
+
+            const params = {
+                Action: { ID: 'action-1', Name: 'Test Action', DriverClass: 'TestDriver' },
+                ContextUser: { ID: 'user-1', Name: 'Test' },
+                Filters: [{ ID: 'f1' }],
+                Params: [],
+                SkipActionLog: true,
+                DeferExecution: defer,
+            };
+
+            await engine.RunAction(params as unknown as Record<string, Function>);
+            expect(defer).not.toHaveBeenCalled();
         });
     });
 

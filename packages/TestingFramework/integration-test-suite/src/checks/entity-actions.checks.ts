@@ -37,7 +37,7 @@ import {
     type DurableEntityActionSubmission,
     type DurableEntityActionSubmitter,
 } from '@memberjunction/actions-base';
-import { EntityActionEngineServer } from '@memberjunction/actions';
+import { ACTION_PREVENTED_BY_FILTER_MESSAGE, ActionEngineServer, EntityActionEngineServer } from '@memberjunction/actions';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -211,13 +211,20 @@ async function waitFor(predicate: () => boolean | Promise<boolean>, what: string
     Assert(false, `timed out waiting for ${what}`);
 }
 
-/** How many execution-log rows exist for an action — the observable proof it ran. */
-async function logCountFor(ctx: IntegrationCheckContext, entityActionID: string): Promise<number> {
-    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+/**
+ * How many times this binding actually EXECUTED its action.
+ *
+ * Not simply "how many log rows exist". A run a filter prevented also writes a row — deliberately,
+ * so an operator can see that a filter refused rather than wondering why nothing happened — so
+ * counting rows would report a working filter as a failure to gate. The refusal is identified by the
+ * shared message constant rather than by matching prose here, so the two cannot drift.
+ */
+async function executionCountFor(ctx: IntegrationCheckContext, entityActionID: string): Promise<number> {
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string; Message: string | null }>(
         {
             EntityName: 'MJ: Action Execution Logs',
             ExtraFilter: `EntityActionID='${entityActionID}'`,
-            Fields: ['ID'],
+            Fields: ['ID', 'Message'],
             ResultType: 'simple',
             // The log is written fire-and-forget through a save queue; a cached read here would show
             // the count as it was before the run.
@@ -225,7 +232,22 @@ async function logCountFor(ctx: IntegrationCheckContext, entityActionID: string)
         },
         ctx.User,
     );
-    return res.Results?.length ?? 0;
+    return (res.Results ?? []).filter((r) => r.Message !== ACTION_PREVENTED_BY_FILTER_MESSAGE).length;
+}
+
+/** How many times a filter PREVENTED this binding — the positive proof a gate did its job. */
+async function preventedCountFor(ctx: IntegrationCheckContext, entityActionID: string): Promise<number> {
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string; Message: string | null }>(
+        {
+            EntityName: 'MJ: Action Execution Logs',
+            ExtraFilter: `EntityActionID='${entityActionID}'`,
+            Fields: ['ID', 'Message'],
+            ResultType: 'simple',
+            BypassCache: true,
+        },
+        ctx.User,
+    );
+    return (res.Results ?? []).filter((r) => r.Message === ACTION_PREVENTED_BY_FILTER_MESSAGE).length;
 }
 
 // ── checks ───────────────────────────────────────────────────────────────────────────────────────
@@ -244,12 +266,12 @@ export const EntityActionChecks: NamedCheck[] = [
             await refreshEngine(ctx);
 
             const list = await createList(ctx, `mj-it-ea1 ${Date.now()} (safe to delete)`);
-            const before = await logCountFor(ctx, binding.ID);
+            const before = await executionCountFor(ctx, binding.ID);
 
             list.Description = 'changed';
             Assert(await list.Save(), 'the subject save must succeed');
 
-            await waitFor(async () => (await logCountFor(ctx, binding.ID)) > before,
+            await waitFor(async () => (await executionCountFor(ctx, binding.ID)) > before,
                 'the AfterUpdate binding to produce an execution-log row');
         },
     },
@@ -271,26 +293,28 @@ export const EntityActionChecks: NamedCheck[] = [
             const list = await createList(ctx, `mj-it-ea2 ${Date.now()} (safe to delete)`, 'draft');
 
             // A save that does NOT make the transition must not fire.
-            const baseline = await logCountFor(ctx, binding.ID);
+            const baseline = await executionCountFor(ctx, binding.ID);
             list.Description = 'still-draft';
             Assert(await list.Save(), 'the non-transition save must succeed');
             await settle(1500);
-            AssertEqual(await logCountFor(ctx, binding.ID), baseline,
+            AssertEqual(await executionCountFor(ctx, binding.ID), baseline,
                 'a save that did not make the transition must not fire the binding');
+            Assert(await preventedCountFor(ctx, binding.ID) > 0,
+                'the filter must have been evaluated and refused — not merely absent');
 
             // The transition itself must.
             list.Description = 'approved';
             Assert(await list.Save(), 'the transition save must succeed');
-            await waitFor(async () => (await logCountFor(ctx, binding.ID)) > baseline,
+            await waitFor(async () => (await executionCountFor(ctx, binding.ID)) > baseline,
                 'the transition to fire the binding');
 
             // And saving again while it is ALREADY approved must not — that is the state/transition
             // distinction the whole change contract exists to draw.
-            const afterTransition = await logCountFor(ctx, binding.ID);
+            const afterTransition = await executionCountFor(ctx, binding.ID);
             list.Name = `${list.Name} (touched)`;
             Assert(await list.Save(), 'the re-save must succeed');
             await settle(1500);
-            AssertEqual(await logCountFor(ctx, binding.ID), afterTransition,
+            AssertEqual(await executionCountFor(ctx, binding.ID), afterTransition,
                 'a record that was ALREADY approved did not become approved again');
         },
     },
@@ -311,12 +335,12 @@ export const EntityActionChecks: NamedCheck[] = [
             await refreshEngine(ctx);
 
             const list = await createList(ctx, `mj-it-ea3 ${Date.now()} (safe to delete)`);
-            const before = await logCountFor(ctx, binding.ID);
+            const before = await executionCountFor(ctx, binding.ID);
 
             list.Description = 'anything';
             Assert(await list.Save(), 'the subject save must succeed');
 
-            await waitFor(async () => (await logCountFor(ctx, binding.ID)) > before,
+            await waitFor(async () => (await executionCountFor(ctx, binding.ID)) > before,
                 'the binding to run despite a Disabled filter — a Disabled filter must not gate');
         },
     },
@@ -331,21 +355,27 @@ export const EntityActionChecks: NamedCheck[] = [
             // behind it is an agent.
             const action = await resolveAction(ctx);
             const binding = await createBinding(ctx, action, 'AfterUpdate');
-            const { Filter } = await attachFilter(ctx, binding, 'true');
+            const { Filter, Binding: link } = await attachFilter(ctx, binding, 'true');
 
-            // Delete the filter row out from under the binding, leaving a dangling reference.
-            Assert(await Filter.Delete(), 'the filter fixture must delete');
-            CREATED.ActionFilters.splice(CREATED.ActionFilters.indexOf(Filter.ID), 1);
+            // Leave a dangling reference by removing the filter from the ENGINE's view rather than
+            // from the database: the junction row's FK means the row itself cannot be deleted while
+            // the binding points at it, and dropping the junction row too would remove the binding
+            // being tested rather than break it.
+            const filters = ActionEngineServer.Instance.ActionFilters;
+            const at = filters.findIndex((f) => f.ID === Filter.ID);
+            Assert(at >= 0, 'the filter fixture must be visible to the engine before it is removed');
+            filters.splice(at, 1);
+            void link;
             await refreshEngine(ctx);
 
             const list = await createList(ctx, `mj-it-ea4 ${Date.now()} (safe to delete)`);
-            const before = await logCountFor(ctx, binding.ID);
+            const before = await executionCountFor(ctx, binding.ID);
 
             list.Description = 'anything';
             Assert(await list.Save(), 'the save itself must still succeed — an After-hook cannot fail it');
 
             await settle(2000);
-            AssertEqual(await logCountFor(ctx, binding.ID), before,
+            AssertEqual(await executionCountFor(ctx, binding.ID), before,
                 'an unresolvable filter must prevent the action, not run it unfiltered');
         },
     },
@@ -369,11 +399,11 @@ export const EntityActionChecks: NamedCheck[] = [
             });
             await refreshEngine(ctx);
 
-            const before = await logCountFor(ctx, binding.ID);
+            const before = await executionCountFor(ctx, binding.ID);
             outOfScope.Description = 'changed';
             Assert(await outOfScope.Save(), 'the out-of-scope save must succeed');
             await settle(2000);
-            AssertEqual(await logCountFor(ctx, binding.ID), before,
+            AssertEqual(await executionCountFor(ctx, binding.ID), before,
                 'a record outside the binding\'s scope must not fire it');
         },
     },
@@ -394,13 +424,16 @@ export const EntityActionChecks: NamedCheck[] = [
             DurableEntityActionRegistry.Instance.Register(submitter);
             try {
                 const list = await createList(ctx, `mj-it-ea6 ${Date.now()} (safe to delete)`);
-                const beforeLogs = await logCountFor(ctx, binding.ID);
+                const beforeLogs = await executionCountFor(ctx, binding.ID);
 
                 list.Description = 'changed';
                 Assert(await list.Save(), 'the subject save must succeed');
 
-                await waitFor(() => submitter.Requests.length > 0, 'the durable submission');
-                const request = submitter.Requests[0];
+                // Filtered to THIS binding: every Durable binding an earlier check created is still
+                // Active on the same entity, so a shared submitter sees their submissions too.
+                const mine = () => submitter.Requests.filter((r) => r.EntityActionID === binding.ID);
+                await waitFor(() => mine().length > 0, 'the durable submission');
+                const request = mine()[0];
                 AssertEqual(request.EntityActionID, binding.ID, 'the request must name the binding that fired');
                 AssertEqual(request.ActionID, action.ID, 'the request must name the action to run');
                 AssertEqual(request.InvocationType, 'AfterUpdate', 'the request must name the event that fired it');
@@ -411,8 +444,9 @@ export const EntityActionChecks: NamedCheck[] = [
                 // And it must NOT also have run inline — a durable dispatch that double-runs is
                 // worse than one that never ran, because the effect happens twice.
                 await settle(1500);
-                AssertEqual(await logCountFor(ctx, binding.ID), beforeLogs,
+                AssertEqual(await executionCountFor(ctx, binding.ID), beforeLogs,
                     'a submitted binding must not also execute in-process');
+                AssertEqual(mine().length, 1, 'the binding must have been submitted exactly once');
             } finally {
                 DurableEntityActionRegistry.Instance.Clear();
             }
@@ -436,14 +470,15 @@ export const EntityActionChecks: NamedCheck[] = [
             DurableEntityActionRegistry.Instance.Register(submitter);
             try {
                 const list = await createList(ctx, `mj-it-ea7 ${Date.now()} (safe to delete)`);
-                const before = await logCountFor(ctx, binding.ID);
+                const before = await executionCountFor(ctx, binding.ID);
 
                 list.Description = 'changed';
                 Assert(await list.Save(), 'the subject save must succeed');
 
-                await waitFor(async () => (await logCountFor(ctx, binding.ID)) > before,
+                await waitFor(async () => (await executionCountFor(ctx, binding.ID)) > before,
                     'the inline fallback to run the action after a failed submission');
-                AssertEqual(submitter.Requests.length, 1, 'submission must have been attempted exactly once');
+                AssertEqual(submitter.Requests.filter((r) => r.EntityActionID === binding.ID).length, 1,
+                    'submission must have been attempted exactly once for THIS binding');
             } finally {
                 DurableEntityActionRegistry.Instance.Clear();
             }
