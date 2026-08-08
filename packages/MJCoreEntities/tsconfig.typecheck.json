@@ -1,9 +1,9 @@
 {
-  "//": "Type-level tests only. The build tsconfig EXCLUDES src/__tests__, so pointing vitest's typecheck at it silently produced an empty program — the *.test-d.ts assertions all 'passed' while a deliberately widened generic went undetected. This config puts them back in the program.",
+  "//": "Type-level tests only. The build tsconfig EXCLUDES src/__tests__, so pointing vitest's typecheck at it silently produced an empty program — the *.test-d.ts assertions all 'passed' while a deliberately widened generic went undetected. This config puts the test-d files back in the program. Include is scoped to *.test-d.ts (+ src via transitive imports), NOT all of __tests__: tsc surfaces errors from every file in the program, and the legacy *.test.ts files carry ~36 pre-typecheck-era issues that would fail the suite for unrelated changes (they did, on next, 2026-08-07). Vacuity re-verified after the narrowing: a deliberately broken expectTypeOf in the test-d file fails.",
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/__tests__/**/*.test-d.ts"],
   "exclude": ["node_modules", "dist"]
 }
