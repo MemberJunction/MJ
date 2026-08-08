@@ -475,10 +475,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
         }
         else if (params.QueryID) {
-            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment);
+            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment, params.DataSource);
         }
         else if (params.QueryName) {
-            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment);
+            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment, params.DataSource);
         }
         else {
             throw new Error("No SQL, QueryID, or QueryName provided to RunQuery");
@@ -547,7 +547,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             StartRow: p.StartRow,
             ForceAuditLog: p.ForceAuditLog,
             AuditLogDescription: p.AuditLogDescription,
-            Enrichment: p.Enrichment
+            Enrichment: p.Enrichment,
+            DataSource: p.DataSource // forward so a batched DataSource:'Materialized' isn't silently downgraded to live
         }));
 
         const result = await this.ExecuteGQL(query, { input });
@@ -558,17 +559,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return [];
     }
 
-    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment): Promise<RunQueryResult> {
+    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment, DataSource?: 'Live' | 'Materialized'): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
-                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
+            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject, $DataSource: String) {
+                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment, DataSource: $DataSource) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
 
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryID: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment } = { QueryID };
+        const variables: { QueryID: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment; DataSource?: 'Live' | 'Materialized' } = { QueryID };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
@@ -586,6 +587,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         if (Enrichment !== undefined) {
             variables.Enrichment = Enrichment;
+        }
+        if (DataSource !== undefined) {
+            variables.DataSource = DataSource;
         }
 
         const result = await this.ExecuteGQL(query, variables);
@@ -594,17 +598,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment): Promise<RunQueryResult> {
+    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment, DataSource?: 'Live' | 'Materialized'): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
-                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
+            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject, $DataSource: String) {
+                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment, DataSource: $DataSource) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
 
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryName: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment } = { QueryName };
+        const variables: { QueryName: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment; DataSource?: 'Live' | 'Materialized' } = { QueryName };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
@@ -622,6 +626,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         if (Enrichment !== undefined) {
             variables.Enrichment = Enrichment;
+        }
+        if (DataSource !== undefined) {
+            variables.DataSource = DataSource;
         }
 
         const result = await this.ExecuteGQL(query, variables);
@@ -690,6 +697,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     ForceAuditLog: item.params.ForceAuditLog || false,
                     AuditLogDescription: item.params.AuditLogDescription || null,
                     Enrichment: item.params.Enrichment || null,
+                    DataSource: item.params.DataSource || null,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
