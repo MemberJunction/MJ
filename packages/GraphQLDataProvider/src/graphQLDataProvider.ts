@@ -2543,7 +2543,19 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data;
         }
         catch (e) {
-            // Enhanced error logging to diagnose 500 errors
+            // Enhanced error logging to diagnose 500 errors.
+            //
+            // SECURITY: `e` (from the underlying graphql-request client) carries the
+            // original request on `e.request`, including `variables` verbatim. For any
+            // mutation whose input contains a secret (CreateConnection/UpdateConnection's
+            // CredentialValues, etc.), logging `fullError: e` directly put that secret in
+            // plaintext into whatever this process's console output is captured to —
+            // which, on a server, is typically a persistent log file. Redact
+            // `request.variables` before logging; every other diagnostic field (status,
+            // GraphQL errors, the query text itself) is preserved unchanged.
+            const redactedError = e && typeof e === 'object'
+                ? { ...e, request: e.request ? { ...e.request, variables: '[REDACTED]' } : e.request }
+                : e;
             console.error('[GraphQL] ExecuteGQL error caught:', {
                 hasResponse: !!e?.response,
                 hasErrors: !!e?.response?.errors,
@@ -2551,7 +2563,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 firstError: e?.response?.errors?.[0],
                 errorCode: e?.response?.errors?.[0]?.extensions?.code,
                 errorMessage: e?.response?.errors?.[0]?.message,
-                fullError: e
+                fullError: redactedError
             });
 
             if (e && e.response && e.response.errors?.length > 0) {//e.code === 'JWT_EXPIRED') {
