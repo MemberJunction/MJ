@@ -32,6 +32,42 @@ export type TaskAgentRunner = {
     RunAgentForTask(params: TaskAgentRunParams): Promise<TaskAgentRunResult>;
 };
 
+/** Everything running one action for one task node needs. */
+export type TaskActionRunParams = {
+    TaskID: string;
+    ActionID: string;
+    /** Structured input from `Task.InputPayload` — for durable entity-action dispatch, the redacted params. */
+    InputPayload: unknown;
+    /** Outputs of this node's satisfied prerequisites, in the same shape agent nodes receive. */
+    DependencyOutputs: Map<string, unknown>;
+    Provider: IMetadataProvider;
+    ContextUser: UserInfo;
+};
+
+/** The outcome of one action node. */
+export type TaskActionRunResult = {
+    Success: boolean;
+    Output?: unknown;
+    ErrorMessage?: string;
+};
+
+/**
+ * Runs one action for one task node.
+ *
+ * The third execution shape, beside agents and people. Abstracted for the same reason
+ * {@link TaskAgentRunner} is: the dispatcher must stay unit-testable without standing up the action
+ * engine, and this package must not import it — `@memberjunction/actions` depends on the entity
+ * layer this one also builds on, and reaching for it here would make every consumer of durable
+ * execution load the action engine too.
+ *
+ * **A host with no action runner is not broken, it is limited.** Action nodes stay Pending on it,
+ * which is visible in the Tasks UI, rather than being marked failed — a task nobody in this
+ * deployment can run is not the same as a task that ran and did not work.
+ */
+export type TaskActionRunner = {
+    RunActionForTask(params: TaskActionRunParams): Promise<TaskActionRunResult>;
+};
+
 /** What happened to a task or a graph, as a closed set a consumer can branch on. */
 export type TaskGraphFrameKind =
     /** A task was claimed by an instance and is about to run. */

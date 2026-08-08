@@ -23,6 +23,7 @@ import {
     type WorkflowSpecValidationError,
     type WorkflowSpecValidationResult,
 } from './workflow-spec';
+import { IsChangeFilterParseable } from '@memberjunction/actions-base';
 
 /**
  * Validates a workflow's structure and its triggers.
@@ -98,18 +99,20 @@ export function ValidateWorkflowSpec(spec: WorkflowSpec): WorkflowSpecValidation
                     }
                 }
                 if (trigger.filter?.trim()) {
-                    // Rejected rather than saved-and-ignored. Narrowing by predicate needs the
-                    // before/after values of the change, a contract that does not exist yet;
-                    // accepting the field would give the author a workflow firing on every save while
-                    // they believed it was narrowed. Accepting it later is additive — the reverse
-                    // would break specs already published against it.
-                    errors.push({
-                        Code: 'UnsupportedFilter',
-                        Message:
-                            'Narrowing an entity-change trigger by predicate is not supported yet, and a filter would be ' +
-                            'silently ignored. Remove it, or narrow with scopeEntityName/scopeRecordID.',
-                        TriggerIndex: index,
-                    });
+                    // Checked here rather than at persist time on purpose. Filters fail closed at
+                    // runtime, so an expression that does not parse becomes a trigger that silently
+                    // never fires — indistinguishable, from the author's seat, from a workflow that
+                    // simply has nothing to do.
+                    const parse = IsChangeFilterParseable(trigger.filter);
+                    if (!parse.Parseable) {
+                        errors.push({
+                            Code: 'InvalidFilter',
+                            Message:
+                                `The trigger's filter is not a valid expression (${parse.Message}). It must be a JavaScript ` +
+                                `boolean expression — for example: DidFieldChangeToValue('Status', 'Approved').`,
+                            TriggerIndex: index,
+                        });
+                    }
                 }
                 if (trigger.scopeRecordID && !trigger.scopeEntityName) {
                     // A record ID without its entity is unresolvable — IDs are only unique within an

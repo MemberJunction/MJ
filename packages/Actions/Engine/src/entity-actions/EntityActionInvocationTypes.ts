@@ -1,14 +1,45 @@
 import { MJGlobal, MJLruCache, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
-import { MJActionParamEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
-import { BaseEntity, Metadata, RunView } from "@memberjunction/core";
-import { ActionInvocationProvenance, ActionParam, ActionResult, EntityActionInvocationParams, EntityActionResult, IsEntityActionInScope, ResolveEntityActionScopeResolver } from "@memberjunction/actions-base";
+import { MJActionFilterEntity, MJActionParamEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
+import { BaseEntity, LogError, Metadata, RunView } from "@memberjunction/core";
+import {
+    ActionInvocationProvenance,
+    ActionParam,
+    ActionResult,
+    ActionResultSimple,
+    DurableEntityActionRegistry,
+    EntityActionInvocationParams,
+    EntityActionResult,
+    IsEntityActionInScope,
+    MJActionEntityExtended,
+    RedactParamsToJSON,
+    ResolveEntityActionScopeResolver,
+    RunActionParams,
+} from "@memberjunction/actions-base";
 import { ActionEngineServer } from "../generic/ActionEngine";
+
+/**
+ * Lifecycle events a durable binding may defer.
+ *
+ * Duplicated from the workflow layer's list rather than imported, because importing it would give
+ * the action engine a dependency on `@memberjunction/ai-core-plus` — which itself depends on
+ * `actions-base`, so the edge would run the wrong way through the graph for three string literals.
+ */
+const AFTER_INVOCATION_TYPES: readonly string[] = ['AfterCreate', 'AfterUpdate', 'AfterDelete'];
 
 /**
  * Base class for invocation of any entity action invocation type
  */
 export abstract class EntityActionInvocationBase {
-    public abstract InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult>
+    /**
+     * Runs the action for this invocation type.
+     *
+     * **Returns null when the action did not run at all** — the binding is scoped
+     * (`ScopeEntityID`/`ScopeRecordID`) and this record falls outside it, or a filter refused it.
+     * That is an ordinary outcome, not a failure: there is simply no result to report. The type
+     * says so because callers were dereferencing it — `HandleEntityActions` guards correctly, the
+     * GraphQL resolver did not, and an out-of-scope binding surfaced to clients as a server error.
+     */
+    public abstract InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult | null>
 
     /**
      * Case insensitive helper method to find a param by valueType
@@ -161,7 +192,103 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
         return true;
     }
 
-    public async InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult> {
+    /**
+     * The deferral that hands this run to the durable substrate, or `undefined` to execute normally.
+     *
+     * Returns undefined for every case that must stay inline: a binding that did not opt in, a
+     * lifecycle event that participates in the save, or a host with no submitter registered. The
+     * last is a fallback rather than a refusal — `RunMode='Durable'` asks for the work to be harder
+     * to lose, so declining to run it where the durable path is unavailable would make the opt-in
+     * less reliable than leaving it off.
+     */
+    protected BuildDurableDeferral(
+        params: EntityActionInvocationParams,
+        action: MJActionEntityExtended,
+    ): ((runParams: RunActionParams) => Promise<ActionResultSimple | null>) | undefined {
+        if (params.EntityAction.RunMode !== 'Durable') {
+            return undefined;
+        }
+        // Validate and Before* run inside the save and can abort it. Deferring one would decide the
+        // save's outcome after it had already happened, which is a different feature, not durability.
+        if (!AFTER_INVOCATION_TYPES.includes(params.InvocationType?.Name)) {
+            return undefined;
+        }
+        const submitter = DurableEntityActionRegistry.Instance.Submitter;
+        if (!submitter) {
+            return undefined;
+        }
+
+        return async (runParams: RunActionParams): Promise<ActionResultSimple | null> => {
+            const submission = await submitter.Submit({
+                EntityActionID: params.EntityAction.ID,
+                ActionID: action.ID,
+                ActionName: action.Name,
+                EntityID: params.EntityObject.EntityInfo.ID,
+                EntityName: params.EntityObject.EntityInfo.Name,
+                RecordID: params.EntityObject.PrimaryKey.ToConcatenatedString(),
+                InvocationType: params.InvocationType.Name,
+                // Persistent, user-visible storage: nothing writes a raw ActionParam[] there. Redacted
+                // through the same helper ActionExecutionLog.Params goes through, so the binding's
+                // LogValue rows decide what survives.
+                RedactedParams: SafeJSONParse<Record<string, unknown>>(
+                    RedactParamsToJSON(runParams.Params, [...action.Params.Items], params.EntityAction.Params),
+                ) ?? {},
+                ContextUser: params.ContextUser,
+            });
+
+            if (submission.Success) {
+                return {
+                    Success: true,
+                    ResultCode: 'SUBMITTED',
+                    Message: `Submitted for durable execution as task graph ${submission.ParentTaskID ?? '(unknown)'}.`,
+                };
+            }
+
+            // Declining the deferral runs the action normally. See the doc comment above: dropping
+            // the work would make opting into durability worse than not opting in.
+            LogError(
+                `Entity Action ${params.EntityAction.ID} asked for durable dispatch but ran inline instead: ` +
+                `${submission.ErrorMessage ?? 'the durable submission failed'}`,
+            );
+            return null;
+        };
+    }
+
+    /**
+     * The filter rows that gate this binding, in the order the binding declares.
+     *
+     * Two things this does beyond the obvious lookup:
+     *
+     * 1. **`Disabled` bindings are skipped.** Filters fail closed by design, so a disabled binding
+     *    that still gated would not merely be inert — it would *prevent* the action, and the only
+     *    visible symptom is a trigger that silently stopped firing. `Pending` still gates: it is the
+     *    column default, so treating it as inert would open every gate that was never explicitly
+     *    activated.
+     * 2. **An unresolvable filter is reported separately, and prevents the run.** A binding pointing
+     *    at an `ActionFilter` the engine cannot see is a misconfiguration; running unfiltered would be
+     *    the worst possible reading of it, since the whole point of the row is to narrow when this
+     *    fires. Previously the undefined entry reached the evaluator and threw there — fail-closed by
+     *    accident, with no usable reason in the log.
+     */
+    protected ResolveFilters(params: EntityActionInvocationParams): { Filters: MJActionFilterEntity[]; Unresolved: string[] } {
+        const bindings = [...params.EntityAction.Filters]
+            .filter(f => f.Status !== 'Disabled')
+            .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0));
+
+        const Filters: MJActionFilterEntity[] = [];
+        const Unresolved: string[] = [];
+        for (const binding of bindings) {
+            const filter = ActionEngineServer.Instance.ActionFilters.find(fi => UUIDsEqual(fi.ID, binding.ActionFilterID));
+            if (filter) {
+                Filters.push(filter);
+            } else {
+                Unresolved.push(binding.ActionFilterID);
+            }
+        }
+        return { Filters, Unresolved };
+    }
+
+    public async InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult | null> {
         // for this type of invocation we need to validate that the EntityObject is not null
         if (this.ValidateParams(params)) {
             // A binding narrowed to one configuration record (ScopeEntityID/ScopeRecordID) only fires for
@@ -180,16 +307,29 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
             // prepare the variables for the action
             const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, params.EntityAction.ActionID));
             const internalParams = await this.MapParams([...action.Params.Items], params.EntityAction.Params, params.EntityObject);
-            const filters = params.EntityAction.Filters.map(f => {
-                const filter = ActionEngineServer.Instance.ActionFilters.find(fi => UUIDsEqual(fi.ID, f.ActionFilterID));
-                return filter;
-            })
+            const { Filters: filters, Unresolved } = this.ResolveFilters(params);
+            if (Unresolved.length > 0) {
+                const message =
+                    `This entity action is gated by ${Unresolved.length === 1 ? 'a filter' : 'filters'} the engine cannot ` +
+                    `resolve (${Unresolved.join(', ')}), so it did not run. Filters fail closed by design — running ` +
+                    `unfiltered would ignore the narrowing the binding exists to express.`;
+                LogError(`Entity Action ${params.EntityAction.ID}: ${message}`);
+                return { Success: false, Message: message, RunParams: null, LogEntry: null };
+            }
             
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,
                 ContextUser: params.ContextUser,
                 Filters: filters,
                 Params: internalParams,
+                // Carried so a filter can decide on the transition rather than only the end state.
+                // Captured by the dispatcher before the save finished; see EntityChangeContext.
+                EntityChange: params.EntityChange,
+                // Durability replaces EXECUTION, not the gates. Passed as a deferral so scope (above)
+                // and the binding's filters (inside RunAction) both decide first — submitting earlier
+                // would fire a scoped durable trigger for every record and a filtered one on every
+                // save, which is the opposite of what those rows were configured to do.
+                DeferExecution: this.BuildDurableDeferral(params, action),
                 Provenance: this.BuildProvenance(params, params.EntityObject)
             });
 
@@ -225,7 +365,7 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
            return true;
     }
 
-    public async InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult> {
+    public async InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult | null> {
         // for this type of invocation we need to validate that we have either a list or a view 
         if (this.ValidateParams(params)) {
             // now do the work
@@ -343,32 +483,23 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
 }
 
 /**
- * This class handles the invocation type of Validate and uses Entity Actions to validate a record and provide the results back to the caller
+ * Handles the `Validate` invocation type.
+ *
+ * **Deliberately has no `InvokeAction` of its own.** It used to override the single-record
+ * implementation with a near-copy that had drifted into a strict subset: same parameter mapping,
+ * same filters, but missing two things the parent does.
+ *
+ * 1. **Scope resolution.** The override never called `IsEntityActionInScope`, so a binding narrowed
+ *    to one record via `ScopeEntityID`/`ScopeRecordID` ran `Validate` against *every* record of the
+ *    entity — the same class of bug as a workflow trigger that claims to be scoped and is not.
+ * 2. **Provenance.** `RunAction` was called without it, so logging and redaction could not see which
+ *    binding produced the run — meaning a whole-record `Validate` parameter was logged raw, ignoring
+ *    the binding's `LogValue` rows and its `LoggingMode`.
+ *
+ * Inheriting is what keeps those two facts true for `Validate` forever, rather than until the next
+ * time the two copies drift. The class remains because `@RegisterClass` needs a distinct type to
+ * resolve the `Validate` key.
  */
 @RegisterClass(EntityActionInvocationBase, 'Validate')
 export class EntityActionInvocationValidate extends EntityActionInvocationSingleRecord {
-    public override async InvokeAction(params: EntityActionInvocationParams): Promise<EntityActionResult> {
-        // for this type of invocation we need to validate that the EntityObject is not null
-        if (this.ValidateParams(params)) {
-            // make sure the action engine is good to go, the below won't do anything if it was already configured
-            await ActionEngineServer.Instance.Config(false, params.ContextUser);
-
-            const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, params.EntityAction.ActionID));
-            const internalParams = await this.MapParams([...action.Params.Items], params.EntityAction.Params, params.EntityObject);
-            
-            const result = await ActionEngineServer.Instance.RunAction({
-                Action: action,
-                ContextUser: params.ContextUser,
-                Filters: params.EntityAction.Filters.map(f => {
-                    const filter = ActionEngineServer.Instance.ActionFilters.find(fi => UUIDsEqual(fi.ID, f.ActionFilterID));
-                    return filter;
-                }),
-                Params: internalParams
-            })
-
-            return result 
-        }
-        else
-            return null;
-    }
 }
