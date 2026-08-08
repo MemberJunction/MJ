@@ -65,6 +65,29 @@ The gaps that make the trigger substrate unsafe to promote to users. All verifie
 
 Executed in order per that plan (finalized v8): Phase 0 legacy retirement → Phases 1–4 engine → Phase 5 Workflow UX, with Track R (BaseAgent decomposition) parallel. Program-relevant outputs: the durable dispatcher (MJ's one durable-async substrate, D14, with D20 task-row integrity), human tasks as graph nodes (self-assignment only until [#3524](https://github.com/MemberJunction/MJ/issues/3524)), `TaskGraphSpec` (D16), Save as Workflow (D17/§3.9), the Workflow viewer/editor upgrade with its committed mockups (D19, `mockups/workflow-ux/`), and the reconciliation sweep that finally enforces `AIAgentRequest.ExpiresAt` and `Task.DueAt`.
 
+#### Track C.1 — Flow agents onto the engine (**gap found 2026-08-08**) → [`plans/flow-agent-taskgraph-unification.md`](flow-agent-taskgraph-unification.md)
+
+Task Graph is the universal workflow engine in this plan; in the code it is not yet. **Flow agents do
+not use it at all.** Verified on a live run (`4d25c954-…`, Demo Flow Agent, Completed): 9
+`AIAgentRunStep` rows and **zero `Task` rows — `__mj.Task` has never had a row.**
+`@memberjunction/ai-agents` has no dependency on `@memberjunction/task-graph`, so the flow path
+cannot reach the dispatcher even in principle; the `GetTaskGraphSubmitter()` seam it does have is
+bound to the **loop** agent's `tasks` decomposition.
+
+The consequence is not only bookkeeping. Flow's `traversalMode` defaults to `'sequential'` while a
+`TaskGraphSpec` graph *always* runs parallel — in that verified run, five independent searches summed
+2332 ms inside a 2469 ms `ForEach`, serially. Two engines, two execution semantics.
+
+The companion plan closes it: a pure `FlowGraphCompiler` (`AIAgentStep` + `AIAgentStepPath` →
+`TaskGraphSpec`) feeding the existing submitter seam, with `traversalMode` as a **compiler input** so
+existing flows keep their exact order. It also proposes replacing the node's flat
+`agentName`/`actionName`/`assignToUser` fields with a discriminated `kind` + typed `configuration`
+bag — into which the already-universal `ForEachOperation`/`WhileOperation` contracts drop unchanged.
+
+**Directed:** full cutover — all flows move and the in-run executor is deleted in the same change;
+`onError: 'continue'` becomes a supported dispatcher concept. Decisions still open are marked ⬥ in
+that document.
+
 ### Track D — The trigger layer (WHEN)
 
 1. **Record Process OnChange reconciliation** — the schema (`OnChangeEnabled`/`OnChangeInvocationType`/`OnChangeFilter`) is built and the blocker recorded in the RSP plan (§18.5) is stale: entity actions now fire from the save pipeline (`GenericDatabaseProvider.ts:552-586`). Remaining: `MJRecordProcessEntityServer` reconciles an owned Entity Action binding (the same pattern it already uses for its Scheduled Job), plus the self-trigger guard and per-record coalescing from RSP plan §12. This closes the trigger triangle: every trigger type reaches every work type.
