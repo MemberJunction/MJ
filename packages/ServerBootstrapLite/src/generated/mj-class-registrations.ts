@@ -957,8 +957,9 @@ import {
     WorkflowValidateServerOperation,
 } from '@memberjunction/task-graph';
 
-// @memberjunction/scheduling-engine (7 classes)
+// @memberjunction/scheduling-engine (8 classes)
 import {
+    ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
@@ -1876,6 +1877,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     TaskGraphSubmitServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
+    ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
@@ -2081,7 +2083,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 893;
+export const CLASS_REGISTRATIONS_COUNT = 894;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
