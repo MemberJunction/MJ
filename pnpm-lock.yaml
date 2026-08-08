@@ -12373,34 +12373,6 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  packages/Materialization:
-    dependencies:
-      '@memberjunction/core':
-        specifier: 6.1.0-edge.0
-        version: link:../MJCore
-      '@memberjunction/core-entities':
-        specifier: 6.1.0-edge.0
-        version: link:../MJCoreEntities
-      '@memberjunction/global':
-        specifier: 6.1.0-edge.0
-        version: link:../MJGlobal
-      '@memberjunction/sql-dialect':
-        specifier: 6.1.0-edge.0
-        version: link:../SQLDialect
-      '@memberjunction/sql-parser':
-        specifier: 6.1.0-edge.0
-        version: link:../SQLParser
-    devDependencies:
-      '@types/node':
-        specifier: 24.10.11
-        version: 24.10.11
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^3.1.1
-        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-
   packages/MessagingAdapters:
     dependencies:
       '@memberjunction/ai':
@@ -13389,9 +13361,6 @@ importers:
       '@memberjunction/integration-engine':
         specifier: 6.1.0-edge.0
         version: link:../../Integration/engine
-      '@memberjunction/materialization':
-        specifier: 6.1.0-edge.0
-        version: link:../../Materialization
       '@memberjunction/notifications':
         specifier: 6.1.0-edge.0
         version: link:../../Communication/notifications
