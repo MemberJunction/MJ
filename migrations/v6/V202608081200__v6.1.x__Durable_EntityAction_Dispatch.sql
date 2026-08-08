@@ -189,6 +189,20 @@ GO
 
 /* SQL text to insert 2 new entity field(s) */
 
+/* HAND CORRECTION TO THE GENERATED SQL ABOVE — see the note at the end of this block.
+   CodeGen hardcoded Sequence = 100025 for RunMode, which is the number that was free on the
+   database CodeGen ran against. On a database built only from migrations, 100025 already belongs
+   to EntityAction.ScopeEntity, so the INSERT violates UQ_EntityField_EntityID_Sequence. Because
+   the script does not SET XACT_ABORT ON, that aborts only the statement — execution continues and
+   the failure resurfaces further down as a FOREIGN KEY error on EntityFieldValue, whose rows point
+   at the RunMode field that was never inserted. Computing the next free sequence makes the insert
+   correct on any database rather than only on the one that generated it. */
+DECLARE @RunModeSequence int = (
+   SELECT ISNULL(MAX([Sequence]), 0) + 1
+   FROM [${flyway:defaultSchema}].[EntityField]
+   WHERE [EntityID] = '34248F34-2837-EF11-86D4-6045BDEE16E6'
+);
+
       IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'da98df59-65aa-469a-b44a-8059aa839366' OR (EntityID = '34248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'RunMode')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
@@ -224,7 +238,7 @@ GO
          (
             'da98df59-65aa-469a-b44a-8059aa839366',
             '34248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Entity Actions
-            100025,
+            @RunModeSequence, -- hand correction: was a hardcoded 100025, which collides on a clean DB
             'RunMode',
             'Run Mode',
             'How an After* dispatch of this binding executes. Inline (the default) runs it fire-and-forget in the saving process, which is fast but lost if that process dies. Durable submits a single-node task graph instead, so the work survives a restart and is reclaimed by the dispatcher — at the cost of a Task row, a dispatcher hop of latency, and the action''s parameters being persisted (redacted) at rest. Ignored for Validate and Before* invocations, which run inside the save and cannot be deferred without changing whether the save succeeds.',
