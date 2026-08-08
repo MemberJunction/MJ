@@ -1,8 +1,11 @@
 {
   "//": "Type-level tests only. The build tsconfig EXCLUDES src/__tests__, so pointing vitest's typecheck at it silently produced an empty program — the *.test-d.ts assertions all 'passed' while a deliberately widened generic went undetected. This config puts them back in the program.",
   "extends": "./tsconfig.json",
+  "//declaration": "Off on purpose. The base (tsconfig.server.json) turns declaration emit on, and re-including src/__tests__ here drags the test helpers into declaration CHECKING for an emit that never happens — the build tsconfig excludes them. That surfaced as TS4094 ('property of exported anonymous class type may not be private or protected') on a test-only factory returning a local class. We want the type-level assertions, not .d.ts diagnostics for files that are never emitted.",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

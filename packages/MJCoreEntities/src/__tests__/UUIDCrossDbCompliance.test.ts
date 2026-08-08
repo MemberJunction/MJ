@@ -77,7 +77,7 @@ describe('UUID Cross-Database Compliance', () => {
             const engine = MCPEngineClass.Instance;
 
             // Simulate data loaded from SQL Server (uppercase)
-            (engine as Record<string, unknown>)['_Servers'] = [
+            (engine as unknown as Record<string, unknown>)['_Servers'] = [
                 { ID: UUID_UPPER, Name: 'Test Server' },
                 { ID: UUID_OTHER, Name: 'Other Server' },
             ];
@@ -91,7 +91,7 @@ describe('UUID Cross-Database Compliance', () => {
         it('should find connection by ID regardless of UUID case', () => {
             const engine = MCPEngineClass.Instance;
 
-            (engine as Record<string, unknown>)['_Connections'] = [
+            (engine as unknown as Record<string, unknown>)['_Connections'] = [
                 { ID: UUID_LOWER, Name: 'Test Connection' },
             ];
 
@@ -104,13 +104,15 @@ describe('UUID Cross-Database Compliance', () => {
         it('should find tool by ID regardless of UUID case', () => {
             const engine = MCPEngineClass.Instance;
 
-            (engine as Record<string, unknown>)['_Tools'] = [
-                { ID: UUID_UPPER, Name: 'Test Tool' },
+            // MJMCPServerToolEntity's label field is ToolName, not Name — the fixture has to match
+            // the real entity or the assertion below passes against a field that does not exist.
+            (engine as unknown as Record<string, unknown>)['_Tools'] = [
+                { ID: UUID_UPPER, ToolName: 'Test Tool' },
             ];
 
             const found = engine.GetToolById(UUID_LOWER);
             expect(found).toBeDefined();
-            expect(found?.Name).toBe('Test Tool');
+            expect(found?.ToolName).toBe('Test Tool');
         });
     });
 
@@ -119,7 +121,7 @@ describe('UUID Cross-Database Compliance', () => {
             const { EncryptionEngineBase } = await import('../engines/EncryptionEngineBase');
             const engine = EncryptionEngineBase.Instance;
 
-            (engine as Record<string, unknown>)['_encryptionKeys'] = [
+            (engine as unknown as Record<string, unknown>)['_encryptionKeys'] = [
                 { ID: UUID_UPPER, Name: 'AES-256 Key' },
             ];
 
@@ -132,7 +134,7 @@ describe('UUID Cross-Database Compliance', () => {
             const { EncryptionEngineBase } = await import('../engines/EncryptionEngineBase');
             const engine = EncryptionEngineBase.Instance;
 
-            (engine as Record<string, unknown>)['_encryptionAlgorithms'] = [
+            (engine as unknown as Record<string, unknown>)['_encryptionAlgorithms'] = [
                 { ID: UUID_LOWER, Name: 'AES-256-GCM' },
             ];
 
@@ -145,7 +147,7 @@ describe('UUID Cross-Database Compliance', () => {
             const { EncryptionEngineBase } = await import('../engines/EncryptionEngineBase');
             const engine = EncryptionEngineBase.Instance;
 
-            (engine as Record<string, unknown>)['_encryptionKeySources'] = [
+            (engine as unknown as Record<string, unknown>)['_encryptionKeySources'] = [
                 { ID: UUID_UPPER, Name: 'Azure Key Vault' },
             ];
 
@@ -160,7 +162,7 @@ describe('UUID Cross-Database Compliance', () => {
             const { FileStorageEngineBase } = await import('../engines/FileStorageEngine');
             const engine = FileStorageEngineBase.Instance;
 
-            (engine as Record<string, unknown>)['_accounts'] = [
+            (engine as unknown as Record<string, unknown>)['_accounts'] = [
                 { ID: UUID_UPPER, Name: 'S3 Bucket' },
             ];
 
@@ -173,7 +175,7 @@ describe('UUID Cross-Database Compliance', () => {
             const { FileStorageEngineBase } = await import('../engines/FileStorageEngine');
             const engine = FileStorageEngineBase.Instance;
 
-            (engine as Record<string, unknown>)['_providers'] = [
+            (engine as unknown as Record<string, unknown>)['_providers'] = [
                 { ID: UUID_LOWER, Name: 'AWS S3' },
             ];
 
@@ -188,7 +190,7 @@ describe('UUID Cross-Database Compliance', () => {
             const { UserViewEngine } = await import('../engines/UserViewEngine');
             const engine = UserViewEngine.Instance;
 
-            (engine as Record<string, unknown>)['_views'] = [
+            (engine as unknown as Record<string, unknown>)['_views'] = [
                 { ID: UUID_UPPER, Name: 'My View' },
             ];
 

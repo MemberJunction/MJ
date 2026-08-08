@@ -109,6 +109,12 @@ vi.mock('../custom/Permissions/shareNotification', () => ({
 import { MJCollectionPermissionEntityExtended } from '../custom/Permissions/MJCollectionPermissionEntityExtended';
 import { MJArtifactPermissionEntityExtended } from '../custom/Permissions/MJArtifactPermissionEntityExtended';
 
+// The generated bases are vi.mock'd above as no-arg classes, but the real BaseEntity signature is
+// (EntityInfo, Provider?) — which the mocks never receive. Construct through no-arg views of the
+// ctors so tsc still type-checks the rest of the file honestly. Runtime behaviour is unchanged.
+const NewCollectionPermission = MJCollectionPermissionEntityExtended as unknown as new () => object;
+const NewArtifactPermission = MJArtifactPermissionEntityExtended as unknown as new () => object;
+
 /** Writable view of the mocked entity surface the tests interact with. */
 interface MutableShareEntity {
     CollectionID: string;
@@ -140,7 +146,7 @@ describe('MJCollectionPermissionEntityExtended — share-create gate', () => {
     });
 
     function makeEntity(): MutableShareEntity {
-        const entity = new MJCollectionPermissionEntityExtended() as unknown as MutableShareEntity;
+        const entity = new NewCollectionPermission() as unknown as MutableShareEntity;
         entity.CollectionID = 'COLL-1';
         entity.UserID = 'GRANTEE-1';
         entity.SharedByUserID = 'USER-1';
@@ -231,7 +237,7 @@ describe('MJArtifactPermissionEntityExtended — share-create gate', () => {
     });
 
     function makeEntity(): MutableShareEntity {
-        const entity = new MJArtifactPermissionEntityExtended() as unknown as MutableShareEntity;
+        const entity = new NewArtifactPermission() as unknown as MutableShareEntity;
         entity.ArtifactID = 'ART-1';
         entity.UserID = 'GRANTEE-1';
         entity.SharedByUserID = 'USER-1';

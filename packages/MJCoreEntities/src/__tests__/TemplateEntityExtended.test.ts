@@ -26,6 +26,11 @@ vi.mock('../generated/entity_subclasses', () => ({
 
 import { MJTemplateEntityExtended } from '../custom/MJTemplateEntityExtended';
 
+// The generated base is vi.mock'd above as a no-arg class, but the real BaseEntity signature is
+// (EntityInfo, Provider?) — which the mock never receives. Construct through a no-arg view of the
+// ctor so tsc still type-checks the rest of the file honestly. Runtime behaviour is unchanged.
+const NewTemplate = MJTemplateEntityExtended as unknown as new () => MJTemplateEntityExtended;
+
 // Helper to create a mock content object with the required properties
 function createContent(type: string, priority: number): { Type: string; Priority: number } {
     return { Type: type, Priority: priority };
@@ -44,7 +49,7 @@ describe('MJTemplateEntityExtended', () => {
     let template: MJTemplateEntityExtended;
 
     beforeEach(() => {
-        template = new MJTemplateEntityExtended();
+        template = new NewTemplate();
         template.Content = [];
         template.Params = [];
     });
@@ -54,7 +59,7 @@ describe('MJTemplateEntityExtended', () => {
     // ---------------------------------------------------------------
     describe('Content getter/setter', () => {
         it('should default to an empty array', () => {
-            const fresh = new MJTemplateEntityExtended();
+            const fresh = new NewTemplate();
             expect(fresh.Content).toEqual([]);
         });
 
@@ -68,7 +73,7 @@ describe('MJTemplateEntityExtended', () => {
 
     describe('Params getter/setter', () => {
         it('should default to an empty array', () => {
-            const fresh = new MJTemplateEntityExtended();
+            const fresh = new NewTemplate();
             expect(fresh.Params).toEqual([]);
         });
 

@@ -491,7 +491,7 @@ describe('ConversationEngine', () => {
 
             const found = engine.GetConversation('c1');
             expect(found).toBeDefined();
-            expect((found as Record<string, unknown>)['IsPinned']).toBe(true);
+            expect((found as unknown as Record<string, unknown>)['IsPinned']).toBe(true);
         });
     });
 
@@ -616,7 +616,7 @@ describe('ConversationEngine', () => {
 
             const retrieved = engine.GetAgentRunForDetail('conv-1', 'd1');
             expect(retrieved).toBeDefined();
-            expect((retrieved as Record<string, unknown>)['ID']).toBe('run-1');
+            expect((retrieved as unknown as Record<string, unknown>)['ID']).toBe('run-1');
         });
 
         it('should return undefined when no cache entry exists', () => {
@@ -691,7 +691,7 @@ describe('ConversationEngine', () => {
 
             const cached = engine.GetCachedDetails('conv-1');
             expect(cached).toHaveLength(1);
-            expect((cached![0] as Record<string, unknown>)['extraField']).toBe('updated');
+            expect((cached![0] as unknown as Record<string, unknown>)['extraField']).toBe('updated');
         });
     });
 

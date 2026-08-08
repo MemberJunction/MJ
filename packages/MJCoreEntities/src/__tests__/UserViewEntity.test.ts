@@ -127,24 +127,31 @@ import {
     DEFAULT_AGGREGATE_DISPLAY,
 } from '../custom/MJUserViewEntityExtended';
 
+// These JSON-shape types come from the generated entity module — MJUserViewEntityExtended only
+// imports them under local aliases, so it never re-exported them. (A former `ViewDisplayMode`
+// import was dropped: no such type exists anywhere in the package, and nothing here used it.)
 import type {
-    ViewDisplayState,
-    ViewDisplayMode,
-    ViewTimelineState,
-} from '../custom/MJUserViewEntityExtended';
+    MJUserViewEntity_IDisplayState as ViewDisplayState,
+    MJUserViewEntity_ITimelineState as ViewTimelineState,
+} from '../generated/entity_subclasses';
 
 // Resolves to the vi.mock above — lets the UserCanView specs drive ResourceTypes + perm level.
 import { ResourcePermissionEngine } from '../custom/ResourcePermissions/ResourcePermissionEngine';
+
+// The generated base is vi.mock'd above as a no-arg class, but the real BaseEntity signature is
+// (EntityInfo, Provider?) — which the mock never receives. Construct through a no-arg view of the
+// ctor so tsc still type-checks the rest of the file honestly. Runtime behaviour is unchanged.
+const NewUserView = MJUserViewEntityExtended as unknown as new () => MJUserViewEntityExtended;
 
 // ============================================================================
 // Helper: create a MJUserViewEntityExtended with optional initial property values
 // ============================================================================
 
 function createView(overrides: Record<string, unknown> = {}): MJUserViewEntityExtended {
-    const view = new MJUserViewEntityExtended();
+    const view = new NewUserView();
     // Apply overrides directly to the instance
     for (const [key, value] of Object.entries(overrides)) {
-        (view as Record<string, unknown>)[key] = value;
+        (view as unknown as Record<string, unknown>)[key] = value;
     }
     return view;
 }
@@ -850,7 +857,7 @@ describe('MJUserViewEntityExtended', () => {
         });
 
         it('should return null when there are no date fields', () => {
-            (view as Record<string, unknown>)['_ViewEntityInfo'] = makeMockEntityInfo([
+            (view as unknown as Record<string, unknown>)['_ViewEntityInfo'] = makeMockEntityInfo([
                 { Name: 'ID', NeedsQuotes: true, TSType: 'String' },
                 { Name: 'Count', NeedsQuotes: false, TSType: 'Number' },
             ]);
@@ -858,7 +865,7 @@ describe('MJUserViewEntityExtended', () => {
         });
 
         it('should return DefaultInView date field with lowest Sequence (priority 1)', () => {
-            (view as Record<string, unknown>)['_ViewEntityInfo'] = makeMockEntityInfo([
+            (view as unknown as Record<string, unknown>)['_ViewEntityInfo'] = makeMockEntityInfo([
                 { Name: 'UpdatedAt', NeedsQuotes: true, TSType: 'Date', DefaultInView: true, Sequence: 10 },
                 { Name: 'CreatedAt', NeedsQuotes: true, TSType: 'Date', DefaultInView: true, Sequence: 5 },
                 { Name: 'ArchivedAt', NeedsQuotes: true, TSType: 'Date', DefaultInView: false, Sequence: 1 },
@@ -868,7 +875,7 @@ describe('MJUserViewEntityExtended', () => {
         });
 
         it('should fall back to any date field by Sequence when no DefaultInView date fields exist (priority 2)', () => {
-            (view as Record<string, unknown>)['_ViewEntityInfo'] = makeMockEntityInfo([
+            (view as unknown as Record<string, unknown>)['_ViewEntityInfo'] = makeMockEntityInfo([
                 { Name: 'ID', NeedsQuotes: true, TSType: 'String', Sequence: 1 },
                 { Name: 'EndDate', NeedsQuotes: true, TSType: 'Date', DefaultInView: false, Sequence: 20 },
                 { Name: 'StartDate', NeedsQuotes: true, TSType: 'Date', DefaultInView: false, Sequence: 10 },
@@ -878,7 +885,7 @@ describe('MJUserViewEntityExtended', () => {
         });
 
         it('should prefer DefaultInView date field even with higher Sequence over non-DefaultInView', () => {
-            (view as Record<string, unknown>)['_ViewEntityInfo'] = makeMockEntityInfo([
+            (view as unknown as Record<string, unknown>)['_ViewEntityInfo'] = makeMockEntityInfo([
                 { Name: 'EarlyDate', NeedsQuotes: true, TSType: 'Date', DefaultInView: false, Sequence: 1 },
                 { Name: 'LateDate', NeedsQuotes: true, TSType: 'Date', DefaultInView: true, Sequence: 100 },
             ]);
@@ -896,7 +903,7 @@ describe('MJUserViewEntityExtended', () => {
         });
 
         it('should return empty array when no date fields exist', () => {
-            (view as Record<string, unknown>)['_ViewEntityInfo'] = makeMockEntityInfo([
+            (view as unknown as Record<string, unknown>)['_ViewEntityInfo'] = makeMockEntityInfo([
                 { Name: 'ID', NeedsQuotes: true, TSType: 'String', Sequence: 1 },
                 { Name: 'Count', NeedsQuotes: false, TSType: 'Number', Sequence: 2 },
             ]);
@@ -904,7 +911,7 @@ describe('MJUserViewEntityExtended', () => {
         });
 
         it('should return date fields sorted by Sequence', () => {
-            (view as Record<string, unknown>)['_ViewEntityInfo'] = makeMockEntityInfo([
+            (view as unknown as Record<string, unknown>)['_ViewEntityInfo'] = makeMockEntityInfo([
                 { Name: 'ID', NeedsQuotes: true, TSType: 'String', Sequence: 1 },
                 { Name: 'EndDate', NeedsQuotes: true, TSType: 'Date', Sequence: 30 },
                 { Name: 'StartDate', NeedsQuotes: true, TSType: 'Date', Sequence: 10 },
@@ -928,6 +935,8 @@ describe('MJUserViewEntityExtended', () => {
                 return this.GenerateWhereClause(filterState, entityInfo as unknown as never);
             }
         }
+        // Inherits BaseEntity's (EntityInfo, Provider?) ctor — same no-arg view as NewUserView above.
+        const NewTestableView = TestableView as unknown as new () => TestableView;
 
         let testView: TestableView;
 
@@ -944,7 +953,7 @@ describe('MJUserViewEntityExtended', () => {
         let entityInfo: Record<string, unknown>;
 
         beforeEach(() => {
-            testView = new TestableView();
+            testView = new NewTestableView();
             entityInfo = makeMockEntityInfo(standardFields);
         });
 
@@ -1321,7 +1330,7 @@ describe('MJUserViewEntityExtended', () => {
 
         it('should parse columns and attach EntityField reference', () => {
             const mockField = { Name: 'CompanyName', TSType: 'String', ID: 'f-1' };
-            (view as Record<string, unknown>)['_ViewEntityInfo'] = {
+            (view as unknown as Record<string, unknown>)['_ViewEntityInfo'] = {
                 Fields: [mockField],
             };
             view.GridState = JSON.stringify({
@@ -1337,7 +1346,7 @@ describe('MJUserViewEntityExtended', () => {
         });
 
         it('should handle null column settings gracefully', () => {
-            (view as Record<string, unknown>)['_ViewEntityInfo'] = { Fields: [] };
+            (view as unknown as Record<string, unknown>)['_ViewEntityInfo'] = { Fields: [] };
             view.GridState = JSON.stringify({
                 columnSettings: [null, { Name: 'Test', DisplayName: 'Test' }],
             });
@@ -1353,7 +1362,7 @@ describe('MJUserViewEntityExtended', () => {
 
         it('should match field names case-insensitively', () => {
             const mockField = { Name: 'CompanyName', TSType: 'String', ID: 'f-1' };
-            (view as Record<string, unknown>)['_ViewEntityInfo'] = {
+            (view as unknown as Record<string, unknown>)['_ViewEntityInfo'] = {
                 Fields: [mockField],
             };
             view.GridState = JSON.stringify({
@@ -1376,7 +1385,7 @@ describe('MJUserViewEntityExtended', () => {
 
         it('should return the set _ViewEntityInfo', () => {
             const mockEntity = { Name: 'Test', ID: 'e-1', Fields: [] };
-            (view as Record<string, unknown>)['_ViewEntityInfo'] = mockEntity;
+            (view as unknown as Record<string, unknown>)['_ViewEntityInfo'] = mockEntity;
             expect(view.ViewEntityInfo).toBe(mockEntity);
         });
     });
@@ -1403,8 +1412,8 @@ describe('MJUserViewEntityExtended - UserCanView resource-type resolution', () =
     const USER_VIEWS_RT = { ID: 'rt-user-views', Name: 'User Views', Entity: 'MJ: User Views' };
 
     function makeView(opts: { userID: string; currentUserID: string; contextUserID?: string }): MJUserViewEntityExtended {
-        const view = new MJUserViewEntityExtended();
-        const props = view as Record<string, unknown>;
+        const view = new NewUserView();
+        const props = view as unknown as Record<string, unknown>;
         props['ID'] = 'view-1';
         props['UserID'] = opts.userID;
         props['IsSaved'] = true;
