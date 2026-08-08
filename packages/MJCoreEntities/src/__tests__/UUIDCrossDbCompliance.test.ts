@@ -37,7 +37,7 @@ vi.mock('@memberjunction/core', () => {
         }
         Config() { return Promise.resolve(); }
         protected GetConfigData<E>(propertyName: string): E[] {
-            return ((this as Record<string, unknown>)[propertyName] as E[]) ?? [];
+            return ((this as unknown as Record<string, unknown>)[propertyName] as E[]) ?? [];
         }
     }
     return {
@@ -63,6 +63,18 @@ const UUID_UPPER = 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890';
 const UUID_LOWER = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const UUID_OTHER = 'BBBBBBBB-CCCC-DDDD-EEEE-FFFFFFFFFFFF';
 
+/**
+ * Seeds a private engine cache directly.
+ *
+ * Reaching a private field needs an assertion through `unknown` — a `BaseEngine` subclass has no
+ * index signature, so a direct `as unknown as Record<string, unknown>` is the mistake TypeScript actually
+ * reports. Naming the operation once keeps the intent legible at nine call sites and keeps the
+ * assertion in exactly one place instead of scattered through the file.
+ */
+function seedEngineCache(engine: object, propertyName: string, rows: ReadonlyArray<Record<string, unknown>>): void {
+    (engine as unknown as Record<string, unknown>)[propertyName] = rows;
+}
+
 describe('UUID Cross-Database Compliance', () => {
     describe('MCPEngine', () => {
         let MCPEngineClass: Awaited<typeof import('../engines/MCPEngine')>['MCPEngine'];
@@ -77,10 +89,10 @@ describe('UUID Cross-Database Compliance', () => {
             const engine = MCPEngineClass.Instance;
 
             // Simulate data loaded from SQL Server (uppercase)
-            (engine as unknown as Record<string, unknown>)['_Servers'] = [
+            seedEngineCache(engine, '_Servers', [
                 { ID: UUID_UPPER, Name: 'Test Server' },
                 { ID: UUID_OTHER, Name: 'Other Server' },
-            ];
+            ]);
 
             // Look up with PostgreSQL-style lowercase UUID
             const found = engine.GetServerById(UUID_LOWER);
@@ -91,9 +103,9 @@ describe('UUID Cross-Database Compliance', () => {
         it('should find connection by ID regardless of UUID case', () => {
             const engine = MCPEngineClass.Instance;
 
-            (engine as unknown as Record<string, unknown>)['_Connections'] = [
+            seedEngineCache(engine, '_Connections', [
                 { ID: UUID_LOWER, Name: 'Test Connection' },
-            ];
+            ]);
 
             // Look up with SQL Server-style uppercase UUID
             const found = engine.GetConnectionById(UUID_UPPER);
@@ -104,11 +116,9 @@ describe('UUID Cross-Database Compliance', () => {
         it('should find tool by ID regardless of UUID case', () => {
             const engine = MCPEngineClass.Instance;
 
-            // MJMCPServerToolEntity's label field is ToolName, not Name — the fixture has to match
-            // the real entity or the assertion below passes against a field that does not exist.
-            (engine as unknown as Record<string, unknown>)['_Tools'] = [
+            seedEngineCache(engine, '_Tools', [
                 { ID: UUID_UPPER, ToolName: 'Test Tool' },
-            ];
+            ]);
 
             const found = engine.GetToolById(UUID_LOWER);
             expect(found).toBeDefined();
@@ -121,9 +131,9 @@ describe('UUID Cross-Database Compliance', () => {
             const { EncryptionEngineBase } = await import('../engines/EncryptionEngineBase');
             const engine = EncryptionEngineBase.Instance;
 
-            (engine as unknown as Record<string, unknown>)['_encryptionKeys'] = [
+            seedEngineCache(engine, '_encryptionKeys', [
                 { ID: UUID_UPPER, Name: 'AES-256 Key' },
-            ];
+            ]);
 
             const found = engine.GetKeyByID(UUID_LOWER);
             expect(found).toBeDefined();
@@ -134,9 +144,9 @@ describe('UUID Cross-Database Compliance', () => {
             const { EncryptionEngineBase } = await import('../engines/EncryptionEngineBase');
             const engine = EncryptionEngineBase.Instance;
 
-            (engine as unknown as Record<string, unknown>)['_encryptionAlgorithms'] = [
+            seedEngineCache(engine, '_encryptionAlgorithms', [
                 { ID: UUID_LOWER, Name: 'AES-256-GCM' },
-            ];
+            ]);
 
             const found = engine.GetAlgorithmByID(UUID_UPPER);
             expect(found).toBeDefined();
@@ -147,9 +157,9 @@ describe('UUID Cross-Database Compliance', () => {
             const { EncryptionEngineBase } = await import('../engines/EncryptionEngineBase');
             const engine = EncryptionEngineBase.Instance;
 
-            (engine as unknown as Record<string, unknown>)['_encryptionKeySources'] = [
+            seedEngineCache(engine, '_encryptionKeySources', [
                 { ID: UUID_UPPER, Name: 'Azure Key Vault' },
-            ];
+            ]);
 
             const found = engine.GetKeySourceByID(UUID_LOWER);
             expect(found).toBeDefined();
@@ -162,9 +172,9 @@ describe('UUID Cross-Database Compliance', () => {
             const { FileStorageEngineBase } = await import('../engines/FileStorageEngine');
             const engine = FileStorageEngineBase.Instance;
 
-            (engine as unknown as Record<string, unknown>)['_accounts'] = [
+            seedEngineCache(engine, '_accounts', [
                 { ID: UUID_UPPER, Name: 'S3 Bucket' },
-            ];
+            ]);
 
             const found = engine.GetAccountById(UUID_LOWER);
             expect(found).toBeDefined();
@@ -175,9 +185,9 @@ describe('UUID Cross-Database Compliance', () => {
             const { FileStorageEngineBase } = await import('../engines/FileStorageEngine');
             const engine = FileStorageEngineBase.Instance;
 
-            (engine as unknown as Record<string, unknown>)['_providers'] = [
+            seedEngineCache(engine, '_providers', [
                 { ID: UUID_LOWER, Name: 'AWS S3' },
-            ];
+            ]);
 
             const found = engine.GetProviderById(UUID_UPPER);
             expect(found).toBeDefined();
@@ -190,9 +200,9 @@ describe('UUID Cross-Database Compliance', () => {
             const { UserViewEngine } = await import('../engines/UserViewEngine');
             const engine = UserViewEngine.Instance;
 
-            (engine as unknown as Record<string, unknown>)['_views'] = [
+            seedEngineCache(engine, '_views', [
                 { ID: UUID_UPPER, Name: 'My View' },
-            ];
+            ]);
 
             const found = engine.GetViewById(UUID_LOWER);
             expect(found).toBeDefined();

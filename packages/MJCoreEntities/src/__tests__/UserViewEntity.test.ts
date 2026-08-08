@@ -126,29 +126,23 @@ import {
     ViewGridState,
     DEFAULT_AGGREGATE_DISPLAY,
 } from '../custom/MJUserViewEntityExtended';
-
-// These JSON-shape types come from the generated entity module — MJUserViewEntityExtended only
-// imports them under local aliases, so it never re-exported them. (A former `ViewDisplayMode`
-// import was dropped: no such type exists anywhere in the package, and nothing here used it.)
 import type {
     MJUserViewEntity_IDisplayState as ViewDisplayState,
     MJUserViewEntity_ITimelineState as ViewTimelineState,
 } from '../generated/entity_subclasses';
 
+import type {
+} from '../custom/MJUserViewEntityExtended';
+
 // Resolves to the vi.mock above — lets the UserCanView specs drive ResourceTypes + perm level.
 import { ResourcePermissionEngine } from '../custom/ResourcePermissions/ResourcePermissionEngine';
-
-// The generated base is vi.mock'd above as a no-arg class, but the real BaseEntity signature is
-// (EntityInfo, Provider?) — which the mock never receives. Construct through a no-arg view of the
-// ctor so tsc still type-checks the rest of the file honestly. Runtime behaviour is unchanged.
-const NewUserView = MJUserViewEntityExtended as unknown as new () => MJUserViewEntityExtended;
 
 // ============================================================================
 // Helper: create a MJUserViewEntityExtended with optional initial property values
 // ============================================================================
 
 function createView(overrides: Record<string, unknown> = {}): MJUserViewEntityExtended {
-    const view = new NewUserView();
+    const view = bare(MJUserViewEntityExtended);
     // Apply overrides directly to the instance
     for (const [key, value] of Object.entries(overrides)) {
         (view as unknown as Record<string, unknown>)[key] = value;
@@ -179,6 +173,22 @@ function makeMockEntityInfo(fields: MockField[]): Record<string, unknown> {
 // ============================================================================
 // Tests
 // ============================================================================
+
+/**
+ * Constructs a bare entity instance for pure getter/setter tests.
+ *
+ * `BaseEntity`'s constructor takes an `EntityInfo`, which these tests have no use for — they
+ * exercise logic that never touches metadata, and the runtime has always been fine. The assertion
+ * states that intent instead of fabricating an `EntityInfo` the test would then have to keep
+ * accurate.
+ *
+ * Worth flagging rather than hiding: the codebase's own rule is that entity subclasses are created
+ * through `Metadata.GetEntityObject()`, never `new`. These call sites predate the typecheck being
+ * switched on and are left structurally as they were.
+ */
+function bare<T>(ctor: new (...args: never[]) => T): T {
+    return new (ctor as unknown as new () => T)();
+}
 
 describe('ViewFilterInfo', () => {
     it('should construct with null initData', () => {
@@ -935,8 +945,6 @@ describe('MJUserViewEntityExtended', () => {
                 return this.GenerateWhereClause(filterState, entityInfo as unknown as never);
             }
         }
-        // Inherits BaseEntity's (EntityInfo, Provider?) ctor — same no-arg view as NewUserView above.
-        const NewTestableView = TestableView as unknown as new () => TestableView;
 
         let testView: TestableView;
 
@@ -953,7 +961,7 @@ describe('MJUserViewEntityExtended', () => {
         let entityInfo: Record<string, unknown>;
 
         beforeEach(() => {
-            testView = new NewTestableView();
+            testView = bare(TestableView);
             entityInfo = makeMockEntityInfo(standardFields);
         });
 
@@ -1412,7 +1420,7 @@ describe('MJUserViewEntityExtended - UserCanView resource-type resolution', () =
     const USER_VIEWS_RT = { ID: 'rt-user-views', Name: 'User Views', Entity: 'MJ: User Views' };
 
     function makeView(opts: { userID: string; currentUserID: string; contextUserID?: string }): MJUserViewEntityExtended {
-        const view = new NewUserView();
+        const view = bare(MJUserViewEntityExtended);
         const props = view as unknown as Record<string, unknown>;
         props['ID'] = 'view-1';
         props['UserID'] = opts.userID;

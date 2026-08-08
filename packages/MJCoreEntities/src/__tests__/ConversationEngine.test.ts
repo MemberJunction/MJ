@@ -197,11 +197,11 @@ function enqueueDetailsResults(
 ) {
     // Build ConversationDetailComplete-shaped rows: detail fields + AgentRunsJSON
     const rows = details.map((detail) => {
-        const d = detail as Record<string, unknown>;
+        const d = detail as unknown as Record<string, unknown>;
         const detailId = d['ID'] as string;
         // Find agent runs matching this detail
         const matchingRuns = agentRuns.filter(
-            (r) => (r as Record<string, unknown>)['ConversationDetailID'] === detailId
+            (r) => (r as unknown as Record<string, unknown>)['ConversationDetailID'] === detailId
         );
         return {
             ...d,
