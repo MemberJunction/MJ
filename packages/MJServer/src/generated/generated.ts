@@ -16520,6 +16520,9 @@ export class MJAIModelType_ {
     @Field({nullable: true, description: `Default fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Use {{prefill}} as a placeholder for the actual prefill text. Example: "IMPORTANT: You must begin your response with exactly: {{prefill}}". Individual AI Model Vendor records can override this. If null, a generic fallback is used.`}) 
     PrefillFallbackText?: string;
         
+    @Field({nullable: true, description: `Type-wide default of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the ModelConfiguration cascade — AIModel and AIModelVendor rows inherit from it per key and may override. NULL = contributes nothing.`}) 
+    ModelConfiguration?: string;
+        
     @Field() 
     @MaxLength(50)
     DefaultInputModality: string;
@@ -16562,6 +16565,9 @@ export class CreateMJAIModelTypeInput {
     @Field({ nullable: true })
     PrefillFallbackText: string | null;
 
+    @Field({ nullable: true })
+    ModelConfiguration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -16592,6 +16598,9 @@ export class UpdateMJAIModelTypeInput {
 
     @Field({ nullable: true })
     PrefillFallbackText?: string | null;
+
+    @Field({ nullable: true })
+    ModelConfiguration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -16784,6 +16793,9 @@ export class MJAIModelVendor_ {
     @Field({nullable: true, description: `Model-specific fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default. Use {{prefill}} as a placeholder. Allows tuning the fallback instruction per model since different models respond better to different phrasing.`}) 
     PrefillFallbackText?: string;
         
+    @Field({nullable: true, description: `Most-specific layer of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape) — configuration for THIS model on THIS provider. Deep-merges per key over the model and type layers. NULL = inherit the merged model/type configuration unchanged.`}) 
+    ModelConfiguration?: string;
+        
     @Field() 
     @MaxLength(50)
     Model: string;
@@ -16854,6 +16866,9 @@ export class CreateMJAIModelVendorInput {
     @Field({ nullable: true })
     PrefillFallbackText: string | null;
 
+    @Field({ nullable: true })
+    ModelConfiguration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -16911,6 +16926,9 @@ export class UpdateMJAIModelVendorInput {
 
     @Field({ nullable: true })
     PrefillFallbackText?: string | null;
+
+    @Field({ nullable: true })
+    ModelConfiguration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -17068,6 +17086,9 @@ export class MJAIModel_ {
         
     @Field({nullable: true, description: `Model-level fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default, can be further overridden per-vendor in AI Model Vendor. Use {{prefill}} as a placeholder.`}) 
     PrefillFallbackText?: string;
+        
+    @Field({nullable: true, description: `Per-model layer of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape). Deep-merges per key over the AIModelType default; AIModelVendor rows may override per key on top. NULL = inherit the type default unchanged.`}) 
+    ModelConfiguration?: string;
         
     @Field() 
     @MaxLength(50)
@@ -17227,6 +17248,9 @@ export class CreateMJAIModelInput {
     PrefillFallbackText: string | null;
 
     @Field({ nullable: true })
+    ModelConfiguration: string | null;
+
+    @Field({ nullable: true })
     Vendor: string | null;
 
     @Field({ nullable: true })
@@ -17295,6 +17319,9 @@ export class UpdateMJAIModelInput {
 
     @Field({ nullable: true })
     PrefillFallbackText?: string | null;
+
+    @Field({ nullable: true })
+    ModelConfiguration?: string | null;
 
     @Field({ nullable: true })
     Vendor?: string | null;

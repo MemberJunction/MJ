@@ -7,6 +7,7 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
          ChatMessageContent,
          BaseEmbeddings} from "@memberjunction/ai";
 import { SummarizeResult } from "@memberjunction/ai";
+import { AIModelConfiguration } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
@@ -224,6 +225,14 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     // ========================================================================
     // Delegated Properties from AIEngineBase
     // All base metadata is accessed through AIEngineBase.Instance
+    //
+    // 🚨 THIS CLASS IS A FACADE, NOT A SUBCLASS — the delegation below is the
+    // ONLY thing that makes AIEngineBase's surface reachable as
+    // `AIEngine.Instance.X`. When a public member is added to AIEngineBase,
+    // add its one-line delegate here too, or every server-side caller gets
+    // `Property 'X' does not exist on type 'AIEngine'` at compile time.
+    // The rationale for composition-over-inheritance is on the AIEngineBase
+    // class docblock (packages/AI/BaseAIEngine/src/BaseAIEngine.ts).
     // ========================================================================
 
     /** Access to the underlying AIEngineBase instance */
@@ -315,6 +324,15 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get Modalities(): MJAIModalityEntity[] { return this.Base.Modalities; }
     public get AgentModalities(): MJAIAgentModalityEntity[] { return this.Base.AgentModalities; }
     public get ModelModalities(): MJAIModelModalityEntity[] { return this.Base.ModelModalities; }
+
+    /**
+     * Resolves the EFFECTIVE model-catalog configuration for a model, optionally scoped to one of
+     * its vendor rows — the `AIModelType < AIModel < AIModelVendor` `ModelConfiguration` cascade.
+     * See {@link AIEngineBase.GetEffectiveModelConfiguration} for the merge semantics.
+     */
+    public GetEffectiveModelConfiguration(modelID: string, vendorModelVendorID?: string): AIModelConfiguration | null {
+        return this.Base.GetEffectiveModelConfiguration(modelID, vendorModelVendorID);
+    }
 
     // Modality helper methods - delegated from AIEngineBase
     public GetModalityByName(name: string): MJAIModalityEntity | undefined {
