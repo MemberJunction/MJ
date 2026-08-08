@@ -827,7 +827,7 @@ export class OrderEntity extends mjBizAppsOrdersOrderEntity {
         RelatedEntity: 'MJ_BizApps_Orders: Order Lines',
         RelatedEntityJoinField: 'OrderHeaderID',
         OrderBy: 'LineNumber ASC',
-        Load: 'explicit',                        // 'eager' | 'explicit' | 'never'
+        Load: 'explicit',                        // 'explicit' | 'immediate' | 'lazy' | 'never'
         OnRemove: 'delete',                      // 'delete' | 'orphan' | 'refuse'
         Sequence: { Field: 'LineNumber', From: 1 },
     });
@@ -865,7 +865,7 @@ reimplementing it.
 The root additionally raises `graph_save_started` and `graph_save` so a UI can refresh once per unit
 of work.
 
-**Loading.** `Load: 'eager'` is honoured by `Load()` and **never** by `LoadFromData()` — that method
+**Loading.** `Load: 'immediate'` is honoured by `Load()` and **never** by `LoadFromData()` — that method
 is the per-row materialisation path for `RunView(ResultType:'entity_object')`, so loading children
 there degrades a view into N+1 queries. For result sets, ask for children explicitly and get one
 batched query per collection:

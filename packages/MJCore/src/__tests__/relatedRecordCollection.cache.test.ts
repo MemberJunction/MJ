@@ -244,10 +244,14 @@ describe('Load modes — immediate vs explicit', () => {
 });
 
 describe('Source: cache — a lazy miss throws, and says which kind of miss it is', () => {
-    it('throws when NO registered engine caches the entity, and names the fix', () => {
+    it('throws when NO registered engine declares the entity, naming BOTH possible causes', () => {
+        // The registry cannot distinguish "nothing caches this entity" (a design error) from "the
+        // engine that does has not STARTED loading" (a bootstrap ordering race) — engines register
+        // only once Config() begins. The message must name both, because they need opposite fixes.
         const collection = makeCollection({ Load: 'lazy' });
-        expect(() => collection.Items).toThrow(/no registered BaseEngine caches/);
+        expect(() => collection.Items).toThrow(/no registered BaseEngine declares/);
         expect(() => collection.Items).toThrow(/Source: 'database'/);
+        expect(() => collection.Items).toThrow(/Config\(\) begins/);
     });
 
     it('throws differently when the engine EXISTS but is not loaded yet — an ordering problem', () => {
