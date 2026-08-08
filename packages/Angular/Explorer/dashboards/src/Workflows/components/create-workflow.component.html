@@ -1,0 +1,89 @@
+<div class="create-workflow">
+  <div class="cw-tiles" role="radiogroup" aria-label="How would you like to start?">
+    @for (option of StartOptions; track option.Mode) {
+      <button
+        type="button"
+        class="cw-tile"
+        role="radio"
+        [class.cw-tile-selected]="SelectedMode === option.Mode"
+        [attr.aria-checked]="SelectedMode === option.Mode"
+        [attr.data-mode]="option.Mode"
+        (click)="OnSelectMode(option.Mode)">
+        <i class="cw-tile-icon" [ngClass]="option.Icon" aria-hidden="true"></i>
+        <b class="cw-tile-title">{{ option.Title }}</b>
+        <p class="cw-tile-blurb">{{ option.Blurb }}</p>
+        <span class="cw-tile-meta">{{ option.Meta }}</span>
+      </button>
+    }
+  </div>
+
+  @switch (SelectedMode) {
+    @case ('describe') {
+      <div class="cw-field">
+        <label for="cw-description">What should this workflow do?</label>
+        <textarea
+          id="cw-description"
+          rows="3"
+          [(ngModel)]="Description"
+          placeholder="e.g. Every Monday, pull last week's support tickets, summarise the themes, and email the team lead."></textarea>
+      </div>
+    }
+
+    @case ('past-run') {
+      @if (IsLoadingRuns) {
+        <mj-loading></mj-loading>
+      } @else if (RunsError) {
+        <mj-alert Variant="error" [Message]="RunsError"></mj-alert>
+      } @else if (PastRuns.length === 0) {
+        <mj-empty-state
+          Icon="fa-solid fa-rotate"
+          Title="No finished runs yet"
+          Message="Once an agent finishes working something out, it will show up here ready to promote.">
+        </mj-empty-state>
+      } @else {
+        <div class="cw-runs" role="listbox" aria-label="Finished runs">
+          @for (run of PastRuns; track run.ID) {
+            <div
+              class="cw-run"
+              role="option"
+              [class.cw-run-selected]="SelectedRunID === run.ID"
+              [class.cw-run-unavailable]="!run.IsSettled"
+              [attr.aria-selected]="SelectedRunID === run.ID"
+              [attr.aria-disabled]="!run.IsSettled"
+              [attr.tabindex]="run.IsSettled ? 0 : -1"
+              (click)="OnSelectRun(run)"
+              (keydown.enter)="OnSelectRun(run)"
+              (keydown.space)="OnSelectRun(run)">
+              <span class="cw-run-name">{{ run.Name }}</span>
+              <span class="cw-run-sub">{{ run.Age }} · {{ run.AgentName }}</span>
+              <span class="cw-run-status">{{ run.Status }}</span>
+            </div>
+          }
+        </div>
+        <p class="cw-note">
+          Steps that waited on a person are kept as person steps. Anything the run used that cannot be
+          repeated — one-off inputs from that day — is flagged so you can replace it with something reusable.
+        </p>
+      }
+    }
+  }
+
+  <div class="cw-field">
+    <label for="cw-name">
+      Name <span class="cw-label-hint">— you can change this later</span>
+    </label>
+    <input id="cw-name" type="text" [(ngModel)]="WorkflowName" />
+  </div>
+
+  <p class="cw-note">
+    Workflows are deterministic pathways — they can include AI steps, but always follow the same route.
+    You will review every step before anything runs.
+  </p>
+
+  <div class="cw-actions">
+    <button mjButton variant="primary" size="sm" [disabled]="!CanCreate" (click)="OnCreate()">
+      Create
+    </button>
+    <button mjButton variant="secondary" size="sm" (click)="OnCancel()">Cancel</button>
+  </div>
+</div>
