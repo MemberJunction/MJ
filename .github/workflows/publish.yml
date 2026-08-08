@@ -63,7 +63,18 @@ jobs:
 
   build-and-publish:
     name: Build and publish new versions of NPM packages
-    timeout-minutes: 30
+    # 30 minutes was not enough and the failure mode is DESTRUCTIVE, not a clean retry.
+    # v6.1.0-edge.1 ran 30m16s and GitHub killed it mid-`changeset publish`, leaving the
+    # fixed-version group split across two versions on npm (~100 packages at the new version,
+    # ~200 at the old) with no version-bump commit, no tag, and no back-merge. A job timeout
+    # reports as "The operation was canceled", which is indistinguishable at a glance from
+    # someone clicking Cancel — the v5.49.0 split was attributed to an accidental click and
+    # may well have been this same ceiling.
+    #
+    # The budget is structurally tight: the build alone takes ~25 minutes, leaving ~5 for a
+    # publish loop that uploads ~300 packages serially. Every package added shrinks the margin.
+    # 120 leaves real headroom. This only bounds a hung job; it cannot make one publish more.
+    timeout-minutes: 120
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
