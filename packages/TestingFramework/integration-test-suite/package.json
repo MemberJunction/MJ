@@ -50,6 +50,7 @@
     "@memberjunction/record-set-processor-base": "6.1.0-edge.1",
     "@memberjunction/scheduling-engine": "6.1.0-edge.1",
     "@memberjunction/search-engine": "6.1.0-edge.1",
+    "@memberjunction/server-bootstrap-lite": "6.1.0-edge.1",
     "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.1",
     "@memberjunction/storage": "6.1.0-edge.1",
     "@memberjunction/task-graph": "6.1.0-edge.1",

@@ -170,6 +170,7 @@
     "@memberjunction/cli": "workspace:*",
     "tsx": "^4.21.0",
     "@memberjunction/integration-test-suite": "workspace:*",
+    "@memberjunction/server-bootstrap-lite": "workspace:*",
     "@axe-core/playwright": "^4.10.2"
   },
   "pnpm": {

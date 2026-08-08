@@ -81,6 +81,9 @@ importers:
       '@memberjunction/integration-test-suite':
         specifier: workspace:*
         version: link:packages/TestingFramework/integration-test-suite
+      '@memberjunction/server-bootstrap-lite':
+        specifier: workspace:*
+        version: link:packages/ServerBootstrapLite
       '@playwright/test':
         specifier: ^1.58.1
         version: 1.58.1
@@ -14475,6 +14478,9 @@ importers:
       '@memberjunction/search-engine':
         specifier: 6.1.0-edge.1
         version: link:../../SearchEngine
+      '@memberjunction/server-bootstrap-lite':
+        specifier: 6.1.0-edge.1
+        version: link:../../ServerBootstrapLite
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.1
         version: link:../../SQLServerDataProvider
