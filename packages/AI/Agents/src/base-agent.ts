@@ -7969,6 +7969,10 @@ The context is now within limits. Please retry your request with the recovered c
         
         // Set parent run ID if we're in a sub-agent context
         this._agentRun.ParentRunID = params.parentRun?.ID;
+        // Only a continuation deliverer sets this; every ordinary run stays at the column default of
+        // 0. It has to be recorded on the run itself because the run is the only thing that outlives
+        // the dispatcher that started it, and the next graph this run submits reads it back.
+        this._agentRun.ContinuationDepth = params.continuationDepth ?? 0;
         
         // Set LastRunID for run chaining (different from ParentRunID)
         if (params.lastRunId) {
@@ -11913,6 +11917,11 @@ The context is now within limits. Please retry your request with the recovered c
             EnvironmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
             ConversationDetailID: params.conversationDetailId ?? null,
             AgentRunID: this._agentRun?.ID ?? null,
+            // If THIS run was itself started by a finished graph, the graph it emits inherits that
+            // depth + 1. Without this the chain restarts at zero on every hop and
+            // MAX_REINVOKE_DEPTH never fires — a graph reinvoking an agent that emits a graph would
+            // run forever.
+            ReinvokeDepth: this._agentRun?.ContinuationDepth ?? 0,
             ContextUser: params.contextUser,
             Provider: this.ProviderToUse
         });

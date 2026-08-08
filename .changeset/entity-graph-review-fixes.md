@@ -1,14 +1,10 @@
 ---
 "@memberjunction/core": patch
-"@memberjunction/core-entities": patch
-"@memberjunction/server": patch
 "@memberjunction/sqlserver-dataprovider": patch
-"@memberjunction/ng-core-entity-forms": patch
 ---
 
 fix(core): post-merge review fixes for entity companions / related-record collections / unified transaction scope (PR #3585)
 
-- Restore `ReadFilterSpec` (deleted by a stale CodeGen run) to the generated ORM, GraphQL types and Explorer form
 - Settle the entity-transaction scope on every `_InnerSave`/`_InnerDelete` exit path (clean-chain save, provider `Delete()` returning false, provider `Save()` returning falsy data)
 - Run composite graph saves through the in-flight save debounce; refuse TransactionGroup + companion graphs loudly
 - Skip read-only collections in `Validate`/`ValidateAsync`/`Serialize` — a projection contributes no validation, no FK stamping and no wire payload
