@@ -42,6 +42,7 @@
  */
 import { RunView } from '@memberjunction/core';
 import type { IEntityDataProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentEntity, MJAIAgentPromptEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -109,11 +110,11 @@ async function readPrompts(ctx: IntegrationCheckContext, agentId: string): Promi
 /** Records every id the graph persisted so Teardown sweeps them even if a later check throws. */
 function trackGraph(ctx: IntegrationCheckContext, agent: MJAIAgentEntity): void {
     const f = fx(ctx);
-    if (agent.ID && !f.AgentIds.includes(agent.ID)) {
+    if (agent.ID && !f.AgentIds.some((id) => UUIDsEqual(id, agent.ID))) {
         f.AgentIds.push(agent.ID);
     }
     for (const child of agent.Prompts.Items) {
-        if (child.ID && !f.AgentPromptIds.includes(child.ID)) {
+        if (child.ID && !f.AgentPromptIds.some((id) => UUIDsEqual(id, child.ID))) {
             f.AgentPromptIds.push(child.ID);
         }
     }
@@ -192,7 +193,7 @@ export const EntityGraphClientChecks: NamedCheck[] = [
             AssertEqual(rows.length, 2, 'EGC3: both children persisted');
             // Never assigned by this check — the collection stamps the FK from the parent key, which
             // on the remote path is a key the SERVER generated after deserializing.
-            Assert(rows.every((r) => r.AgentID === agent.ID), 'EGC3: every child must carry the parent FK');
+            Assert(rows.every((r) => UUIDsEqual(r.AgentID, agent.ID)), 'EGC3: every child must carry the parent FK');
             AssertEqual(rows.map((r) => r.ExecutionOrder).join(','), '0,1',
                 'EGC3: the Sequence policy must survive serialization (From: 0)');
             Assert(!agent.Dirty, 'EGC3: the whole graph must be clean after a successful remote save');

@@ -553,10 +553,29 @@ is not loaded yet. Await that engine's Config() before reading 'Actions', or dec
 Load: 'explicit' …
 ```
 ```
-… but no registered BaseEngine caches 'MJ: Foo'. Lazy loading reads exclusively from
-engine caches. Declare Source: 'database' with Load: 'explicit', or add an entity
-config for 'MJ: Foo' to an engine.
+… but no registered BaseEngine declares 'MJ: Foo'. Two possible causes: (1) the engine
+that caches it has not STARTED loading yet …; or (2) nothing caches this entity at all —
+declare Source: 'database' with Load: 'explicit', or add an entity config to an engine.
 ```
+
+**Templates guard with `IsAvailable`, never with a null check.** A widget can render during
+bootstrap, before anything has awaited the donor engine's `Config()` — and `@if (action.Params && …)`
+cannot help, because the collection property is never null; it is the *read* that throws.
+
+```html
+@if (action.Params.IsAvailable) {
+  @for (p of action.Params.Items; track p.ID) { … }
+}
+```
+
+`IsAvailable` is a predicate, not a second way to read: there is exactly one accessor, so no caller
+has to decide what a `null` return means versus an empty one. It never queries and never throws, and
+a `true` answer means the next `Items` read is both safe *and* already populated — deciding the
+question requires consulting the donor, and consulting it is what fills the collection.
+
+**Business logic should not reach for it.** In non-display code, an unavailable donor means the
+caller ran before the engine was configured — `await` that engine's `Config()` instead of branching
+on availability, or the "not yet" branch quietly becomes the silent-empty bug wearing a guard.
 
 ### One call for everything
 

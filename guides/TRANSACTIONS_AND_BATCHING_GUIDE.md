@@ -142,7 +142,7 @@ export class JournalEntryEntity extends mjBizAppsAccountingJournalEntryEntity {
         RelatedEntity: 'MJ_BizApps_Accounting: Journal Entry Lines',
         RelatedEntityJoinField: 'JournalEntryID',
         OrderBy: 'LineNumber ASC',
-        Load: 'explicit',                       // 'eager' | 'explicit' | 'never'
+        Load: 'explicit',                       // 'explicit' | 'immediate' | 'lazy' | 'never'
         OnRemove: 'delete',                     // 'delete' | 'orphan' | 'refuse'
         Sequence: { Field: 'LineNumber', From: 1 },
     });
@@ -191,7 +191,8 @@ of work rather than once per line.
 | Mode | Behaviour |
 |---|---|
 | `'explicit'` (default) | Nothing loads until `await entity.Lines.Load()` |
-| `'eager'` | Populated by `Load()` — **never** by `LoadFromData()` |
+| `'immediate'` | Populated by `Load()` — **never** by `LoadFromData()` |
+| `'lazy'` | Populated on first read of `Items` — requires `Source: 'cache'` and read-only, and **throws** on a cache miss rather than returning an empty array |
 | `'never'` | Write-only staging buffer |
 
 For result sets, use one batched query rather than eager loading per row:
@@ -205,7 +206,7 @@ const result = await rv.RunView<JournalEntryEntity>({
 });
 ```
 
-> **Why `eager` excludes `LoadFromData()`.** `LoadFromData()` is the per-row materialisation path for
+> **Why `immediate` excludes `LoadFromData()`.** `LoadFromData()` is the per-row materialisation path for
 > `RunView(ResultType:'entity_object')`. Loading children there turns one view into N+1 queries. This
 > is a real defect that shipped: a `LoadFromData` override calling `LoadLines()` meant listing 500
 > journal entries issued 500 line queries plus 500 dimension queries. `IncludeRelatedRecords` costs
@@ -276,7 +277,7 @@ server-side with no configuration.
 Deprecated since 6.2. It opens a second physical transaction blind to any already in flight. Use
 `BeginEntityTransaction()`.
 
-**❌ Setting `Load: 'eager'` on a collection whose parent is commonly listed in grids.**
+**❌ Setting `Load: 'immediate'` on a collection whose parent is commonly listed in grids.**
 Use `'explicit'` plus `IncludeRelatedRecords` on the specific views that need children.
 
 ---

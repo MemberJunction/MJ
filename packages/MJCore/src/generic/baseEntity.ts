@@ -1519,6 +1519,12 @@ export abstract class BaseEntity<T = unknown> {
      * @param output - The server's result graph.
      */
     private async applyGraphResult(output: SaveEntityGraphOutput): Promise<void> {
+        // Captured at entry — the last moment the create-vs-update distinction exists on this
+        // object, since `_everSaved` is stamped true a few lines down. The result history and the
+        // 'save' event both carry it; hardcoding 'update' here made every remote graph CREATE
+        // report (and notify subscribers) as an update.
+        const saveSubType: BaseEntityEvent['saveSubType'] = this.IsSaved ? 'update' : 'create';
+
         // Root: rebase field values and dirty state onto what the database now holds.
         this.init();
         this.SetMany(output.Fields, false, true, true);
@@ -1533,12 +1539,12 @@ export abstract class BaseEntity<T = unknown> {
 
         const result = new BaseEntityResult();
         result.Success = true;
-        result.Type = 'update';
+        result.Type = saveSubType;
         result.StartedAt = new Date();
         result.EndedAt = new Date();
         this.RegisterResultHistoryEntry(result);
 
-        this.RaiseEvent('save', null, 'update');
+        this.RaiseEvent('save', null, saveSubType);
     }
 
     /**
@@ -1581,24 +1587,36 @@ export abstract class BaseEntity<T = unknown> {
 
         // Cache-backed ones first — synchronous, zero queries. Whatever misses falls through to the
         // batched database load below, so a donor engine that is not loaded yet costs correctness
-        // nothing.
+        // nothing. Database-backed collections carry the same guards Load() itself has: a
+        // collection that is already loaded, or that holds staged work (new/edited children,
+        // pending removals), is left alone — without those guards this call re-queried an
+        // already-loaded collection and, worse, WIPED staged children on a new parent, because the
+        // parent's pre-generated UUID matches zero rows and SetLoadedItems([]) discards everything.
         const needsDatabase: RelatedRecordCollection[] = [];
         for (const collection of collections) {
-            if (!(await collection.TryLoadFromCache())) {
-                needsDatabase.push(collection);
+            if (await collection.TryLoadFromCache()) {
+                continue;
             }
+            if (collection.IsLoaded || collection.Dirty) {
+                continue;
+            }
+            needsDatabase.push(collection);
         }
-        if (needsDatabase.length === 0) {
+        // An unsaved parent owns no persisted related records — mirror Load()'s own guard rather
+        // than issuing queries guaranteed to return nothing (and destroy staged state adopting it).
+        if (needsDatabase.length === 0 || !this.IsSaved) {
             return;
         }
 
         // One `RunViews` for all remaining collections — N declared collections cost one round trip,
-        // not N. Params are built per collection so each keeps its own filter and ordering.
+        // not N. Params are built per collection so each keeps its own filter and ordering. The key
+        // is escaped exactly as RelatedRecordCollection.Load() and the batch loader escape it.
+        const parentKeyLiteral = String(this.FirstPrimaryKey?.Value).replace(/'/g, "''");
         const rv = new RunView(this.ProviderToUse as unknown as IRunViewProvider);
         const results = await rv.RunViews(
             needsDatabase.map(c => ({
                 EntityName: c.RelatedEntityName,
-                ExtraFilter: `${c.RelatedEntityJoinField} = '${this.FirstPrimaryKey?.Value}'`,
+                ExtraFilter: `${c.RelatedEntityJoinField} = '${parentKeyLiteral}'`,
                 OrderBy: c.OrderByClause,
                 ResultType: 'entity_object' as const,
             })),
@@ -1672,16 +1690,20 @@ export abstract class BaseEntity<T = unknown> {
      *
      * @param includeRoot - Whether to include this record's own save. False when the caller has
      *                      already persisted the root by other means.
+     * @param saveOptions - The caller's save options, forwarded to each companion so it can honor
+     *                      flags that change what counts as work (`IgnoreDirtyState`, most
+     *                      importantly — a companion that skips clean children must not skip them
+     *                      when the caller demanded a full write-out).
      * @returns The plan. A `NodeCount` of 1 means there is no graph and the caller should take the
      *          ordinary single-record path.
      */
-    protected BuildSavePlan(includeRoot = true): EntitySavePlan {
+    protected BuildSavePlan(includeRoot = true, saveOptions?: EntitySaveOptions): EntitySavePlan {
         const plan = new EntitySavePlan(this);
         if (includeRoot) {
             plan.AddSave(this, this.EntityInfo?.Name ?? 'root', undefined, /* selfOnly */ true);
         }
         for (const companion of this.Companions) {
-            companion.ContributeSaveWork(plan);
+            companion.ContributeSaveWork(plan, saveOptions);
         }
         return plan;
     }
@@ -1778,10 +1800,6 @@ export abstract class BaseEntity<T = unknown> {
         operationKind: 'save' | 'delete' = 'save',
     ): Promise<boolean> {
         const provider = this.ProviderToUse;
-        const scope =
-            provider?.SupportsEntityTransactions === true && provider.BeginEntityTransaction
-                ? await provider.BeginEntityTransaction()
-                : null;
         // Passed explicitly rather than inferred from which options object is set: `Delete()` is
         // routinely called with no arguments, so an inference would mislabel every such failure.
         const operation = operationKind;
@@ -1796,7 +1814,15 @@ export abstract class BaseEntity<T = unknown> {
         const childDeleteOptions = Object.assign(new EntityDeleteOptions(), deleteOptions ?? {});
         childDeleteOptions.GraphVisited = visited;
 
+        // Acquired INSIDE the try: a begin failure (pool exhausted, dead connection) is a failed
+        // save, and Save()/Delete() report failure by returning false — an escaping throw here
+        // would break that contract for exactly one path.
+        let scope: EntityTransactionScope | null = null;
         try {
+            scope =
+                provider?.SupportsEntityTransactions === true && provider.BeginEntityTransaction
+                    ? await provider.BeginEntityTransaction()
+                    : null;
             const result = await ExecuteEntitySavePlan(plan, {
                 SaveOptions: childSaveOptions,
                 RootSaveOptions: this.buildRootSaveOptions(saveOptions),
@@ -1816,7 +1842,17 @@ export abstract class BaseEntity<T = unknown> {
             this.RaiseEvent('graph_save', { Success: true, NodeCount: plan.NodeCount });
             return true;
         } catch (e) {
-            await scope?.Rollback();
+            // Rollback failures are logged and swallowed: this is already the failure path, and a
+            // secondary throw (a doomed transaction refusing a savepoint rollback, a dropped
+            // connection) would both replace the real error and escape the no-throw contract.
+            try {
+                await scope?.Rollback();
+            } catch (rollbackError) {
+                LogError(
+                    `BaseEntity.executeGraphLocal: rollback failed after graph error for ` +
+                    `${this.EntityInfo?.Name}: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+                );
+            }
             const detail = e instanceof Error ? e.message : String(e);
             LogError(`BaseEntity.executeGraphLocal failed for ${this.EntityInfo?.Name}: ${detail}`);
             this.registerGraphFailure(detail, operation);
@@ -3035,20 +3071,49 @@ export abstract class BaseEntity<T = unknown> {
             return this._InnerSave(options);
         }
 
+        // If a save is already in progress, return its promise. This check MUST run before graph
+        // routing: a composite save is still a save, and two concurrent Save() calls on one record
+        // (double-click, autosave racing a manual save) must share the in-flight unit of work.
+        // Routing first meant each call built and executed its own full graph — a double insert of
+        // root and children — while single-row entities kept the debounce protection.
+        if (this._pendingSave$) {
+            return firstValueFrom(this._pendingSave$);
+        }
+
         // Composite routing: when companions contribute work, this save is a multi-record unit of
         // work rather than a single row. Building the plan is cheap and, crucially, a plan with one
         // node falls straight through to the ordinary path below — so entities without companions,
         // and composites whose collections happen to be empty, behave exactly as they did before.
         if (this.HasCompanions) {
-            const plan = this.BuildSavePlan();
+            const plan = this.BuildSavePlan(true, options);
             if (plan.NodeCount > 1) {
-                return this.saveGraph(plan, options);
+                // A TransactionGroup defers this record's own write until Submit(), while a graph
+                // executes its child nodes immediately (or ships the whole graph to the server) —
+                // children would insert rows pointing at a parent whose write is still queued, and
+                // the remote path would commit everything before the group ever submits. The
+                // combination cannot be made coherent, so refuse it loudly rather than silently
+                // tearing the group's atomicity. (Same conclusion as the guide: a TransactionGroup
+                // is not a composite-save engine — see guides/TRANSACTIONS_AND_BATCHING_GUIDE.md.)
+                if (this.TransactionGroup) {
+                    throw new Error(
+                        `${this.EntityInfo?.Name}: cannot save related-record collections while enrolled in a ` +
+                        `TransactionGroup. The group defers the parent's write until Submit(), so the graph's ` +
+                        `child records would persist against a parent row that does not exist yet. Save the ` +
+                        `composite record on its own — entity.Save() is already atomic for its collections — ` +
+                        `or detach it from the TransactionGroup first.`,
+                    );
+                }
+                // Run the graph through the same pending-save pipeline as a single-row save, so
+                // concurrent callers share one execution and one result. The graph's own root node
+                // re-enters Save() with IsGraphNodeSave, which bypasses this pipeline above — no
+                // self-deadlock.
+                this._pendingSave$ = of(options).pipe(
+                    switchMap(opts => from(this.saveGraph(plan, opts))),
+                    finalize(() => { this._pendingSave$ = null; }),
+                    shareReplay(1)
+                );
+                return firstValueFrom(this._pendingSave$);
             }
-        }
-
-        // If a save is already in progress, return its promise.
-        if (this._pendingSave$) {
-            return firstValueFrom(this._pendingSave$);
         }
 
         // Create a new observable that debounces duplicative calls, and executes the save.
@@ -3237,8 +3302,18 @@ export abstract class BaseEntity<T = unknown> {
                             // no transaction group, so we have our results here
                             const result = this.finalizeSave(data, saveSubType);
 
-                            // Commit the scope this entity opened, if any (only the initiator holds one).
-                            await this.commitEntityTransactionScope();
+                            // Settle the scope this entity opened, if any (only the initiator holds
+                            // one). The provider can fail by RETURNING falsy data rather than
+                            // throwing — a validate-type entity action rejecting the save does
+                            // exactly that — and committing on that path would persist the parent
+                            // chain around a leaf that reported failure: precisely the torn write
+                            // this scope exists to prevent.
+                            if (result) {
+                                await this.commitEntityTransactionScope();
+                            }
+                            else {
+                                await this.rollbackEntityTransactionScope();
+                            }
 
                             return result;
                         }
@@ -3279,8 +3354,15 @@ export abstract class BaseEntity<T = unknown> {
                     }
                 }
             }
-            else
+            else {
+                // Nothing to save — but the scope opened above (an IS-A initiator whose whole chain
+                // is clean) must still be settled. Returning with it open leaked the provider's
+                // ambient transaction: every subsequent write joined a transaction nobody would ever
+                // commit, so later "successful" saves were silently non-durable. Committing an
+                // empty scope writes nothing; it only releases the transaction.
+                await this.commitEntityTransactionScope();
                 return true; // nothing to save since we're not dirty
+            }
         }
         catch (e: any) {
             // Roll back the scope this entity opened, if any. No-op when it holds none.
@@ -3581,7 +3663,7 @@ export abstract class BaseEntity<T = unknown> {
             // Only runs for parent-type entities; idempotent via _childEntityDiscoveryDone.
             await this.InitializeChildEntity();
 
-            // Companions declared Load:'eager' populate here — and ONLY here.
+            // Companions declared Load:'immediate' populate here — and ONLY here.
             //
             // Deliberately not in LoadFromData(): that is the per-row materialization path for
             // RunView(ResultType:'entity_object'), so an eager child query there becomes one query
@@ -4117,8 +4199,16 @@ export abstract class BaseEntity<T = unknown> {
                     }
                     return true;
                 }
-                else // record didn't delete, return false, but also don't wipe out the entity like we do if the Delete() worked
+                else {
+                    // Record didn't delete. This path is ordinary, not exotic: the provider reports
+                    // essentially every delete failure — RLS denial, FK violation, zero rows
+                    // affected — by RETURNING false rather than throwing. The scope opened above
+                    // must be settled here or the provider's ambient transaction leaks open and
+                    // every subsequent "committed" write on this provider silently never commits.
+                    // (Also: don't wipe out the entity like we do when the Delete() worked.)
+                    await this.rollbackEntityTransactionScope();
                     return false;
+                }
             }
         }
         catch (e) {
