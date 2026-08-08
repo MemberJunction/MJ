@@ -180,6 +180,68 @@ This makes the hand-DDL/generated boundary unmissable when scrolling a 9,000-lin
 
 Reference example: `V202607020230__v5.45.x__AISkill_ActivationMode.sql`.
 
+### 🚨 A CodeGen `EntityField` INSERT must never carry a LITERAL `Sequence`
+
+If an appended CodeGen block inserts `EntityField` rows, the `Sequence` must be an expression
+evaluated **at apply time**, never the number CodeGen wrote:
+
+```sql
+-- ✅ correct — what CodeGen now emits. The offset is the field's SCHEMA ORDINAL, so a batch of
+--    new fields keeps its relative order regardless of the order the INSERTs execute.
+(SELECT COALESCE(MAX([Sequence]), 0)
+   FROM [${flyway:defaultSchema}].[EntityField]
+  WHERE [EntityID] = '<entity-id>') + <schema-ordinal>
+
+-- ✅ also fine for a HAND-written correction of a single field, where there is no batch to order
+(SELECT COALESCE(MAX([Sequence]), 0) + 1
+   FROM [${flyway:defaultSchema}].[EntityField]
+  WHERE [EntityID] = '<entity-id>')
+
+-- ❌ wrong — a placeholder that was only ever valid on the database CodeGen ran against
+100025,
+```
+
+**Values are disposable; order is not.** `spUpdateExistingEntityFieldsFromSchema` overwrites `Sequence`
+from the schema on its next pass (`ef.Sequence = fr.Sequence`), so the numbers themselves are
+throwaway — two independent from-scratch builds land on identical sequences. What must hold is that
+base (non-virtual) fields sort **before** virtual ones, because the providers' positional
+save-capture depends on that alignment. Encoding the ordinal in the emitted value keeps that true
+without depending on statement execution order.
+
+**Why this is not a style preference.** The number CodeGen emits is a *temporary* placeholder —
+`MAX(Sequence) + 100000 + ordinal` — that `spUpdateExistingEntityFieldsFromSchema` rewrites to a
+proper low value moments later, both live and from `R__RefreshMetadata.sql`. Locally it is always
+correct by the time anyone looks.
+
+But Flyway runs **every versioned migration before any repeatable script**. On a database built only
+from migrations, that renumber never happens in between. So two migrations that add columns to the
+**same entity** within one release each carry a placeholder derived from the same low `MAX` — and
+the second collides on `UQ_EntityField_EntityID_Sequence`.
+
+**The failure lies about itself.** These scripts do not `SET XACT_ABORT ON`, so the unique violation
+aborts only that *statement*; execution continues and the run dies further down on a FOREIGN KEY
+error against `EntityFieldValue`, whose rows point at the field that was never inserted. Debugging
+the reported error leads nowhere — see MJ#3670, where this cost real time.
+
+Note what makes this invisible to ordinary review: whether your migration collides depends on a
+migration **someone else wrote**, and on the state of a database **nobody is looking at**. It cannot
+fail on a working dev database. It fails only on fresh installs — CI, new developers, releases.
+
+CodeGen now emits the computed form (`manage-metadata.ts`, `getPendingEntityFieldINSERTSQL`), so
+newly generated blocks are already correct. Two guard rails back it up:
+
+```bash
+.github/scripts/check-migration-entityfield-sequence.sh              # changed migrations (CI gate)
+.github/scripts/check-migration-entityfield-sequence.sh --self-test  # the detector's own tests
+```
+
+Existing migrations using the literal form are left alone deliberately — they apply cleanly today,
+and rewriting them would change Flyway checksums on every existing database for no benefit.
+
+**The backstop for this whole class of defect is a from-scratch database build** — the
+`bootstrap-clean-db` skill. A migration whose correctness depends on local state cannot be caught
+any other way, and is cheapest to fix before a release cut.
+
 ### 🚨 ONE DATABASE PER AGENT — never point two sessions at the same one
 
 **Before running `mj migrate`, `mj codegen`, or `mj sync push`, confirm the database in your

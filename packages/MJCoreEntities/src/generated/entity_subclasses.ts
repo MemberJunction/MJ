@@ -387,10 +387,6 @@ export const MJActionExecutionLogSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    EntityAction: z.string().nullable().describe(`
-        * * Field Name: EntityAction
-        * * Display Name: Entity Action
-        * * SQL Data Type: nvarchar(425)`),
     EntityActionInvocationType: z.string().nullable().describe(`
         * * Field Name: EntityActionInvocationType
         * * Display Name: Entity Action Invocation Type
@@ -16849,10 +16845,6 @@ export const MJEntityActionFilterSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityAction: z.string().describe(`
-        * * Field Name: EntityAction
-        * * Display Name: Entity Action Name
-        * * SQL Data Type: nvarchar(425)`),
     ActionFilter: z.string().describe(`
         * * Field Name: ActionFilter
         * * Display Name: Action Filter Name
@@ -16945,10 +16937,6 @@ export const MJEntityActionInvocationSchema = z.object({
         * * Display Name: Runtime UX Driver Class
         * * SQL Data Type: nvarchar(255)
         * * Description: Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.`),
-    EntityAction: z.string().describe(`
-        * * Field Name: EntityAction
-        * * Display Name: Entity Action Name
-        * * SQL Data Type: nvarchar(425)`),
     InvocationType: z.string().describe(`
         * * Field Name: InvocationType
         * * Display Name: Invocation Type Name
@@ -17013,10 +17001,6 @@ export const MJEntityActionParamSchema = z.object({
         * * Display Name: Log Value
         * * SQL Data Type: bit
         * * Description: Optional per-binding override of ActionParam.LogValue. NULL (the default) inherits the parameter definition. Set to 0 when this particular binding passes something sensitive through a parameter that is ordinarily safe to log - a message body through a generic Text parameter, for instance. Cannot re-enable logging for a value type the hard rule suppresses.`),
-    EntityAction: z.string().describe(`
-        * * Field Name: EntityAction
-        * * Display Name: Entity Action
-        * * SQL Data Type: nvarchar(425)`),
     ActionParam: z.string().describe(`
         * * Field Name: ActionParam
         * * Display Name: Action Parameter
@@ -33795,15 +33779,6 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
     */
     get User(): string {
         return this.Get('User');
-    }
-
-    /**
-    * * Field Name: EntityAction
-    * * Display Name: Entity Action
-    * * SQL Data Type: nvarchar(425)
-    */
-    get EntityAction(): string | null {
-        return this.Get('EntityAction');
     }
 
     /**
@@ -78555,15 +78530,6 @@ export class MJEntityActionFilterEntity extends BaseEntity<MJEntityActionFilterE
     }
 
     /**
-    * * Field Name: EntityAction
-    * * Display Name: Entity Action Name
-    * * SQL Data Type: nvarchar(425)
-    */
-    get EntityAction(): string {
-        return this.Get('EntityAction');
-    }
-
-    /**
     * * Field Name: ActionFilter
     * * Display Name: Action Filter Name
     * * SQL Data Type: nvarchar(MAX)
@@ -78801,15 +78767,6 @@ export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInv
     }
 
     /**
-    * * Field Name: EntityAction
-    * * Display Name: Entity Action Name
-    * * SQL Data Type: nvarchar(425)
-    */
-    get EntityAction(): string {
-        return this.Get('EntityAction');
-    }
-
-    /**
     * * Field Name: InvocationType
     * * Display Name: Invocation Type Name
     * * SQL Data Type: nvarchar(255)
@@ -78966,15 +78923,6 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
     }
     set LogValue(value: boolean | null) {
         this.Set('LogValue', value);
-    }
-
-    /**
-    * * Field Name: EntityAction
-    * * Display Name: Entity Action
-    * * SQL Data Type: nvarchar(425)
-    */
-    get EntityAction(): string {
-        return this.Get('EntityAction');
     }
 
     /**
@@ -110451,7 +110399,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
         if (this.ActionID != null) {
             count++;
         }
-    
+
         if (count > 1) {
             result.Errors.push(new ValidationErrorInfo(
                 "UserID",
