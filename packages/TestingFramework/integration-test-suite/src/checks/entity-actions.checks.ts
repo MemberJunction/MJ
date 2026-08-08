@@ -219,7 +219,10 @@ async function waitFor(predicate: () => boolean | Promise<boolean>, what: string
  * counting rows would report a working filter as a failure to gate. The refusal is identified by the
  * shared message constant rather than by matching prose here, so the two cannot drift.
  */
-async function executionCountFor(ctx: IntegrationCheckContext, entityActionID: string): Promise<number> {
+async function logRowsFor(
+    ctx: IntegrationCheckContext,
+    entityActionID: string,
+): Promise<Array<{ ID: string; Message: string | null }>> {
     const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string; Message: string | null }>(
         {
             EntityName: 'MJ: Action Execution Logs',
@@ -227,27 +230,46 @@ async function executionCountFor(ctx: IntegrationCheckContext, entityActionID: s
             Fields: ['ID', 'Message'],
             ResultType: 'simple',
             // The log is written fire-and-forget through a save queue; a cached read here would show
-            // the count as it was before the run.
+            // the rows as they were before the run.
             BypassCache: true,
         },
         ctx.User,
     );
-    return (res.Results ?? []).filter((r) => r.Message !== ACTION_PREVENTED_BY_FILTER_MESSAGE).length;
+    return res.Results ?? [];
+}
+
+async function executionCountFor(ctx: IntegrationCheckContext, entityActionID: string): Promise<number> {
+    const rows = await logRowsFor(ctx, entityActionID);
+    return rows.filter((r) => r.Message !== ACTION_PREVENTED_BY_FILTER_MESSAGE).length;
+}
+
+/** The marker a durable submission leaves on its log row. */
+const SUBMITTED_MARKER = 'Submitted for durable execution';
+
+/**
+ * How many times this binding actually ran the action IN THIS PROCESS.
+ *
+ * Excludes both a filter refusal and a durable submission. All three write a log row — the run
+ * happened in every case, it simply ended differently — so "a row exists" answers none of the
+ * questions these checks ask.
+ */
+async function inProcessCountFor(ctx: IntegrationCheckContext, entityActionID: string): Promise<number> {
+    const rows = await logRowsFor(ctx, entityActionID);
+    return rows.filter((r) =>
+        r.Message !== ACTION_PREVENTED_BY_FILTER_MESSAGE && !(r.Message ?? '').includes(SUBMITTED_MARKER),
+    ).length;
+}
+
+/** How many runs of this binding were handed to the durable substrate. */
+async function submissionCountFor(ctx: IntegrationCheckContext, entityActionID: string): Promise<number> {
+    const rows = await logRowsFor(ctx, entityActionID);
+    return rows.filter((r) => (r.Message ?? '').includes(SUBMITTED_MARKER)).length;
 }
 
 /** How many times a filter PREVENTED this binding — the positive proof a gate did its job. */
 async function preventedCountFor(ctx: IntegrationCheckContext, entityActionID: string): Promise<number> {
-    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string; Message: string | null }>(
-        {
-            EntityName: 'MJ: Action Execution Logs',
-            ExtraFilter: `EntityActionID='${entityActionID}'`,
-            Fields: ['ID', 'Message'],
-            ResultType: 'simple',
-            BypassCache: true,
-        },
-        ctx.User,
-    );
-    return (res.Results ?? []).filter((r) => r.Message === ACTION_PREVENTED_BY_FILTER_MESSAGE).length;
+    const rows = await logRowsFor(ctx, entityActionID);
+    return rows.filter((r) => r.Message === ACTION_PREVENTED_BY_FILTER_MESSAGE).length;
 }
 
 // ── checks ───────────────────────────────────────────────────────────────────────────────────────
@@ -424,7 +446,7 @@ export const EntityActionChecks: NamedCheck[] = [
             DurableEntityActionRegistry.Instance.Register(submitter);
             try {
                 const list = await createList(ctx, `mj-it-ea6 ${Date.now()} (safe to delete)`);
-                const beforeLogs = await executionCountFor(ctx, binding.ID);
+                const beforeLogs = await inProcessCountFor(ctx, binding.ID);
 
                 list.Description = 'changed';
                 Assert(await list.Save(), 'the subject save must succeed');
@@ -441,12 +463,15 @@ export const EntityActionChecks: NamedCheck[] = [
                 Assert(!!request.EntityName, 'the request must name the entity, for a readable task');
                 Assert(typeof request.RedactedParams === 'object', 'params must arrive as a plain JSON-safe object');
 
-                // And it must NOT also have run inline — a durable dispatch that double-runs is
-                // worse than one that never ran, because the effect happens twice.
+                // A submitted run IS logged, and should be: the dispatch happened, it simply handed
+                // the work on. What must NOT happen is the action also executing here — so the
+                // assertion is on WHAT the log says, not on whether a row exists.
                 await settle(1500);
-                AssertEqual(await executionCountFor(ctx, binding.ID), beforeLogs,
-                    'a submitted binding must not also execute in-process');
                 AssertEqual(mine().length, 1, 'the binding must have been submitted exactly once');
+                const submitted = await submissionCountFor(ctx, binding.ID);
+                Assert(submitted > 0, 'the run must be recorded as submitted, not silently absent');
+                AssertEqual(await inProcessCountFor(ctx, binding.ID), beforeLogs,
+                    'a submitted binding must not also execute in-process');
             } finally {
                 DurableEntityActionRegistry.Instance.Clear();
             }
