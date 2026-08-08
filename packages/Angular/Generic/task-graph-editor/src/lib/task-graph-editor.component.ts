@@ -24,7 +24,7 @@
  *
  * @module @memberjunction/ng-task-graph-editor
  */
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnDestroy, Output, ViewChild } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
     ValidateTaskGraphSpec,
@@ -32,17 +32,21 @@ import {
     type TaskGraphSpecNode,
     type TaskGraphValidationError,
 } from '@memberjunction/ai-core-plus';
+import { FlowEditorComponent } from '@memberjunction/ng-flow-editor';
 import type {
     FlowConnection,
     FlowConnectionCreatedEvent,
     FlowLayoutDirection,
     FlowNode,
+    FlowNodeAddedEvent,
     FlowNodeTypeConfig,
 } from '@memberjunction/ng-flow-editor';
 import {
     AddDependency,
     AddTask,
     GetDependents,
+    GetNodeTypeConfig,
+    NewTaskFromNodeType,
     NextTempId,
     RemoveDependency,
     RemoveTask,
@@ -53,6 +57,10 @@ import {
     WouldCreateCycle,
     type TaskGraphRuntimeStatus,
 } from './task-graph-canvas-adapter';
+import type {
+    DependencyConditionChangeRequestedEventArgs,
+    TaskPropertyChangeRequestedEventArgs,
+} from './task-graph-properties-panel.component';
 import {
     AfterDependencyAddedEventArgs,
     AfterDependencyRemovedEventArgs,
@@ -77,7 +85,7 @@ import {
     templateUrl: './task-graph-editor.component.html',
     styleUrls: ['./task-graph-editor.component.css'],
 })
-export class TaskGraphEditorComponent extends BaseAngularComponent {
+export class TaskGraphEditorComponent extends BaseAngularComponent implements OnDestroy {
     // ── Inputs ───────────────────────────────────────────────────────────────
 
     /**
@@ -117,6 +125,25 @@ export class TaskGraphEditorComponent extends BaseAngularComponent {
     @Input() public ShowStatusBar: boolean = true;
     @Input() public AutoLayoutDirection: FlowLayoutDirection = 'vertical';
 
+    /**
+     * Whether the properties panel rides alongside the canvas.
+     *
+     * On by default, because without it a step added from the palette can never be named or
+     * assigned — the canvas draws structure, the panel supplies content, and one without the other
+     * is a graph the author can build but not finish. Hosts embedding the read-only viewer in a chat
+     * card turn it off.
+     */
+    @Input() public ShowProperties: boolean = true;
+
+    /**
+     * Agent names offered when assigning a step. Supplied by the host, which owns data access —
+     * this is a widgets-layer component and does not query.
+     */
+    @Input() public AvailableAgentNames: readonly string[] = [];
+
+    /** Action names offered when assigning a step. Same ownership rule as `AvailableAgentNames`. */
+    @Input() public AvailableActionNames: readonly string[] = [];
+
     /** Shown when there is nothing to draw yet. */
     @Input() public EmptyStateMessage: string = 'No steps yet. Add one to start building this workflow.';
 
@@ -146,10 +173,12 @@ export class TaskGraphEditorComponent extends BaseAngularComponent {
 
     public Nodes: FlowNode[] = [];
     public Connections: FlowConnection[] = [];
-    public NodeTypes: FlowNodeTypeConfig[] = TASK_GRAPH_NODE_TYPES;
+    public NodeTypes: FlowNodeTypeConfig[] = [...TASK_GRAPH_NODE_TYPES];
     public SelectedTask: TaskGraphSpecNode | null = null;
     public ValidationErrors: readonly TaskGraphValidationError[] = [];
     public IsValid: boolean = true;
+
+    @ViewChild(FlowEditorComponent) protected canvas: FlowEditorComponent | undefined;
 
     private currentSpec: TaskGraphSpec | null = null;
     private currentRuntime: TaskGraphRuntimeStatus | null = null;
@@ -188,6 +217,7 @@ export class TaskGraphEditorComponent extends BaseAngularComponent {
             name: partial.name ?? 'New step',
             description: partial.description ?? '',
             agentName: partial.agentName,
+            actionName: partial.actionName,
             assignToUser: partial.assignToUser,
             dependsOn: partial.dependsOn ?? [],
             inputPayload: partial.inputPayload,
@@ -301,6 +331,44 @@ export class TaskGraphEditorComponent extends BaseAngularComponent {
         this.selectTask(node ? this.findTask(node.ID) : null);
     }
 
+    /**
+     * A palette entry was clicked or dragged onto the canvas.
+     *
+     * **This binding is the bug.** The canvas has always emitted `NodeAdded` for a palette drop, and
+     * this component simply never listened — so the node the canvas announced was thrown away, the
+     * spec never gained a task, and the author was told "a task graph must contain at least one
+     * task" no matter how many times they tried to add one. The canvas does not mutate its own
+     * `Nodes` on purpose (the host owns the model); an unheard event is therefore a silent no-op
+     * rather than a visible failure, which is why it survived.
+     *
+     * The new step is selected immediately: it lands unnamed and, for an agent or action step with
+     * nothing available to default to, unassigned — so the properties panel is where the author has
+     * to go next, and putting them there beats making them find it.
+     */
+    public OnNodeAdded(event: FlowNodeAddedEvent): void {
+        if (this.ReadOnly || !this.currentSpec) return;
+        const type = GetNodeTypeConfig(event.Node.Type)?.Type;
+        if (!type) return;
+
+        const added = this.AddTask(
+            NewTaskFromNodeType(this.currentSpec, type, {
+                agentName: this.AvailableAgentNames[0],
+                actionName: this.AvailableActionNames[0],
+            }),
+        );
+        if (added) this.selectTask(added);
+    }
+
+    /** Applies a properties-panel edit through the same vetoable path a canvas edit takes. */
+    public OnTaskPropertyChangeRequested(args: TaskPropertyChangeRequestedEventArgs): void {
+        this.UpdateTask(args.TempId, args.Next);
+    }
+
+    /** Applies a properties-panel edge-condition edit. */
+    public OnDependencyConditionChangeRequested(args: DependencyConditionChangeRequestedEventArgs): void {
+        this.SetDependencyCondition(args.FromTempId, args.ToTempId, args.Condition);
+    }
+
     public OnConnectionCreated(event: FlowConnectionCreatedEvent): void {
         this.AddDependency(event.SourceNodeID, event.TargetNodeID);
     }
@@ -338,10 +406,48 @@ export class TaskGraphEditorComponent extends BaseAngularComponent {
             this.Connections = [];
             this.ValidationErrors = [];
             this.IsValid = true;
+            this.laidOutTopology = '';
             return;
         }
         this.Nodes = SpecToNodes(this.currentSpec, this.currentRuntime ?? undefined);
         this.Connections = SpecToConnections(this.currentSpec);
         this.Validate();
+        this.arrangeIfTopologyChanged();
     }
+
+    /**
+     * Lays the graph out whenever its shape changes.
+     *
+     * A `TaskGraphSpec` carries no geometry — every projected node starts at the origin — so without
+     * this every step is stacked on the last one and a two-step graph looks like a one-step graph
+     * with a rendering glitch. Layout is Dagre's, inside the canvas, run only when the *topology*
+     * changes: a rename or an edge-condition edit re-projects too, and re-arranging on those would
+     * make boxes jump under the author's cursor mid-edit.
+     */
+    private arrangeIfTopologyChanged(): void {
+        const topology = this.Nodes.map((n) => n.ID).join(',') + '|' + this.Connections.map((c) => c.ID).join(',');
+        if (topology === this.laidOutTopology) return;
+        this.laidOutTopology = topology;
+        if (this.Nodes.length === 0) return;
+
+        // Deferred one turn: the canvas has to render the new node before Dagre can measure and
+        // place it. Guarded on the topology it was scheduled for, so a burst of edits lays out once,
+        // and cleared on destroy so a pending layout cannot run against a torn-down view.
+        if (this.pendingLayout !== null) clearTimeout(this.pendingLayout);
+        this.pendingLayout = setTimeout(() => {
+            this.pendingLayout = null;
+            if (this.laidOutTopology === topology) this.canvas?.AutoArrange(this.AutoLayoutDirection);
+        });
+    }
+
+    public ngOnDestroy(): void {
+        if (this.pendingLayout !== null) {
+            clearTimeout(this.pendingLayout);
+            this.pendingLayout = null;
+        }
+    }
+
+    /** The topology the current layout was computed for; '' when nothing has been laid out. */
+    private laidOutTopology: string = '';
+    private pendingLayout: ReturnType<typeof setTimeout> | null = null;
 }
