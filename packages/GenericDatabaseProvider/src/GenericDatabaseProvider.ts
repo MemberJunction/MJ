@@ -3419,7 +3419,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     ): Promise<{ sql: string; parameters: unknown[] } | null> {
         if (!IsMaterializedDataSource(params.DataSource)) return null; // not opted in → live
         if (query.ExternalDataSourceID) return null;                   // external source → materialized table is local; live
-        const matId = query.MaterializedResultID;
+        // The query<->materialization link lives in the MaterializedResultQuery join table — there is no
+        // Query.MaterializedResultID column (that direct FK, paired with MaterializedResult.SourceQueryID,
+        // formed a circular dependency). Resolve this query's materialization via the join; absent → live.
+        // query.ID is our own metadata UUID (never caller input), so it is safe to interpolate.
+        const linkRv = new RunView(this);
+        const linkRes = await linkRv.RunView<{ MaterializedResultID: string }>(
+            {
+                EntityName: 'MJ: Materialized Result Queries',
+                ExtraFilter: `QueryID='${query.ID}'`,
+                Fields: ['MaterializedResultID'],
+                ResultType: 'simple',
+                MaxRows: 1,
+            },
+            contextUser,
+        );
+        if (!linkRes.Success || !linkRes.Results || linkRes.Results.length === 0) return null; // query not materialized → live
+        const matId = linkRes.Results[0].MaterializedResultID;
         if (!matId) return null;                                       // query not materialized → live
         // Ordering fidelity: buildMaterializedReadQuery emits no ORDER BY, and the snapshot was built with the
         // source's top-level ORDER BY stripped (it has no inherent order). A query that carries a top-level ORDER

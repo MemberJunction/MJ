@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { IMetadataProvider, UserInfo, LogError, LogStatus, EntityInfo, ExternalDataSourceReadRouter } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo, LogError, LogStatus, EntityInfo, ExternalDataSourceReadRouter, RunView } from '@memberjunction/core';
 import { MJMaterializedResultEntity, MJQueryEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { SQLParser } from '@memberjunction/sql-parser';
@@ -748,7 +748,10 @@ export class MaterializationRefresher {
         // query with its row-filter WHERE predicate(s) removed — is persisted on the row at
         // materialization time; the refresh rebuilds it broad and the filter is re-applied at read
         // (ExtraFilter on the materialized VE). Unparameterized queries use the static query SQL.
-        if (!matResult.SourceQueryID) return null;
+        // The MR<->Query link lives in the MaterializedResultQuery join table (no SourceQueryID column).
+        // Reuse the preloaded query's ID when RefreshOne already resolved it; otherwise look it up via the join.
+        const sourceQueryId = preloadedQuery ? preloadedQuery.ID : await this.resolveSourceQueryId(matResult, provider, contextUser);
+        if (!sourceQueryId) return null;
         let rawSql: string | null;
         if (matResult.ParamMode === 'RowFilterBroad') {
             rawSql = matResult.BroadSQL && matResult.BroadSQL.trim().length > 0 ? matResult.BroadSQL : null;
@@ -757,7 +760,7 @@ export class MaterializationRefresher {
             let query = preloadedQuery;
             if (!query) {
                 query = await provider.GetEntityObject<MJQueryEntity>('MJ: Queries', contextUser);
-                await query.Load(matResult.SourceQueryID);
+                await query.Load(sourceQueryId);
             }
             rawSql = query.SQL && query.SQL.trim().length > 0 ? query.SQL : null;
         }
@@ -919,14 +922,36 @@ export class MaterializationRefresher {
      * when it's a LOCAL query. The caller reuses this same loaded `query` to build the local source SELECT
      * (no second Load). Returns null when the source isn't a stored Query.
      */
+    /**
+     * Resolve a materialization's source Query ID via the `MJ: Materialized Result Queries` join table.
+     * The MR<->Query link lives in that join table (there is no MaterializedResult.SourceQueryID column —
+     * the direct FK formed a circular dependency). Returns null when the materialization has no linked query.
+     */
+    private async resolveSourceQueryId(matResult: MJMaterializedResultEntity, provider: IMetadataProvider, contextUser: UserInfo): Promise<string | null> {
+        const rv = new RunView(provider);
+        const res = await rv.RunView<{ QueryID: string }>(
+            {
+                EntityName: 'MJ: Materialized Result Queries',
+                ExtraFilter: `MaterializedResultID='${matResult.ID}'`,
+                Fields: ['QueryID'],
+                ResultType: 'simple',
+                MaxRows: 1,
+            },
+            contextUser,
+        );
+        return res.Success && res.Results.length > 0 ? res.Results[0].QueryID : null;
+    }
+
     private async resolveSourceQuery(
         matResult: MJMaterializedResultEntity,
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<{ query: MJQueryEntity; externalSql: string | null } | null> {
-        if (matResult.SourceType !== 'Query' || !matResult.SourceQueryID) return null;
+        if (matResult.SourceType !== 'Query') return null;
+        const sourceQueryId = await this.resolveSourceQueryId(matResult, provider, contextUser);
+        if (!sourceQueryId) return null;
         const query = await provider.GetEntityObject<MJQueryEntity>('MJ: Queries', contextUser);
-        await query.Load(matResult.SourceQueryID);
+        await query.Load(sourceQueryId);
         if (!query.ExternalDataSourceID) return { query, externalSql: null };
         const sql = matResult.ParamMode === 'RowFilterBroad' ? (matResult.BroadSQL ?? '') : (query.SQL ?? '');
         return { query, externalSql: sql.trim().length > 0 ? sql : null };

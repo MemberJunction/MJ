@@ -1526,8 +1526,9 @@ export class ManageMetadataBase {
     *      via the cross-engine DDL primitive,
     *   3. mints a read-only Virtual Entity over the wrapper view (idempotent — reuses an existing
     *      one), linked back to the source Query,
-    *   4. upserts the "MJ: Materialized Results" row (SourceType='Query') and sets the
-    *      Query.MaterializedResultID back-link.
+    *   4. upserts the "MJ: Materialized Results" row (SourceType='Query') and its
+    *      MaterializedResultQuery join row linking it to the source Query (no direct
+    *      SourceQueryID / MaterializedResultID FK columns — the join table breaks the cycle).
     * Runs BEFORE manageVirtualEntities so the minted entity's fields get synced from the wrapper
     * view in the same run. Population is the refresh driver's job (later phase); Status='Building'.
     * Parameterized queries are skipped with a log (deferred to Phase 2).
@@ -1687,13 +1688,15 @@ export class ManageMetadataBase {
          // different source SQL. Refuse if the derived table is already owned by a different materialization.
          const tableOwners = await this.runQueryWithParams(
             pool,
-            `SELECT SourceType, SourceQueryID FROM ${this.qs(coreSchema, 'MaterializedResult')} WHERE SchemaName = @S AND TableName = @T`,
+            `SELECT mr.SourceType, mrq.QueryID FROM ${this.qs(coreSchema, 'MaterializedResult')} mr
+                LEFT JOIN ${this.qs(coreSchema, 'MaterializedResultQuery')} mrq ON mrq.MaterializedResultID = mr.ID
+                WHERE mr.SchemaName = @S AND mr.TableName = @T`,
             { S: coreSchema, T: tableName },
          );
-         const foreignOwner = tableOwners.recordset.find((row: CodeGenQueryRow) => !(row.SourceType === 'Query' && UUIDsEqual(row.SourceQueryID as string, queryId)));
+         const foreignOwner = tableOwners.recordset.find((row: CodeGenQueryRow) => !(row.SourceType === 'Query' && UUIDsEqual(row.QueryID as string, queryId)));
          if (foreignOwner) {
             logError(
-               `    > REFUSING to materialize query "${queryName}": its derived table [${coreSchema}].[${tableName}] (from CodeName "${codeName}") is already owned by a different materialization (SourceType=${foreignOwner.SourceType}, SourceQueryID=${foreignOwner.SourceQueryID ?? 'n/a'}). Two sources whose names normalize to the same CodeName would clobber each other's snapshot — rename one so their CodeNames differ. Skipping.`,
+               `    > REFUSING to materialize query "${queryName}": its derived table [${coreSchema}].[${tableName}] (from CodeName "${codeName}") is already owned by a different materialization (SourceType=${foreignOwner.SourceType}, QueryID=${foreignOwner.QueryID ?? 'n/a'}). Two sources whose names normalize to the same CodeName would clobber each other's snapshot — rename one so their CodeNames differ. Skipping.`,
             );
             continue;
          }
@@ -1737,8 +1740,17 @@ export class ManageMetadataBase {
             continue;
          }
 
-         // 4) Upsert the MJ: Materialized Results row (keyed on SourceType='Query' + SourceQueryID) + back-link.
-         const existing = await this.runQueryWithParams(pool, `SELECT ID FROM ${this.qs(coreSchema, 'MaterializedResult')} WHERE SourceType = @T AND SourceQueryID = @QID`, { T: 'Query', QID: queryId });
+         // 4) Upsert the MJ: Materialized Results row and its MaterializedResultQuery join row. The MR<->Query
+         //    link lives in the join table — there is no MaterializedResult.SourceQueryID or
+         //    Query.MaterializedResultID column (those direct FKs formed a circular dependency CodeGen rejects;
+         //    the join table carries the relationship with both FKs pointing outward).
+         const existing = await this.runQueryWithParams(
+            pool,
+            `SELECT mr.ID FROM ${this.qs(coreSchema, 'MaterializedResult')} mr
+                JOIN ${this.qs(coreSchema, 'MaterializedResultQuery')} mrq ON mrq.MaterializedResultID = mr.ID
+                WHERE mr.SourceType = @T AND mrq.QueryID = @QID`,
+            { T: 'Query', QID: queryId },
+         );
          let matResultId: string;
          if (existing.recordset.length > 0) {
             matResultId = existing.recordset[0].ID;
@@ -1751,13 +1763,18 @@ export class ManageMetadataBase {
             matResultId = this.createNewUUID();
             const c = (n: string) => this.qi(n);
             const sqlIns = `INSERT INTO ${this.qs(coreSchema, 'MaterializedResult')} (
-                                 ${c('ID')}, ${c('SourceType')}, ${c('SourceQueryID')}, ${c('GeneratedEntityID')}, ${c('SchemaName')}, ${c('TableName')}, ${c('ViewName')},
+                                 ${c('ID')}, ${c('SourceType')}, ${c('GeneratedEntityID')}, ${c('SchemaName')}, ${c('TableName')}, ${c('ViewName')},
                                  ${c('ParamMode')}, ${c('RowFilterColumns')}, ${c('BroadSQL')}, ${c('ReadFilterSpec')}, ${c('KeyColumns')}, ${c('RefreshStrategy')}, ${c('Status')}, ${c('__mj_CreatedAt')}, ${c('__mj_UpdatedAt')} )
-                            VALUES ( '${matResultId}', 'Query', '${queryId}', ${idLit(generatedEntityId)}, '${esc(coreSchema)}', '${esc(tableName)}', '${esc(viewName)}',
+                            VALUES ( '${matResultId}', 'Query', ${idLit(generatedEntityId)}, '${esc(coreSchema)}', '${esc(tableName)}', '${esc(viewName)}',
                                  '${paramMode}', ${rowFilterColumnsLit}, ${broadSQLLit}, ${readFilterSpecLit}, ${keyColumnsLit}, '${refreshStrategy}', 'Building', ${this.utcNow()}, ${this.utcNow()} )`;
             await this.LogSQLAndExecute(pool, sqlIns, `Insert MJ: Materialized Results for query "${queryName}"`);
+            // Link the new materialization to its source Query via the join table.
+            const joinId = this.createNewUUID();
+            const sqlJoinIns = `INSERT INTO ${this.qs(coreSchema, 'MaterializedResultQuery')} (
+                                 ${c('ID')}, ${c('MaterializedResultID')}, ${c('QueryID')}, ${c('__mj_CreatedAt')}, ${c('__mj_UpdatedAt')} )
+                            VALUES ( '${joinId}', '${matResultId}', '${queryId}', ${this.utcNow()}, ${this.utcNow()} )`;
+            await this.LogSQLAndExecute(pool, sqlJoinIns, `Link MJ: Materialized Results to Query "${queryName}" via join row`);
          }
-         await this.LogSQLAndExecute(pool, `UPDATE ${this.qs(coreSchema, 'Query')} SET MaterializedResultID='${matResultId}' WHERE ID='${queryId}'`, `Set Query.MaterializedResultID back-link for "${queryName}"`);
 
          processedCount++;
       }
@@ -1784,7 +1801,10 @@ export class ManageMetadataBase {
       if (!(await this.materializedResultTableExists(pool))) return { success: true, heldCount: 0 };
       const rows = await this.runQuery(
          pool,
-         `SELECT ID, SourceType, SourceEntityID, SourceQueryID, GeneratedEntityID, SchemaName, TableName FROM ${this.qs(coreSchema, 'MaterializedResult')} WHERE Status NOT IN ('Disabled', 'DriftHold')`,
+         `SELECT mr.ID, mr.SourceType, mr.SourceEntityID, mrq.QueryID AS SourceQueryID, mr.GeneratedEntityID, mr.SchemaName, mr.TableName
+             FROM ${this.qs(coreSchema, 'MaterializedResult')} mr
+             LEFT JOIN ${this.qs(coreSchema, 'MaterializedResultQuery')} mrq ON mrq.MaterializedResultID = mr.ID
+             WHERE mr.Status NOT IN ('Disabled', 'DriftHold')`,
       );
       if (rows.recordset.length === 0) return { success: true, heldCount: 0 };
 
