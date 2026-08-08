@@ -17013,12 +17013,12 @@ export type MJEntityActionParamEntityType = z.infer<typeof MJEntityActionParamSc
 export const MJEntityActionSchema = z.object({
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     ActionID: z.string().describe(`
         * * Field Name: ActionID
-        * * Display Name: Action ID
+        * * Display Name: Action
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)`),
     Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
@@ -17034,12 +17034,12 @@ export const MJEntityActionSchema = z.object({
         * * Description: Status of the entity action (Pending, Active, Disabled).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     ID: z.string().describe(`
@@ -17075,17 +17075,27 @@ export const MJEntityActionSchema = z.object({
     *   * FailuresOnly
     *   * None
         * * Description: How much of this binding's activity reaches ActionExecutionLog. All (default) writes a row per invocation. FailuresOnly writes only runs that did not succeed - the right setting for a high-frequency binding on a busy entity, where the successful runs are noise. None disables logging for the binding entirely and should be rare, because it also removes the failure record.`),
+    RunMode: z.union([z.literal('Durable'), z.literal('Inline')]).describe(`
+        * * Field Name: RunMode
+        * * Display Name: Run Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Inline
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Durable
+    *   * Inline
+        * * Description: How an After* dispatch of this binding executes. Inline (the default) runs it fire-and-forget in the saving process, which is fast but lost if that process dies. Durable submits a single-node task graph instead, so the work survives a restart and is reclaimed by the dispatcher — at the cost of a Task row, a dispatcher hop of latency, and the action's parameters being persisted (redacted) at rest. Ignored for Validate and Before* invocations, which run inside the save and cannot be deferred without changing whether the save succeeds.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     Action: z.string().describe(`
         * * Field Name: Action
-        * * Display Name: Action
+        * * Display Name: Action Name
         * * SQL Data Type: nvarchar(425)`),
     ScopeEntity: z.string().nullable().describe(`
         * * Field Name: ScopeEntity
-        * * Display Name: Scope Entity
+        * * Display Name: Scope Entity Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -29385,13 +29395,19 @@ export const MJTaskSchema = z.object({
         * * Display Name: Claim Expires At
         * * SQL Data Type: datetimeoffset
         * * Description: When the current dispatcher claim lapses. Long-running tasks extend it by heartbeat; reconciliation treats an expired claim as an orphaned task and returns it to Pending.`),
+    ActionID: z.string().nullable().describe(`
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
+        * * Description: The Action this task executes, when the node is action-assigned rather than agent-assigned or awaiting a person. Mutually exclusive with UserID and AgentID (CK_Task_Assignment). Set by durable entity-action dispatch, where a single-node graph carries one action to run with restart recovery.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Task Type Name
+        * * Display Name: Type Name
         * * SQL Data Type: nvarchar(255)`),
     Environment: z.string().describe(`
         * * Field Name: Environment
@@ -29417,6 +29433,10 @@ export const MJTaskSchema = z.object({
         * * Field Name: AgentRun
         * * Display Name: Agent Run
         * * SQL Data Type: nvarchar(255)`),
+    Action: z.string().nullable().describe(`
+        * * Field Name: Action
+        * * Display Name: Action Name
+        * * SQL Data Type: nvarchar(425)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Task
@@ -78699,7 +78719,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -78712,7 +78732,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
 
     /**
     * * Field Name: ActionID
-    * * Display Name: Action ID
+    * * Display Name: Action
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
     */
@@ -78744,7 +78764,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -78754,7 +78774,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -78836,8 +78856,26 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
     }
 
     /**
+    * * Field Name: RunMode
+    * * Display Name: Run Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Inline
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Durable
+    *   * Inline
+    * * Description: How an After* dispatch of this binding executes. Inline (the default) runs it fire-and-forget in the saving process, which is fast but lost if that process dies. Durable submits a single-node task graph instead, so the work survives a restart and is reclaimed by the dispatcher — at the cost of a Task row, a dispatcher hop of latency, and the action's parameters being persisted (redacted) at rest. Ignored for Validate and Before* invocations, which run inside the save and cannot be deferred without changing whether the save succeeds.
+    */
+    get RunMode(): 'Durable' | 'Inline' {
+        return this.Get('RunMode');
+    }
+    set RunMode(value: 'Durable' | 'Inline') {
+        this.Set('RunMode', value);
+    }
+
+    /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -78846,7 +78884,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
 
     /**
     * * Field Name: Action
-    * * Display Name: Action
+    * * Display Name: Action Name
     * * SQL Data Type: nvarchar(425)
     */
     get Action(): string {
@@ -78855,7 +78893,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
 
     /**
     * * Field Name: ScopeEntity
-    * * Display Name: Scope Entity
+    * * Display Name: Scope Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get ScopeEntity(): string | null {
@@ -110037,7 +110075,6 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     /**
     * Validate() method override for MJ: Tasks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * PercentComplete: This rule ensures that if a percent complete value is provided, it must be between 0 and 100 inclusive.
-    * * Table-Level: This rule ensures that for each record, either UserID or AgentID can be set, or both can be left empty, but not both can be filled in at the same time.
     * @public
     * @method
     * @override
@@ -110045,7 +110082,6 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidatePercentCompleteWithinZeroAndOneHundred(result);
-        this.ValidateUserIDAndAgentIDMutualExclusivity(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -110060,18 +110096,6 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     public ValidatePercentCompleteWithinZeroAndOneHundred(result: ValidationResult) {
     	if (this.PercentComplete != null && (this.PercentComplete < 0 || this.PercentComplete > 100)) {
     		result.Errors.push(new ValidationErrorInfo("PercentComplete", "PercentComplete must be between 0 and 100 if specified.", this.PercentComplete, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that for each record, either UserID or AgentID can be set, or both can be left empty, but not both can be filled in at the same time.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateUserIDAndAgentIDMutualExclusivity(result: ValidationResult) {
-    	if (this.UserID != null && this.AgentID != null) {
-    		result.Errors.push(new ValidationErrorInfo("UserID", "UserID and AgentID cannot both have values at the same time. Only one or neither may be set.", this.UserID, ValidationErrorType.Failure));
     	}
     }
 
@@ -110382,6 +110406,20 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     }
 
     /**
+    * * Field Name: ActionID
+    * * Display Name: Action ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
+    * * Description: The Action this task executes, when the node is action-assigned rather than agent-assigned or awaiting a person. Mutually exclusive with UserID and AgentID (CK_Task_Assignment). Set by durable entity-action dispatch, where a single-node graph carries one action to run with restart recovery.
+    */
+    get ActionID(): string | null {
+        return this.Get('ActionID');
+    }
+    set ActionID(value: string | null) {
+        this.Set('ActionID', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
@@ -110392,7 +110430,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Task Type Name
+    * * Display Name: Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get Type(): string {
@@ -110451,6 +110489,15 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     */
     get AgentRun(): string | null {
         return this.Get('AgentRun');
+    }
+
+    /**
+    * * Field Name: Action
+    * * Display Name: Action Name
+    * * SQL Data Type: nvarchar(425)
+    */
+    get Action(): string | null {
+        return this.Get('Action');
     }
 
     /**
