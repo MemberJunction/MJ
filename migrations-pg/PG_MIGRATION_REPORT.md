@@ -134,9 +134,10 @@ All against **new, uncommitted** files. No committed `.pg.sql` was edited.
    `UserCache.Refresh` is mssql-only. **Needs a decision before PG metadata reseed can be proven.**
 2. **`--split` boolean regression** — worth fixing in `mj migrate convert --split` so it emits
    native `TRUE`/`FALSE` like the legacy path, otherwise the next build hits this again.
-3. **Phases 4 / 4b not run** — full-stack browser smoke and deep CRUD are delegated to Claude Code
-   inside `claude-dev`, which is **not authenticated** (`Not logged in · Please run /login`).
-   Run `docker exec -it claude-dev claude`, complete OAuth, then those phases can execute.
+3. **`RecentAccessService: Failed to create log entry`** — logged three times per record open in the
+   browser smoke. The magic-link `UI` role lacks create permission on the recent-access entity, so
+   this is a permission-surface question, not a migration defect (nothing else in the session
+   failed). Worth confirming the intended grant for restricted roles.
 
 ## Verification performed
 
@@ -151,6 +152,23 @@ All against **new, uncommitted** files. No committed `.pg.sql` was edited.
   `DROP TABLE` statements**; the counts agree only after that fix)
 - ✅ Layer 3 — view equivalence: 44 differences, all in the two documented-benign buckets
 - ✅ Layer 4 — CRUD oracle: 369 pass / 4 fail, all four pre-existing (v5.46–v5.49)
+- ✅ **Full-stack browser smoke (DEPLOYMENT.md §8)** — Playwright + Chromium against MJExplorer
+  served from its production build, talking to MJAPI on the converted PostgreSQL database:
+  - **Login** via the real magic-link journey (browser → `/magic-link/redeem` interstitial → 302 to
+    Explorer with the minted JWT). Asserted **positively** on `<mj-shell>` plus a loaded workspace
+    and non-zero API traffic — never on absence of error text. No password field (off-IdP).
+  - **Provisioning wrote through the converted schema** — redeeming created the `User`, `UserRole`
+    (UI) and `MagicLinkRedemption` rows, and the new user then appeared in Explorer's own user list.
+  - **Entity grid** reached by *in-app clicks only* (typing in the entity-browser search, clicking
+    the result row): `MJ: AI Models` rendered **26 `.ag-row`s**, zero console errors.
+  - **Deep CRUD round-trip** on `MJ: Dashboard Categories`: read the existing Description, entered
+    edit mode, replaced it via the real textarea, clicked **Save Changes** — and the new value was
+    then **verified directly in PostgreSQL** with a fresh `__mj_UpdatedAt`. The UI toast was not
+    treated as proof; the table was. A matching `RecordChange` row (`Update` / `Complete`, with the
+    before→after description) confirms Record Changes fires correctly on PostgreSQL. The original
+    value was restored afterwards.
+  - **The permission gate held**: an earlier attempt targeted `MJ: AI Models`, where the `UI` role
+    has `CanUpdate = false` — the save was correctly refused and nothing was written.
 - ✅ Migration ordering — `AI_Agent_Harness_Foundation` retimestamped `202608050724` →
   `202608052200` so it sorts **after** the edge.0 ceiling (`202608052115`). `outOfOrder` defaults
   to `false`, so under the original timestamp Flyway would silently skip it on every database
