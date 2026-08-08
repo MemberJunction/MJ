@@ -732,18 +732,8 @@ export class SQLServerDataProvider
 
     // Build array of SQL statements for batch execution
     const sqlStatements: string[] = [];
-    for (const { entityInfo, whereSQL, item } of items) {
-      // The freshness probe MUST target the same physical view the read targets. For a
-      // DataSource:'Materialized' read that's the materialized_vw<CodeName> wrapper (a full SELECT *
-      // snapshot of the base view, so it carries __mj_UpdatedAt) — NOT the live base view. Probing the
-      // live view would compare the client's snapshot cache against an unrelated source's rowCount/
-      // maxUpdatedAt, yielding a meaningless current/stale verdict. (Materialized reads are normally kept
-      // out of the client cache by runViewCacheEligible, so this is defense-in-depth for any caller that
-      // still supplies a materialized cacheStatus.) Use the status-gated resolveEffectiveBaseView (not the
-      // unconditional GetEffectiveBaseView) so a Building/DriftHold/Disabled/never-minted snapshot probes the
-      // LIVE base view — mirroring the read path — instead of a held or missing materialized_vw wrapper.
-      const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
-      const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${effectiveView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+    for (const { entityInfo, whereSQL } of items) {
+      const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
       sqlStatements.push(statusSQL);
     }
 
@@ -780,23 +770,20 @@ export class SQLServerDataProvider
 
   protected override async executeSQLForUserViewRunLogging(
     viewId: number,
-    entityInfo: EntityInfo,
-    effectiveBaseView: string,
+    entityBaseView: string,
     whereSQL: string,
     orderBySQL: string,
     user: UserInfo,
   ): Promise<{ executeViewSQL: string; runID: string }> {
-    // entityInfo + effectiveBaseView are passed in (no reverse-lookup by base-view name) so the logged
-    // read honors DataSource:'Materialized' — effectiveBaseView is the materialized wrapper view then,
-    // and the entity's live base view otherwise.
+    const entityInfo = this.Entities.find((e) => e.BaseView.trim().toLowerCase() === entityBaseView.trim().toLowerCase());
     const sSQL = `
             DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
-            INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE (${whereSQL}))
+            INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
     const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
-    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
+    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ` ORDER BY ${orderBySQL}` : ''}`;
     return { executeViewSQL: sRetSQL, runID };

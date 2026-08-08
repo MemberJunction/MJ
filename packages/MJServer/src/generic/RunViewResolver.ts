@@ -177,13 +177,6 @@ export class RunViewByIDInput {
       'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
   })
   BypassCache?: boolean;
-
-  @Field(() => String, {
-    nullable: true,
-    description:
-      "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
-  })
-  DataSource?: 'Live' | 'Materialized';
 }
 
 @InputType()
@@ -298,13 +291,6 @@ export class RunViewByNameInput {
       'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
   })
   BypassCache?: boolean;
-
-  @Field(() => String, {
-    nullable: true,
-    description:
-      "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
-  })
-  DataSource?: 'Live' | 'Materialized';
 }
 
 @InputType()
@@ -405,13 +391,6 @@ export class RunDynamicViewInput {
       'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
   })
   BypassCache?: boolean;
-
-  @Field(() => String, {
-    nullable: true,
-    description:
-      "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
-  })
-  DataSource?: 'Live' | 'Materialized';
 }
 
 @InputType()
@@ -541,13 +520,6 @@ export class RunViewGenericInput {
       'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
   })
   BypassCache?: boolean;
-
-  @Field(() => String, {
-    nullable: true,
-    description:
-      "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
-  })
-  DataSource?: 'Live' | 'Materialized';
 }
 
 //****************************************************************************
@@ -1110,9 +1082,6 @@ export class RunViewResolver extends ResolverBase {
           // Forward the aggregate request to the engine (B40) — omitted here as well as in the
           // client's input map, so aggregates never reached InternalRunView on this transport.
           Aggregates: item.params.Aggregates,
-          // DataSource must be forwarded on this transport too (same as the InternalRunView/RunViews maps):
-          // otherwise a CacheLocal batch's DataSource:'Materialized' request silently reads the live view.
-          DataSource: item.params.DataSource,
           AfterKey: item.params.AfterKey
             ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
             : undefined,

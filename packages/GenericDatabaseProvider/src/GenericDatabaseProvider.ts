@@ -33,7 +33,6 @@ import {
     Metadata,
     RunView,
     RunViewParams,
-    IsMaterializedDataSource,
     RunViewResult,
     RunViewWithCacheCheckParams,
     RunViewsWithCacheCheckResponse,
@@ -1234,71 +1233,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     protected BuildTotalRowCountSQL(
         entityInfo: EntityInfo,
         usingPagination: boolean,
-        maxRowsForQuery: number,
-        baseViewOverride?: string
+        maxRowsForQuery: number
     ): string | null {
         const rowsAreLimited = usingPagination || maxRowsForQuery > 0;
         if (!rowsAreLimited) return null;
-        return `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, baseViewOverride ?? entityInfo.BaseView)}`;
-    }
-
-    /**
-     * Resolves the view a RunView reads from: the entity's live base view by default, or its materialized
-     * wrapper view when the caller opts into the snapshot via `DataSource: 'Materialized'` (plan §7). The
-     * choice is explicit (never silent), so the same RLS/paging/field-selection apply against the identical shape.
-     *
-     * Two materialization shapes:
-     *  - **Base-view materialization** reuses the SOURCE entity, whose `BaseView` stays the LIVE view; the
-     *    snapshot lives beside it as `materialized_vw<CodeName>` (the name CodeGen's base-view path emits).
-     *    `'Materialized'` swaps the live view for that snapshot.
-     *  - **Query materialization** mints a NEW entity whose `BaseView` ALREADY IS the materialized wrapper
-     *    view (`materialized_vw<...>`), so there is no separate live source to swap — `'Materialized'` is a
-     *    no-op and we return the entity's own base view. (Deriving `materialized_vw<CodeName>` here would be
-     *    wrong: the minted entity's CodeName need not match the query-derived view name.)
-     *
-     * Convention-based for the base-view case: if the entity has no such materialization the wrapper view
-     * won't exist and the read will error — opting into `'Materialized'` asserts the snapshot exists.
-     */
-    protected GetEffectiveBaseView(entityInfo: EntityInfo, params: RunViewParams): string {
-        // Case-INSENSITIVE prefix test (matches the sibling guard in providerBase.IsServerCacheAllowedForEntity):
-        // a BaseView returned with non-lowercase casing (e.g. 'Materialized_vwFoo' from a case-insensitive SQL
-        // Server, or a hand-authored entity) is still an already-materialized view — a case-sensitive check
-        // would miss it and wrongly derive materialized_vw<CodeName>, targeting a non-existent object.
-        if (IsMaterializedDataSource(params.DataSource) && !entityInfo.BaseView?.toLowerCase().startsWith('materialized_vw')) {
-            return `materialized_vw${entityInfo.CodeName}`;
-        }
-        return entityInfo.BaseView;
-    }
-
-    /**
-     * Async status-aware wrapper around {@link GetEffectiveBaseView} for the BASE-VIEW materialization case.
-     * `GetEffectiveBaseView` name-swaps unconditionally, which (a) serves a `Building`/`DriftHold`/`Disabled`
-     * snapshot — defeating "flag and hold" (§13/§17.2), since a base-view materialization reuses the source
-     * entity and thus has no read-permission revoke to fall back on the way a minted query entity does — and
-     * (b) hard-errors on a `Materialized` read of a non-materialized entity (missing view). This gates the swap
-     * on an ACTIVE `MaterializedResult` and otherwise returns the LIVE base view (graceful fallback). The status
-     * read uses `BypassCache` because DriftHold/Disabled are written by CodeGen via direct SQL (no BaseEntity
-     * cache-invalidation event), so a cached status could otherwise be stale. Non-materialized reads and minted
-     * query virtual entities (BaseView already `materialized_vw…`) skip the lookup entirely (no extra query).
-     */
-    protected async resolveEffectiveBaseView(entityInfo: EntityInfo, params: RunViewParams, contextUser?: UserInfo): Promise<string> {
-        if (!IsMaterializedDataSource(params.DataSource) || entityInfo.BaseView?.toLowerCase().startsWith('materialized_vw')) {
-            return this.GetEffectiveBaseView(entityInfo, params);
-        }
-        const rv = new RunView(this);
-        const res = await rv.RunView<{ Status: string }>(
-            {
-                EntityName: 'MJ: Materialized Results',
-                ExtraFilter: `SourceType='EntityBaseView' AND SourceEntityID='${entityInfo.ID}'`, // entityInfo.ID: trusted metadata PK
-                Fields: ['Status'],
-                ResultType: 'simple',
-                MaxRows: 1,
-                BypassCache: true,
-            },
-            contextUser,
-        );
-        const active = res.Success && res.Results?.length > 0 && res.Results[0].Status === 'Active';
-        return active ? `materialized_vw${entityInfo.CodeName}` : entityInfo.BaseView;
+        return `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`;
     }
 
     /**
@@ -1504,8 +1443,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     protected async executeSQLForUserViewRunLogging(
         _viewId: number,
-        _entityInfo: EntityInfo,
-        _effectiveBaseView: string,
+        _entityBaseView: string,
         _whereSQL: string,
         _orderBySQL: string,
         _user: UserInfo,
@@ -1627,17 +1565,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const fields: string = this.getRunTimeViewFieldString(params, viewEntity);
 
             // ── Build SELECT and COUNT SQL ──
-            // DataSource:'Materialized' routes the read to the entity's materialized wrapper view
-            // (same shape, so RLS/paging/fields all apply identically); default stays the live base view.
-            const effectiveBaseView = await this.resolveEffectiveBaseView(entityInfo, params, contextUser);
             const topFragment = topSQL ? topSQL + ' ' : '';
-            let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveBaseView)}`;
+            let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`;
             // count_only ALWAYS needs the count query — BuildTotalRowCountSQL only emits
             // it when rows are limited (its pagination purpose), which previously left
             // count_only with no COUNT at all (silently returned TotalRowCount 0).
             let countSQL: string | null = params.ResultType === 'count_only'
-                ? `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveBaseView)}`
-                : this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery, effectiveBaseView);
+                ? `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`
+                : this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
 
             // ── WHERE clause assembly ──
             let whereSQL = '';
@@ -1732,11 +1667,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // View run logging (SQL Server-specific, others return null)
             let userViewRunID = '';
             if (viewEntity?.ID && String(viewEntity.ID).length > 0 && saveViewResults && user) {
-                // Pass entityInfo + effectiveBaseView so the logged read honors DataSource:'Materialized'
-                // (reads the snapshot). effectiveBaseView === entityInfo.BaseView on the default live path,
-                // so non-materialized reads are unchanged.
                 const logResult = await this.executeSQLForUserViewRunLogging(
-                    Number(viewEntity.ID), entityInfo, effectiveBaseView, whereSQL, orderBy, user,
+                    Number(viewEntity.ID), viewEntity.EntityBaseView, whereSQL, orderBy, user,
                 );
                 if (logResult) {
                     viewSQL = logResult.executeViewSQL;
@@ -1768,10 +1700,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             let aggregateSQL: string | null = null;
             let aggregateValidationErrors: AggregateResult[] = [];
             if (params.Aggregates && params.Aggregates.length > 0) {
-                // Aggregate over the SAME source the rows/count came from — effectiveBaseView, so a caller
-                // asking for DataSource:'Materialized' gets aggregates over the snapshot, not the live view.
                 const aggregateBuild = this.BuildAggregateSQL(
-                    params.Aggregates, entityInfo, entityInfo.SchemaName, effectiveBaseView, whereSQL,
+                    params.Aggregates, entityInfo, entityInfo.SchemaName, entityInfo.BaseView, whereSQL,
                 );
                 aggregateSQL = aggregateBuild.aggregateSQL;
                 aggregateValidationErrors = aggregateBuild.validationErrors;
@@ -2492,16 +2422,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
         if (items.length === 0) return results;
 
-        const promises = items.map(async ({ index, item, entityInfo, whereSQL }) => {
+        const promises = items.map(async ({ index, entityInfo, whereSQL }) => {
             try {
-                // Probe the SAME physical view the read targets — for a DataSource:'Materialized' read that's
-                // the materialized_vw<CodeName> snapshot (a full SELECT * of the base view, so it carries
-                // __mj_UpdatedAt), NOT the live base view. Probing the live view would compare the client's
-                // snapshot cache against an unrelated source, yielding a meaningless current/stale verdict.
-                // (Materialized reads are normally kept out of the client cache by runViewCacheEligible; this
-                // matches the SQL Server override and is defense-in-depth on the PG/default path.)
-                const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
-                const statusSQL = `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRows')}, MAX(${this.QuoteIdentifier('__mj_UpdatedAt')}) AS ${this.QuoteIdentifier('MaxUpdatedAt')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+                const statusSQL = `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRows')}, MAX(${this.QuoteIdentifier('__mj_UpdatedAt')}) AS ${this.QuoteIdentifier('MaxUpdatedAt')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
                 const rows = await this.ExecuteSQL<Record<string, unknown>>(statusSQL, undefined, undefined, contextUser);
                 if (rows && rows.length > 0) {
                     const row = rows[0];

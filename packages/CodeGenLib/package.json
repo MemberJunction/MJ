@@ -45,7 +45,6 @@
     "@memberjunction/ai-provider-bundle": "6.1.0-edge.0",
     "@memberjunction/aiengine": "6.1.0-edge.0",
     "@memberjunction/config": "6.1.0-edge.0",
-    "@memberjunction/query-processor": "6.1.0-edge.0",
     "@memberjunction/core": "6.1.0-edge.0",
     "@memberjunction/core-entities": "6.1.0-edge.0",
     "@memberjunction/core-entities-server": "6.1.0-edge.0",

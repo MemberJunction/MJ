@@ -55,12 +55,12 @@ describe('Cross-Dialect Comparison Tests', () => {
     describe('Schema-Qualified Identifiers', () => {
         it('should produce schema.object in platform-specific quoting', () => {
             expect(ss.QuoteSchema('dbo', 'Users')).toBe('[dbo].[Users]');
-            expect(pg.QuoteSchema('public', 'Users')).toBe('"public"."Users"');
+            expect(pg.QuoteSchema('public', 'Users')).toBe('public."Users"');
         });
 
         it('should handle MJ-style schema names (__mj)', () => {
             expect(ss.QuoteSchema('__mj', 'Entity')).toBe('[__mj].[Entity]');
-            expect(pg.QuoteSchema('__mj', 'Entity')).toBe('"__mj"."Entity"');
+            expect(pg.QuoteSchema('__mj', 'Entity')).toBe('__mj."Entity"');
         });
     });
 
