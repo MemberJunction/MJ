@@ -1,5 +1,94 @@
 # @memberjunction/open-app-engine
 
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- 394d276: Open App migrations run per-migration by default, and the mode is now selectable
+
+  `RunAppMigrations` built its Skyway config without ever setting `TransactionMode`, and the
+  option was declared only on the module's internal Skyway config shape — never on the public
+  `MigrationRunOptions`. No caller could select a mode, so Open App installs always fell
+  through to Skyway's `per-run` default: one transaction wrapping the entire pending set.
+
+  Two changes:
+  - `MigrationRunOptions` accepts `TransactionMode?: 'per-run' | 'per-migration'`, threaded onto
+    the config handed to Skyway.
+  - The default is now **`per-migration`** — each migration file runs and commits in its own
+    transaction. `per-run` remains available opt-in.
+
+  This aligns app installs with `mj migrate`, which MJCLI already defaults to `per-migration`;
+  the two paths previously had silently different transaction semantics.
+
+  The reason the default matters: `per-run` cannot host every valid migration set. SQL Server
+  cannot create a table type and instantiate a variable of that type in the same transaction —
+  the `CREATE TYPE` holds a schema-modification lock while TVP instantiation, which runs in a
+  nested system transaction that does not share the session's lock ownership, requests
+  schema-stability on the same type, so the session deadlocks against itself (error 1205).
+  Minimal reproduction, no MemberJunction involved:
+
+  ```sql
+  BEGIN TRAN;
+      CREATE TYPE dbo.IDList AS TABLE (ID UNIQUEIDENTIFIER NOT NULL PRIMARY KEY);
+  GO
+      DECLARE @ids dbo.IDList;   -- Msg 1205
+  GO
+  COMMIT;
+  ```
+
+  On a from-zero install every migration is pending, so under `per-run` the whole app is one
+  transaction and no arrangement of migration files avoids this — making a table type, a
+  standard T-SQL construct, impossible to ship. It surfaces only on a clean install, never on an
+  incremental development database where the type was committed by an earlier run.
+
+  Note on failure semantics: under `per-migration`, a set that fails partway leaves earlier
+  migrations committed and recorded in the app's history table. Undoing a failed install is
+  therefore the orchestrator's responsibility rather than the database's.
+
+- 394d276: Align zod to ^3.25.0 with the rest of the workspace (was the last ^3.24.3 straggler; the AI SDK family peers on zod ^3.25).
+- 394d276: Fix: a failed Open App install now removes everything it wrote, not just its schema
+
+  With migrations applying per-migration, a set that fails partway leaves earlier files
+  committed — the database will not undo them, and it cannot: one transaction spanning a whole
+  app's migrations is not something SQL Server can always host. The install's all-or-nothing
+  guarantee therefore has to be a compensating action.
+
+  `CompensateSchemaOnFailure` previously did one of the three things `RemoveApp` does — it
+  dropped the app's schema. Rows the app's seed migrations wrote into the **shared** core schema
+  were left orphaned, because dropping the app's own schema cannot reach them.
+
+  It now runs the same three-step sequence `RemoveApp` uses, in the same order:
+  1. `RemoveAppEntityMetadata` — the app's entity metadata and the Application rows its
+     migrations declared, in the core schema.
+  2. `HandleTeardown` — the app's declared `migrations.teardownDirectory` inverse DELETEs,
+     which retire what its seed migrations wrote into the shared core schema.
+  3. `DropAppSchema` — the app's own schema, which takes its migration history table with it so
+     a retry starts from a clean slate rather than resuming a half-applied set.
+
+  Unchanged: compensation still runs only for a schema **this run actually created**, never a
+  reused or adopted one. Because the run created it, no other installed app can legitimately
+  share it, so no co-tenant check is needed here.
+
+  Every step is best-effort and reported. One failing step does not skip the others (a teardown
+  failure must not leave the schema behind), and nothing here turns a failed install into a
+  successful one. An app that declares migrations but no `teardownDirectory` now emits an
+  explicit warning that rows in the shared core schema may remain, rather than letting a partial
+  rollback look complete.
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+  - @memberjunction/sql-dialect@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes
