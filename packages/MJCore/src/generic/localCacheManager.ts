@@ -1579,9 +1579,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *   same entity+filter, so they must never share a cache entry. When empty/undefined (the
      *   common case — users with no RLS filter), the fingerprint is byte-for-byte identical to the
      *   pre-RLS format so normal cache sharing is preserved and no existing entries are invalidated.
-     * @param flsDeniedFieldsKey - Canonical key of the user's field-security denied-READ set on this
-     *   entity (lowercased field names, sorted, comma-joined — what
-     *   `ProviderBase.ComputeRunViewFLSDeniedKey` produces). Must participate for the same reason as
+     * @param flsFieldsKey - Canonical key identifying this user's field-security access on the
+     *   entity: lowercased field names, sorted, comma-joined. The SERVER passes the DENIED set
+     *   (`ProviderBase.ComputeRunViewFLSDeniedKey`); the CLIENT passes the ALLOWED set
+     *   (`ComputeClientFLSAllowedKey`) because filtered client metadata cannot see denied
+     *   fields at all — both are opaque here, and the two caches are looked up independently. Must participate for the same reason as
      *   `rlsWhereClause`, but for COLUMNS instead of rows: a field-restricted user's queries are
      *   widened to their ALLOWED column set (not all columns), so their cached rows are narrower
      *   than an unrestricted user's — the two must never share a slot in either direction. Keyed by
@@ -1595,7 +1597,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *   entity. Appended only when supplied, so ordinary reads keep their pre-existing key.
      * @returns A unique, human-readable fingerprint string
      */
-    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string, datasetSegment?: string, flsDeniedFieldsKey?: string): string {
+    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string, datasetSegment?: string, flsFieldsKey?: string): string {
         const entity = params.EntityName?.trim() || 'Unknown';
         const rawFilter = params.ExtraFilter;
         const filter = (typeof rawFilter === 'string' ? rawFilter : rawFilter ? JSON.stringify(rawFilter) : '').trim();
@@ -1687,7 +1689,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // serve someone rows with missing columns (or, without the read-time projection, extra
         // ones). Appended ONLY when the denied set is non-empty, so unrestricted users and
         // non-FLS entities keep byte-identical fingerprints and shared slots (the rls: rule).
-        const fls = (flsDeniedFieldsKey ?? '').trim();
+        const fls = (flsFieldsKey ?? '').trim();
         if (fls.length > 0) {
             parts.push(`fls:${this.simpleHash(fls)}`);
         }

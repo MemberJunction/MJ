@@ -282,6 +282,81 @@ Changes payloads reviewed for not-loaded handling.
 
 ---
 
+## Decisions taken after Workstream D shipped (2026-08-06)
+
+R6 answered "don't reroute single-record loads through RunView," but attached a condition:
+*revisit once entity objects have a partial-hydration story.* Workstream D delivered that, so
+the question was reopened with Jordan and his boss. Outcome:
+
+- **Server-side loads no longer fetch denied columns.** `GenericDatabaseProvider.Load` emits an
+  explicit allowed-column list instead of `SELECT *` when the context user has denials
+  (`buildFieldSecuritySelectList`). This closes the case that motivated it: an AI agent running
+  under a restricted service account previously pulled every column into server memory on a PK
+  load. Omitted columns arrive as absent keys, so D-1 marks them not-loaded and the next save
+  skips them.
+- **The RunView reroute is DEFERRED to its own PR**, not abandoned. It is the tidier long-term
+  shape (one code path, RLS consistency), but it touches the hottest path in the ORM. Two
+  requirements are decided in advance so the future work does not re-litigate them:
+  1. **It must pass `BypassCache`.** A PK load has never been served from cache; making it
+     cache-eligible would return stale rows after direct-SQL DML. Jordan's call: single-record
+     loads must always read current data.
+  2. **Relationship loading stays on its current path.** Routing it through RunView would
+     silently start applying RLS to related rows (a pre-existing gap — see gap 4) and needs a
+     1+N reshape. Out of scope for the reroute.
+- **The system user is EXEMPT from field security — this amends decision 1.** Decision 1 said
+  no user is ever exempt. That still holds for every *person*: no admin bypass, no Owner
+  carve-out. The system user is not a person — it is the account the server runs its own work
+  as — and the exemption is required, not a convenience.
+
+  **Why it is required (found by live testing, not by reading):** the whitelist flip means the
+  FIRST rule on a field closes that field for everyone without an explicit Allow, including
+  users no rule mentions. A live run proved it — a Deny aimed at a brand-new role the system
+  user had nothing to do with silently stripped the field from the system user too. Engines
+  then cache partially loaded records process-wide and serve them to every user, and the
+  failure surfaces nowhere near the rule that caused it. The originally-planned configuration
+  guard does NOT prevent this, because nothing in the configuration mentions the system user.
+
+  **Why it costs nothing:** the server reaches the database through a single service login that
+  can already read every column. Denying the system user at the app tier protects no data; it
+  only breaks the server's ability to do its own work. Acting as the system user (the system API
+  key, gated by `@RequireSystemUser`) is already full-trust by design.
+
+  Implementation (reworked by the BaseEngine session, 2026-08-08): the exemption in
+  `EntityFieldInfo.GetUserFieldPermissions` resolves through the `WellKnownUserSource`
+  class-factory seam (MJCore base answers false; `DatabaseWellKnownUserSource` in
+  GenericDatabaseProvider answers on servers). `SystemUserID` lives in
+  `packages/GenericDatabaseProvider/src/systemUser.ts` — a server concept, kept out of
+  browser bundles. On a client no source is registered, so the exemption never fires there
+  (a browser has no system account).
+
+- **The configuration guards stay too** — they cover the entanglement the exemption does not
+  make harmless (an admin reasoning about roles should still be told "no"). Two saves are
+  refused: a rule targeting a role the system user holds (`MJEntityFieldPermissionEntityServer`)
+  and giving the system user a role that carries rules (`MJUserRoleEntityServer`). This mirrors
+  the DB-tier backstop, which skips a column DENY for any role a service login belongs to.
+  Context for why the system user matters at all: engines pre-warm as it in full startup mode,
+  but in **task mode** — what job and agent runners use — engines load on first touch, so any
+  caller can configure them, and their caches are process-wide and shared.
+- **The `entity_object` cache exemption applies to SERVER caches only.** Caught by Jordan after
+  the fact: engines default to `ResultType: 'entity_object'` and many enable `CacheLocal`, so a
+  blanket exemption stripped client-side engine caching from every restricted signed-in user in
+  the browser — a permanent network refetch on each page load, aimed at exactly the users an
+  administrator restricted. The exemption's two hazards are both server-only: a browser hosts
+  one principal (nothing to cross-serve) and its slots can only hold allowed-width rows anyway
+  (the server strips denied columns on the wire). Partial entities are also no longer dangerous
+  now that D-1 marks not-loaded fields, and the client `fls:` segment already separates
+  permission classes. Gated on `TrustLocalCacheCompletely`.
+
+- **The client cache key uses the ALLOWED field list**, while the server keeps using the denied
+  set. Reason: once metadata ships to browsers filtered to what a user may see
+  ([#3485](https://github.com/MemberJunction/MJ/issues/3485)), a denied field will not appear in
+  the client's field list at all, so a denied-set key would be empty and silently stop
+  segmenting. The allowed list is what the client can still observe, and it also resolves the
+  `f:*` full-width ambiguity (after #3485, "all fields" means different columns per user). The
+  two caches are looked up independently, so they do not need matching schemes. **The client
+  fingerprint still omits the RLS clause** — a pre-existing defect filed in `MJ-UPSTREAM.md`,
+  deliberately not fixed here.
+
 ## Later / explicitly out of scope here
 
 - **Phase 4 admin UI** (unchanged scope, plus two additions from this work): warn when

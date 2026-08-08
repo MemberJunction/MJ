@@ -2003,6 +2003,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     /**
+     * Returns the SELECT list for a single-record load: `*` normally, or an explicit list of
+     * the columns this user is allowed to read when field security denies them any.
+     *
+     * Deliberately NOT routed through RunView, which is the other way to get this behavior.
+     * That reroute is the tidier long-term shape and is planned separately (it must pass
+     * `BypassCache` — a PK load has never been cache-served and must not silently start being
+     * — and it changes relationship loading, which stays on its current path). Filtering the
+     * column list here buys the same protection without touching either.
+     */
+    protected buildFieldSecuritySelectList(entityInfo: EntityInfo, user: UserInfo | undefined): string {
+        if (!user || !entityInfo.HasAnyFieldPermissions) {
+            return '*'; // the overwhelmingly common case — one boolean, unchanged SQL
+        }
+        const denied = entityInfo.GetDeniedReadFields(user);
+        if (denied.size === 0) {
+            return '*';
+        }
+        const allowed = entityInfo.Fields.filter(f => !denied.has(f.Name.trim().toLowerCase()));
+        if (allowed.length === 0) {
+            return '*'; // degenerate; PKs are unrestrictable so this should be unreachable
+        }
+        return allowed.map(f => this.QuoteIdentifier(f.Name)).join(', ');
+    }
+
+    /**
      * Builds the SQL field list string for a view query, using dialect-neutral quoting.
      * Returns '*' if no specific fields are resolved.
      */
@@ -4503,7 +4528,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
 
-        const sql = `SELECT * FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${fullWhere}`;
+        // Field security: a user with denied columns gets an explicit allowed-column list
+        // instead of `SELECT *`, so denied values never leave the database — not even into
+        // server memory. This is the single-record counterpart of the SELECT-list filtering
+        // RunView already does, and it is what stops an agent running under a restricted
+        // service account from holding values its user may not read. The columns that ARE
+        // omitted come back as absent keys, which marks them not-loaded on the entity, so the
+        // next save skips them and the stored values survive.
+        //
+        // Unrestricted users keep the literal `SELECT *` — byte-identical SQL, no plan churn.
+        const selectList = this.buildFieldSecuritySelectList(entityInfo, user);
+        const sql = `SELECT ${selectList} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${fullWhere}`;
         const rawData = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
         const d = await this.PostProcessRows(rawData, entityInfo, user);
 
