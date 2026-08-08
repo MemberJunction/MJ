@@ -23,3 +23,8 @@
   flex: 1 1 auto;
   min-height: 0;
 }
+
+/* Shown above a usable, empty canvas — the palette stays reachable so the hint's advice is followable. */
+.mj-tge__empty-hint {
+  margin: var(--mj-space-2) var(--mj-space-3) 0;
+}

@@ -1,11 +1,17 @@
 <div class="mj-tge">
-  @if (IsEmpty) {
+  <!-- An EDITABLE empty canvas must still render the editor, because the palette is the only way to
+       add a step — showing a bare empty state instead made "Add one to start building this workflow"
+       an instruction the user could not follow. The hint stays, as a banner above a usable canvas. -->
+  @if (IsEmpty && ReadOnly) {
     <mj-empty-state
       Icon="fa-diagram-project"
       Title="Nothing here yet"
       [Message]="EmptyStateMessage">
     </mj-empty-state>
   } @else {
+    @if (IsEmpty) {
+      <mj-alert Variant="info" class="mj-tge__empty-hint" [Message]="EmptyStateMessage"></mj-alert>
+    }
     @if (!IsValid && ValidationErrors.length > 0) {
       <!-- Author-time validation comes from the SAME function the engine runs at submission, so a
            graph that looks fine here cannot be rejected later for a reason the canvas never showed. -->
