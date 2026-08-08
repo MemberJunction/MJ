@@ -16,7 +16,7 @@ public readonly Lines = this.DeclareRelatedRecords<OrderLineEntity>({
     RelatedEntity: 'MJ_BizApps_Orders: Order Lines',
     RelatedEntityJoinField: 'OrderHeaderID',
     OrderBy: 'LineNumber ASC',
-    Load: 'explicit',                            // 'eager' | 'explicit' | 'never'
+    Load: 'explicit',                            // 'explicit' | 'immediate' | 'lazy' | 'never'
     OnRemove: 'delete',                          // 'delete' | 'orphan' | 'refuse'
     Sequence: { Field: 'LineNumber', From: 1 },
 });

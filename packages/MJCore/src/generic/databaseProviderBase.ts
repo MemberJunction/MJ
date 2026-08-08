@@ -164,6 +164,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
+     * The provider's current transaction nesting depth, for subclasses that track one.
+     *
+     * Distinct from {@link IsInTransaction}, which some providers deliberately leave `false` so
+     * that `RunMaybeSerial` keeps fanning out — SQL Server most notably. This accessor exists so
+     * the entity-transaction machinery can still see real nesting on those providers: it feeds
+     * {@link EntityTransactionScope.IsNested} and the out-of-order settle detection in
+     * {@link BeginEntityTransaction}. Defaults to 0 for providers that do not track depth.
+     */
+    protected get CurrentTransactionDepth(): number {
+        return 0;
+    }
+
+    /**
      * Database providers execute multi-record units of work atomically, in-process.
      *
      * @see ProviderBase.SupportsEntityTransactions for why the base default is `false`.
@@ -195,9 +208,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public async BeginEntityTransaction(): Promise<EntityTransactionScope> {
         // Capture nesting BEFORE beginning: once BeginTransaction() returns we are, by definition,
-        // in a transaction, so asking afterwards would always answer "nested".
-        const isNested = this.IsInTransaction;
+        // in a transaction, so asking afterwards would always answer "nested". IsInTransaction is
+        // not enough on its own — SQL Server deliberately leaves it false (so RunMaybeSerial keeps
+        // fanning out), which made every scope on the flagship provider report IsNested === false
+        // even when joining. The depth accessor sees the truth on providers that track it.
+        const isNested = this.IsInTransaction || this.CurrentTransactionDepth > 0;
         await this.BeginTransaction();
+        const depthAtBegin = this.CurrentTransactionDepth;
 
         let settled = false;
         const settle = async (commit: boolean): Promise<void> => {
@@ -205,6 +222,24 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 return; // settle-once: the first outcome wins
             }
             settled = true;
+            // Out-of-order settle detection. Depth pairing is strictly LIFO: a scope must settle
+            // while the provider sits at the depth its own begin produced. A mismatch means two
+            // units of work interleaved their scopes on ONE provider instance — concurrent
+            // transactional saves on a shared provider — so this commit/rollback is about to
+            // settle the WRONG savepoint, silently entangling both units' writes in one physical
+            // transaction. That corruption otherwise has no witness at all, so be loud about it.
+            // (Providers that do not track depth report 0/0 and never trip this.)
+            const depthNow = this.CurrentTransactionDepth;
+            if (depthAtBegin > 0 && depthNow !== depthAtBegin) {
+                LogError(
+                    `EntityTransactionScope settled out of order on ${this.constructor.name}: the scope began at ` +
+                    `transaction depth ${depthAtBegin} but the provider is now at depth ${depthNow}. Two ` +
+                    `transactional units of work are interleaving on one provider instance, so their writes share ` +
+                    `one physical transaction and a rollback by either can silently undo the other's committed ` +
+                    `work. Do not run concurrent transactional saves on a shared provider instance — use ` +
+                    `per-request providers (as MJServer does) or serialize the units of work.`,
+                );
+            }
             if (commit) {
                 await this.CommitTransaction();
             } else {
