@@ -1716,6 +1716,7 @@ export class BaseAgent {
             // passed in, not our chained signal.
             params.cancellationToken = upstreamToken;
             this.releasePerRunDataCache();
+            await this.finalizeRun(this.deriveRunOutcome());
         }
     }
 
@@ -1729,6 +1730,34 @@ export class BaseAgent {
     private releasePerRunDataCache(): void {
         if (this._agentRun?.ID) {
             AgentDataPreloader.Instance.clearRunCache(this._agentRun.ID);
+        }
+    }
+
+    /**
+     * Subclass extension point for per-run cleanup of resources this instance owns outside of
+     * MJ's own tracked state (e.g. an external sandbox or session). No-op by default. Called
+     * unconditionally from `Execute()`'s top-level `finally` block, once per `Execute()` call,
+     * so it runs on every exit path (success, failure, or cancellation) exactly like
+     * {@link releasePerRunDataCache}.
+     */
+    protected async finalizeRun(outcome: 'success' | 'failure' | 'cancelled'): Promise<void> {
+        // Intentionally empty — subclasses override as needed.
+    }
+
+    /**
+     * Maps the just-completed run's final `AgentRun.Status` to the 3-value outcome that
+     * {@link finalizeRun} hooks care about. `'AwaitingFeedback'` is a normal settled end-of-turn
+     * (see {@link settledRunStatuses}) — the conversational turn is genuinely over, not paused
+     * mid-`Execute()` — so it maps to `'success'`, same as `'Completed'`.
+     */
+    private deriveRunOutcome(): 'success' | 'failure' | 'cancelled' {
+        switch (this._agentRun?.Status) {
+            case 'Cancelled':
+                return 'cancelled';
+            case 'Failed':
+                return 'failure';
+            default:
+                return 'success';
         }
     }
 
