@@ -15,7 +15,7 @@
  */
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
-import { GetDependencies } from './task-graph-canvas-adapter';
+import { GetDependencies, GetTaskNodeType, type TaskGraphNodeType } from './task-graph-canvas-adapter';
 
 /** A requested change to one task. The parent applies it; this panel never writes. */
 export class TaskPropertyChangeRequestedEventArgs {
@@ -60,6 +60,9 @@ export class TaskGraphPropertiesPanelComponent {
     /** Agent names offered in the assignment dropdown. Supplied by the host, which owns data access. */
     @Input() public AvailableAgentNames: readonly string[] = [];
 
+    /** Action names offered in the assignment dropdown. Same ownership rule as `AvailableAgentNames`. */
+    @Input() public AvailableActionNames: readonly string[] = [];
+
     @Input() public ReadOnly: boolean = false;
 
     @Output() public TaskPropertyChangeRequested = new EventEmitter<TaskPropertyChangeRequestedEventArgs>();
@@ -70,14 +73,20 @@ export class TaskGraphPropertiesPanelComponent {
     private currentTask: TaskGraphSpecNode | null = null;
 
     /**
-     * Whether this step waits on a person.
+     * Which of the three assignment shapes this step currently uses.
      *
-     * Derived from the absence of an agent rather than stored separately, because the spec's own
-     * rule is that a task has exactly one assignee. A separate boolean could disagree with
-     * `agentName` and the validator would then reject a graph the form said was fine.
+     * Derived from the draft rather than stored separately, because the spec's own rule is that a
+     * task has exactly one assignee. A separate field could disagree with `agentName` /
+     * `actionName` / `assignToUser`, and the validator would then reject a graph the form said was
+     * fine.
      */
+    public get Assignment(): TaskGraphNodeType {
+        return this.Draft ? GetTaskNodeType(this.Draft) : 'AgentTask';
+    }
+
+    /** True when this step waits on a person. */
     public get IsHumanTask(): boolean {
-        return !this.Draft?.agentName;
+        return this.Assignment === 'HumanTask';
     }
 
     /** The edges into this task, so their conditions are editable where the step is. */
@@ -91,12 +100,28 @@ export class TaskGraphPropertiesPanelComponent {
         }));
     }
 
-    /** Switches the step between an agent and a person, keeping the spec's xor rule intact. */
-    public SetAssignment(kind: 'agent' | 'human', agentName?: string): void {
+    /**
+     * Switches the step between an agent, an action and a person, keeping the spec's xor rule
+     * intact.
+     *
+     * Every branch clears the other two fields rather than only setting its own — leaving a stale
+     * `agentName` behind while setting `actionName` is exactly the `AssignmentConflict` the
+     * validator rejects, and it would be produced by a UI gesture that looks like a simple choice.
+     */
+    public SetAssignment(kind: TaskGraphNodeType, name?: string): void {
         if (!this.Draft || this.ReadOnly) return;
-        this.Draft = kind === 'human'
-            ? { ...this.Draft, agentName: undefined, assignToUser: true }
-            : { ...this.Draft, agentName: agentName ?? this.AvailableAgentNames[0], assignToUser: undefined };
+        const cleared = { ...this.Draft, agentName: undefined, actionName: undefined, assignToUser: undefined };
+        switch (kind) {
+            case 'HumanTask':
+                this.Draft = { ...cleared, assignToUser: true };
+                break;
+            case 'ActionTask':
+                this.Draft = { ...cleared, actionName: name ?? this.Draft.actionName ?? this.AvailableActionNames[0] };
+                break;
+            default:
+                this.Draft = { ...cleared, agentName: name ?? this.Draft.agentName ?? this.AvailableAgentNames[0] };
+                break;
+        }
         this.Commit();
     }
 
