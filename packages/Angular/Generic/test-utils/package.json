@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-test-utils",
-  "version": "6.1.0-edge.0",
+  "version": "6.1.0-edge.1",
   "private": true,
   "description": "MemberJunction: Shared DOM-test helpers for Angular component unit tests (zoneless-safe render() fixture factory).",
   "type": "module",
@@ -41,7 +41,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.0",
+    "@memberjunction/core": "6.1.0-edge.1",
     "tslib": "^2.8.1"
   },
   "sideEffects": false,
