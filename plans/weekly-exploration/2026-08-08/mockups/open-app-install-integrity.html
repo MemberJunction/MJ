@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Open App Install — Preflight &amp; Integrity Report</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-danger: #dc2626;
+    --mj-status-danger-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --mj-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.55; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .breadcrumb { color: var(--mj-text-muted); font-size: 13px; }
+  .breadcrumb b { color: var(--mj-text-primary); }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor:default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+  .btn-primary:hover { opacity: .9; }
+
+  .content { padding: 20px 28px 40px; max-width: 980px; }
+
+  .app-header { display:flex; align-items:center; gap:14px; margin-bottom: 22px; }
+  .app-icon { width: 46px; height: 46px; border-radius: 10px; background: linear-gradient(135deg, var(--mj-brand-primary), #4f7fe0); display:flex; align-items:center; justify-content:center; color:white; font-size:20px; }
+  .app-header h1 { font-size: 19px; font-weight: 800; }
+  .app-header .ver { color: var(--mj-text-muted); font-size: 13px; font-weight: 500; margin-top: 2px; }
+
+  .steps { display: flex; align-items: center; gap: 0; margin-bottom: 26px; }
+  .step { display:flex; align-items:center; gap: 8px; font-size: 12.5px; color: var(--mj-text-muted); font-weight: 600; }
+  .step .circle { width: 22px; height: 22px; border-radius: 50%; background: var(--mj-bg-surface-sunken); display:flex; align-items:center; justify-content:center; font-size: 11px; color: var(--mj-text-muted); border: 2px solid var(--mj-border-default); }
+  .step.done .circle { background: var(--mj-status-success); border-color: var(--mj-status-success); color: white; }
+  .step.done { color: var(--mj-text-secondary); }
+  .step.active .circle { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+  .step.active { color: var(--mj-brand-primary); }
+  .step-line { flex: 1; height: 2px; background: var(--mj-border-default); margin: 0 6px; min-width: 24px; }
+
+  .banner { border-radius: 10px; padding: 14px 18px; display: flex; gap: 12px; align-items: flex-start; margin-bottom: 20px; }
+  .banner.info { background: var(--mj-status-info-bg); border: 1px solid color-mix(in srgb, var(--mj-status-info) 25%, transparent); }
+  .banner.warn { background: var(--mj-status-warning-bg); border: 1px solid color-mix(in srgb, var(--mj-status-warning) 25%, transparent); }
+  .banner i.icon { font-size: 18px; margin-top: 1px; }
+  .banner.info i.icon { color: var(--mj-status-info); }
+  .banner.warn i.icon { color: var(--mj-status-warning); }
+  .banner b { display:block; margin-bottom: 2px; font-size: 13px; }
+  .banner span.sub { font-size: 12.5px; color: var(--mj-text-secondary); }
+
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
+  .card-header { padding: 13px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); width: 16px; }
+  .status-pill { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
+  .status-pill.ok { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .status-pill.warn { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; padding: 9px 18px; background: var(--mj-bg-surface-card); color: var(--mj-text-secondary); font-weight: 700; font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--mj-border-default); }
+  td { padding: 10px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  tr:last-child td { border-bottom: none; }
+  code.schema { font-family: var(--mj-mono); background: var(--mj-bg-surface-sunken); padding: 2px 7px; border-radius: 5px; color: var(--mj-text-primary); font-size: 11.5px; }
+  .tag { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .tag.own { background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+  .tag.core { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .tag.fixed { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .tag.baked { background: var(--mj-status-danger-bg); color: var(--mj-status-danger); }
+
+  .rollback-body { padding: 16px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .rb-col h3 { font-size: 12px; font-weight: 700; margin-bottom: 8px; display:flex; align-items:center; gap:6px; }
+  .rb-col ul { list-style: none; font-size: 12.5px; color: var(--mj-text-secondary); }
+  .rb-col li { padding: 5px 0; display: flex; align-items: center; gap: 8px; }
+  .rb-col li i { width: 14px; }
+  .rb-col.covered h3, .rb-col.covered li i { color: var(--mj-status-success); }
+  .rb-col.mechanism h3 { color: var(--mj-brand-primary); }
+  .rb-col.mechanism li i { color: var(--mj-brand-primary); }
+
+  .footer-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 16px; }
+  .footer-actions .left { font-size: 12px; color: var(--mj-text-muted); display:flex; align-items:center; gap:6px; }
+  .footer-btns { display: flex; gap: 10px; }
+
+  .footer-note { padding: 4px 28px 24px; color: var(--mj-text-muted); font-size: 11.5px; max-width: 980px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-diagram-project"></i> MemberJunction</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item"><i class="fa-solid fa-database"></i> Entities</div>
+    <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Permissions</div>
+    <div class="nav-item active"><i class="fa-solid fa-puzzle-piece"></i> Open Apps</div>
+    <div class="nav-section">Framework · New</div>
+    <div class="nav-item"><i class="fa-solid fa-clipboard-check"></i> Install Integrity</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="breadcrumb">Admin / Open Apps / <b>Install</b></div>
+      <div class="topbar-actions"><div class="btn"><i class="fa-solid fa-terminal"></i> View CLI Output</div></div>
+    </div>
+
+    <div class="content">
+      <div class="app-header">
+        <div class="app-icon"><i class="fa-solid fa-clipboard-list"></i></div>
+        <div>
+          <h1>Installing bizapps-caliber</h1>
+          <div class="ver">v0.5.0 · from github.com/example-org/bizapps-caliber · target schema <code class="schema">__mj_BizAppsCaliber</code></div>
+        </div>
+      </div>
+
+      <div class="steps">
+        <div class="step done"><div class="circle"><i class="fa-solid fa-check"></i></div> Manifest</div>
+        <div class="step-line"></div>
+        <div class="step active"><div class="circle">2</div> Preflight</div>
+        <div class="step-line"></div>
+        <div class="step"><div class="circle">3</div> Migrate</div>
+        <div class="step-line"></div>
+        <div class="step"><div class="circle">4</div> Metadata Sync</div>
+        <div class="step-line"></div>
+        <div class="step"><div class="circle">5</div> Complete</div>
+      </div>
+
+      <div class="banner warn">
+        <i class="fa-solid fa-triangle-exclamation icon"></i>
+        <div>
+          <b>1 portability warning found — advisory only, install can proceed</b>
+          <span class="sub">One captured reference could not be verified as a resolving lookup. Review below before confirming, especially if this host registered its schema independently before this app shipped a baseline.</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-diagram-project"></i> Schema Footprint</h2>
+          <span class="status-pill ok">2 schemas, as declared</span>
+        </div>
+        <table>
+          <thead><tr><th>Schema</th><th>Writes</th><th>Classification</th><th>Rewrite Rule</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code class="schema">__mj_BizAppsCaliber</code></td>
+              <td>34 CREATE, 891 INSERT</td>
+              <td><span class="tag own">App-owned</span></td>
+              <td><code class="schema">${flyway:defaultSchema}</code></td>
+            </tr>
+            <tr>
+              <td><code class="schema">__mj</code> (core)</td>
+              <td>0 CREATE, 47 INSERT</td>
+              <td><span class="tag core">Core, expected</span></td>
+              <td><code class="schema">${mjSchema}</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-link"></i> Portability Check</h2>
+          <span class="status-pill warn">1 of 47 flagged</span>
+        </div>
+        <table>
+          <thead><tr><th>Core Reference</th><th>Table</th><th>Form</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>EntityID → <code class="schema">Caliber: Assessments</code></td>
+              <td>EntityPermission</td>
+              <td>Resolving subquery</td>
+              <td><span class="tag fixed"><i class="fa-solid fa-check"></i> Portable</span></td>
+            </tr>
+            <tr>
+              <td>EntityID → <code class="schema">Caliber: Applicants</code></td>
+              <td>EntityRelationship</td>
+              <td>Resolving subquery</td>
+              <td><span class="tag fixed"><i class="fa-solid fa-check"></i> Portable</span></td>
+            </tr>
+            <tr>
+              <td>ApplicationID → <code class="schema">Caliber Suite</code></td>
+              <td>ApplicationEntity</td>
+              <td>Literal ID</td>
+              <td><span class="tag baked"><i class="fa-solid fa-triangle-exclamation"></i> Baked — pre-2026-08 capture</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-rotate-left"></i> Rollback Plan</h2>
+          <span class="status-pill ok">Full coverage</span>
+        </div>
+        <div class="rollback-body">
+          <div class="rb-col mechanism">
+            <h3><i class="fa-solid fa-gears"></i> If this install fails</h3>
+            <ul>
+              <li><i class="fa-solid fa-check"></i> Table-type DDL runs outside the transaction (deadlock-safe)</li>
+              <li><i class="fa-solid fa-check"></i> Remaining 924 statements run as one atomic transaction</li>
+              <li><i class="fa-solid fa-check"></i> On failure: full ROLLBACK, zero rows committed anywhere</li>
+              <li><i class="fa-solid fa-check"></i> On success: nothing to roll back — this only matters on failure</li>
+            </ul>
+          </div>
+          <div class="rb-col covered">
+            <h3><i class="fa-solid fa-shield"></i> Ownership tracked for uninstall</h3>
+            <ul>
+              <li><i class="fa-solid fa-check"></i> 34 App schema objects — <code class="schema">DROP SCHEMA</code></li>
+              <li><i class="fa-solid fa-check"></i> 47 core rows — tagged <code class="schema">OpenAppID</code></li>
+              <li><i class="fa-solid fa-check"></i> Action, AIAgent, AIPrompt, Query, Template all covered</li>
+              <li><i class="fa-solid fa-check"></i> No teardown script required from publisher</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-actions">
+        <div class="left"><i class="fa-solid fa-clock"></i> Estimated install time: ~40s</div>
+        <div class="footer-btns">
+          <div class="btn"><i class="fa-solid fa-xmark"></i> Cancel</div>
+          <div class="btn btn-primary"><i class="fa-solid fa-play"></i> Proceed with Install</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">Mockup — MemberJunction Weekly Exploration, 2026-08-08 · Idea 2: Open App Publish &amp; Install Integrity Contract · Illustrative data, grounded in issues #3619, #3618, #3547, #3546, #3561.</div>
+  </div>
+</body>
+</html>

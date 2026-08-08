@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Rights Center</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-danger: #dc2626;
+    --mj-status-danger-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --mj-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.55; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .breadcrumb { color: var(--mj-text-muted); font-size: 13px; }
+  .breadcrumb b { color: var(--mj-text-primary); }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor:default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+
+  .content { padding: 20px 28px 40px; }
+
+  .summary-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+  .stat-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 14px 16px; }
+  .stat-card .num { font-size: 24px; font-weight: 800; color: var(--mj-text-primary); }
+  .stat-card.danger .num { color: var(--mj-status-danger); }
+  .stat-card.warn .num { color: var(--mj-status-warning); }
+  .stat-card.ok .num { color: var(--mj-status-success); }
+  .stat-card .lbl { font-size: 11.5px; color: var(--mj-text-secondary); margin-top: 3px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px; align-items: start; margin-bottom: 20px; }
+
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+  .card-header p { font-size: 11.5px; color: var(--mj-text-secondary); margin-top: 3px; }
+
+  .purpose-row { padding: 12px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .purpose-row:last-child { border-bottom: none; }
+  .purpose-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .purpose-name { font-weight: 700; font-size: 13px; }
+  .purpose-basis { font-size: 10.5px; color: var(--mj-text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .02em; }
+  .purpose-count { font-size: 12px; color: var(--mj-text-secondary); }
+  .bar-track { height: 8px; background: var(--mj-bg-surface-sunken); border-radius: 5px; overflow: hidden; display: flex; }
+  .bar-granted { background: var(--mj-status-success); }
+  .bar-withdrawn { background: var(--mj-status-danger); opacity: .75; }
+  .bar-expired { background: var(--mj-text-muted); opacity: .5; }
+  .legend { display: flex; gap: 14px; padding: 10px 18px; font-size: 11px; color: var(--mj-text-secondary); border-top: 1px solid var(--mj-border-subtle); }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; padding: 9px 18px; background: var(--mj-bg-surface-card); color: var(--mj-text-secondary); font-weight: 700; font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--mj-border-default); }
+  td { padding: 10px 18px; border-bottom: 1px solid var(--mj-border-subtle); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+
+  .req-type { font-weight: 700; font-size: 12px; }
+  .req-sub { font-size: 11px; color: var(--mj-text-muted); }
+  .sla-pill { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; display: inline-flex; align-items:center; gap:5px; }
+  .sla-pill.ok { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .sla-pill.warn { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .sla-pill.danger { background: var(--mj-status-danger-bg); color: var(--mj-status-danger); }
+  .status-tag { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+
+  /* Privacy tab preview panel */
+  .privacy-panel { padding: 18px; }
+  .subject-hdr { display:flex; align-items:center; gap: 12px; margin-bottom: 16px; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--mj-bg-surface-sunken); display:flex; align-items:center; justify-content:center; color: var(--mj-text-secondary); font-weight: 700; }
+  .subject-hdr .name { font-weight: 700; font-size: 13.5px; }
+  .subject-hdr .sub { font-size: 11.5px; color: var(--mj-text-muted); }
+
+  .consent-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--mj-border-subtle); font-size: 12px; }
+  .consent-item:last-child { border-bottom: none; }
+  .consent-item .p-name { font-weight: 600; }
+  .consent-item .p-meta { color: var(--mj-text-muted); font-size: 11px; }
+  .granted-dot { color: var(--mj-status-success); }
+  .withdrawn-dot { color: var(--mj-status-danger); }
+
+  .erasure-box { margin-top: 14px; background: var(--mj-status-danger-bg); border: 1px solid color-mix(in srgb, var(--mj-status-danger) 25%, transparent); border-radius: 8px; padding: 12px 14px; }
+  .erasure-box b { font-size: 12.5px; color: #7f1d1d; display:block; margin-bottom: 3px; }
+  .erasure-box span { font-size: 11.5px; color: #7f1d1d; opacity: .85; }
+  .erasure-box .btn { margin-top: 10px; background: var(--mj-status-danger); border-color: var(--mj-status-danger); color: white; font-size: 12px; padding: 6px 12px; }
+
+  .footer-note { padding: 0 28px 24px; color: var(--mj-text-muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-diagram-project"></i> MemberJunction</div>
+    <div class="nav-section">Explorer</div>
+    <div class="nav-item"><i class="fa-solid fa-house"></i> Home</div>
+    <div class="nav-item"><i class="fa-solid fa-users"></i> Members</div>
+    <div class="nav-section">Framework · New</div>
+    <div class="nav-item active"><i class="fa-solid fa-user-shield"></i> Data Rights Center</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="breadcrumb">Admin / <b>Data Rights Center</b></div>
+      <div class="topbar-actions">
+        <div class="btn"><i class="fa-solid fa-file-export"></i> Export Audit Trail</div>
+        <div class="btn btn-primary"><i class="fa-solid fa-plus"></i> Log a Rights Request</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="summary-bar">
+        <div class="stat-card"><div class="num">18,442</div><div class="lbl">Active consent records</div></div>
+        <div class="stat-card"><div class="num">6</div><div class="lbl">Processing purposes configured</div></div>
+        <div class="stat-card warn"><div class="num">4</div><div class="lbl">Open data rights requests</div></div>
+        <div class="stat-card danger"><div class="num">1</div><div class="lbl">Due within 48 hours</div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card" style="margin-bottom:0;">
+          <div class="card-header">
+            <div>
+              <h2><i class="fa-solid fa-layer-group"></i> Consent by Purpose</h2>
+              <p>Purpose and lawful basis are tracked as separate, linked fields — not one flattened status.</p>
+            </div>
+          </div>
+          <div>
+            <div class="purpose-row">
+              <div class="purpose-top"><span class="purpose-name">Membership Renewal Communications</span><span class="purpose-basis">Legitimate Interest</span></div>
+              <div class="bar-track"><div class="bar-granted" style="width:91%"></div><div class="bar-withdrawn" style="width:5%"></div><div class="bar-expired" style="width:4%"></div></div>
+              <div class="purpose-count" style="margin-top:5px;">6,204 granted · 341 withdrawn · 279 expired</div>
+            </div>
+            <div class="purpose-row">
+              <div class="purpose-top"><span class="purpose-name">Donor Analytics &amp; Segmentation</span><span class="purpose-basis">Consent</span></div>
+              <div class="bar-track"><div class="bar-granted" style="width:68%"></div><div class="bar-withdrawn" style="width:12%"></div><div class="bar-expired" style="width:20%"></div></div>
+              <div class="purpose-count" style="margin-top:5px;">3,891 granted · 686 withdrawn · 1,144 expired</div>
+            </div>
+            <div class="purpose-row">
+              <div class="purpose-top"><span class="purpose-name">Program Impact Reporting</span><span class="purpose-basis">Consent</span></div>
+              <div class="bar-track"><div class="bar-granted" style="width:82%"></div><div class="bar-withdrawn" style="width:3%"></div><div class="bar-expired" style="width:15%"></div></div>
+              <div class="purpose-count" style="margin-top:5px;">4,120 granted · 151 withdrawn · 754 expired</div>
+            </div>
+            <div class="purpose-row">
+              <div class="purpose-top"><span class="purpose-name">Third-Party Sponsor Sharing</span><span class="purpose-basis">Consent</span></div>
+              <div class="bar-track"><div class="bar-granted" style="width:34%"></div><div class="bar-withdrawn" style="width:9%"></div><div class="bar-expired" style="width:57%"></div></div>
+              <div class="purpose-count" style="margin-top:5px;">1,412 granted · 374 withdrawn · 2,335 expired</div>
+            </div>
+          </div>
+          <div class="legend">
+            <span><i style="background:var(--mj-status-success)"></i> Granted</span>
+            <span><i style="background:var(--mj-status-danger); opacity:.75;"></i> Withdrawn</span>
+            <span><i style="background:var(--mj-text-muted); opacity:.5;"></i> Expired</span>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:0;">
+          <div class="card-header">
+            <div>
+              <h2><i class="fa-solid fa-id-card-clip"></i> Privacy Tab Preview</h2>
+              <p>Embeddable on any entity form, same pattern as Decision Timeline</p>
+            </div>
+          </div>
+          <div class="privacy-panel">
+            <div class="subject-hdr">
+              <div class="avatar">ET</div>
+              <div>
+                <div class="name">Elena Torres</div>
+                <div class="sub">Member #M-88213 · Jurisdiction hint: Colorado, US</div>
+              </div>
+            </div>
+            <div class="consent-item">
+              <div><div class="p-name">Membership Renewal Communications</div><div class="p-meta">Granted via web form · 2024-03-11</div></div>
+              <i class="fa-solid fa-circle-check granted-dot"></i>
+            </div>
+            <div class="consent-item">
+              <div><div class="p-name">Donor Analytics &amp; Segmentation</div><div class="p-meta">Withdrawn · 2026-06-02, supersedes prior grant</div></div>
+              <i class="fa-solid fa-circle-xmark withdrawn-dot"></i>
+            </div>
+            <div class="consent-item">
+              <div><div class="p-name">Program Impact Reporting</div><div class="p-meta">Granted via web form · 2024-03-11</div></div>
+              <i class="fa-solid fa-circle-check granted-dot"></i>
+            </div>
+            <div class="erasure-box">
+              <b><i class="fa-solid fa-triangle-exclamation"></i> Open erasure request — DR-2026-0041</b>
+              <span>Received 2026-08-06 · Due 2026-09-05 (GDPR, 30-day SLA) · 3 related records in relationship neighborhood not yet reviewed</span>
+              <div class="btn"><i class="fa-solid fa-broom"></i> Process Erasure Request</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2><i class="fa-solid fa-list-check"></i> Data Rights Requests Queue</h2>
+            <p>SLA due-dates are computed per jurisdiction, not tracked in someone's inbox.</p>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Request</th><th>Subject</th><th>Type</th><th>Status</th><th>SLA</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="req-type">DR-2026-0041</span><br><span class="req-sub">Received 2026-08-06</span></td>
+              <td>Elena Torres — Member #M-88213</td>
+              <td>Erasure</td>
+              <td><span class="status-tag">In Progress</span></td>
+              <td><span class="sla-pill danger"><i class="fa-solid fa-hourglass-end"></i> Due in 2 days</span></td>
+            </tr>
+            <tr>
+              <td><span class="req-type">DR-2026-0039</span><br><span class="req-sub">Received 2026-07-29</span></td>
+              <td>Marcus Fenwick — Donor #D-33107</td>
+              <td>Access</td>
+              <td><span class="status-tag">In Progress</span></td>
+              <td><span class="sla-pill warn"><i class="fa-solid fa-hourglass-half"></i> Due in 6 days</span></td>
+            </tr>
+            <tr>
+              <td><span class="req-type">DR-2026-0037</span><br><span class="req-sub">Received 2026-07-24</span></td>
+              <td>Priya Nandan — Member #M-71920</td>
+              <td>Correction</td>
+              <td><span class="status-tag">In Progress</span></td>
+              <td><span class="sla-pill ok"><i class="fa-solid fa-hourglass-start"></i> Due in 15 days</span></td>
+            </tr>
+            <tr>
+              <td><span class="req-type">DR-2026-0033</span><br><span class="req-sub">Received 2026-07-18</span></td>
+              <td>Sam Whitcombe — Donor #D-29814</td>
+              <td>Portability</td>
+              <td><span class="status-tag">In Progress</span></td>
+              <td><span class="sla-pill ok"><i class="fa-solid fa-hourglass-start"></i> Due in 19 days</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="footer-note">Mockup — MemberJunction Weekly Exploration, 2026-08-08 · Idea 3: Consent &amp; Data Rights Ledger · Illustrative data only.</div>
+  </div>
+</body>
+</html>

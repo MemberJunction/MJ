@@ -17,7 +17,8 @@ capabilities, not by prescribing specific business applications.
 
 | Week | Ideas | PR |
 |---|---|---|
-| [2026-08-07](./2026-08-07/) | Relationship Graph & Engagement Signal Engine · Decision Provenance Layer & AI Handoff Briefs · Accessibility-by-Default Framework Layer | _(this week's PR)_ |
+| [2026-08-08](./2026-08-08/) | CodeGen Decision Ledger (+ IS-A name-field fix) · Open App Publish & Install Integrity Contract · Consent & Data Rights Ledger | _(this week's PR)_ |
+| [2026-08-07](./2026-08-07/) | Relationship Graph & Engagement Signal Engine · Decision Provenance Layer & AI Handoff Briefs · Accessibility-by-Default Framework Layer | [#3609](https://github.com/MemberJunction/MJ/pull/3609) (Idea 3, selected) |
 
 ## Before starting a new week
 

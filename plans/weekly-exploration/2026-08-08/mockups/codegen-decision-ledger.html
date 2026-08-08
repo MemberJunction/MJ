@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeGen Run Report — Decision Ledger</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-danger: #dc2626;
+    --mj-status-danger-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --mj-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.55; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .breadcrumb { color: var(--mj-text-muted); font-size: 13px; }
+  .breadcrumb b { color: var(--mj-text-primary); }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor:default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+  .topbar-actions { display: flex; gap: 8px; }
+
+  .content { padding: 20px 28px 40px; }
+
+  .summary-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 20px; }
+  .stat-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 14px 16px; }
+  .stat-card .num { font-size: 22px; font-weight: 800; color: var(--mj-text-primary); }
+  .stat-card.warn .num { color: var(--mj-status-warning); }
+  .stat-card.ok .num { color: var(--mj-status-success); }
+  .stat-card .lbl { font-size: 11.5px; color: var(--mj-text-secondary); margin-top: 3px; }
+
+  .run-meta { display:flex; align-items:center; gap:8px; color: var(--mj-text-muted); font-size: 12px; margin-bottom: 18px; }
+  .run-meta code { background: var(--mj-bg-surface-sunken); padding: 1px 6px; border-radius: 4px; font-family: var(--mj-mono); color: var(--mj-text-secondary); }
+
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+  .card-header p { font-size: 12px; color: var(--mj-text-secondary); margin-top: 3px; }
+  .card-body { padding: 0; }
+
+  .diff-pickers { display: flex; align-items: center; gap: 10px; padding: 14px 18px; background: var(--mj-bg-surface-card); border-bottom: 1px solid var(--mj-border-default); font-size: 12.5px; }
+  .diff-pickers select { border: 1px solid var(--mj-border-default); border-radius: 6px; padding: 6px 10px; font-size: 12.5px; color: var(--mj-text-primary); background: white; font-family: inherit; }
+  .diff-pickers i.fa-arrow-right-arrow-left { color: var(--mj-text-muted); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; padding: 10px 16px; background: var(--mj-bg-surface-card); color: var(--mj-text-secondary); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--mj-border-default); }
+  td { padding: 11px 16px; border-bottom: 1px solid var(--mj-border-subtle); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr.highlight-row { background: var(--mj-status-warning-bg); }
+  .entity-name { font-weight: 700; color: var(--mj-text-primary); }
+  .entity-sub { color: var(--mj-text-muted); font-size: 11px; margin-top: 2px; }
+
+  .tier-badge { display: inline-flex; align-items:center; gap:4px; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .02em; }
+  .tier-stability { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .tier-repair { background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+  .tier-freshpick { background: #f5f0ff; color: #7c3aed; }
+  .tier-skipped { background: var(--mj-status-danger-bg); color: var(--mj-status-danger); }
+
+  .field-chip { font-family: var(--mj-mono); font-size: 11.5px; background: var(--mj-bg-surface-sunken); padding: 2px 7px; border-radius: 5px; color: var(--mj-text-primary); }
+  .field-chip.none { color: var(--mj-status-danger); background: var(--mj-status-danger-bg); font-family: inherit; font-style: italic; font-weight: 600; }
+
+  .impact-badge { font-size: 11px; font-weight: 700; color: var(--mj-status-danger); display:flex; align-items:center; gap:4px; }
+
+  .skip-list { list-style: none; }
+  .skip-list li { padding: 11px 18px; border-bottom: 1px solid var(--mj-border-subtle); display:flex; align-items:center; gap:10px; font-size: 12.5px; }
+  .skip-list li:last-child { border-bottom: none; }
+  .skip-list i { color: var(--mj-status-danger); }
+
+  .detail-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
+
+  .timeline { position: relative; padding: 4px 18px 14px 40px; }
+  .timeline::before { content: ''; position: absolute; left: 24px; top: 8px; bottom: 8px; width: 2px; background: var(--mj-border-default); }
+  .t-item { position: relative; padding-bottom: 16px; }
+  .t-item:last-child { padding-bottom: 0; }
+  .t-dot { position: absolute; left: -22px; top: 2px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--mj-bg-surface); }
+  .t-dot.stability { background: var(--mj-status-success); }
+  .t-dot.freshpick { background: #7c3aed; }
+  .t-dot.skipped { background: var(--mj-status-danger); }
+  .t-date { font-size: 10.5px; color: var(--mj-text-muted); font-weight: 700; margin-bottom: 2px; font-family: var(--mj-mono); }
+  .t-title { font-size: 12.5px; font-weight: 700; color: var(--mj-text-primary); }
+  .t-sub { font-size: 11.5px; color: var(--mj-text-secondary); margin-top: 2px; }
+
+  .confidence-bar { width: 100%; height: 5px; background: var(--mj-bg-surface-sunken); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .confidence-bar span { display: block; height: 100%; background: #7c3aed; }
+
+  .footer-note { padding: 0 28px 24px; color: var(--mj-text-muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-diagram-project"></i> MemberJunction</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item"><i class="fa-solid fa-database"></i> Entities</div>
+    <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Permissions</div>
+    <div class="nav-item"><i class="fa-solid fa-puzzle-piece"></i> Open Apps</div>
+    <div class="nav-section">Framework · New</div>
+    <div class="nav-item active"><i class="fa-solid fa-scale-balanced"></i> CodeGen Run Report</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="breadcrumb">Admin / CodeGen / <b>Run Report</b></div>
+      <div class="topbar-actions">
+        <div class="btn"><i class="fa-solid fa-download"></i> Export Decision Log</div>
+        <div class="btn btn-primary"><i class="fa-solid fa-arrows-rotate"></i> Re-run Analysis</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="run-meta">
+        <i class="fa-solid fa-code-branch"></i> Run <code>#4821</code> · branch <code>next</code> · 2026-08-08 06:02 UTC · SQL Server · 312 entities analyzed
+      </div>
+
+      <div class="summary-bar">
+        <div class="stat-card"><div class="num">312</div><div class="lbl">Entities analyzed</div></div>
+        <div class="stat-card"><div class="num">276</div><div class="lbl">Stability tier (unchanged)</div></div>
+        <div class="stat-card warn"><div class="num">4</div><div class="lbl">Fresh-pick (LLM decided)</div></div>
+        <div class="stat-card warn"><div class="num">1</div><div class="lbl">Skipped — AI circuit open</div></div>
+        <div class="stat-card ok"><div class="num">0</div><div class="lbl">Left with no name field</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2><i class="fa-solid fa-code-compare"></i> Cross-Environment Decision Diff</h2>
+            <p>Compare which tier fired and what it chose across two runs of the identical schema — the question issue #3608 shows nobody could currently answer.</p>
+          </div>
+        </div>
+        <div class="diff-pickers">
+          <i class="fa-solid fa-server"></i>
+          <select><option>Run A — Fresh Install Baseline (#4821, next)</option></select>
+          <i class="fa-solid fa-arrow-right-arrow-left"></i>
+          <select><option>Run B — Long-Lived Dev Database (#4790, next, 2yr old)</option></select>
+        </div>
+        <div class="card-body">
+          <table>
+            <thead>
+              <tr><th>Entity</th><th>Run A — Name Field</th><th>Tier</th><th>Run B — Name Field</th><th>Tier</th><th>Impact</th></tr>
+            </thead>
+            <tbody>
+              <tr class="highlight-row">
+                <td>
+                  <div class="entity-name">Caliber: Assessment Sessions</div>
+                  <div class="entity-sub">28 fields · no literal "Name" column</div>
+                </td>
+                <td><span class="field-chip">SubjectEntityName</span></td>
+                <td><span class="tier-badge tier-freshpick"><i class="fa-solid fa-robot"></i> Fresh Pick</span></td>
+                <td><span class="field-chip none">— none —</span></td>
+                <td><span class="tier-badge tier-skipped"><i class="fa-solid fa-ban"></i> No candidate</span></td>
+                <td><span class="impact-badge"><i class="fa-solid fa-triangle-exclamation"></i> vwAssessments: 27 vs 26 cols</span></td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="entity-name">Accounting: Company Profiles</div>
+                  <div class="entity-sub">IS-A child of MJ: Companies · mirrors parent Name</div>
+                </td>
+                <td><span class="field-chip">Name (virtual)</span></td>
+                <td><span class="tier-badge tier-stability"><i class="fa-solid fa-lock"></i> Stability</span></td>
+                <td><span class="field-chip">Name (virtual)</span></td>
+                <td><span class="tier-badge tier-stability"><i class="fa-solid fa-lock"></i> Stability</span></td>
+                <td style="color:var(--mj-status-success); font-weight:700; font-size:11px;">✓ Matched — IS-A carve-out active</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="entity-name">MJ: Conversation Details</div>
+                  <div class="entity-sub">276 core entities matched — showing 1 of 276</div>
+                </td>
+                <td><span class="field-chip">Message</span></td>
+                <td><span class="tier-badge tier-stability"><i class="fa-solid fa-lock"></i> Stability</span></td>
+                <td><span class="field-chip">Message</span></td>
+                <td><span class="tier-badge tier-stability"><i class="fa-solid fa-lock"></i> Stability</span></td>
+                <td style="color:var(--mj-status-success); font-weight:700; font-size:11px;">✓ Matched</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2><i class="fa-solid fa-circle-exclamation"></i> Skipped This Run</h2>
+            <p>Entities where analysis did not run at all — distinct from analysis running and finding nothing.</p>
+          </div>
+        </div>
+        <ul class="skip-list">
+          <li><i class="fa-solid fa-plug-circle-xmark"></i> <b>Caliber: Applicant Sources</b> — AI circuit open (Gemini vendor timeout at 06:02:14 UTC) · <span style="color:var(--mj-text-muted);">last known-good state retained, re-run recommended</span></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-timeline"></i> Decision History — Caliber: Assessment Sessions</h2>
+        </div>
+        <div class="detail-grid" style="padding: 18px;">
+          <div>
+            <div class="timeline">
+              <div class="t-item">
+                <div class="t-dot freshpick"></div>
+                <div class="t-date">2026-08-08 06:02 UTC · Run #4821</div>
+                <div class="t-title">Fresh Pick — SubjectEntityName selected</div>
+                <div class="t-sub">No field previously flagged; 3 eligible candidates returned by LLM, top-ranked chosen</div>
+                <div class="confidence-bar"><span style="width:78%"></span></div>
+                <div class="t-sub" style="margin-top:3px;">Confidence 78% · Source: LLM (Gemini)</div>
+              </div>
+              <div class="t-item">
+                <div class="t-dot skipped"></div>
+                <div class="t-date">2026-08-01 14:11 UTC · Run #4802</div>
+                <div class="t-title">No candidate — entity left with no name field</div>
+                <div class="t-sub">isFieldEligibleForNameField rejected all candidates prior to the eligibility fix shipping in this run</div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin:0; box-shadow:none;">
+            <div class="card-header"><h2 style="font-size:12.5px;"><i class="fa-solid fa-circle-info"></i> Why this matters</h2></div>
+            <div class="card-body" style="padding: 14px 16px; font-size: 12px; color: var(--mj-text-secondary);">
+              A view gaining or losing a derived name column changes its column count. A downstream <code style="font-family:var(--mj-mono);">INSERT ... EXEC spCreate</code> pattern fails with a column-count mismatch on write — reads look fine, so nothing surfaces until someone writes. This is the exact failure mode behind issue #3608.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">Mockup — MemberJunction Weekly Exploration, 2026-08-08 · Idea 1: CodeGen Decision Ledger · Illustrative data, grounded in issues #3608, #3551, #3604.</div>
+  </div>
+</body>
+</html>
