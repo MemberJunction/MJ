@@ -94,6 +94,8 @@ Unit tests passing is necessary but **not sufficient** — the integration tier 
 
 **CodeGen reads JSONType definitions from the database, not from `metadata/`.** Run `mj sync push` **before** `mj codegen`, or CodeGen regenerates from stale definitions and *silently deletes* properties from the generated types. Full ordering + why it's silent: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
+**One database per agent.** Before `mj migrate` / `mj codegen` / `mj sync push`, confirm no other session is using your `DB_DATABASE` — a git worktree isolates the filesystem, **not** the database. Interleaved CodeGen runs leave metadata demanding view columns that no longer exist, and *both* runs report success while someone else's server logs the errors. Rules + the incident that produced them: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
+
 **Build commands** — this is a **pnpm** workspace (`packageManager` in `package.json` pins the version; the lockfile is `pnpm-lock.yaml`). Never run `npm install` here — it would create a `package-lock.json` the repo no longer uses and resolve a different tree:
 ```bash
 pnpm run build            # all packages, from repo root

@@ -180,6 +180,40 @@ This makes the hand-DDL/generated boundary unmissable when scrolling a 9,000-lin
 
 Reference example: `V202607020230__v5.45.x__AISkill_ActivationMode.sql`.
 
+### 🚨 ONE DATABASE PER AGENT — never point two sessions at the same one
+
+**Before running `mj migrate`, `mj codegen`, or `mj sync push`, confirm the database in your
+`.env` is not in use by another agent or another session.** If someone else is working, use a
+different database — copy the `.env`, change `DB_DATABASE`, and migrate that one.
+
+**A git worktree does not isolate the database.** It isolates the *filesystem*, which is what makes
+it feel safe. Two agents in two worktrees, both pointed at the same `DB_DATABASE`, are one agent as
+far as the schema is concerned — and the collision surfaces in the other person's running server,
+not in your terminal.
+
+**Why this is worse than an ordinary conflict.** `mj codegen` regenerates base views and reconciles
+`EntityField` metadata as *separate steps* against a live database. An interleaved run leaves a
+window where metadata demands a column the freshly-regenerated view no longer emits, and the symptom
+is a runtime `Invalid column name` on every load of that entity — with no error at either agent's
+CodeGen, both of which report success. It self-heals only when someone happens to regenerate again.
+
+This happened on 2026-08-08: a full CodeGen for a *metadata-only* change dropped the denormalized
+`EntityAction` column from three `vwEntityAction*` views, and the next server boot logged 975
+`Invalid column name 'EntityAction'` errors before an unrelated `mj migrate` from another session
+incidentally repaired it. Both agents' commands reported success throughout.
+
+**Corollaries worth internalizing:**
+
+- **Do not run a full `mj codegen` for a change with no schema DDL.** Metadata-only work —
+  a new Remote Operation, a prompt, an Action — needs `mj codegen --skipdb`, which emits the
+  TypeScript and touches no view. Regenerating 374 entities' views to obtain three interfaces is how
+  the incident above started.
+- **A shared database also means shared *migration state*.** Another session's `mj migrate` moves
+  your schema forward without your knowledge, so a build that passed an hour ago may not match the
+  database it is now talking to.
+- **When you must share** (a single dev DB by policy), say so explicitly and serialize: announce the
+  run, complete it, confirm, then hand over. Concurrency is the hazard, not the sharing.
+
 ### 🚨 CodeGen Ordering — run `mj sync push` BEFORE `mj codegen` (REQUIRED)
 
 **CodeGen reads JSONType definitions from the DATABASE, not from `metadata/`.** The TypeScript
