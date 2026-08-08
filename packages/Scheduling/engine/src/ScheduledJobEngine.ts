@@ -762,6 +762,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // PHASE 1: stale-inflight sweep. Decoupled from isJobDue and cap.
         const swept = await this.sweepStaleInflightJobs(contextUser);
 
+        // PHASE 1b: retire jobs whose window has closed. Cheap (in-memory scan, writes only on a
+        // transition) and placed before dispatch so an expired job cannot be considered this tick.
+        await this.expireFinishedJobs(contextUser, evalTime);
+
         // PHASE 2: cap-bounded dispatch.
         let dispatched = 0;
         let lockedOut = 0;
@@ -1067,6 +1071,52 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         } catch (cacheError) {
             this.logError('Cache invalidation after stats update failed (non-fatal)', cacheError);
         }
+    }
+
+    /**
+     * Move jobs past their `EndAt` to `Status='Expired'`.
+     *
+     * **`Expired` has always been a declared status that nothing ever set.** `isJobDue` already
+     * refuses a job whose `EndAt` has passed, so such a job stops running on its own — but it stays
+     * `Active` forever, permanently inert, and keeps counting toward `UpdatePollingInterval`. A
+     * one-shot expressed as "cron at T plus `EndAt` just after T" therefore left the whole scheduler
+     * polling at that job's cadence for a job that will never run again.
+     *
+     * That makes this the one-shot story rather than a new schedule shape: "run once at T" is
+     * already expressible with the columns that exist, and what was missing was the retirement.
+     *
+     * Deliberately narrow. It only transitions `Active`/`Pending` — a `Paused` or `Disabled` job was
+     * put there by a person, and quietly rewriting their decision to `Expired` would lose it. And it
+     * only fires on `EndAt`, never on "the cron has no future occurrence": a cron always has one, so
+     * inferring exhaustion would be guessing.
+     *
+     * Best-effort: a failed transition is logged and retried on the next poll, never propagated —
+     * retiring a finished job must not be able to stop live ones from dispatching.
+     */
+    private async expireFinishedJobs(contextUser: UserInfo, evalTime: Date): Promise<void> {
+        for (const job of this.ScheduledJobs) {
+            if (!job.EndAt || evalTime <= job.EndAt) {
+                continue;
+            }
+            if (job.Status !== 'Active' && job.Status !== 'Pending') {
+                continue;
+            }
+
+            try {
+                job.Status = 'Expired';
+                if (await job.Save()) {
+                    this.log(`Job "${job.Name}" passed its EndAt (${job.EndAt.toISOString()}) — marked Expired.`);
+                } else {
+                    this.logError(`Could not mark job "${job.Name}" Expired: ${job.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            } catch (error) {
+                this.logError(`Expiring job "${job.Name}" threw (non-fatal)`, error);
+            }
+        }
+
+        // The active set may have shrunk, and the polling cadence is derived from it — an expired
+        // job must stop driving how often every other job is checked.
+        this.UpdatePollingInterval();
     }
 
     /**
