@@ -2600,6 +2600,10 @@ numbered_rows AS (
    SELECT
       sf."EntityID",
       COALESCE(ms."MaxSequence", 0) + 100000 + sf."Sequence" AS "Sequence",
+      -- The RAW schema ordinal, carried alongside the temporary Sequence above. The INSERT emitter
+      -- adds it to an apply-time MAX(), so the ordering of newly discovered fields is encoded in the
+      -- emitted VALUE rather than depending on the order the INSERT statements happen to execute.
+      sf."Sequence" AS "SourceOrdinal",
       sf."FieldName",
       sf."Description",
       sf."Type",
