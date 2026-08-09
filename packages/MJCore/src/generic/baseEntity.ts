@@ -1,4 +1,4 @@
-import { MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
@@ -3265,9 +3265,9 @@ export abstract class BaseEntity<T = unknown> {
                         // that already exempts companions below.
                         const skipAsyncValidation = _options.SkipAsyncValidation !== undefined
                             ? _options.SkipAsyncValidation
-                            : BaseEntity.isOverridden(this, 'DefaultSkipAsyncValidation')
+                            : IsMemberOverridden(this, 'DefaultSkipAsyncValidation', BaseEntity)
                                 ? this.DefaultSkipAsyncValidation
-                                : !BaseEntity.isOverridden(this, 'ValidateAsync');
+                                : !IsMemberOverridden(this, 'ValidateAsync', BaseEntity);
 
                         // If not skipping async validation, run it - even if sync validation failed
                         // This ensures all validation errors (sync and async) are collected
@@ -3958,61 +3958,6 @@ export abstract class BaseEntity<T = unknown> {
         }
     }
     
-    /**
-     * Cache for {@link isOverridden}, keyed by the constructor that was asked about. The answer is
-     * a property of the class, not the instance, and a save path should not walk a prototype chain
-     * per record.
-     */
-    private static __overrideCache = new WeakMap<Function, Map<string, boolean>>();
-
-    /**
-     * Whether a subclass replaced `member` somewhere between `instance` and `BaseEntity`.
-     *
-     * @remarks
-     * Used to tell "the author made no choice" apart from "the author chose the default value",
-     * which a getter cannot express on its own — `DefaultSkipAsyncValidation` returning `true` looks
-     * identical whether a subclass deliberately opted out or never knew the flag existed. Comparing
-     * property descriptors against `BaseEntity.prototype` distinguishes them.
-     *
-     * Handles both methods (`value`) and accessors (`get`), so it works for `ValidateAsync` and for
-     * `DefaultSkipAsyncValidation` alike, and finds overrides declared anywhere in a multi-level
-     * chain — a generated class, an app subclass, a server subclass on top of it.
-     *
-     * @param instance - The object whose class chain is inspected.
-     * @param member - The property name to look for.
-     * @returns True when some class below `BaseEntity` declares it.
-     */
-    private static isOverridden(instance: object, member: string): boolean {
-        const ctor = instance?.constructor;
-        if (!ctor) {
-            return false;
-        }
-        let perClass = BaseEntity.__overrideCache.get(ctor);
-        if (perClass?.has(member)) {
-            return perClass.get(member)!;
-        }
-        if (!perClass) {
-            perClass = new Map<string, boolean>();
-            BaseEntity.__overrideCache.set(ctor, perClass);
-        }
-
-        const base = Object.getOwnPropertyDescriptor(BaseEntity.prototype, member);
-        let answer = false;
-        if (base) {
-            let proto = Object.getPrototypeOf(instance);
-            while (proto && proto !== BaseEntity.prototype) {
-                const own = Object.getOwnPropertyDescriptor(proto, member);
-                if (own && (own.get !== base.get || own.value !== base.value)) {
-                    answer = true;
-                    break;
-                }
-                proto = Object.getPrototypeOf(proto);
-            }
-        }
-        perClass.set(member, answer);
-        return answer;
-    }
-
     /**
      * Default value for whether async validation should be skipped.
      *

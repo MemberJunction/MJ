@@ -31,6 +31,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { IsMemberOverridden } from '@memberjunction/global';
 import { BaseEntity } from '../generic/baseEntity';
 import { EntityInfo, ValidationErrorInfo, ValidationResult, ValidationErrorType } from '../generic/entityInfo';
 import { Metadata } from '../generic/metadata';
@@ -206,11 +207,12 @@ describe('save options outrank everything', () => {
 });
 
 describe('override detection', () => {
-    // Exercised directly because the inference is only as good as this, and the getter-vs-method
-    // distinction is easy to get wrong: a property descriptor carries an overridden accessor on
-    // `get` and an overridden method on `value`, never both.
+    // Exercised through the entity classes above because the inference is only as good as this, and
+    // the getter-vs-method distinction is easy to get wrong: a property descriptor carries an
+    // overridden accessor on `get` and an overridden method on `value`, never both. The general
+    // behaviour of the helper itself is covered in @memberjunction/global's ClassUtils tests.
     const isOverridden = (instance: object, member: string): boolean =>
-        (BaseEntity as unknown as { isOverridden(i: object, m: string): boolean }).isOverridden(instance, member);
+        IsMemberOverridden(instance, member, BaseEntity);
 
     it('detects an overridden method', () => {
         expect(isOverridden(newRecord(RulesEntity), 'ValidateAsync')).toBe(true);
