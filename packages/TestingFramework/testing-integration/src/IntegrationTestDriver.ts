@@ -58,6 +58,18 @@ const RLS_BUNDLES = new Set(['rls-isolation', 'rls-isolation-client']);
 /** Key under SuiteFixtureContext.Data where the discovered RLS fixture is stashed. */
 const RLS_FIXTURE_KEY = 'rlsFixture';
 
+/**
+ * Bootstrap failures that mean "this environment has no client tier at all", as opposed
+ * to "the client tier is misconfigured". Only the former is a skippable environment gap.
+ *
+ * - `MJ_API_KEY is not set …` — thrown by `LoadClientConfig()` before any network call.
+ * - `MJAPI is not reachable …` — thrown by `preflightMJAPI()` when the server is absent.
+ *
+ * Kept as one named constant so the driver and its tests cannot drift apart, and so the
+ * next person adding a bootstrap precondition sees that the skip contract is a closed set.
+ */
+const CLIENT_TIER_ABSENT = /MJAPI is not reachable|MJ_API_KEY is not set/i;
+
 @RegisterClass(BaseTestDriver, 'IntegrationTestDriver')
 export class IntegrationTestDriver extends BaseTestDriver {
     /** The driver arms its own timeout and breaks the check loop when it fires. */
@@ -179,11 +191,31 @@ export class IntegrationTestDriver extends BaseTestDriver {
             clearTimeout(timer);
             const msg = (bootErr as Error).message ?? String(bootErr);
             // ENVIRONMENT GAP, not a product defect: client-transport bundles need a live MJAPI.
-            // When the preflight says the server is simply absent (CI runs no MJAPI), skip-as-pass
-            // loudly — the same contract the old per-bundle tsx dispatchers honored with exit 0.
-            // Any OTHER bootstrap failure (bad credentials, cache ownership, config) stays a
-            // hard error.
-            if (transport === 'client' && /MJAPI is not reachable/i.test(msg)) {
+            // When the environment simply has no client tier to talk to, skip-as-pass loudly —
+            // the same contract the old per-bundle tsx dispatchers honored with exit 0. Any
+            // OTHER bootstrap failure (bad credentials, cache ownership, config) stays a hard
+            // error.
+            //
+            // Two distinct messages mean "there is no client tier here", because the bootstrap
+            // can fail at either of two points:
+            //
+            //   1. `LoadClientConfig()` throws when MJ_API_KEY is unset — reached FIRST, before
+            //      any network call. The PR gate provisions a database and runs the suite
+            //      in-process with no MJAPI and no key (see .github/workflows/integration.yml,
+            //      "No MJAPI is up, so client-transport members skip on the MJAPI preflight"),
+            //      so this is the branch CI actually takes.
+            //   2. `preflightMJAPI()` throws when the server is unreachable — only reached when
+            //      a key IS present.
+            //
+            // Matching only (2) meant CI never reached the skip: it failed at (1) and the whole
+            // tier went red on every PR, for an environment gap the workflow deliberately
+            // designed for.
+            //
+            // Deliberately NOT covered, and still hard errors: a key that is present but wrong
+            // ("MJAPI at ... answered HTTP 401") and a reachable server returning any non-OK
+            // status. Those are real misconfigurations of an environment that HAS a client tier,
+            // and skipping them would hide exactly the failures this gate exists to catch.
+            if (transport === 'client' && CLIENT_TIER_ABSENT.test(msg)) {
                 return this.buildSkipResult(context, startTime,
                     `SKIPPED (environment gap): ${msg} Client-transport checks need a live MJAPI; start it and re-run for full coverage.`);
             }
