@@ -64,14 +64,15 @@ unbounded. Cap exists (`MAX_REINVOKE_DEPTH`) but nothing feeds it.
 **Done when:** the runner stamps depth (parent's + 1, read from the parent Task's metadata) and
 `Submit` refuses beyond the cap with a message naming the workflow.
 
-### [~] 4. Refuse Flow-agent-as-sub-agent / scheduled target
+### [x] 4. Refuse Flow-agent-as-sub-agent / scheduled target
 **Wrong:** both report success-before-work; downstream proceeds on nothing. Most dangerous item in
 the review.
 **Done when:** submitting a Flow agent as a sub-agent step or a scheduled target fails **loudly** at
 submit, with a message saying an await path does not exist yet.
-**STATUS:** sub-agent half DONE (`FlowAgentType.DetermineInitialStep` refuses when `params.parentRun`
-is set). **Scheduled targets still open** — needs the equivalent guard wherever a scheduled job
-resolves its target agent.
+**STATUS: DONE, both halves.** Sub-agent: `FlowAgentType.DetermineInitialStep` refuses when
+`params.parentRun` is set. Scheduled: `AgentScheduledJobDriver.Execute` refuses a Flow-type target
+before running it — placed there rather than at submission because that is where the caller's
+expectation lives (a job expects a completed unit of work).
 
 ### [x] 5. Wire `failureSemantics: 'edges'`
 **Wrong:** the compiler sets it; nothing persists or reads it. Recovery paths are dead machinery.
