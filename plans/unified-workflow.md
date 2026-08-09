@@ -85,15 +85,17 @@ existing flows keep their exact order. It also replaces the node's flat
 bag — into which the already-universal `ForEachOperation`/`WhileOperation` contracts drop unchanged,
 plus `kind: 'External'` so Phase 9's Caliber nodes never ship as a fourth flat arm.
 
-**Directed (v2, revised per the intense review + author response, 2026-08-08):** full cutover — all
-flows move at C1.4 behind named gates (differential suite + golden fixtures, streaming bridge, HITL
-end-to-end, `onError: 'continue'`, claim-sweep fix, clean-bootstrap burn-in). Key corrections baked
-in: sequential traversal is an **exclusive choice resolved at run time** (XOR-split + `Skipped`
-cascade), not a compile-time chain; the calling contract is **attached await-settlement** (every
-flow invocation keeps its synchronous shape via an envelope `AIAgentRun` + `WaitForSettlement`);
-the in-run executor is retained **unrouted as the test oracle** at cutover and deleted in Track R.
-All v1 open decisions are resolved in that document's §11; D6/D7/D8 supersession notes live in the
-engine plan's decision rows.
+**Shipped (v2.1, 2026-08-09):** the cutover **merged as omnibus
+[#3692](https://github.com/MemberJunction/MJ/pull/3692)** — flows compile and route through the
+durable dispatcher; the in-run executor is refused at its choke point and retained unrouted as the
+test oracle until Track R deletes it. Post-merge rulings (R1–R6, recorded in the companion plan's
+§14): the calling contract is **submit-and-detach by design** ("you don't talk to a workflow" —
+superseding v2's attached-await), the hard-cut v2 spec and the typed `Task` columns are ratified,
+the Workflows-app retirement is **reversed** (app restored, repurposed for run review),
+`maxIterations: 0` stays zero-iterations parity, and a walk that ends settles `Complete`, never
+`Blocked`. Outstanding follow-ups (Prompt runner, input snapshot, `failureSemantics` wiring, depth
+chain, envelope truthfulness, metadata-driven differential + fixtures) are the companion plan's
+§14 punch list.
 
 ### Track D — The trigger layer (WHEN)
 

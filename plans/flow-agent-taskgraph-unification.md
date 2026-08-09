@@ -1,10 +1,81 @@
 # Flow Agents on the Task Graph engine — unification plan (Track C.1)
 
-**Status:** ✅ **v2 — revised per review, approved for build** (2026-08-08, AN-BC directed the review be baked in directly)
+**Status:** 🟨 **v2.1 — post-merge amendment** (2026-08-09). The cutover **shipped** in
+[PR #3692](https://github.com/MemberJunction/MJ/pull/3692) (merged) as an omnibus carrying the
+C1.0–C1.2 substance, partial C1.3, the C1.4 routing, and a parallel authoring-UI track. Review
+findings ([5233582557](https://github.com/MemberJunction/MJ/pull/3692#issuecomment-5233582557)),
+follow-up punch list ([5234281079](https://github.com/MemberJunction/MJ/pull/3692#issuecomment-5234281079)),
+and **rulings R1–R6** ([5234305719](https://github.com/MemberJunction/MJ/pull/3692#issuecomment-5234305719),
+AN-BC 2026-08-09) are baked into this revision. §14 is the authoritative post-merge state: what
+shipped, what each ruling changed in this document, and the outstanding work.
+
+---
+
+## 14. Post-merge amendment (v2.1) — rulings and current state
+
+**Read §14 first if you are doing follow-up work; the section-level supersession notes below all
+point back here.**
+
+### The six rulings (AN-BC, 2026-08-09)
+
+| # | Ruling | Effect on this plan |
+|---|---|---|
+| **R1** | **Detach-by-design ratified.** Submit-and-detach is the universal flow calling contract; §6's attached-await default is **superseded**. | §6 rewritten in place as a superseded record + the detach contract's two bills: (a) **envelope truthfulness** — on `GraphSettled`, correct the submitting run's outcome and deliver the settled result (today the run claims `Completed` at submission forever and the payload reaches no caller); (b) until an await path exists, **enforce at submit that a Flow agent cannot be a sub-agent step or scheduled target**, failing loudly instead of reporting success-before-work. |
+| **R2** | **Hard-cut spec ratified** — AN-BC directed no v1 back-compat; not a deviation. | §3's `NormalizeTaskGraphSpec`/dual-accept mandate is void. Mandatory consequence: the two prompt templates still teaching the flat shape (`workflow-drafting.template.md`, `workflow-planner.template.md`) must be updated to v2 and `Workflow.Draft` live-verified — the validator now rejects what they teach. |
+| **R3** | **Typed columns ratified over the InputPayload envelope** — ruled *better* than this plan's design. | §5.7's envelope is superseded by what shipped: `Task.StepType` + `Task.PromptID` columns (queryable, CHECK-constrained; `CK_Task_Assignment` counts `PromptID`) + `Task.Configuration` typed by the `ITaskStepConfiguration` JSONType; `InputPayload` stays the freeform per-workflow data, which cannot be strongly typed — that split is the point. Riders: `PromptID` is intentionally-waiting schema for the Prompt runner; loop tasks carrying the *body's* `AgentID` needs a confirm (display behavior). |
+| **R4** | **Workflows-app retirement superseded — the app is being restored** (in flight), repurposed primarily for **reviewing workflow runs** (three of the five run producers have no agent run and are visible nowhere). | The #3692 retirement migration is removed and the app metadata restored rather than patching its hard-coded `[__mj]`; the D18 vocabulary test guard returns with the app; parent-ledger rows 5a/5b stay live with amended purpose. Scope of the restored app to be settled with AN-BC. |
+| **R5** | **`maxIterations: 0` = zero iterations (parity)** — the shipped unlimited implementation is reverted. | §4.3/§9 stand exactly as written; revert `TaskLoopExecutor`'s `0 → null` cap and its pinning test; fix the "0=unlimited" doc-fiction JSDoc on both operation types. |
+| **R6** | **A walk that ends settles `Complete`, never `Blocked`.** A definite-false *ordinary* conditional edge is a normal not-taken outcome. | New declared change #5 in §5.6: definite-false conditional edges route through the **Skip machinery** (Skipped + cascade) exactly like XOR losers, for **all** graphs — `Blocked` is reserved for failure-driven unsatisfiability. (Loop-agent graphs with not-taken conditional branches currently settle `Blocked` — same illogic, corrected together.) The differential simulator must then match the real dispatcher — it currently writes Skipped where the dispatcher writes Blocked, hiding this divergence — and the terminal-conditioned-step fixture asserts `Complete`. |
+
+### What #3692 verifiably shipped (aligned with this plan)
+
+Spec v2 union incl. `External` + per-kind validator checks + object-form self-dependency fix;
+compiler with all five §7 ordered rules (exclusion → single entry → prune → cycle rejection →
+emission) and the oracle-order `sequence` tiebreak; pure-layer Skipped/cascade/
+`ResolveExclusiveGroups` with XOR edges exempted from the Blocked machinery and writes confined to
+`propagateAndRollup`; the §5.5 terminality guard; the §5.10.1 sweep-predicate fix;
+`ConvertAgentSpecToTaskGraph` deleted; RO wire fully v2 with zero generated drift; loop prompt
+updated behind both gates; cost rollup via the never-written `AIAgentRun …Rollup` columns (a good
+design this plan didn't have); a real offline differential suite (synthetic fixtures); total in-run
+refusal at the `createStepForFlowNode` choke point.
+
+### Outstanding work (the follow-up punch list, authoritative copy in
+[5234281079](https://github.com/MemberJunction/MJ/pull/3692#issuecomment-5234281079))
+
+**P0:** CI reds (`as never` ×5; retirement migration handled per R4) · **Prompt runner** (the
+shipped User Onboarding Flow Agent is refused at submission — §5.7's runner contract stands;
+meanwhile stop teaching `kind:'Prompt'` in the loop prompt) · v1-shape template fixes (R2) ·
+**submit-time input snapshot** (starting payload/`data`/`context`/`conversationMessages` →
+parent metadata → condition context + `BuildMappedInput`; today they evaluate as `{}`/literals) ·
+**R6 implementation** · **`failureSemantics: 'edges'` wiring** (compiled but never persisted or
+enforced — recovery paths are dead until this lands) · **depth stamping** (`TaskGraphAgentRunner`
+stamps `ContinuationDepth`; cap enforced at `Submit` — a self-referencing flow recurses
+unboundedly today) · **XOR race** (`findClaimableTasks` must filter `skipSeedTaskIDs`, not just
+`holdTaskIDs`) · **R5 revert**.
+
+**P1:** envelope truthfulness + result delivery (R1a) · submit-time enforcement for
+sub-agent/scheduled flow targets (R1b) · hold-aware `IsGraphStalled` + non-group unevaluable HOLD
+(§5.3/§5.6 — the "stalls visibly" log line is currently false) · loop-executor parity (sequential
+payload threading; per-iteration `[index]` output mapping; While context dialect
+`{payload, results, errors}`; sub-agent bodies receive the item — currently `{}` every iteration) ·
+differential suite to §9 (metadata-driven, golden fixtures, missing pins: succeeded-chain,
+`data.*`/`context.*` dialects, While default 100, cyclic-metadata assertion, cascade-order unit
+pin) · D17 loop-body identity (`stepShapeFor` must write `ActionID`/`SubAgentID` — saved
+workflows with loops fail recompilation) · mapping-dialect consolidation (three implementations
+exist; §5.7's extraction stands) · remove `joinMode:'any'→Optional` + compile diagnostic +
+compiler reads `AgentTypePromptParams` (§4.6 stands) · `NodeProgress` frame (§5.11) ·
+completion-path retries + claim-TTL derivation (§5.8/§5.10.2 — `policy` is persisted but never
+read) · hygiene (stale `TaskGraphService` docstring; `task-graph-spec.ts`'s invented
+`AIAgentStepPath.Sequence` column; D18 guard restoration with the app).
+
+---
+
+## Document history (v1 → v2 → v2.1)
+
 **v1:** drafted 2026-08-08 from a live audit of `next` @ `4b76d24fc0` (builder agent)
 **Parent program:** Unified Workflow DAG engine ([PR #3456](https://github.com/MemberJunction/MJ/pull/3456)); parent plan `plans/task-graph-primitive.md`
 
-**Review record (all applied here):**
+**Review record (all applied in v2):**
 - Planner intense review — [comment 5228660150](https://github.com/MemberJunction/MJ/pull/3456#issuecomment-5228660150): §4 chain compilation refuted (sequential is an exclusive choice, not a chain), `ActionInputMapping` inventory row refuted (it IS implemented), Disabled-step handling corrected, oracle-deletion contradiction, calling contract, run identity, streaming greenfield, D6/D7/D8 supersession, `External` in the union, RO wire staleness, sweep blind spot, one projection path, `traversalMode` source.
 - First planner pass — [comment 5228591654](https://github.com/MemberJunction/MJ/pull/3456#issuecomment-5228591654).
 - Author response — [comment 5228685338](https://github.com/MemberJunction/MJ/pull/3456#issuecomment-5228685338): all corrections accepted; adds **zero production mileage** (`__mj.Task` has never had a row), **event-loop starvation vs. claim expiry**, **differential suites must read metadata files not DB state**, **golden fixtures before deletion**, and the **parity scope reduction** (no shipped flow is parallel — parity = the sequential path only).
@@ -18,9 +89,11 @@
   completion-path retries (§5.8).
 
 **Goal:** Task Graph becomes the **universal** workflow engine. Flow agents compile to an ephemeral
-`TaskGraphSpec` executed by the durable dispatcher. All flows move at cutover. The in-run executor is
-**retained unrouted as the differential-test oracle** and deleted in **Track R**, not in the cutover
-change. No behaviour change for existing flows except the **four declared changes** listed in §5.6.
+`TaskGraphSpec` executed by the durable dispatcher. **The cutover has happened** (#3692, merged
+2026-08-09): flows route through the dispatcher and the in-run executor is refused at its choke
+point, retained unrouted as the differential-test oracle until **Track R** deletes it. No behaviour
+change for existing flows except the **declared changes** listed in §5.6 (now five, incl. R6) —
+the §14 punch list is what closes the remaining gaps between that promise and the shipped state.
 
 ---
 
@@ -191,7 +264,11 @@ this section cures. The union entry (type only; validator accepts it; dispatcher
 like `Human` — never claims, sweep-exempt) costs nothing here and means the first external consumer
 never sees the flat shape. **Sequencing consequence: C1.0 lands before program Phase 9** (§10).
 
-**Back-compat — ruled: normalise, don't hard-cut.** One function, one place:
+**Back-compat — ⟶ SUPERSEDED by R2 (§14): hard-cut ratified, AN-BC-directed.** No
+`NormalizeTaskGraphSpec`, no `TaskGraphSpecLike`, no deprecated flat fields, no dual-accept —
+"there is no v1 compatibility shim, deliberately." The mandatory consequence: every spec *producer*
+(prompt templates, RO callers) must speak v2, and the two templates still teaching the flat shape
+must be fixed (§14 P0). The original v2 design is preserved below for the record only:
 
 ```ts
 /** The v1 flat spec shape ∪ the v2 union shape — what boundaries accept during dual-accept. */
@@ -481,6 +558,14 @@ differential-suite carve-out; anything else surfacing at cutover is a bug):
 4. Previously-dead `TimeoutSeconds`/`RetryCount` authored values start taking effect
    (§4.4/§5.8) — fulfilling author intent, but a change for rows where someone set them
    expecting nothing.
+5. **(R6, ruled 2026-08-09) Definite-false ordinary conditional edges route through the Skip
+   machinery** — Skipped + cascade, exactly like XOR losers — for **all** graphs, and a walk that
+   ends settles **`Complete`**, never `Blocked`. `Blocked` is reserved for failure-driven
+   unsatisfiability. This corrects the dispatcher's pre-existing behaviour (a not-taken
+   conditional branch settled the parent `Blocked`, including for loop-agent graphs). The
+   differential simulator must match the *real* dispatcher — as shipped it writes Skipped where
+   the dispatcher writes Blocked, hiding this divergence — and the terminal-conditioned-step
+   fixture asserts `Complete`.
 
 ### 5.7 New runners — host implementations in `packages/MJServer/src/services/`
 
@@ -495,7 +580,16 @@ predicates treat them as runnable agent-side work (see §5.10), the `UserID`-xor
 generated validator passes, and task UIs show the owning workflow. Kind-based routing below keeps
 them away from the plain agent runner.
 
-- **The `Task.InputPayload` envelope — defined once, here; every other section references this.**
+- **⟶ SUPERSEDED by R3 (§14): typed columns shipped instead of this envelope, and were ruled the
+  better design.** What exists on `next`: `Task.StepType` (CHECK: the seven kinds) + `Task.PromptID`
+  (FK, waiting for the Prompt runner) as real columns, `CK_Task_Assignment` counting `PromptID`,
+  and `Task.Configuration` typed by the **`ITaskStepConfiguration`** JSONType (per-kind config,
+  `inputMapping`/`outputMapping`, `policy`, `layout`) — strong typing for the machine-known node
+  config, while `InputPayload` stays the freeform per-workflow data. Kind routing checks
+  `StepType` **before** the `ActionID`/`AgentID` ternary (`runTaskBody`), which is what makes a
+  loop-with-ActionID loop instead of running once. The envelope design is preserved below for the
+  record only:
+- **The `Task.InputPayload` envelope — superseded, historical record.**
   ```ts
   Task.InputPayload = {
       node?: {                       // absent ⇒ legacy column-discriminated task (loop-agent graphs,
@@ -652,8 +746,22 @@ chat-bound. Verified callers and their expectations:
 | Sub-agent steps | parent BaseAgent awaits the child run | awaited result + payload |
 | Loop-agent `Tasks` | `executeTasksStep` — already **submit-and-detach** by design | unchanged |
 
-**Ruling: attached await-settlement is the default for flow invocation; detach is opt-in** (and
-remains the loop-primitive's shape). Every caller above keeps its contract.
+**⟶ SUPERSEDED by R1 (§14): detach-by-design is ratified — submit-and-detach is the universal
+flow calling contract** ("you don't talk to a workflow"). The original ruling below is preserved
+as the record of what the caller table's expectations *were*; under detach, those expectations are
+resolved instead by R1's two bills: **(a) envelope truthfulness + result delivery** — on
+`GraphSettled` the submitting run's outcome is corrected and the settled payload delivered
+(without this, an `AIAgentRun` claims `Completed` forever for a workflow that failed, and the
+result reaches no caller); **(b) submit-time enforcement** that a Flow agent cannot be a
+sub-agent step or a scheduled target until an await path exists — loud failure instead of
+success-before-work. §6.1–§6.4 below (FlowViaGraphExecutor, WaitForSettlement, streaming bridge,
+HITL/CompleteTask) are the superseded attached-mode design, kept as the reference for whichever
+pieces (Prompt runner's Chat escape, `CompleteTask` RO, progress surfaces) get revived under the
+detach model — the *needs* they addressed (progress visibility, human-task completion, chat
+resume) still exist and are re-homed in the restored Workflows app (R4) and future UX work.
+
+*Historical (superseded) ruling:* attached await-settlement is the default for flow invocation;
+detach is opt-in (and remains the loop-primitive's shape). Every caller above keeps its contract.
 
 ### 6.1 `FlowViaGraphExecutor` (new module, `packages/AI/Agents/src/`)
 
@@ -828,7 +936,11 @@ ignore layout entirely; the validator must never require it.
 
 ---
 
-## 8. Cutover gates (C1.4 ships only when all are closed)
+## 8. Cutover gates — **overtaken by events (§14)**
+
+*The cutover shipped in #3692 with this scorecard: gate 5 shipped; gates 1/4/6 partial; gates
+2/3/7 absent. AN-BC accepted the merge; the unmet gates convert into the §14 punch list rather
+than blocking. The list below stands as the definition of "the cutover is actually finished":*
 
 1. **Differential suite green** (§9) across every Flow agent in `metadata/`, plus golden fixtures
    captured and committed.
@@ -902,7 +1014,13 @@ Construction rules, all ruled:
 
 ---
 
-## 10. Phasing — revised
+## 10. Phasing — **overtaken by events (§14)**
+
+*#3692 shipped C1.0 + C1.1 (minus metadata-driven suite/fixtures) + most of C1.2 (minus Prompt
+runner, failureSemantics wiring, policy/retries, NodeProgress) + fragments of C1.3 (cost rollup
+only) + the C1.4 routing, in one omnibus. Remaining work proceeds as the §14 punch list in
+follow-up PRs, not as these phases; C1.5 (Prompt loop bodies) and Track R (oracle deletion, gated
+on golden fixtures) are unchanged. The table below is the historical phasing:*
 
 | Phase | Deliverable | Depends on | Risk |
 |---|---|---|---|
