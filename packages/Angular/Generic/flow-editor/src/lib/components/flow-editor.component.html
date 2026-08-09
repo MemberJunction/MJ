@@ -28,12 +28,13 @@
     <!-- Palette Sidebar -->
     @if (ShowPalette && !ReadOnly) {
       <mj-flow-palette
-        [NodeTypes]="NodeTypes">
+        [NodeTypes]="NodeTypes"
+        (NodeTypeActivated)="onPaletteNodeTypeActivated($event)">
       </mj-flow-palette>
     }
 
     <!-- Foblex Canvas -->
-    <div class="mj-flow-editor-canvas"
+    <div class="mj-flow-editor-canvas" #canvasArea
       [class.mj-flow-editor-canvas--pan-mode]="panMode">
       <f-flow fDraggable
         [fDraggableDisabled]="false"

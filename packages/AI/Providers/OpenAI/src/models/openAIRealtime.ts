@@ -18,7 +18,7 @@ import {
     RealtimeTurnDetectionMode,
     RealtimeTurnDetectionSettings,
 } from '@memberjunction/ai';
-import { ClientRealtimeSessionConfig } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { OpenAI } from 'openai';
 import { OpenAIRealtimeWebSocket } from 'openai/realtime/websocket';
 // NOTE: the bare 'openai/realtime' directory subpath is not exported by the SDK's package
@@ -1228,7 +1228,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             case 'response.done':
                 // Emitted for every terminal status (completed, cancelled, failed) — always clears.
                 this.responseActive = false;
-                return this.handleResponseDone(event.response.usage as GARealtimeResponseUsage | undefined);
+                return this.handleResponseDone(ResolveResponseDoneUsage(event));
             default:
                 return this.dispatchMcpEvent(event);
         }

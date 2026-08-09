@@ -1,5 +1,17 @@
 # @memberjunction/interactive-component-types
 
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Minor Changes

@@ -12,16 +12,22 @@ import {
     AddTask,
     GetDependents,
     GetEntryTempIds,
+    GetNodeTypeConfig,
+    GetTaskNodeType,
     IsHumanTask,
+    NewTaskFromNodeType,
     NextTempId,
     RemoveDependency,
     RemoveTask,
     RuntimeStateToNodeStatus,
     SpecToConnections,
     SpecToNodes,
+    TASK_GRAPH_NODE_TYPES,
+    TaskSubtitle,
     UpdateTask,
     WouldCreateCycle,
 } from '../lib/task-graph-canvas-adapter';
+import { ValidateTaskGraphSpec } from '@memberjunction/ai-core-plus';
 import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 
 const task = (over: Partial<TaskGraphSpecNode> = {}): TaskGraphSpecNode => ({
@@ -46,6 +52,37 @@ const diamond = (): TaskGraphSpec => spec({
         task({ tempId: 'c', dependsOn: ['a'] }),
         task({ tempId: 'd', dependsOn: ['b', 'c'] }),
     ],
+});
+
+describe('SpecToNodes — geometry the spec cannot hold', () => {
+    // TaskGraphSpec is an execution contract with no layout field. Before this, every projection
+    // reset each node to the origin, so the component had to re-run auto-layout after EVERY edit —
+    // and auto-layout ends in zoom-to-fit, which is why adding a step yanked the viewport. These
+    // tests pin the carrier that makes arranging-once possible.
+    it('honours a caller-supplied position', () => {
+        const positions = new Map([['a', { X: 120, Y: 40 }]]);
+        const node = SpecToNodes(spec(), undefined, positions).find((n) => n.ID === 'a')!;
+        expect(node.Position).toEqual({ X: 120, Y: 40 });
+    });
+
+    it('falls back to the origin for a task it has never seen', () => {
+        const positions = new Map([['a', { X: 120, Y: 40 }]]);
+        const node = SpecToNodes(spec(), undefined, positions).find((n) => n.ID === 'b')!;
+        expect(node.Position).toEqual({ X: 0, Y: 0 });
+    });
+
+    it('copies the position rather than aliasing the caller’s object', () => {
+        // The canvas mutates node.Position in place during a drag; sharing the reference would let
+        // that write back into the map and quietly defeat the next projection's comparison.
+        const shared = { X: 5, Y: 5 };
+        const node = SpecToNodes(spec(), undefined, new Map([['a', shared]])).find((n) => n.ID === 'a')!;
+        node.Position.X = 999;
+        expect(shared.X).toBe(5);
+    });
+
+    it('still projects at the origin when no positions are supplied', () => {
+        expect(SpecToNodes(spec()).every((n) => n.Position.X === 0 && n.Position.Y === 0)).toBe(true);
+    });
 });
 
 describe('SpecToNodes', () => {
@@ -169,9 +206,82 @@ describe('graph queries', () => {
         expect(GetDependents(diamond(), 'd')).toEqual([]);
     });
 
-    it('identifies a human task by the absence of an agent', () => {
+    it('identifies a human task by assignToUser, not by the absence of an agent', () => {
         expect(IsHumanTask(task({ agentName: undefined, assignToUser: true }))).toBe(true);
         expect(IsHumanTask(task())).toBe(false);
+        // An action step has no agent either. Reading "no agent" as "a person" is what put steps in
+        // the graph claiming to wait on someone nobody had asked for.
+        expect(IsHumanTask(task({ agentName: undefined, actionName: 'Send Email' }))).toBe(false);
+        expect(IsHumanTask(task({ agentName: undefined }))).toBe(false);
+    });
+});
+
+describe('assignment shapes', () => {
+    it('offers one palette entry per shape the spec supports — no more, no fewer', () => {
+        // TaskGraphSpecNode has exactly three mutually-exclusive assignees. A fourth palette entry
+        // would be a step the engine cannot run; a missing one hides a capability the spec has.
+        expect(TASK_GRAPH_NODE_TYPES.map((c) => c.Type).sort()).toEqual(['ActionTask', 'AgentTask', 'HumanTask']);
+    });
+
+    it('classifies each shape', () => {
+        expect(GetTaskNodeType(task())).toBe('AgentTask');
+        expect(GetTaskNodeType(task({ agentName: undefined, actionName: 'Send Email' }))).toBe('ActionTask');
+        expect(GetTaskNodeType(task({ agentName: undefined, assignToUser: true }))).toBe('HumanTask');
+    });
+
+    it('reads an unassigned step as an agent step rather than guessing "person"', () => {
+        expect(GetTaskNodeType(task({ agentName: undefined }))).toBe('AgentTask');
+    });
+
+    it('says so when a step has no assignee, instead of showing a blank subtitle', () => {
+        // A blank subtitle looks like a step that is fine; this one is why validation is complaining.
+        expect(TaskSubtitle(task({ agentName: undefined }))).toMatch(/no agent/i);
+        expect(TaskSubtitle(task({ agentName: undefined, actionName: undefined, assignToUser: undefined }))).not.toBe('');
+    });
+
+    it('resolves a palette entry by type, and refuses an unknown one', () => {
+        expect(GetNodeTypeConfig('ActionTask')?.Label).toBe('Action Step');
+        expect(GetNodeTypeConfig('NotAThing')).toBeNull();
+    });
+});
+
+describe('NewTaskFromNodeType', () => {
+    const empty = (): TaskGraphSpec => ({ workflowName: 'W', tasks: [] });
+
+    it('sets exactly one assignee per shape — never two, which the validator rejects', () => {
+        const agent = NewTaskFromNodeType(empty(), 'AgentTask', { agentName: 'Sage' });
+        expect([agent.agentName, agent.actionName, agent.assignToUser].filter(Boolean)).toHaveLength(1);
+
+        const action = NewTaskFromNodeType(empty(), 'ActionTask', { actionName: 'Send Email' });
+        expect([action.agentName, action.actionName, action.assignToUser].filter(Boolean)).toHaveLength(1);
+
+        const human = NewTaskFromNodeType(empty(), 'HumanTask', { agentName: 'Sage', actionName: 'Send Email' });
+        expect([human.agentName, human.actionName, human.assignToUser].filter(Boolean)).toHaveLength(1);
+        expect(human.assignToUser).toBe(true);
+    });
+
+    it('produces a graph the engine accepts when the host has something to assign', () => {
+        const s = AddTask(empty(), NewTaskFromNodeType(empty(), 'AgentTask', { agentName: 'Sage' }));
+        expect(ValidateTaskGraphSpec(s).Valid).toBe(true);
+    });
+
+    it('leaves an agent step unassigned when the host has nothing to offer, rather than inventing a name', () => {
+        // An invented agent name passes the canvas and fails at submission. An unassigned step is
+        // reported immediately, by the same validator the engine runs.
+        const t = NewTaskFromNodeType(empty(), 'AgentTask');
+        expect(t.agentName).toBeUndefined();
+        expect(ValidateTaskGraphSpec(AddTask(empty(), t)).Errors.some((e) => e.Code === 'NoAssignment')).toBe(true);
+    });
+
+    it('gives each new step a unique handle so edges stay unambiguous', () => {
+        const first = NewTaskFromNodeType(empty(), 'AgentTask');
+        const s = AddTask(empty(), first);
+        expect(NewTaskFromNodeType(s, 'HumanTask').tempId).not.toBe(first.tempId);
+    });
+
+    it('names the step after what it is, so a new box is not blank', () => {
+        expect(NewTaskFromNodeType(empty(), 'HumanTask').name).toMatch(/person/i);
+        expect(NewTaskFromNodeType(empty(), 'ActionTask').name).toMatch(/action/i);
     });
 });
 
