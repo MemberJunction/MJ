@@ -9,6 +9,7 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJAIAgentFormComponent } from '../../generated/Entities/MJAIAgent/mjaiagent.form.component';
 import { MJDialogService, type TabConfig } from '@memberjunction/ng-ui-components';
+import { BuildAgentFormTabs, HasDesignerTab, type AgentFormTabContext } from './agent-form-tabs';
 import { SharedService } from '@memberjunction/ng-shared';
 import { AIAgentManagementService } from './ai-agent-management.service';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
@@ -445,41 +446,30 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
     /** True when this agent's type contributes a designer pane (Flow does; Loop does not). */
     public get HasDesignerTab(): boolean {
-        return !!this.record?.ID && !!this.agentType?.UIFormSectionKey;
+        return HasDesignerTab(this.formTabContext);
+    }
+
+    /** The slice of state the tab rules read — kept small so the rules stay unit-testable. */
+    private get formTabContext(): AgentFormTabContext {
+        return {
+            AgentTypeName: this.agentType?.Name ?? null,
+            UIFormSectionKey: this.agentType?.UIFormSectionKey ?? null,
+            HasRecordID: !!this.record?.ID,
+        };
     }
 
     /**
      * Rebuilds the tab strip.
      *
      * A field rather than a getter: a getter would allocate a new array on every change-detection
-     * pass, and `mj-tab-nav` would see a changed input each time.
+     * pass, and `mj-tab-nav` would see a changed input each time. The rules themselves live in
+     * `agent-form-tabs.ts` — they are small, but each has a failure mode that renders as a blank
+     * form rather than an error, and none is reachable in a test from inside this component.
      */
     private refreshFormTabs(): void {
-        const tabs: TabConfig[] = [];
-        if (this.HasDesignerTab) {
-            tabs.push({
-                key: 'designer',
-                label: this.designerTabLabel,
-                icon: this.agentType?.Name === 'Flow' ? 'fa-solid fa-diagram-project' : 'fa-solid fa-puzzle-piece',
-            });
-        }
-        tabs.push({ key: 'details', label: 'Details', icon: 'fa-solid fa-sliders' });
-        if (this.record?.ID) {
-            tabs.push({ key: 'invocations', label: 'Invocations', icon: 'fa-solid fa-tower-broadcast' });
-        }
-        this.FormTabs = tabs;
-
-        // Covers both "never chosen" and "chose a tab this agent no longer has" (its type changed, or
-        // this is an unsaved record with no Invocations yet). Either way, falling through to the
-        // first tab is what keeps every pane from being hidden at once.
-        if (!tabs.some((t) => t.key === this.ActiveFormTab)) {
-            this.ActiveFormTab = tabs[0]?.key ?? 'details';
-        }
-    }
-
-    /** What the designer pane is called. Flow gets the end-user word; other types get their own name. */
-    private get designerTabLabel(): string {
-        return this.agentType?.Name === 'Flow' ? 'Flow' : (this.agentType?.Name ?? 'Designer');
+        const plan = BuildAgentFormTabs(this.formTabContext, this.ActiveFormTab);
+        this.FormTabs = plan.Tabs;
+        this.ActiveFormTab = plan.ActiveKey;
     }
 
     public OnFormTabChange(key: string): void {
