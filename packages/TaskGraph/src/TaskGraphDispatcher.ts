@@ -407,9 +407,18 @@ export class TaskGraphDispatcher implements IShutdownable {
             // SKIPS FIRST — before blocking, before eligibility. A task whose gating predecessors
             // are all Skipped is simultaneously "eligible" (Skipped satisfies a prerequisite) and
             // "to be skipped"; deciding eligibility first would dispatch the branch nobody took.
+            //
+            // `unreachableTaskIDs` seeds this too, and that is a correction (R6). A target whose only
+            // route in was an ordinary conditional edge that evaluated DEFINITELY FALSE is a branch
+            // that was not taken — semantically identical to an XOR loser — yet it used to settle
+            // `Blocked`. That made `Blocked` mean two unrelated things: "the workflow chose another
+            // route" and "something upstream broke". A reader cannot tell those apart, so every
+            // conditional workflow looked half-failed and people went hunting for bugs that did not
+            // exist. `Blocked` is now reserved for FAILURE-driven unsatisfiability.
+            const skipSeeds = new Set([...graph.skipSeedTaskIDs, ...graph.unreachableTaskIDs]);
             const toSkip = new Set([
-                ...graph.skipSeedTaskIDs,
-                ...ComputeSkipCascade(graph.nodes, graph.edges, [...graph.skipSeedTaskIDs]),
+                ...skipSeeds,
+                ...ComputeSkipCascade(graph.nodes, graph.edges, [...skipSeeds]),
             ]);
             for (const taskID of toSkip) {
                 const entity = graph.entityById.get(taskID);
@@ -434,7 +443,10 @@ export class TaskGraphDispatcher implements IShutdownable {
                 }
             }
 
-            const toBlock = new Set([...ComputeTasksToBlock(graph.nodes, graph.edges), ...graph.unreachableTaskIDs]);
+            // Only failure-driven unsatisfiability reaches here now; not-taken branches were skipped
+            // above. A task already Skipped is left alone rather than overwritten — the two passes
+            // must not fight over the same row.
+            const toBlock = [...ComputeTasksToBlock(graph.nodes, graph.edges)].filter((id) => !toSkip.has(id));
             for (const taskID of toBlock) {
                 const entity = graph.entityById.get(taskID);
                 if (!entity) continue;
@@ -820,8 +832,15 @@ export class TaskGraphDispatcher implements IShutdownable {
             // An undecided exclusive group keeps all its edges, and a kept edge on a Complete origin
             // is a SATISFIED prerequisite — so without this filter every branch of the fork would be
             // eligible at once and all of them would run. A typo must not multiply a fork.
+            //
+            // The losers of a DECIDED group must be filtered for the same reason, and this is a race
+            // rather than a rule: they are marked Skipped by the propagation pass, but between the
+            // moment the group resolves and the moment that write lands, their incoming edge is still
+            // a satisfied prerequisite on a Complete origin. A poll landing in that window would
+            // claim and execute the branch the workflow chose NOT to take — irreversibly, since the
+            // action has already run by the time Skipped is written over it.
             const eligible = ComputeEligibleTasks(graph.nodes, graph.edges)
-                .filter((n) => !graph.holdTaskIDs.has(n.id));
+                .filter((n) => !graph.holdTaskIDs.has(n.id) && !graph.skipSeedTaskIDs.has(n.id));
             for (const node of eligible) {
                 const entity = graph.entityById.get(node.id);
                 if (!entity) continue;

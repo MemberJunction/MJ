@@ -110,10 +110,28 @@ export type AgentRunTreeNode = AgentRunTreeRow & {
  * actually gets deep, and then the rows are the ones you wanted. It exists so that corrupt data
  * (a run that is somehow its own ancestor) truncates instead of running forever.
  *
+ * Set high deliberately. A number chosen to feel "reasonable" is the one that bites: agent → graph →
+ * agent → graph reaches fifteen in four business-level hops. At a hundred, hitting it is evidence of
+ * something wrong rather than of a big workflow — which is why {@link IsAgentRunTreeTruncated}
+ * exists and why callers are expected to make noise about it.
+ *
  * Expressed as a predicate on `Depth` inside the recursive term rather than a T-SQL `MAXRECURSION`
  * hint, so the same SQL converts mechanically to PostgreSQL, which has no such hint.
  */
-export const MAX_AGENT_RUN_TREE_DEPTH = 50;
+export const MAX_AGENT_RUN_TREE_DEPTH = 100;
+
+/**
+ * True when the tree came back truncated at the depth cap.
+ *
+ * Worth surfacing rather than inferring: a truncated tree looks like a complete one, so a viewer
+ * would believe a run ended where the query stopped reading. Callers should log this loudly AND
+ * record it durably — a depth this large means either a genuinely pathological workflow or corrupt
+ * ancestry, and both are things someone needs to see after the fact rather than in a log nobody
+ * tailed.
+ */
+export function IsAgentRunTreeTruncated(rows: readonly AgentRunTreeRow[]): boolean {
+    return rows.some((r) => r.Depth >= MAX_AGENT_RUN_TREE_DEPTH);
+}
 
 /**
  * Assembles flat rows into a tree.
