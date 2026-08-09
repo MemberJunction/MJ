@@ -1,12 +1,19 @@
 /**
- * Field-Level Security — Workstream C cache composition (fls: fingerprint segment,
- * allowed-set widening, entity_object cache exemption).
+ * Field-Level Security — RunView cache composition.
  *
- * The invariant under test: a field-restricted user's cache-eligible queries fetch only
- * their ALLOWED columns and live in their own cache slots (the `fls:` fingerprint segment),
- * so restricted data never enters server memory on the simple path and no slot is ever
- * shared across permission classes in either direction. Unrestricted users and non-FLS
- * entities keep byte-identical pre-FLS fingerprints and shared slots.
+ * The invariant under test:
+ *
+ *   - The SERVER cache holds FULL-WIDTH slots serving every user: no `fls:` segment, no
+ *     allowed-set fetch narrowing, no entity_object exemption. Per-request narrowing happens
+ *     at read time in `ApplyFieldSecurityProjection`, which runs on both cache hits and misses
+ *     and reads live metadata — so a permission change takes effect on the next metadata
+ *     refresh with no result-cache invalidation.
+ *   - The CLIENT segments, keyed on the ALLOWED list. Its slots are stored exactly as the
+ *     server returned them (already narrowed on the wire) and are never projected on read, so
+ *     the field set has to be part of slot identity.
+ *
+ * That asymmetry is decided in exactly one place — `ComputeRunViewFLSFingerprintKey` — which
+ * is what these tests pin down.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -27,7 +34,7 @@ import { RunQueryResult } from '../generic/runQuery';
 import { QueryExecutionSpec } from '../generic/queryExecutionSpec';
 import { CompositeKey } from '../generic/compositeKey';
 import { UserInfo, UserRoleInfo, RecordDependency } from '../generic/securityInfo';
-import { EntityInfo, RecordMergeRequest, RecordMergeResult } from '../generic/entityInfo';
+import { EntityInfo, RecordMergeRequest, RecordMergeResult, FieldPermissionAccess } from '../generic/entityInfo';
 import { TransactionGroupBase } from '../generic/transactionGroup';
 import { RunViewParams } from '../views/runView';
 
@@ -37,11 +44,31 @@ const HR_ROLE_ID = 'A0000000-0000-0000-0000-000000000001';
 const FINANCE_ROLE_ID = 'A0000000-0000-0000-0000-000000000002';
 const INTERN_ROLE_ID = 'A0000000-0000-0000-0000-000000000003';
 const ENTITY_ID = 'entity-employees';
+const ALL_ROLES = [HR_ROLE_ID, FINANCE_ROLE_ID, INTERN_ROLE_ID];
 
-function employeeEntityInit(fieldPermissions: {
-    salary?: Record<string, unknown>[];
-    bonus?: Record<string, unknown>[];
-}): Record<string, unknown> {
+const ALLOW = FieldPermissionAccess.Allow;
+
+/**
+ * Full access to `fieldId` for every listed role. Snapshot initialization writes rows like
+ * these for every (field, role) that holds the matching entity-level permission — which is why
+ * the unrestricted fields below need them explicitly: on an FLS-enabled entity, a field with
+ * NO rows is denied, not open.
+ */
+function openTo(fieldId: string, roles: string[] = ALL_ROLES): Record<string, unknown>[] {
+    return roles.map((roleId, i) => ({
+        ID: `${fieldId}-open-${i}`,
+        EntityFieldID: fieldId,
+        RoleID: roleId,
+        ReadAccess: ALLOW,
+        UpdateAccess: ALLOW,
+        CreateAccess: ALLOW,
+    }));
+}
+
+function employeeEntityInit(
+    fieldPermissions: { salary?: Record<string, unknown>[]; bonus?: Record<string, unknown>[] },
+    enableFieldLevelSecurity: boolean = true
+): Record<string, unknown> {
     return {
         ID: ENTITY_ID,
         Name: 'Employees',
@@ -49,6 +76,11 @@ function employeeEntityInit(fieldPermissions: {
         BaseTable: 'Employee',
         BaseView: 'vwEmployees',
         IncludeInAPI: true,
+        // Required for runViewCacheEligible to reach the field-security question at all —
+        // without it the entity short-circuits on IsServerCacheAllowedForEntity and the
+        // eligibility assertions below would pass for the wrong reason.
+        AllowCaching: true,
+        EnableFieldLevelSecurity: enableFieldLevelSecurity,
         Permissions: [
             { EntityID: ENTITY_ID, RoleID: HR_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
             { EntityID: ENTITY_ID, RoleID: FINANCE_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
@@ -56,21 +88,18 @@ function employeeEntityInit(fieldPermissions: {
         ],
         Fields: [
             { ID: 'f-id', EntityID: ENTITY_ID, Sequence: 1, Name: 'ID', Entity: 'Employees', Type: 'uniqueidentifier', IsPrimaryKey: true },
-            { ID: 'f-name', EntityID: ENTITY_ID, Sequence: 2, Name: 'Name', Entity: 'Employees', Type: 'nvarchar' },
-            { ID: 'f-salary', EntityID: ENTITY_ID, Sequence: 3, Name: 'Salary', Entity: 'Employees', Type: 'money', EntityFieldPermissions: fieldPermissions.salary ?? [] },
-            { ID: 'f-bonus', EntityID: ENTITY_ID, Sequence: 4, Name: 'Bonus', Entity: 'Employees', Type: 'money', EntityFieldPermissions: fieldPermissions.bonus ?? [] },
-            { ID: 'f-notes', EntityID: ENTITY_ID, Sequence: 5, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar' },
+            { ID: 'f-name', EntityID: ENTITY_ID, Sequence: 2, Name: 'Name', Entity: 'Employees', Type: 'nvarchar', EntityFieldPermissions: openTo('f-name') },
+            { ID: 'f-salary', EntityID: ENTITY_ID, Sequence: 3, Name: 'Salary', Entity: 'Employees', Type: 'money', EntityFieldPermissions: fieldPermissions.salary ?? openTo('f-salary') },
+            { ID: 'f-bonus', EntityID: ENTITY_ID, Sequence: 4, Name: 'Bonus', Entity: 'Employees', Type: 'money', EntityFieldPermissions: fieldPermissions.bonus ?? openTo('f-bonus') },
+            { ID: 'f-notes', EntityID: ENTITY_ID, Sequence: 5, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', EntityFieldPermissions: openTo('f-notes') },
         ],
     };
 }
 
 /** Salary readable only by HR; Bonus readable only by HR and Finance. */
 const standardPermissions = {
-    salary: [{ ID: 'p1', EntityFieldID: 'f-salary', RoleID: HR_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: true }],
-    bonus: [
-        { ID: 'p2', EntityFieldID: 'f-bonus', RoleID: HR_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: true },
-        { ID: 'p3', EntityFieldID: 'f-bonus', RoleID: FINANCE_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: false },
-    ],
+    salary: openTo('f-salary', [HR_ROLE_ID]),
+    bonus: openTo('f-bonus', [HR_ROLE_ID, FINANCE_ROLE_ID]),
 };
 
 function buildUser(roleIds: string[], id = 'user-1'): UserInfo {
@@ -104,14 +133,14 @@ class TestProvider extends ProviderBase {
         return this._entities.find(e => e.Name.trim().toLowerCase() === name?.trim().toLowerCase());
     }
 
-    public flsDeniedKey(params: RunViewParams, user?: UserInfo): string {
-        return this['ComputeRunViewFLSDeniedKey'](params, user);
+    public fingerprintKey(params: RunViewParams): string | undefined {
+        return this['ComputeRunViewFLSFingerprintKey'](params);
     }
-    public fetchFields(entity: EntityInfo, user?: UserInfo): string[] {
-        return this['ComputeRunViewFetchFields'](entity, user);
+    public fetchFields(entity: EntityInfo): string[] {
+        return this['ComputeRunViewFetchFields'](entity);
     }
-    public flsCacheExempt(params: RunViewParams, user?: UserInfo): boolean {
-        return this['flsCacheExemptEntityObjectRequest'](params, user);
+    public cacheEligible(params: RunViewParams): boolean {
+        return this['runViewCacheEligible'](params);
     }
     /** Server providers share one cache across users; clients do not. Default here: server. */
     private _sharedCache = true;
@@ -160,9 +189,12 @@ class TestProvider extends ProviderBase {
     protected get Metadata(): IMetadataProvider { return {} as IMetadataProvider; }
 }
 
-function setupProvider(perms: Parameters<typeof employeeEntityInit>[0] = standardPermissions): TestProvider {
+function setupProvider(
+    perms: Parameters<typeof employeeEntityInit>[0] = standardPermissions,
+    enableFieldLevelSecurity: boolean = true
+): TestProvider {
     const provider = new TestProvider();
-    provider.seedEntities([new EntityInfo(employeeEntityInit(perms))]);
+    provider.seedEntities([new EntityInfo(employeeEntityInit(perms, enableFieldLevelSecurity))]);
     return provider;
 }
 
@@ -172,14 +204,14 @@ const viewParams = (extra: Partial<RunViewParams> = {}): RunViewParams =>
 const cache = LocalCacheManager.Instance;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 1. The fls: fingerprint segment
+// 1. The fls: fingerprint segment — still emitted, but only the CLIENT feeds it
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('GenerateRunViewFingerprint — fls: segment', () => {
     const base = { EntityName: 'Employees', ExtraFilter: 'IsActive=1' } as unknown as RunViewParams;
 
-    it('appends an fls: segment only when a denied-fields key is provided', () => {
-        expect(cache.GenerateRunViewFingerprint(base, 'conn', '', 'salary')).toContain('fls:');
+    it('appends an fls: segment only when a key is provided', () => {
+        expect(cache.GenerateRunViewFingerprint(base, 'conn', '', 'id,name')).toContain('fls:');
         expect(cache.GenerateRunViewFingerprint(base, 'conn', '', '')).not.toContain('fls:');
         expect(cache.GenerateRunViewFingerprint(base, 'conn', '')).not.toContain('fls:');
     });
@@ -189,105 +221,112 @@ describe('GenerateRunViewFingerprint — fls: segment', () => {
             .toBe(cache.GenerateRunViewFingerprint(base, 'conn', '', ''));
     });
 
-    it('distinct denied sets produce distinct fingerprints; identical sets share one', () => {
-        const salaryOnly = cache.GenerateRunViewFingerprint(base, 'conn', '', 'salary');
-        const salaryAndBonus = cache.GenerateRunViewFingerprint(base, 'conn', '', 'bonus,salary');
-        const salaryOnlyAgain = cache.GenerateRunViewFingerprint(base, 'conn', '', 'salary');
+    it('distinct field sets produce distinct fingerprints; identical sets share one', () => {
+        const narrow = cache.GenerateRunViewFingerprint(base, 'conn', '', 'id,name');
+        const wider = cache.GenerateRunViewFingerprint(base, 'conn', '', 'bonus,id,name');
+        const narrowAgain = cache.GenerateRunViewFingerprint(base, 'conn', '', 'id,name');
 
-        expect(salaryOnly).not.toBe(salaryAndBonus);
-        expect(salaryOnly).toBe(salaryOnlyAgain);
+        expect(narrow).not.toBe(wider);
+        expect(narrow).toBe(narrowAgain);
     });
 
     it('composes with the rls: segment rather than replacing it', () => {
-        const fp = cache.GenerateRunViewFingerprint(base, 'conn', "UserID='u1'", 'salary');
+        const fp = cache.GenerateRunViewFingerprint(base, 'conn', "UserID='u1'", 'id,name');
         expect(fp).toContain('rls:');
         expect(fp).toContain('fls:');
     });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 2. The denied-set key (fingerprint input) per permission class
+// 2. The tier split — the single decision point for server vs client
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('ProviderBase.ComputeRunViewFLSDeniedKey', () => {
-    it('is the sorted, comma-joined, lowercased denied set for a restricted user', () => {
+describe('ProviderBase.ComputeRunViewFLSFingerprintKey', () => {
+    it('SERVER: contributes NO key, even for a restricted user', () => {
+        // Server slots are full-width and shared; ApplyFieldSecurityProjection narrows per
+        // request at read time, so segmenting here would fragment one shared slot into one
+        // per permission class and protect nothing.
         const provider = setupProvider();
-        expect(provider.flsDeniedKey(viewParams(), buildUser([INTERN_ROLE_ID]))).toBe('bonus,salary');
-        expect(provider.flsDeniedKey(viewParams(), buildUser([FINANCE_ROLE_ID]))).toBe('salary');
+        provider.setSharedCache(true);
+        provider.setCurrentUser(buildUser([INTERN_ROLE_ID]));
+
+        expect(provider.fingerprintKey(viewParams())).toBeUndefined();
     });
 
-    it('is empty for an unrestricted user, so their fingerprints (and slots) are unchanged', () => {
+    it('SERVER: restricted and unrestricted users therefore share one slot', () => {
         const provider = setupProvider();
-        expect(provider.flsDeniedKey(viewParams(), buildUser([HR_ROLE_ID]))).toBe('');
-    });
-
-    it('is empty on entities with no field security and without a user', () => {
-        const provider = setupProvider({});
-        expect(provider.flsDeniedKey(viewParams(), buildUser([INTERN_ROLE_ID]))).toBe('');
-        expect(setupProvider().flsDeniedKey(viewParams(), undefined)).toBe('');
-    });
-
-    it('three permission classes yield three distinct fingerprints on the same query', () => {
-        const provider = setupProvider();
+        provider.setSharedCache(true);
         const params = viewParams({ ExtraFilter: 'IsActive=1' });
-        const fingerprintFor = (user: UserInfo) =>
-            cache.GenerateRunViewFingerprint(params, 'conn', '', provider.flsDeniedKey(params, user));
 
-        const hr = fingerprintFor(buildUser([HR_ROLE_ID]));
-        const finance = fingerprintFor(buildUser([FINANCE_ROLE_ID]));
-        const intern = fingerprintFor(buildUser([INTERN_ROLE_ID]));
+        provider.setCurrentUser(buildUser([INTERN_ROLE_ID]));
+        const restricted = cache.GenerateRunViewFingerprint(params, 'conn', '', provider.fingerprintKey(params));
+        provider.setCurrentUser(buildUser([HR_ROLE_ID]));
+        const unrestricted = cache.GenerateRunViewFingerprint(params, 'conn', '', provider.fingerprintKey(params));
+
+        expect(restricted).toBe(unrestricted);
+    });
+
+    it('CLIENT: contributes the allowed-list key for a restricted user', () => {
+        const provider = setupProvider();
+        provider.setSharedCache(false);
+        provider.setCurrentUser(buildUser([INTERN_ROLE_ID]));
+
+        expect(provider.fingerprintKey(viewParams())).toBe('id,name,notes');
+    });
+
+    it('CLIENT: three permission classes yield three distinct fingerprints on the same query', () => {
+        const provider = setupProvider();
+        provider.setSharedCache(false);
+        const params = viewParams({ ExtraFilter: 'IsActive=1' });
+        const fingerprintFor = (roles: string[]) => {
+            provider.setCurrentUser(buildUser(roles));
+            return cache.GenerateRunViewFingerprint(params, 'conn', '', provider.fingerprintKey(params));
+        };
+
+        const hr = fingerprintFor([HR_ROLE_ID]);
+        const finance = fingerprintFor([FINANCE_ROLE_ID]);
+        const intern = fingerprintFor([INTERN_ROLE_ID]);
 
         expect(new Set([hr, finance, intern]).size).toBe(3);
     });
 
-    it('a permission change produces a NEW fingerprint — the old slot strands, never serves', () => {
-        const params = viewParams({ ExtraFilter: 'IsActive=1' });
-        const before = setupProvider(); // Salary denied to Finance
-        const beforeFp = cache.GenerateRunViewFingerprint(params, 'conn', '', before.flsDeniedKey(params, buildUser([FINANCE_ROLE_ID])));
+    it('CLIENT: an unrestricted user contributes nothing, keeping their fingerprints unchanged', () => {
+        const provider = setupProvider();
+        provider.setSharedCache(false);
+        provider.setCurrentUser(buildUser([HR_ROLE_ID]));
 
-        // Finance is granted Salary read — the denied set shrinks, the key changes.
-        const after = setupProvider({
-            ...standardPermissions,
-            salary: [
-                ...standardPermissions.salary,
-                { ID: 'p4', EntityFieldID: 'f-salary', RoleID: FINANCE_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: false },
-            ],
-        });
-        const afterFp = cache.GenerateRunViewFingerprint(params, 'conn', '', after.flsDeniedKey(params, buildUser([FINANCE_ROLE_ID])));
-
-        expect(beforeFp).not.toBe(afterFp);
+        expect(provider.fingerprintKey(viewParams())).toBe('');
     });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 3. Allowed-set widening
+// 3. Fetch widening — always the full superset now
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('ProviderBase.ComputeRunViewFetchFields', () => {
-    it('widens a restricted user to their ALLOWED set — denied columns never fetched', () => {
+    it('widens to ALL fields regardless of who is asking', () => {
+        // The fetch does not depend on the user at all, which is what lets one server slot
+        // serve everyone.
         const provider = setupProvider();
         const entity = provider.EntityByName('Employees')!;
+        const all = ['ID', 'Name', 'Salary', 'Bonus', 'Notes'];
 
-        expect(provider.fetchFields(entity, buildUser([INTERN_ROLE_ID]))).toEqual(['ID', 'Name', 'Notes']);
-        expect(provider.fetchFields(entity, buildUser([FINANCE_ROLE_ID]))).toEqual(['ID', 'Name', 'Bonus', 'Notes']);
-    });
-
-    it('widens an unrestricted user to ALL fields (the pre-existing superset contract)', () => {
-        const provider = setupProvider();
-        const entity = provider.EntityByName('Employees')!;
-        expect(provider.fetchFields(entity, buildUser([HR_ROLE_ID]))).toEqual(['ID', 'Name', 'Salary', 'Bonus', 'Notes']);
-    });
-
-    it('always includes the primary key for restricted users', () => {
-        const provider = setupProvider();
-        const entity = provider.EntityByName('Employees')!;
-        expect(provider.fetchFields(entity, buildUser([INTERN_ROLE_ID]))).toContain('ID');
+        provider.setCurrentUser(buildUser([INTERN_ROLE_ID]));
+        expect(provider.fetchFields(entity)).toEqual(all);
+        provider.setCurrentUser(buildUser([HR_ROLE_ID]));
+        expect(provider.fetchFields(entity)).toEqual(all);
     });
 
     it('widens to ALL fields on entities without field security', () => {
-        const provider = setupProvider({});
+        const provider = setupProvider(standardPermissions, false);
         const entity = provider.EntityByName('Employees')!;
-        expect(provider.fetchFields(entity, buildUser([INTERN_ROLE_ID]))).toEqual(['ID', 'Name', 'Salary', 'Bonus', 'Notes']);
+
+        expect(provider.fetchFields(entity)).toEqual(['ID', 'Name', 'Salary', 'Bonus', 'Notes']);
+    });
+
+    it('always includes the primary key', () => {
+        const provider = setupProvider();
+        expect(provider.fetchFields(provider.EntityByName('Employees')!)).toContain('ID');
     });
 });
 
@@ -300,8 +339,8 @@ describe('ProviderBase.ComputeRunViewFetchFields', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('ProviderBase.ComputeClientFLSAllowedKey', () => {
-    const keyFor = (roles: string[], perms = standardPermissions): string => {
-        const provider = setupProvider(perms);
+    const keyFor = (roles: string[], perms = standardPermissions, enabled = true): string => {
+        const provider = setupProvider(perms, enabled);
         provider.setCurrentUser(roles.length ? buildUser(roles) : undefined);
         return provider.clientAllowedKey(viewParams());
     };
@@ -315,8 +354,8 @@ describe('ProviderBase.ComputeClientFLSAllowedKey', () => {
         expect(keyFor([HR_ROLE_ID])).toBe('');
     });
 
-    it('is empty on entities with no field security, and with no user', () => {
-        expect(keyFor([INTERN_ROLE_ID], {})).toBe('');
+    it('is empty on entities with field security disabled, and with no user', () => {
+        expect(keyFor([INTERN_ROLE_ID], standardPermissions, false)).toBe('');
         expect(keyFor([])).toBe('');
     });
 
@@ -328,50 +367,47 @@ describe('ProviderBase.ComputeClientFLSAllowedKey', () => {
     });
 
     it('changes when access is taken away — the tightening case that strands a persisted slot', () => {
-        const before = keyFor([FINANCE_ROLE_ID]);                       // Bonus readable
-        const after = keyFor([FINANCE_ROLE_ID], {                        // Bonus revoked
+        const before = keyFor([FINANCE_ROLE_ID]);                    // Bonus readable
+        const after = keyFor([FINANCE_ROLE_ID], {                     // Bonus revoked
             ...standardPermissions,
-            bonus: [{ ID: 'p2', EntityFieldID: 'f-bonus', RoleID: HR_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: true }],
+            bonus: openTo('f-bonus', [HR_ROLE_ID]),
         });
         expect(before).not.toBe(after);
     });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 4. entity_object cache exemption
+// 4. Cache eligibility does not depend on the user
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('ProviderBase.flsCacheExemptEntityObjectRequest', () => {
-    it('exempts a restricted user\'s entity_object request on a SHARED (server) cache', () => {
+describe('ProviderBase.runViewCacheEligible', () => {
+    it('does not exempt a restricted user\'s entity_object request', () => {
+        // Server slots are full-width, so a restricted user's entity_object request is as
+        // cacheable as anyone else's — field security only changes what is projected out.
         const provider = setupProvider();
-        expect(provider.flsCacheExempt(viewParams({ ResultType: 'entity_object' }), buildUser([INTERN_ROLE_ID]))).toBe(true);
+        provider.setSharedCache(true);
+        provider.setCurrentUser(buildUser([INTERN_ROLE_ID]));
+
+        expect(provider.cacheEligible(viewParams({ ResultType: 'entity_object' }))).toBe(true);
     });
 
-    it('does NOT exempt on a CLIENT cache — a browser hosts one principal, and engines depend on it', () => {
-        // Engines default to entity_object and many enable CacheLocal. Exempting the client
-        // would strip client-side engine caching from every restricted signed-in user, forcing
-        // a network refetch on each page load — a permanent penalty on exactly the users an
-        // administrator restricted. Nothing is gained: a client slot can only hold
-        // allowed-width rows (the server strips denied columns on the wire), partial entities
-        // are safe now that hydration marks not-loaded fields, and the client `fls:` segment
-        // already keys permission classes apart.
+    it('gives restricted and unrestricted users the same answer', () => {
         const provider = setupProvider();
-        provider.setSharedCache(false);
-        expect(provider.flsCacheExempt(viewParams({ ResultType: 'entity_object' }), buildUser([INTERN_ROLE_ID]))).toBe(false);
+        provider.setSharedCache(true);
+        const params = viewParams({ ResultType: 'entity_object' });
+
+        provider.setCurrentUser(buildUser([INTERN_ROLE_ID]));
+        const restricted = provider.cacheEligible(params);
+        provider.setCurrentUser(buildUser([HR_ROLE_ID]));
+
+        expect(restricted).toBe(provider.cacheEligible(params));
     });
 
-    it('does NOT exempt a restricted user\'s simple request — it gets its own fls: slot instead', () => {
+    it('still honours the non-security exclusions', () => {
         const provider = setupProvider();
-        expect(provider.flsCacheExempt(viewParams({ ResultType: 'simple' }), buildUser([INTERN_ROLE_ID]))).toBe(false);
-    });
+        provider.setSharedCache(true);
 
-    it('does NOT exempt an unrestricted user\'s entity_object request (full-width slots are safe)', () => {
-        const provider = setupProvider();
-        expect(provider.flsCacheExempt(viewParams({ ResultType: 'entity_object' }), buildUser([HR_ROLE_ID]))).toBe(false);
-    });
-
-    it('does NOT exempt entity_object requests on non-FLS entities or without a user', () => {
-        expect(setupProvider({}).flsCacheExempt(viewParams({ ResultType: 'entity_object' }), buildUser([INTERN_ROLE_ID]))).toBe(false);
-        expect(setupProvider().flsCacheExempt(viewParams({ ResultType: 'entity_object' }), undefined)).toBe(false);
+        expect(provider.cacheEligible(viewParams({ BypassCache: true }))).toBe(false);
+        expect(provider.cacheEligible(viewParams({ ResultType: 'count_only' }))).toBe(false);
     });
 });

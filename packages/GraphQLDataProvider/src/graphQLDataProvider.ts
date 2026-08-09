@@ -1759,9 +1759,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
-     * Field-level security, client side (Workstream D-2). The current user's denied-READ set is
-     * computable HERE because `EntityFieldPermission` records ship to clients with entity
-     * metadata (decision §1.7) — so the provider can (a) exclude denied fields from the
+     * Field-level security, client side. The current user's denied-READ set is computable HERE
+     * because `EntityFieldPermission` records ship to clients with entity metadata — so the
+     * provider can (a) exclude denied fields from the
      * selection sets it requests (a GraphQL response always contains every REQUESTED key, so
      * key-omission — which drives `EntityField.NotLoaded` marking in the hydration paths —
      * only happens for fields never requested; this also stops denied NOT-NULL columns from
@@ -1770,7 +1770,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * users and non-FLS entities — zero behavior change there.
      */
     private GetDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
-        if (!entityInfo?.HasAnyFieldPermissions || !this.CurrentUser) {
+        if (!entityInfo?.EnableFieldLevelSecurity || !this.CurrentUser) {
             return new Set<string>();
         }
         return entityInfo.GetDeniedReadFields(this.CurrentUser);

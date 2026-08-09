@@ -100,7 +100,7 @@ export class ResolverBase {
       // single-record resolvers, where "once per row" and "once per request" are the same
       // thing) rather than failing open — a missing argument must never mean missing security.
       const denied = deniedReadFields ?? (
-        entityInfo.HasAnyFieldPermissions && contextUser
+        entityInfo.EnableFieldLevelSecurity && contextUser
           ? entityInfo.GetDeniedReadFields(contextUser)
           : null
       );
@@ -230,7 +230,7 @@ export class ResolverBase {
       // flag so non-FLS entities (nearly all of them) don't even resolve the entity twice.
       const md = provider ?? new Metadata();
       const entityInfo = md.EntityByName(entityName);
-      const deniedReadFields = entityInfo?.HasAnyFieldPermissions && contextUser
+      const deniedReadFields = entityInfo?.EnableFieldLevelSecurity && contextUser
         ? entityInfo.GetDeniedReadFields(contextUser)
         : undefined;
 
@@ -1359,26 +1359,18 @@ export class ResolverBase {
   /**
    * Field-level security guard for the update path.
    *
-   * With the not-loaded contract in place (Workstream D-2), the client OMITS fields it was
-   * never shown from the mutation input — so a value that IS present for a denied-READ field
-   * is a deliberate write, not transport fabrication. The guard therefore splits by the
-   * user's UPDATE permission on the field:
+   * Every denied-read field is stripped — new values AND OldValues. A field the user cannot
+   * read was absent from every payload that client ever received, so any value coming back for
+   * it is the transport's invention rather than user intent, and applying it would silently
+   * overwrite the real column. Stripping is what makes "load a record, edit an unrelated field,
+   * save" safe for a restricted user.
    *
-   *  - **Denied-read + denied-update**: STRIPPED (new values and OldValues). Nothing
-   *    legitimate can write these, and a pre-D-2 (or non-MJ) client that still fabricates
-   *    values for every writable field would otherwise make them spuriously dirty and fail
-   *    the save-time guard on edits to UNRELATED fields. Silent narrowing, consistent with
-   *    the output projection the client already experiences.
-   *  - **Denied-read + update-ALLOWED (the write-only case, e.g. SSN capture)**: passed
-   *    through to the normal save path — an explicit blind set must save (R5's confirmed
-   *    design). Residual risk, accepted and bounded: a version-skewed pre-D-2 client
-   *    fabricates values for such fields and those fabrications now reach the column; the
-   *    window closes when the client bundle updates, and the configuration (write-only
-   *    fields) is rare.
+   * There is no split by update permission: Read is required for Update, so a user denied read
+   * is denied update too and denied-read ∩ denied-update is just denied-read.
    *
-   * OldValues entries for EVERY denied-read field are still removed — the client cannot know
-   * a true old value for a field it cannot read, so any entry it sends is fiction that would
-   * pollute conflict detection.
+   * Silent narrowing, not rejection — consistent with the output projection the client already
+   * experiences, and with the ambiguous-error rule (naming the field would confirm it exists
+   * and is restricted).
    *
    * Returns true when the user has a non-empty denied-read set on this entity. The caller
    * must then hydrate the entity from the DATABASE (never from client OldValues), so denied
@@ -1390,33 +1382,26 @@ export class ResolverBase {
     input: { OldValues___?: Array<{ Key: string; Value: unknown }> } & Record<string, unknown>,
     clientNewValues: Record<string, unknown>
   ): boolean {
-    if (!entityInfo.HasAnyFieldPermissions || !userInfo) {
+    if (!entityInfo.EnableFieldLevelSecurity || !userInfo) {
       return false;
     }
     const deniedReadNames = entityInfo.GetDeniedReadFields(userInfo);
     if (deniedReadNames.size === 0) {
       return false;
     }
-    const deniedUpdateNames = entityInfo.GetDeniedUpdateFields(userInfo);
 
-    // Input keys are entity CodeNames (post ReverseMapInputFieldNames); the denied sets hold
+    // Input keys are entity CodeNames (post ReverseMapInputFieldNames); the denied set holds
     // lowercased field Names — bridge via the field metadata once.
     const deniedReadCodeNames = new Set<string>();
-    const strippableCodeNames = new Set<string>(); // denied-read ∩ denied-update
     for (const field of entityInfo.Fields) {
-      const name = field.Name.trim().toLowerCase();
-      if (deniedReadNames.has(name)) {
-        const codeName = field.CodeName.trim().toLowerCase();
-        deniedReadCodeNames.add(codeName);
-        if (deniedUpdateNames.has(name)) {
-          strippableCodeNames.add(codeName);
-        }
+      if (deniedReadNames.has(field.Name.trim().toLowerCase())) {
+        deniedReadCodeNames.add(field.CodeName.trim().toLowerCase());
       }
     }
 
     const stripped: string[] = [];
     for (const key of Object.keys(clientNewValues)) {
-      if (strippableCodeNames.has(key.trim().toLowerCase())) {
+      if (deniedReadCodeNames.has(key.trim().toLowerCase())) {
         delete clientNewValues[key];
         delete input[key];
         stripped.push(key);
@@ -1430,7 +1415,7 @@ export class ResolverBase {
     if (stripped.length > 0) {
       LogDebug(
         `[FieldSecurity] UpdateRecord on '${entityInfo.Name}' for user ${userInfo.Email}: ` +
-          `stripped client-sent value(s) for denied-read+denied-update field(s) ${stripped.join(', ')}`
+          `stripped client-sent value(s) for denied-read field(s) ${stripped.join(', ')}`
       );
     }
     return true;

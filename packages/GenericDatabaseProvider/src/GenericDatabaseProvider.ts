@@ -1891,7 +1891,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * column list here buys the same protection without touching either.
      */
     protected buildFieldSecuritySelectList(entityInfo: EntityInfo, user: UserInfo | undefined): string {
-        if (!user || !entityInfo.HasAnyFieldPermissions) {
+        if (!user || !entityInfo.EnableFieldLevelSecurity) {
             return '*'; // the overwhelmingly common case — one boolean, unchanged SQL
         }
         const denied = entityInfo.GetDeniedReadFields(user);
@@ -1947,7 +1947,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             const flsUser = contextUser ?? this.CurrentUser;
-            const denied: Set<string> = params.ResultType !== 'entity_object' && flsUser && entityInfo.HasAnyFieldPermissions
+            const denied: Set<string> = params.ResultType !== 'entity_object' && flsUser && entityInfo.EnableFieldLevelSecurity
                 ? entityInfo.GetDeniedReadFields(flsUser)
                 : new Set<string>();
 
@@ -2011,7 +2011,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // fields are simply excluded from the searched set. Computed once per call, never per
         // field (the per-request precompute contract).
         const user = contextUser ?? this.CurrentUser;
-        const deniedSearchFields: Set<string> = entityInfo.HasAnyFieldPermissions && user
+        const deniedSearchFields: Set<string> = entityInfo.EnableFieldLevelSecurity && user
             ? entityInfo.GetDeniedReadFields(user)
             : new Set<string>();
 
@@ -2277,14 +2277,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     continue;
                 }
                 const widenEntity = p.EntityName ? this.EntityByName(p.EntityName) : null;
-                if (widenEntity && this.runViewCacheEligible(p, user)) {
+                if (widenEntity && this.runViewCacheEligible(p)) {
                     const requested = p.Fields && p.Fields.length > 0
                         ? p.Fields.map(f => f.trim().toLowerCase())
                         : null;
-                    // ALL fields for unrestricted users; the user's field-security ALLOWED
-                    // set when restricted — pairs with the fls: fingerprint segment so each
-                    // permission class stores/serves its own internally consistent superset.
-                    p.Fields = this.ComputeRunViewFetchFields(widenEntity, user);
+                    // ALL fields, for every user: server slots are full-width and shared, and
+                    // field security narrows per request at read time via
+                    // ApplyFieldSecurityProjection rather than at fetch time.
+                    p.Fields = this.ComputeRunViewFetchFields(widenEntity);
                     if (requested) {
                         callerFieldsByIndex.set(i, ProviderBase.UnionFieldsWithPrimaryKeys(requested, widenEntity));
                     }
@@ -2423,8 +2423,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             for (const entry of itemsWithoutCacheCheck) {
                 if (LocalCacheManager.Instance.IsInitialized) {
                     const rlsWhereClause = this.ComputeRunViewRLSWhereClause(entry.item.params, contextUser);
-                    const flsDeniedKey = this.ComputeRunViewFLSDeniedKey(entry.item.params, contextUser);
-                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(entry.item.params, this.InstanceConnectionString, rlsWhereClause, flsDeniedKey);
+                    const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(entry.item.params);
+                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(entry.item.params, this.InstanceConnectionString, rlsWhereClause, flsFieldsKey);
                     const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                     if (cached) {
                         const entityLabel = entry.item.params.EntityName || 'unknown';
@@ -2648,15 +2648,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // for eligible items) so subsequent calls can serve any field subset. The
             // eligibility gate matters: BypassCache/AfterKey/count_only results were
             // never widened and must NOT be written under the superset fingerprint.
-            if (this.runViewCacheEligible(params, contextUser) && LocalCacheManager.Instance.IsInitialized) {
+            if (this.runViewCacheEligible(params) && LocalCacheManager.Instance.IsInitialized) {
                 // External entities cache with a TTL (no BaseEntity events to invalidate them);
                 // MJ-DB entities get undefined (event-invalidated as before). A 0 means the
                 // external source has caching disabled — skip the write to avoid stale data.
                 const ttlMs = await this.resolveExternalCacheTTLMs(params, contextUser);
                 if (ttlMs !== 0) {
                     const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
-                    const flsDeniedKey = this.ComputeRunViewFLSDeniedKey(params, contextUser);
-                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause, flsDeniedKey);
+                    const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(params);
+                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause, flsFieldsKey);
                     const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
                     // Pass the aggregates (B38-family omission #4). This slot is ALSO written by
                     // InternalRunView's normal PostRunView path WITH aggregates — two writers,
@@ -2815,8 +2815,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
 
         const rlsWhereClause = this.ComputeRunViewRLSWhereClause(item.params, contextUser);
-        const flsDeniedKey = this.ComputeRunViewFLSDeniedKey(item.params, contextUser);
-        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString, rlsWhereClause, flsDeniedKey);
+        const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(item.params);
+        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString, rlsWhereClause, flsFieldsKey);
         const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
         if (!cached) return null;
 

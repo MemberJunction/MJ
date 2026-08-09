@@ -733,13 +733,18 @@ GO
     }
 
     /**
-     * Field-level security column DENYs (decisions D1a/D2): for each role holding an explicit
-     * `Type='Deny'` + `CanRead` row on this entity's fields, emit
-     * `DENY SELECT ([col], ...) ON [schema].[BaseView] TO [role]` so a SQL user connecting
-     * DIRECTLY with that role cannot read the denied columns. Constraints, all decided:
-     *  - **Explicit Deny rows only** — never synthesized from absent Allows. The emitted
-     *    pattern stays object-level GRANT + column-level DENY, avoiding SQL Server's
-     *    column-GRANT-overrides-object-DENY quirk entirely.
+     * Field-level security column DENYs: for each role holding a `ReadAccess = 'Deny'` row on
+     * this entity's fields, emit `DENY SELECT ([col], ...) ON [schema].[BaseView] TO [role]` so
+     * a SQL user connecting DIRECTLY with that role cannot read the denied columns. Constraints:
+     *  - **Only when the entity has `EnableFieldLevelSecurity`.** Rows on a disabled entity are
+     *    retained but inactive at the app tier, so mirroring them would make the two tiers
+     *    disagree — and the DB tier is the one an administrator cannot see. Disabling an entity
+     *    revokes its DENYs on the next run via the reconciliation pass below.
+     *  - **Explicit `ReadAccess = 'Deny'` only** — never synthesized from a `No Access` or a
+     *    missing row. `No Access` is neutral and blocks nothing on its own, so mirroring it
+     *    would make the DB tier stricter than the app tier rather than the conservative subset
+     *    it is meant to be. The emitted pattern stays object-level GRANT + column-level DENY,
+     *    avoiding SQL Server's column-GRANT-overrides-object-DENY quirk entirely.
      *  - **Custom roles only** — the orchestrator's run context excludes the standard
      *    UI/Developer/Integration roles from `RoleSQLNameByID`, so Deny rows against them are
      *    app-tier-enforced only (MJ_Connect keeps its cdp_* memberships).
@@ -752,12 +757,13 @@ GO
     private generateFieldSecurityDenies(entity: EntityInfo): string {
         const context = this._fieldSecurityRunContext;
         if (!context) return '';
+        if (!entity.EnableFieldLevelSecurity) return ''; // rules retained but inactive — mirror nothing
         const deniedColumnsByRole = new Map<string, string[]>();
         for (const field of entity.Fields) {
             if (!field.HasFieldPermissions) continue;
             if (field.IsUnrestrictableField || field.IsOnUnrestrictableEntity) continue; // defensive — save-time guards should prevent these rows
             for (const fp of field.FieldPermissions) {
-                if ((fp.Type || 'Allow').trim().toLowerCase() !== 'deny' || !fp.CanRead) continue;
+                if ((fp.ReadAccess ?? '').trim().toLowerCase() !== 'deny') continue;
                 const sqlName = context.RoleSQLNameByID.get((fp.RoleID ?? '').trim().toLowerCase());
                 if (!sqlName) continue; // blank SQLName (app-tier-only) or standard role (never DB-mirrored)
                 if (context.ServiceProtectedRoleSQLNames.has(sqlName.trim().toLowerCase())) {
