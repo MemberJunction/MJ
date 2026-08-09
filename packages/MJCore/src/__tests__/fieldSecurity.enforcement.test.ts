@@ -128,6 +128,45 @@ function employeeEntityInit(
 
 const hrOnlySalary = openTo('f-salary', [HR_ROLE_ID]);
 
+/**
+ * Metadata for the Get/Set gate tests: `Salary` is HR-only (so the intern cannot read it),
+ * `Bonus` is readable by the intern but not updatable, and `Notes` is fully open.
+ */
+const GATE_METADATA = {
+    Applications: [],
+    Entities: [
+        {
+            ID: ENTITY_ID, Name: 'Employees', SchemaName: 'dbo', BaseView: 'vwEmployees', BaseTable: 'Employee',
+            IncludeInAPI: true, AllowCreateAPI: true, AllowUpdateAPI: true, AllowDeleteAPI: true,
+            EnableFieldLevelSecurity: true,
+            EntityFields: [
+                { ID: 'f-id', EntityID: ENTITY_ID, Name: 'ID', Entity: 'Employees', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1 },
+                { ID: 'f-name', EntityID: ENTITY_ID, Name: 'Name', Entity: 'Employees', Type: 'nvarchar', Sequence: 2, AllowUpdateAPI: true, EntityFieldPermissions: openTo('f-name') },
+                { ID: 'f-salary', EntityID: ENTITY_ID, Name: 'Salary', Entity: 'Employees', Type: 'money', Sequence: 3, AllowUpdateAPI: true, EntityFieldPermissions: openTo('f-salary', [HR_ROLE_ID]) },
+                {
+                    ID: 'f-bonus', EntityID: ENTITY_ID, Name: 'Bonus', Entity: 'Employees', Type: 'money', Sequence: 4, AllowUpdateAPI: true,
+                    EntityFieldPermissions: [
+                        ...openTo('f-bonus', [HR_ROLE_ID]),
+                        { ID: 'f-bonus-intern', EntityFieldID: 'f-bonus', RoleID: INTERN_ROLE_ID, ReadAccess: ALLOW, UpdateAccess: NONE, CreateAccess: NONE },
+                    ],
+                },
+                { ID: 'f-notes', EntityID: ENTITY_ID, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', Sequence: 5, AllowUpdateAPI: true, EntityFieldPermissions: openTo('f-notes') },
+            ],
+            EntityPermissions: [
+                { EntityID: ENTITY_ID, RoleID: HR_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
+                { EntityID: ENTITY_ID, RoleID: INTERN_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
+            ],
+        },
+    ],
+    get EntityFields() { return this.Entities.flatMap((e: Record<string, unknown>) => (e['EntityFields'] as unknown[]) || []); },
+    get EntityPermissions() { return this.Entities.flatMap((e: Record<string, unknown>) => (e['EntityPermissions'] as unknown[]) || []); },
+    EntityFieldValues: [], EntityRelationships: [], EntitySettings: [], ApplicationEntities: [], ApplicationSettings: [],
+    Roles: [{ ID: HR_ROLE_ID, Name: 'HR' }, { ID: INTERN_ROLE_ID, Name: 'Intern' }],
+    RowLevelSecurityFilters: [], AuditLogTypes: [], Authorizations: [],
+    QueryCategories: [], Queries: [], QueryFields: [], QueryPermissions: [], QueryEntities: [], QueryParameters: [],
+    EntityDocumentTypes: [], Libraries: [], ExplorerNavigationItems: [],
+};
+
 function buildUser(roleIds: string[], id = 'user-1'): UserInfo {
     const u = new UserInfo();
     u.ID = id;
@@ -592,7 +631,21 @@ describe('Output projection', () => {
 describe('BaseEntity save guard', () => {
     class TestEntity extends BaseEntity {}
 
+    /** Salary: HR only. The intern cannot READ it, so Get/Set throw for them. */
     const SALARY_PERMS = openTo('f-salary', [HR_ROLE_ID]);
+
+    /**
+     * Bonus: readable by both, but the intern may neither update nor create it.
+     *
+     * This is the only shape that can exercise the update guard, and the create suppression,
+     * at all. Read is required for Update and Create, so denied-read is a subset of
+     * denied-update — a field the intern cannot READ throws at `Set` long before any save-time
+     * guard could run on it.
+     */
+    const BONUS_PERMS = [
+        ...openTo('f-bonus', [HR_ROLE_ID]),
+        { ID: 'f-bonus-intern', EntityFieldID: 'f-bonus', RoleID: INTERN_ROLE_ID, ReadAccess: ALLOW, UpdateAccess: NONE, CreateAccess: NONE },
+    ];
 
     const MOCK_METADATA = {
         Applications: [],
@@ -607,7 +660,8 @@ describe('BaseEntity save guard', () => {
                     { ID: 'f-id', EntityID: ENTITY_ID, Name: 'ID', Entity: 'Employees', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1 },
                     { ID: 'f-name', EntityID: ENTITY_ID, Name: 'Name', Entity: 'Employees', Type: 'nvarchar', Sequence: 2, AllowUpdateAPI: true, EntityFieldPermissions: openTo('f-name') },
                     { ID: 'f-salary', EntityID: ENTITY_ID, Name: 'Salary', Entity: 'Employees', Type: 'money', Sequence: 3, AllowUpdateAPI: true, EntityFieldPermissions: SALARY_PERMS },
-                    { ID: 'f-notes', EntityID: ENTITY_ID, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', Sequence: 4, AllowUpdateAPI: true, EntityFieldPermissions: openTo('f-notes') },
+                    { ID: 'f-bonus', EntityID: ENTITY_ID, Name: 'Bonus', Entity: 'Employees', Type: 'money', Sequence: 4, AllowUpdateAPI: true, EntityFieldPermissions: BONUS_PERMS },
+                    { ID: 'f-notes', EntityID: ENTITY_ID, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', Sequence: 5, AllowUpdateAPI: true, EntityFieldPermissions: openTo('f-notes') },
                 ],
                 EntityPermissions: [
                     { EntityID: ENTITY_ID, RoleID: HR_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
@@ -661,20 +715,20 @@ describe('BaseEntity save guard', () => {
         // Per MJ's Save contract, a logical failure returns false and records the reason on
         // LatestResult — it does not throw. The guard throws internally; Save converts it.
         const { entity, saveSpy } = makeEntity(buildUser([INTERN_ROLE_ID]));
-        entity.Set('Salary', 999999);
+        entity.Set('Bonus', 999999); // readable, so Set is allowed; not updatable, so Save is not
 
         const saved = await entity.Save(opts());
 
         expect(saved).toBe(false);
         expect(saveSpy).not.toHaveBeenCalled(); // rejected BEFORE any SQL was generated
         expect(entity.LatestResult?.CompleteMessage).toMatch(
-            /Field 'Salary' does not exist on entity 'Employees' or you do not have access to it/
+            /Field 'Bonus' does not exist on entity 'Employees' or you do not have access to it/
         );
     });
 
     it('the rejection message does not disclose whether the field is missing or forbidden', async () => {
         const { entity } = makeEntity(buildUser([INTERN_ROLE_ID]));
-        entity.Set('Salary', 999999);
+        entity.Set('Bonus', 999999);
         await entity.Save(opts());
 
         const message = entity.LatestResult?.CompleteMessage ?? '';
@@ -698,7 +752,11 @@ describe('BaseEntity save guard', () => {
 
         await expect(entity.Save(opts())).resolves.toBe(true);
         expect(saveSpy).toHaveBeenCalled();
-        expect(entity.Get('Salary')).toBe(250000);
+
+        // Read the stored value off the EntityField rather than through Get(), which throws for
+        // this user by design. Framework-internal value machinery is exempt from the gate, and
+        // that exemption is exactly what keeps the value intact through the round trip.
+        expect(entity.Fields.find(f => f.Name === 'Salary')!.Value).toBe(250000);
     });
 
     it('does not REJECT an INSERT — a create-denied value is dropped, never an error', async () => {
@@ -707,9 +765,41 @@ describe('BaseEntity save guard', () => {
         // read path (a denied field is absent, not an error) and the ambiguous-error rule
         // (naming the field would confirm it exists and is restricted).
         const { entity, saveSpy } = makeEntity(buildUser([INTERN_ROLE_ID]), false);
-        entity.Set('Salary', 100);
+        entity.Set('Bonus', 100);
+
         await expect(entity.Save(opts())).resolves.toBe(true);
         expect(saveSpy).toHaveBeenCalled();
+    });
+
+    it('marks a create-denied field suppressed so the save omits it', async () => {
+        const { entity } = makeEntity(buildUser([INTERN_ROLE_ID]), false);
+        entity.Set('Bonus', 100);
+        await entity.Save(opts());
+
+        // The value is still in memory — it is simply not one this user may supply, so the
+        // SQL builder leaves the parameter out and the column takes its default.
+        const bonus = entity.Fields.find(f => f.Name === 'Bonus')!;
+        expect(bonus.CreateSuppressed).toBe(true);
+        expect(bonus.Value).toBe(100);
+        expect(entity.Fields.find(f => f.Name === 'Notes')!.CreateSuppressed).toBe(false);
+    });
+
+    it('does not suppress anything on an UPDATE', async () => {
+        const { entity } = makeEntity(buildUser([INTERN_ROLE_ID]));
+        entity.Set('Notes', 'edit');
+        await entity.Save(opts());
+
+        for (const field of entity.Fields) {
+            expect(field.CreateSuppressed).toBe(false);
+        }
+    });
+
+    it('suppresses nothing for a user who may create the field', async () => {
+        const { entity } = makeEntity(buildUser([HR_ROLE_ID]), false);
+        entity.Set('Bonus', 100);
+        await entity.Save(opts());
+
+        expect(entity.Fields.find(f => f.Name === 'Bonus')!.CreateSuppressed).toBe(false);
     });
 
     it('is a no-op for an entity with field security switched OFF', async () => {
@@ -719,9 +809,84 @@ describe('BaseEntity save guard', () => {
         entityInfo.EnableFieldLevelSecurity = false;
 
         const { entity, saveSpy } = makeEntity(buildUser([INTERN_ROLE_ID]));
-        entity.Set('Salary', 1);
+        entity.Set('Salary', 1); // read-denied while enabled; freely settable once off
         await expect(entity.Save(opts())).resolves.toBe(true);
         expect(saveSpy).toHaveBeenCalled();
         expect(entityInfo.Fields.find(f => f.Name === 'Salary')!.HasFieldPermissions).toBe(true);
     });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. The strongly-typed accessor path throws on a field the user cannot read
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('BaseEntity Get/Set field-security gate', () => {
+    class TypedTestEntity extends BaseEntity {}
+
+    let provider: TestMetadataProvider;
+
+    beforeEach(async () => {
+        ClearAllDataHooks();
+        provider = new TestMetadataProvider();
+        provider.setMockDelay(0);
+        provider.setMockMetadata(GATE_METADATA);
+        await provider.Config(new ProviderConfigDataBase({}, '__mj', [], [], true));
+    });
+    afterEach(() => ClearAllDataHooks());
+
+    function makeEntity(user: UserInfo | null): BaseEntity {
+        const entityInfo = provider.Entities.find(e => e.Name === 'Employees')!;
+        const entity = new TypedTestEntity(entityInfo);
+        Object.defineProperty(entity, 'ActiveUser', { get: () => user, configurable: true });
+        entity.LoadFromData({ ID: '1', Name: 'Ada', Salary: 250000, Bonus: 10, Notes: 'n' });
+        return entity;
+    }
+
+    it('Get throws for a field the user cannot read', () => {
+        const entity = makeEntity(buildUser([INTERN_ROLE_ID]));
+        expect(() => entity.Get('Salary')).toThrow(
+            /Field 'Salary' does not exist on entity 'Employees' or you do not have access to it/
+        );
+    });
+
+    it('Set throws for a field the user cannot read', () => {
+        const entity = makeEntity(buildUser([INTERN_ROLE_ID]));
+        expect(() => entity.Set('Salary', 1)).toThrow(/does not have access to it|do not have access to it/);
+    });
+
+    it('allows a readable-but-not-updatable field through Get and Set', () => {
+        // The write is refused at save time, not at the accessor — a rejection here would fire
+        // on every keystroke of a bound form field rather than once, at the save.
+        const entity = makeEntity(buildUser([INTERN_ROLE_ID]));
+        expect(entity.Get('Bonus')).toBe(10);
+        expect(() => entity.Set('Bonus', 99)).not.toThrow();
+    });
+
+    it('does not throw for a user who may read the field', () => {
+        const entity = makeEntity(buildUser([HR_ROLE_ID]));
+        expect(entity.Get('Salary')).toBe(250000);
+        expect(() => entity.Set('Salary', 1)).not.toThrow();
+    });
+
+    it('FAILS OPEN when no user resolves', () => {
+        // ActiveUser is legitimately null in plenty of server paths. A gate that threw there
+        // would break unrelated code in ways that look nothing like field security.
+        const entity = makeEntity(null);
+        expect(entity.Get('Salary')).toBe(250000);
+        expect(() => entity.Set('Salary', 1)).not.toThrow();
+    });
+
+    it('SetMany does NOT throw — it is the hydration and resolver-apply path', () => {
+        const entity = makeEntity(buildUser([INTERN_ROLE_ID]));
+        expect(() => entity.SetMany({ Notes: 'x', Salary: 1 })).not.toThrow();
+    });
+
+    it('framework-internal reads stay exempt, so the value survives for the save path', () => {
+        const entity = makeEntity(buildUser([INTERN_ROLE_ID]));
+
+        expect(() => entity.Get('Salary')).toThrow();
+        expect(entity.Fields.find(f => f.Name === 'Salary')!.Value).toBe(250000);
+        expect(entity.GetAll()['Salary']).toBe(250000);
+    });
+
 });

@@ -1144,6 +1144,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // wiped to NULL by its own construction state.
             if (theField?.NotLoaded) continue;
 
+            // Field security on INSERT: a field this user may not create is omitted so the
+            // column takes its database default. Distinct from NotLoaded — the value here is
+            // real, it is simply not one this user is permitted to supply — which is why the
+            // flag is separate and why validation still ran against it normally.
+            if (!isUpdate && theField?.CreateSuppressed) continue;
+
             const rawValue = theField?.Value;
 
             // PK-on-CREATE with no explicit value: omit so the SP default fires.
