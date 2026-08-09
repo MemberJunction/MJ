@@ -43,10 +43,25 @@ describe('TaskGraphPropertiesPanelComponent (DOM)', () => {
         expect(f.componentInstance.Draft!.name).toBe('Gather');
     });
 
-    it('offers both assignment kinds', () => {
+    it('offers all three assignment kinds the spec supports', () => {
         const f = render({ Task: task(), Spec: spec });
         expect(host(f).textContent).toContain('An agent');
+        expect(host(f).textContent).toContain('An action');
         expect(host(f).textContent).toContain('A person');
+    });
+
+    it('CLEARS the other assignees when switching kind — two would be an AssignmentConflict', () => {
+        const f = render({ Task: task({ agentName: 'Sage' }), Spec: spec, AvailableActionNames: ['Send Email'] });
+        f.componentInstance.SetAssignment('ActionTask');
+        expect(f.componentInstance.Draft!.agentName).toBeUndefined();
+        expect(f.componentInstance.Draft!.actionName).toBe('Send Email');
+        expect(f.componentInstance.Draft!.assignToUser).toBeUndefined();
+    });
+
+    it('says the list is empty rather than rendering an empty dropdown, which reads as a bug', () => {
+        const f = render({ Task: task({ agentName: undefined }), Spec: spec, AvailableAgentNames: [] });
+        expect(host(f).querySelector('select')).toBeNull();
+        expect(host(f).querySelector('mj-alert')).toBeTruthy();
     });
 
     it('states that cross-user assignment is unavailable rather than offering a picker that fails', () => {

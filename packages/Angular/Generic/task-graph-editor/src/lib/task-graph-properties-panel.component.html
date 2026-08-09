@@ -15,29 +15,58 @@
               [(ngModel)]="Draft.description" [disabled]="ReadOnly" (blur)="Commit()"></textarea>
 
     <label class="mj-tgp__label">Who does it</label>
+    <!-- Three, because TaskGraphSpecNode has exactly three mutually-exclusive assignment shapes:
+         agentName, actionName, assignToUser. -->
     <div class="mj-tgp__assignment">
-      <button mjButton [variant]="!IsHumanTask ? 'primary' : 'outline'" size="sm"
-              [disabled]="ReadOnly" (click)="SetAssignment('agent')">
+      <button mjButton [variant]="Assignment === 'AgentTask' ? 'primary' : 'outline'" size="sm"
+              [disabled]="ReadOnly" (click)="SetAssignment('AgentTask')">
         <i class="fa-solid fa-robot"></i> An agent
       </button>
-      <button mjButton [variant]="IsHumanTask ? 'primary' : 'outline'" size="sm"
-              [disabled]="ReadOnly" (click)="SetAssignment('human')">
+      <button mjButton [variant]="Assignment === 'ActionTask' ? 'primary' : 'outline'" size="sm"
+              [disabled]="ReadOnly" (click)="SetAssignment('ActionTask')">
+        <i class="fa-solid fa-bolt"></i> An action
+      </button>
+      <button mjButton [variant]="Assignment === 'HumanTask' ? 'primary' : 'outline'" size="sm"
+              [disabled]="ReadOnly" (click)="SetAssignment('HumanTask')">
         <i class="fa-solid fa-user-check"></i> A person
       </button>
     </div>
 
-    @if (!IsHumanTask) {
-      <select class="mj-input" [(ngModel)]="Draft.agentName" [disabled]="ReadOnly" (change)="Commit()">
-        @for (name of AvailableAgentNames; track name) {
-          <option [value]="name">{{ name }}</option>
+    @switch (Assignment) {
+      @case ('AgentTask') {
+        @if (AvailableAgentNames.length > 0) {
+          <select class="mj-input" aria-label="Agent" [(ngModel)]="Draft.agentName" [disabled]="ReadOnly" (change)="Commit()">
+            @for (name of AvailableAgentNames; track name) {
+              <option [value]="name">{{ name }}</option>
+            }
+          </select>
+        } @else {
+          <!-- Says the list is empty rather than rendering an empty dropdown, which reads as a bug. -->
+          <mj-alert Variant="warning" Size="sm"
+                    Message="No agents are available to assign. This step will not run until one is chosen.">
+          </mj-alert>
         }
-      </select>
-    } @else {
-      <!-- Cross-user assignment is rejected at submission until the authorization model lands
-           (#3524), so the panel states the rule rather than offering a picker that would fail. -->
-      <mj-alert Variant="info" Size="sm"
-                Message="This step waits for you. Assigning it to someone else isn't available yet.">
-      </mj-alert>
+      }
+      @case ('ActionTask') {
+        @if (AvailableActionNames.length > 0) {
+          <select class="mj-input" aria-label="Action" [(ngModel)]="Draft.actionName" [disabled]="ReadOnly" (change)="Commit()">
+            @for (name of AvailableActionNames; track name) {
+              <option [value]="name">{{ name }}</option>
+            }
+          </select>
+        } @else {
+          <mj-alert Variant="warning" Size="sm"
+                    Message="No actions are available to assign. This step will not run until one is chosen.">
+          </mj-alert>
+        }
+      }
+      @default {
+        <!-- Cross-user assignment is rejected at submission until the authorization model lands
+             (#3524), so the panel states the rule rather than offering a picker that would fail. -->
+        <mj-alert Variant="info" Size="sm"
+                  Message="This step waits for you. Assigning it to someone else isn't available yet.">
+        </mj-alert>
+      }
     }
 
     @if (IncomingEdges.length > 0) {

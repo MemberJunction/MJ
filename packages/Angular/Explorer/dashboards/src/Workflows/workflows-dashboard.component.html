@@ -34,11 +34,15 @@
            know about routing, and this app supplies the shell around it. -->
       <mj-task-graph-editor
         class="wf-canvas"
+        [Provider]="ProviderToUse"
         [Spec]="DraftSpec"
         [ShowToolbar]="true"
         [ShowPalette]="true"
         [ShowMinimap]="true"
-        EmptyStateMessage="No steps yet. Add one to start building this workflow.">
+        [AvailableAgentNames]="AvailableAgentNames"
+        [AvailableActionNames]="AvailableActionNames"
+        (SpecChanged)="OnDraftSpecChanged($event)"
+        EmptyStateMessage="No steps yet. Click a step in the palette to start building this workflow.">
       </mj-task-graph-editor>
     } @else if (IsCreating) {
       <mj-create-workflow

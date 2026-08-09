@@ -4,7 +4,16 @@ import { MJAIAgentEntity, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
+import type { TaskGraphSpecChangedEventArgs } from '@memberjunction/ng-task-graph-editor';
 import type { WorkflowDraftRequest, WorkflowListItem } from './workflows.types';
+
+/** The name-only projection the canvas needs to offer an assignment. */
+type NamedRow = { Name: string | null };
+
+/** Usable names only — a nameless row cannot be assigned to, so it is dropped rather than shown blank. */
+function namesOf(rows: readonly NamedRow[]): string[] {
+    return rows.map((r) => r.Name ?? '').filter((n) => n.length > 0);
+}
 
 /**
  * Local alias for the client-tool shape `NavigationService.SetAgentClientTools` accepts. Declared
@@ -54,6 +63,15 @@ export class WorkflowsDashboardComponent extends BaseDashboard implements AfterV
      */
     public DraftSpec: TaskGraphSpec | null = null;
 
+    /**
+     * What a step on the canvas can be assigned to.
+     *
+     * Resolved here rather than in the canvas because the canvas is a widgets-layer component that
+     * does not query — this app owns data access and hands the names down.
+     */
+    public AvailableAgentNames: string[] = [];
+    public AvailableActionNames: string[] = [];
+
     constructor(private cdr: ChangeDetectorRef) {
         super();
     }
@@ -82,21 +100,42 @@ export class WorkflowsDashboardComponent extends BaseDashboard implements AfterV
         this.LoadError = null;
         this.cdr.markForCheck();
         try {
-            const result = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIAgentEntity>(
+            // Batched: the list, plus the two name sets the canvas needs to offer an assignment.
+            // Three RunView calls would be three round trips for one screen.
+            const [result, agents, actions] = await RunView.FromMetadataProvider(
+                this.ProviderToUse,
+            ).RunViews<MJAIAgentEntity | NamedRow>([
                 {
                     EntityName: 'MJ: AI Agents',
                     ExtraFilter: `TypeID IN (SELECT ID FROM __mj.vwAIAgentTypes WHERE Name='Flow')`,
                     OrderBy: '__mj_UpdatedAt DESC',
                     ResultType: 'entity_object',
                 },
-                undefined,
-            );
+                {
+                    EntityName: 'MJ: AI Agents',
+                    Fields: ['Name'],
+                    ExtraFilter: `Status='Active'`,
+                    OrderBy: 'Name ASC',
+                    ResultType: 'simple',
+                },
+                {
+                    EntityName: 'MJ: Actions',
+                    Fields: ['Name'],
+                    ExtraFilter: `Status='Active'`,
+                    OrderBy: 'Name ASC',
+                    ResultType: 'simple',
+                },
+            ]);
+
+            this.AvailableAgentNames = namesOf(agents.Success ? (agents.Results as NamedRow[]) : []);
+            this.AvailableActionNames = namesOf(actions.Success ? (actions.Results as NamedRow[]) : []);
+
             if (!result.Success) {
                 this.LoadError = result.ErrorMessage ?? 'Workflows could not be loaded.';
                 this.Workflows = [];
                 return;
             }
-            this.Workflows = (result.Results ?? []).map((a) => ({
+            this.Workflows = ((result.Results ?? []) as MJAIAgentEntity[]).map((a) => ({
                 ID: a.ID,
                 // Name is nullable on the entity. A row with no label is unfindable, so it says so
                 // rather than rendering blank — the ID is still there to open it by.
@@ -150,6 +189,20 @@ export class WorkflowsDashboardComponent extends BaseDashboard implements AfterV
             reasoning: request.Description,
             tasks: [],
         };
+        this.publishAgentContext();
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Keeps the draft in step with the canvas.
+     *
+     * The canvas treats a spec as immutable — every edit produces a NEW spec object — so without
+     * this the value held here would still be the graph as it was when the canvas opened, and
+     * anything later read off `DraftSpec` (the agent context below, and saving, when it lands) would
+     * describe a workflow the author no longer has on screen.
+     */
+    public OnDraftSpecChanged(args: TaskGraphSpecChangedEventArgs): void {
+        this.DraftSpec = args.Spec;
         this.publishAgentContext();
         this.cdr.markForCheck();
     }
