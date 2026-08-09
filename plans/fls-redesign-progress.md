@@ -13,7 +13,10 @@
 | `a944885798` | W1 — schema + CodeGen: trinary columns, `Entity.EnableFieldLevelSecurity`, `TrackRecordChanges = 0` |
 | `8ed964c6c2` | W2 + W3 — trinary aggregation, RunView cache posture, comment/dead-code cleanup |
 | `052ce4980f` | W4 (partial) — reconciliation delta, transactional applier, flag-flip + entity-permission adapters |
-| _(pending)_ | W5 — create suppression + `Get`/`Set` read gate |
+| `105a31e9e8` | W5 — create suppression + `Get`/`Set` read gate |
+| `641e4b62c8` | Form-field access gate + fail-open `ActiveUser` resolution |
+| `6db09ebb9f` | W4 complete — CodeGen schema-change reconciliation + applier tests |
+| `f1f2f61b4d` | W6 docs — guide + changeset rewritten for the trinary model |
 
 ## Status by workstream
 
@@ -24,7 +27,7 @@
 | W3 | Cache reversal | **Done.** Server `fls:` segment, allowed-set widening and `entity_object` exemption all removed; client keeps its allowed-list key. Tier split lives only in `ComputeRunViewFLSFingerprintKey`. |
 | W4 | Lifecycle | **Done.** Delta + applier + all 3 adapters (flag flip, entity permissions, CodeGen schema changes) + tests. |
 | W5 | Create enforcement + Get/Set throw | **Done.** `EntityField.CreateSuppressed`, `ApplyFieldLevelCreateSuppression`, `AssertFieldReadable` on `Get`/`Set`, `FieldSecurityDenialMessage` now shared. |
-| W6 | Metadata invalidation + docs | **Not started.** |
+| W6 | Metadata invalidation + docs | **Docs done** (guide + changeset rewritten). **Invalidation remaining** — and the research doc's `graph_save` plan does not apply; see below. |
 
 ## Test baseline (all currently passing)
 
@@ -82,16 +85,41 @@ Harmless while only the save path consulted it; fatal once `Get()`/`Set()` do on
 an FLS-enabled entity. Now routed through `resolveActiveUserOrNull()`, which treats "no provider
 to ask" as "no user" and fails open.
 
-### W6 — metadata invalidation + docs
-- Wire `remote-invalidate` → metadata refresh (`RefreshIfNeeded()`, debounced). The pub/sub
-  infrastructure already exists and fires; only this last hop is missing.
-- **One invalidation per unit of work.** Reconciliation currently publishes one per row saved.
-  Suppress per-node publishes between `graph_save_started` and `graph_save` and publish once.
-- Rewrite `guides/FIELD_LEVEL_SECURITY_GUIDE.md` — §1.1 is the old allow-list-flip narrative,
-  the §1 config table lists the old columns, and §2's write-only line is now impossible.
-- Rewrite `.changeset/field-level-security.md` (same reason).
-- `ResolverBase.PublishCacheInvalidation` is dead (zero callers) but **pre-existing in `next`** —
-  deleting it belongs in its own commit, not the FLS PR.
+### W6 — docs DONE, invalidation REMAINING
+
+Done: `guides/FIELD_LEVEL_SECURITY_GUIDE.md` and `.changeset/field-level-security.md` rewritten
+for the trinary model (commit `f1f2f61b4d`). `check:claude-md` passes.
+
+Remaining, and **the research doc's plan for it does not work** — verified, not assumed:
+
+1. **One invalidation per unit of work.** The global listener at
+   `packages/MJServer/src/index.ts:841-856` publishes `CACHE_INVALIDATION` to every connected
+   browser on every `BaseEntity` save/delete. `ReconcileFieldPermissions` saves rows one at a
+   time, so enabling field security on a wide entity emits hundreds of broadcasts.
+
+   The research doc proposed suppressing per-node publishes between `graph_save_started` and
+   `graph_save`. **That does not apply here**: reconciliation uses `RunInEntityTransaction` with
+   individual `Save()` calls, not an entity graph, so `graph_save` never fires. Two shapes that
+   would actually work:
+
+   - **(a) An explicit batch scope.** A primitive in MJCore (`BaseEntity` events originate
+     there) that marks "a bulk unit of work is in flight"; the MJServer listener coalesces while
+     it is open and publishes once on close. Targeted, and the reconciler opts in explicitly.
+     Note the dependency direction — MJCoreEntitiesServer cannot call into MJServer, so the
+     primitive cannot live in MJServer.
+   - **(b) Debounce the listener per entity name.** Simpler and helps every bulk write in the
+     platform, but it changes semantics for all entities and would drop `recordData` for
+     coalesced saves, which browser BaseEngine caches use for in-place updates.
+
+   Recommend (a): (b) trades a broad behavior change for a narrower problem.
+
+2. **`remote-invalidate` → metadata refresh.** The pub/sub infrastructure exists and fires end to
+   end; `remote-invalidate` drives `BaseEngine` caches, but metadata is `ProviderBase`'s
+   AllMetadata cache and nothing subscribes it. Recognize the permission-metadata entity names in
+   `GraphQLDataProvider`'s invalidation handler and call `RefreshIfNeeded()`, debounced.
+
+3. `ResolverBase.PublishCacheInvalidation` is dead (zero callers) but **pre-existing in `next`** —
+   deleting it belongs in its own commit, not the FLS PR.
 
 ## Traps already paid for — do not re-learn these
 
