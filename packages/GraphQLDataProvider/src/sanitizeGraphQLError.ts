@@ -100,6 +100,65 @@ export interface SanitizedGraphQLError {
  */
 export type VariableShape = string | { [key: string]: VariableShape };
 
+/**
+ * The error `ExecuteGQL` rethrows in place of the raw client error.
+ *
+ * Sanitising only the log line is not enough to close the leak. `ExecuteGQL`
+ * rethrows, and its callers catch and log — `LogError(e)` appears 19 times in this
+ * package alone, and there are ~178 `ExecuteGQL` call sites across the repo. Every
+ * one of those receives an error whose `message` and `stack` still contain the
+ * serialised request, and any of them may stringify it. Redacting at one log
+ * statement fixes one log statement; replacing the propagated object fixes all of
+ * them at once, including callers not yet written.
+ *
+ * What is preserved, and why it is safe:
+ * - `response.status` / `response.errors` — the server's diagnosis of the failure.
+ *   Every known downstream consumer reads exactly these (and `extensions.code`).
+ * - `request.query` — the static document, which binds values but contains none.
+ *
+ * What is dropped:
+ * - `request.variables` — the caller's payload, where secrets live.
+ * - `response.data` — a partial success on a credential-bearing read could return
+ *   decrypted values here, so it is not forwarded.
+ * - the upstream `message` and `stack`, both of which embed the serialised request.
+ *
+ * `name` is preserved from the original (e.g. `ClientError`) so code that branches
+ * on the error's name keeps working.
+ */
+export class SafeGraphQLError extends Error {
+    /** Server response, narrowed to status and GraphQL errors. */
+    public readonly response?: { status?: number; errors?: SanitizedGraphQLErrorDetail[] };
+    /** Originating request, narrowed to the query document. */
+    public readonly request?: { query?: string };
+    /** Error code from the first GraphQL error, e.g. `JWT_EXPIRED`. */
+    public readonly code?: string;
+    /** Shape of the withheld variables — key names and value types, never values. */
+    public readonly variableShape?: VariableShape;
+
+    constructor(sanitized: SanitizedGraphQLError) {
+        super(sanitized.message);
+        this.name = sanitized.name;
+        this.response = { status: sanitized.status, errors: sanitized.errors };
+        this.request = { query: sanitized.query };
+        this.code = sanitized.code;
+        this.variableShape = sanitized.variableShape;
+        // Rebuild the stack with a header derived from the sanitised message, keeping
+        // the original frames. Assigning the raw `stack` would reintroduce the payload,
+        // since V8's header line is `${name}: ${unsanitised message}`.
+        this.stack = sanitized.stackFrames
+            ? `${sanitized.name}: ${sanitized.message}\n${sanitized.stackFrames}`
+            : this.stack;
+    }
+}
+
+/**
+ * Wraps a caught GraphQL client error in a {@link SafeGraphQLError} suitable for
+ * rethrowing. The input is not mutated.
+ */
+export function ToSafeGraphQLError(e: unknown): SafeGraphQLError {
+    return e instanceof SafeGraphQLError ? e : new SafeGraphQLError(SanitizeGraphQLError(e));
+}
+
 /** Narrow structural view of the upstream error; avoids importing its type. */
 interface ClientErrorLike {
     name?: unknown;

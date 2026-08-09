@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ClientError } from 'graphql-request';
-import { SanitizeGraphQLError } from '../sanitizeGraphQLError';
+import { SanitizeGraphQLError, ToSafeGraphQLError, SafeGraphQLError } from '../sanitizeGraphQLError';
 
 /**
  * `GraphQLDataProvider.ExecuteGQL()` logs the error thrown by the underlying
@@ -159,6 +159,104 @@ describe('SanitizeGraphQLError', () => {
                 { query: QUERY } as never,
             );
             expect(SanitizeGraphQLError(err).variableShape).toBeUndefined();
+        });
+    });
+
+    describe('the rethrown error — closing the class, not one log line', () => {
+        /**
+         * Sanitising the log statement inside ExecuteGQL leaves the rethrown error
+         * loaded: ~178 call sites catch it, and `LogError(e)` — which stringifies —
+         * appears 19 times in this package alone. These pin that what propagates is
+         * safe no matter what a caller does with it.
+         */
+        it('carries the secret in NO field, however it is inspected', () => {
+            const safe = ToSafeGraphQLError(buildClientError());
+
+            expect(safe.message).not.toContain(SECRET);
+            expect(safe.stack).not.toContain(SECRET);
+            expect(String(safe)).not.toContain(SECRET);
+            expect(JSON.stringify(safe)).not.toContain(SECRET);
+        });
+
+        it('survives the exact call that was still leaking: LogError-style String()', () => {
+            // LogError does String(message) internally — the path that re-emitted the
+            // payload from every caller that caught the rethrown error.
+            expect(String(ToSafeGraphQLError(buildClientError()))).not.toContain(SECRET);
+        });
+
+        it('is still an Error, so existing catch/rethrow handling is unaffected', () => {
+            const safe = ToSafeGraphQLError(buildClientError());
+            expect(safe).toBeInstanceOf(Error);
+            expect(safe).toBeInstanceOf(SafeGraphQLError);
+        });
+
+        it('preserves the name verbatim, so code branching on it keeps working', () => {
+            // Note: ClientError never assigns `this.name`, so it inherits
+            // Error.prototype.name — the upstream value really is 'Error'. The wrapper
+            // copies whatever the original had rather than inventing a new name.
+            const original = buildClientError();
+            expect(ToSafeGraphQLError(original).name).toBe(original.name);
+        });
+
+        it('preserves response.errors and extensions.code — all any consumer reads', () => {
+            // Verified against every downstream consumer: workspace-initializer,
+            // Bootstrap initialization.service, and the DevTools graphql-console all
+            // read response.errors and extensions.code, and nothing else.
+            const safe = ToSafeGraphQLError(buildClientError('JWT_EXPIRED'));
+            expect(safe.response?.errors?.[0]?.message).toBe('Request timed out');
+            expect(safe.response?.errors?.[0]?.extensions?.['code']).toBe('JWT_EXPIRED');
+            expect(safe.response?.status).toBe(500);
+            expect(safe.code).toBe('JWT_EXPIRED');
+        });
+
+        it('preserves the query, which binds values but contains none', () => {
+            expect(ToSafeGraphQLError(buildClientError()).request?.query).toBe(QUERY);
+        });
+
+        it('drops request.variables entirely', () => {
+            const safe = ToSafeGraphQLError(buildClientError());
+            expect((safe.request as Record<string, unknown>).variables).toBeUndefined();
+        });
+
+        it('drops response.data — a partial success could return decrypted values', () => {
+            const err = new ClientError(
+                {
+                    data: { credential: { Values: SECRET } },
+                    errors: [{ message: 'partial failure' }],
+                    status: 200,
+                    headers: undefined as never,
+                } as never,
+                { query: QUERY, variables: {} } as never,
+            );
+            const safe = ToSafeGraphQLError(err);
+            expect((safe.response as Record<string, unknown>).data).toBeUndefined();
+            expect(JSON.stringify(safe)).not.toContain(SECRET);
+        });
+
+        it('keeps the stack frames, so the error is still traceable', () => {
+            const safe = ToSafeGraphQLError(buildClientError());
+            expect(safe.stack).toContain('at ');
+            // Header rebuilt from the sanitised message, not V8's original.
+            expect(safe.stack).toContain('Request timed out');
+            expect(safe.stack?.split('\n')[0]).not.toContain(SECRET);
+        });
+
+        it('retains the variable shape for debugging', () => {
+            expect(ToSafeGraphQLError(buildClientError()).variableShape).toEqual({
+                input: { Name: 'string', CredentialValues: 'string' },
+            });
+        });
+
+        it('is idempotent — re-wrapping does not re-derive or degrade', () => {
+            const once = ToSafeGraphQLError(buildClientError());
+            expect(ToSafeGraphQLError(once)).toBe(once);
+        });
+
+        it('does not mutate the original, which the catch block still inspects', () => {
+            const err = buildClientError('JWT_EXPIRED');
+            ToSafeGraphQLError(err);
+            expect(err.response.errors?.[0]?.extensions?.code).toBe('JWT_EXPIRED');
+            expect(err.message).toContain(SECRET);
         });
     });
 

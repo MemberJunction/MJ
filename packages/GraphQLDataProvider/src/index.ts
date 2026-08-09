@@ -5,8 +5,8 @@ export { GraphQLDataProvider, GraphQLProviderConfigData } from './graphQLDataPro
 export type { AuthenticationErrorCallback, SocketConnectionState } from './graphQLDataProvider';
 export * from './graphQLTransactionGroup';
 export { FieldMapper } from './FieldMapper';
-export { SanitizeGraphQLError } from './sanitizeGraphQLError';
-export type { SanitizedGraphQLError, SanitizedGraphQLErrorDetail } from './sanitizeGraphQLError';
+export { SanitizeGraphQLError, ToSafeGraphQLError, SafeGraphQLError } from './sanitizeGraphQLError';
+export type { SanitizedGraphQLError, SanitizedGraphQLErrorDetail, VariableShape } from './sanitizeGraphQLError';
 export * from './rolesAndUsersType';
 export * from './graphQLSystemUserClient';
 export { GraphQLActionClient } from './graphQLActionClient';

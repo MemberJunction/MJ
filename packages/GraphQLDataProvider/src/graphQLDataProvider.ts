@@ -28,7 +28,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 import { GraphQLAIClient } from "./graphQLAIClient";
 import { BrowserIndexedDBStorageProvider } from "./storage-providers";
-import { SanitizeGraphQLError } from "./sanitizeGraphQLError";
+import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -2585,6 +2585,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const safeError = SanitizeGraphQLError(e, this._configData?.LogVariableValues === true);
             console.error('[GraphQL] ExecuteGQL error caught:', safeError);
 
+            // SECURITY: what propagates out of here must ALSO be free of the payload.
+            // Sanitising the log line above fixes one log statement; the raw error is
+            // caught and logged by ~178 call sites across the repo (19 `LogError(e)` in
+            // this file alone), each of which would stringify the serialised request.
+            // Rethrowing a SafeGraphQLError closes all of them at once, including
+            // callers not yet written. It preserves `response.status`,
+            // `response.errors` and `request.query` — everything known consumers read.
+            const safeToThrow = ToSafeGraphQLError(e);
+
             if (e && e.response && e.response.errors?.length > 0) {//e.code === 'JWT_EXPIRED') {
                 const error = e.response.errors[0];
                 const code = error?.extensions?.code?.toUpperCase().trim()
@@ -2597,18 +2606,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     else {
                         // token expired but the caller doesn't want a refresh, so just return the error
                         LogError(`JWT_EXPIRED and refreshTokenIfNeeded is false`);
-                        throw e;
+                        throw safeToThrow;
                     }
                 }
                 else
-                    throw e;
+                    throw safeToThrow;
             }
             else {
                 // LogError() stringifies its argument (String(message) internally), which
-                // for this error class yields the full serialised request. Log the
-                // sanitised view instead; `e` itself is still rethrown untouched.
+                // for the raw error class yields the full serialised request.
                 LogError(JSON.stringify(safeError));
-                throw e; // force the caller to handle the error
+                throw safeToThrow; // force the caller to handle the error
             }
         }
     }
