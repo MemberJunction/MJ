@@ -1105,8 +1105,9 @@ describe('GenericDatabaseProvider — DataSource (Live vs Materialized) read rou
 /**
  * Plan-level tests for `tryBuildMaterializedQueryPlan` — the phase-2 read-redirect orchestration that the pure
  * `buildMaterializedReadQuery`/`queryHasTopLevelOrderBy` static tests do NOT cover. Subclasses the complete
- * TestPipelineProvider stub and adds two seams: a settable PlatformKey and a canned "MJ: Materialized Results"
- * status row (the method reads it via `new RunView(this).RunView(...)`, which proxies to this provider's RunView).
+ * TestPipelineProvider stub and adds two seams: a settable PlatformKey and a canned materialization row served
+ * to BOTH reads the method performs via `new RunView(this).RunView(...)` — the "MJ: Materialized Result Queries"
+ * join lookup (query→MR link) and the "MJ: Materialized Results" status row.
  * Locks: FIX #2 (ordering guard reads GetPlatformSQL, not base query.SQL), FIX #4 (bidirectional coverage), the
  * paramTypes → coercion threading, and the Active status gate.
  */
@@ -1118,8 +1119,17 @@ class TestMatPlanProvider extends TestPipelineProvider {
     private _matRow: Record<string, unknown> | null = null;
     public setMatRow(row: Record<string, unknown> | null) { this._matRow = row; }
 
-    /** Intercept the status read (`new RunView(this).RunView(...)` proxies here) and return the canned row. */
+    /**
+     * Intercept the two reads `tryBuildMaterializedQueryPlan` performs (both proxy here via `new RunView(this)`):
+     *   1) 'MJ: Materialized Result Queries' — the query<->MR join lookup (by QueryID). A row exists iff the query
+     *      has a materialization; we key its presence off `_matRow` so setMatRow(null) models "not materialized".
+     *   2) 'MJ: Materialized Results'        — the materialization status row (canned via setMatRow).
+     */
     public override async RunView<T = unknown>(params: RunViewParams, _contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        if (params.EntityName === 'MJ: Materialized Result Queries') {
+            const Results = (this._matRow ? [{ MaterializedResultID: 'm1' }] : []) as T[];
+            return { Success: true, Results, RowCount: Results.length, TotalRowCount: Results.length, ErrorMessage: '' } as unknown as RunViewResult<T>;
+        }
         if (params.EntityName === 'MJ: Materialized Results') {
             const Results = (this._matRow ? [this._matRow] : []) as T[];
             return { Success: true, Results, RowCount: Results.length, TotalRowCount: Results.length, ErrorMessage: '' } as unknown as RunViewResult<T>;
