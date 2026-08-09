@@ -22,12 +22,20 @@ import {
     RunView,
     UserInfo,
 } from '@memberjunction/core';
-import { MJTaskEntity, MJTaskDependencyEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
+import {
+    MJTaskEntity,
+    MJTaskDependencyEntity,
+    MJTaskTypeEntity,
+    type MJTaskEntity_ITaskStepConfiguration,
+} from '@memberjunction/core-entities';
 import {
     FormatValidationErrors,
     NormalizeDependency,
     ValidateTaskGraphSpec,
     type TaskGraphSpec,
+    type TaskGraphSpecNode,
+    type ForEachOperation,
+    type WhileOperation,
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
 
@@ -149,6 +157,128 @@ export type TaskGraphSubmitResult = {
 /** Name of the task type used for agent-orchestrated graphs. */
 const TASK_TYPE_NAME = 'AI Workflow';
 
+/**
+ * The node kinds a `Task` row can actually represent, and therefore the ones the dispatcher can run.
+ *
+ * `Agent` and `Action` have their own foreign keys; `Human` is a task with an assignee; `ForEach`
+ * and `While` carry their loop definition in `Task.Configuration` and their repeated body in the
+ * same `AgentID` / `ActionID` keys.
+ *
+ * `Prompt` and `External` are absent because nothing runs them yet — there is no prompt runner, and
+ * an external step is completed by a system that has no way to report back. Both are legitimate
+ * parts of the spec; persisting one would simply produce a task that waits forever.
+ */
+const DISPATCHABLE_KINDS: ReadonlyArray<TaskGraphSpecNode['kind']> = [
+    'Agent', 'Action', 'Human', 'ForEach', 'While',
+];
+
+/**
+ * Reports the node kinds this dispatcher cannot execute, or `null` when the graph is fully runnable.
+ *
+ * **Why this is a submit-time check and not a validation rule.** `ValidateTaskGraphSpec` is a pure
+ * function over the spec: it answers "is this a well-formed graph?", and its answer has to be the
+ * same in a browser, a CLI and a server. "Can it run *here*?" is a different question whose answer
+ * changes as runners are added, so it belongs to the runtime that owns the runners.
+ *
+ * **Why refuse rather than persist-and-stall.** Before this existed, `persistTasks` keyed off which
+ * configuration field happened to be populated and fell through to "Human task assigned to the
+ * submitter" for everything else — so a loop step silently became an approval request nobody asked
+ * for and nothing would ever complete. A graph that hangs forever while *looking* like it is waiting
+ * on a person is the most expensive failure available here. Refusing at the door instead names the
+ * offending step while the workflow is still the author's to edit.
+ */
+/**
+ * Projects a spec node onto the `Task.Configuration` bag.
+ *
+ * Everything the row cannot hold in a column of its own: the kind-specific settings, the payload
+ * mappings, and the execution policy. Returning `null` for an empty result keeps `Configuration`
+ * NULL rather than `"{}"`, so "this step has no settings" reads the same in the database as it does
+ * in the spec.
+ *
+ * **The mappings are the point.** They are how a step's result reaches the payload, and every
+ * branch condition downstream reads the payload — so a step persisted without them produces a
+ * workflow whose conditions all evaluate against nothing. Undefined is falsy, so that failure looks
+ * exactly like a branch legitimately not being taken.
+ */
+export function BuildStepConfiguration(node: TaskGraphSpecNode): MJTaskEntity_ITaskStepConfiguration | null {
+    const config: MJTaskEntity_ITaskStepConfiguration = {};
+
+    const agent = ConfigOf(node, 'Agent');
+    if (agent?.message || agent?.templateParameters) {
+        config.agent = { message: agent.message, templateParameters: agent.templateParameters };
+    }
+
+    const prompt = ConfigOf(node, 'Prompt');
+    if (prompt?.templateParameters) config.prompt = { templateParameters: prompt.templateParameters };
+
+    const forEach = ConfigOf(node, 'ForEach');
+    if (forEach) config.forEach = forEach;
+
+    const whileOp = ConfigOf(node, 'While');
+    if (whileOp) config.while = whileOp;
+
+    const human = ConfigOf(node, 'Human');
+    if (human?.instructions) config.human = { instructions: human.instructions };
+
+    const external = ConfigOf(node, 'External');
+    if (external) config.external = external;
+
+    // Mappings live on the Action arm of the spec, but they are not action-specific: a loop step
+    // carries them too, which is how its per-iteration inputs and results are wired.
+    const action = ConfigOf(node, 'Action');
+    const inputMapping = action?.inputMapping;
+    const outputMapping = action?.outputMapping;
+    if (inputMapping) config.inputMapping = inputMapping;
+    if (outputMapping) config.outputMapping = outputMapping;
+
+    if (node.policy) {
+        config.policy = {
+            timeoutSeconds: node.policy.timeoutSeconds,
+            retryCount: node.policy.retryCount,
+            onError: node.policy.onError,
+        };
+    }
+
+    return Object.keys(config).length > 0 ? config : null;
+}
+
+/** Internal alias so the persistence path reads as a step, not as a projection. */
+const buildStepConfiguration = BuildStepConfiguration;
+
+/**
+ * The loop definition on a node, whichever loop kind it is.
+ *
+ * ForEach and While differ in how they decide to iterate, not in what they repeat, so everything
+ * downstream of that decision — body resolution, name collection, persistence — treats them alike.
+ */
+export function LoopOperationOf(node: TaskGraphSpecNode): ForEachOperation | WhileOperation | null {
+    return ConfigOf(node, 'ForEach') ?? ConfigOf(node, 'While') ?? null;
+}
+
+/** Every agent name a node references, including the sub-agent a loop repeats. */
+function agentNamesIn(node: TaskGraphSpecNode): string[] {
+    const names = [ConfigOf(node, 'Agent')?.agentName, LoopOperationOf(node)?.subAgent?.name];
+    return names.filter((n): n is string => !!n);
+}
+
+/** Every action name a node references, including the action a loop repeats. */
+function actionNamesIn(node: TaskGraphSpecNode): string[] {
+    const names = [ConfigOf(node, 'Action')?.actionName, LoopOperationOf(node)?.action?.name];
+    return names.filter((n): n is string => !!n);
+}
+
+export function FindUnrunnableKinds(spec: TaskGraphSpec): string | null {
+    const offenders = spec.tasks.filter((t) => !DISPATCHABLE_KINDS.includes(t.kind));
+    if (offenders.length === 0) return null;
+
+    const detail = offenders.map((t) => `"${t.name}" (${t.kind})`).join(', ');
+    return (
+        `"${spec.workflowName}" cannot be run yet: ${detail}. ` +
+        `The dispatcher runs agent, action, person and loop steps. Prompt steps and steps completed ` +
+        `by an outside system are not supported yet — replace them, or split them out of this workflow.`
+    );
+}
+
 export class TaskGraphService {
     /**
      * Validates and persists a task graph, returning as soon as it is durable.
@@ -166,6 +296,15 @@ export class TaskGraphService {
             const message = `Task graph "${spec.workflowName}" is invalid:\n${FormatValidationErrors(validation.Errors)}`;
             LogError(`[TaskGraphService] ${message}`);
             return { Success: false, ErrorMessage: message };
+        }
+
+        // 1b. Representability. Validation asks "is this a well-formed graph?"; this asks "can THIS
+        //     dispatcher run it?" — a different question, and one the pure validator has no business
+        //     answering, since capability is a property of the runtime, not of the spec.
+        const unrunnable = this.findUnrunnableKinds(spec);
+        if (unrunnable) {
+            LogError(`[TaskGraphService] ${unrunnable}`);
+            return { Success: false, ErrorMessage: unrunnable };
         }
 
         try {
@@ -283,7 +422,10 @@ export class TaskGraphService {
         spec: TaskGraphSpec,
         context: TaskGraphSubmitContext,
     ): Promise<{ Success: boolean; Map?: Map<string, string>; ErrorMessage?: string }> {
-        const names = [...new Set(spec.tasks.map((t) => ConfigOf(t, 'Agent')?.agentName).filter((n): n is string => !!n))];
+        // A loop's repeated sub-agent counts as a referenced agent. Collecting only the Agent nodes
+        // left a loop body pointing at a name nothing had resolved, so the row got no AgentID and
+        // the loop had nothing to run.
+        const names = [...new Set(spec.tasks.flatMap(agentNamesIn))];
         if (names.length === 0) return { Success: true, Map: new Map() };
 
         const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
@@ -316,7 +458,8 @@ export class TaskGraphService {
         spec: TaskGraphSpec,
         context: TaskGraphSubmitContext,
     ): Promise<{ Success: boolean; Map?: Map<string, string>; ErrorMessage?: string }> {
-        const names = [...new Set(spec.tasks.map((t) => ConfigOf(t, 'Action')?.actionName).filter((n): n is string => !!n))];
+        // Includes a loop's repeated action — see the note in resolveAgents.
+        const names = [...new Set(spec.tasks.flatMap(actionNamesIn))];
         if (names.length === 0) return { Success: true, Map: new Map() };
 
         const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
@@ -406,17 +549,60 @@ export class TaskGraphService {
             task.Status = 'Pending';
             task.PercentComplete = 0;
 
-            const agentName = ConfigOf(node, 'Agent')?.agentName;
-            const actionName = ConfigOf(node, 'Action')?.actionName;
-            if (agentName) {
-                task.AgentID = agentIDsByName.get(agentName)!;
-            } else if (actionName) {
-                task.ActionID = actionIDsByName.get(actionName)!;
-            } else {
-                // Human task. Assigned to the submitting user only — cross-user assignment stays
-                // rejected until the authorization model in #3524 lands.
-                task.UserID = context.ContextUser.ID;
+            // The discriminator the dispatcher routes on. Written first because everything below —
+            // and everything the dispatcher later does with this row — reads it.
+            task.StepType = node.kind;
+
+            // Switching on `kind` rather than on which config field happens to be populated. The
+            // old shape — "agentName? then agent; actionName? then action; ELSE human" — turned
+            // every kind it did not know about into a Human task assigned to the submitter, so a
+            // ForEach step became an approval request that nobody had asked for and nothing would
+            // ever complete. A graph that stalls forever while LOOKING like it is waiting on a
+            // person is the worst available failure. `findUnrunnableKinds` refuses unsupported
+            // kinds before anything is written; this switch is what keeps the two in step.
+            switch (node.kind) {
+                case 'Agent':
+                    task.AgentID = agentIDsByName.get(ConfigOf(node, 'Agent')!.agentName)!;
+                    break;
+                case 'Action':
+                    task.ActionID = actionIDsByName.get(ConfigOf(node, 'Action')!.actionName)!;
+                    break;
+                case 'Human':
+                    // Assigned to the submitting user only — cross-user assignment stays rejected
+                    // until the authorization model in #3524 lands.
+                    task.UserID = context.ContextUser.ID;
+                    break;
+                case 'ForEach':
+                case 'While': {
+                    // A loop's key points at what it REPEATS, not at the loop itself. That keeps the
+                    // reference a real foreign key — joinable, constrained, rename-proof — instead
+                    // of a name buried in JSON, and CK_Task_Assignment still holds because a loop
+                    // body is exactly one thing.
+                    const op = LoopOperationOf(node);
+                    if (op?.action) task.ActionID = actionIDsByName.get(op.action.name)!;
+                    else if (op?.subAgent) task.AgentID = agentIDsByName.get(op.subAgent.name)!;
+                    else {
+                        throw new Error(
+                            `Task "${node.name}" is a loop with nothing to repeat. Choose an action ` +
+                            `or a sub-agent for it to run on each pass.`,
+                        );
+                    }
+                    break;
+                }
+                default:
+                    // Unreachable: findUnrunnableKinds rejected these before any write. Throwing
+                    // rather than falling through means a kind added later fails loudly here
+                    // instead of quietly becoming somebody's to-do item.
+                    throw new Error(
+                        `Task "${node.name}" has kind "${node.kind}", which cannot be persisted for dispatch.`,
+                    );
             }
+
+            // Everything about the step that has no column of its own. Dropping this is what used
+            // to lose the input/output mappings — and with them the payload values every branch
+            // condition downstream reads.
+            const configuration = buildStepConfiguration(node);
+            task.Configuration = configuration ? JSON.stringify(configuration) : null;
 
             // Input rides in its own column; Description stays human-readable.
             task.InputPayload = node.inputPayload ? JSON.stringify(node.inputPayload) : null;
@@ -427,6 +613,26 @@ export class TaskGraphService {
             map.set(node.tempId, task.ID);
         }
         return map;
+    }
+
+    /**
+     * Reports the node kinds this dispatcher cannot yet execute, or `null` when the graph is
+     * entirely runnable.
+     *
+     * **Why this is a submit-time check and not a validation rule.** `ValidateTaskGraphSpec` is a
+     * pure function over the spec: it answers "is this a well-formed graph?", and its answer must be
+     * the same in a browser, a CLI and a server. "Can it run *here*?" is a different question whose
+     * answer changes as runners are added, so it belongs to the runtime that owns the runners.
+     *
+     * **Why refuse rather than persist-and-stall.** `Prompt`, `ForEach`, `While` and `External`
+     * are legitimate parts of the spec, but the `Task` row has nowhere to carry a node's `kind` or
+     * its typed `configuration` — so a persisted one could not be dispatched even if a runner
+     * existed. Refusing at the door tells the author which step is the problem while the graph is
+     * still theirs to edit. The alternative is a graph that submits successfully and then never
+     * finishes, which costs an operator an afternoon to diagnose.
+     */
+    private findUnrunnableKinds(spec: TaskGraphSpec): string | null {
+        return FindUnrunnableKinds(spec);
     }
 
     /** Writes the dependency edges, translating tempIds to persisted IDs. */
@@ -451,6 +657,16 @@ export class TaskGraphService {
                 // NULL for an unconditional edge, matching AIAgentStepPath — so a graph authored in
                 // the flow editor and one emitted by an agent store the same thing.
                 dep.Condition = edge.condition ?? null;
+
+                // The exclusive-choice fields. Dropping these was silent and severe: without an
+                // ExclusiveGroup the dispatcher sees a plain fan-out and runs EVERY branch, so a
+                // workflow that should pick one route would take all of them — doing work its author
+                // never intended and, in the Demo workflow's case, calling two different APIs where
+                // the flow calls one. Priority and Sequence are what decide which branch wins, so a
+                // group without them resolves arbitrarily.
+                dep.ExclusiveGroup = edge.exclusiveGroup ?? null;
+                dep.Priority = edge.priority ?? 0;
+                dep.Sequence = edge.sequence ?? 0;
                 if (!(await dep.Save())) {
                     throw new Error(
                         `Could not create dependency ${node.tempId} -> ${edge.tempId}: ${dep.LatestResult?.CompleteMessage ?? 'unknown error'}`,

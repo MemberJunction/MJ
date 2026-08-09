@@ -19997,6 +19997,9 @@ export class MJAIPrompt_ {
     @Field(() => [MJAIAgentType_])
     MJAIAgentTypes_ConversationSummaryPromptIDArray: MJAIAgentType_[]; // Link to MJAIAgentTypes
     
+    @Field(() => [MJTask_])
+    MJTasks_PromptIDArray: MJTask_[]; // Link to MJTasks
+    
 }
 
 //****************************************************************************
@@ -20597,6 +20600,16 @@ export class MJAIPromptResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentTypes')} WHERE ${provider.QuoteIdentifier('ConversationSummaryPromptID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Types', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiprompt_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Types', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTask_])
+    async MJTasks_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tasks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTasks')} WHERE ${provider.QuoteIdentifier('PromptID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tasks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiprompt_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tasks', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -84888,6 +84901,17 @@ export class MJTask_ {
     @MaxLength(36)
     ActionID?: string;
         
+    @Field({nullable: true, description: `Which kind of workflow step this task represents. NULL for a task that is not part of a workflow, such as a hand-authored to-do. Determines which of AgentID/ActionID/PromptID/UserID is meaningful and how Configuration is read. This is the executable vocabulary and is deliberately not the same value list as AIAgentStep.StepType, which describes a step at design time.`}) 
+    @MaxLength(20)
+    StepType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    PromptID?: string;
+        
+    @Field({nullable: true, description: `Everything about this step that has no column of its own, as JSON: the loop definition for a ForEach or While step, an agent step's message and template parameters, the mappings that move data between this step and the workflow payload, and the execution policy (timeout, retries, what to do on failure). Typed by ITaskStepConfiguration.`}) 
+    Configuration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -84923,6 +84947,10 @@ export class MJTask_ {
     @Field({nullable: true}) 
     @MaxLength(425)
     Action?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Prompt?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -85010,6 +85038,15 @@ export class CreateMJTaskInput {
     @Field({ nullable: true })
     ActionID: string | null;
 
+    @Field({ nullable: true })
+    StepType: string | null;
+
+    @Field({ nullable: true })
+    PromptID: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -85085,6 +85122,15 @@ export class UpdateMJTaskInput {
 
     @Field({ nullable: true })
     ActionID?: string | null;
+
+    @Field({ nullable: true })
+    StepType?: string | null;
+
+    @Field({ nullable: true })
+    PromptID?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

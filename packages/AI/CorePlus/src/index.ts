@@ -29,6 +29,7 @@ export * from './task-graph/task-graph-validator';
 export * from './task-graph/flow-graph-compiler';
 export * from './task-graph/task-graph-submitter';
 export * from './task-graph/graph-traversal-engine';
+export * from './task-graph/payload-mapping';
 export * from './task-graph/task-graph-to-agent-spec';
 export * from './task-graph/workflow-spec';
 export * from './task-graph/workflow-spec-validator';

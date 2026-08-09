@@ -380,6 +380,25 @@ type LoopConfigJSON = {
     condition?: string;
 };
 
+/**
+ * Parses a stored JSON object, yielding `{}` for anything unusable.
+ *
+ * Silent by design, unlike {@link parseLoopConfig}: this reads an input mapping, whose absence is
+ * the normal case for a step that takes no parameters. Reporting that as a workflow problem would
+ * bury the real ones.
+ */
+function parseJSONObject(raw: string | null | undefined): Record<string, unknown> {
+    if (!raw?.trim()) return {};
+    try {
+        const parsed: unknown = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? (parsed as Record<string, unknown>)
+            : {};
+    } catch {
+        return {};
+    }
+}
+
 function parseLoopConfig(step: FlowCompilerStep, errors: FlowCompileError[]): LoopConfigJSON {
     if (!step.Configuration?.trim()) return {};
     try {
@@ -409,7 +428,13 @@ function buildLoopBody(
             return {
                 action: {
                     name: actionName,
-                    params: {},
+                    // The step's authored input mapping, carried UNRESOLVED on purpose. Its values
+                    // may reference the payload — including the item and index this loop binds on
+                    // each pass — so resolving it here would freeze every iteration to the same
+                    // inputs. The dispatcher resolves it per iteration, with the bindings in scope.
+                    // Emitting `{}` (as this did) dropped the step's inputs entirely: the repeated
+                    // action ran N times with no parameters.
+                    params: parseJSONObject(step.ActionInputMapping),
                     outputMapping: step.ActionOutputMapping ?? undefined,
                 },
             };

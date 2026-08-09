@@ -31,12 +31,18 @@ import {
     type EdgeConditionOutcome,
 
     ComputeSkipCascade,
+    ApplyOutputMapping,
+    BuildMappedInput,
+    ResolveMappedInput,
+    type ForEachOperation,
+    type WhileOperation,
 } from '@memberjunction/ai-core-plus';
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { IShutdownable, ShutdownRegistry } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
 import { DispatcherConditionEvaluator } from './DispatcherConditionEvaluator';
+import { RunForEachLoop, RunWhileLoop, type LoopBodyInvoker } from './TaskLoopExecutor';
 import { NotificationEngine } from '@memberjunction/notifications';
 
 /** Metadata-seeded notification type for human tasks (metadata/notifications/.task-assignment-type.json). */
@@ -341,28 +347,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 catch (e) { LogError(`[TaskGraphDispatcher] Task ${taskID} has malformed InputPayload: ${e}`); }
             }
 
-            // Which executor runs this node is decided by its assignment, which the Task table makes
-            // exclusive — so this is a branch on data, not a guess. Both branches are normalized to
-            // one shape here so the recording below stays a single path: an action node simply has
-            // no agent run to point at, since its forensics live in ActionExecutionLog.
-            const result: { Success: boolean; Output?: unknown; ErrorMessage?: string; AgentRunID?: string | null } =
-                task.ActionID
-                    ? { ...await this.actionRunner!.RunActionForTask({
-                        TaskID: taskID,
-                        ActionID: task.ActionID,
-                        InputPayload: inputPayload,
-                        DependencyOutputs: dependencyOutputs,
-                        Provider: provider,
-                        ContextUser: this.contextUser,
-                    }), AgentRunID: null }
-                    : await this.agentRunner.RunAgentForTask({
-                        TaskID: taskID,
-                        AgentID: task.AgentID!,
-                        InputPayload: inputPayload,
-                        DependencyOutputs: dependencyOutputs,
-                        Provider: provider,
-                        ContextUser: this.contextUser,
-                    });
+            const result = await this.runTaskBody(task, provider, inputPayload, dependencyOutputs);
 
             const recorded = await this.claims.CompleteClaimed(
                 provider,
@@ -1005,5 +990,176 @@ export class TaskGraphDispatcher implements IShutdownable {
             catch (e) { LogError(`[TaskGraphDispatcher] Task ${dep.DependsOnTaskID} has malformed OutputPayload: ${e}`); }
         }
         return outputs;
+    }
+
+    /**
+     * Runs one task's body, whatever kind of step it is.
+     *
+     * **Routing is on `StepType`, not on which key happens to be set.** A loop step carries the same
+     * `ActionID` or `AgentID` as an ordinary step — that key is what the loop *repeats* — so the old
+     * `task.ActionID ? action : agent` test would have run a loop exactly once and called it done.
+     * `StepType` is the only field that distinguishes them.
+     *
+     * Every branch is normalized to one shape so the recording path above stays single: an action has
+     * no agent run to point at, because its forensics live in `ActionExecutionLog` instead.
+     */
+    private async runTaskBody(
+        task: MJTaskEntity,
+        provider: IMetadataProvider,
+        inputPayload: unknown,
+        dependencyOutputs: Map<string, unknown>,
+    ): Promise<{ Success: boolean; Output?: unknown; ErrorMessage?: string; AgentRunID?: string | null }> {
+        const payload = this.mergedPayload(inputPayload, dependencyOutputs);
+        const config = task.ConfigurationObject;
+
+        // A loop's own step type decides how many times its body runs; the body itself is dispatched
+        // through the very same runners as a one-shot step.
+        if (task.StepType === 'ForEach' || task.StepType === 'While') {
+            return this.runLoopTask(task, provider, payload, dependencyOutputs);
+        }
+
+        const { params, errors } = BuildMappedInput(config?.inputMapping, { payload });
+        for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${e}`);
+        const effectiveInput = Object.keys(params).length > 0 ? params : inputPayload;
+
+        const raw = task.ActionID
+            ? { ...await this.actionRunner!.RunActionForTask({
+                TaskID: task.ID,
+                ActionID: task.ActionID,
+                InputPayload: effectiveInput,
+                DependencyOutputs: dependencyOutputs,
+                Provider: provider,
+                ContextUser: this.contextUser,
+            }), AgentRunID: null }
+            : await this.agentRunner.RunAgentForTask({
+                TaskID: task.ID,
+                AgentID: task.AgentID!,
+                InputPayload: effectiveInput,
+                DependencyOutputs: dependencyOutputs,
+                Provider: provider,
+                ContextUser: this.contextUser,
+            });
+
+        return { ...raw, Output: this.applyStepOutputMapping(task, payload, raw.Output, config?.outputMapping) };
+    }
+
+    /**
+     * Runs a loop step: its body once per iteration, with the item and index in scope.
+     *
+     * The loop's own `Configuration` supplies the definition; the row's `ActionID` / `AgentID`
+     * supplies what to repeat. Per-iteration inputs are resolved fresh each pass — the bindings are
+     * merged into the payload before the mapping is applied, which is how a body can reference the
+     * current item at all.
+     */
+    private async runLoopTask(
+        task: MJTaskEntity,
+        provider: IMetadataProvider,
+        payload: Record<string, unknown>,
+        dependencyOutputs: Map<string, unknown>,
+    ): Promise<{ Success: boolean; Output?: unknown; ErrorMessage?: string; AgentRunID?: string | null }> {
+        const config = task.ConfigurationObject;
+        const op = task.StepType === 'ForEach' ? config?.forEach : config?.while;
+        if (!op) {
+            return {
+                Success: false,
+                AgentRunID: null,
+                ErrorMessage: `"${task.Name}" is a ${task.StepType} step with no loop settings, so there is nothing to repeat.`,
+            };
+        }
+
+        const bodyMapping = (op.action?.params ?? {}) as Record<string, unknown>;
+        const invokeBody: LoopBodyInvoker = async ({ Bindings }) => {
+            // Bindings go INTO the payload rather than beside it, so an authored mapping reaches the
+            // current item the same way it reaches anything else: `payload.<itemVariable>`.
+            const iterationPayload = { ...payload, ...Bindings };
+            const resolved = ResolveMappedInput(bodyMapping, { payload: iterationPayload }) as Record<string, unknown>;
+
+            return task.ActionID
+                ? this.actionRunner!.RunActionForTask({
+                    TaskID: task.ID,
+                    ActionID: task.ActionID,
+                    InputPayload: resolved,
+                    DependencyOutputs: dependencyOutputs,
+                    Provider: provider,
+                    ContextUser: this.contextUser,
+                })
+                : this.agentRunner.RunAgentForTask({
+                    TaskID: task.ID,
+                    AgentID: task.AgentID!,
+                    InputPayload: resolved,
+                    DependencyOutputs: dependencyOutputs,
+                    Provider: provider,
+                    ContextUser: this.contextUser,
+                });
+        };
+
+        const outcome = task.StepType === 'ForEach'
+            ? await RunForEachLoop(op as ForEachOperation, { payload }, invokeBody)
+            : await RunWhileLoop(
+                op as WhileOperation,
+                (iteration) => this.conditionEvaluator.Evaluate(
+                    (op as WhileOperation).condition,
+                    { ...payload, iteration },
+                ),
+                invokeBody,
+            );
+
+        return {
+            Success: outcome.Success,
+            AgentRunID: null,
+            ErrorMessage: outcome.ErrorMessage,
+            Output: this.applyStepOutputMapping(task, payload, outcome.Output, op.action?.outputMapping ?? config?.outputMapping),
+        };
+    }
+
+    /**
+     * Files a step's result into the payload it hands downstream.
+     *
+     * **This is what makes a branch condition possible.** A workflow that branches on
+     * `payload.stockPrice` has that value only because this step mapped `CurrentPrice -> stockPrice`.
+     * Without it the condition reads `undefined` — merely falsy — so the workflow takes the other
+     * branch, finishes, and reports success with nothing to indicate anything went wrong.
+     *
+     * The incoming payload is carried through as well as the update, so a value written three steps
+     * back is still readable here. Returning only this step's own output is what used to limit a
+     * condition's view to its immediate predecessor.
+     */
+    private applyStepOutputMapping(
+        task: MJTaskEntity,
+        payload: Record<string, unknown>,
+        output: unknown,
+        outputMapping: string | undefined,
+    ): unknown {
+        if (!outputMapping) return output ?? payload;
+
+        const source = output && typeof output === 'object' ? output as Record<string, unknown> : { value: output };
+        const { updates, errors } = ApplyOutputMapping(source, outputMapping);
+        for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${e}`);
+
+        return { ...payload, ...updates };
+    }
+
+    /**
+     * The payload a step sees: everything its prerequisites produced, plus its own declared input.
+     *
+     * **Why the outputs are merged rather than kept per-task.** A flow carried ONE payload that
+     * accumulated as it went, so a condition on the edge into step C could read a value step A wrote.
+     * Handing each task only its immediate predecessor's output would silently narrow that: the
+     * condition reads `undefined`, which is falsy, and the workflow quietly takes a different route
+     * than the flow it was compiled from. Merging in dependency order restores the accumulation.
+     *
+     * Later prerequisites win on a key collision, matching a flow's own last-write-wins behaviour.
+     */
+    private mergedPayload(inputPayload: unknown, dependencyOutputs: Map<string, unknown>): Record<string, unknown> {
+        const merged: Record<string, unknown> = {};
+        for (const output of dependencyOutputs.values()) {
+            if (output && typeof output === 'object' && !Array.isArray(output)) {
+                Object.assign(merged, output as Record<string, unknown>);
+            }
+        }
+        if (inputPayload && typeof inputPayload === 'object' && !Array.isArray(inputPayload)) {
+            Object.assign(merged, inputPayload as Record<string, unknown>);
+        }
+        return merged;
     }
 }
