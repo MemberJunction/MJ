@@ -1,9 +1,9 @@
 # Field-Level Security (FLS) Guide
 
-Role-based, per-field access control for entity data — who can **read** and who can **update**
-each column, enforced server-side. Built for the compensation / donor-giving / personnel-record
-class of requirement: an entity most users may work with, containing a few columns most users
-must never see.
+Role-based, per-field access control for entity data — who can **read**, **update**, and
+**create** each column, enforced server-side. Built for the compensation / donor-giving /
+personnel-record class of requirement: an entity most users may work with, containing a few
+columns most users must never see.
 
 This guide is for administrators configuring FLS and for developers building on entities that
 carry it. It documents the configuration model, what is and is not enforced, and — read these
@@ -13,72 +13,91 @@ before restricting anything — the configuration constraints and trust boundari
 
 ## 1. Configuration model
 
-FLS is data, not code: rows in **`MJ: Entity Field Permissions`** (`EntityFieldPermission`),
-each mapping an entity **field** to a **role** with access flags:
+### 1.1 Field security is ON or OFF per entity
+
+Every entity has an **`Enable Field Level Security`** flag, and it is off by default. While it
+is off, field permission rows are ignored entirely — so nothing you configure can change access
+on an entity that has not opted in.
+
+**Turning it ON is safe.** MJ snapshots the entity's existing entity-level permissions into
+per-field rows at that moment, so every role keeps exactly the access it already had. Enabling
+changes nothing until you tighten a specific field.
+
+**Turning it OFF keeps the rows**, functionally inactive. Re-enabling does not lose your
+configuration, and MJ reconciles whatever the schema gained in the meantime.
+
+You never maintain those rows by hand. Add a column, grant a role access to the entity, drop a
+column, revoke a role — MJ adds and removes the corresponding field rows for you. What it will
+never do is overwrite a rule you wrote: a tightening survives every reconciliation, including
+disable → schema change → re-enable.
+
+### 1.2 The three verbs
+
+Rows live in **`MJ: Entity Field Permissions`** (`EntityFieldPermission`), one per
+(field, role):
 
 | Column | Meaning |
 |---|---|
 | `EntityFieldID` | The field being secured |
 | `RoleID` | The role the row applies to |
-| `Type` | `Allow` or `Deny` |
-| `CanRead` / `CanUpdate` | The access being granted (Allow) or revoked (Deny) |
-| `CanCreate` | Present in the schema but **not enforced** in this release |
+| `ReadAccess` | Whether this role may read the field's values |
+| `UpdateAccess` | Whether this role may change the value on an existing record |
+| `CreateAccess` | Whether this role may supply the value when creating a record |
 
-### Aggregation semantics
+Each verb is one of three values, behaving the way SQL Server's own permissions do:
 
-- **No rows on a field → default open.** Every existing deployment is unaffected until an
-  admin explicitly adds rows. Zero migration burden.
-- **Any row on a field → allow-list mode for that field.** Only roles holding an `Allow` row
-  with the flag set get that access; a user whose roles match no rows gets **nothing** on that
-  field. Adding the first row to a field is therefore a deployment-visible event — see §5.
-- **Across a user's roles**: Allow flags OR together; Deny flags OR together; result =
-  `Allow AND NOT Deny`. **A single Deny row on any of the user's roles beats every Allow.**
-- **No person is ever exempt.** There is no admin bypass and no Owner carve-out — deliberately.
-  A feature whose purpose is confidentiality cannot ship with a role that quietly reads
-  everything. (Administering FLS never requires reading the secured *values*; the admin UI
-  edits permission rows, not the data.) **The one exemption is the MJ system user**, which is
-  not a person — see §1.1.
-- `CanRead` and `CanUpdate` aggregate **independently**. Read-denied + update-allowed is a
-  legal configuration (a write-only field, e.g. SSN capture); so is readable + update-denied.
+| Value | Meaning |
+|---|---|
+| **`No Access`** | Neutral, and the default. Grants nothing, blocks nothing — another role's `Allow` still wins. |
+| **`Allow`** | Grants the action for this role. |
+| **`Deny`** | Beats everything. One `Deny` anywhere across the user's roles wins, no matter how many `Allow`s sit beside it. |
 
-### 1.1 The one thing that surprises everyone: the first rule closes the field
+Across the roles a user holds, each verb resolves independently:
+**allowed if any matching row says `Allow` and none says `Deny`.**
 
-Read this before you add your first rule to any field.
+Because `No Access` is the default, a row you create by hand grants nothing until you say so.
 
-The open-by-default behavior is a property of the **field**, not of the user. So:
+### 1.3 Read is required for Update and Create
 
-- A field with **no** rules is readable by everyone.
-- A field with **one** rule is readable only by roles that have an explicit Allow. Everyone
-  else gets nothing — **including users no rule ever mentions.**
+A field a user cannot see is one they cannot change. MJ enforces this in two places, and it
+needs both:
 
-That means adding a single Deny rule for one role does two things at once. It denies that
-role, and it closes the field for every user who does not hold an Allow. People expect a Deny
-list; what they get is an allow list that switches on the moment any rule exists.
+- **Per row**, a database constraint refuses `Update = Allow` or `Create = Allow` unless
+  `Read = Allow`. You will get an error when you save such a row.
+- **Across roles**, the runtime enforces it again. Two rows that are each perfectly legal — role
+  A granting Read+Update, role B denying Read — combine, for a user holding both, into
+  read-denied and update-allowed. No per-row constraint can see that; the runtime clamps it.
 
-**There is no "everyone except role X" form.** Securing a field means listing who *may* read
-it. If four roles should keep access and one should lose it, write four Allow rows — not one
-Deny row.
+So a write-only field is not a configuration MJ supports. If you need one, capture the value
+through a purpose-built action rather than a restricted column.
 
-**Practical rule:** when you secure a field, add the Allow rows for every role that should keep
-access **in the same change**. Otherwise working users lose the field at the next metadata
-refresh.
+### 1.4 No person is exempt
 
-### The system user is exempt
+There is no admin bypass and no Owner carve-out — deliberately. A feature whose purpose is
+confidentiality cannot ship with a role that quietly reads everything. Administering FLS never
+requires reading the secured *values*; the admin UI edits permission rows, not the data.
 
-The MJ system user — the account the server runs its own work as — is exempt from field
-security. It is the only exemption, and it exists because of the flip above: the first rule an
-admin writes, on any role at all, would otherwise strip that field from the server itself.
-Engines then cache partially loaded records process-wide and serve them to every user, with
-nothing at the point of failure pointing back at the rule that caused it.
+The one exemption is the **MJ system user**, which is not a person: it is the account the server
+runs its own work as. Its engine caches are process-wide and shared across every user, so a
+restricted system user would leave partially loaded records where everyone reads them, with
+nothing at the point of failure pointing back at the rule that caused it. The exemption also
+protects no data — the server reaches the database through a single service login that can
+already see every column, so denying it at this layer only stops the server doing its own work.
 
-It costs nothing in protection. The server reads the database through a single service login
-that can already see every column, so denying the system user at this layer protects no data —
-it only stops the server from doing its own work. Anyone who can act as the system user (the
-system API key) is already fully trusted by design.
+MJ refuses to entangle that account with restricted roles in the first place: you cannot save a
+field rule aimed at a role the system user holds, and you cannot give the system user a role
+that already carries field rules.
 
-MJ also refuses to entangle that account with restricted roles in the first place: you cannot
-save a field rule aimed at a role the system user holds, and you cannot give the system user a
-role that already carries field rules.
+### 1.5 What "no rows" means
+
+On an entity with field security **off**, rows are ignored — everything is governed by
+entity-level permissions as usual.
+
+On an entity with field security **on**, a field with no rows for any of your roles is
+**denied**. That is deliberate. MJ creates the rows that should exist, so a missing row means
+reconciliation has not caught up — and failing closed turns that into a visible "I cannot see
+this column" rather than a silent loss of protection. If a field disappears unexpectedly after a
+schema change, run CodeGen; that is the pass which reconciles new columns.
 
 ### Unrestrictable targets
 
@@ -109,6 +128,9 @@ denied set on an entity:
 | **`UserSearchString`** | Not rejected — denied fields are simply excluded from the searched-field list. |
 | **Saves (update)** | A save that modifies a field the user cannot update is rejected server-side before SQL generation. |
 | **Saves (denied-read fields)** | Values a client sends for fields it cannot *read* are **silently ignored** — such a field was stripped from every payload the client ever received, so any value it sends back is fabricated by the transport, not user intent. This is what makes "load a record, edit an unrelated field, save" safe for restricted users. |
+| **Creates** | A value supplied for a field the user may not create is **dropped, and the column takes its default** — the insert is never rejected. Rejecting would name the field, confirming it exists and is restricted; and silently defaulting is exactly what an unrestricted user gets by leaving the field blank, so a restricted user ends up with the same record shape rather than a failure. |
+| **Typed accessors (`Get` / `Set`)** | Reading or writing a denied field **by name** throws, so a restricted field surfaces as a clear failure instead of a silent blank. Framework-internal machinery — validation, save-SQL generation, serialization — reads values directly and is exempt, which is what keeps stored values intact through a restricted user's round trip. |
+| **Entity forms** | Fields the user cannot read are **not rendered at all**. The form checks access before touching a value, so one denied column cannot take out the form it sits in. |
 
 ### The denial message — deliberately ambiguous
 
@@ -190,9 +212,11 @@ connections. Configure both if you have both.
 each entity's generated permissions file, which runs on every CodeGen pass. A DENY is emitted
 only when all of these hold:
 
-1. There is an `EntityFieldPermission` row with `Type = 'Deny'` and `CanRead` set. MJ never
-   invents a DENY from a missing Allow — the database tier is a conservative subset of the
-   app tier, not a copy of it.
+1. The entity has **field security switched on**, and there is an `EntityFieldPermission` row
+   with `ReadAccess = 'Deny'`. MJ never invents a DENY from a `No Access` or a missing row —
+   `No Access` blocks nothing on its own, so mirroring it would make the database tier
+   *stricter* than the app tier rather than the conservative subset it is meant to be.
+   Switching field security off on an entity removes its DENYs on the next CodeGen run.
 2. The role is a **custom role you created** and gave a `SQLName`. The three standard roles
    (UI, Developer, Integration) never get DENYs, because the API service login belongs to
    them and a DENY beats every grant — the API would lose the column for everyone.
@@ -243,9 +267,12 @@ Until it runs, only the API tier reflects the change.
 
 ## 5. Operational notes
 
-- **Adding the first row to a field flips it to allow-list mode** (§1). Before adding it,
-  enumerate which roles legitimately need the field and create their Allow rows in the same
-  change, or working users lose access on the next metadata refresh.
+- **Enabling field security on an entity is safe and reversible** (§1.1). It snapshots current
+  access, so nothing changes until you tighten a field; switching it off keeps your rules for
+  later. You do not maintain the rows by hand — MJ reconciles them as the schema and
+  entity-level permissions change, and never overwrites a rule you wrote.
+- **Run CodeGen after a schema change on an enabled entity.** That is the pass which creates
+  rows for new columns. Until it runs, a new column is denied to everyone (§1.5).
 - **Restricted users still need their baseline roles.** A user holding *only* a custom
   restricted role has no read on the metadata entities and cannot even boot a client session.
   FLS composes with normal role grants (e.g. UI role + the custom role); the custom role's
