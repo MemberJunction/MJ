@@ -60,7 +60,7 @@ and mint-time DDL identifier escaping (dialect-level `QuoteIdentifier`/`QuoteSch
 1. **Rebase/merge onto final `next`.** Resolve any conflicts (materialization files are new, so conflicts
    should be limited to generated files + the migration timestamp ordering).
 
-2. **Re-stamp the migration timestamp** in `migrations/v6/V202608082000__v6.1.x__Query_Entity_Materialization.sql`
+2. **Re-stamp the migration timestamp** in `migrations/v6/V202608090001__v6.1.x__Query_Entity_Materialization.sql`
    to a value **after** `next`'s newest migration at that moment (keep the `v6.1.x` label — do **not** bump to v6.2.x;
    all v6 migrations in `next` are `v6.1.x` per the edge-release convention).
 
