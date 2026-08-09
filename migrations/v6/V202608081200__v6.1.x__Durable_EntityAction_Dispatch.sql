@@ -159,6 +159,111 @@ GO
 
 
 
+/* ==============================================================================================
+   ==============================================================================================
+   ==
+   ==   METADATA REFRESH -- INLINED COPY OF R__RefreshMetadata.sql
+   ==
+   ==   Why this is here rather than left to the repeatable script. Flyway runs EVERY versioned
+   ==   migration before ANY repeatable one. On a live database that ordering is invisible: R
+   ==   already ran after the previous release, so by the time this migration executes, the entity
+   ==   and field metadata its generated block below was produced against is reconciled.
+   ==
+   ==   On a REPLAY from the baseline it is not. The DDL above lands, but the metadata the generated
+   ==   block assumes -- reconciled EntityField rows, recompiled views, renumbered sequences -- does
+   ==   not exist yet, because R will not run until every versioned migration has finished. The
+   ==   generated block then executes against a database in a state it was never generated for.
+   ==
+   ==   Running the refresh here puts the database into that state, so a from-scratch build arrives
+   ==   where a live upgrade arrives. R still runs at the end as normal; doing it twice costs a few
+   ==   seconds and changes nothing, because every statement below is idempotent.
+   ==
+   ==   This is a verbatim copy of migrations/R__RefreshMetadata.sql MINUS its ${flyway:timestamp}
+   ==   line -- that line exists solely to churn the repeatable script's checksum on every run, and
+   ==   including it here would make THIS migration's checksum unstable, which is the one thing a
+   ==   versioned migration may never be.
+   ==
+   ==   A future consolidated baseline (B script) removes the need for this.
+   ==
+   ==============================================================================================
+   ============================================================================================== */
+
+/* SQL text to recompile all views */
+EXEC [${flyway:defaultSchema}].spRecompileAllViews
+GO
+
+/* SQL text to update existing entities from schema */
+EXEC [${flyway:defaultSchema}].spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='sys,staging'
+GO
+
+/* SQL text to sync schema info from database schemas */
+EXEC [${flyway:defaultSchema}].spUpdateSchemaInfoFromDatabase @ExcludedSchemaNames='sys,staging'
+GO
+
+/* SQL text to delete unneeded entity fields */
+EXEC [${flyway:defaultSchema}].spDeleteUnneededEntityFields @ExcludedSchemaNames='sys,staging'
+GO
+
+/* SQL text to update existing entity fields from schema */
+EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='sys,staging'
+GO
+
+/* SQL text to set default column width where needed */
+EXEC [${flyway:defaultSchema}].spSetDefaultColumnWidthWhereNeeded @ExcludedSchemaNames='sys,staging'
+GO
+
+/* SQL text to recompile all stored procedures in dependency order */
+EXEC [${flyway:defaultSchema}].spRecompileAllProceduresInDependencyOrder @ExcludedSchemaNames='sys,staging', @LogOutput=0, @ContinueOnError=1
+GO
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

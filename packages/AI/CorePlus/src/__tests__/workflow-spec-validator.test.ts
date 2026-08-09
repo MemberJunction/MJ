@@ -22,7 +22,7 @@ import type { TaskGraphSpec } from '../task-graph/task-graph-spec';
 
 const graph = (over: Partial<TaskGraphSpec> = {}): TaskGraphSpec => ({
     workflowName: 'W',
-    tasks: [{ tempId: 'a', name: 'A', description: 'a', agentName: 'Sage', dependsOn: [] }],
+    tasks: [{ tempId: 'a', name: 'A', description: 'a', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] }],
     ...over,
 });
 
@@ -51,7 +51,7 @@ describe('ValidateWorkflowSpec', () => {
 
     it('DELEGATES graph validation rather than re-implementing it', () => {
         // A second definition of "valid graph" would let a workflow accept steps the engine rejects.
-        const bad = spec({ graph: graph({ tasks: [{ tempId: 'a', name: 'A', description: 'a', agentName: 'Sage', dependsOn: ['ghost'] }] }) });
+        const bad = spec({ graph: graph({ tasks: [{ tempId: 'a', name: 'A', description: 'a', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['ghost'] }] }) });
         const result = ValidateWorkflowSpec(bad);
         expect(result.Valid).toBe(false);
         const err = result.Errors.find((e) => e.Code === 'InvalidGraph')!;

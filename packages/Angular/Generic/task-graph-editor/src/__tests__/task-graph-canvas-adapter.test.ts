@@ -27,14 +27,14 @@ import {
     UpdateTask,
     WouldCreateCycle,
 } from '../lib/task-graph-canvas-adapter';
-import { ValidateTaskGraphSpec } from '@memberjunction/ai-core-plus';
+import { ConfigOf, ValidateTaskGraphSpec } from '@memberjunction/ai-core-plus';
 import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 
 const task = (over: Partial<TaskGraphSpecNode> = {}): TaskGraphSpecNode => ({
     tempId: 'a',
     name: 'A',
     description: 'does a',
-    agentName: 'Sage',
+    kind: 'Agent' as const, configuration: { agentName: 'Sage' },
     dependsOn: [],
     ...over,
 });
@@ -97,7 +97,7 @@ describe('SpecToNodes', () => {
     });
 
     it('distinguishes a person step from an agent step', () => {
-        const s = spec({ tasks: [task({ tempId: 'h', agentName: undefined, assignToUser: true })] });
+        const s = spec({ tasks: [task({ tempId: 'h', kind: 'Human' as const, configuration: {} })] });
         const node = SpecToNodes(s)[0];
         expect(node.Type).toBe('HumanTask');
         expect(node.Subtitle).toMatch(/person/i);
@@ -207,11 +207,11 @@ describe('graph queries', () => {
     });
 
     it('identifies a human task by assignToUser, not by the absence of an agent', () => {
-        expect(IsHumanTask(task({ agentName: undefined, assignToUser: true }))).toBe(true);
+        expect(IsHumanTask(task({ kind: 'Human' as const, configuration: {} }))).toBe(true);
         expect(IsHumanTask(task())).toBe(false);
         // An action step has no agent either. Reading "no agent" as "a person" is what put steps in
         // the graph claiming to wait on someone nobody had asked for.
-        expect(IsHumanTask(task({ agentName: undefined, actionName: 'Send Email' }))).toBe(false);
+        expect(IsHumanTask(task({ kind: 'Action' as const, configuration: { actionName: 'Send Email' } }))).toBe(false);
         expect(IsHumanTask(task({ agentName: undefined }))).toBe(false);
     });
 });
@@ -225,8 +225,8 @@ describe('assignment shapes', () => {
 
     it('classifies each shape', () => {
         expect(GetTaskNodeType(task())).toBe('AgentTask');
-        expect(GetTaskNodeType(task({ agentName: undefined, actionName: 'Send Email' }))).toBe('ActionTask');
-        expect(GetTaskNodeType(task({ agentName: undefined, assignToUser: true }))).toBe('HumanTask');
+        expect(GetTaskNodeType(task({ kind: 'Action' as const, configuration: { actionName: 'Send Email' } }))).toBe('ActionTask');
+        expect(GetTaskNodeType(task({ kind: 'Human' as const, configuration: {} }))).toBe('HumanTask');
     });
 
     it('reads an unassigned step as an agent step rather than guessing "person"', () => {
@@ -235,8 +235,9 @@ describe('assignment shapes', () => {
 
     it('says so when a step has no assignee, instead of showing a blank subtitle', () => {
         // A blank subtitle looks like a step that is fine; this one is why validation is complaining.
-        expect(TaskSubtitle(task({ agentName: undefined }))).toMatch(/no agent/i);
-        expect(TaskSubtitle(task({ agentName: undefined, actionName: undefined, assignToUser: undefined }))).not.toBe('');
+        const unassigned = task({ kind: 'Agent', configuration: { agentName: '' } });
+        expect(TaskSubtitle(unassigned)).toMatch(/no agent/i);
+        expect(TaskSubtitle(unassigned)).not.toBe('');
     });
 
     it('resolves a palette entry by type, and refuses an unknown one', () => {
@@ -248,16 +249,16 @@ describe('assignment shapes', () => {
 describe('NewTaskFromNodeType', () => {
     const empty = (): TaskGraphSpec => ({ workflowName: 'W', tasks: [] });
 
-    it('sets exactly one assignee per shape — never two, which the validator rejects', () => {
-        const agent = NewTaskFromNodeType(empty(), 'AgentTask', { agentName: 'Sage' });
-        expect([agent.agentName, agent.actionName, agent.assignToUser].filter(Boolean)).toHaveLength(1);
-
-        const action = NewTaskFromNodeType(empty(), 'ActionTask', { actionName: 'Send Email' });
-        expect([action.agentName, action.actionName, action.assignToUser].filter(Boolean)).toHaveLength(1);
+    it('gives each shape exactly one kind, and ignores defaults that do not apply to it', () => {
+        // Under the flat spec this test counted how many of three fields were set. The union makes
+        // "two assignees" unrepresentable, so what is worth pinning now is that the palette shape
+        // decides the kind — and that irrelevant defaults are not smuggled into the configuration.
+        expect(NewTaskFromNodeType(empty(), 'AgentTask', { agentName: 'Sage' }).kind).toBe('Agent');
+        expect(NewTaskFromNodeType(empty(), 'ActionTask', { actionName: 'Send Email' }).kind).toBe('Action');
 
         const human = NewTaskFromNodeType(empty(), 'HumanTask', { agentName: 'Sage', actionName: 'Send Email' });
-        expect([human.agentName, human.actionName, human.assignToUser].filter(Boolean)).toHaveLength(1);
-        expect(human.assignToUser).toBe(true);
+        expect(human.kind).toBe('Human');
+        expect(human.configuration).toEqual({});
     });
 
     it('produces a graph the engine accepts when the host has something to assign', () => {
@@ -269,8 +270,10 @@ describe('NewTaskFromNodeType', () => {
         // An invented agent name passes the canvas and fails at submission. An unassigned step is
         // reported immediately, by the same validator the engine runs.
         const t = NewTaskFromNodeType(empty(), 'AgentTask');
-        expect(t.agentName).toBeUndefined();
-        expect(ValidateTaskGraphSpec(AddTask(empty(), t)).Errors.some((e) => e.Code === 'NoAssignment')).toBe(true);
+        expect(ConfigOf(t, 'Agent')?.agentName).toBe('');
+        // Reported as InvalidConfiguration, not NoAssignment: the step DOES declare what it is (an
+        // agent step), it just has not been told which agent — a more precise complaint than before.
+        expect(ValidateTaskGraphSpec(AddTask(empty(), t)).Errors.some((e) => e.Code === 'InvalidConfiguration')).toBe(true);
     });
 
     it('gives each new step a unique handle so edges stay unambiguous', () => {

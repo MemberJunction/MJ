@@ -178,7 +178,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="InputPayload"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -186,7 +186,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="OutputPayload"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -231,6 +231,31 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="StepType"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="PromptID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -292,10 +317,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Task Dependencies (Depends On Task) Section -->
+    <!-- Task Dependencies (Depends On Task ID) Section -->
     <mj-collapsible-panel
         SectionKey="mJTaskDependenciesDependsOnTaskID"
-        SectionName="Task Dependencies (Depends On Task)"
+        SectionName="Task Dependencies (Depends On Task ID)"
         Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"

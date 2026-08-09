@@ -13,7 +13,9 @@
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation,
-         FormatValidationErrors, ValidateTaskGraphSpec, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
+         FormatValidationErrors, ValidateTaskGraphSpec, type TaskGraphSpec,
+    ConfigOf,
+} from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { LoopAgentResponse } from './loop-agent-response-type';
@@ -193,9 +195,12 @@ export class LoopAgentType extends BaseAgentType {
         const fold = this.describeFold(spec);
         if (fold.folded) {
             const node = spec.tasks[0];
+            // describeFold() has already established this is an Agent node — folding is only offered
+            // for one. The `?? ''` is unreachable and exists so this cannot become a silent `undefined`
+            // if that precondition is ever loosened.
             retVal.step = 'Sub-Agent';
             retVal.subAgent = {
-                name: node.agentName!,
+                name: ConfigOf(node, 'Agent')?.agentName ?? '',
                 message: node.description,
                 terminateAfter: false,
                 templateParameters: {},
@@ -219,7 +224,9 @@ export class LoopAgentType extends BaseAgentType {
 
         const node = spec.tasks[0];
         if (node.dependsOn?.length) return { folded: false, reason: 'the single node declares dependencies' };
-        if (!node.agentName) return { folded: false, reason: 'the single node is a human task' };
+        // Only an Agent node folds to an in-run sub-agent call. Every other kind — a person's step, an
+        // action, a prompt, a loop — has no in-run equivalent and must reach the dispatcher.
+        if (node.kind !== 'Agent') return { folded: false, reason: `the single node is a ${node.kind} step, which has no in-run equivalent` };
         if (spec.durable === true) return { folded: false, reason: 'the graph requested durable execution' };
         if (spec.continuation && spec.continuation !== 'message') {
             return { folded: false, reason: `continuation is '${spec.continuation}', not the default` };
