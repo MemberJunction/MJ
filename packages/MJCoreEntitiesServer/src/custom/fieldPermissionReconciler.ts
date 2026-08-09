@@ -7,6 +7,7 @@ import {
     UserInfo,
 } from '@memberjunction/core';
 import { MJEntityFieldPermissionEntity } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { ComputeFieldPermissionDelta, IsEmptyFieldPermissionDelta } from './fieldPermissionDelta';
 
 /** What a reconciliation run actually wrote. */
@@ -14,6 +15,22 @@ export type FieldPermissionReconcileResult = {
     Inserted: number;
     Deleted: number;
 };
+
+/**
+ * The roles the MJ system user holds, which must never receive permission rows.
+ *
+ * `MJEntityFieldPermissionEntityServer` refuses to save a row aimed at one of them. The standard
+ * roles (UI, Developer, Integration) hold entity permissions on essentially every entity and the
+ * system user holds those roles — so without this exclusion the snapshot fails on its first row
+ * and field security cannot be enabled on anything.
+ *
+ * Returns empty when the cache is cold, which degrades to the previous behaviour rather than
+ * silently skipping every role.
+ */
+function systemUserRoleIDs(): string[] {
+    const systemUser = UserCache.Instance?.GetSystemUser?.();
+    return (systemUser?.UserRoles ?? []).map(ur => ur.RoleID).filter(Boolean);
+}
 
 const NOTHING_DONE: FieldPermissionReconcileResult = { Inserted: 0, Deleted: 0 };
 
@@ -41,7 +58,7 @@ export async function ReconcileFieldPermissions(
     if (!entity || !provider) {
         return NOTHING_DONE;
     }
-    const delta = ComputeFieldPermissionDelta(entity);
+    const delta = ComputeFieldPermissionDelta(entity, { ExcludedRoleIDs: systemUserRoleIDs() });
     if (IsEmptyFieldPermissionDelta(delta)) {
         return NOTHING_DONE;
     }
