@@ -80,13 +80,20 @@ The consequence is not only bookkeeping. Flow's `traversalMode` defaults to `'se
 
 The companion plan closes it: a pure `FlowGraphCompiler` (`AIAgentStep` + `AIAgentStepPath` →
 `TaskGraphSpec`) feeding the existing submitter seam, with `traversalMode` as a **compiler input** so
-existing flows keep their exact order. It also proposes replacing the node's flat
+existing flows keep their exact order. It also replaces the node's flat
 `agentName`/`actionName`/`assignToUser` fields with a discriminated `kind` + typed `configuration`
-bag — into which the already-universal `ForEachOperation`/`WhileOperation` contracts drop unchanged.
+bag — into which the already-universal `ForEachOperation`/`WhileOperation` contracts drop unchanged,
+plus `kind: 'External'` so Phase 9's Caliber nodes never ship as a fourth flat arm.
 
-**Directed:** full cutover — all flows move and the in-run executor is deleted in the same change;
-`onError: 'continue'` becomes a supported dispatcher concept. Decisions still open are marked ⬥ in
-that document.
+**Directed (v2, revised per the intense review + author response, 2026-08-08):** full cutover — all
+flows move at C1.4 behind named gates (differential suite + golden fixtures, streaming bridge, HITL
+end-to-end, `onError: 'continue'`, claim-sweep fix, clean-bootstrap burn-in). Key corrections baked
+in: sequential traversal is an **exclusive choice resolved at run time** (XOR-split + `Skipped`
+cascade), not a compile-time chain; the calling contract is **attached await-settlement** (every
+flow invocation keeps its synchronous shape via an envelope `AIAgentRun` + `WaitForSettlement`);
+the in-run executor is retained **unrouted as the test oracle** at cutover and deleted in Track R.
+All v1 open decisions are resolved in that document's §11; D6/D7/D8 supersession notes live in the
+engine plan's decision rows.
 
 ### Track D — The trigger layer (WHEN)
 
