@@ -13,7 +13,7 @@ import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-p
  */
 describe('TaskGraphPropertiesPanelComponent (DOM)', () => {
     const task = (over: Partial<TaskGraphSpecNode> = {}): TaskGraphSpecNode => ({
-        tempId: 'a', name: 'Gather', description: 'g', agentName: 'Sage', dependsOn: [], ...over,
+        tempId: 'a', name: 'Gather', description: 'g', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [], ...over,
     });
     const spec: TaskGraphSpec = {
         workflowName: 'W',
@@ -50,22 +50,24 @@ describe('TaskGraphPropertiesPanelComponent (DOM)', () => {
         expect(host(f).textContent).toContain('A person');
     });
 
-    it('CLEARS the other assignees when switching kind — two would be an AssignmentConflict', () => {
-        const f = render({ Task: task({ agentName: 'Sage' }), Spec: spec, AvailableActionNames: ['Send Email'] });
+    it('REPLACES kind and configuration together when switching assignment', () => {
+        // The old flat shape needed three fields cleared in step; forgetting one produced an
+        // AssignmentConflict from a gesture that looked like a simple choice. The union makes the
+        // switch atomic — this pins that the configuration is genuinely replaced, not merged.
+        const f = render({ Task: task({ kind: 'Agent' as const, configuration: { agentName: 'Sage' } }), Spec: spec, AvailableActionNames: ['Send Email'] });
         f.componentInstance.SetAssignment('ActionTask');
-        expect(f.componentInstance.Draft!.agentName).toBeUndefined();
-        expect(f.componentInstance.Draft!.actionName).toBe('Send Email');
-        expect(f.componentInstance.Draft!.assignToUser).toBeUndefined();
+        expect(f.componentInstance.Draft!.kind).toBe('Action');
+        expect(f.componentInstance.Draft!.configuration).toEqual({ actionName: 'Send Email' });
     });
 
     it('says the list is empty rather than rendering an empty dropdown, which reads as a bug', () => {
-        const f = render({ Task: task({ agentName: undefined }), Spec: spec, AvailableAgentNames: [] });
+        const f = render({ Task: task({ kind: 'Agent' as const, configuration: { agentName: '' } }), Spec: spec, AvailableAgentNames: [] });
         expect(host(f).querySelector('select')).toBeNull();
         expect(host(f).querySelector('mj-alert')).toBeTruthy();
     });
 
     it('states that cross-user assignment is unavailable rather than offering a picker that fails', () => {
-        const f = render({ Task: task({ agentName: undefined, assignToUser: true }), Spec: spec });
+        const f = render({ Task: task({ kind: 'Human' as const, configuration: {} }), Spec: spec });
         expect(host(f).querySelector('mj-alert')).toBeTruthy();
     });
 

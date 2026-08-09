@@ -585,21 +585,31 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   }
 
   protected onContextMenuAction(action: FlowContextMenuAction): void {
+    // Capture the target BEFORE closing: hideContextMenu() nulls contextMenuNode and
+    // contextMenuConnection, so reading them afterwards found nothing and every branch below fell
+    // through — the menu closed and neither Remove nor Edit did anything, for nodes or connections.
+    const targetType = this.contextMenuTargetType;
+    const node = this.contextMenuNode;
+    const connection = this.contextMenuConnection;
+
     this.hideContextMenu();
 
     if (action === 'edit') {
-      if (this.contextMenuTargetType === 'node' && this.contextMenuNode) {
-        this.NodeEditRequested.emit(this.contextMenuNode);
-      } else if (this.contextMenuTargetType === 'connection' && this.contextMenuConnection) {
-        this.ConnectionEditRequested.emit(this.contextMenuConnection);
+      if (targetType === 'node' && node) {
+        this.NodeEditRequested.emit(node);
+      } else if (targetType === 'connection' && connection) {
+        this.ConnectionEditRequested.emit(connection);
       }
     } else if (action === 'remove') {
-      this.pushUndoState();
-      if (this.contextMenuTargetType === 'node' && this.contextMenuNode) {
-        this.removeNodeById(this.contextMenuNode.ID);
-      } else if (this.contextMenuTargetType === 'connection' && this.contextMenuConnection) {
-        this.removeConnectionById(this.contextMenuConnection.ID);
+      if (targetType === 'node' && node) {
+        this.pushUndoState();
+        this.removeNodeById(node.ID);
+      } else if (targetType === 'connection' && connection) {
+        this.pushUndoState();
+        this.removeConnectionById(connection.ID);
       }
+      // pushUndoState moved inside the branches: pushing before knowing there IS a target left an
+      // undo entry for an action that never happened, so the next Ctrl+Z did nothing visible.
     }
   }
 

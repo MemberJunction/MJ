@@ -27,6 +27,7 @@
 import { Component, EventEmitter, Input, OnDestroy, Output, ViewChild } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
+    ConfigOf,
     ValidateTaskGraphSpec,
     type TaskGraphSpec,
     type TaskGraphSpecNode,
@@ -214,14 +215,18 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     public AddTask(partial: Partial<TaskGraphSpecNode> = {}): TaskGraphSpecNode | null {
         if (this.ReadOnly || !this.currentSpec) return null;
 
+        // Kind and configuration travel together — a partial that supplies one without the other
+        // would be a node the engine cannot run, so an unspecified partial defaults to an unassigned
+        // Agent step and the validator says so immediately.
         const task: TaskGraphSpecNode = {
             tempId: partial.tempId ?? NextTempId(this.currentSpec),
             name: partial.name ?? 'New step',
             description: partial.description ?? '',
-            agentName: partial.agentName,
-            actionName: partial.actionName,
-            assignToUser: partial.assignToUser,
+            kind: partial.kind ?? 'Agent',
+            configuration: partial.configuration ?? { agentName: '' },
             dependsOn: partial.dependsOn ?? [],
+            policy: partial.policy,
+            layout: partial.layout,
             inputPayload: partial.inputPayload,
         };
 
@@ -317,8 +322,9 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
 
     /** Asks the host to open the agent behind a task. */
     public RequestAgentOpen(task: TaskGraphSpecNode): void {
-        if (task.agentName) {
-            this.AgentOpenRequested.emit(new AgentOpenRequestedEventArgs(task.agentName, task));
+        const agentName = ConfigOf(task, 'Agent')?.agentName;
+        if (agentName) {
+            this.AgentOpenRequested.emit(new AgentOpenRequestedEventArgs(agentName, task));
         }
     }
 

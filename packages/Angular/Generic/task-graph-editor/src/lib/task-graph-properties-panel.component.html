@@ -35,7 +35,7 @@
     @switch (Assignment) {
       @case ('AgentTask') {
         @if (AvailableAgentNames.length > 0) {
-          <select class="mj-input" aria-label="Agent" [(ngModel)]="Draft.agentName" [disabled]="ReadOnly" (change)="Commit()">
+          <select class="mj-input" aria-label="Agent" [(ngModel)]="AgentName" [disabled]="ReadOnly" (change)="Commit()">
             @for (name of AvailableAgentNames; track name) {
               <option [value]="name">{{ name }}</option>
             }
@@ -49,7 +49,7 @@
       }
       @case ('ActionTask') {
         @if (AvailableActionNames.length > 0) {
-          <select class="mj-input" aria-label="Action" [(ngModel)]="Draft.actionName" [disabled]="ReadOnly" (change)="Commit()">
+          <select class="mj-input" aria-label="Action" [(ngModel)]="ActionName" [disabled]="ReadOnly" (change)="Commit()">
             @for (name of AvailableActionNames; track name) {
               <option [value]="name">{{ name }}</option>
             }

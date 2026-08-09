@@ -25,7 +25,7 @@ import type {
 } from '../lib/task-graph-editor-events';
 
 const task = (over: Partial<TaskGraphSpecNode> = {}): TaskGraphSpecNode => ({
-    tempId: 'a', name: 'A', description: 'does a', agentName: 'Sage', dependsOn: [], ...over,
+    tempId: 'a', name: 'A', description: 'does a', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [], ...over,
 });
 
 const spec = (over: Partial<TaskGraphSpec> = {}): TaskGraphSpec => ({
@@ -252,14 +252,14 @@ describe('TaskGraphEditorComponent', () => {
             // inside Explorer, a downstream app, or an embedded panel.
             const seen: string[] = [];
             c.AgentOpenRequested.subscribe((a) => seen.push(a.AgentName));
-            c.RequestAgentOpen(task({ agentName: 'Query Builder' }));
+            c.RequestAgentOpen(task({ kind: 'Agent' as const, configuration: { agentName: 'Query Builder' } }));
             expect(seen).toEqual(['Query Builder']);
         });
 
         it('does not ask to open an agent for a human task', () => {
             let emitted = 0;
             c.AgentOpenRequested.subscribe(() => emitted++);
-            c.RequestAgentOpen(task({ agentName: undefined, assignToUser: true }));
+            c.RequestAgentOpen(task({ kind: 'Human' as const, configuration: {} }));
             expect(emitted).toBe(0);
         });
 

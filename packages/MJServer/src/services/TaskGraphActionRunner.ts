@@ -36,7 +36,7 @@ export class TaskGraphActionRunner implements TaskActionRunner {
 
             return {
                 Success: result.Success,
-                Output: result.Params,
+                Output: this.buildOutput(result.Params),
                 ErrorMessage: result.Success ? undefined : result.Message,
             };
         } catch (e) {
@@ -44,6 +44,29 @@ export class TaskGraphActionRunner implements TaskActionRunner {
             LogError(`[TaskGraphActionRunner] Task ${params.TaskID} failed: ${message}`);
             return { Success: false, ErrorMessage: message };
         }
+    }
+
+    /**
+     * Projects the action's parameters onto the flat result a workflow step is expected to produce.
+     *
+     * **Why not return `result.Params` as-is.** That is an `ActionParam[]`, and every consumer of a
+     * step's output addresses fields BY NAME: an output mapping says `{"CurrentPrice": "stockPrice"}`,
+     * and a branch condition then reads `payload.stockPrice`. Handed an array, the mapping finds no
+     * `CurrentPrice`, writes nothing, and the condition evaluates against `undefined` — which is
+     * falsy rather than erroneous, so the workflow takes the other branch and reports success. That
+     * is exactly what the Demo workflow did: step 1 completed with an output payload of `{}` and
+     * every downstream branch was skipped, with nothing anywhere reporting a problem.
+     *
+     * Only `Output` and `Both` params are included. Echoing the inputs back would let a step's own
+     * parameters masquerade as its results, so an output mapping could "succeed" by reading the
+     * value the step was given rather than the one it produced.
+     */
+    private buildOutput(actionParams: ActionParam[]): Record<string, unknown> {
+        const output: Record<string, unknown> = {};
+        for (const p of actionParams ?? []) {
+            if (p.Type === 'Output' || p.Type === 'Both') output[p.Name] = p.Value;
+        }
+        return output;
     }
 
     /**

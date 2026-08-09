@@ -228,6 +228,21 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return this._pendingRecords;
   }
 
+  /**
+   * Unsaved changes a form holds OUTSIDE its record's fields and pending records.
+   *
+   * A form whose sections own editors — a flow canvas, a designer, a grid — accumulates edits that
+   * neither `record.Dirty` nor `PendingRecordsDirty()` can see, because nothing on the entity
+   * changed. Without this the toolbar reports "no changes" while the user is looking at their own
+   * work, and the navigate-away guard lets them lose it silently.
+   *
+   * Default `false`, so no existing form changes behaviour. Override to consult whatever holds the
+   * extra state.
+   */
+  public get HasAdditionalUnsavedChanges(): boolean {
+    return false;
+  }
+
   protected PendingRecordsDirty(): boolean {
     this.PopulatePendingRecords();
     const pendingRecords = this.PendingRecords;

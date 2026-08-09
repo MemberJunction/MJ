@@ -167,7 +167,7 @@ export class TaskClaimStore {
             `SELECT ${db.QuoteIdentifier('ID')}, ${db.QuoteIdentifier('Name')}, ${db.QuoteIdentifier('ClaimedBy')}
              FROM ${this.taskTable(provider)}
              WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-               AND ${db.QuoteIdentifier('AgentID')} IS NOT NULL
+               AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
                AND ${db.QuoteIdentifier('ClaimedBy')} IS NOT NULL
                AND ${db.QuoteIdentifier('ClaimExpiresAt')} IS NOT NULL
                AND ${db.QuoteIdentifier('ClaimExpiresAt')} < '${now}'`,
@@ -182,7 +182,7 @@ export class TaskClaimStore {
                 ${db.QuoteIdentifier('ClaimedBy')} = NULL,
                 ${db.QuoteIdentifier('ClaimExpiresAt')} = NULL
             WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-              AND ${db.QuoteIdentifier('AgentID')} IS NOT NULL
+              AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
               AND ${db.QuoteIdentifier('ClaimedBy')} IS NOT NULL
               AND ${db.QuoteIdentifier('ClaimExpiresAt')} IS NOT NULL
               AND ${db.QuoteIdentifier('ClaimExpiresAt')} < '${now}'`;
@@ -213,7 +213,7 @@ export class TaskClaimStore {
             `SELECT ${db.QuoteIdentifier('ID')}, ${db.QuoteIdentifier('Name')}
              FROM ${this.taskTable(provider)}
              WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-               AND ${db.QuoteIdentifier('AgentID')} IS NOT NULL
+               AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
                AND ${db.QuoteIdentifier('ClaimedBy')} IS NULL`,
             undefined, undefined, contextUser,
         );

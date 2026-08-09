@@ -6,7 +6,8 @@ const node = (over: Partial<TaskGraphSpecNode> = {}): TaskGraphSpecNode => ({
     tempId: 'a',
     name: 'A',
     description: 'does a thing',
-    agentName: 'Some Agent',
+    kind: 'Agent',
+    configuration: { agentName: 'Some Agent' },
     dependsOn: [],
     ...over,
 });
@@ -73,18 +74,27 @@ describe('ValidateTaskGraphSpec', () => {
         expect(cycleErr?.Message).toMatch(/cycle/i);
     });
 
-    it('rejects a task assigned to both an agent and a user', () => {
-        const s = spec({ tasks: [node({ agentName: 'X', assignToUser: true })] });
-        expect(codes(s)).toContain('AssignmentConflict');
+    it('cannot express a task assigned to two things at once', () => {
+        // Spec v2 replaced the mutually-exclusive flat arms with `kind` + `configuration`, so there
+        // is no longer a way to SAY "agent and person" — the old AssignmentConflict rule guarded a
+        // state the type system now forbids. This test records that the guarantee moved from a
+        // runtime check to the shape itself; the compiler is what enforces it.
+        const agent = node();
+        const human = node({ kind: 'Human', configuration: {} });
+        expect(agent.kind).toBe('Agent');
+        expect(human.kind).toBe('Human');
+        expect(codes(spec({ tasks: [agent] }))).toEqual([]);
+        expect(codes(spec({ tasks: [human] }))).toEqual([]);
     });
 
     it('rejects a task assigned to neither', () => {
-        const s = spec({ tasks: [node({ agentName: undefined, assignToUser: false })] });
+        // A node with no kind at all — only reachable from a JavaScript caller the compiler never saw.
+        const s = spec({ tasks: [{ ...node(), kind: undefined as unknown as TaskGraphSpecNode['kind'] }] });
         expect(codes(s)).toContain('NoAssignment');
     });
 
     it('accepts a human task', () => {
-        const s = spec({ tasks: [node({ agentName: undefined, assignToUser: true })] });
+        const s = spec({ tasks: [node({ kind: 'Human', configuration: {} })] });
         expect(ValidateTaskGraphSpec(s).Valid).toBe(true);
     });
 
@@ -105,7 +115,9 @@ describe('ValidateTaskGraphSpec', () => {
             workflowName: '',
             tasks: [
                 node({ tempId: 'a', dependsOn: ['ghost'] }),
-                node({ tempId: 'a', agentName: undefined, assignToUser: false }),
+                // Kindless: only reachable from a JavaScript caller, and the one remaining way to
+                // reach NoAssignment now that the union owns assignment.
+                { ...node({ tempId: 'a' }), kind: undefined as unknown as TaskGraphSpecNode['kind'] },
             ],
         });
         const found = new Set(codes(s));

@@ -29,10 +29,6 @@
       "types": "./dist/scheduling-dashboards.module.d.ts",
       "default": "./dist/scheduling-dashboards.module.js"
     },
-    "./workflows-dashboards.module": {
-      "types": "./dist/workflows-dashboards.module.d.ts",
-      "default": "./dist/workflows-dashboards.module.js"
-    },
     "./communication-dashboards.module": {
       "types": "./dist/communication-dashboards.module.d.ts",
       "default": "./dist/communication-dashboards.module.js"
@@ -157,7 +153,6 @@
     "@memberjunction/ng-shared": "6.1.0-edge.1",
     "@memberjunction/ng-shared-generic": "6.1.0-edge.1",
     "@memberjunction/ng-tabstrip": "6.1.0-edge.1",
-    "@memberjunction/ng-task-graph-editor": "6.1.0-edge.1",
     "@memberjunction/ng-testing": "6.1.0-edge.1",
     "@memberjunction/ng-trees": "6.1.0-edge.1",
     "@memberjunction/ng-ui-components": "6.1.0-edge.1",
