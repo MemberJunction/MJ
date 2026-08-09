@@ -206,7 +206,7 @@ describe('SanitizeGraphQLError', () => {
             expect(safe.response?.errors?.[0]?.message).toBe('Request timed out');
             expect(safe.response?.errors?.[0]?.extensions?.['code']).toBe('JWT_EXPIRED');
             expect(safe.response?.status).toBe(500);
-            expect(safe.code).toBe('JWT_EXPIRED');
+            expect(safe.Code).toBe('JWT_EXPIRED');
         });
 
         it('preserves the query, which binds values but contains none', () => {
@@ -242,7 +242,7 @@ describe('SanitizeGraphQLError', () => {
         });
 
         it('retains the variable shape for debugging', () => {
-            expect(ToSafeGraphQLError(buildClientError()).variableShape).toEqual({
+            expect(ToSafeGraphQLError(buildClientError()).VariableShape).toEqual({
                 input: { Name: 'string', CredentialValues: 'string' },
             });
         });

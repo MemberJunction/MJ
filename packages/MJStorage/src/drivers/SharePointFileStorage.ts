@@ -1,6 +1,6 @@
 import { Client } from '@microsoft/microsoft-graph-client';
 import { AuthenticationProvider } from '@microsoft/microsoft-graph-client';
-import { RegisterClass, describeTokenEndpointFailure } from '@memberjunction/global';
+import { RegisterClass, DescribeTokenEndpointFailure } from '@memberjunction/global';
 import env from 'env-var';
 import mime from 'mime-types';
 import { Readable } from 'stream';
@@ -268,7 +268,7 @@ class RefreshTokenAuthProvider implements AuthenticationProvider {
       // the body — but the body was logged one line above, which leaks just as durably.
       // A failed Microsoft token refresh echoes the request, including client_secret
       // and the refresh token itself.
-      const detail = describeTokenEndpointFailure(await response.text());
+      const detail = DescribeTokenEndpointFailure(await response.text());
       console.error('[SharePoint RefreshTokenAuth] Token refresh failed:', `${response.status}${detail}`);
       throw new Error(`Failed to refresh access token: ${response.statusText}${detail}`);
     }

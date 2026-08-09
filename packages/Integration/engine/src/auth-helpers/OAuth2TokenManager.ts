@@ -24,7 +24,7 @@
  * round-trip rather than each re-implementing `grant_type` form bodies.
  */
 
-import { describeTokenEndpointFailure } from '@memberjunction/global';
+import { DescribeTokenEndpointFailure } from '@memberjunction/global';
 
 /** Which OAuth2 grant a token request should use. */
 export type OAuth2GrantType = 'refresh_token' | 'password' | 'client_credentials';
@@ -166,11 +166,11 @@ export class OAuth2TokenManager {
             // SECURITY: never fall back to the raw response body. This branch is also
             // reached on an HTTP 200 whose token sits somewhere `parsed` did not look
             // (a vendor envelope, a nested `data` object) — in which case the body IS
-            // the token. `describeTokenEndpointFailure` surfaces only the RFC 6749 §5.2
+            // the token. `DescribeTokenEndpointFailure` surfaces only the RFC 6749 §5.2
             // error fields, which by spec describe the failure and carry no credentials.
             throw new Error(
                 `OAuth2 ${grant} token request to ${req.TokenURL} failed: ` +
-                `HTTP ${response.status}${describeTokenEndpointFailure(text)}`
+                `HTTP ${response.status}${DescribeTokenEndpointFailure(text)}`
             );
         }
 

@@ -61,11 +61,11 @@ function asBoundedString(value: unknown): string | undefined {
  * ```ts
  * throw new Error(
  *     `Token request failed: ${response.status}` +
- *     describeTokenEndpointFailure(await response.text())
+ *     DescribeTokenEndpointFailure(await response.text())
  * );
  * ```
  */
-export function describeTokenEndpointFailure(body: string | null | undefined): string {
+export function DescribeTokenEndpointFailure(body: string | null | undefined): string {
     if (!body) {
         return '';
     }

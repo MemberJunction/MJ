@@ -8,7 +8,7 @@
  */
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus, BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
-import { describeTokenEndpointFailure } from '@memberjunction/global';
+import { DescribeTokenEndpointFailure } from '@memberjunction/global';
 import type {
     AuthServerMetadata,
     DCRRequest,
@@ -199,7 +199,7 @@ export class ClientRegistration {
             // SECURITY: see TokenManager — an unparseable body is withheld rather than
             // echoed. A failed Dynamic Client Registration response can carry back the
             // submitted registration, including client credentials the server minted.
-            throw new Error(`HTTP ${response.status}${describeTokenEndpointFailure(await response.text())}`);
+            throw new Error(`HTTP ${response.status}${DescribeTokenEndpointFailure(await response.text())}`);
         }
 
         const dcrResponse = await response.json() as DCRResponse;

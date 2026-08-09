@@ -1,4 +1,4 @@
-import { describeTokenEndpointFailure } from '@memberjunction/global';
+import { DescribeTokenEndpointFailure } from '@memberjunction/global';
 
 /**
  * Configuration options for OAuth2Manager
@@ -357,7 +357,7 @@ export class OAuth2Manager {
                 // they describe the failure and by spec carry no credentials.
                 throw new Error(
                     `Token request failed: ${response.status} ${response.statusText}` +
-                    `${describeTokenEndpointFailure(await response.text())}`
+                    `${DescribeTokenEndpointFailure(await response.text())}`
                 );
             }
 

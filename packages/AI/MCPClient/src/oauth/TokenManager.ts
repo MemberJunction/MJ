@@ -9,7 +9,7 @@
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus, BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
 import { CredentialEngine } from '@memberjunction/credentials';
-import { describeTokenEndpointFailure } from '@memberjunction/global';
+import { DescribeTokenEndpointFailure } from '@memberjunction/global';
 import type {
     OAuthTokenSet,
     OAuthTokenResponse,
@@ -542,7 +542,7 @@ export class TokenManager {
             // in their error body, and that request carries `client_secret` and the
             // refresh token — so an unparseable body is exactly the case that must NOT
             // be surfaced. Only the RFC 6749 §5.2 error fields are safe.
-            throw new Error(`HTTP ${response.status}${describeTokenEndpointFailure(await response.text())}`);
+            throw new Error(`HTTP ${response.status}${DescribeTokenEndpointFailure(await response.text())}`);
         }
 
         return await response.json() as OAuthTokenResponse;

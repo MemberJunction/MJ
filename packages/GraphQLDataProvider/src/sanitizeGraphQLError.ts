@@ -126,22 +126,33 @@ export type VariableShape = string | { [key: string]: VariableShape };
  * on the error's name keeps working.
  */
 export class SafeGraphQLError extends Error {
-    /** Server response, narrowed to status and GraphQL errors. */
+    /**
+     * Server response, narrowed to status and GraphQL errors.
+     *
+     * NAMING: `response` and `request` are intentionally camelCase, against MJ's
+     * PascalCase convention for public members. They exist to mirror the shape of
+     * the upstream `ClientError` this replaces, and downstream code reads them by
+     * those exact names — `err?.response?.errors` in the workspace initializer, the
+     * Bootstrap initialization service, and the DevTools GraphQL console. Renaming
+     * them would break the compatibility that is this class's entire purpose.
+     * Members that are new here, rather than inherited from the upstream surface,
+     * follow the MJ convention below.
+     */
     public readonly response?: { status?: number; errors?: SanitizedGraphQLErrorDetail[] };
-    /** Originating request, narrowed to the query document. */
+    /** Originating request, narrowed to the query document. See the note above on casing. */
     public readonly request?: { query?: string };
     /** Error code from the first GraphQL error, e.g. `JWT_EXPIRED`. */
-    public readonly code?: string;
+    public readonly Code?: string;
     /** Shape of the withheld variables — key names and value types, never values. */
-    public readonly variableShape?: VariableShape;
+    public readonly VariableShape?: VariableShape;
 
     constructor(sanitized: SanitizedGraphQLError) {
         super(sanitized.message);
         this.name = sanitized.name;
         this.response = { status: sanitized.status, errors: sanitized.errors };
         this.request = { query: sanitized.query };
-        this.code = sanitized.code;
-        this.variableShape = sanitized.variableShape;
+        this.Code = sanitized.code;
+        this.VariableShape = sanitized.variableShape;
         // Rebuild the stack with a header derived from the sanitised message, keeping
         // the original frames. Assigning the raw `stack` would reintroduce the payload,
         // since V8's header line is `${name}: ${unsanitised message}`.
