@@ -21,20 +21,44 @@ import {
     type TaskGraphSpecNode,
     type TaskGraphDependency,
 } from '@memberjunction/ai-core-plus';
-import type { FlowConnection, FlowNode, FlowNodeStatus, FlowNodeTypeConfig } from '@memberjunction/ng-flow-editor';
+import type { FlowConnection, FlowNode, FlowNodeStatus, FlowNodeTypeConfig, FlowPosition } from '@memberjunction/ng-flow-editor';
 
-/** Node types the palette offers. Two, because a task is either an agent's or a person's. */
-export const TASK_GRAPH_NODE_TYPES: FlowNodeTypeConfig[] = [
+/**
+ * The kinds of step a `TaskGraphSpec` can express.
+ *
+ * Exactly three, and not by choice of this file: `TaskGraphSpecNode` carries `agentName`,
+ * `actionName` and `assignToUser` as a mutually-exclusive trio, and the validator rejects a node
+ * that sets none or more than one of them. The palette therefore offers one entry per assignment
+ * shape — a fourth would be a step the engine cannot run, and a missing third (which is what the
+ * palette shipped with) is a capability the spec has and the canvas silently hid.
+ */
+export type TaskGraphNodeType = 'AgentTask' | 'ActionTask' | 'HumanTask';
+
+/** A palette entry, pinned to one of the three assignment shapes. */
+export type TaskGraphNodeTypeConfig = FlowNodeTypeConfig & { Type: TaskGraphNodeType };
+
+const TASK_GRAPH_PORTS: FlowNodeTypeConfig['DefaultPorts'] = [
+    { ID: 'in', Direction: 'input', Side: 'top', Multiple: true },
+    { ID: 'out', Direction: 'output', Side: 'bottom', Multiple: true },
+];
+
+/** What the palette offers — one entry per assignment shape the spec supports. */
+export const TASK_GRAPH_NODE_TYPES: readonly TaskGraphNodeTypeConfig[] = [
     {
         Type: 'AgentTask',
         Label: 'Agent Step',
         Icon: 'fa-robot',
         Color: '#4A6FA5',
         Category: 'Steps',
-        DefaultPorts: [
-            { ID: 'in', Direction: 'input', Side: 'top', Multiple: true },
-            { ID: 'out', Direction: 'output', Side: 'bottom', Multiple: true },
-        ],
+        DefaultPorts: TASK_GRAPH_PORTS,
+    },
+    {
+        Type: 'ActionTask',
+        Label: 'Action Step',
+        Icon: 'fa-bolt',
+        Color: '#3B82F6',
+        Category: 'Steps',
+        DefaultPorts: TASK_GRAPH_PORTS,
     },
     {
         Type: 'HumanTask',
@@ -42,12 +66,14 @@ export const TASK_GRAPH_NODE_TYPES: FlowNodeTypeConfig[] = [
         Icon: 'fa-user-check',
         Color: '#7B1FA2',
         Category: 'Steps',
-        DefaultPorts: [
-            { ID: 'in', Direction: 'input', Side: 'top', Multiple: true },
-            { ID: 'out', Direction: 'output', Side: 'bottom', Multiple: true },
-        ],
+        DefaultPorts: TASK_GRAPH_PORTS,
     },
 ];
+
+/** The palette entry for a node type, or null when the type is not one of ours. */
+export function GetNodeTypeConfig(type: string): TaskGraphNodeTypeConfig | null {
+    return TASK_GRAPH_NODE_TYPES.find((c) => c.Type === type) ?? null;
+}
 
 /** Live per-task state for the runtime overlay, keyed by `tempId`. */
 export type TaskGraphRuntimeStatus = Record<string, TaskGraphRuntimeState>;
@@ -83,10 +109,67 @@ export function RuntimeStateToNodeStatus(state: TaskGraphRuntimeState | undefine
     }
 }
 
-/** True when the node is a person's step rather than an agent's. */
+/**
+ * True when the node is a person's step.
+ *
+ * Read off `assignToUser` rather than "has no agent", because there are now three assignment shapes
+ * and absence-of-agent no longer implies a person — an action step has no agent either, and a
+ * freshly-added step has no assignment at all until the author picks one.
+ */
 export function IsHumanTask(node: TaskGraphSpecNode): boolean {
-    return !node.agentName;
+    return node.assignToUser === true;
 }
+
+/**
+ * Which of the three shapes a node is, for rendering.
+ *
+ * An unassigned node (just added, nothing picked yet) reads as an agent step: it is the commonest
+ * intent, and the validator is already telling the author, in words, that it needs an assignee.
+ * Guessing "person" instead — which is what the old `!agentName` rule did — put a step in the
+ * graph that claimed to be waiting on someone when nobody had said so.
+ */
+export function GetTaskNodeType(node: TaskGraphSpecNode): TaskGraphNodeType {
+    if (node.assignToUser === true) return 'HumanTask';
+    if (node.actionName) return 'ActionTask';
+    return 'AgentTask';
+}
+
+/**
+ * Builds the task a palette entry stands for.
+ *
+ * Pure, and here rather than in the component, because "what does clicking *Person Step* actually
+ * put in the graph" is a fact about the spec — testable without a TestBed, and the one place the
+ * assignment xor is honoured on creation.
+ *
+ * `defaultAgentName` / `defaultActionName` are what the host has to offer. When it has nothing, the
+ * step is created unassigned on purpose: inventing an agent name that may not exist would produce a
+ * graph that passes the canvas and fails at submission, whereas an unassigned step is reported
+ * immediately by the same validator the engine runs.
+ */
+export function NewTaskFromNodeType(
+    spec: TaskGraphSpec,
+    type: TaskGraphNodeType,
+    defaults: { agentName?: string; actionName?: string } = {},
+): TaskGraphSpecNode {
+    const base: TaskGraphSpecNode = {
+        tempId: NextTempId(spec),
+        name: NEW_TASK_NAMES[type],
+        description: '',
+        dependsOn: [],
+    };
+    switch (type) {
+        case 'HumanTask':  return { ...base, assignToUser: true };
+        case 'ActionTask': return { ...base, actionName: defaults.actionName };
+        default:           return { ...base, agentName: defaults.agentName };
+    }
+}
+
+/** Default step names, so a new box says what it is before the author renames it. */
+const NEW_TASK_NAMES: Record<TaskGraphNodeType, string> = {
+    AgentTask: 'New agent step',
+    ActionTask: 'New action step',
+    HumanTask: 'New person step',
+};
 
 /** Entry points: nodes nothing else has to finish first. Same rule the traversal engine uses. */
 export function GetEntryTempIds(spec: TaskGraphSpec): string[] {
@@ -117,21 +200,35 @@ function edgeId(fromTempId: string, toTempId: string): string {
  * geometry precisely because a task graph is a *logical* structure. An agent that emitted one never
  * had an opinion about where the boxes go.
  */
-export function SpecToNodes(spec: TaskGraphSpec, runtime?: TaskGraphRuntimeStatus): FlowNode[] {
+/**
+ * Projects the spec onto canvas nodes.
+ *
+ * `positions` carries geometry the spec cannot hold. `TaskGraphSpec` is an execution contract with
+ * no layout field, so without a caller-held map every re-projection would return every node to the
+ * origin — which is what previously forced a full re-arrange (and a viewport re-zoom) after every
+ * single edit. Unknown ids fall back to the origin, which is also the correct starting state for a
+ * graph that has never been laid out.
+ */
+export function SpecToNodes(
+    spec: TaskGraphSpec,
+    runtime?: TaskGraphRuntimeStatus,
+    positions?: ReadonlyMap<string, FlowPosition>,
+): FlowNode[] {
     const entryIds = new Set(GetEntryTempIds(spec));
 
     return (spec.tasks ?? []).map((task) => {
-        const human = IsHumanTask(task);
+        const type = GetTaskNodeType(task);
+        const known = positions?.get(task.tempId);
         return {
             ID: task.tempId,
-            Type: human ? 'HumanTask' : 'AgentTask',
+            Type: type,
             Label: task.name,
-            Subtitle: human ? 'Waiting on a person' : task.agentName,
-            Icon: human ? 'fa-user-check' : 'fa-robot',
+            Subtitle: TaskSubtitle(task, type),
+            Icon: GetNodeTypeConfig(type)?.Icon ?? 'fa-circle-nodes',
             Status: RuntimeStateToNodeStatus(runtime?.[task.tempId]),
             StatusMessage: task.description,
             IsStartNode: entryIds.has(task.tempId),
-            Position: { X: 0, Y: 0 },
+            Position: known ? { ...known } : { X: 0, Y: 0 },
             Ports: [
                 { ID: 'in', Direction: 'input', Side: 'top', Multiple: true },
                 { ID: 'out', Direction: 'output', Side: 'bottom', Multiple: true },
@@ -139,6 +236,20 @@ export function SpecToNodes(spec: TaskGraphSpec, runtime?: TaskGraphRuntimeStatu
             Data: { TempId: task.tempId },
         };
     });
+}
+
+/**
+ * The one line under a node's name: who or what runs it.
+ *
+ * An unassigned step says so rather than showing nothing — a blank subtitle looks like a step that
+ * is fine, and this one is the reason the validation banner is complaining.
+ */
+export function TaskSubtitle(task: TaskGraphSpecNode, type: TaskGraphNodeType = GetTaskNodeType(task)): string {
+    switch (type) {
+        case 'HumanTask':  return 'Waiting on a person';
+        case 'ActionTask': return task.actionName ?? 'No action chosen yet';
+        default:           return task.agentName ?? 'No agent chosen yet';
+    }
 }
 
 /**

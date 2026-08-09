@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "Name": "Workflows",
+    "Description": "Build and run repeatable pathways — the same steps, the same route, every time",
+    "Icon": "fa-solid fa-diagram-project",
+    "DefaultForNewUser": true,
+    "Color": "#2d6a9f",
+    "DefaultSequence": 1004,
+    "DefaultNavItems": [
+      {
+        "Label": "Workflows",
+        "Icon": "fa-solid fa-diagram-project",
+        "ResourceType": "Custom",
+        "DriverClass": "WorkflowsResource",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "A715122C-F912-4BF5-B4BB-9B94DFDD2A9E"
+  }
+}

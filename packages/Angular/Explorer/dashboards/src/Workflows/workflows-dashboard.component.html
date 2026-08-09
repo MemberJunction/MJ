@@ -1,0 +1,83 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Workflows"
+    Icon="fa-solid fa-diagram-project"
+    Subtitle="Repeatable pathways that always follow the same route.">
+
+    <div meta>
+      @if (!IsLoading && !IsCreating) {
+        <mj-stat-badge Icon="fa-solid fa-diagram-project" [Label]="Workflows.length + ' saved'"></mj-stat-badge>
+      }
+    </div>
+
+    <div actions>
+      @if (DraftSpec) {
+        <button mjButton variant="secondary" size="sm" (click)="OnCloseCanvas()">
+          <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to workflows
+        </button>
+      } @else if (IsCreating) {
+        <button mjButton variant="secondary" size="sm" (click)="OnCancelCreate()">
+          <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to workflows
+        </button>
+      } @else {
+        <mj-refresh-button [Loading]="IsLoading" (Clicked)="loadData()"></mj-refresh-button>
+        <button mjButton variant="primary" size="sm" (click)="OnStartCreate()">
+          <i class="fa-solid fa-plus" aria-hidden="true"></i> Create Workflow
+        </button>
+      }
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    @if (DraftSpec) {
+      <!-- The canvas is EMBEDDED, not routed to: it is a widgets-layer component that refuses to
+           know about routing, and this app supplies the shell around it. -->
+      <mj-task-graph-editor
+        class="wf-canvas"
+        [Provider]="ProviderToUse"
+        [Spec]="DraftSpec"
+        [ShowToolbar]="true"
+        [ShowPalette]="true"
+        [ShowMinimap]="true"
+        [AvailableAgentNames]="AvailableAgentNames"
+        [AvailableActionNames]="AvailableActionNames"
+        (SpecChanged)="OnDraftSpecChanged($event)"
+        EmptyStateMessage="No steps yet. Click a step in the palette to start building this workflow.">
+      </mj-task-graph-editor>
+    } @else if (IsCreating) {
+      <mj-create-workflow
+        [Provider]="ProviderToUse"
+        [CurrentUser]="ProviderToUse.CurrentUser"
+        (Created)="OnCreated($event)"
+        (Cancelled)="OnCancelCreate()">
+      </mj-create-workflow>
+    } @else if (IsLoading) {
+      <mj-loading></mj-loading>
+    } @else if (LoadError) {
+      <mj-alert Variant="error" [Message]="LoadError"></mj-alert>
+    } @else if (Workflows.length === 0) {
+      <mj-empty-state
+        Icon="fa-solid fa-diagram-project"
+        Title="No workflows yet"
+        Message="A workflow runs the same steps the same way every time. Describe what you want done and we will draft it.">
+      </mj-empty-state>
+    } @else {
+      <div class="wf-list">
+        @for (item of Workflows; track item.ID) {
+          <button type="button" class="wf-row" (click)="OnOpenWorkflow(item)">
+            <span class="wf-row-main">
+              <span class="wf-row-name">{{ item.Name }}</span>
+              @if (item.Description) {
+                <span class="wf-row-desc">{{ item.Description }}</span>
+              }
+            </span>
+            <span class="wf-row-trigger">{{ item.TriggerSummary }}</span>
+            <span class="wf-row-status" [class.wf-row-status-active]="item.Status === 'Active'">
+              {{ item.Status }}
+            </span>
+          </button>
+        }
+      </div>
+    }
+  </mj-page-body>
+</mj-page-layout>

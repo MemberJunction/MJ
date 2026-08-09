@@ -7,12 +7,13 @@ editUrl: false
 
 import InstallBlock from '../../components/InstallBlock.astro';
 import LandingFooter from '../../components/LandingFooter.astro';
+import { documentedLine } from '../../lib/documented-line.mjs';
 
 <div class="mjd-landing">
 
 <section class="mjd-hero">
   <div class="mjd-pills">
-    <span class="mjd-pill mjd-pill--accent">v5.x</span>
+    <span class="mjd-pill mjd-pill--accent">{documentedLine}</span>
     <span class="mjd-pill">Open Source</span>
     <span class="mjd-pill">ISC License</span>
   </div>
