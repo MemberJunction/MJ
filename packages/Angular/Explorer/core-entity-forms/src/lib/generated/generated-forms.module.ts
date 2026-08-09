@@ -208,6 +208,7 @@ import { MJEntityDocumentRunFormComponent } from "./Entities/MJEntityDocumentRun
 import { MJEntityDocumentSettingFormComponent } from "./Entities/MJEntityDocumentSetting/mjentitydocumentsetting.form.component";
 import { MJEntityDocumentTypeFormComponent } from "./Entities/MJEntityDocumentType/mjentitydocumenttype.form.component";
 import { MJEntityDocumentFormComponent } from "./Entities/MJEntityDocument/mjentitydocument.form.component";
+import { MJEntityFieldPermissionFormComponent } from "./Entities/MJEntityFieldPermission/mjentityfieldpermission.form.component";
 import { MJEntityFieldValueFormComponent } from "./Entities/MJEntityFieldValue/mjentityfieldvalue.form.component";
 import { MJEntityFieldFormComponent } from "./Entities/MJEntityField/mjentityfield.form.component";
 import { MJEntityFormOverrideFormComponent } from "./Entities/MJEntityFormOverride/mjentityformoverride.form.component";
@@ -731,6 +732,7 @@ declarations: [
     MJEntityDocumentSettingFormComponent,
     MJEntityDocumentTypeFormComponent,
     MJEntityDocumentFormComponent,
+    MJEntityFieldPermissionFormComponent,
     MJEntityFieldValueFormComponent,
     MJEntityFieldFormComponent,
     MJEntityFormOverrideFormComponent,
