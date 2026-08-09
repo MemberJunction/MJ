@@ -1,5 +1,5 @@
 /**
- * GenerateSaveSQL not-loaded skip — Workstream D-1 (plans/field-level-security-implementation.md).
+ * GenerateSaveSQL not-loaded skip.
  *
  * A field whose hydration source omitted it (EntityField.NotLoaded) must be OMITTED from the
  * save SP call entirely: every generated param has a default, the update procs'

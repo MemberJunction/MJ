@@ -33,7 +33,7 @@ import { CompositeKey } from '../generic/compositeKey';
 import { UserInfo, UserRoleInfo, RecordDependency } from '../generic/securityInfo';
 import { WellKnownUserSource } from '../generic/wellKnownUserSource';
 
-import { EntityInfo, RecordMergeRequest, RecordMergeResult } from '../generic/entityInfo';
+import { EntityInfo, RecordMergeRequest, RecordMergeResult, FieldPermissionAccess } from '../generic/entityInfo';
 import { TransactionGroupBase } from '../generic/transactionGroup';
 import { RunViewParams } from '../views/runView';
 import { BaseEntity } from '../generic/baseEntity';
@@ -70,11 +70,35 @@ const ENTITY_ID = 'entity-employees';
 
 // ─── Metadata builders ────────────────────────────────────────────────────
 
+const ALLOW = FieldPermissionAccess.Allow;
+const DENY = FieldPermissionAccess.Deny;
+const NONE = FieldPermissionAccess.NoAccess;
+
+/**
+ * Full access to `fieldId` for every listed role. Snapshot initialization writes rows like
+ * these for every (field, role) holding the matching entity-level permission — which is why the
+ * UNRESTRICTED fields below need them explicitly. On an FLS-enabled entity a field with no rows
+ * is denied, not open.
+ */
+function openTo(fieldId: string, roles: string[] = [HR_ROLE_ID, INTERN_ROLE_ID]): Record<string, unknown>[] {
+    return roles.map((roleId, i) => ({
+        ID: `${fieldId}-open-${i}`,
+        EntityFieldID: fieldId,
+        RoleID: roleId,
+        ReadAccess: ALLOW,
+        UpdateAccess: ALLOW,
+        CreateAccess: ALLOW,
+    }));
+}
+
 /**
  * An `Employees` entity whose `Salary` field is readable/updatable only by HR.
- * `Notes` and the `ID` primary key carry no field permissions.
+ * `Name` and `Notes` are open to both roles; the `ID` primary key is unrestrictable.
  */
-function employeeEntityInit(salaryPermissions: Record<string, unknown>[]): Record<string, unknown> {
+function employeeEntityInit(
+    salaryPermissions: Record<string, unknown>[],
+    enableFieldLevelSecurity: boolean = true
+): Record<string, unknown> {
     return {
         ID: ENTITY_ID,
         Name: 'Employees',
@@ -85,25 +109,24 @@ function employeeEntityInit(salaryPermissions: Record<string, unknown>[]): Recor
         AllowCreateAPI: true,
         AllowUpdateAPI: true,
         AllowDeleteAPI: true,
+        EnableFieldLevelSecurity: enableFieldLevelSecurity,
         Permissions: [
             { EntityID: ENTITY_ID, RoleID: HR_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
             { EntityID: ENTITY_ID, RoleID: INTERN_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
         ],
         Fields: [
             { ID: 'f-id', EntityID: ENTITY_ID, Sequence: 1, Name: 'ID', Entity: 'Employees', Type: 'uniqueidentifier', IsPrimaryKey: true },
-            { ID: 'f-name', EntityID: ENTITY_ID, Sequence: 2, Name: 'Name', Entity: 'Employees', Type: 'nvarchar' },
+            { ID: 'f-name', EntityID: ENTITY_ID, Sequence: 2, Name: 'Name', Entity: 'Employees', Type: 'nvarchar', EntityFieldPermissions: openTo('f-name') },
             {
                 ID: 'f-salary', EntityID: ENTITY_ID, Sequence: 3, Name: 'Salary', Entity: 'Employees', Type: 'money',
                 EntityFieldPermissions: salaryPermissions,
             },
-            { ID: 'f-notes', EntityID: ENTITY_ID, Sequence: 4, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar' },
+            { ID: 'f-notes', EntityID: ENTITY_ID, Sequence: 4, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', EntityFieldPermissions: openTo('f-notes') },
         ],
     };
 }
 
-const hrOnlySalary = [
-    { ID: 'p1', EntityFieldID: 'f-salary', RoleID: HR_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: true, CanCreate: false },
-];
+const hrOnlySalary = openTo('f-salary', [HR_ROLE_ID]);
 
 function buildUser(roleIds: string[], id = 'user-1'): UserInfo {
     const u = new UserInfo();
@@ -180,9 +203,12 @@ class TestProvider extends ProviderBase {
     protected get Metadata(): IMetadataProvider { return {} as IMetadataProvider; }
 }
 
-function setupProvider(salaryPermissions: Record<string, unknown>[] = hrOnlySalary): TestProvider {
+function setupProvider(
+    salaryPermissions: Record<string, unknown>[] = hrOnlySalary,
+    enableFieldLevelSecurity: boolean = true
+): TestProvider {
     const provider = new TestProvider();
-    provider.seedEntities([new EntityInfo(employeeEntityInit(salaryPermissions))]);
+    provider.seedEntities([new EntityInfo(employeeEntityInit(salaryPermissions, enableFieldLevelSecurity))]);
     return provider;
 }
 
@@ -204,8 +230,9 @@ describe('EntityInfo denied-field sets (per-request precompute)', () => {
         expect(entity.GetDeniedReadFields(buildUser([HR_ROLE_ID])).size).toBe(0);
     });
 
-    it('returns an empty set when the entity has no field security at all', () => {
-        const entity = new EntityInfo(employeeEntityInit([]));
+    it('returns an empty set when field security is switched OFF on the entity', () => {
+        // Same rows as the restricted case above — the flag is the only thing that changed.
+        const entity = new EntityInfo(employeeEntityInit(hrOnlySalary, false));
         expect(entity.GetDeniedReadFields(buildUser([INTERN_ROLE_ID])).size).toBe(0);
     });
 
@@ -217,57 +244,88 @@ describe('EntityInfo denied-field sets (per-request precompute)', () => {
     it('tracks read and update denials independently', () => {
         // Readable but NOT updatable for the intern role.
         const perms = [
-            { ID: 'p1', EntityFieldID: 'f-salary', RoleID: HR_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: true },
-            { ID: 'p2', EntityFieldID: 'f-salary', RoleID: INTERN_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: false },
+            ...openTo('f-salary', [HR_ROLE_ID]),
+            { ID: 'p2', EntityFieldID: 'f-salary', RoleID: INTERN_ROLE_ID, ReadAccess: ALLOW, UpdateAccess: NONE, CreateAccess: NONE },
         ];
         const entity = new EntityInfo(employeeEntityInit(perms));
         const intern = buildUser([INTERN_ROLE_ID]);
         expect(entity.GetDeniedReadFields(intern).size).toBe(0);
         expect([...entity.GetDeniedUpdateFields(intern)]).toEqual(['salary']);
     });
+
+    it('reports the create set too, independently of read and update', () => {
+        const perms = [
+            ...openTo('f-salary', [HR_ROLE_ID]),
+            { ID: 'p2', EntityFieldID: 'f-salary', RoleID: INTERN_ROLE_ID, ReadAccess: ALLOW, UpdateAccess: ALLOW, CreateAccess: NONE },
+        ];
+        const entity = new EntityInfo(employeeEntityInit(perms));
+        const intern = buildUser([INTERN_ROLE_ID]);
+        expect(entity.GetDeniedCreateFields(intern).has('salary')).toBe(true);
+        expect(entity.GetDeniedUpdateFields(intern).has('salary')).toBe(false);
+    });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 1b. The system-user exemption — the ONE exemption, and why it exists
 //
-// The whitelist flip means the FIRST rule on a field closes it for everyone without an
-// explicit Allow — including users no rule ever mentions. Left alone that silently strips
-// the field from the server's own account, whose engines then cache partial records
-// process-wide for every user. It costs nothing security-wise: the server reads the
-// database through one service login that can already see every column.
+//   1. TASK MODE. Job and agent runners load engines on first touch, and engine caches are
+//      process-wide — whoever touches one first would otherwise configure it for every
+//      subsequent user in the process. BaseEngine.ResolveContextUser() forces the system user
+//      on Database providers; this exemption is what makes that resolution safe.
+//   2. IT PROTECTS NOTHING TO DENY IT. The server reads through one service login that can
+//      already see every column, so denying the system user here only breaks the server's
+//      ability to do its own work.
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('System-user exemption', () => {
-    /** The system user, holding no roles at all — the shape that gets caught by the flip. */
+    /** The system user, holding no roles at all — the shape that would otherwise be denied. */
     const systemUser = (): UserInfo => buildUser([], SystemUserID);
 
     it('is exempt from a Deny that would otherwise catch it', () => {
         const entity = new EntityInfo(employeeEntityInit(hrOnlySalary));
         expect(entity.GetDeniedReadFields(systemUser()).size).toBe(0);
         expect(entity.GetDeniedUpdateFields(systemUser()).size).toBe(0);
+        expect(entity.GetDeniedCreateFields(systemUser()).size).toBe(0);
     });
 
-    it('reads and updates a secured field even holding NO matching role (the whitelist flip)', () => {
+    it('reads, updates and creates a secured field while holding NO matching role', () => {
         const entity = new EntityInfo(employeeEntityInit(hrOnlySalary));
-        const perms = entity.Fields.find(f => f.Name === 'Salary')!.GetUserFieldPermissions(systemUser());
-        expect(perms.CanRead).toBe(true);
-        expect(perms.CanUpdate).toBe(true);
+        const perms = entity.Fields.find(f => f.Name === 'Salary')!.GetUserFieldPermissions(systemUser(), true);
+        expect(perms).toEqual({ CanRead: true, CanUpdate: true, CanCreate: true });
     });
 
     it('is exempt even from an explicit Deny row aimed at a role it holds', () => {
         const denyIntern = [
             ...hrOnlySalary,
-            { ID: 'p2', EntityFieldID: 'f-salary', RoleID: INTERN_ROLE_ID, Type: 'Deny', CanRead: true, CanUpdate: true },
+            { ID: 'p2', EntityFieldID: 'f-salary', RoleID: INTERN_ROLE_ID, ReadAccess: DENY, UpdateAccess: DENY, CreateAccess: DENY },
         ];
         const entity = new EntityInfo(employeeEntityInit(denyIntern));
         const sysWithRole = buildUser([INTERN_ROLE_ID], SystemUserID);
         expect(entity.GetDeniedReadFields(sysWithRole).size).toBe(0);
     });
 
+    it('is exempt from the fail-closed default too — a field reconciliation never reached', () => {
+        // The exemption has to cover more than Denies now: on an FLS-enabled entity a field
+        // with NO rows is denied, and the server would otherwise lose a brand-new column
+        // between a schema change and the next reconciliation run.
+        const entity = new EntityInfo(employeeEntityInit([]));
+        expect(entity.GetDeniedReadFields(systemUser()).size).toBe(0);
+        expect(entity.GetDeniedReadFields(buildUser([HR_ROLE_ID])).has('salary')).toBe(true);
+    });
+
     it('does NOT exempt anyone else — no human bypass, including a role-less user', () => {
         const entity = new EntityInfo(employeeEntityInit(hrOnlySalary));
+
+        // The intern holds Allow rows on Name and Notes, so only Salary is denied.
         expect([...entity.GetDeniedReadFields(buildUser([INTERN_ROLE_ID]))]).toEqual(['salary']);
-        expect([...entity.GetDeniedReadFields(buildUser([], 'some-other-user'))]).toEqual(['salary']);
+
+        // A user holding NO roles matches no Allow row anywhere, so every RESTRICTABLE field
+        // is denied — not just the one an administrator singled out. That is the intended
+        // shape: access is granted by rows, and this user has none. The primary key stays out
+        // of the set because it is unrestrictable, which is what keeps records loadable at all.
+        const roleless = [...entity.GetDeniedReadFields(buildUser([], 'some-other-user'))];
+        expect(roleless.sort()).toEqual(['name', 'notes', 'salary']);
+        expect(roleless).not.toContain('id');
     });
 
     it('recognizes the system user case-insensitively and is null-safe', () => {
@@ -335,8 +393,9 @@ describe('Predicate validation (ExtraFilter / OrderBy)', () => {
         )).not.toThrow();
     });
 
-    it('is a no-op when the entity has no field security configured', () => {
-        const provider = setupProvider([]);
+    it('is a no-op when field security is switched OFF on the entity', () => {
+        // The rows still say Salary is HR-only; the flag is what disarms the gate.
+        const provider = setupProvider(hrOnlySalary, false);
         expect(() => provider.assertPredicates(
             viewParams({ ExtraFilter: 'Salary > 200000' }),
             buildUser([INTERN_ROLE_ID])
@@ -434,8 +493,9 @@ describe('Predicate validation (Aggregates)', () => {
         )).not.toThrow();
     });
 
-    it('is a no-op when the entity has no field security configured', () => {
-        const provider = setupProvider([]);
+    it('is a no-op when field security is switched OFF on the entity', () => {
+        // The rows still say Salary is HR-only; the flag is what disarms the gate.
+        const provider = setupProvider(hrOnlySalary, false);
         expect(() => provider.assertPredicates(
             viewParams({ Aggregates: [{ expression: 'MIN(Salary)' }] }),
             buildUser([INTERN_ROLE_ID])
@@ -532,9 +592,7 @@ describe('Output projection', () => {
 describe('BaseEntity save guard', () => {
     class TestEntity extends BaseEntity {}
 
-    const SALARY_PERMS = [
-        { ID: 'p1', EntityFieldID: 'f-salary', RoleID: HR_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: true, CanCreate: false },
-    ];
+    const SALARY_PERMS = openTo('f-salary', [HR_ROLE_ID]);
 
     const MOCK_METADATA = {
         Applications: [],
@@ -542,13 +600,14 @@ describe('BaseEntity save guard', () => {
             {
                 ID: ENTITY_ID, Name: 'Employees', SchemaName: 'dbo', BaseView: 'vwEmployees', BaseTable: 'Employee',
                 IncludeInAPI: true, AllowCreateAPI: true, AllowUpdateAPI: true, AllowDeleteAPI: true,
+                EnableFieldLevelSecurity: true,
                 // AllowUpdateAPI must be true or EntityFieldInfo.ReadOnly is true, the field is
                 // never Dirty, and every assertion below passes vacuously.
                 EntityFields: [
                     { ID: 'f-id', EntityID: ENTITY_ID, Name: 'ID', Entity: 'Employees', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1 },
-                    { ID: 'f-name', EntityID: ENTITY_ID, Name: 'Name', Entity: 'Employees', Type: 'nvarchar', Sequence: 2, AllowUpdateAPI: true },
+                    { ID: 'f-name', EntityID: ENTITY_ID, Name: 'Name', Entity: 'Employees', Type: 'nvarchar', Sequence: 2, AllowUpdateAPI: true, EntityFieldPermissions: openTo('f-name') },
                     { ID: 'f-salary', EntityID: ENTITY_ID, Name: 'Salary', Entity: 'Employees', Type: 'money', Sequence: 3, AllowUpdateAPI: true, EntityFieldPermissions: SALARY_PERMS },
-                    { ID: 'f-notes', EntityID: ENTITY_ID, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', Sequence: 4, AllowUpdateAPI: true },
+                    { ID: 'f-notes', EntityID: ENTITY_ID, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', Sequence: 4, AllowUpdateAPI: true, EntityFieldPermissions: openTo('f-notes') },
                 ],
                 EntityPermissions: [
                     { EntityID: ENTITY_ID, RoleID: HR_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
@@ -642,22 +701,27 @@ describe('BaseEntity save guard', () => {
         expect(entity.Get('Salary')).toBe(250000);
     });
 
-    it('does not block an INSERT — CanCreate is not enforced in this release', async () => {
+    it('does not REJECT an INSERT — a create-denied value is dropped, never an error', async () => {
+        // The update guard is a rejection; the create path deliberately is not. A user who may
+        // not create a field gets the column default rather than a failed save, matching the
+        // read path (a denied field is absent, not an error) and the ambiguous-error rule
+        // (naming the field would confirm it exists and is restricted).
         const { entity, saveSpy } = makeEntity(buildUser([INTERN_ROLE_ID]), false);
         entity.Set('Salary', 100);
         await expect(entity.Save(opts())).resolves.toBe(true);
         expect(saveSpy).toHaveBeenCalled();
     });
 
-    it('is a no-op for an entity with no field security configured', async () => {
+    it('is a no-op for an entity with field security switched OFF', async () => {
         const entityInfo = provider.Entities.find(e => e.Name === 'Employees')!;
-        // Strip the permission records to simulate an unconfigured entity.
-        entityInfo.Fields.find(f => f.Name === 'Salary')!.FieldPermissions.length = 0;
-        (entityInfo as unknown as Record<string, unknown>)['_hasAnyFieldPermissionsCache'] = undefined;
+        // The flag alone disarms enforcement — the permission rows are left in place, which is
+        // exactly the "retained but inactive" state a disabled entity is meant to hold.
+        entityInfo.EnableFieldLevelSecurity = false;
 
         const { entity, saveSpy } = makeEntity(buildUser([INTERN_ROLE_ID]));
         entity.Set('Salary', 1);
         await expect(entity.Save(opts())).resolves.toBe(true);
         expect(saveSpy).toHaveBeenCalled();
+        expect(entityInfo.Fields.find(f => f.Name === 'Salary')!.HasFieldPermissions).toBe(true);
     });
 });

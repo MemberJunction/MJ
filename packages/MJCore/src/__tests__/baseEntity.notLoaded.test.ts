@@ -1,5 +1,5 @@
 /**
- * EntityField not-loaded flag — Workstream D-1 (plans/field-level-security-implementation.md).
+ * EntityField not-loaded flag.
  *
  * The flag means: "the source this entity was hydrated from OMITTED this field's key."
  * Semantics under test:

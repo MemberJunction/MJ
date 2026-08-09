@@ -1,13 +1,13 @@
 /**
  * Tests for ResolverBase.StripDeniedReadFieldsFromClientInput — the field-level-security
- * guard on the update path (Workstream A2 of plans/field-level-security-implementation.md).
+ * guard on the update path.
  *
- * The hazard this guard closes: a read-denied field is stripped from every payload the
- * client receives, so the client's Save fabricates a value for it (default / 0 / '' / null)
- * and sends it back. Without the guard, UpdateRecord's SetMany applies the fabrication —
- * silent data loss when the user holds CanUpdate, and a spurious save failure on UNRELATED
- * edits when they don't. The guard strips denied-read keys from the client's new values and
- * OldValues before anything applies them, and its `true` return forces the caller onto the
+ * The hazard it closes: a read-denied field is stripped from every payload the client
+ * receives, so the client's Save fabricates a value for it (default / 0 / '' / null) and sends
+ * it back. Without the guard, UpdateRecord's SetMany applies the fabrication — silent data
+ * loss when the user holds update access, and a spurious save failure on UNRELATED edits when
+ * they don't. The guard strips denied-read keys from the client's new values and OldValues
+ * before anything applies them, and its `true` return forces the caller onto the
  * load-truth-from-DB branch so denied fields hold real values a stripped SetMany never
  * touches.
  */
@@ -124,13 +124,23 @@ const ENTITY_ID = 'entity-employees';
  * `Base Salary` has a space, so its CodeName (`Base_Salary`) differs from its Name —
  * exercising the Name→CodeName bridge (input keys are CodeNames).
  */
+/**
+ * Full access to `fieldId` for every listed role. Snapshot initialization writes rows like these
+ * for every (field, role) that should have one — which is why the UNRESTRICTED fields below need
+ * them explicitly. On an FLS-enabled entity a field with no rows is denied, not open.
+ */
+function openTo(fieldId: string, roles: string[] = [HR_ROLE_ID, INTERN_ROLE_ID]): Record<string, unknown>[] {
+    return roles.map((roleId, i) => ({
+        ID: `${fieldId}-open-${i}`,
+        EntityFieldID: fieldId,
+        RoleID: roleId,
+        ReadAccess: 'Allow',
+        UpdateAccess: 'Allow',
+        CreateAccess: 'Allow',
+    }));
+}
+
 function employeeEntityInit(withFls: boolean): Record<string, unknown> {
-    const salaryPerms = withFls
-        ? [{ ID: 'p1', EntityFieldID: 'f-salary', RoleID: HR_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: true, CanCreate: false }]
-        : [];
-    const baseSalaryPerms = withFls
-        ? [{ ID: 'p2', EntityFieldID: 'f-base-salary', RoleID: HR_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: true, CanCreate: false }]
-        : [];
     return {
         ID: ENTITY_ID,
         Name: 'Employees',
@@ -141,16 +151,19 @@ function employeeEntityInit(withFls: boolean): Record<string, unknown> {
         AllowCreateAPI: true,
         AllowUpdateAPI: true,
         AllowDeleteAPI: true,
+        // The flag is the enforcement gate — `withFls: false` switches field security off
+        // entirely rather than merely removing rows.
+        EnableFieldLevelSecurity: withFls,
         Permissions: [
             { EntityID: ENTITY_ID, RoleID: HR_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
             { EntityID: ENTITY_ID, RoleID: INTERN_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
         ],
         Fields: [
             { ID: 'f-id', EntityID: ENTITY_ID, Sequence: 1, Name: 'ID', Entity: 'Employees', Type: 'uniqueidentifier', IsPrimaryKey: true },
-            { ID: 'f-name', EntityID: ENTITY_ID, Sequence: 2, Name: 'Name', Entity: 'Employees', Type: 'nvarchar' },
-            { ID: 'f-salary', EntityID: ENTITY_ID, Sequence: 3, Name: 'Salary', Entity: 'Employees', Type: 'money', EntityFieldPermissions: salaryPerms },
-            { ID: 'f-base-salary', EntityID: ENTITY_ID, Sequence: 4, Name: 'Base Salary', Entity: 'Employees', Type: 'money', EntityFieldPermissions: baseSalaryPerms },
-            { ID: 'f-notes', EntityID: ENTITY_ID, Sequence: 5, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar' },
+            { ID: 'f-name', EntityID: ENTITY_ID, Sequence: 2, Name: 'Name', Entity: 'Employees', Type: 'nvarchar', EntityFieldPermissions: openTo('f-name') },
+            { ID: 'f-salary', EntityID: ENTITY_ID, Sequence: 3, Name: 'Salary', Entity: 'Employees', Type: 'money', EntityFieldPermissions: openTo('f-salary', [HR_ROLE_ID]) },
+            { ID: 'f-base-salary', EntityID: ENTITY_ID, Sequence: 4, Name: 'Base Salary', Entity: 'Employees', Type: 'money', EntityFieldPermissions: openTo('f-base-salary', [HR_ROLE_ID]) },
+            { ID: 'f-notes', EntityID: ENTITY_ID, Sequence: 5, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', EntityFieldPermissions: openTo('f-notes') },
         ],
     };
 }
@@ -288,39 +301,52 @@ describe('ResolverBase.StripDeniedReadFieldsFromClientInput', () => {
     });
 });
 
-// ─── Write-only fields (denied-read + update-ALLOWED) — D-2 refinement ────
+// ─── A write-only field is a FORBIDDEN configuration ──────────────────────
 //
-// Under the not-loaded contract the client OMITS fields it was never shown, so a value
-// that IS present for a denied-read field is a deliberate write. Only fields that are
-// ALSO denied-update get stripped; write-only values flow to the normal save guard.
+// Read is required for Update, enforced by a row-level CHECK constraint AND by the clamp in
+// EntityFieldInfo.GetUserFieldPermissions that catches the across-roles case the constraint
+// cannot see. These tests write the forbidden rows DIRECTLY into metadata, bypassing the
+// constraint, and assert the runtime still refuses to produce a write-only outcome.
 
-describe('write-only fields pass through the strip', () => {
+describe('write-only fields are unreachable, so every denied-read field is stripped', () => {
     const resolver = new TestResolver();
 
-    /** Salary: HR full access; intern denied READ but ALLOWED update (the SSN-capture shape). */
-    function writeOnlyEntity(): EntityInfo {
+    /**
+     * Salary with the forbidden shape written straight into metadata: the intern is denied READ
+     * but granted UPDATE. A CHECK constraint would refuse this row; reaching it here means it
+     * was written outside the entity path.
+     */
+    function forbiddenWriteOnlyEntity(): EntityInfo {
         const init = employeeEntityInit(true);
         const fields = init['Fields'] as Array<Record<string, unknown>>;
         const salary = fields.find(f => f['Name'] === 'Salary')!;
         salary['EntityFieldPermissions'] = [
-            { ID: 'p1', EntityFieldID: 'f-salary', RoleID: HR_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: true },
-            { ID: 'p2', EntityFieldID: 'f-salary', RoleID: INTERN_ROLE_ID, Type: 'Allow', CanRead: false, CanUpdate: true },
+            ...openTo('f-salary', [HR_ROLE_ID]),
+            { ID: 'p2', EntityFieldID: 'f-salary', RoleID: INTERN_ROLE_ID, ReadAccess: 'No Access', UpdateAccess: 'Allow', CreateAccess: 'No Access' },
         ];
         return new EntityInfo(init);
     }
 
-    it('a deliberate write to a denied-read + update-allowed field is NOT stripped', () => {
-        const entity = writeOnlyEntity();
+    it('the aggregation clamps the forbidden row — update does not survive a denied read', () => {
+        const entity = forbiddenWriteOnlyEntity();
+        const intern = buildUser([INTERN_ROLE_ID]);
+
+        expect(entity.GetDeniedReadFields(intern).has('salary')).toBe(true);
+        expect(entity.GetDeniedUpdateFields(intern).has('salary')).toBe(true);
+    });
+
+    it('strips the value anyway — a client cannot have a legitimate value for a field it never saw', () => {
+        const entity = forbiddenWriteOnlyEntity();
         const { input, clientNewValues } = makeClientPayload({ ID: '1', Salary: 123456 });
         const result = resolver.TestStrip(entity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
 
         expect(result).toBe(true); // truth-load still forced — the denied-read set is non-empty
-        expect(clientNewValues['Salary']).toBe(123456);
-        expect(input['Salary']).toBe(123456);
+        expect(clientNewValues).not.toHaveProperty('Salary');
+        expect(input).not.toHaveProperty('Salary');
     });
 
-    it('the write-only field\'s OldValues entry is still removed (the client cannot know a true old value)', () => {
-        const entity = writeOnlyEntity();
+    it('removes the OldValues entry too (the client cannot know a true old value)', () => {
+        const entity = forbiddenWriteOnlyEntity();
         const { input, clientNewValues } = makeClientPayload(
             { ID: '1', Salary: 123456 },
             [{ Key: 'ID', Value: '1' }, { Key: 'Salary', Value: '99' }]
@@ -328,16 +354,17 @@ describe('write-only fields pass through the strip', () => {
         resolver.TestStrip(entity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
 
         expect(input.OldValues___).toEqual([{ Key: 'ID', Value: '1' }]);
-        expect(clientNewValues['Salary']).toBe(123456);
+        expect(clientNewValues).not.toHaveProperty('Salary');
     });
 
-    it('a read+update-denied field on the SAME entity is still stripped while the write-only one passes', () => {
-        // Base Salary stays HR-only (denied read AND update for the intern); Salary is write-only.
-        const entity = writeOnlyEntity();
+    it('strips EVERY denied-read field, with no update-permission split', () => {
+        // Base Salary is denied read AND update; Salary carries the forbidden write-only row.
+        // Both are stripped, because denied-read ∩ denied-update is now just denied-read.
+        const entity = forbiddenWriteOnlyEntity();
         const { input, clientNewValues } = makeClientPayload({ ID: '1', Salary: 123456, Base_Salary: 7 });
         resolver.TestStrip(entity, buildUser([INTERN_ROLE_ID]), input, clientNewValues);
 
-        expect(clientNewValues['Salary']).toBe(123456);
+        expect(clientNewValues).not.toHaveProperty('Salary');
         expect(clientNewValues).not.toHaveProperty('Base_Salary');
     });
 });

@@ -75,17 +75,21 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
 
     /**
      * Names of entities that have at least one field rule bound to this role. Walks cached
-     * metadata only — no database access — and short-circuits on the per-entity flag, so
-     * entities without field security cost one boolean each. Runs only when the system user is
-     * the save target, which is rare.
+     * metadata only — no database access. Runs only when the system user is the save target,
+     * which is rare.
+     *
+     * Deliberately does NOT gate on {@link EntityInfo.EnableFieldLevelSecurity}, even though
+     * rules on a disabled entity are inactive and gating would be the cheaper walk. Gating
+     * would leave the two halves of this guard unable to compose, and the gap is reachable in
+     * three ordinary steps: disable field security on an entity, assign the role (now carrying
+     * no active rules) to the system user, re-enable. Each step is permitted and the end state
+     * is the one both guards exist to prevent. Disabling preserves rules so re-enabling does
+     * not lose them, so a rule on a disabled entity is dormant rather than gone.
      */
     private static EntitiesWithFieldRulesForRole(roleID: string): string[] {
         const md = new Metadata();
         const names: string[] = [];
         for (const entity of md.Entities as EntityInfo[]) {
-            if (!entity.HasAnyFieldPermissions) {
-                continue;
-            }
             const hit = entity.Fields.some(
                 f => f.HasFieldPermissions && f.FieldPermissions.some(fp => UUIDsEqual(fp.RoleID, roleID))
             );

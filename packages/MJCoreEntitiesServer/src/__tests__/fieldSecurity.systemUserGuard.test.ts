@@ -74,18 +74,24 @@ function systemUserHolding(...roleIDs: string[]): void {
     };
 }
 
-/** Metadata where `Employees.Salary` carries a rule bound to the given role. */
-function metadataWithRuleForRole(roleID: string): void {
+/**
+ * Metadata where `Employees.Salary` carries a rule bound to the given role.
+ *
+ * `EnableFieldLevelSecurity` is a red herring on purpose — see the disabled-entity test below.
+ * The guard walks rules regardless of the flag, so that the two halves of the system-user
+ * guard compose.
+ */
+function metadataWithRuleForRole(roleID: string, enableFieldLevelSecurity: boolean = true): void {
     entitiesStub.value = [
         {
             Name: 'Employees',
-            HasAnyFieldPermissions: true,
+            EnableFieldLevelSecurity: enableFieldLevelSecurity,
             Fields: [
                 { Name: 'ID', HasFieldPermissions: false, FieldPermissions: [] },
                 { Name: 'Salary', HasFieldPermissions: true, FieldPermissions: [{ RoleID: roleID }] },
             ],
         },
-        { Name: 'Unsecured Entity', HasAnyFieldPermissions: false, Fields: [] },
+        { Name: 'Unsecured Entity', EnableFieldLevelSecurity: false, Fields: [] },
     ];
 }
 
@@ -165,5 +171,18 @@ describe('MJUserRoleEntityServer.SystemUserRejectionReason', () => {
         systemUserHolding();
         expect(MJUserRoleEntityServer.SystemUserRejectionReason(null, RESTRICTED_ROLE_ID)).toBeNull();
         expect(MJUserRoleEntityServer.SystemUserRejectionReason(SYSTEM_USER_ID, null)).toBeNull();
+    });
+
+    it('still refuses when the entity has field security DISABLED — the ordering trap', () => {
+        // The two halves of this guard have to compose, and gating this walk on
+        // EnableFieldLevelSecurity would leave a three-step hole: disable field security on an
+        // entity, assign the role (now "carrying no active rules") to the system user, then
+        // re-enable. Every step is permitted and the end state is the one both halves exist to
+        // prevent. Disabling preserves rules precisely so re-enabling does not lose them, so a
+        // dormant rule is not a gone rule.
+        systemUserHolding();
+        metadataWithRuleForRole(RESTRICTED_ROLE_ID, false);
+
+        expect(MJUserRoleEntityServer.SystemUserRejectionReason(SYSTEM_USER_ID, RESTRICTED_ROLE_ID)).toBeTruthy();
     });
 });

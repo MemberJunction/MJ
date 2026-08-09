@@ -2,9 +2,6 @@
    Entity Field Permissions — Field-Level (Column-Level) Security
    v6.1.x
 
-   Companion plans: plans/fls-redesign-direction.md (the direction),
-                    plans/fls-redesign-research.md  (R1-R8 + the forward plan).
-
    Adds role-based FIELD-level access control, filling the gap between the
    existing entity-level CRUD permissions (EntityPermission) and row-level
    security (RowLevelSecurityFilter). Until now the only field-scoped feature
@@ -14,13 +11,9 @@
    TWO PIECES SHIP HERE:
 
    1. Entity.EnableFieldLevelSecurity — field-level security is ON or OFF per
-      entity, EXPLICITLY. Enforcement gates on this flag alone. It is never
-      inferred from "does any permission row happen to exist," which is the
-      model this replaces: under that model the FIRST rule an administrator
-      wrote closed the field for everyone without an explicit Allow, including
-      users no rule mentioned. Flipping the flag ON snapshots the entity's
-      existing entity-level permissions into per-field rows, so enabling it
-      changes NOTHING behaviourally until an admin tightens a field.
+      entity, explicitly, and enforcement gates on this flag alone. Flipping it
+      ON snapshots the entity's existing entity-level permissions into per-field
+      rows, so enabling changes no behavior until an admin tightens a field.
 
    2. EntityFieldPermission — one row per (field, role), carrying three
       INDEPENDENT trinary verbs: ReadAccess, UpdateAccess, CreateAccess.
@@ -31,7 +24,7 @@
        nothing by accident.
      * 'Allow'     — grants the action for this role.
      * 'Deny'      — trumps everything. Any Deny across any of the user's roles
-       wins, no matter how many Allows sit beside it ("multiply by zero").
+       wins, no matter how many Allows sit beside it.
 
    Aggregation across the roles a user holds, per verb:
        effective = (any matching row Allows) AND NOT (any matching row Denies)
@@ -87,9 +80,8 @@ CREATE TABLE ${flyway:defaultSchema}.EntityFieldPermission (
         FOREIGN KEY (EntityFieldID) REFERENCES ${flyway:defaultSchema}.EntityField(ID),
     CONSTRAINT FK_EntityFieldPermission_Role
         FOREIGN KEY (RoleID) REFERENCES ${flyway:defaultSchema}.Role(ID),
-    -- One row per (field, role). The old model carried a Type discriminator and
-    -- allowed an Allow row AND a Deny row for the same pair; the trinary verbs
-    -- make that split unnecessary and the ambiguity impossible.
+    -- One row per (field, role): a role's stance on a field is always a single
+    -- readable row rather than a set that has to be reconciled.
     CONSTRAINT UQ_EntityFieldPermission_Field_Role UNIQUE (EntityFieldID, RoleID),
     CONSTRAINT CK_EntityFieldPermission_ReadAccess
         CHECK (ReadAccess   IN (N'Allow', N'Deny', N'No Access')),
@@ -5372,29 +5364,22 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedB
 /* ============================================================================= */
 /*              HAND-WRITTEN — POST-CODEGEN METADATA CORRECTION                  */
 /*                                                                               */
-/* This runs AFTER the CodeGen block deliberately. CodeGen creates every new     */
-/* Entity row with TrackRecordChanges = 1 (see the Entity INSERT above), and it  */
-/* has no way to know that this particular entity should opt out. An UPDATE      */
-/* after the fact is the only place to express that, so do not fold it into the  */
-/* generated INSERT — a CodeGen re-run would silently discard the edit.          */
+/* Runs AFTER the CodeGen block: CodeGen creates every new Entity row with       */
+/* TrackRecordChanges = 1, so this must be an UPDATE rather than an edit to the  */
+/* generated INSERT, which a CodeGen re-run would discard.                       */
 /* ============================================================================= */
 
 -- Turn OFF Record Changes for MJ: Entity Field Permissions.
 --
--- Enabling field-level security on an entity snapshots its entity-level permissions
--- into one EntityFieldPermission row per (field x qualifying role). On a wide entity
--- with several roles that is hundreds of rows written in a single unit of work, every
--- one of them through BaseEntity.Save() — which is correct (the delta module must not
--- bypass validation or the save-time guards), but which also produces hundreds of audit
--- rows all saying the same thing: "the system wrote the defaults."
+-- Enabling field-level security on an entity snapshots its entity-level permissions into
+-- one EntityFieldPermission row per (field x qualifying role) — hundreds of rows in a
+-- single unit of work on a wide entity, each written through BaseEntity.Save(). Auditing
+-- every one of them says only "the system wrote the defaults" and buries the entries that
+-- matter: an administrator later tightening a specific field.
 --
--- That is not an audit trail anyone reads, and it buries the entries that DO matter --
--- an administrator later tightening a specific field. The signal worth auditing is the
--- deliberate edit, and the snapshot noise is what would hide it.
---
--- Note this is NOT an opt-in to direct SQL. AllowDirectSQLInsert/Update/Delete all stay
--- off: every mutation still goes through the entity path, so validation, entity actions
--- and cache invalidation are unaffected. Only the Record Changes audit row is suppressed.
+-- This is NOT an opt-in to direct SQL. AllowDirectSQLInsert/Update/Delete all stay off, so
+-- every mutation still goes through the entity path and validation, entity actions and cache
+-- invalidation are unaffected. Only the audit row is suppressed.
 UPDATE [${flyway:defaultSchema}].[Entity]
    SET [TrackRecordChanges] = 0
  WHERE [ID] = 'C4ECCED4-5040-4DA9-A022-3BC195090058';
