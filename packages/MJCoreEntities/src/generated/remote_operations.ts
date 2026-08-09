@@ -583,10 +583,15 @@ export interface TaskGraphSubmitInput {
             tempId: string;
             name: string;
             description: string;
+            /** Agent that executes this node. Mutually exclusive with actionName and assignToUser. */
             agentName?: string;
+            /** Action that executes this node (D14 durable dispatch). Mutually exclusive with agentName and assignToUser. */
+            actionName?: string;
             assignToUser?: boolean;
-            dependsOn: string[];
+            dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional' }>;
             inputPayload?: Record<string, unknown>;
+            /** Canvas geometry. Presentation only: the dispatcher ignores it and the validator never requires it. */
+            layout?: { x: number; y: number; width?: number; height?: number };
         }>;
         continuation?: 'message' | 'reinvoke' | 'none';
         durable?: boolean;
@@ -649,10 +654,15 @@ export interface WorkflowDraftOutput {
             tempId: string;
             name: string;
             description: string;
+            /** Agent that executes this node. Mutually exclusive with actionName and assignToUser. */
             agentName?: string;
+            /** Action that executes this node (D14 durable dispatch). Mutually exclusive with agentName and assignToUser. */
+            actionName?: string;
             assignToUser?: boolean;
             dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional' }>;
             inputPayload?: Record<string, unknown>;
+            /** Canvas geometry. Presentation only: the dispatcher ignores it and the validator never requires it. */
+            layout?: { x: number; y: number; width?: number; height?: number };
         }>;
         continuation?: 'message' | 'reinvoke' | 'none';
         durable?: boolean;
@@ -675,10 +685,15 @@ export interface WorkflowSaveInput {
                 tempId: string;
                 name: string;
                 description: string;
+                /** Agent that executes this node. Mutually exclusive with actionName and assignToUser. */
                 agentName?: string;
+                /** Action that executes this node (D14 durable dispatch). Mutually exclusive with agentName and assignToUser. */
+                actionName?: string;
                 assignToUser?: boolean;
                 dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional' }>;
                 inputPayload?: Record<string, unknown>;
+                /** Canvas geometry. Presentation only: the dispatcher ignores it and the validator never requires it. */
+                layout?: { x: number; y: number; width?: number; height?: number };
             }>;
             continuation?: 'message' | 'reinvoke' | 'none';
             durable?: boolean;

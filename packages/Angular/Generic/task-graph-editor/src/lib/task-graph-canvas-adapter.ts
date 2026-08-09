@@ -203,22 +203,26 @@ function edgeId(fromTempId: string, toTempId: string): string {
 /**
  * Projects the spec onto canvas nodes.
  *
- * `positions` carries geometry the spec cannot hold. `TaskGraphSpec` is an execution contract with
- * no layout field, so without a caller-held map every re-projection would return every node to the
- * origin — which is what previously forced a full re-arrange (and a viewport re-zoom) after every
- * single edit. Unknown ids fall back to the origin, which is also the correct starting state for a
- * graph that has never been laid out.
+ * Geometry comes from the node's own `layout` — presentation-only data the spec now carries so an
+ * author's arrangement survives a re-projection, a reload, and a round trip over the wire. A node
+ * without it falls back to the origin, which is the correct starting state for a graph that has
+ * never been laid out (an agent-emitted decomposition, a fresh draft) and is what triggers the
+ * one-time auto-layout pass.
+ *
+ * `overrides` is the in-flight position of a node the author is dragging right now, which the canvas
+ * knows before the spec does.
  */
 export function SpecToNodes(
     spec: TaskGraphSpec,
     runtime?: TaskGraphRuntimeStatus,
-    positions?: ReadonlyMap<string, FlowPosition>,
+    overrides?: ReadonlyMap<string, FlowPosition>,
 ): FlowNode[] {
     const entryIds = new Set(GetEntryTempIds(spec));
 
     return (spec.tasks ?? []).map((task) => {
         const type = GetTaskNodeType(task);
-        const known = positions?.get(task.tempId);
+        const known = overrides?.get(task.tempId)
+            ?? (task.layout ? { X: task.layout.x, Y: task.layout.y } : undefined);
         return {
             ID: task.tempId,
             Type: type,
@@ -350,6 +354,26 @@ export function AddTask(spec: TaskGraphSpec, task: TaskGraphSpecNode): TaskGraph
 /** Replaces a task in place by `tempId`, returning a NEW spec. */
 export function UpdateTask(spec: TaskGraphSpec, tempId: string, next: TaskGraphSpecNode): TaskGraphSpec {
     return { ...spec, tasks: (spec.tasks ?? []).map((t) => (t.tempId === tempId ? next : t)) };
+}
+
+/**
+ * Writes canvas geometry back onto the spec, immutably and only where it actually changed.
+ *
+ * Returns the SAME spec object when nothing moved. That identity check is what keeps a drag from
+ * looping: the component re-projects on every commit, and a commit that always produced a new object
+ * would re-enter projection on each `NodesChanged` the canvas emits while a node is under the
+ * cursor. It also keeps `SpecChanged` from firing for a no-op.
+ */
+export function ApplyLayout(spec: TaskGraphSpec, positions: ReadonlyMap<string, FlowPosition>): TaskGraphSpec {
+    let changed = false;
+    const tasks = (spec.tasks ?? []).map((t) => {
+        const p = positions.get(t.tempId);
+        if (!p) return t;
+        if (t.layout && t.layout.x === p.X && t.layout.y === p.Y) return t;
+        changed = true;
+        return { ...t, layout: { ...(t.layout ?? {}), x: p.X, y: p.Y } };
+    });
+    return changed ? { ...spec, tasks } : spec;
 }
 
 /**

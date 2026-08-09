@@ -85,6 +85,40 @@ export type TaskGraphSpecNode = {
 
     /** Structured input persisted to `Task.InputPayload`. */
     inputPayload?: Record<string, unknown>;
+
+    /**
+     * Where this node sits on a canvas. **Presentation only.**
+     *
+     * Two rules make this safe to carry in an execution contract, and both are load-bearing:
+     *
+     * 1. **The dispatcher ignores it entirely.** Nothing about scheduling, claiming or ordering may
+     *    read this field. A graph with no layout executes identically to the same graph with one.
+     * 2. **The validator never requires it.** A producer that has never seen a canvas — an agent
+     *    decomposing work at run time, a durable entity-action dispatch — emits nodes without it,
+     *    and those graphs are fully valid.
+     *
+     * It exists because a spec is otherwise the *only* record of a graph the author is drawing.
+     * A saved workflow's geometry has a home already (`AIAgentStep.PositionX/PositionY/Width/Height`),
+     * but a draft, an agent-emitted graph, or a spec in flight over the wire has none — so without
+     * this the canvas has to re-run auto-layout every time it re-projects, which throws away the
+     * author's arrangement and (because auto-layout ends in zoom-to-fit) yanks their viewport.
+     *
+     * Lower-case keys to match the rest of this contract, not the canvas's `FlowPosition`.
+     */
+    layout?: TaskGraphNodeLayout;
+};
+
+/**
+ * Canvas geometry for a node. Presentation only — see the rules on {@link TaskGraphSpecNode.layout}.
+ *
+ * `width`/`height` are optional because most producers have no opinion about size; the canvas
+ * supplies its own defaults, and a node that omits them renders exactly as it always has.
+ */
+export type TaskGraphNodeLayout = {
+    x: number;
+    y: number;
+    width?: number;
+    height?: number;
 };
 
 /** A complete, submittable task graph. */

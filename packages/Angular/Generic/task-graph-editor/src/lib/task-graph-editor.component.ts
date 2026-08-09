@@ -45,6 +45,7 @@ import type {
 } from '@memberjunction/ng-flow-editor';
 import {
     AddDependency,
+    ApplyLayout,
     AddTask,
     GetDependents,
     GetNodeTypeConfig,
@@ -469,11 +470,32 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
      */
     public OnNodesChanged(nodes: FlowNode[]): void {
         for (const n of nodes) this.knownPositions.set(n.ID, { ...n.Position });
+        this.persistLayout();
     }
 
     /** A single node was dragged. Same authority, narrower event. */
     public OnNodeMoved(event: FlowNodeMovedEvent): void {
         this.knownPositions.set(event.NodeID, { ...event.NewPosition });
+        this.persistLayout();
+    }
+
+    /**
+     * Folds the canvas's geometry into the spec so it outlives this component.
+     *
+     * `ApplyLayout` returns the same object when nothing moved, so a no-op drag neither re-projects
+     * nor emits `SpecChanged` — without that identity check this would loop, since the canvas emits
+     * `NodesChanged` continuously while a node is under the cursor.
+     *
+     * Deliberately NOT routed through `commit()`: geometry is presentation, and re-projecting
+     * mid-drag would fight the canvas for control of the node the author is holding. The host is
+     * still told, so it can persist.
+     */
+    private persistLayout(): void {
+        if (this.ReadOnly || !this.currentSpec) return;
+        const next = ApplyLayout(this.currentSpec, this.knownPositions);
+        if (next === this.currentSpec) return;
+        this.currentSpec = next;
+        this.SpecChanged.emit(new TaskGraphSpecChangedEventArgs(next, 'LayoutApplied'));
     }
 
     public ngOnDestroy(): void {
