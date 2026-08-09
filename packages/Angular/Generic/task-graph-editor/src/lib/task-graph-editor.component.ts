@@ -39,7 +39,9 @@ import type {
     FlowLayoutDirection,
     FlowNode,
     FlowNodeAddedEvent,
+    FlowNodeMovedEvent,
     FlowNodeTypeConfig,
+    FlowPosition,
 } from '@memberjunction/ng-flow-editor';
 import {
     AddDependency,
@@ -356,7 +358,16 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
                 actionName: this.AvailableActionNames[0],
             }),
         );
-        if (added) this.selectTask(added);
+        if (!added) return;
+
+        // Remember where the canvas put it BEFORE anything re-projects. The spec has no geometry
+        // field, so this map is the only record that the author dropped (or clicked) it here — and
+        // without it the node would snap back to the origin on the very next edit.
+        this.knownPositions.set(added.tempId, { ...event.Node.Position });
+        // A graph that has received a hand-placed node is laid out, by definition. Marking it here
+        // stops the one-time Dagre pass from firing later and discarding that placement.
+        this.hasLaidOut = true;
+        this.selectTask(added);
     }
 
     /** Applies a properties-panel edit through the same vetoable path a canvas edit takes. */
@@ -406,38 +417,63 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
             this.Connections = [];
             this.ValidationErrors = [];
             this.IsValid = true;
-            this.laidOutTopology = '';
+            this.hasLaidOut = false;
+            this.knownPositions.clear();
             return;
         }
-        this.Nodes = SpecToNodes(this.currentSpec, this.currentRuntime ?? undefined);
+        this.Nodes = SpecToNodes(this.currentSpec, this.currentRuntime ?? undefined, this.knownPositions);
         this.Connections = SpecToConnections(this.currentSpec);
         this.Validate();
-        this.arrangeIfTopologyChanged();
+        this.arrangeIfNeverLaidOut();
     }
 
     /**
-     * Lays the graph out whenever its shape changes.
+     * Lays the graph out ONCE — when it arrives with no geometry of its own.
      *
-     * A `TaskGraphSpec` carries no geometry — every projected node starts at the origin — so without
-     * this every step is stacked on the last one and a two-step graph looks like a one-step graph
-     * with a rendering glitch. Layout is Dagre's, inside the canvas, run only when the *topology*
-     * changes: a rename or an edge-condition edit re-projects too, and re-arranging on those would
-     * make boxes jump under the author's cursor mid-edit.
+     * A `TaskGraphSpec` carries no positions, so a spec opened for the first time projects with
+     * every node at the origin and needs Dagre to make it readable. After that the author's layout
+     * is the layout: `knownPositions` carries it across re-projections, and re-arranging again would
+     * throw away the arrangement they just made.
+     *
+     * It must also not run on every edit, because `AutoArrange` ends in `ZoomToFit` — so arranging
+     * per change meant the viewport snapped to fit after every added step and every drawn
+     * connection, which on a one-node graph zooms to maximum. That is the behaviour being fixed
+     * here; the rule mirrors the Flow Agent editor's (`flow-agent-editor.component.ts`), which has
+     * always arranged only when every node sits at the origin.
      */
-    private arrangeIfTopologyChanged(): void {
-        const topology = this.Nodes.map((n) => n.ID).join(',') + '|' + this.Connections.map((c) => c.ID).join(',');
-        if (topology === this.laidOutTopology) return;
-        this.laidOutTopology = topology;
+    private arrangeIfNeverLaidOut(): void {
         if (this.Nodes.length === 0) return;
+        if (this.hasLaidOut) return;
 
-        // Deferred one turn: the canvas has to render the new node before Dagre can measure and
-        // place it. Guarded on the topology it was scheduled for, so a burst of edits lays out once,
-        // and cleared on destroy so a pending layout cannot run against a torn-down view.
+        // Nothing to rescue a layout from: a spec whose nodes all sit at the origin has never been
+        // arranged. One node at the origin is the legitimate starting case too.
+        const allAtOrigin = this.Nodes.every((n) => n.Position.X === 0 && n.Position.Y === 0);
+        if (!allAtOrigin) { this.hasLaidOut = true; return; }
+
+        this.hasLaidOut = true;
+        // Deferred one turn: the canvas has to render the nodes before Dagre can measure them.
+        // Cleared on destroy so a pending layout cannot run against a torn-down view.
         if (this.pendingLayout !== null) clearTimeout(this.pendingLayout);
         this.pendingLayout = setTimeout(() => {
             this.pendingLayout = null;
-            if (this.laidOutTopology === topology) this.canvas?.AutoArrange(this.AutoLayoutDirection);
+            this.canvas?.AutoArrange(this.AutoLayoutDirection);
         });
+    }
+
+    /**
+     * The canvas is the authority on geometry, so remember what it reports.
+     *
+     * Without this the spec — which has no geometry field — is the only survivor of a re-projection,
+     * and every edit silently moved every node back to the origin. That is what forced a re-arrange
+     * (and therefore a re-zoom) on each change.
+     */
+    public OnNodesChanged(nodes: FlowNode[]): void {
+        for (const n of nodes) this.knownPositions.set(n.ID, { ...n.Position });
+    }
+
+    /** A single node was dragged. Same authority, narrower event. */
+    public OnNodeMoved(event: FlowNodeMovedEvent): void {
+        this.knownPositions.set(event.NodeID, { ...event.NewPosition });
     }
 
     public ngOnDestroy(): void {
@@ -448,6 +484,17 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     }
 
     /** The topology the current layout was computed for; '' when nothing has been laid out. */
-    private laidOutTopology: string = '';
+    /**
+     * Node geometry, which the spec cannot hold.
+     *
+     * `TaskGraphSpec` is an execution contract with no layout field, so a re-projection would
+     * otherwise return every node to the origin. Keyed by `tempId`; written from the canvas
+     * (`NodesChanged` / `NodeMoved`) and from the drop position of a newly added node, and read back
+     * by `SpecToNodes` on every projection.
+     */
+    private readonly knownPositions = new Map<string, FlowPosition>();
+
+    /** Whether the one-time Dagre pass has run (or been made unnecessary by a hand-placed node). */
+    private hasLaidOut: boolean = false;
     private pendingLayout: ReturnType<typeof setTimeout> | null = null;
 }
