@@ -28,6 +28,7 @@ import {
     NormalizeDependency,
     ValidateTaskGraphSpec,
     type TaskGraphSpec,
+    ConfigOf,
 } from '@memberjunction/ai-core-plus';
 
 /** Context a submission carries beyond the graph itself. */
@@ -282,7 +283,7 @@ export class TaskGraphService {
         spec: TaskGraphSpec,
         context: TaskGraphSubmitContext,
     ): Promise<{ Success: boolean; Map?: Map<string, string>; ErrorMessage?: string }> {
-        const names = [...new Set(spec.tasks.filter((t) => !!t.agentName).map((t) => t.agentName!))];
+        const names = [...new Set(spec.tasks.map((t) => ConfigOf(t, 'Agent')?.agentName).filter((n): n is string => !!n))];
         if (names.length === 0) return { Success: true, Map: new Map() };
 
         const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
@@ -315,7 +316,7 @@ export class TaskGraphService {
         spec: TaskGraphSpec,
         context: TaskGraphSubmitContext,
     ): Promise<{ Success: boolean; Map?: Map<string, string>; ErrorMessage?: string }> {
-        const names = [...new Set(spec.tasks.filter((t) => !!t.actionName).map((t) => t.actionName!))];
+        const names = [...new Set(spec.tasks.map((t) => ConfigOf(t, 'Action')?.actionName).filter((n): n is string => !!n))];
         if (names.length === 0) return { Success: true, Map: new Map() };
 
         const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
@@ -405,10 +406,12 @@ export class TaskGraphService {
             task.Status = 'Pending';
             task.PercentComplete = 0;
 
-            if (node.agentName) {
-                task.AgentID = agentIDsByName.get(node.agentName)!;
-            } else if (node.actionName) {
-                task.ActionID = actionIDsByName.get(node.actionName)!;
+            const agentName = ConfigOf(node, 'Agent')?.agentName;
+            const actionName = ConfigOf(node, 'Action')?.actionName;
+            if (agentName) {
+                task.AgentID = agentIDsByName.get(agentName)!;
+            } else if (actionName) {
+                task.ActionID = actionIDsByName.get(actionName)!;
             } else {
                 // Human task. Assigned to the submitting user only — cross-user assignment stays
                 // rejected until the authorization model in #3524 lands.

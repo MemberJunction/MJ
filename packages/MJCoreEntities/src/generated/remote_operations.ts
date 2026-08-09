@@ -580,16 +580,29 @@ export interface TaskGraphSubmitInput {
         workflowName: string;
         reasoning?: string;
         tasks: Array<{
+            /** One step. `kind` selects which `configuration` shape applies. */
             tempId: string;
             name: string;
             description: string;
-            agentName?: string;
-            assignToUser?: boolean;
-            dependsOn: string[];
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';
+            configuration:
+                | { agentName: string; message?: string; templateParameters?: Record<string, string> }
+                | { actionName: string; inputMapping?: string; outputMapping?: string }
+                | { assignToUserID?: string; instructions?: string }
+                | { promptName: string; templateParameters?: Record<string, string> }
+                | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
+                | { condition: string; itemVariable?: string; maxIterations?: number }
+                | { domain: string; ref?: string };
+            dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
+            policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
+            /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
+            layout?: { x?: number; y?: number; width?: number; height?: number };
             inputPayload?: Record<string, unknown>;
         }>;
         continuation?: 'message' | 'reinvoke' | 'none';
         durable?: boolean;
+        /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */
+        failureSemantics?: 'block' | 'edges';
     };
     /** Environment the tasks belong to. */
     environmentID: string;
@@ -646,16 +659,29 @@ export interface WorkflowDraftOutput {
         workflowName: string;
         reasoning?: string;
         tasks: Array<{
+            /** One step. `kind` selects which `configuration` shape applies. */
             tempId: string;
             name: string;
             description: string;
-            agentName?: string;
-            assignToUser?: boolean;
-            dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional' }>;
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';
+            configuration:
+                | { agentName: string; message?: string; templateParameters?: Record<string, string> }
+                | { actionName: string; inputMapping?: string; outputMapping?: string }
+                | { assignToUserID?: string; instructions?: string }
+                | { promptName: string; templateParameters?: Record<string, string> }
+                | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
+                | { condition: string; itemVariable?: string; maxIterations?: number }
+                | { domain: string; ref?: string };
+            dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
+            policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
+            /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
+            layout?: { x?: number; y?: number; width?: number; height?: number };
             inputPayload?: Record<string, unknown>;
         }>;
         continuation?: 'message' | 'reinvoke' | 'none';
         durable?: boolean;
+        /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */
+        failureSemantics?: 'block' | 'edges';
     };
     /** Why drafting failed, or why the model's output was rejected. */
     errorMessage?: string;
@@ -672,16 +698,29 @@ export interface WorkflowSaveInput {
             workflowName: string;
             reasoning?: string;
             tasks: Array<{
+                /** One step. `kind` selects which `configuration` shape applies. */
                 tempId: string;
                 name: string;
                 description: string;
-                agentName?: string;
-                assignToUser?: boolean;
-                dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional' }>;
+                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';
+                configuration:
+                    | { agentName: string; message?: string; templateParameters?: Record<string, string> }
+                    | { actionName: string; inputMapping?: string; outputMapping?: string }
+                    | { assignToUserID?: string; instructions?: string }
+                    | { promptName: string; templateParameters?: Record<string, string> }
+                    | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
+                    | { condition: string; itemVariable?: string; maxIterations?: number }
+                    | { domain: string; ref?: string };
+                dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
+                policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
+                /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
+                layout?: { x?: number; y?: number; width?: number; height?: number };
                 inputPayload?: Record<string, unknown>;
             }>;
             continuation?: 'message' | 'reinvoke' | 'none';
             durable?: boolean;
+            /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */
+            failureSemantics?: 'block' | 'edges';
         };
         triggers: Array<
             | { type: 'EntityEvent'; entityName: string; invocationType: string; filter?: string; scopeEntityName?: string; scopeRecordID?: string }

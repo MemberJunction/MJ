@@ -20,7 +20,7 @@
  * @module @memberjunction/ai-core-plus
  */
 import type { AgentSpec, AgentStep, AgentStepPath } from '../agent-spec';
-import { NormalizeDependency, type TaskGraphSpec } from './task-graph-spec';
+import { ConfigOf, NormalizeDependency, TaskNode, type TaskGraphSpec } from './task-graph-spec';
 
 /** What the caller must supply that a runtime graph does not carry. */
 export type SaveAsWorkflowOptions = {
@@ -85,7 +85,10 @@ export function ConvertTaskGraphToAgentSpec(
     );
 
     for (const node of graph.tasks) {
-        if (!node.agentName) {
+        // Only an Agent node becomes a Sub-Agent step. Every other kind is reported as a loss below
+        // rather than silently dropped.
+        const agentName = ConfigOf(node, 'Agent')?.agentName;
+        if (!agentName) {
             // Human steps have no Flow equivalent until assignment lands (#3524). Reported rather
             // than emitted as an empty step, which would look like a workflow that runs unattended.
             losses.push({
@@ -96,12 +99,12 @@ export function ConvertTaskGraphToAgentSpec(
             continue;
         }
 
-        const subAgentID = options.ResolveAgentID(node.agentName);
+        const subAgentID = options.ResolveAgentID(agentName);
         if (!subAgentID) {
             losses.push({
                 Kind: 'UnknownAgent',
                 TempId: node.tempId,
-                Detail: `Agent "${node.agentName}" could not be resolved; "${node.name}" is omitted.`,
+                Detail: `Agent "${agentName}" could not be resolved; "${node.name}" is omitted.`,
             });
             continue;
         }
@@ -230,16 +233,22 @@ export function ConvertAgentSpecToTaskGraph(
     return {
         workflowName: spec.Name,
         reasoning: spec.Description,
-        tasks: steps.map((step) => ({
-            tempId: step.ID,
-            name: step.Name,
-            description: step.Description ?? '',
-            agentName: step.SubAgentID ? resolveAgentName(step.SubAgentID) ?? undefined : undefined,
-            dependsOn: (incoming.get(step.ID) ?? [])
-                // A path from a step that is not in the spec cannot be drawn or executed; skipping it
-                // beats emitting a dependsOn the validator will reject as UnknownDependency.
-                .filter((p) => stepIds.has(p.OriginStepID))
-                .map((p) => (p.Condition?.trim() ? { tempId: p.OriginStepID, condition: p.Condition } : p.OriginStepID)),
-        })),
+        tasks: steps.map((step) => {
+            const base = {
+                tempId: step.ID,
+                name: step.Name,
+                description: step.Description ?? '',
+                dependsOn: (incoming.get(step.ID) ?? [])
+                    // A path from a step that is not in the spec cannot be drawn or executed; skipping
+                    // it beats emitting a dependsOn the validator will reject as UnknownDependency.
+                    .filter((p) => stepIds.has(p.OriginStepID))
+                    .map((p) => (p.Condition?.trim() ? { tempId: p.OriginStepID, condition: p.Condition } : p.OriginStepID)),
+            };
+            // A step with no resolvable sub-agent becomes a Human node rather than an Agent one with
+            // an empty name: the validator would reject the latter, and "nobody assigned yet" is
+            // exactly what an unresolved step means.
+            const agentName = step.SubAgentID ? resolveAgentName(step.SubAgentID) ?? undefined : undefined;
+            return agentName ? TaskNode.Agent(base, { agentName }) : TaskNode.Human(base);
+        }),
     };
 }

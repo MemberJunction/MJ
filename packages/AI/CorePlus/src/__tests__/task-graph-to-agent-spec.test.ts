@@ -11,6 +11,7 @@
  * would only find out by running it.
  */
 import { describe, it, expect } from 'vitest';
+import { ConfigOf } from '../task-graph/task-graph-spec';
 import {
     ConvertAgentSpecToTaskGraph,
     ConvertTaskGraphToAgentSpec,
@@ -34,8 +35,8 @@ const graph = (over: Partial<TaskGraphSpec> = {}): TaskGraphSpec => ({
     workflowName: 'Quarterly review',
     reasoning: 'research then summarize',
     tasks: [
-        { tempId: 'a', name: 'Gather', description: 'gather data', agentName: 'Query Builder', dependsOn: [] },
-        { tempId: 'b', name: 'Summarize', description: 'summarize it', agentName: 'Sage', dependsOn: ['a'] },
+        { tempId: 'a', name: 'Gather', description: 'gather data', kind: 'Agent' as const, configuration: { agentName: 'Query Builder' }, dependsOn: [] },
+        { tempId: 'b', name: 'Summarize', description: 'summarize it', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['a'] },
     ],
     ...over,
 });
@@ -69,8 +70,8 @@ describe('ConvertTaskGraphToAgentSpec', () => {
         // The point of the shared condition grammar: no rewriting at the boundary.
         const g = graph({
             tasks: [
-                { tempId: 'a', name: 'Check', description: 'check', agentName: 'Sage', dependsOn: [] },
-                { tempId: 'b', name: 'Escalate', description: 'escalate', agentName: 'Sage', dependsOn: [{ tempId: 'a', condition: 'output.severity > 3' }] },
+                { tempId: 'a', name: 'Check', description: 'check', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
+                { tempId: 'b', name: 'Escalate', description: 'escalate', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [{ tempId: 'a', condition: 'output.severity > 3' }] },
             ],
         });
         const result = ConvertTaskGraphToAgentSpec(g, optionsOf());
@@ -80,10 +81,10 @@ describe('ConvertTaskGraphToAgentSpec', () => {
     it('preserves a diamond exactly', () => {
         const g = graph({
             tasks: [
-                { tempId: 'a', name: 'A', description: 'a', agentName: 'Sage', dependsOn: [] },
-                { tempId: 'b', name: 'B', description: 'b', agentName: 'Sage', dependsOn: ['a'] },
-                { tempId: 'c', name: 'C', description: 'c', agentName: 'Sage', dependsOn: ['a'] },
-                { tempId: 'd', name: 'D', description: 'd', agentName: 'Sage', dependsOn: ['b', 'c'] },
+                { tempId: 'a', name: 'A', description: 'a', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
+                { tempId: 'b', name: 'B', description: 'b', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['a'] },
+                { tempId: 'c', name: 'C', description: 'c', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['a'] },
+                { tempId: 'd', name: 'D', description: 'd', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['b', 'c'] },
             ],
         });
         const result = ConvertTaskGraphToAgentSpec(g, optionsOf());
@@ -110,7 +111,7 @@ describe('ConvertTaskGraphToAgentSpec — losses are reported, never silent', ()
     it('reports a human task rather than emitting an unattended step', () => {
         const g = graph({
             tasks: [
-                { tempId: 'a', name: 'Draft', description: 'draft', agentName: 'Sage', dependsOn: [] },
+                { tempId: 'a', name: 'Draft', description: 'draft', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
                 { tempId: 'b', name: 'Approve', description: 'approve', assignToUser: true, dependsOn: ['a'] },
             ],
         });
@@ -124,9 +125,9 @@ describe('ConvertTaskGraphToAgentSpec — losses are reported, never silent', ()
         // A path to a step that does not exist would make the saved workflow unopenable.
         const g = graph({
             tasks: [
-                { tempId: 'a', name: 'Draft', description: 'draft', agentName: 'Sage', dependsOn: [] },
+                { tempId: 'a', name: 'Draft', description: 'draft', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
                 { tempId: 'b', name: 'Approve', description: 'approve', assignToUser: true, dependsOn: ['a'] },
-                { tempId: 'c', name: 'Publish', description: 'publish', agentName: 'Sage', dependsOn: ['b'] },
+                { tempId: 'c', name: 'Publish', description: 'publish', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['b'] },
             ],
         });
         const result = ConvertTaskGraphToAgentSpec(g, optionsOf());
@@ -140,8 +141,8 @@ describe('ConvertTaskGraphToAgentSpec — losses are reported, never silent', ()
     it('reports an unresolvable agent', () => {
         const g = graph({
             tasks: [
-                { tempId: 'a', name: 'Fine', description: 'fine', agentName: 'Sage', dependsOn: [] },
-                { tempId: 'b', name: 'Broken', description: 'broken', agentName: 'Missing Agent', dependsOn: ['a'] },
+                { tempId: 'a', name: 'Fine', description: 'fine', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
+                { tempId: 'b', name: 'Broken', description: 'broken', kind: 'Agent' as const, configuration: { agentName: 'Missing Agent' }, dependsOn: ['a'] },
             ],
         });
         const result = ConvertTaskGraphToAgentSpec(g, optionsOf());
@@ -152,7 +153,7 @@ describe('ConvertTaskGraphToAgentSpec — losses are reported, never silent', ()
         // A saved workflow that replays last week's literal inputs answers last week's question
         // forever — the exact opposite of what "make this reusable" means.
         const g = graph({
-            tasks: [{ tempId: 'a', name: 'Query', description: 'q', agentName: 'Sage', dependsOn: [], inputPayload: { quarter: 'Q3' } }],
+            tasks: [{ tempId: 'a', name: 'Query', description: 'q', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [], inputPayload: { quarter: 'Q3' } }],
         });
         expect(ConvertTaskGraphToAgentSpec(g, optionsOf()).Losses.find((l) => l.Kind === 'InputPayload')).toBeTruthy();
     });
@@ -187,7 +188,7 @@ describe('FormatSaveAsWorkflowLosses', () => {
     it('renders one labeled line per loss', () => {
         const g = graph({
             tasks: [
-                { tempId: 'a', name: 'Draft', description: 'd', agentName: 'Sage', dependsOn: [], inputPayload: { x: 1 } },
+                { tempId: 'a', name: 'Draft', description: 'd', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [], inputPayload: { x: 1 } },
                 { tempId: 'b', name: 'Approve', description: 'a', assignToUser: true, dependsOn: ['a'] },
             ],
         });
@@ -213,7 +214,7 @@ describe('ConvertAgentSpecToTaskGraph — the inverse projection', () => {
         const back = ConvertAgentSpecToTaskGraph(asAgent, resolve);
 
         expect(back.tasks.map((t) => t.name)).toEqual(['Gather', 'Summarize']);
-        expect(back.tasks.map((t) => t.agentName)).toEqual(['Query Builder', 'Sage']);
+        expect(back.tasks.map((t) => ConfigOf(t, 'Agent')?.agentName)).toEqual(['Query Builder', 'Sage']);
     });
 
     it('restores dependency DIRECTION on the way back', () => {
@@ -233,8 +234,8 @@ describe('ConvertAgentSpecToTaskGraph — the inverse projection', () => {
         // TaskDependency.Condition was given AIAgentStepPath.Condition's shape in Phase 4.
         const g = graph({
             tasks: [
-                { tempId: 'a', name: 'Check', description: 'check', agentName: 'Sage', dependsOn: [] },
-                { tempId: 'b', name: 'Escalate', description: 'esc', agentName: 'Sage', dependsOn: [{ tempId: 'a', condition: 'output.severity > 3' }] },
+                { tempId: 'a', name: 'Check', description: 'check', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
+                { tempId: 'b', name: 'Escalate', description: 'esc', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [{ tempId: 'a', condition: 'output.severity > 3' }] },
             ],
         });
         const back = ConvertAgentSpecToTaskGraph(ConvertTaskGraphToAgentSpec(g, optionsOf()).Spec!, resolve);
@@ -245,10 +246,10 @@ describe('ConvertAgentSpecToTaskGraph — the inverse projection', () => {
     it('round-trips a diamond without losing edges', () => {
         const g = graph({
             tasks: [
-                { tempId: 'a', name: 'A', description: 'a', agentName: 'Sage', dependsOn: [] },
-                { tempId: 'b', name: 'B', description: 'b', agentName: 'Sage', dependsOn: ['a'] },
-                { tempId: 'c', name: 'C', description: 'c', agentName: 'Sage', dependsOn: ['a'] },
-                { tempId: 'd', name: 'D', description: 'd', agentName: 'Sage', dependsOn: ['b', 'c'] },
+                { tempId: 'a', name: 'A', description: 'a', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
+                { tempId: 'b', name: 'B', description: 'b', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['a'] },
+                { tempId: 'c', name: 'C', description: 'c', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['a'] },
+                { tempId: 'd', name: 'D', description: 'd', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['b', 'c'] },
             ],
         });
         const back = ConvertAgentSpecToTaskGraph(ConvertTaskGraphToAgentSpec(g, optionsOf()).Spec!, resolve);

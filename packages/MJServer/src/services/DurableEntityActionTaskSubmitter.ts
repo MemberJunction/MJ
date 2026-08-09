@@ -16,7 +16,7 @@ import type {
     DurableEntityActionSubmitter,
 } from '@memberjunction/actions-base';
 import { LogError } from '@memberjunction/core';
-import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
+import { TaskNode, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { TaskGraphService, type ProviderFactory } from '@memberjunction/task-graph';
 
@@ -39,14 +39,16 @@ export class DurableEntityActionTaskSubmitter implements DurableEntityActionSubm
                     `Durable dispatch of entity action binding ${request.EntityActionID} on ` +
                     `${request.EntityName} (${request.RecordID}), fired by ${request.InvocationType}.`,
                 tasks: [
-                    {
-                        tempId: 'action',
-                        name: request.ActionName,
-                        description: `Run ${request.ActionName} for ${request.EntityName} ${request.RecordID}.`,
-                        actionName: request.ActionName,
-                        dependsOn: [],
-                        inputPayload: request.RedactedParams,
-                    },
+                    TaskNode.Action(
+                        {
+                            tempId: 'action',
+                            name: request.ActionName,
+                            description: `Run ${request.ActionName} for ${request.EntityName} ${request.RecordID}.`,
+                            dependsOn: [],
+                            inputPayload: request.RedactedParams,
+                        },
+                        { actionName: request.ActionName },
+                    ),
                 ],
                 // Nothing to say to anyone: this graph exists because a record was saved, not
                 // because a person asked a question. Defaulting to 'message' would post an
