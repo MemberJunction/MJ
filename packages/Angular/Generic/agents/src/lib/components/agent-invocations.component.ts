@@ -287,7 +287,6 @@ export class AgentInvocationsComponent extends BaseAngularComponent {
             }
         }
 
-        void now;
         return out;
     }
 
