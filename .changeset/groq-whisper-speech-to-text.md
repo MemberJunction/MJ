@@ -13,7 +13,7 @@ An empty transcript is reported as a **failure**, not a success with empty conte
 
 **`SpeechToTextParams`** gains four optional fields, all additive: `audioData` (a `Buffer`, avoiding the 33% memory cost of base 64 encoding an hour of audio into a string the implementation immediately decodes again), `fileName` (some providers infer the container format from the extension), `language` and `prompt`. `audioFile` is unchanged and still accepted.
 
-**`AudioSplitter`** is a new port in `@memberjunction/ai`, for providers that cap upload size. Groq rejects requests over 25MB; assign an `AudioSplitter` to `GroqAudioGenerator.Splitter` and longer audio is split, transcribed piece by piece **sequentially** (Groq rate limits by audio-seconds per minute, so overlapping uploads buy 429s) and joined. Without one, oversized audio fails with a message naming the option rather than silently transcribing a truncated prefix.
+**`AudioSplitter`** is a new port in `@memberjunction/ai`, for providers that cap upload size. It declares one method, `Split(audio, maxBytes)`. Groq rejects requests over 25MB; assign an `AudioSplitter` to `GroqAudioGenerator.Splitter` and longer audio is split, transcribed piece by piece **sequentially** (Groq rate limits by audio-seconds per minute, so overlapping uploads buy 429s) and joined. Without one, oversized audio fails with a message naming the option rather than silently transcribing a truncated prefix.
 
 The splitter is injected rather than bundled on purpose: splitting audio without re-encoding it means an ffmpeg binary, and a ~70MB platform-specific binary is not a dependency an AI provider package should force on every consumer, most of which transcribe short clips.
 

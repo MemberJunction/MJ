@@ -89,7 +89,7 @@ export interface AudioSplitter {
      * Implementations should split on time, not byte offsets: cutting a compressed stream
      * mid-frame produces pieces the provider cannot decode.
      */
-    split(audio: Buffer, maxBytes: number): Promise<Buffer[]>;
+    Split(audio: Buffer, maxBytes: number): Promise<Buffer[]>;
 }
 
 /**

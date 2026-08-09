@@ -154,11 +154,11 @@ describe('GroqAudioGenerator — single-pass transcription', () => {
 
     it('transcribes audio exactly at the 25MB ceiling in one pass', async () => {
         const g = makeGenerator();
-        g.Splitter = { split: vi.fn() };
+        g.Splitter = { Split: vi.fn() };
         const result = await g.SpeechToText({ model: '', audioData: audio(25 * MB) });
         expect(result.success).toBe(true);
         expect(transcribe).toHaveBeenCalledTimes(1);
-        expect(g.Splitter.split).not.toHaveBeenCalled();
+        expect(g.Splitter.Split).not.toHaveBeenCalled();
     });
 });
 
@@ -216,7 +216,7 @@ describe('GroqAudioGenerator — oversized audio', () => {
 
     it('splits, transcribes every piece, and joins the transcripts in order', async () => {
         const g = makeGenerator();
-        g.Splitter = { split: async () => [audio(MB, 1), audio(MB, 2), audio(MB, 3)] };
+        g.Splitter = { Split: async () => [audio(MB, 1), audio(MB, 2), audio(MB, 3)] };
         transcribe
             .mockResolvedValueOnce({ text: 'first part' })
             .mockResolvedValueOnce({ text: 'second part' })
@@ -232,7 +232,7 @@ describe('GroqAudioGenerator — oversized audio', () => {
     it('asks the splitter for pieces under the ceiling, with headroom for form overhead', async () => {
         const g = makeGenerator();
         const split = vi.fn().mockResolvedValue([audio(MB)]);
-        g.Splitter = { split };
+        g.Splitter = { Split: split };
         await g.SpeechToText({ model: '', audioData: audio(30 * MB) });
         expect(split.mock.calls[0][1]).toBe(24 * MB);
         expect(split.mock.calls[0][1]).toBeLessThan(25 * MB);
@@ -240,7 +240,7 @@ describe('GroqAudioGenerator — oversized audio', () => {
 
     it('applies language and model to every piece', async () => {
         const g = makeGenerator();
-        g.Splitter = { split: async () => [audio(MB, 1), audio(MB, 2)] };
+        g.Splitter = { Split: async () => [audio(MB, 1), audio(MB, 2)] };
         await g.SpeechToText({
             model: 'whisper-large-v3-turbo',
             audioData: audio(30 * MB),
@@ -255,7 +255,7 @@ describe('GroqAudioGenerator — oversized audio', () => {
     it('transcribes pieces sequentially, not concurrently', async () => {
         // Groq rate limits by audio-seconds per minute, so overlapping uploads buy 429s.
         const g = makeGenerator();
-        g.Splitter = { split: async () => [audio(MB, 1), audio(MB, 2), audio(MB, 3)] };
+        g.Splitter = { Split: async () => [audio(MB, 1), audio(MB, 2), audio(MB, 3)] };
         let inFlight = 0;
         let maxInFlight = 0;
         transcribe.mockImplementation(async () => {
@@ -271,7 +271,7 @@ describe('GroqAudioGenerator — oversized audio', () => {
 
     it('skips a piece that transcribed to nothing instead of joining a double space', async () => {
         const g = makeGenerator();
-        g.Splitter = { split: async () => [audio(MB, 1), audio(MB, 2)] };
+        g.Splitter = { Split: async () => [audio(MB, 1), audio(MB, 2)] };
         transcribe.mockResolvedValueOnce({ text: 'only part' }).mockResolvedValueOnce({ text: '' });
         const result = await g.SpeechToText({ model: '', audioData: audio(30 * MB) });
         expect(result.success).toBe(true);
@@ -280,7 +280,7 @@ describe('GroqAudioGenerator — oversized audio', () => {
 
     it('fails when every piece transcribed to nothing', async () => {
         const g = makeGenerator();
-        g.Splitter = { split: async () => [audio(MB, 1), audio(MB, 2)] };
+        g.Splitter = { Split: async () => [audio(MB, 1), audio(MB, 2)] };
         transcribe.mockResolvedValue({ text: '' });
         const result = await g.SpeechToText({ model: '', audioData: audio(30 * MB) });
         expect(result.success).toBe(false);
@@ -289,7 +289,7 @@ describe('GroqAudioGenerator — oversized audio', () => {
 
     it('fails when the splitter returns no pieces', async () => {
         const g = makeGenerator();
-        g.Splitter = { split: async () => [] };
+        g.Splitter = { Split: async () => [] };
         const result = await g.SpeechToText({ model: '', audioData: audio(30 * MB) });
         expect(result.success).toBe(false);
         expect(result.errorMessage).toMatch(/no pieces/);
@@ -299,7 +299,7 @@ describe('GroqAudioGenerator — oversized audio', () => {
     it('names the splitter when it produces a piece that is still oversized', async () => {
         // Otherwise the API returns a size error naming neither the splitter nor the piece.
         const g = makeGenerator();
-        g.Splitter = { split: async () => [audio(MB, 1), audio(26 * MB, 2)] };
+        g.Splitter = { Split: async () => [audio(MB, 1), audio(26 * MB, 2)] };
         const result = await g.SpeechToText({ model: '', audioData: audio(30 * MB) });
         expect(result.success).toBe(false);
         expect(result.errorMessage).toMatch(/AudioSplitter produced a 26\.0MB piece/);
@@ -310,7 +310,7 @@ describe('GroqAudioGenerator — oversized audio', () => {
     it('surfaces a splitter failure rather than reporting an empty transcript', async () => {
         const g = makeGenerator();
         g.Splitter = {
-            split: async () => {
+            Split: async () => {
                 throw new Error('ffmpeg exited with code 1');
             },
         };
@@ -321,7 +321,7 @@ describe('GroqAudioGenerator — oversized audio', () => {
 
     it('stops at the piece that failed instead of returning a transcript with a hole', async () => {
         const g = makeGenerator();
-        g.Splitter = { split: async () => [audio(MB, 1), audio(MB, 2), audio(MB, 3)] };
+        g.Splitter = { Split: async () => [audio(MB, 1), audio(MB, 2), audio(MB, 3)] };
         transcribe
             .mockResolvedValueOnce({ text: 'first' })
             .mockRejectedValueOnce(new Error('rate limit exceeded'))

@@ -87,7 +87,7 @@ export class GroqAudioGenerator extends BaseAudioGenerator {
                             `audio this size.`,
                     );
                 }
-                const pieces = await this.Splitter.split(audio, SPLIT_TARGET_BYTES);
+                const pieces = await this.Splitter.Split(audio, SPLIT_TARGET_BYTES);
                 if (pieces.length === 0) {
                     throw new Error('The configured AudioSplitter returned no pieces');
                 }
