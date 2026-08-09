@@ -1,4 +1,9 @@
-@if (Record && (Record.IsSaved || !IsFieldReadOnly)) {
+<!--
+  IsFieldReadableByUser is FIRST deliberately. BaseEntity.Get() throws for a field the user
+  cannot read, so every expression below — Value, ShouldHideField, the FK resolution — is only
+  safe once this has short-circuited. A denied field renders nothing at all.
+-->
+@if (IsFieldReadableByUser && Record && (Record.IsSaved || !IsFieldReadOnly)) {
   <!-- READ-ONLY MODE -->
   @if ((!EditMode || IsFieldReadOnly) && !ShouldHideField) {
     <div class="mj-forms-field" [class.mj-forms-field--readonly]="EditMode && IsFieldReadOnly" [class.mj-forms-field--dirty]="IsDirty">
