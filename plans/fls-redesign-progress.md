@@ -27,13 +27,13 @@
 | W3 | Cache reversal | **Done.** Server `fls:` segment, allowed-set widening and `entity_object` exemption all removed; client keeps its allowed-list key. Tier split lives only in `ComputeRunViewFLSFingerprintKey`. |
 | W4 | Lifecycle | **Done.** Delta + applier + all 3 adapters (flag flip, entity permissions, CodeGen schema changes) + tests. |
 | W5 | Create enforcement + Get/Set throw | **Done.** `EntityField.CreateSuppressed`, `ApplyFieldLevelCreateSuppression`, `AssertFieldReadable` on `Get`/`Set`, `FieldSecurityDenialMessage` now shared. |
-| W6 | Metadata invalidation + docs | **Docs done** (guide + changeset rewritten). **Invalidation remaining** — and the research doc's `graph_save` plan does not apply; see below. |
+| W6 | Metadata invalidation + docs | **Done.** Guide + changeset rewritten; `remote-invalidate` → metadata refresh wired and debounced. One known gap accepted — see below. |
 
 ## Test baseline (all currently passing)
 
 MJCore 1998 · MJCoreEntitiesServer 429 · MJServer 826 (+56 skipped) ·
 GenericDatabaseProvider 894 (+5 skipped) · CodeGenLib 771 (+60 skipped) ·
-GraphQLDataProvider 274 · SQLServerDataProvider 87 · ng-base-forms 196.
+GraphQLDataProvider 280 · SQLServerDataProvider 87 · ng-base-forms 196.
 Full build: 299 tasks. `mj standards check` passes.
 
 ## Integration tests — deferred to the END, deliberately
@@ -90,36 +90,49 @@ to ask" as "no user" and fails open.
 Done: `guides/FIELD_LEVEL_SECURITY_GUIDE.md` and `.changeset/field-level-security.md` rewritten
 for the trinary model (commit `f1f2f61b4d`). `check:claude-md` passes.
 
-Remaining, and **the research doc's plan for it does not work** — verified, not assumed:
+Done: `GraphQLDataProvider.ScheduleMetadataRefreshForPermissionChange` recognises the five
+permission-bearing entity names and calls `RefreshIfNeeded()` on a 500ms debounce. Metadata is the
+provider's own AllMetadata cache, not a `BaseEngine`, so `remote-invalidate` alone never reached
+it — a client would keep rendering a column it had just lost until the next full refresh.
 
-1. **One invalidation per unit of work.** The global listener at
-   `packages/MJServer/src/index.ts:841-856` publishes `CACHE_INVALIDATION` to every connected
-   browser on every `BaseEntity` save/delete. `ReconcileFieldPermissions` saves rows one at a
-   time, so enabling field security on a wide entity emits hundreds of broadcasts.
+Not done, deliberately: `ResolverBase.PublishCacheInvalidation` is dead (zero callers) but
+**pre-existing in `next`**, so deleting it belongs in its own commit rather than the FLS PR.
 
-   The research doc proposed suppressing per-node publishes between `graph_save_started` and
-   `graph_save`. **That does not apply here**: reconciliation uses `RunInEntityTransaction` with
-   individual `Save()` calls, not an entity graph, so `graph_save` never fires. Two shapes that
-   would actually work:
+## 🔴 KNOWN GAP — one cache invalidation per row, not per transaction
 
-   - **(a) An explicit batch scope.** A primitive in MJCore (`BaseEntity` events originate
-     there) that marks "a bulk unit of work is in flight"; the MJServer listener coalesces while
-     it is open and publishes once on close. Targeted, and the reconciler opts in explicitly.
-     Note the dependency direction — MJCoreEntitiesServer cannot call into MJServer, so the
-     primitive cannot live in MJServer.
-   - **(b) Debounce the listener per entity name.** Simpler and helps every bulk write in the
-     platform, but it changes semantics for all entities and would drop `recordData` for
-     coalesced saves, which browser BaseEngine caches use for in-place updates.
+**Accepted for this PR; needs its own follow-up.** Decided with Jordan 2026-08-08.
 
-   Recommend (a): (b) trades a broad behavior change for a narrower problem.
+The global listener at `packages/MJServer/src/index.ts:841-856` publishes `CACHE_INVALIDATION`
+to every connected browser on every `BaseEntity` save/delete. `ReconcileFieldPermissions` saves
+rows one at a time, so enabling field security on a wide entity emits **hundreds of broadcasts
+for what is logically one transaction**.
 
-2. **`remote-invalidate` → metadata refresh.** The pub/sub infrastructure exists and fires end to
-   end; `remote-invalidate` drives `BaseEngine` caches, but metadata is `ProviderBase`'s
-   AllMetadata cache and nothing subscribes it. Recognize the permission-metadata entity names in
-   `GraphQLDataProvider`'s invalidation handler and call `RefreshIfNeeded()`, debounced.
+Impact is performance and noise, not correctness — every broadcast carries accurate data and
+clients converge on the right state. It is worst on the least frequent operation (the initial
+flag flip), which is why it is not blocking.
 
-3. `ResolverBase.PublishCacheInvalidation` is dead (zero callers) but **pre-existing in `next`** —
-   deleting it belongs in its own commit, not the FLS PR.
+**The research doc's proposed fix does not work, and this is the trap to avoid re-walking.** It
+proposed suppressing per-node publishes between `graph_save_started` and `graph_save`. Those
+events are raised by `BaseEntity`'s ENTITY-GRAPH save path. Reconciliation uses
+`RunInEntityTransaction` with individual `Save()` calls, which is not a graph save — so
+`graph_save` never fires and the suppression would be silently inert.
+
+Two shapes that would actually work:
+
+- **(a) An explicit batch scope (recommended).** A primitive in MJCore — where `BaseEntity`
+  events originate — that marks "a bulk unit of work is in flight". The MJServer listener
+  coalesces while it is open and publishes once on close; the reconciler opts in explicitly.
+  **Dependency direction constrains this**: MJCoreEntitiesServer cannot call into MJServer, so
+  the primitive cannot live in MJServer.
+- **(b) Debounce the listener per entity name.** Simpler, and would help every bulk write in the
+  platform. But it changes semantics for all entities and would drop `recordData` for coalesced
+  saves, which browser `BaseEngine` caches use for in-place updates — a broad behavior change for
+  a narrow problem.
+
+Ideally the scope would be the TRANSACTION itself: `RunInEntityTransaction` already knows the
+unit of work's boundaries, so hanging the batch on the transaction scope would make every
+server-side multi-row write correct by default rather than only the ones that remember to opt in.
+That is worth investigating before committing to (a).
 
 ## Traps already paid for — do not re-learn these
 
