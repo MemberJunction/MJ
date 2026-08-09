@@ -19,7 +19,7 @@ const spec = (over: Partial<WorkflowSpec> = {}): WorkflowSpec => ({
     status: 'Draft',
     graph: {
         workflowName: 'Weekly digest',
-        tasks: [{ tempId: 'a', name: 'Summarize', description: 's', agentName: 'Sage', dependsOn: [] }],
+        tasks: [{ tempId: 'a', name: 'Summarize', description: 's', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] }],
     },
     triggers: [{ type: 'OnDemand' }],
     ...over,
@@ -66,7 +66,7 @@ describe('WorkflowSpecSync.Persist — guards run before anything is written', (
         const bad = spec({
             graph: {
                 workflowName: 'W',
-                tasks: [{ tempId: 'a', name: 'A', description: 'a', agentName: 'Sage', dependsOn: ['ghost'] }],
+                tasks: [{ tempId: 'a', name: 'A', description: 'a', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['ghost'] }],
             },
         });
         const r = await new WorkflowSpecSync(writerSpy()).Persist(bad, context());

@@ -26,6 +26,11 @@ import {
     type TaskGraphEdge,
     type TaskGraphNode,
     type TaskGraphNodeStatus,
+
+    ResolveExclusiveGroups,
+    type EdgeConditionOutcome,
+
+    ComputeSkipCascade,
 } from '@memberjunction/ai-core-plus';
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { IShutdownable, ShutdownRegistry } from '@memberjunction/global';
@@ -68,6 +73,16 @@ type GraphState = {
      * not taken, so they can never legitimately run.
      */
     unreachableTaskIDs: Set<string>;
+    /**
+     * Targets of a LOSING exclusive edge. These become `Skipped`, not `Blocked` — a branch that was
+     * not taken is a normal outcome, and blocking it would poison the parent rollup.
+     */
+    skipSeedTaskIDs: Set<string>;
+    /**
+     * Targets of an UNDECIDED exclusive group (some condition could not be evaluated). Neither run
+     * nor skipped: held, so a typo stalls visibly instead of firing every branch of a fork.
+     */
+    holdTaskIDs: Set<string>;
 };
 
 /**
@@ -404,6 +419,36 @@ export class TaskGraphDispatcher implements IShutdownable {
             const graph = await this.loadGraphState(provider, parentID);
             if (graph.nodes.length === 0) continue;
 
+            // SKIPS FIRST — before blocking, before eligibility. A task whose gating predecessors
+            // are all Skipped is simultaneously "eligible" (Skipped satisfies a prerequisite) and
+            // "to be skipped"; deciding eligibility first would dispatch the branch nobody took.
+            const toSkip = new Set([
+                ...graph.skipSeedTaskIDs,
+                ...ComputeSkipCascade(graph.nodes, graph.edges, [...graph.skipSeedTaskIDs]),
+            ]);
+            for (const taskID of toSkip) {
+                const entity = graph.entityById.get(taskID);
+                if (!entity || entity.Status !== 'Pending') continue;
+                entity.Status = 'Skipped';
+                if (await entity.Save()) {
+                    LogStatus(`[TaskGraphDispatcher] Skipped '${entity.Name}' (${taskID}) — another branch was taken.`);
+                    // Announced separately from TaskBlocked because it means something different to
+                    // a viewer: nothing went wrong, this route simply was not the one chosen.
+                    this.emit({
+                        Kind: 'TaskSkipped',
+                        ParentTaskID: parentID,
+                        OwnerUserID: await this.resolveOwner(provider, parentID),
+                        TaskID: taskID,
+                        TaskName: entity.Name,
+                        Status: 'Skipped',
+                    });
+                    // Keep the in-memory graph consistent so the blocking pass below and the rollup
+                    // both see the skip rather than a stale Pending.
+                    const node = graph.nodes.find((n) => n.id === taskID);
+                    if (node) node.status = 'Skipped';
+                }
+            }
+
             const toBlock = new Set([...ComputeTasksToBlock(graph.nodes, graph.edges), ...graph.unreachableTaskIDs]);
             for (const taskID of toBlock) {
                 const entity = graph.entityById.get(taskID);
@@ -694,7 +739,13 @@ export class TaskGraphDispatcher implements IShutdownable {
         for (const parentID of await this.findActiveGraphIDs(provider)) {
             if (claimable.length >= limit) break;
             const graph = await this.loadGraphState(provider, parentID);
-            for (const node of ComputeEligibleTasks(graph.nodes, graph.edges)) {
+            // HOLD is what makes "a broken condition stalls visibly" true rather than merely stated.
+            // An undecided exclusive group keeps all its edges, and a kept edge on a Complete origin
+            // is a SATISFIED prerequisite — so without this filter every branch of the fork would be
+            // eligible at once and all of them would run. A typo must not multiply a fork.
+            const eligible = ComputeEligibleTasks(graph.nodes, graph.edges)
+                .filter((n) => !graph.holdTaskIDs.has(n.id));
+            for (const node of eligible) {
                 const entity = graph.entityById.get(node.id);
                 if (!entity) continue;
 
@@ -733,7 +784,12 @@ export class TaskGraphDispatcher implements IShutdownable {
             this.contextUser,
         );
         const children = (childrenResult.Success ? childrenResult.Results : []) ?? [];
-        if (children.length === 0) return { nodes: [], edges: [], entityById: new Map(), unreachableTaskIDs: new Set() };
+        if (children.length === 0) {
+            return {
+                nodes: [], edges: [], entityById: new Map(),
+                unreachableTaskIDs: new Set(), skipSeedTaskIDs: new Set(), holdTaskIDs: new Set(),
+            };
+        }
 
         const idList = children.map((c) => `'${c.ID}'`).join(',');
         const depsResult = await rv.RunView<MJTaskDependencyEntity>(
@@ -761,11 +817,49 @@ export class TaskGraphDispatcher implements IShutdownable {
         // unreachable instead, and blocked before anything can claim it.
         const droppedInto = new Set<string>();
         const stillReachable = new Set<string>();
-        for (const d of deps) {
+
+        // EXCLUSIVE edges are exempt from the generic machinery below, and that exemption is
+        // load-bearing. An XOR loser is by definition condition-false, so the ordinary path would
+        // record it as unreachable and Block it — and a Blocked child poisons the parent rollup, so
+        // every fork would settle the graph as Blocked. Losers must become Skipped instead, which
+        // only ResolveExclusiveGroups can decide.
+        const exclusive = deps.filter((d) => !!d.ExclusiveGroup);
+        const ordinary = deps.filter((d) => !d.ExclusiveGroup);
+
+        const resolution = ResolveExclusiveGroups(
+            exclusive.map((d) => ({
+                id: d.ID,
+                taskId: d.TaskID,
+                dependsOnTaskId: d.DependsOnTaskID,
+                exclusiveGroup: d.ExclusiveGroup!,
+                originStatus: (entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending') as TaskGraphNodeStatus,
+                priority: d.Priority ?? 0,
+                sequence: d.Sequence ?? 0,
+                conditionOutcome: this.evaluateExclusiveCondition(d, entityById),
+            })),
+            // A flow's failure handling is its outgoing edges, so a Failed origin still decides its
+            // group. For a loop-agent graph the set is Complete-only and nothing changes.
+            new Set<TaskGraphNodeStatus>(['Complete', 'Failed']),
+        );
+        const loserEdgeIDs = new Set(resolution.loserEdgeIDs);
+
+        for (const d of ordinary) {
             if (d.Condition?.trim()) {
                 const outcome = this.evaluateEdgeCondition(d, entityById);
                 if (outcome === 'drop') { droppedInto.add(d.TaskID); continue; }
             }
+            stillReachable.add(d.TaskID);
+            liveEdges.push({
+                taskId: d.TaskID,
+                dependsOnTaskId: d.DependsOnTaskID,
+                dependencyType: d.DependencyType as TaskGraphEdge['dependencyType'],
+            });
+        }
+
+        for (const d of exclusive) {
+            // A losing edge is removed rather than left to gate: its target is being skipped, and a
+            // live edge into a skipped task would keep the graph waiting on a branch nobody took.
+            if (loserEdgeIDs.has(d.ID)) continue;
             stillReachable.add(d.TaskID);
             liveEdges.push({
                 taskId: d.TaskID,
@@ -783,6 +877,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             edges: liveEdges,
             entityById,
             unreachableTaskIDs,
+            skipSeedTaskIDs: new Set(resolution.skipSeedTaskIDs),
+            holdTaskIDs: new Set(resolution.holdTaskIDs),
         };
     }
 
@@ -832,6 +928,31 @@ export class TaskGraphDispatcher implements IShutdownable {
         return result.Value ? 'keep' : 'drop';
     }
 
+
+
+    /**
+     * An exclusive edge's condition as a three-way outcome.
+     *
+     * `ResolveExclusiveGroups` needs to tell "false" from "could not be evaluated": the first loses
+     * the branch, the second holds the whole group. The generic keep/drop path cannot express that
+     * difference, which is why exclusive edges take this route instead.
+     */
+    private evaluateExclusiveCondition(
+        dep: MJTaskDependencyEntity,
+        entityById: Map<string, MJTaskEntity>,
+    ): EdgeConditionOutcome {
+        if (!dep.Condition?.trim()) return 'satisfied';
+        const upstream = entityById.get(dep.DependsOnTaskID);
+        if (!upstream) return 'unevaluable';
+
+        let output: unknown = null;
+        if (upstream.OutputPayload) {
+            try { output = JSON.parse(upstream.OutputPayload); } catch { /* malformed payload */ }
+        }
+        const result = this.conditionEvaluator.Evaluate(dep.Condition, this.buildConditionContext(upstream, output));
+        if (!result.Success) return 'unevaluable';
+        return result.Value ? 'satisfied' : 'unsatisfied';
+    }
 
     /**
      * Everything an edge condition can see — the SUPERSET of both dialects.
