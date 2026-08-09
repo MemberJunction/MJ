@@ -204,7 +204,6 @@ export class AgentInvocationsComponent extends BaseAngularComponent {
             },
         ]);
 
-        const now = new Date();
         const out: AgentInvocationPathway[] = [];
 
         if (jobs.Success) {
