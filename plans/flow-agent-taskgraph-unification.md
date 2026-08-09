@@ -39,7 +39,42 @@ updated behind both gates; cost rollup via the never-written `AIAgentRun …Roll
 design this plan didn't have); a real offline differential suite (synthetic fixtures); total in-run
 refusal at the `createStepForFlowNode` choke point.
 
-### Outstanding work (the follow-up punch list, authoritative copy in
+### Status update (2026-08-09, post-dispatch — per builder report, not yet independently verified)
+
+- **Prompt runner LANDED** — the onboarding-flow brick (P0 item 2) is closed; the loop prompt
+  teaches `kind:'Prompt'` again.
+- **v1-shape templates FIXED** (P0 item 3) — both `workflow-drafting` and `workflow-planner`
+  confirmed genuinely broken (zero `kind` occurrences) and converted.
+- **Retirement migration resolved by deletion** (P0 item 1 / R4): the Workflows app never
+  shipped, so `V202608082330__Retire_Workflows_Application.sql` is **deleted outright** and the
+  app returns as declarative metadata under `metadata/applications/`. Fresh DB required after.
+- **R7 (new ruling, AN-BC): cost is a read-time SUM over the run tree, not a dispatcher
+  materialization.** The #3692 settlement write-back to the `…Rollup` columns is dropped;
+  `ParentRunID` **is now populated on graph-spawned runs** (reversing #3692's "deliberately not
+  included" — the `ParentRunID IS NULL` = conversational-root breadth concern is accepted), and
+  cost aggregates via a recursive run-tree stored query (`Depth < 100` bound). Gap found and
+  fixed en route: Prompt nodes had **no cost path** — `TaskPromptRunResult.PromptRunID` was
+  returned and dropped; it now persists into the `Configuration` JSONType bag (strongly typed),
+  not a new column. ⚠️ *Planner watch-flag: the run-tree SUM sees `AIAgentRun` children only —
+  prompt-node cost lives in `AIPromptRun` reached via the captured `promptRunID`, so the stored
+  query must join those too or Prompt nodes vanish from cost a second time.*
+- **Item 16 ruled as a SPLIT** (AN-BC): the live `base-agent.ts` Loop-path clones consolidate
+  onto `payload-mapping.ts`; the `flow-agent-type.ts` copies **stay** as the refused walker's
+  reference implementation, since the differential oracle is currently a re-implementation.
+  Planner answer to the builder's standing question: keep that split until **Track R's
+  golden-fixture capture** — fixtures must be captured from the *real* walker before deletion,
+  and that is the moment the flow-agent-type copies move or die with it.
+- **R4 scope concretizing**: run-tree stored query → `LoadAgentRunTree` → timeline refactor →
+  nested-canvas embed revert → Subway Lines → two demo flow agents → integration records +
+  checks → fresh-DB end-to-end verification.
+- **Still open per the builder**: items **4** (input snapshot), **10** (envelope truthfulness +
+  result delivery), **12–15** (hold-aware stall, loop parity, differential-to-§9, D17 loop-body
+  identity), **17** (joinMode), **18** (NodeProgress + hygiene). ⚠️ *Planner watch-flag: if R6
+  (item 5) was implemented dispatcher-side, the differential simulator must be updated in the
+  same change (it currently encodes the pre-R6 divergence) — otherwise the suite asserts the
+  wrong engine until item 14 lands.*
+
+### The follow-up punch list (authoritative copy in
 [5234281079](https://github.com/MemberJunction/MJ/pull/3692#issuecomment-5234281079))
 
 **P0:** CI reds (`as never` ×5; retirement migration handled per R4) · **Prompt runner** (the
