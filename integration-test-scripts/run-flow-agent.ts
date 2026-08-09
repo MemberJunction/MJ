@@ -27,6 +27,20 @@
  *      branch and finishes cleanly. The script prints the payload each step handed on.
  */
 import { AgentRunner } from '@memberjunction/ai-agents';
+// MJAPI registers its AI providers through the generated class-registration manifest; a bare script
+// has no manifest, so ClassFactory resolves the local embedding model's DriverClass to something
+// that is not a BaseEmbeddings and the run dies on `embedding.EmbedText is not a function` — inside
+// agent memory retrieval, long before the workflow itself. Referencing the class below is what
+// makes its @RegisterClass decorator run. (@memberjunction/ai-provider-bundle looks like the right
+// import for this and is not — it became a no-op when the manifest system replaced it.)
+import { LocalEmbedding } from '@memberjunction/ai-local-embeddings';
+void LocalEmbedding;
+// Same reasoning: the durable submitter registers itself as a side effect of this package loading.
+// Without it, submission has nowhere to go — this script would compile the workflow and then report
+// that no dispatcher exists, which is honest but is not the thing being tested. The graph is
+// persisted here; the dispatcher inside a running MJAPI is what executes it.
+import { LoadTaskGraphSubmitter } from '@memberjunction/task-graph';
+LoadTaskGraphSubmitter();
 import { RunView, UserInfo } from '@memberjunction/core';
 import { MJAIAgentEntityExtended, MJTaskEntity } from '@memberjunction/core-entities';
 import { initializeMJProvider } from '@memberjunction/ai-cli/dist/lib/mj-provider.js';
