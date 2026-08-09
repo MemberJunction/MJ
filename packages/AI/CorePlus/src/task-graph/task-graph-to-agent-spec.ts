@@ -20,7 +20,7 @@
  * @module @memberjunction/ai-core-plus
  */
 import type { AgentSpec, AgentStep, AgentStepPath } from '../agent-spec';
-import { ConfigOf, NormalizeDependency, TaskNode, type TaskGraphSpec } from './task-graph-spec';
+import { ConfigOf, NormalizeDependency, type TaskGraphSpec, type TaskGraphSpecNode } from './task-graph-spec';
 
 /** What the caller must supply that a runtime graph does not carry. */
 export type SaveAsWorkflowOptions = {
@@ -28,6 +28,16 @@ export type SaveAsWorkflowOptions = {
     AgentID: string;
     /** Resolves an agent name to its ID; a node naming an unknown agent is reported, not dropped. */
     ResolveAgentID: (agentName: string) => string | null;
+    /**
+     * Resolves an action name to its ID.
+     *
+     * Required for a graph containing Action steps: the spec addresses actions by NAME, but a step
+     * stores an `ActionID`. Without it the saved step would carry no action at all — it would
+     * reopen as a step that resolves to nothing.
+     */
+    ResolveActionID?: (actionName: string) => string | null;
+    /** Resolves a prompt name to its ID. Same reasoning as {@link ResolveActionID}. */
+    ResolvePromptID?: (promptName: string) => string | null;
     /** Deterministic ids for the generated steps and paths, in creation order. */
     NextID: () => string;
     /** Flow agent-type id, so the persisted agent is a Flow rather than a Loop. */
@@ -85,26 +95,31 @@ export function ConvertTaskGraphToAgentSpec(
     );
 
     for (const node of graph.tasks) {
-        // Only an Agent node becomes a Sub-Agent step. Every other kind is reported as a loss below
-        // rather than silently dropped.
-        const agentName = ConfigOf(node, 'Agent')?.agentName;
-        if (!agentName) {
-            // Human steps have no Flow equivalent until assignment lands (#3524). Reported rather
-            // than emitted as an empty step, which would look like a workflow that runs unattended.
+        // Human and External have no design-time equivalent — reported, never emitted as an empty
+        // step, which would look like a workflow that runs unattended. Every OTHER kind maps to a
+        // step type: reading only `agentName` used to mislabel action, prompt and loop nodes as
+        // "human task" losses and drop them.
+        if (node.kind === 'Human' || node.kind === 'External') {
             losses.push({
                 Kind: 'HumanTask',
                 TempId: node.tempId,
-                Detail: `"${node.name}" is a human task and has no design-time equivalent yet; it is omitted from the workflow.`,
+                Detail: node.kind === 'Human'
+                    ? `"${node.name}" is a person's step and has no design-time equivalent yet; it is omitted from the workflow.`
+                    : `"${node.name}" is completed by an external system and has no design-time equivalent; it is omitted from the workflow.`,
             });
             continue;
         }
 
-        const subAgentID = options.ResolveAgentID(agentName);
-        if (!subAgentID) {
+        const agentName = ConfigOf(node, 'Agent')?.agentName;
+        const subAgentID = agentName ? options.ResolveAgentID(agentName) : null;
+        // An Agent node that names nothing, or names something unresolvable, cannot become a step:
+        // emitting one with an empty SubAgentID would produce a workflow with a step that does
+        // nothing, which is worse than declining to convert it.
+        if (node.kind === 'Agent' && !subAgentID) {
             losses.push({
                 Kind: 'UnknownAgent',
                 TempId: node.tempId,
-                Detail: `Agent "${agentName}" could not be resolved; "${node.name}" is omitted.`,
+                Detail: `Agent "${agentName ?? "(none chosen)"}" could not be resolved; "${node.name}" is omitted.`,
             });
             continue;
         }
@@ -126,9 +141,17 @@ export function ConvertTaskGraphToAgentSpec(
             ID: stepID,
             Name: node.name,
             Description: node.description,
-            StepType: 'Sub-Agent',
             StartingStep: !hasDependency.has(node.tempId),
-            SubAgentID: subAgentID,
+            ...stepShapeFor(node, subAgentID, options),
+            // Policy and geometry are presentation/execution settings the graph carries; dropping
+            // them here would make Save-as-Workflow quietly lossy.
+            TimeoutSeconds: node.policy?.timeoutSeconds,
+            RetryCount: node.policy?.retryCount,
+            OnErrorBehavior: node.policy?.onError,
+            PositionX: node.layout?.x,
+            PositionY: node.layout?.y,
+            Width: node.layout?.width,
+            Height: node.layout?.height,
         });
     }
 
@@ -150,16 +173,29 @@ export function ConvertTaskGraphToAgentSpec(
             const originStepID = stepIdByTempId.get(dep.tempId);
             if (!originStepID) continue; // predecessor was dropped; the edge cannot be drawn
 
+            // An Optional/Corequisite edge has no design-time equivalent — a flow path always
+            // gates. Previously dropped in silence; now reported, because a workflow whose join
+            // rule changed is not the workflow the user saved.
+            if (dep.dependencyType && dep.dependencyType !== 'Prerequisite') {
+                losses.push({
+                    Kind: 'InputPayload',
+                    TempId: node.tempId,
+                    Detail: `The link into "${node.name}" was optional; in a workflow every incoming link must complete first.`,
+                });
+            }
+
             paths.push({
                 ID: options.NextID(),
                 // The direction flip: dependsOn points backwards, a flow path points forwards.
                 OriginStepID: originStepID,
                 DestinationStepID: destinationStepID,
                 Condition: dep.condition,
-                // Flat priority. The graph expressed ordering through dependencies, not through
-                // ranked alternatives, so inventing a ranking here would assert something the
-                // original never said.
-                Priority: 0,
+                // The graph's own ranking, carried through. Hardcoding 0 here used to flatten every
+                // branch to equal priority, so a saved workflow could take a different branch than
+                // the graph it came from. `exclusiveGroup`/`sequence` are deliberately NOT carried:
+                // they are compiler artifacts, reconstructed from the fan-out shape itself.
+                Priority: dep.priority ?? 0,
+                PathPoints: dep.pathPoints,
             });
         }
     }
@@ -195,3 +231,54 @@ export function FormatSaveAsWorkflowLosses(losses: SaveAsWorkflowLoss[]): string
     return losses.map((l) => `[${l.Kind}] ${l.Detail}`).join('\n');
 }
 
+/**
+ * The step fields that depend on a node's kind.
+ *
+ * One place where `kind` becomes `StepType`, so a new kind is a compile error here rather than a
+ * step that silently converts to the wrong type.
+ */
+function stepShapeFor(
+    node: TaskGraphSpecNode,
+    subAgentID: string | null,
+    options: SaveAsWorkflowOptions,
+): Partial<AgentStep> & Pick<AgentStep, 'StepType'> {
+    switch (node.kind) {
+        case 'Agent':
+            return { StepType: 'Sub-Agent', SubAgentID: subAgentID ?? undefined };
+        case 'Action': {
+            const cfg = ConfigOf(node, 'Action');
+            return {
+                StepType: 'Action',
+                // Name → ID. A step stores the ID; leaving it unset produces a step that reopens
+                // pointing at nothing.
+                ActionID: cfg?.actionName ? options.ResolveActionID?.(cfg.actionName) ?? undefined : undefined,
+                ActionInputMapping: cfg?.inputMapping,
+                ActionOutputMapping: cfg?.outputMapping,
+            };
+        }
+        case 'Prompt': {
+            const promptName = ConfigOf(node, 'Prompt')?.promptName;
+            return {
+                StepType: 'Prompt',
+                PromptID: promptName ? options.ResolvePromptID?.(promptName) ?? undefined : undefined,
+                PromptName: promptName,
+            };
+        }
+        case 'ForEach':
+            return {
+                StepType: 'ForEach',
+                LoopBodyType: ConfigOf(node, 'ForEach')?.action ? 'Action' : 'Sub-Agent',
+                Configuration: JSON.stringify(ConfigOf(node, 'ForEach') ?? {}),
+            };
+        case 'While':
+            return {
+                StepType: 'While',
+                LoopBodyType: ConfigOf(node, 'While')?.action ? 'Action' : 'Sub-Agent',
+                Configuration: JSON.stringify(ConfigOf(node, 'While') ?? {}),
+            };
+        default:
+            // Human/External are filtered out before this point; the fallback keeps the function
+            // total rather than letting a future kind fall through as undefined.
+            return { StepType: 'Sub-Agent', SubAgentID: subAgentID ?? undefined };
+    }
+}

@@ -376,6 +376,30 @@ export interface AgentStep {
      */
     Configuration?: string;
 
+    /**
+     * Per-step execution policy, mirroring the entity's `TimeoutSeconds` / `RetryCount` /
+     * `OnErrorBehavior` columns.
+     *
+     * Optional and additive: added so a compiled workflow can round-trip back to a flow without
+     * silently losing these settings. Behaviour for a compiled flow comes from the graph's
+     * `failureSemantics`, not from `OnErrorBehavior` — a flow's real error handling is its recovery
+     * paths — but the values still have to survive the trip.
+     */
+    TimeoutSeconds?: number;
+    RetryCount?: number;
+    OnErrorBehavior?: MJAIAgentStepEntity['OnErrorBehavior'];
+
+    /**
+     * Canvas geometry. Presentation only — nothing about execution reads it.
+     *
+     * Carried so reopening a saved workflow puts the boxes back where its author left them instead
+     * of re-running auto-layout, which discards the arrangement they made.
+     */
+    PositionX?: number;
+    PositionY?: number;
+    Width?: number;
+    Height?: number;
+
     Paths?: Array<AgentStepPath>
 }
 
@@ -392,4 +416,7 @@ export interface AgentStepPath {
      * Path evaluation priority. Higher values are evaluated first. Use 0 or negative values for default/fallback paths that execute when no other conditions match.
      */
     Priority: number;
+
+    /** Edge routing for a canvas. Presentation only, same rules as the step's geometry. */
+    PathPoints?: string;
 }

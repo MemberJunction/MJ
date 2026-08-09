@@ -111,7 +111,7 @@ describe('ConvertTaskGraphToAgentSpec — losses are reported, never silent', ()
         const g = graph({
             tasks: [
                 { tempId: 'a', name: 'Draft', description: 'draft', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
-                { tempId: 'b', name: 'Approve', description: 'approve', assignToUser: true, dependsOn: ['a'] },
+                { tempId: 'b', name: 'Approve', description: 'approve', kind: 'Human' as const, configuration: {}, dependsOn: ['a'] },
             ],
         });
         const result = ConvertTaskGraphToAgentSpec(g, optionsOf());
@@ -125,7 +125,7 @@ describe('ConvertTaskGraphToAgentSpec — losses are reported, never silent', ()
         const g = graph({
             tasks: [
                 { tempId: 'a', name: 'Draft', description: 'draft', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
-                { tempId: 'b', name: 'Approve', description: 'approve', assignToUser: true, dependsOn: ['a'] },
+                { tempId: 'b', name: 'Approve', description: 'approve', kind: 'Human' as const, configuration: {}, dependsOn: ['a'] },
                 { tempId: 'c', name: 'Publish', description: 'publish', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['b'] },
             ],
         });
@@ -175,7 +175,7 @@ describe('ConvertTaskGraphToAgentSpec — losses are reported, never silent', ()
     it('refuses rather than saving an empty workflow when every node is unrepresentable', () => {
         // Returning a stepless "success" would hand the user a workflow that does nothing.
         const g = graph({
-            tasks: [{ tempId: 'a', name: 'Approve', description: 'approve', assignToUser: true, dependsOn: [] }],
+            tasks: [{ tempId: 'a', name: 'Approve', description: 'approve', kind: 'Human' as const, configuration: {}, dependsOn: [] }],
         });
         const result = ConvertTaskGraphToAgentSpec(g, optionsOf());
         expect(result.Success).toBe(false);
@@ -188,7 +188,7 @@ describe('FormatSaveAsWorkflowLosses', () => {
         const g = graph({
             tasks: [
                 { tempId: 'a', name: 'Draft', description: 'd', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [], inputPayload: { x: 1 } },
-                { tempId: 'b', name: 'Approve', description: 'a', assignToUser: true, dependsOn: ['a'] },
+                { tempId: 'b', name: 'Approve', description: 'a', kind: 'Human' as const, configuration: {}, dependsOn: ['a'] },
             ],
         });
         const text = FormatSaveAsWorkflowLosses(ConvertTaskGraphToAgentSpec(g, optionsOf()).Losses);
