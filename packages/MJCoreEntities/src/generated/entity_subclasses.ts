@@ -302,7 +302,7 @@ export const MJActionExecutionLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     ActionID: z.string().describe(`
         * * Field Name: ActionID
-        * * Display Name: Action ID
+        * * Display Name: Action
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)`),
     StartedAt: z.date().describe(`
@@ -318,7 +318,7 @@ export const MJActionExecutionLogSchema = z.object({
         * * Description: Timestamp when the action execution ended (timezone-aware)`),
     Params: z.string().nullable().describe(`
         * * Field Name: Params
-        * * Display Name: Params
+        * * Display Name: Input Parameters
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON-formatted input parameters AS THE ACTION WAS CALLED, captured once when execution starts and never overwritten. Custom and Generated actions mutate their parameter array in place, so this is the only durable record of the values actually passed in; the final state lives in ResultParams. Parameter values may be redacted per ActionParam.LogValue / EntityActionParam.LogValue, and whole-record value types are never written - see the parameter's own documentation.`),
     ResultCode: z.string().nullable().describe(`
@@ -328,12 +328,12 @@ export const MJActionExecutionLogSchema = z.object({
         * * Description: The outcome code returned by the action execution, indicating success, failure, or specific error conditions as defined in Action Result Codes.`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     RetentionPeriod: z.number().nullable().describe(`
         * * Field Name: RetentionPeriod
-        * * Display Name: Retention Period
+        * * Display Name: Retention Period (Days)
         * * SQL Data Type: int
         * * Description: Number of days to retain the log; NULL for indefinite retention.`),
     __mj_CreatedAt: z.date().describe(`
@@ -348,24 +348,24 @@ export const MJActionExecutionLogSchema = z.object({
         * * Default Value: getutcdate()`),
     Message: z.string().nullable().describe(`
         * * Field Name: Message
-        * * Display Name: Message
+        * * Display Name: Execution Message
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Human-readable summary message returned by the action - the reason for a refusal, or a short description of what was done. Not the action's output data: parameter values live in Params and ResultParams, and the outcome code in ResultCode.`),
     EntityActionID: z.string().nullable().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action ID
+        * * Display Name: Entity Action Binding
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)
         * * Description: Optional. The Entity Action binding that caused this run. NULL when the action was invoked directly - from a resolver, a script, an agent step or a scheduled action.`),
     EntityActionInvocationTypeID: z.string().nullable().describe(`
         * * Field Name: EntityActionInvocationTypeID
-        * * Display Name: Entity Action Invocation Type ID
+        * * Display Name: Invocation Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)
         * * Description: Optional. Which lifecycle event fired the binding - AfterUpdate, Validate, List and so on. Recorded separately from EntityActionID because one binding may be attached to several invocation types, and telling a Validate refusal apart from an AfterUpdate side effect is the first question anyone asks of this log.`),
     TargetEntityID: z.string().nullable().describe(`
         * * Field Name: TargetEntityID
-        * * Display Name: Target Entity ID
+        * * Display Name: Target Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Optional. The entity of the record this run operated on. Deliberately denormalized rather than joined through EntityActionID: it survives the binding being deleted or retargeted, and it lets the log be queried by record with no join. Kept generic because every invoker has a subject - not only Entity Actions.`),
@@ -376,24 +376,24 @@ export const MJActionExecutionLogSchema = z.object({
         * * Description: Optional. The primary key of the record this run operated on, as text, paired with TargetEntityID. For multi-record invocation types (List, View) one log row is written per record, so this is always a single record.`),
     ResultParams: z.string().nullable().describe(`
         * * Field Name: ResultParams
-        * * Display Name: Result Params
+        * * Display Name: Result Parameters
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON-formatted FINAL parameter set captured when the action finished - the inputs as the action left them, plus any output parameters it produced. Written on FAILURE exactly as on success, under the same redaction rules: a failed run's partially-mutated inputs are usually the most diagnostic thing available, and an audit trail that records only successes is not an audit trail. Distinct from Params, which holds the values the action was called with and is never overwritten. NULL means one thing only - the run never finished (process died, host killed) - so it is a signal rather than an absence, and must not be backfilled.`),
     Action: z.string().describe(`
         * * Field Name: Action
-        * * Display Name: Action
+        * * Display Name: Action Name
         * * SQL Data Type: nvarchar(425)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     EntityActionInvocationType: z.string().nullable().describe(`
         * * Field Name: EntityActionInvocationType
-        * * Display Name: Entity Action Invocation Type
+        * * Display Name: Invocation Event
         * * SQL Data Type: nvarchar(255)`),
     TargetEntity: z.string().nullable().describe(`
         * * Field Name: TargetEntity
-        * * Display Name: Target Entity
+        * * Display Name: Target Entity Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -16956,12 +16956,12 @@ export const MJEntityActionParamSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityActionID: z.string().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action ID
+        * * Display Name: Entity Action
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)`),
     ActionParamID: z.string().describe(`
         * * Field Name: ActionParamID
-        * * Display Name: Action Parameter ID
+        * * Display Name: Action Parameter
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Action Params (vwActionParams.ID)`),
     ValueType: z.union([z.literal('Entity Field'), z.literal('Entity Object'), z.literal('Entity Object Data'), z.literal('Script'), z.literal('Static')]).describe(`
@@ -17003,7 +17003,7 @@ export const MJEntityActionParamSchema = z.object({
         * * Description: Optional per-binding override of ActionParam.LogValue. NULL (the default) inherits the parameter definition. Set to 0 when this particular binding passes something sensitive through a parameter that is ordinarily safe to log - a message body through a generic Text parameter, for instance. Cannot re-enable logging for a value type the hard rule suppresses.`),
     ActionParam: z.string().describe(`
         * * Field Name: ActionParam
-        * * Display Name: Action Parameter
+        * * Display Name: Action Parameter Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -29220,6 +29220,23 @@ export const MJTaskDependencySchema = z.object({
         * * Display Name: Condition
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional boolean expression gating this dependency edge. NULL (the default, and the value every pre-existing row carries) means the edge is unconditional, so adding this column changes the meaning of no existing graph. When present it is evaluated by the shared GraphTraversalEngine against the same context a design-time AIAgentStepPath.Condition sees, which is what lets a runtime task graph and a flow-editor graph be the same graph. A condition that evaluates false skips the edge; one that fails to evaluate ALSO skips it, but is reported distinctly so a graph stalled by a malformed expression cannot be mistaken for one that finished normally.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Ordering within an exclusive group — higher wins. Mirrors AIAgentStepPath.Priority so a compiled workflow chooses the same branch the flow editor shows. Ignored for edges that are not part of an ExclusiveGroup.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Deterministic tiebreak when two edges in an ExclusiveGroup share a Priority, applied ascending. Load-bearing rather than cosmetic: compiled dependencies get fresh UUIDs and Priority defaults to 0, so without a stored ordinal a tie would resolve by row order and the same workflow could take a different branch on a different machine.`),
+    ExclusiveGroup: z.string().nullable().describe(`
+        * * Field Name: ExclusiveGroup
+        * * Display Name: Exclusive Group
+        * * SQL Data Type: nvarchar(255)
+        * * Description: XOR group key: sibling edges leaving the same origin that share a non-null ExclusiveGroup are an exclusive fan-out. The highest-Priority satisfied edge wins, ties broken by ascending Sequence; the rest are Skipped. NULL (the default) means an ordinary dependency, so existing graphs are unaffected. An unevaluable condition anywhere in the group holds the whole group rather than firing every branch.`),
     Task: z.string().describe(`
         * * Field Name: Task
         * * Display Name: Task Name
@@ -29320,7 +29337,7 @@ export const MJTaskSchema = z.object({
         * * Display Name: Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
-    Status: z.union([z.literal('Blocked'), z.literal('Cancelled'), z.literal('Complete'), z.literal('Deferred'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending')]).describe(`
+    Status: z.union([z.literal('Blocked'), z.literal('Cancelled'), z.literal('Complete'), z.literal('Deferred'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending'), z.literal('Skipped')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(50)
@@ -29334,7 +29351,8 @@ export const MJTaskSchema = z.object({
     *   * Failed
     *   * In Progress
     *   * Pending
-        * * Description: Current status of the task (Pending, In Progress, Complete, Cancelled, Failed, Blocked, Deferred)`),
+    *   * Skipped
+        * * Description: Lifecycle state. Pending awaits prerequisites; In Progress is claimed and running; Complete succeeded; Failed did not; Blocked can never run because a prerequisite is unsatisfiable; Cancelled was stopped deliberately; Deferred is waiting on a schedule. Skipped is a branch that was NOT TAKEN at an exclusive fan-out — a normal outcome, not a failure: it satisfies dependents (so a join downstream of a fork still runs) and is invisible to failure precedence when the parent rolls up.`),
     PercentComplete: z.number().nullable().describe(`
         * * Field Name: PercentComplete
         * * Display Name: Percent Complete
@@ -33572,7 +33590,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: ActionID
-    * * Display Name: Action ID
+    * * Display Name: Action
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
     */
@@ -33612,7 +33630,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: Params
-    * * Display Name: Params
+    * * Display Name: Input Parameters
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON-formatted input parameters AS THE ACTION WAS CALLED, captured once when execution starts and never overwritten. Custom and Generated actions mutate their parameter array in place, so this is the only durable record of the values actually passed in; the final state lives in ResultParams. Parameter values may be redacted per ActionParam.LogValue / EntityActionParam.LogValue, and whole-record value types are never written - see the parameter's own documentation.
     */
@@ -33638,7 +33656,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -33651,7 +33669,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: RetentionPeriod
-    * * Display Name: Retention Period
+    * * Display Name: Retention Period (Days)
     * * SQL Data Type: int
     * * Description: Number of days to retain the log; NULL for indefinite retention.
     */
@@ -33684,7 +33702,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: Message
-    * * Display Name: Message
+    * * Display Name: Execution Message
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Human-readable summary message returned by the action - the reason for a refusal, or a short description of what was done. Not the action's output data: parameter values live in Params and ResultParams, and the outcome code in ResultCode.
     */
@@ -33697,7 +33715,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action ID
+    * * Display Name: Entity Action Binding
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)
     * * Description: Optional. The Entity Action binding that caused this run. NULL when the action was invoked directly - from a resolver, a script, an agent step or a scheduled action.
@@ -33711,7 +33729,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: EntityActionInvocationTypeID
-    * * Display Name: Entity Action Invocation Type ID
+    * * Display Name: Invocation Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)
     * * Description: Optional. Which lifecycle event fired the binding - AfterUpdate, Validate, List and so on. Recorded separately from EntityActionID because one binding may be attached to several invocation types, and telling a Validate refusal apart from an AfterUpdate side effect is the first question anyone asks of this log.
@@ -33725,7 +33743,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: TargetEntityID
-    * * Display Name: Target Entity ID
+    * * Display Name: Target Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Optional. The entity of the record this run operated on. Deliberately denormalized rather than joined through EntityActionID: it survives the binding being deleted or retargeted, and it lets the log be queried by record with no join. Kept generic because every invoker has a subject - not only Entity Actions.
@@ -33752,7 +33770,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: ResultParams
-    * * Display Name: Result Params
+    * * Display Name: Result Parameters
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON-formatted FINAL parameter set captured when the action finished - the inputs as the action left them, plus any output parameters it produced. Written on FAILURE exactly as on success, under the same redaction rules: a failed run's partially-mutated inputs are usually the most diagnostic thing available, and an audit trail that records only successes is not an audit trail. Distinct from Params, which holds the values the action was called with and is never overwritten. NULL means one thing only - the run never finished (process died, host killed) - so it is a signal rather than an absence, and must not be backfilled.
     */
@@ -33765,7 +33783,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: Action
-    * * Display Name: Action
+    * * Display Name: Action Name
     * * SQL Data Type: nvarchar(425)
     */
     get Action(): string {
@@ -33774,7 +33792,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -33783,7 +33801,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: EntityActionInvocationType
-    * * Display Name: Entity Action Invocation Type
+    * * Display Name: Invocation Event
     * * SQL Data Type: nvarchar(255)
     */
     get EntityActionInvocationType(): string | null {
@@ -33792,7 +33810,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: TargetEntity
-    * * Display Name: Target Entity
+    * * Display Name: Target Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get TargetEntity(): string | null {
@@ -78822,7 +78840,7 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action ID
+    * * Display Name: Entity Action
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)
     */
@@ -78835,7 +78853,7 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
 
     /**
     * * Field Name: ActionParamID
-    * * Display Name: Action Parameter ID
+    * * Display Name: Action Parameter
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Action Params (vwActionParams.ID)
     */
@@ -78927,7 +78945,7 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
 
     /**
     * * Field Name: ActionParam
-    * * Display Name: Action Parameter
+    * * Display Name: Action Parameter Name
     * * SQL Data Type: nvarchar(255)
     */
     get ActionParam(): string {
@@ -110213,6 +110231,47 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
     }
 
     /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Ordering within an exclusive group — higher wins. Mirrors AIAgentStepPath.Priority so a compiled workflow chooses the same branch the flow editor shows. Ignored for edges that are not part of an ExclusiveGroup.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Deterministic tiebreak when two edges in an ExclusiveGroup share a Priority, applied ascending. Load-bearing rather than cosmetic: compiled dependencies get fresh UUIDs and Priority defaults to 0, so without a stored ordinal a tie would resolve by row order and the same workflow could take a different branch on a different machine.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: ExclusiveGroup
+    * * Display Name: Exclusive Group
+    * * SQL Data Type: nvarchar(255)
+    * * Description: XOR group key: sibling edges leaving the same origin that share a non-null ExclusiveGroup are an exclusive fan-out. The highest-Priority satisfied edge wins, ties broken by ascending Sequence; the rest are Skipped. NULL (the default) means an ordinary dependency, so existing graphs are unaffected. An unevaluable condition anywhere in the group holds the whole group rather than firing every branch.
+    */
+    get ExclusiveGroup(): string | null {
+        return this.Get('ExclusiveGroup');
+    }
+    set ExclusiveGroup(value: string | null) {
+        this.Set('ExclusiveGroup', value);
+    }
+
+    /**
     * * Field Name: Task
     * * Display Name: Task Name
     * * SQL Data Type: nvarchar(255)
@@ -110356,7 +110415,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     /**
     * Validate() method override for MJ: Tasks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * PercentComplete: This rule ensures that if a percent complete value is provided, it must be between 0 and 100 inclusive.
-    * * Table-Level: An entity can be associated with at most one of a User, an Agent, or an Action. Having multiple of these fields populated simultaneously is not allowed.
+    * * Table-Level: At most one of User, Agent, or Action can be associated with this record to ensure clear ownership and context.
     * @public
     * @method
     * @override
@@ -110364,7 +110423,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidatePercentCompleteWithinZeroAndOneHundred(result);
-        this.ValidateMutuallyExclusiveAssociations(result);
+        this.ValidateExclusiveUserAgentOrAction(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -110382,13 +110441,14 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     	}
     }
 
+
     /**
-    * An entity can be associated with at most one of a User, an Agent, or an Action. Having multiple of these fields populated simultaneously is not allowed.
+    * At most one of User, Agent, or Action can be associated with this record to ensure clear ownership and context.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateMutuallyExclusiveAssociations(result: ValidationResult) {
+    public ValidateExclusiveUserAgentOrAction(result: ValidationResult) {
         let count = 0;
         if (this.UserID != null) {
             count++;
@@ -110399,11 +110459,11 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
         if (this.ActionID != null) {
             count++;
         }
-
+    
         if (count > 1) {
             result.Errors.push(new ValidationErrorInfo(
                 "UserID",
-                "Only one of User, Agent, or Action can be specified for this record.",
+                "Only one of User, Agent, or Action can be specified for a single record.",
                 this.UserID,
                 ValidationErrorType.Failure
             ));
@@ -110555,12 +110615,13 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     *   * Failed
     *   * In Progress
     *   * Pending
-    * * Description: Current status of the task (Pending, In Progress, Complete, Cancelled, Failed, Blocked, Deferred)
+    *   * Skipped
+    * * Description: Lifecycle state. Pending awaits prerequisites; In Progress is claimed and running; Complete succeeded; Failed did not; Blocked can never run because a prerequisite is unsatisfiable; Cancelled was stopped deliberately; Deferred is waiting on a schedule. Skipped is a branch that was NOT TAKEN at an exclusive fan-out — a normal outcome, not a failure: it satisfies dependents (so a join downstream of a fork still runs) and is invisible to failure precedence when the parent rolls up.
     */
-    get Status(): 'Blocked' | 'Cancelled' | 'Complete' | 'Deferred' | 'Failed' | 'In Progress' | 'Pending' {
+    get Status(): 'Blocked' | 'Cancelled' | 'Complete' | 'Deferred' | 'Failed' | 'In Progress' | 'Pending' | 'Skipped' {
         return this.Get('Status');
     }
-    set Status(value: 'Blocked' | 'Cancelled' | 'Complete' | 'Deferred' | 'Failed' | 'In Progress' | 'Pending') {
+    set Status(value: 'Blocked' | 'Cancelled' | 'Complete' | 'Deferred' | 'Failed' | 'In Progress' | 'Pending' | 'Skipped') {
         this.Set('Status', value);
     }
 

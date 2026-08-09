@@ -17,6 +17,7 @@ export class MJTaskDependencyFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'taskReference', sectionName: 'Task Reference', isExpanded: true },
             { sectionKey: 'dependencyLink', sectionName: 'Dependency Link', isExpanded: true },
+            { sectionKey: 'dependencyConfiguration', sectionName: 'Dependency Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

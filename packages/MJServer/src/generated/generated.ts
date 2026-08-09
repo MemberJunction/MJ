@@ -84459,6 +84459,16 @@ export class MJTaskDependency_ {
     @Field({nullable: true, description: `Optional boolean expression gating this dependency edge. NULL (the default, and the value every pre-existing row carries) means the edge is unconditional, so adding this column changes the meaning of no existing graph. When present it is evaluated by the shared GraphTraversalEngine against the same context a design-time AIAgentStepPath.Condition sees, which is what lets a runtime task graph and a flow-editor graph be the same graph. A condition that evaluates false skips the edge; one that fails to evaluate ALSO skips it, but is reported distinctly so a graph stalled by a malformed expression cannot be mistaken for one that finished normally.`}) 
     Condition?: string;
         
+    @Field(() => Int, {description: `Ordering within an exclusive group — higher wins. Mirrors AIAgentStepPath.Priority so a compiled workflow chooses the same branch the flow editor shows. Ignored for edges that are not part of an ExclusiveGroup.`}) 
+    Priority: number;
+        
+    @Field(() => Int, {description: `Deterministic tiebreak when two edges in an ExclusiveGroup share a Priority, applied ascending. Load-bearing rather than cosmetic: compiled dependencies get fresh UUIDs and Priority defaults to 0, so without a stored ordinal a tie would resolve by row order and the same workflow could take a different branch on a different machine.`}) 
+    Sequence: number;
+        
+    @Field({nullable: true, description: `XOR group key: sibling edges leaving the same origin that share a non-null ExclusiveGroup are an exclusive fan-out. The highest-Priority satisfied edge wins, ties broken by ascending Sequence; the rest are Skipped. NULL (the default) means an ordinary dependency, so existing graphs are unaffected. An unevaluable condition anywhere in the group holds the whole group rather than firing every branch.`}) 
+    @MaxLength(255)
+    ExclusiveGroup?: string;
+        
     @Field() 
     @MaxLength(255)
     Task: string;
@@ -84489,6 +84499,15 @@ export class CreateMJTaskDependencyInput {
     @Field({ nullable: true })
     Condition: string | null;
 
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    ExclusiveGroup: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -84513,6 +84532,15 @@ export class UpdateMJTaskDependencyInput {
 
     @Field({ nullable: true })
     Condition?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    ExclusiveGroup?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -84814,7 +84842,7 @@ export class MJTask_ {
     @MaxLength(36)
     AgentID?: string;
         
-    @Field({description: `Current status of the task (Pending, In Progress, Complete, Cancelled, Failed, Blocked, Deferred)`}) 
+    @Field({description: `Lifecycle state. Pending awaits prerequisites; In Progress is claimed and running; Complete succeeded; Failed did not; Blocked can never run because a prerequisite is unsatisfiable; Cancelled was stopped deliberately; Deferred is waiting on a schedule. Skipped is a branch that was NOT TAKEN at an exclusive fan-out — a normal outcome, not a failure: it satisfies dependents (so a join downstream of a fork still runs) and is invisible to failure precedence when the parent rolls up.`}) 
     @MaxLength(50)
     Status: string;
         
