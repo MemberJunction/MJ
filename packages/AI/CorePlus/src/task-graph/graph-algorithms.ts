@@ -25,20 +25,42 @@ export type TaskGraphNodeStatus =
     | 'Cancelled'
     | 'Failed'
     | 'Blocked'
-    | 'Deferred';
+    | 'Deferred'
+    /**
+     * A branch that was not taken.
+     *
+     * Deliberately NOT `Blocked` or `Cancelled`: an exclusive fan-out settles every losing branch,
+     * and if that outcome were unsatisfiable then every sequential flow containing a fork would roll
+     * its parent up to `Blocked`. Skipped is a NORMAL outcome — terminal, satisfies dependents, and
+     * invisible to failure precedence.
+     */
+    | 'Skipped';
 
 /** Statuses from which a task can never proceed or be retried into eligibility on its own. */
 const TERMINAL_STATUSES: ReadonlySet<TaskGraphNodeStatus> = new Set<TaskGraphNodeStatus>([
     'Complete',
     'Cancelled',
     'Failed',
+    'Skipped',
 ]);
 
-/** Statuses that permanently prevent a dependent from ever becoming eligible. */
+/**
+ * Statuses that permanently prevent a dependent from ever becoming eligible.
+ *
+ * `Skipped` is deliberately ABSENT. A skipped node is a branch that was not taken, not a failure,
+ * and adding it here would make `ComputeTasksToBlock` cascade Blocked down every loser branch —
+ * which is precisely the outcome the Skipped status exists to avoid.
+ */
 const UNSATISFIABLE_STATUSES: ReadonlySet<TaskGraphNodeStatus> = new Set<TaskGraphNodeStatus>([
     'Failed',
     'Cancelled',
     'Blocked',
+]);
+
+/** A prerequisite is satisfied by completion OR by being skipped. */
+const SATISFIES_DEPENDENT: ReadonlySet<TaskGraphNodeStatus> = new Set<TaskGraphNodeStatus>([
+    'Complete',
+    'Skipped',
 ]);
 
 /** The minimum a graph algorithm needs to know about a task. */
@@ -162,7 +184,12 @@ export function ComputeEligibleTasks(
     return nodes.filter((node) => {
         if (node.status !== 'Pending') return false;
         const deps = prerequisites.get(node.id) ?? [];
-        return deps.every((depId) => statusById.get(depId) === 'Complete');
+        // Skipped satisfies: a join downstream of an exclusive fork is reached by whichever branch
+        // ran, and the branches that did not run must not hold it hostage forever.
+        return deps.every((depId) => {
+            const st = statusById.get(depId);
+            return st !== undefined && SATISFIES_DEPENDENT.has(st);
+        });
     });
 }
 
@@ -181,12 +208,19 @@ export function ComputeEligibleTasks(
  */
 export function ComputeTasksToBlock(
     nodes: readonly TaskGraphNode[],
-    edges: readonly TaskGraphEdge[]
+    edges: readonly TaskGraphEdge[],
+    handledFailureIDs: ReadonlySet<string> = new Set(),
 ): string[] {
     const statusById = new Map(nodes.map((n) => [n.id, n.status]));
     const dependentsOf = buildDependentsAdjacency(edges.filter(isGatingEdge));
 
-    const frontier: string[] = nodes.filter((n) => UNSATISFIABLE_STATUSES.has(n.status)).map((n) => n.id);
+    // Under `failureSemantics: 'edges'`, a Failed step whose outgoing paths produced a satisfied
+    // edge is a HANDLED failure — the flow's recovery path ran, so its dependents must not be
+    // blocked. An unhandled Failed still seeds, matching the flow engine's "failed with no recovery
+    // path" outcome. Under the default 'block' semantics the set is empty and nothing changes.
+    const frontier: string[] = nodes
+        .filter((n) => UNSATISFIABLE_STATUSES.has(n.status) && !handledFailureIDs.has(n.id))
+        .map((n) => n.id);
     const toBlock = new Set<string>();
     const seen = new Set<string>(frontier);
 
@@ -225,26 +259,43 @@ export type ParentRollup = {
  * `In Progress`. An empty graph is `Complete` — vacuously true, and it keeps a degenerate submission
  * from hanging.
  *
- * `percentComplete` counts only `Complete` children, so a half-failed graph never reads as 100%.
+ * `percentComplete` counts `Complete` and `Skipped` children — a fork's loser branch is *done*, and
+ * counting it as outstanding would leave every branching flow stuck below 100%.
+ *
+ * **`Skipped` is invisible to precedence.** A branch that was not taken says nothing about whether
+ * the graph succeeded, so it neither fails nor blocks the parent. Without this, a sequential flow
+ * containing a single fork would settle `Blocked` every time.
+ *
+ * `handledFailureIDs` (spec `failureSemantics: 'edges'`) names Failed children that produced a
+ * satisfied outgoing edge — a *recovery path* ran. Those are treated like Skipped for precedence,
+ * so a flow that failed a step, recovered, and reached the end settles `Complete`, exactly as the
+ * flow engine does today. A Failed child with no recovery path stays a failure.
  */
-export function ComputeParentRollup(children: readonly TaskGraphNode[]): ParentRollup {
+export function ComputeParentRollup(
+    children: readonly TaskGraphNode[],
+    handledFailureIDs: ReadonlySet<string> = new Set(),
+): ParentRollup {
     if (children.length === 0) {
         return { status: 'Complete', percentComplete: 100, isTerminal: true };
     }
 
-    let complete = 0, failed = 0, blocked = 0, cancelled = 0, active = 0;
+    let complete = 0, failed = 0, blocked = 0, cancelled = 0, active = 0, settledAside = 0;
     for (const c of children) {
         switch (c.status) {
             case 'Complete': complete++; break;
-            case 'Failed': failed++; break;
+            case 'Failed':
+                // A handled failure is a branch the flow recovered from, not an outcome.
+                if (handledFailureIDs.has(c.id)) settledAside++; else failed++;
+                break;
             case 'Blocked': blocked++; break;
             case 'Cancelled': cancelled++; break;
+            case 'Skipped': settledAside++; break;
             // Pending / In Progress / Deferred all mean "not settled yet".
             default: active++; break;
         }
     }
 
-    const percentComplete = Math.floor((complete / children.length) * 100);
+    const percentComplete = Math.floor(((complete + settledAside) / children.length) * 100);
 
     if (active > 0) {
         return { status: 'In Progress', percentComplete, isTerminal: false };
@@ -310,4 +361,164 @@ function buildDependentsAdjacency(edges: readonly TaskGraphEdge[]): Map<string, 
         else map.set(e.dependsOnTaskId, [e.taskId]);
     }
     return map;
+}
+
+/**
+ * Propagates "not taken" down a losing branch.
+ *
+ * When an exclusive fan-out picks a winner, the losing targets are seeded here and their exclusive
+ * descendants follow. The rule is deliberately conservative: a task is skipped only when it has at
+ * least one gating predecessor and **every** gating predecessor is skipped. A join that is also
+ * reachable from the winning branch therefore survives — which is the entire point, since a fork
+ * that reconverges must still run its join.
+ *
+ * `Optional` and `Corequisite` edges are ignored, matching `ComputeEligibleTasks`: an edge that does
+ * not gate a task starting cannot decide that it never starts.
+ *
+ * Fixpoint rather than a single forward walk, because a join's fate is only decidable once every one
+ * of its gating predecessors is known — a walk in edge order could visit it too early and let a
+ * doomed branch through.
+ *
+ * **Ordering invariant (load-bearing):** the cascade is computed and persisted BEFORE eligibility in
+ * every cycle. A task whose gating predecessors are all Skipped is simultaneously *eligible*
+ * (Skipped satisfies, §5.2) and *to-be-skipped*; running eligibility first would dispatch the loser
+ * branch before anything marked it. Cascade first, always.
+ *
+ * @param seedSkipIDs tasks already decided to skip this cycle (XOR losers), which may not yet carry
+ *                    `Skipped` in `nodes` because the write happens later in the same pass.
+ * @returns ids of `Pending` tasks that should become `Skipped`
+ */
+export function ComputeSkipCascade(
+    nodes: readonly TaskGraphNode[],
+    edges: readonly TaskGraphEdge[],
+    seedSkipIDs: readonly string[] = [],
+): string[] {
+    const statusById = new Map(nodes.map((n) => [n.id, n.status]));
+    const prerequisites = buildDependsOnAdjacency(edges.filter(isGatingEdge));
+
+    const skipped = new Set<string>(seedSkipIDs);
+    for (const n of nodes) if (n.status === 'Skipped') skipped.add(n.id);
+
+    // Iterate to a fixpoint: each pass can only add, and there are finitely many nodes, so this
+    // terminates in at most one pass per node.
+    let changed = true;
+    while (changed) {
+        changed = false;
+        for (const node of nodes) {
+            if (skipped.has(node.id)) continue;
+            if (statusById.get(node.id) !== 'Pending') continue;
+
+            const deps = prerequisites.get(node.id) ?? [];
+            if (deps.length === 0) continue;   // an entry point is never skipped by cascade
+            if (deps.every((d) => skipped.has(d))) {
+                skipped.add(node.id);
+                changed = true;
+            }
+        }
+    }
+
+    // Return only what this call decided — seeds and already-persisted Skipped are the caller's.
+    const seeded = new Set(seedSkipIDs);
+    return [...skipped].filter((id) => !seeded.has(id) && statusById.get(id) === 'Pending');
+}
+
+/** How a conditional edge's expression came out this cycle. */
+export type EdgeConditionOutcome = 'satisfied' | 'unsatisfied' | 'unevaluable';
+
+/** An edge with everything `ResolveExclusiveGroups` needs to decide it. */
+export type EvaluatedEdge = {
+    /** Stable identifier for the edge (the persisted `TaskDependency.ID`). */
+    id: string;
+    taskId: string;
+    dependsOnTaskId: string;
+    exclusiveGroup: string;
+    originStatus: TaskGraphNodeStatus;
+    /** Higher wins. */
+    priority: number;
+    /** Ascending tiebreak when priorities are equal. */
+    sequence: number;
+    conditionOutcome: EdgeConditionOutcome;
+};
+
+export type ExclusiveGroupResolution = {
+    /** Edges that remain live — at most one per decided group. */
+    keptEdgeIDs: string[];
+    /** Edges that lost their group and must not gate their target. */
+    loserEdgeIDs: string[];
+    /** Targets of losing edges, seeding {@link ComputeSkipCascade}. */
+    skipSeedTaskIDs: string[];
+    /** Targets of an UNDECIDED group — neither run nor skipped until a human fixes the condition. */
+    holdTaskIDs: string[];
+};
+
+/**
+ * Resolves exclusive fan-outs: within a group, one branch runs and the rest are skipped.
+ *
+ * This is what a flow's `sequential` traversal actually is. The old engine took the
+ * highest-priority satisfied edge and discarded the rest; expressing that as a dependency *chain*
+ * would run branches the author's flow has never run, so it is modelled as an exclusive choice
+ * decided at run time instead.
+ *
+ * Rules, each of which exists because the obvious alternative is wrong:
+ *
+ * - **Only terminal origins decide.** A group whose origin has not finished is not yet decidable and
+ *   resolves to nothing. Recomputing next cycle is free; guessing is not.
+ * - **Winner** = highest `priority` among satisfied edges, ties broken by ascending `sequence`.
+ *   Sequence exists because compiled edges get fresh UUIDs, and a priority tie (the common case —
+ *   the column defaults to 0) would otherwise resolve differently than the engine being replaced.
+ * - **No satisfied and none unevaluable ⇒ every edge loses.** The walk simply ends down this fork,
+ *   which is what the flow engine does when no outgoing path matches.
+ * - **Any unevaluable ⇒ the whole group is UNDECIDED**: no winner, no losers, all targets HOLD.
+ *   This is the rule that makes "a broken condition stalls visibly" true. Without it, the kept edges
+ *   of a Complete origin are satisfied prerequisites and *every branch of the fork fires at once* —
+ *   the worst possible XOR violation, produced by a typo.
+ *
+ * Deterministic on persisted state, so it is safe to recompute every poll cycle — no per-completion
+ * callback, and restart-safe for free.
+ *
+ * @param terminalDecides which origin statuses may decide a group. `Complete` always; add `Failed`
+ *                       under `failureSemantics: 'edges'`, where a failed step's outgoing paths are
+ *                       its recovery paths.
+ */
+export function ResolveExclusiveGroups(
+    edges: readonly EvaluatedEdge[],
+    terminalDecides: ReadonlySet<TaskGraphNodeStatus> = new Set<TaskGraphNodeStatus>(['Complete']),
+): ExclusiveGroupResolution {
+    const byGroup = new Map<string, EvaluatedEdge[]>();
+    for (const e of edges) {
+        const list = byGroup.get(e.exclusiveGroup);
+        if (list) list.push(e); else byGroup.set(e.exclusiveGroup, [e]);
+    }
+
+    const keptEdgeIDs: string[] = [];
+    const loserEdgeIDs: string[] = [];
+    const skipSeedTaskIDs: string[] = [];
+    const holdTaskIDs: string[] = [];
+
+    for (const group of byGroup.values()) {
+        // Every edge in a group leaves the same origin (the validator enforces it), so any member
+        // answers "has the origin finished?".
+        if (!terminalDecides.has(group[0].originStatus)) continue;
+
+        if (group.some((e) => e.conditionOutcome === 'unevaluable')) {
+            for (const e of group) holdTaskIDs.push(e.taskId);
+            continue;
+        }
+
+        const satisfied = group.filter((e) => e.conditionOutcome === 'satisfied');
+        if (satisfied.length === 0) {
+            for (const e of group) { loserEdgeIDs.push(e.id); skipSeedTaskIDs.push(e.taskId); }
+            continue;
+        }
+
+        const winner = [...satisfied].sort(
+            (a, b) => (b.priority - a.priority) || (a.sequence - b.sequence),
+        )[0];
+        for (const e of group) {
+            if (e.id === winner.id) keptEdgeIDs.push(e.id);
+            else { loserEdgeIDs.push(e.id); skipSeedTaskIDs.push(e.taskId); }
+        }
+    }
+
+    return { keptEdgeIDs, loserEdgeIDs, skipSeedTaskIDs, holdTaskIDs };
 }

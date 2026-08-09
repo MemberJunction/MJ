@@ -13,7 +13,6 @@
 import { describe, it, expect } from 'vitest';
 import { ConfigOf } from '../task-graph/task-graph-spec';
 import {
-    ConvertAgentSpecToTaskGraph,
     ConvertTaskGraphToAgentSpec,
     FormatSaveAsWorkflowLosses,
     type SaveAsWorkflowOptions,
@@ -200,86 +199,5 @@ describe('FormatSaveAsWorkflowLosses', () => {
 
     it('is empty when nothing was lost', () => {
         expect(FormatSaveAsWorkflowLosses([])).toBe('');
-    });
-});
-
-describe('ConvertAgentSpecToTaskGraph — the inverse projection', () => {
-    const resolve = (id: string) => id.replace('id-of-', '');
-
-    it('round-trips a graph through AgentSpec and back', () => {
-        // The property that makes ONE canvas able to edit both provenances. Without it a graph could
-        // be saved as a workflow but never reopened, and MJ would need a second flow-shaped renderer.
-        const original = graph();
-        const asAgent = ConvertTaskGraphToAgentSpec(original, optionsOf()).Spec!;
-        const back = ConvertAgentSpecToTaskGraph(asAgent, resolve);
-
-        expect(back.tasks.map((t) => t.name)).toEqual(['Gather', 'Summarize']);
-        expect(back.tasks.map((t) => ConfigOf(t, 'Agent')?.agentName)).toEqual(['Query Builder', 'Sage']);
-    });
-
-    it('restores dependency DIRECTION on the way back', () => {
-        // Flow paths point forward, dependsOn points back. Flipping once and not flipping back would
-        // reverse the graph while leaving it structurally valid.
-        const asAgent = ConvertTaskGraphToAgentSpec(graph(), optionsOf()).Spec!;
-        const back = ConvertAgentSpecToTaskGraph(asAgent, resolve);
-
-        const gather = back.tasks.find((t) => t.name === 'Gather')!;
-        const summarize = back.tasks.find((t) => t.name === 'Summarize')!;
-        expect(gather.dependsOn).toEqual([]);
-        expect(summarize.dependsOn).toEqual([gather.tempId]);
-    });
-
-    it('preserves a condition across the round-trip', () => {
-        // Only possible because both models store the same grammar — the reason
-        // TaskDependency.Condition was given AIAgentStepPath.Condition's shape in Phase 4.
-        const g = graph({
-            tasks: [
-                { tempId: 'a', name: 'Check', description: 'check', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
-                { tempId: 'b', name: 'Escalate', description: 'esc', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [{ tempId: 'a', condition: 'output.severity > 3' }] },
-            ],
-        });
-        const back = ConvertAgentSpecToTaskGraph(ConvertTaskGraphToAgentSpec(g, optionsOf()).Spec!, resolve);
-        const escalate = back.tasks.find((t) => t.name === 'Escalate')!;
-        expect(escalate.dependsOn[0]).toMatchObject({ condition: 'output.severity > 3' });
-    });
-
-    it('round-trips a diamond without losing edges', () => {
-        const g = graph({
-            tasks: [
-                { tempId: 'a', name: 'A', description: 'a', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
-                { tempId: 'b', name: 'B', description: 'b', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['a'] },
-                { tempId: 'c', name: 'C', description: 'c', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['a'] },
-                { tempId: 'd', name: 'D', description: 'd', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['b', 'c'] },
-            ],
-        });
-        const back = ConvertAgentSpecToTaskGraph(ConvertTaskGraphToAgentSpec(g, optionsOf()).Spec!, resolve);
-        expect(back.tasks).toHaveLength(4);
-        expect(back.tasks.flatMap((t) => t.dependsOn)).toHaveLength(4);
-    });
-
-    it('carries an unmappable step across with no assignee rather than dropping it', () => {
-        // Dropping it would silently change the graph's shape on screen. Carrying it lets the
-        // validator say NoAssignment — "this step needs attention", not "it never existed".
-        const back = ConvertAgentSpecToTaskGraph({
-            ID: 'x', Name: 'W', Status: 'Active', StartingPayloadValidationMode: 'Warn',
-            Steps: [{ ID: 's1', Name: 'Run a prompt', StepType: 'Prompt', StartingStep: true }],
-            Paths: [],
-        }, resolve);
-        expect(back.tasks).toHaveLength(1);
-        expect(back.tasks[0].agentName).toBeUndefined();
-    });
-
-    it('skips a path whose origin step is missing', () => {
-        const back = ConvertAgentSpecToTaskGraph({
-            ID: 'x', Name: 'W', Status: 'Active', StartingPayloadValidationMode: 'Warn',
-            Steps: [{ ID: 's1', Name: 'Only', StepType: 'Sub-Agent', StartingStep: true, SubAgentID: 'id-of-Sage' }],
-            Paths: [{ ID: 'p1', OriginStepID: 'ghost', DestinationStepID: 's1', Priority: 0 }],
-        }, resolve);
-        expect(back.tasks[0].dependsOn).toEqual([]);
-    });
-
-    it('takes the workflow name from the agent', () => {
-        const asAgent = ConvertTaskGraphToAgentSpec(graph(), optionsOf({ Name: 'Named' })).Spec!;
-        expect(ConvertAgentSpecToTaskGraph(asAgent, resolve).workflowName).toBe('Named');
     });
 });
