@@ -2840,3 +2840,16 @@
     overflow-x: hidden;
     background: var(--mj-bg-page);
 }
+
+/* Initial load: the form's header renders as soon as the record arrives, but the tab strip and
+   every pane wait on the agent TYPE. This fills that window so the page reads as loading rather
+   than as broken. */
+.agent-form-loading {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 240px;
+    padding: 32px;
+    background: var(--mj-bg-page);
+}

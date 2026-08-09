@@ -115,8 +115,9 @@
   <!-- ── Loading State ─────────────────────────────────────── -->
   @if (isLoading) {
     <div class="mj-agent-editor-loading">
-      <i class="fa-solid fa-spinner fa-spin"></i>
-      <span>Loading flow...</span>
+      <!-- MJ's shared indicator, not a hand-rolled fa-spinner: one loading affordance across the
+           product means a slow canvas looks like every other slow thing, not like a different bug. -->
+      <mj-loading text="Loading flow..." size="medium"></mj-loading>
     </div>
   }
 

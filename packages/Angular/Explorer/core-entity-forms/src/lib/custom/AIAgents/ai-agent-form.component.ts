@@ -767,6 +767,16 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     // === Transaction-based editing support ===
     /** Now using BaseFormComponent's PendingRecords system exclusively */
     
+    /**
+     * True until the form knows what it is going to render.
+     *
+     * The tab strip and every pane depend on the agent's TYPE, which is loaded asynchronously. Until
+     * it arrives there are no tabs, no designer pane, and `ActiveFormTab` is null — so the details
+     * pane is hidden too and the form renders its header over an empty area for as long as the load
+     * takes. That reads as a broken page, not as a slow one.
+     */
+    public IsFormInitializing = true;
+
     /** Flag to indicate if there are unsaved changes */
     public hasUnsavedChanges = false;
 
@@ -811,7 +821,18 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      */
     async ngOnInit() {
         await super.ngOnInit();
+        try {
+            await this.initializeForm();
+        } finally {
+            // In a finally on purpose: a failure part-way through init must still reveal the form.
+            // Stranding the spinner would turn a partial load into a page that never arrives.
+            this.IsFormInitializing = false;
+            this.cdr.markForCheck();
+        }
+    }
 
+    /** The async work ngOnInit performs. Extracted so its completion can be signalled in one place. */
+    private async initializeForm(): Promise<void> {
         // Restore user preferences (header state, section expand/collapse)
         this.loadUserPreferences();
 
