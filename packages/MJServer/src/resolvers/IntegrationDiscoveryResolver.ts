@@ -1,6 +1,7 @@
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType, Int, Float } from "type-graphql";
 import { CompositeKey, DatabaseProviderBase, EntityInfo, LocalCacheManager, Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider, TransactionGroupBase } from "@memberjunction/core";
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
+import { NoLog } from "../logging/NoLog.js";
 import { UUIDsEqual } from "@memberjunction/global";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
 import {
@@ -551,7 +552,16 @@ class CreateConnectionInput {
     @Field() CompanyID: string;
     @Field() CredentialTypeID: string;
     @Field() CredentialName: string;
-    @Field() CredentialValues: string;
+    /**
+     * The credential payload being connected, as a JSON string.
+     *
+     * `@NoLog` is load-bearing here, not decorative. This field does NOT map to an
+     * entity column — the resolver assigns it onto `MJ: Credentials`.`Values`
+     * (which IS `Encrypt=true`) in procedural code further down. The metadata-driven
+     * half of the redactor keys off entity columns, so it cannot see this field, and
+     * without the mark the variables log emits the credential in plaintext.
+     */
+    @Field() @NoLog CredentialValues: string;
     @Field({ nullable: true }) ExternalSystemID?: string;
     @Field({ nullable: true }) Configuration?: string;
 }
