@@ -67,10 +67,16 @@ on every keystroke of a bound form field.
 client values via `SetMany` (exempt from the gate), then `BaseEntity.Save()` marks and
 `GenerateSaveSQL` omits. Adding a strip would be redundant code.
 
-**⚠️ Client-UI blast radius is REAL and still deferred to Phase 4.** Generated Angular forms
-render every field, so a denied field on an enabled entity will throw on render. The throw is
-server-side-authoritative and correct; the admin UI must stop rendering denied fields before any
-customer enables FLS on an entity with a generated form.
+**Client-UI blast radius is CLOSED.** `MjFormFieldComponent.IsFieldReadableByUser` gates the
+whole field in the template, first, before any expression reads a value. Memoized (template
+getters run every change-detection cycle and `GetDeniedReadFields` walks every field), invalidated
+in `ngOnChanges` on `Record`/`FieldName`. Fails open on missing entity/user/flag.
+
+Adding that gate surfaced a real defect in `BaseEntity`: `ActiveUser` ends in
+`Metadata.Provider.CurrentUser`, which throws a TypeError when no global provider is configured.
+Harmless while only the save path consulted it; fatal once `Get()`/`Set()` do on every access to
+an FLS-enabled entity. Now routed through `resolveActiveUserOrNull()`, which treats "no provider
+to ask" as "no user" and fails open.
 
 ### W6 — metadata invalidation + docs
 - Wire `remote-invalidate` → metadata refresh (`RefreshIfNeeded()`, debounced). The pub/sub
