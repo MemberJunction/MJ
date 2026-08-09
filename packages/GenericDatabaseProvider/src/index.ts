@@ -2,7 +2,7 @@ export { GenericDatabaseProvider, DoomedTransactionError, ExecuteSQLBatchOptions
 // Side-effect import: registers DatabaseWellKnownUserSource with the class factory so any
 // process holding a database provider can resolve MJ's built-in accounts.
 export { DatabaseWellKnownUserSource } from './DatabaseWellKnownUserSource.js';
-export { SystemUserID, IsSystemUser } from './systemUser.js';
+export { SystemUserID } from './systemUser.js';
 export type {
     SaveCoercedValue,
     SaveCallBinding,

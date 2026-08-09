@@ -1683,12 +1683,20 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             parts.push(`rls:${this.simpleHash(rls)}`);
         }
 
-        // Field-Level-Security segment — the column counterpart of `rls:`. A field-restricted
-        // user's cache-eligible queries fetch only their ALLOWED columns, so their slots hold
-        // narrower rows than an unrestricted user's; sharing a slot in either direction would
-        // serve someone rows with missing columns (or, without the read-time projection, extra
-        // ones). Appended ONLY when the denied set is non-empty, so unrestricted users and
-        // non-FLS entities keep byte-identical fingerprints and shared slots (the rls: rule).
+        // Field-Level-Security segment — the column counterpart of `rls:`, and CLIENT-ONLY.
+        //
+        // A browser stores rows exactly as the server returned them (already narrowed to the
+        // user's allowed columns) and never projects on read, so the field set has to be part
+        // of slot identity. Without it, a user whose access is tightened keeps being served
+        // their persisted IndexedDB slot: the currency check compares maxUpdatedAt and rowCount
+        // only, neither of which notices a column.
+        //
+        // The server passes nothing here — its slots are full-width and shared, with narrowing
+        // applied at read time by ApplyFieldSecurityProjection.
+        // ProviderBase.ComputeRunViewFLSFingerprintKey is where that split is decided.
+        //
+        // Appended ONLY when non-empty, so unrestricted users and non-FLS entities keep
+        // byte-identical fingerprints and shared slots (the rls: rule).
         const fls = (flsFieldsKey ?? '').trim();
         if (fls.length > 0) {
             parts.push(`fls:${this.simpleHash(fls)}`);

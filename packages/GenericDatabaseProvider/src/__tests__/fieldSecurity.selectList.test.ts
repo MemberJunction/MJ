@@ -1,5 +1,5 @@
 /**
- * Field-Level Security — Workstream C SELECT-list intersection + user-search filtering.
+ * Field-Level Security — SELECT-list intersection + user-search filtering.
  *
  * getRunTimeViewFieldArray/String: for a field-restricted user on the simple path, the
  * generated SELECT list must never name a denied column — explicit Fields and saved-view
@@ -146,11 +146,24 @@ const HR_ROLE_ID = 'A0000000-0000-0000-0000-000000000001';
 const INTERN_ROLE_ID = 'A0000000-0000-0000-0000-000000000003';
 const ENTITY_ID = 'entity-employees';
 
+/**
+ * Full access to `fieldId` for every listed role. Snapshot initialization writes rows like these
+ * for every (field, role) that should have one — which is why the UNRESTRICTED fields below need
+ * them explicitly. On an FLS-enabled entity a field with no rows is denied, not open.
+ */
+function openTo(fieldId: string, roles: string[] = [HR_ROLE_ID, INTERN_ROLE_ID]): Record<string, unknown>[] {
+    return roles.map((roleId, i) => ({
+        ID: `${fieldId}-open-${i}`,
+        EntityFieldID: fieldId,
+        RoleID: roleId,
+        ReadAccess: 'Allow',
+        UpdateAccess: 'Allow',
+        CreateAccess: 'Allow',
+    }));
+}
+
 function employeeEntityInit(opts: { fls?: boolean; entityFtx?: boolean; salaryFtx?: boolean } = {}): Record<string, unknown> {
     const { fls = true, entityFtx = false, salaryFtx = false } = opts;
-    const salaryPerms = fls
-        ? [{ ID: 'p1', EntityFieldID: 'f-salary', RoleID: HR_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: true }]
-        : [];
     return {
         ID: ENTITY_ID,
         Name: 'Employees',
@@ -158,6 +171,9 @@ function employeeEntityInit(opts: { fls?: boolean; entityFtx?: boolean; salaryFt
         BaseTable: 'Employee',
         BaseView: 'vwEmployees',
         IncludeInAPI: true,
+        // The flag is the enforcement gate now — `fls: false` turns field security off entirely
+        // rather than merely removing rows.
+        EnableFieldLevelSecurity: fls,
         FullTextSearchEnabled: entityFtx,
         FullTextSearchFunction: 'fnSearchEmployees',
         Permissions: [
@@ -166,13 +182,13 @@ function employeeEntityInit(opts: { fls?: boolean; entityFtx?: boolean; salaryFt
         ],
         Fields: [
             { ID: 'f-id', EntityID: ENTITY_ID, Sequence: 1, Name: 'ID', Entity: 'Employees', Type: 'uniqueidentifier', IsPrimaryKey: true },
-            { ID: 'f-name', EntityID: ENTITY_ID, Sequence: 2, Name: 'Name', Entity: 'Employees', Type: 'nvarchar', Length: 100, IncludeInUserSearchAPI: true, UserSearchPredicateAPI: 'Contains' },
+            { ID: 'f-name', EntityID: ENTITY_ID, Sequence: 2, Name: 'Name', Entity: 'Employees', Type: 'nvarchar', Length: 100, IncludeInUserSearchAPI: true, UserSearchPredicateAPI: 'Contains', EntityFieldPermissions: openTo('f-name') },
             {
                 ID: 'f-salary', EntityID: ENTITY_ID, Sequence: 3, Name: 'Salary', Entity: 'Employees', Type: 'nvarchar', Length: 50,
                 IncludeInUserSearchAPI: true, UserSearchPredicateAPI: 'Contains', FullTextSearchEnabled: salaryFtx,
-                EntityFieldPermissions: salaryPerms,
+                EntityFieldPermissions: openTo('f-salary', [HR_ROLE_ID]),
             },
-            { ID: 'f-notes', EntityID: ENTITY_ID, Sequence: 4, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', Length: 200, IncludeInUserSearchAPI: true, UserSearchPredicateAPI: 'Contains' },
+            { ID: 'f-notes', EntityID: ENTITY_ID, Sequence: 4, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', Length: 200, IncludeInUserSearchAPI: true, UserSearchPredicateAPI: 'Contains', EntityFieldPermissions: openTo('f-notes') },
         ],
     };
 }
@@ -326,9 +342,7 @@ describe('createViewUserSearchSQL — field security', () => {
         const fields = init['Fields'] as Array<Record<string, unknown>>;
         for (const f of fields) {
             if (f['Name'] === 'Name' || f['Name'] === 'Notes') {
-                f['EntityFieldPermissions'] = [
-                    { ID: `p-${f['Name']}`, EntityFieldID: f['ID'], RoleID: HR_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: true },
-                ];
+                f['EntityFieldPermissions'] = openTo(f['ID'] as string, [HR_ROLE_ID]);
             }
         }
         const provider = new FlsSelectTestProvider();
