@@ -2046,19 +2046,32 @@ export class ManageMetadataBase {
                 field.Scale !== veField.Scale ||
                 field.Precision !== veField.Precision ||
                 field.Sequence !== fieldSequence) {
-               // the field needs to be updated, so update it
+               // the field needs to be updated, so update it.
+               //
+               // Identifiers are quoted explicitly via qi(). `runQuery*` routes SQL through
+               // quoteSQLForExecution, which auto-quotes PascalCase words — but it deliberately
+               // SKIPS anything in its keyword list, and that list contains LENGTH (as the SQL
+               // scalar function). `Length` is also a real column on __mj.EntityField, so it is
+               // the one identifier here that escapes auto-quoting, folds to `length` on
+               // PostgreSQL, and fails with `column "length" does not exist`.
+               //
+               // The INSERT arm of this same method already quotes every identifier via q();
+               // only this UPDATE was missed. Quoting all of them (rather than just Length)
+               // keeps the two arms symmetric and immune to future additions to that keyword
+               // list — Count, Format, Date, Left and Right collide the same way.
+               const q = (n: string) => this.qi(n);
                const sqlUpdate = `UPDATE
                                     ${this.qs(mj_core_schema(), 'EntityField')}
                                   SET
-                                    Sequence=${fieldSequence},
-                                    Type='${veField.Type}',
-                                    AllowsNull=${this.boolLit(veField.AllowsNull)},
-                                    ${pkFlagsChanged ? `IsPrimaryKey=${this.boolLit(wantPrimaryKey)},IsUnique=${this.boolLit(wantUnique)},` : ''}
-                                    Length=${veField.Length},
-                                    Precision=${veField.Precision},
-                                    Scale=${veField.Scale}
+                                    ${q('Sequence')}=${fieldSequence},
+                                    ${q('Type')}='${veField.Type}',
+                                    ${q('AllowsNull')}=${this.boolLit(veField.AllowsNull)},
+                                    ${pkFlagsChanged ? `${q('IsPrimaryKey')}=${this.boolLit(wantPrimaryKey)},${q('IsUnique')}=${this.boolLit(wantUnique)},` : ''}
+                                    ${q('Length')}=${veField.Length},
+                                    ${q('Precision')}=${veField.Precision},
+                                    ${q('Scale')}=${veField.Scale}
                                   WHERE
-                                    ID = '${field.ID}'`; // don't need to update the __mj_UpdatedAt field here, that happens automatically via the trigger
+                                    ${q('ID')} = '${field.ID}'`; // don't need to update the __mj_UpdatedAt field here, that happens automatically via the trigger
 
                await this.LogSQLAndExecute(pool, sqlUpdate, `SQL text to update virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
                didUpdate = true;
