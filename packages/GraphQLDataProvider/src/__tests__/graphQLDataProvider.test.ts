@@ -314,3 +314,112 @@ describe('GraphQLDataProvider - Config flow', () => {
     expect(config.WSURL).toBe('ws://localhost:4000');
   });
 });
+
+// ─── Metadata refresh on a permission change ──────────────────────────────
+//
+// `remote-invalidate` reaches BaseEngine caches automatically, but metadata is the provider's
+// own AllMetadata cache and nothing subscribes it — so without this hop a permission change
+// would not reach an open browser until the next full refresh. Field security is enforced from
+// metadata, so a stale client keeps rendering a column it just lost access to.
+
+describe('GraphQLDataProvider - metadata refresh on permission changes', () => {
+  /**
+   * The method under test is pure scheduling — no network, no config. Building it off the
+   * prototype skips the provider's real constructor entirely, which this file mocks away.
+   */
+  function makeScheduler(): { provider: GraphQLDataProvider; refresh: ReturnType<typeof vi.fn> } {
+    const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+    const refresh = vi.fn().mockResolvedValue(true);
+    (provider as unknown as { RefreshIfNeeded: unknown }).RefreshIfNeeded = refresh;
+    return { provider, refresh };
+  }
+
+  function schedule(provider: GraphQLDataProvider, entityName: string): void {
+    (provider as unknown as { ScheduleMetadataRefreshForPermissionChange(n: string): void })
+      .ScheduleMetadataRefreshForPermissionChange(entityName);
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it('refreshes after a field-permission change', async () => {
+    const { provider, refresh } = makeScheduler();
+
+    schedule(provider, 'MJ: Entity Field Permissions');
+    expect(refresh).not.toHaveBeenCalled(); // debounced, not immediate
+
+    await vi.advanceTimersByTimeAsync(600);
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    vi.useRealTimers();
+  });
+
+  it('ignores entities whose rows cannot change effective permissions', async () => {
+    const { provider, refresh } = makeScheduler();
+
+    schedule(provider, 'Accounts');
+    schedule(provider, 'MJ: AI Prompts');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(refresh).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('collapses a burst into ONE refresh', async () => {
+    // Enabling field security on an entity writes one permission row per (field, role), each of
+    // which is its own broadcast. Without the debounce that is N metadata fetches.
+    const { provider, refresh } = makeScheduler();
+
+    for (let i = 0; i < 50; i++) {
+      schedule(provider, 'MJ: Entity Field Permissions');
+    }
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('covers every entity whose rows decide effective access', async () => {
+    const names = [
+      'MJ: Entity Field Permissions',
+      'MJ: Entity Permissions',
+      'MJ: Entities',
+      'MJ: Roles',
+      'MJ: User Roles',
+    ];
+
+    for (const name of names) {
+      const { provider, refresh } = makeScheduler();
+      schedule(provider, name);
+      await vi.advanceTimersByTimeAsync(600);
+      expect(refresh, `expected ${name} to trigger a refresh`).toHaveBeenCalledTimes(1);
+    }
+    vi.useRealTimers();
+  });
+
+  it('matches entity names case-insensitively and ignores surrounding whitespace', async () => {
+    const { provider, refresh } = makeScheduler();
+
+    schedule(provider, '  mj: ENTITY field PERMISSIONS  ');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('swallows a failed refresh rather than rejecting into the subscription handler', async () => {
+    // A failed refresh leaves the client on stale metadata, which the server's own enforcement
+    // still covers. Rejecting here would tear down the invalidation subscription instead.
+    const { provider, refresh } = makeScheduler();
+    refresh.mockRejectedValue(new Error('network down'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    schedule(provider, 'MJ: Roles');
+    await expect(vi.advanceTimersByTimeAsync(600)).resolves.not.toThrow();
+
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+    vi.useRealTimers();
+  });
+});

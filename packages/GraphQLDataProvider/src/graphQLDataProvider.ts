@@ -3475,6 +3475,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     args: baseEntityEvent,
                     component: this,
                 });
+
+                // The event above drives BaseEngine caches. Metadata is NOT a BaseEngine — it is
+                // this provider's own AllMetadata cache — so permission changes need their own
+                // hop or they sit unnoticed until the next full refresh.
+                this.ScheduleMetadataRefreshForPermissionChange(event.EntityName);
             },
             error: (error: unknown) => {
                 console.error('[GraphQLDataProvider] Cache invalidation subscription error:', error);
@@ -3489,9 +3494,70 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * Entities whose rows decide what this user may see. A change to any of them can alter the
+     * effective permissions baked into this client's metadata, so it has to re-check.
+     *
+     * Stored lowercased; compare with a trimmed, lowercased entity name.
+     */
+    private static readonly PermissionMetadataEntityNames: ReadonlySet<string> = new Set<string>([
+        'mj: entity field permissions',
+        'mj: entity permissions',
+        'mj: entities',
+        'mj: roles',
+        'mj: user roles',
+    ]);
+
+    /** Coalescing window for permission-driven metadata refreshes, in milliseconds. */
+    private static readonly MetadataRefreshDebounceMs = 500;
+
+    private _metadataRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /**
+     * Re-checks metadata after a permission-bearing entity changes on another session.
+     *
+     * `remote-invalidate` reaches `BaseEngine` caches automatically, but metadata is this
+     * provider's AllMetadata cache and nothing subscribes it — so without this hop a permission
+     * change would not reach an open browser until the next full refresh or a reload. Field
+     * security in particular is enforced from metadata on both tiers, so a stale client keeps
+     * rendering a column it just lost access to (the server still strips it on the wire; the UI
+     * is what goes wrong).
+     *
+     * Debounced, because a single administrative action produces a burst: enabling field security
+     * on an entity writes one permission row per (field, role), and each is its own broadcast.
+     * Collapsing the burst into one refresh is what keeps that from becoming N metadata fetches.
+     * (See the known gap in `plans/fls-redesign-progress.md` — the burst itself should be one
+     * broadcast per transaction, which is separate work. This debounce is correct regardless.)
+     *
+     * `RefreshIfNeeded` does its own timestamp comparison and refetches only when genuinely
+     * stale, so a spurious call costs a cheap staleness check rather than a full reload.
+     */
+    protected ScheduleMetadataRefreshForPermissionChange(entityName: string): void {
+        const name = (entityName ?? '').trim().toLowerCase();
+        if (!GraphQLDataProvider.PermissionMetadataEntityNames.has(name)) {
+            return; // the overwhelming majority of invalidations
+        }
+
+        if (this._metadataRefreshTimer) {
+            clearTimeout(this._metadataRefreshTimer);
+        }
+        this._metadataRefreshTimer = setTimeout(() => {
+            this._metadataRefreshTimer = null;
+            this.RefreshIfNeeded().catch((e) => {
+                // Never let this reject into the subscription handler: a failed refresh leaves
+                // the client on stale metadata, which the server's own enforcement still covers.
+                console.error('[GraphQLDataProvider] Metadata refresh after a permission change failed:', e);
+            });
+        }, GraphQLDataProvider.MetadataRefreshDebounceMs);
+    }
+
+    /**
      * Unsubscribes from cache invalidation events. Called during cleanup/logout.
      */
     public UnsubscribeFromCacheInvalidation(): void {
+        if (this._metadataRefreshTimer) {
+            clearTimeout(this._metadataRefreshTimer);
+            this._metadataRefreshTimer = null;
+        }
         if (this._cacheInvalidationSubscription) {
             this._cacheInvalidationSubscription.unsubscribe();
             this._cacheInvalidationSubscription = null;
