@@ -223,6 +223,44 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     return this.Record?.EntityInfo?.Fields?.find(f => f.Name === this.FieldName);
   }
 
+  /** Memoized answer for {@link IsFieldReadableByUser}; invalidated in ngOnChanges. */
+  private _isReadableByUser: boolean | undefined;
+
+  /**
+   * Whether field-level security permits the current user to READ this field.
+   *
+   * The template gates the whole field on this BEFORE anything reads a value, because
+   * `BaseEntity.Get()` throws for a denied field — so rendering one at all would take out the
+   * entire form rather than hiding a column. Everything downstream (`Value`, `ShouldHideField`,
+   * FK resolution) is safe only because this check runs first.
+   *
+   * Memoized: template getters are evaluated on every change-detection cycle, and
+   * `GetDeniedReadFields` walks every field on the entity and aggregates permissions across the
+   * user's roles. `ngOnChanges` clears the memo when `Record` or `FieldName` changes.
+   *
+   * Fails OPEN — on a missing entity, missing user, or an entity with field security switched
+   * off — matching `BaseEntity`'s own gate. A form that hid fields because no user had resolved
+   * yet would be worse than one that shows them, since the server is the real boundary.
+   */
+  get IsFieldReadableByUser(): boolean {
+    if (this._isReadableByUser === undefined) {
+      this._isReadableByUser = this.computeIsFieldReadableByUser();
+    }
+    return this._isReadableByUser;
+  }
+
+  private computeIsFieldReadableByUser(): boolean {
+    const entityInfo = this.Record?.EntityInfo;
+    if (!entityInfo?.EnableFieldLevelSecurity) {
+      return true; // one boolean for the overwhelming majority of entities
+    }
+    const user = this.ProviderToUse?.CurrentUser;
+    if (!user || !this.FieldName) {
+      return true;
+    }
+    return !entityInfo.GetDeniedReadFields(user).has(this.FieldName.trim().toLowerCase());
+  }
+
   /** Display name from metadata or override */
   get DisplayName(): string {
     if (this.DisplayNameOverride) return this.DisplayNameOverride;
@@ -1892,6 +1930,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    // Field security depends on both the record's entity and which field this is, so the
+    // memoized answer has to be dropped whenever either changes.
+    if (changes['Record'] || changes['FieldName']) {
+      this._isReadableByUser = undefined;
+    }
     if (changes['FormContext'] || changes['EditMode'] || changes['Record']) {
       // Reset FK state when record changes
       if (changes['Record']) {

@@ -3829,12 +3829,33 @@ export abstract class BaseEntity<T = unknown> {
         if (!this.EntityInfo?.EnableFieldLevelSecurity) {
             return null; // one boolean for the overwhelming majority of entities
         }
-        const u: UserInfo = this.ActiveUser;
+        const u: UserInfo = this.resolveActiveUserOrNull();
         if (!u) {
             return null; // no user resolves — fail open, see AssertFieldReadable
         }
         const denied = select(u);
         return denied.size > 0 ? denied : null;
+    }
+
+    /**
+     * {@link ActiveUser}, but null instead of throwing when no provider is configured to resolve
+     * one from.
+     *
+     * `ActiveUser` ends in `Metadata.Provider.CurrentUser`, which throws a TypeError when there
+     * is no global provider — during early boot, in tests, or in any context that never
+     * configured one. That was harmless while only the save path consulted it, but `Get()` and
+     * `Set()` now do on every access to an FLS-enabled entity, so an unresolvable provider would
+     * turn an ordinary read into a crash.
+     *
+     * "No provider to ask" is the same answer as "no user" for this purpose, and field security
+     * fails open on both.
+     */
+    private resolveActiveUserOrNull(): UserInfo | null {
+        try {
+            return this.ActiveUser ?? null;
+        } catch {
+            return null;
+        }
     }
 
     protected ThrowPermissionError(u: UserInfo, type: EntityPermissionType, additionalInfoMessage: string) {
