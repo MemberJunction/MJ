@@ -928,7 +928,7 @@ export class MaterializationRefresher {
      * the direct FK formed a circular dependency). Returns null when the materialization has no linked query.
      */
     private async resolveSourceQueryId(matResult: MJMaterializedResultEntity, provider: IMetadataProvider, contextUser: UserInfo): Promise<string | null> {
-        const rv = new RunView(provider);
+        const rv = RunView.FromMetadataProvider(provider);
         const res = await rv.RunView<{ QueryID: string }>(
             {
                 EntityName: 'MJ: Materialized Result Queries',

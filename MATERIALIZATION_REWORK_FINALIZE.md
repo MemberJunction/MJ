@@ -14,6 +14,7 @@ Tracking issue: **#3626**. This branch is the clean re-implementation after the 
 | `d2bc5ad2` | Re-introduce Phase 2 read-time-injection code (cherry-pick of reverted `469862f`) |
 | `01d7ab9f` | **Join-table code redesign** — resolve MR↔Query link via `MaterializedResultQuery` |
 | `13966a82` | **One unified `v6.1.x` migration** (DDL only) + drop the old per-step v6.2.x files |
+| _(finalization)_ | **RunView provider-typing fix** — `resolveSourceQueryId` now uses `RunView.FromMetadataProvider(provider)` (the sanctioned factory) instead of `new RunView(provider)`; the join-table code passed an `IMetadataProvider` where `RunView` wants `IRunViewProvider`, which failed `tsc`. Caught by the clean-clone build. |
 
 The re-introduced code already contains the **four review findings** fixed (they were squashed into
 `4c14b3f`/`469862f`): PG swap atomicity, RunQuery cache `DataSource`, first-mint permission re-scoping,
@@ -31,12 +32,23 @@ and mint-time DDL identifier escaping (dialect-level `QuoteIdentifier`/`QuoteSch
   (read-redirect), `manage-metadata` provisioning + drift scan (aliases `mrq.QueryID AS SourceQueryID`), and
   `MaterializationRefresher.resolveSourceQueryId` (used by `resolveSourceQuery`/`resolveSourceSelect`).
 
-## What's already validated (workbench, against `MJ_*` DB with the migration applied)
+## What's already validated (workbench)
 
 - ✅ Migration applies cleanly → `MaterializedResult` 23 cols (no `SourceQueryID`), `MaterializedResultQuery` join table, `Query.IsMaterialized` present.
 - ✅ **No circular-FK warning** from CodeGen (cycle eliminated).
 - ✅ CodeGen creates both entities with the expected names (`MJ: Materialized Results`, `MJ: Materialized Result Queries`).
 - ✅ AI-assisted CodeGen works when the Anthropic key is exposed as `AI_VENDOR_API_KEY__AnthropicLLM` (0 credential errors).
+
+### Finalization pass (clean source-only clone of the branch)
+
+- ✅ **Full build is clean** — `turbo build --filter=@memberjunction/cli` → 142 packages, 0 errors, **after** the RunView provider-typing fix above. (The first clean-clone build failed only on that one `tsc` error, which is now fixed.)
+- ✅ **CodeGen completes cycle-free on a current-schema DB** (a full 385-entity DB + the materialization DDL): 387 entities processed, **0 circular/cycle warnings, 0 "not found in metadata" fatals**, both materialization entities created.
+- ⚠️ **Pristine final artifacts (concatenated SQL emit + regenerated generated files) cannot be produced in the workbench** and are intentionally deferred to the merge-time CodeGen (steps 3–5 below). Reasons, all confirmed this pass:
+  - **No workbench DB equals branch-HEAD.** The only current-schema DBs (e.g. `FABRIC_DEMO`, 385 entities) are hand/CodeGen-built and *diverge* from the branch (they lack a handful of the branch's newer entities — `MJAIAgentCredential`, `MJAIAgentHarness`, `MJAISkillSearchScope`, `MJContentItemChunk`…). CodeGen against them produces a **polluted** diff (deletes/alters those entities' forms + metadata) — not the branch's shippable output.
+  - **`mj migrate` can't bootstrap a clean branch-HEAD DB** — it dies at load time with `MODULE_NOT_FOUND` on `MJCoreEntities/dist/custom/MJUserViewEntityExtended` because `src/index.ts` has **double-quoted, extensionless** relative exports (2 in `index.ts`, ~54 across `custom/*` in dist) that `tsc-alias` doesn't rewrite (it only fixes single-quoted, tsc-emitted specifiers), and the package is `"type":"module"` (strict-ESM `import()`). This is a **pre-existing branch/`next` quirk unrelated to materialization** — CodeGen's own loader tolerates it, which is why CodeGen runs but `migrate` doesn't. (Worth filing separately; do **not** fix it inside the materialization PR.)
+  - **Raw-sqlcmd bootstrap of the migration stack is not faithful** to MJ's Flyway+CodeGen flow. Applying baseline + 38 V/R files by hand reproduces schema but the Metadata_Sync steps assume intervening CodeGen state and collide (e.g. `UQ_EntityField_EntityID_Sequence` on `EntityAction`/seq 100025 vs. the existing `ScopeEntity` virtual field). `R__RefreshMetadata`'s full scan would collide broadly. (For the record, sqlcmd bootstrap also needs: the `__mj.flyway_schema_history` table pre-created, `-I` / `QUOTED_IDENTIFIER ON` on every invocation, and `< /dev/null` on each sqlcmd so it doesn't eat the loop's stdin.)
+
+**Conclusion:** the branch is proven sound (builds, cycle-free CodeGen, DDL correct). The emit concatenation **and** generated-file regen must come from a **single** CodeGen run against final-`next` (steps 3–5) so the two stay mutually consistent — producing them from a divergent workbench DB now would be throwaway and risk emit/generated-file skew. Until that run, the branch's committed generated files are knowingly stale: `MJMaterializedResultQueryEntity` is absent, and `MJMaterializedResultEntity.SourceQueryID` / `MJQueryEntity.MaterializedResultID` still reflect the dropped columns. (Harmless to the build — they're unused superset props — but they MUST be regenerated before merge.)
 
 ---
 
@@ -82,9 +94,14 @@ and mint-time DDL identifier escaping (dialect-level `QuoteIdentifier`/`QuoteSch
 
 ## Workbench pitfalls learned (so finalization avoids them)
 
-- **Baseline Flyway apply fails** on `B…__Baseline.sql` with `No value provided for placeholder: ${dateFns.format(...)}` —
-  the baseline contains literal `${…}` seed data Flyway misreads as a placeholder. Bootstrapping a brand-new DB via the
-  workbench `db-bootstrap` trips on this; applying the migration to an already-bootstrapped clean DB avoids it.
+- **Baseline placeholder bug is NOT present** on this branch — a scan of every `${…}` across `migrations/v5` + `migrations/v6`
+  found only `${flyway:defaultSchema}` (no `${dateFns.format(...)}` or other stray placeholders). The earlier note about
+  `B…__Baseline.sql` failing on `${dateFns.format(...)}` is stale for this branch; disregard it.
+- **`mj migrate` fails to load `MJCoreEntities` under strict ESM** (`MODULE_NOT_FOUND` on a double-quoted, extensionless
+  `custom/*` export). Pre-existing branch/`next` quirk; CodeGen's loader tolerates it. See the finalization-pass notes above.
+- **Raw-sqlcmd bootstrap isn't faithful** to the Flyway+CodeGen metadata flow (EntityField sequence collisions). Use the
+  release/CI bootstrap for a clean branch-HEAD DB. If you must sqlcmd it: pre-create `__mj.flyway_schema_history`, pass `-I`
+  (QUOTED_IDENTIFIER ON) on every call, and redirect each sqlcmd's stdin from `/dev/null`.
 - **AI creds:** MJ CodeGen wants `AI_VENDOR_API_KEY__<DriverClass>`, not the bare `ANTHROPIC_API_KEY`. Bridge it:
   `AI_VENDOR_API_KEY__AnthropicLLM="$ANTHROPIC_API_KEY"`.
 - **Global CLI is old (`5.30.1`)** — use the **workspace** CLI (`6.1.0-edge.x`): `node packages/MJCLI/bin/run.js codegen`
