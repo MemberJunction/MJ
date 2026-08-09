@@ -14,6 +14,7 @@
 import { RegisterClass, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
 import { SelectOutgoingEdges, type IConditionEvaluator } from '@memberjunction/ai-core-plus';
 import { AIEngineGraphRepository, SafeConditionEvaluator } from './flow-graph-adapters';
+import { CompileFlowAgentToTaskGraph, FormatFlowCompileErrors } from './flow-graph-executor';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
@@ -176,6 +177,34 @@ export class FlowAgentType extends BaseAgentType {
     }
 
     /**
+     * Refuses to execute a workflow step inside the agent run.
+     *
+     * **Disabled, not deleted.** The in-run walker below is the differential suite's oracle — the
+     * only independent statement of what a flow *used* to do, and therefore the only thing the
+     * compiled graph can be checked against. Deleting it would leave the compiler unfalsifiable.
+     * But leaving it *runnable* would be worse: a routing mistake would fall back to the old engine
+     * and produce a run that looks correct while proving nothing, which is exactly the failure mode
+     * a cutover has to rule out.
+     *
+     * So it stays compiled, stays tested, and refuses at the door. A workflow that runs at all ran
+     * on the dispatcher.
+     *
+     * Declared `void` rather than `never` on purpose. `never` would narrow everything after each
+     * call site to unreachable, and TypeScript then refuses to type-check the retained walker at
+     * all — which would defeat the "stays compiled" half of the arrangement and let the oracle rot.
+     *
+     * @throws always — the message names the step so the refusal is diagnosable, not mysterious
+     * @private
+     */
+    private refuseInRunFlowExecution(context: string): void {
+        throw new Error(
+            `The in-run workflow executor is disabled: ${context} was routed to it. ` +
+            `Workflows now compile to a task graph and execute on the task-graph dispatcher. ` +
+            `Reaching this code means the compile-and-dispatch path in DetermineInitialStep was bypassed.`
+        );
+    }
+
+    /**
      * Determines the next step based on the flow graph structure.
      * 
      * For Flow agents, the next step is determined by:
@@ -196,8 +225,13 @@ export class FlowAgentType extends BaseAgentType {
         agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P>> {
         try {
+            // A dispatched workflow terminates on the Tasks step, so this is unreachable. Refusing
+            // inside the try turns the refusal into a legible Failed step rather than an escaped
+            // exception — see refuseInRunFlowExecution for why it is refused rather than deleted.
+            this.refuseInRunFlowExecution('DetermineNextStep');
+
             const flowState = agentTypeState as FlowExecutionState;
-            
+
             // If no current step, this should have been handled by DetermineInitialStep
             if (!flowState.currentStepId) {
                 const startingSteps = await this.getStartingSteps(params.agent.ID);
@@ -635,6 +669,12 @@ export class FlowAgentType extends BaseAgentType {
         payload: P,
         flowState: FlowExecutionState
     ): Promise<BaseAgentNextStep<P>> {
+        // THE CHOKE POINT. Every in-run traversal path — initial step, next step, and the
+        // post-action/post-sub-agent re-evaluation — turns a flow node into an executable step
+        // here, and nowhere else. One refusal here disables the entire legacy executor, which is
+        // what makes "this workflow ran on the dispatcher" a fact rather than an assumption.
+        this.refuseInRunFlowExecution(`step '${node.Name}'`);
+
         // Check if this step should be skipped
         const flowParams = params.agentTypeParams as FlowAgentExecuteParams | undefined;
         if (flowParams?.skipSteps && flowParams.skipSteps.some(s => UUIDsEqual(s.ID, node.ID))) {
@@ -1125,19 +1165,86 @@ export class FlowAgentType extends BaseAgentType {
     }
 
     /**
-     * Determines the initial step for flow agent types.
+     * Compiles the flow and hands it to the task-graph dispatcher (C1.3).
      *
-     * Flow agents look up their configured starting step instead of executing a prompt.
-     * If agentTypeParams.startAtStep is provided, the flow will begin at that step
-     * instead of the configured entry point.
+     * **This is the whole of a Flow agent's execution now.** The agent does not walk its own graph;
+     * it compiles its persisted steps and paths into a `TaskGraphSpec` and returns a `Tasks` step,
+     * which `BaseAgent.executeTasksStep` submits and detaches from. Everything after that —
+     * claiming, conditions, exclusive choice, skip cascade, retry, failure semantics — belongs to
+     * the dispatcher, which is the point: one traversal engine, one set of rules, one place a bug
+     * can be fixed. The in-run walker below is retained as the differential suite's oracle and is
+     * unreachable at runtime (see {@link refuseInRunFlowExecution}).
+     *
+     * **Compile failures are authoring failures, and are reported as such.** A flow with no
+     * starting step or a loop in it is something the user can fix in the editor, so the message
+     * names the step and the problem rather than reporting an internal error.
      *
      * @param {ExecuteAgentParams} params - The full execution parameters
-     * @returns {Promise<BaseAgentNextStep<P> | null>} The initial step to execute, or null if flow context not ready
+     * @returns {Promise<BaseAgentNextStep<P> | null>} The `Tasks` step carrying the compiled graph
      *
      * @override
      * @since 2.76.0
      */
     public async DetermineInitialStep<P = any, ATS = any>(params: ExecuteAgentParams<P>, payload: P, agentTypeState: ATS): Promise<BaseAgentNextStep<P> | null> {
+        // Starting part-way through a flow means compiling a subgraph, which the dispatched model
+        // does not do yet. Refusing loudly beats silently starting from the top — that would run
+        // steps the caller explicitly asked to skip.
+        const flowParams = params.agentTypeParams as FlowAgentExecuteParams | undefined;
+        if (flowParams?.startAtStep) {
+            return this.createNextStep('Failed', {
+                errorMessage:
+                    `Starting at a specific step ('${flowParams.startAtStep.Name}') is not supported now that workflows ` +
+                    `run on the task-graph dispatcher. Run the workflow from its starting step, or split it so the ` +
+                    `portion you want is its own workflow.`
+            });
+        }
+
+        const compiled = CompileFlowAgentToTaskGraph(params.agent.ID, params.agent.Name, params.agent.Description ?? undefined);
+        if (!compiled.Success || !compiled.Spec) {
+            return this.createNextStep('Failed', {
+                errorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowCompileErrors(compiled)}`
+            });
+        }
+
+        // Excluded steps are reported, never dropped in silence: a user who disabled a step or left
+        // one unconnected should be able to read that off the run rather than wonder why it did
+        // nothing.
+        if (compiled.Excluded.length > 0) {
+            LogStatus(
+                `Flow Agent '${params.agent.Name}': ${compiled.Excluded.length} step(s) excluded from the run — ` +
+                compiled.Excluded.map((e) => `${e.StepID} (${e.Reason})`).join(', ')
+            );
+        }
+
+        LogStatusEx({
+            message: `Flow Agent '${params.agent.Name}': compiled ${compiled.Spec.tasks.length} step(s) for dispatch`,
+            verboseOnly: true,
+            isVerboseEnabled: IsVerboseLoggingEnabled
+        });
+
+        // 'Tasks' is not in the BaseAgentNextStep step union — it is non-terminal in the same sense
+        // as 'ClientTools'/'Plan' (see that type's doc comment), and BaseAgent routes it to
+        // executeTasksStep, whose terminal step is 'Success'.
+        return {
+            step: 'Tasks' as BaseAgentNextStep<P>['step'],
+            terminate: false,
+            taskGraph: { spec: compiled.Spec, folded: false },
+            previousPayload: payload,
+            newPayload: payload
+        };
+    }
+
+    /**
+     * The original in-run flow walker's entry point — **retained, unrouted, and refused at runtime.**
+     *
+     * Kept because it is the oracle the differential suite compares the compiler against: deleting
+     * it would leave nothing to prove the compiled graph behaves like the flow it replaced. It is
+     * no longer called by {@link DetermineInitialStep}, and {@link createStepForFlowNode} refuses if
+     * anything reaches it, so a workflow that runs at all provably ran on the dispatcher.
+     *
+     * @private
+     */
+    private async determineInitialStepInRun<P = any, ATS = any>(params: ExecuteAgentParams<P>, payload: P, agentTypeState: ATS): Promise<BaseAgentNextStep<P> | null> {
         const flowState = agentTypeState as FlowExecutionState;
         const payloadToUse = payload || {} as P;
 
@@ -1191,6 +1298,26 @@ export class FlowAgentType extends BaseAgentType {
      * @since 2.76.0
      */
     public async PreProcessNextStep<P = any, ATS = any>(
+        _params: ExecuteAgentParams<P>,
+        _step: BaseAgentNextStep<P>,
+        _payload: P,
+        _agentTypeState: ATS
+    ): Promise<BaseAgentNextStep<P> | null> {
+        // Null means "no custom handling" — which is now always true. This hook existed to advance
+        // the in-run walker after an action or sub-agent returned; under dispatch there is nothing
+        // in-run to advance, and the terminal Success that follows submission must be allowed
+        // through untouched. Returning null here (rather than refusing) is deliberate: this method
+        // IS reached on the dispatched path, so a throw would break the very run it is guarding.
+        // The retained walker is {@link preProcessNextStepInRun}.
+        return null;
+    }
+
+    /**
+     * The in-run walker's post-step hook — **retained, unrouted** (see {@link refuseInRunFlowExecution}).
+     *
+     * @private
+     */
+    private async preProcessNextStepInRun<P = any, ATS = any>(
         params: ExecuteAgentParams<P>,
         step: BaseAgentNextStep<P>,
         payload: P,

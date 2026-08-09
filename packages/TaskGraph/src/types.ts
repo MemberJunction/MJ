@@ -78,6 +78,15 @@ export type TaskGraphFrameKind =
     | 'TaskFailed'
     /** A task was blocked because a prerequisite failed or became unreachable. */
     | 'TaskBlocked'
+    /**
+     * A task was NOT TAKEN because another branch of an exclusive fan-out won.
+     *
+     * Distinct from `TaskBlocked` on purpose: blocked means something went wrong upstream and the
+     * viewer should look for a cause; skipped means the workflow chose a different route and there
+     * is nothing to investigate. Rendering them the same would send people hunting for bugs that do
+     * not exist.
+     */
+    | 'TaskSkipped'
     /** A human task became actionable and is waiting on its assignee. */
     | 'TaskAwaitingHuman'
     /** Every node has reached a terminal state; `Status` is the graph's rolled-up outcome. */

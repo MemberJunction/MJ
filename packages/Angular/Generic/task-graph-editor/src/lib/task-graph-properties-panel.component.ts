@@ -14,8 +14,8 @@
  * @module @memberjunction/ng-task-graph-editor
  */
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
-import { GetDependencies } from './task-graph-canvas-adapter';
+import { ConfigOf, TaskNode, type TaskGraphSpec, type TaskGraphSpecNode, type TaskNodeBase } from '@memberjunction/ai-core-plus';
+import { GetDependencies, GetTaskNodeType, type TaskGraphNodeType } from './task-graph-canvas-adapter';
 
 /** A requested change to one task. The parent applies it; this panel never writes. */
 export class TaskPropertyChangeRequestedEventArgs {
@@ -60,6 +60,9 @@ export class TaskGraphPropertiesPanelComponent {
     /** Agent names offered in the assignment dropdown. Supplied by the host, which owns data access. */
     @Input() public AvailableAgentNames: readonly string[] = [];
 
+    /** Action names offered in the assignment dropdown. Same ownership rule as `AvailableAgentNames`. */
+    @Input() public AvailableActionNames: readonly string[] = [];
+
     @Input() public ReadOnly: boolean = false;
 
     @Output() public TaskPropertyChangeRequested = new EventEmitter<TaskPropertyChangeRequestedEventArgs>();
@@ -70,14 +73,44 @@ export class TaskGraphPropertiesPanelComponent {
     private currentTask: TaskGraphSpecNode | null = null;
 
     /**
-     * Whether this step waits on a person.
+     * Which of the three assignment shapes this step currently uses.
      *
-     * Derived from the absence of an agent rather than stored separately, because the spec's own
-     * rule is that a task has exactly one assignee. A separate boolean could disagree with
-     * `agentName` and the validator would then reject a graph the form said was fine.
+     * Derived from the draft rather than stored separately: the node's own `kind` is the single
+     * source of truth, and a parallel field could disagree with it.
      */
+    public get Assignment(): TaskGraphNodeType {
+        return this.Draft ? GetTaskNodeType(this.Draft) : 'AgentTask';
+    }
+
+    /**
+     * The chosen agent, read and written through the node's configuration.
+     *
+     * A template cannot narrow a discriminated union, so the two-way binding goes through here
+     * rather than at `Draft.configuration.agentName` — which would also be wrong the moment the
+     * draft is a different kind.
+     */
+    public get AgentName(): string {
+        return ConfigOf(this.Draft!, 'Agent')?.agentName ?? '';
+    }
+    public set AgentName(value: string) {
+        if (this.Draft?.kind === 'Agent') {
+            this.Draft = { ...this.Draft, configuration: { ...ConfigOf(this.Draft, 'Agent')!, agentName: value } };
+        }
+    }
+
+    /** The chosen action. Same reasoning as {@link AgentName}. */
+    public get ActionName(): string {
+        return ConfigOf(this.Draft!, 'Action')?.actionName ?? '';
+    }
+    public set ActionName(value: string) {
+        if (this.Draft?.kind === 'Action') {
+            this.Draft = { ...this.Draft, configuration: { ...ConfigOf(this.Draft, 'Action')!, actionName: value } };
+        }
+    }
+
+    /** True when this step waits on a person. */
     public get IsHumanTask(): boolean {
-        return !this.Draft?.agentName;
+        return this.Assignment === 'HumanTask';
     }
 
     /** The edges into this task, so their conditions are editable where the step is. */
@@ -91,12 +124,43 @@ export class TaskGraphPropertiesPanelComponent {
         }));
     }
 
-    /** Switches the step between an agent and a person, keeping the spec's xor rule intact. */
-    public SetAssignment(kind: 'agent' | 'human', agentName?: string): void {
+    /**
+     * Switches the step between an agent, an action and a person.
+     *
+     * Replacing `kind` and `configuration` together is the whole operation now. Under the old flat
+     * shape this had to clear two sibling fields on every branch, and forgetting one produced an
+     * `AssignmentConflict` from a gesture that looked like a simple choice — a bug the union made
+     * unrepresentable rather than merely guarded.
+     *
+     * The previous name is carried over where it still applies, so toggling Agent → Person → Agent
+     * does not silently forget what the author had chosen.
+     */
+    public SetAssignment(kind: TaskGraphNodeType, name?: string): void {
         if (!this.Draft || this.ReadOnly) return;
-        this.Draft = kind === 'human'
-            ? { ...this.Draft, agentName: undefined, assignToUser: true }
-            : { ...this.Draft, agentName: agentName ?? this.AvailableAgentNames[0], assignToUser: undefined };
+        const base: TaskNodeBase = {
+            tempId: this.Draft.tempId,
+            name: this.Draft.name,
+            description: this.Draft.description,
+            dependsOn: this.Draft.dependsOn,
+            policy: this.Draft.policy,
+            layout: this.Draft.layout,
+            inputPayload: this.Draft.inputPayload,
+        };
+        switch (kind) {
+            case 'HumanTask':
+                this.Draft = TaskNode.Human(base, ConfigOf(this.Draft, 'Human') ?? {});
+                break;
+            case 'ActionTask':
+                this.Draft = TaskNode.Action(base, {
+                    actionName: name ?? ConfigOf(this.Draft, 'Action')?.actionName ?? this.AvailableActionNames[0] ?? '',
+                });
+                break;
+            default:
+                this.Draft = TaskNode.Agent(base, {
+                    agentName: name ?? ConfigOf(this.Draft, 'Agent')?.agentName ?? this.AvailableAgentNames[0] ?? '',
+                });
+                break;
+        }
         this.Commit();
     }
 

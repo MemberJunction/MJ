@@ -54,3 +54,27 @@
   padding: var(--mj-space-sm, 0.5rem) var(--mj-space-md, 1rem);
   border-top: 1px solid var(--mj-border-subtle);
 }
+
+/* Name it inline (④): one field and a button, so capture stays a two-second act. */
+.mj-wpc__name {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--mj-border-strong);
+  border-radius: var(--mj-radius-md);
+  padding: var(--mj-space-2) var(--mj-space-3);
+  font: inherit;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+}
+
+.mj-wpc__name:focus-visible {
+  outline: 2px solid var(--mj-color-primary);
+  outline-offset: -1px;
+}
+
+/* States the default plainly, so nobody goes looking for a schedule field that is not there. */
+.mj-wpc__note {
+  margin-top: var(--mj-space-2);
+  font-size: var(--mj-font-size-xs);
+  color: var(--mj-text-tertiary);
+}

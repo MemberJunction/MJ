@@ -1156,13 +1156,14 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
-// @memberjunction/task-graph (7 classes)
+// @memberjunction/task-graph (8 classes)
 import {
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphRetryTaskServerOperation,
     TaskGraphSubmitServerOperation,
+    WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
 } from '@memberjunction/task-graph';
@@ -2193,6 +2194,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     TaskGraphGetStatusServerOperation,
     TaskGraphRetryTaskServerOperation,
     TaskGraphSubmitServerOperation,
+    WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
     SlackMessagingExtension,
@@ -2415,7 +2417,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 978;
+export const CLASS_REGISTRATIONS_COUNT = 979;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -25,11 +25,23 @@
         </mj-task-graph-editor>
 
         @if (CanSave) {
+          <!-- Name it inline, then offer the editor (ratified answer ④). No trigger is requested
+               here: saving is capture, not scheduling. -->
           <div class="mj-wpc__actions">
-            <button mjButton variant="primary" size="sm" (click)="RequestSave()">
-              <i class="fa-solid fa-floppy-disk"></i> Save this approach as a Workflow
+            <input
+              class="mj-wpc__name"
+              type="text"
+              aria-label="Workflow name"
+              [ngModel]="EffectiveName"
+              (ngModelChange)="OnNameChanged($event)" />
+            <button mjButton variant="primary" size="sm" [disabled]="!CanCommit" (click)="RequestSave(false)">
+              <i class="fa-solid fa-floppy-disk"></i> Save as Workflow
+            </button>
+            <button mjButton variant="secondary" size="sm" [disabled]="!CanCommit" (click)="RequestSave(true)">
+              Open in editor
             </button>
           </div>
+          <p class="mj-wpc__note">Saved workflows run on demand until you give them a schedule.</p>
         }
       </div>
     }

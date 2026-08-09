@@ -1737,13 +1737,33 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // caller's OrderBy — BuildKeysetSeekClause already validated that any caller-provided
             // OrderBy referenced the PK and we use the resolved direction.
             let rawOrderBy: string;
+            let orderByIsPkFallback = false;
             if (usingKeyset) {
                 rawOrderBy = `${keysetPkColumnName} ${keysetDirection}`;
             } else {
                 rawOrderBy = params.OrderBy ? (params.OrderBy as string) : (viewEntity ? viewEntity.OrderByClause ?? '' : '');
+                if (rawOrderBy.trim().length === 0 && maxRowsForQuery > 0 && entityInfo.FirstPrimaryKey) {
+                    // ── DETERMINISM FALLBACK ──
+                    // A row-LIMITED query with no ORDER BY returns an ARBITRARY subset: `TOP N` /
+                    // `LIMIT N` without an ordering is undefined by definition, and the engine is
+                    // free to return different rows run to run (or between two runs of the *same*
+                    // walk). Order by the PK so "the first N rows" means something.
+                    //
+                    // This is what broke keyset (AfterKey) pagination end to end. Page 1 of a walk
+                    // has no cursor yet, so `usingKeyset` is false and it landed here unordered,
+                    // while page 2+ force `ORDER BY <pk>` + `<pk> > @afterKey`. The two pages were
+                    // ordered differently, so a walk both RE-RETURNED page-1 rows and could silently
+                    // MISS others. Reproduced as 4 duplicates in an 8-row page (IT25 V10).
+                    //
+                    // OFFSET pagination already had exactly this fallback (see the pagination block
+                    // below); it was simply never applied to the TOP/LIMIT path. Same PK, so a
+                    // keyset walk's page 1 now agrees with every later page.
+                    rawOrderBy = this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name);
+                    orderByIsPkFallback = true;
+                }
             }
             const orderBy: string = rawOrderBy.length > 0
-                ? (usingKeyset ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
+                ? (usingKeyset || orderByIsPkFallback ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
                 : '';
 
             // View run logging (SQL Server-specific, others return null)
@@ -1759,16 +1779,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     viewSQL = logResult.executeViewSQL;
                     userViewRunID = logResult.runID;
                 } else if (orderBy.length > 0) {
-                    if (!usingKeyset && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+                    if (!usingKeyset && !orderByIsPkFallback && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
                     viewSQL += ` ORDER BY ${orderBy}`;
                 }
             } else if (orderBy.length > 0) {
-                if (!usingKeyset && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+                if (!usingKeyset && !orderByIsPkFallback && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
                 viewSQL += ` ORDER BY ${orderBy}`;
             }
 
             // ── Pagination / Non-paginated limit ──
             if (usingPagination && entityInfo.FirstPrimaryKey) {
+                // Belt-and-braces: the determinism fallback above already supplies ORDER BY <PK>
+                // for every row-limited query (pagination included), so `orderBy` is normally
+                // non-empty here. Kept because OFFSET/FETCH is a hard SYNTAX error without an
+                // ORDER BY — if the fallback above is ever narrowed, this must still hold.
                 if (!orderBy) {
                     viewSQL += ` ORDER BY ${this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name)}`;
                 }

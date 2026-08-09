@@ -6,8 +6,10 @@
   "include": [
     "src/lib/components/flow-toolbar.component.ts",
     "src/lib/components/flow-status-bar.component.ts",
+    "src/lib/components/flow-palette.component.ts",
     "src/lib/components/flow-toolbar.component.dom.test.ts",
-    "src/lib/components/flow-status-bar.component.dom.test.ts"
+    "src/lib/components/flow-status-bar.component.dom.test.ts",
+    "src/lib/components/flow-palette.component.dom.test.ts"
   ],
   "exclude": [
     "node_modules",

@@ -20,7 +20,7 @@
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
-import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
+import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 import {
     TaskGraphDispatcher,
     TaskGraphService,
@@ -267,8 +267,9 @@ async function runUntilSettled(
     }
 }
 
-const agentTask = (tempId: string, name: string, agentName: string, dependsOn: string[] = []) =>
-    ({ tempId, name, description: name, agentName, dependsOn });
+/** One agent-assigned node. Spec v2: `kind` selects the configuration shape. */
+const agentTask = (tempId: string, name: string, agentName: string, dependsOn: string[] = []): TaskGraphSpecNode =>
+    ({ tempId, name, description: name, kind: 'Agent', configuration: { agentName }, dependsOn });
 
 export const TaskGraphExecutionChecks: NamedCheck[] = [
     {
