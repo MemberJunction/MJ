@@ -1,3 +1,5 @@
+import { describeTokenEndpointFailure } from '@memberjunction/global';
+
 /**
  * Configuration options for OAuth2Manager
  */
@@ -348,8 +350,15 @@ export class OAuth2Manager {
             });
 
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Token request failed: ${response.status} ${response.statusText} - ${errorText}`);
+                // SECURITY: never put the raw response body in the error message. Token
+                // endpoints routinely echo the failing request back in their error body,
+                // and that request carries `client_secret` (and, on a refresh, the
+                // refresh token). Only the RFC 6749 §5.2 error fields are surfaced —
+                // they describe the failure and by spec carry no credentials.
+                throw new Error(
+                    `Token request failed: ${response.status} ${response.statusText}` +
+                    `${describeTokenEndpointFailure(await response.text())}`
+                );
             }
 
             const responseData = await response.json();

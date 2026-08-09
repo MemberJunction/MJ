@@ -28,6 +28,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 import { GraphQLAIClient } from "./graphQLAIClient";
 import { BrowserIndexedDBStorageProvider } from "./storage-providers";
+import { SanitizeGraphQLError } from "./sanitizeGraphQLError";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -102,6 +103,27 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
      * WSURL is the URL to the GraphQL websocket endpoint. This is used for subscriptions, if you are not using subscriptions, you can pass in a blank string for this
      */
     get WSURL(): string { return this.Data.WSURL }
+
+    /**
+     * Opt in to logging the *values* of GraphQL variables when a request fails.
+     *
+     * Defaults to `false`, in which case a failed request logs the operation's
+     * diagnostics plus the variables' **shape** (key names and value types) — enough
+     * to answer "was the field sent?", "was it empty?", "is the nesting right?" —
+     * but never a value.
+     *
+     * Set to `true` while debugging to log values verbatim. Do this only in a
+     * development environment: the values of a mutation's input routinely include
+     * credentials, and console output on a server is typically captured to a
+     * persistent log file that outlives any later rotation of the secret.
+     *
+     * This mirrors the server-side `loggingSettings.graphql.logVariables` tier, which
+     * is likewise off by default.
+     *
+     * @default false
+     */
+    get LogVariableValues(): boolean { return this.Data.LogVariableValues === true }
+    set LogVariableValues(value: boolean) { this.Data.LogVariableValues = value }
 
     /**
      * RefreshTokenFunction is a function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
@@ -2545,26 +2567,23 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         catch (e) {
             // Enhanced error logging to diagnose 500 errors.
             //
-            // SECURITY: `e` (from the underlying graphql-request client) carries the
-            // original request on `e.request`, including `variables` verbatim. For any
-            // mutation whose input contains a secret (CreateConnection/UpdateConnection's
-            // CredentialValues, etc.), logging `fullError: e` directly put that secret in
-            // plaintext into whatever this process's console output is captured to —
-            // which, on a server, is typically a persistent log file. Redact
-            // `request.variables` before logging; every other diagnostic field (status,
-            // GraphQL errors, the query text itself) is preserved unchanged.
-            const redactedError = e && typeof e === 'object'
-                ? { ...e, request: e.request ? { ...e.request, variables: '[REDACTED]' } : e.request }
-                : e;
-            console.error('[GraphQL] ExecuteGQL error caught:', {
-                hasResponse: !!e?.response,
-                hasErrors: !!e?.response?.errors,
-                errorCount: e?.response?.errors?.length,
-                firstError: e?.response?.errors?.[0],
-                errorCode: e?.response?.errors?.[0]?.extensions?.code,
-                errorMessage: e?.response?.errors?.[0]?.message,
-                fullError: redactedError
-            });
+            // SECURITY: the error thrown by the underlying graphql-request client
+            // serialises the originating request — INCLUDING its `variables` — into its
+            // own `message` at construction time, and V8 then embeds that message in
+            // `stack`. Any mutation carrying a secret therefore has that secret sitting
+            // in three places on the error object at once. Logging the error directly,
+            // or stringifying it, writes the secret in plaintext to whatever this
+            // process's console output is captured to — on a server, typically a
+            // persistent log file.
+            //
+            // `SanitizeGraphQLError` builds a fresh diagnostic object from known-safe
+            // fields only, re-deriving the message from `response.errors[0]` rather than
+            // reusing the upstream one. It does not mutate `e`, so the control flow
+            // below — and every caller that catches the rethrown error — is unaffected.
+            // `LogVariableValues` is the developer opt-in — off by default, mirroring
+            // the server's `loggingSettings.graphql.logVariables` tier.
+            const safeError = SanitizeGraphQLError(e, this._configData?.LogVariableValues === true);
+            console.error('[GraphQL] ExecuteGQL error caught:', safeError);
 
             if (e && e.response && e.response.errors?.length > 0) {//e.code === 'JWT_EXPIRED') {
                 const error = e.response.errors[0];
@@ -2585,7 +2604,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     throw e;
             }
             else {
-                LogError(e);
+                // LogError() stringifies its argument (String(message) internally), which
+                // for this error class yields the full serialised request. Log the
+                // sanitised view instead; `e` itself is still rethrown untouched.
+                LogError(JSON.stringify(safeError));
                 throw e; // force the caller to handle the error
             }
         }
