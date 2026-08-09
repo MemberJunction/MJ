@@ -22,7 +22,7 @@
  * refusal message and the persistence switch both need the same edit.
  */
 import { describe, it, expect } from 'vitest';
-import { FindUnrunnableKinds } from '../TaskGraphService';
+import { BuildStepConfiguration, FindUnrunnableKinds } from '../TaskGraphService';
 import { TaskNode, type TaskGraphSpec, type TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 
 const base = (tempId: string, name: string) => ({ tempId, name, description: '', dependsOn: [] });
@@ -69,5 +69,70 @@ describe('FindUnrunnableKinds', () => {
     it('names the workflow, so a refusal read from a log identifies its subject', () => {
         const node = { ...base('a', 'Ask the model'), kind: 'Prompt', configuration: {} } as TaskGraphSpecNode;
         expect(FindUnrunnableKinds(graph([node]))).toContain('Demo Flow Agent');
+    });
+});
+
+/**
+ * What a Task row carries about the step it represents.
+ *
+ * Everything asserted here was, at some point, silently dropped on the way in — and each omission
+ * produced a workflow that ran and reported success while doing the wrong thing. The mappings going
+ * missing meant branch conditions read `undefined`; the loop settings going missing meant a loop had
+ * nothing to repeat; the author's layout going missing meant a workflow someone arranged by hand
+ * came back as a machine-arranged graph the first time they watched it run.
+ */
+describe('BuildStepConfiguration', () => {
+    const base = (name: string) => ({ tempId: 't', name, description: '', dependsOn: [] });
+
+    it('carries the payload mappings — the branch condition depends on them', () => {
+        const node = TaskNode.Action(base('Get NVIDIA Stock Price'), {
+            actionName: 'Get Stock Price',
+            inputMapping: '{"ticker":"NVDA"}',
+            outputMapping: '{"CurrentPrice":"stockPrice"}',
+        });
+        const config = BuildStepConfiguration(node);
+        expect(config?.inputMapping).toBe('{"ticker":"NVDA"}');
+        expect(config?.outputMapping).toBe('{"CurrentPrice":"stockPrice"}');
+    });
+
+    it('carries the loop definition', () => {
+        const node = TaskNode.ForEach(base('ForEach Loop Demo'), {
+            collectionPath: 'static:[1,2,3,4,5]',
+            maxIterations: 5,
+            continueOnError: true,
+        });
+        expect(BuildStepConfiguration(node)?.forEach?.collectionPath).toBe('static:[1,2,3,4,5]');
+        expect(BuildStepConfiguration(node)?.forEach?.maxIterations).toBe(5);
+    });
+
+    it('carries the execution policy', () => {
+        const node = {
+            ...TaskNode.Action(base('Web Search'), { actionName: 'Google Custom Search' }),
+            policy: { timeoutSeconds: 600, retryCount: 2, onError: 'continue' as const },
+        };
+        expect(BuildStepConfiguration(node)?.policy).toEqual({
+            timeoutSeconds: 600, retryCount: 2, onError: 'continue',
+        });
+    });
+
+    it('carries the AUTHOR’S layout, so a hand-drawn workflow runs in the shape it was drawn', () => {
+        const node = {
+            ...TaskNode.Action(base('Step 1'), { actionName: 'Get Stock Price' }),
+            layout: { x: 120, y: 40, width: 200, height: 80 },
+        };
+        expect(BuildStepConfiguration(node)?.layout).toEqual({ x: 120, y: 40, width: 200, height: 80 });
+    });
+
+    it('stores NULL rather than "{}" for a step with nothing to configure', () => {
+        // "This step has no settings" should read the same in the database as it does in the spec.
+        const node = TaskNode.Action(base('Plain'), { actionName: 'Get Stock Price' });
+        expect(BuildStepConfiguration(node)).toBeNull();
+    });
+
+    it('omits layout entirely for a graph nobody positioned', () => {
+        // A derived layout must never be persisted: it would freeze one rendering of a graph that
+        // can still change, and go stale the moment it did.
+        const node = { ...TaskNode.Action(base('Emitted'), { actionName: 'X' }), layout: {} };
+        expect(BuildStepConfiguration(node)?.layout).toBeUndefined();
     });
 });

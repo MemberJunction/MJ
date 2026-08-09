@@ -110470,6 +110470,28 @@ export interface MJTaskEntity_ITaskStepConfiguration {
 
     /** Timeout, retries, and what failure means for the rest of the workflow. */
     policy?: MJTaskEntity_ITaskExecutionPolicy;
+
+    /**
+     * Where this step sat on the canvas when a person drew it.
+     *
+     * **Only ever the author's own arrangement — never a computed one.** A graph produced by an
+     * agent or a remote caller has no geometry, and its positions are derived at render time from
+     * the graph's shape. Persisting a derived layout would freeze one rendering of a graph that can
+     * still change, and the stored coordinates would quietly go stale.
+     *
+     * So the rule for anything drawing a run is: use this when it is present, compute a layout when
+     * it is not. That is what makes a workflow someone laid out by hand run — and appear in history —
+     * in the shape they drew, while a machine-authored graph still renders legibly.
+     */
+    layout?: MJTaskEntity_ITaskStepLayout;
+}
+
+/** A step's position and size on the canvas, in canvas units. */
+export interface MJTaskEntity_ITaskStepLayout {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
 }
 
 /** Settings for an Agent step, beyond which agent to run. */

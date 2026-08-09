@@ -39,7 +39,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { IShutdownable, ShutdownRegistry } from '@memberjunction/global';
-import { MJTaskEntity, MJTaskDependencyEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
 import { DispatcherConditionEvaluator } from './DispatcherConditionEvaluator';
 import { RunForEachLoop, RunWhileLoop, type LoopBodyInvoker } from './TaskLoopExecutor';
@@ -486,9 +486,101 @@ export class TaskGraphDispatcher implements IShutdownable {
                     CompletedCount: fresh.nodes.filter((n) => n.status === 'Complete').length,
                     TotalCount: fresh.nodes.length,
                 });
+                await this.rollUpCostToSubmittingRun(provider, parent);
                 await this.deliverContinuation(provider, parent, fresh);
             }
         }
+    }
+
+    /**
+     * Credits a finished graph's spending back to the agent run that submitted it.
+     *
+     * **Why this cannot happen during the run.** `BaseAgent` totals a run by walking its steps in
+     * memory at finalization — but a submitting run *ends at submission*. Submit-and-detach is the
+     * point: the run returns as soon as the graph is durable, and the graph executes afterwards,
+     * possibly minutes later on a different instance. At the moment the run computes its totals the
+     * spending has not happened yet, so there is nothing to count. The only place the number can be
+     * known is here, when the graph settles.
+     *
+     * **Why the `…Rollup` columns and not the plain ones.** `AIAgentRun` has carried six `…Rollup`
+     * columns since v3 that nothing has ever written — they exist for exactly this distinction:
+     *
+     * - `TotalCost` — what the run itself spent. For a Flow agent that is genuinely near zero: it
+     *   compiled a graph and handed it off. This value is already final and is never rewritten here,
+     *   so nothing that reads it today changes meaning, and no guardrail that already evaluated
+     *   against it is retroactively falsified.
+     * - `TotalCostRollup` — the run plus everything it caused. Provisional until the graph settles,
+     *   which is now.
+     *
+     * A graph with no submitting run (a scheduled job, a remote-operation caller) simply has nobody
+     * to credit — its own Task rows still carry the truth, and this returns quietly.
+     */
+    private async rollUpCostToSubmittingRun(provider: IMetadataProvider, parent: MJTaskEntity): Promise<void> {
+        const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
+        if (!meta.submittedByAgentRunID) return;
+
+        try {
+            const children = await this.loadChildTasks(provider, parent.ID);
+            const runIDs = [...new Set(children.map((c) => c.AgentRunID).filter((id): id is string => !!id))];
+
+            const submitting = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+            if (!(await submitting.Load(meta.submittedByAgentRunID))) return;
+
+            // Start from what the run itself spent, so the rollup is a superset rather than a
+            // replacement — a Loop agent that both reasoned AND dispatched a graph paid for both.
+            let cost = submitting.TotalCost ?? 0;
+            let tokens = submitting.TotalTokensUsed ?? 0;
+            let promptTokens = submitting.TotalPromptTokensUsed ?? 0;
+            let completionTokens = submitting.TotalCompletionTokensUsed ?? 0;
+
+            for (const runID of runIDs) {
+                const nested = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+                if (!(await nested.Load(runID))) continue;
+                // Prefer the nested run's OWN rollup: if that agent dispatched a graph of its own,
+                // its rollup already includes it, and reading TotalCost would lose a whole subtree.
+                cost += nested.TotalCostRollup ?? nested.TotalCost ?? 0;
+                tokens += nested.TotalTokensUsedRollup ?? nested.TotalTokensUsed ?? 0;
+                promptTokens += nested.TotalPromptTokensUsedRollup ?? nested.TotalPromptTokensUsed ?? 0;
+                completionTokens += nested.TotalCompletionTokensUsedRollup ?? nested.TotalCompletionTokensUsed ?? 0;
+            }
+
+            submitting.TotalCostRollup = cost;
+            submitting.TotalTokensUsedRollup = tokens;
+            submitting.TotalPromptTokensUsedRollup = promptTokens;
+            submitting.TotalCompletionTokensUsedRollup = completionTokens;
+
+            if (!(await submitting.Save())) {
+                LogError(
+                    `[TaskGraphDispatcher] Could not record graph cost against run ${meta.submittedByAgentRunID}: ` +
+                    `${submitting.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                );
+                return;
+            }
+
+            LogStatus(
+                `[TaskGraphDispatcher] Credited graph ${parent.ID} to run ${meta.submittedByAgentRunID}: ` +
+                `${runIDs.length} nested run(s), ${tokens} token(s), cost ${cost}.`,
+            );
+        } catch (e) {
+            // A failed rollup must never fail the graph. The work finished; only the accounting for
+            // it is missing, and a graph marked Failed because its cost could not be summed would be
+            // a far worse lie than a cost of null.
+            LogError(`[TaskGraphDispatcher] Cost rollup failed for graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /** The graph's child tasks, with the fields the rollup needs. */
+    private async loadChildTasks(provider: IMetadataProvider, parentID: string): Promise<MJTaskEntity[]> {
+        const result = await RunView.FromMetadataProvider(provider).RunView<MJTaskEntity>(
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `ParentID='${parentID}'`,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            },
+            this.contextUser,
+        );
+        return (result.Success ? result.Results : []) ?? [];
     }
 
     /**

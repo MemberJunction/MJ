@@ -239,6 +239,20 @@ export function BuildStepConfiguration(node: TaskGraphSpecNode): MJTaskEntity_IT
         };
     }
 
+    // The author's own arrangement, carried through so a hand-drawn workflow runs — and appears in
+    // run history — in the shape they drew. Dropping it (as this did) meant a workflow someone had
+    // laid out carefully came back as a machine-arranged graph the first time they watched it run.
+    // Only authored geometry is stored: a graph with none has its layout derived at render time, and
+    // persisting a derived layout would freeze one rendering of a graph that can still change.
+    if (node.layout && Object.keys(node.layout).length > 0) {
+        config.layout = {
+            x: node.layout.x,
+            y: node.layout.y,
+            width: node.layout.width,
+            height: node.layout.height,
+        };
+    }
+
     return Object.keys(config).length > 0 ? config : null;
 }
 
