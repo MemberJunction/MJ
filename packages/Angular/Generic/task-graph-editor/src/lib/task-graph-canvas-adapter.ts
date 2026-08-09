@@ -16,7 +16,10 @@
  * @module @memberjunction/ng-task-graph-editor
  */
 import {
+    ConfigOf,
     NormalizeDependency,
+    TaskNode,
+    type TaskNodeBase,
     type TaskGraphSpec,
     type TaskGraphSpecNode,
     type TaskGraphDependency,
@@ -26,11 +29,10 @@ import type { FlowConnection, FlowNode, FlowNodeStatus, FlowNodeTypeConfig, Flow
 /**
  * The kinds of step a `TaskGraphSpec` can express.
  *
- * Exactly three, and not by choice of this file: `TaskGraphSpecNode` carries `agentName`,
- * `actionName` and `assignToUser` as a mutually-exclusive trio, and the validator rejects a node
- * that sets none or more than one of them. The palette therefore offers one entry per assignment
- * shape — a fourth would be a step the engine cannot run, and a missing third (which is what the
- * palette shipped with) is a capability the spec has and the canvas silently hid.
+ * Three of the spec's seven `kind`s, and the choice is the canvas's: these are the shapes a person
+ * draws. `Prompt`, `ForEach`, `While` and `External` are expressible in the spec but have no canvas
+ * affordance yet — offering a palette entry that cannot be configured here would be worse than
+ * omitting it. Adding one later is a palette entry plus a properties-panel section, not a spec change.
  */
 export type TaskGraphNodeType = 'AgentTask' | 'ActionTask' | 'HumanTask';
 
@@ -112,12 +114,11 @@ export function RuntimeStateToNodeStatus(state: TaskGraphRuntimeState | undefine
 /**
  * True when the node is a person's step.
  *
- * Read off `assignToUser` rather than "has no agent", because there are now three assignment shapes
- * and absence-of-agent no longer implies a person — an action step has no agent either, and a
- * freshly-added step has no assignment at all until the author picks one.
+ * One field decides it now: spec v2 gives every node exactly one `kind`, so "is this a person's
+ * step" stopped being an inference over three optional flags and became a comparison.
  */
 export function IsHumanTask(node: TaskGraphSpecNode): boolean {
-    return node.assignToUser === true;
+    return node.kind === 'Human';
 }
 
 /**
@@ -129,8 +130,8 @@ export function IsHumanTask(node: TaskGraphSpecNode): boolean {
  * graph that claimed to be waiting on someone when nobody had said so.
  */
 export function GetTaskNodeType(node: TaskGraphSpecNode): TaskGraphNodeType {
-    if (node.assignToUser === true) return 'HumanTask';
-    if (node.actionName) return 'ActionTask';
+    if (node.kind === 'Human') return 'HumanTask';
+    if (node.kind === 'Action') return 'ActionTask';
     return 'AgentTask';
 }
 
@@ -151,16 +152,19 @@ export function NewTaskFromNodeType(
     type: TaskGraphNodeType,
     defaults: { agentName?: string; actionName?: string } = {},
 ): TaskGraphSpecNode {
-    const base: TaskGraphSpecNode = {
+    const base: TaskNodeBase = {
         tempId: NextTempId(spec),
         name: NEW_TASK_NAMES[type],
         description: '',
         dependsOn: [],
     };
     switch (type) {
-        case 'HumanTask':  return { ...base, assignToUser: true };
-        case 'ActionTask': return { ...base, actionName: defaults.actionName };
-        default:           return { ...base, agentName: defaults.agentName };
+        case 'HumanTask':  return TaskNode.Human(base);
+        // A step created before the host has any names to offer is created with an empty one on
+        // purpose: the validator reports it immediately, whereas inventing a name would produce a
+        // graph that passes here and fails at submission.
+        case 'ActionTask': return TaskNode.Action(base, { actionName: defaults.actionName ?? '' });
+        default:           return TaskNode.Agent(base, { agentName: defaults.agentName ?? '' });
     }
 }
 
@@ -247,8 +251,8 @@ export function SpecToNodes(
 export function TaskSubtitle(task: TaskGraphSpecNode, type: TaskGraphNodeType = GetTaskNodeType(task)): string {
     switch (type) {
         case 'HumanTask':  return 'Waiting on a person';
-        case 'ActionTask': return task.actionName ?? 'No action chosen yet';
-        default:           return task.agentName ?? 'No agent chosen yet';
+        case 'ActionTask': return ConfigOf(task, 'Action')?.actionName || 'No action chosen yet';
+        default:           return ConfigOf(task, 'Agent')?.agentName || 'No agent chosen yet';
     }
 }
 

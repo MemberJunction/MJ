@@ -23,3 +23,7 @@ export * from './lib/components/skill-permissions-dialog.component';
 export * from './lib/components/create-agent-panel.component';
 export * from './lib/components/create-agent-dialog.component';
 export * from './lib/components/create-agent-slidein.component';
+
+// Invocations — the inverse index: everywhere an agent is invoked without a person
+export * from './lib/components/agent-invocations.model';
+export * from './lib/components/agent-invocations.component';
