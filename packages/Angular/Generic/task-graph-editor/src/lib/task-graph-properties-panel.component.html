@@ -1,0 +1,86 @@
+<div class="mj-tgp">
+  @if (!Draft) {
+    <mj-empty-state
+      Icon="fa-hand-pointer"
+      Title="No step selected"
+      Message="Pick a step on the canvas to edit what it does.">
+    </mj-empty-state>
+  } @else {
+    <label class="mj-tgp__label" for="tgp-name">Name</label>
+    <input id="tgp-name" class="mj-input" type="text"
+           [(ngModel)]="Draft.name" [disabled]="ReadOnly" (blur)="Commit()" />
+
+    <label class="mj-tgp__label" for="tgp-desc">What this step does</label>
+    <textarea id="tgp-desc" class="mj-textarea" rows="3"
+              [(ngModel)]="Draft.description" [disabled]="ReadOnly" (blur)="Commit()"></textarea>
+
+    <label class="mj-tgp__label">Who does it</label>
+    <!-- Three, because TaskGraphSpecNode has exactly three mutually-exclusive assignment shapes:
+         agentName, actionName, assignToUser. -->
+    <div class="mj-tgp__assignment">
+      <button mjButton [variant]="Assignment === 'AgentTask' ? 'primary' : 'outline'" size="sm"
+              [disabled]="ReadOnly" (click)="SetAssignment('AgentTask')">
+        <i class="fa-solid fa-robot"></i> An agent
+      </button>
+      <button mjButton [variant]="Assignment === 'ActionTask' ? 'primary' : 'outline'" size="sm"
+              [disabled]="ReadOnly" (click)="SetAssignment('ActionTask')">
+        <i class="fa-solid fa-bolt"></i> An action
+      </button>
+      <button mjButton [variant]="Assignment === 'HumanTask' ? 'primary' : 'outline'" size="sm"
+              [disabled]="ReadOnly" (click)="SetAssignment('HumanTask')">
+        <i class="fa-solid fa-user-check"></i> A person
+      </button>
+    </div>
+
+    @switch (Assignment) {
+      @case ('AgentTask') {
+        @if (AvailableAgentNames.length > 0) {
+          <select class="mj-input" aria-label="Agent" [(ngModel)]="Draft.agentName" [disabled]="ReadOnly" (change)="Commit()">
+            @for (name of AvailableAgentNames; track name) {
+              <option [value]="name">{{ name }}</option>
+            }
+          </select>
+        } @else {
+          <!-- Says the list is empty rather than rendering an empty dropdown, which reads as a bug. -->
+          <mj-alert Variant="warning" Size="sm"
+                    Message="No agents are available to assign. This step will not run until one is chosen.">
+          </mj-alert>
+        }
+      }
+      @case ('ActionTask') {
+        @if (AvailableActionNames.length > 0) {
+          <select class="mj-input" aria-label="Action" [(ngModel)]="Draft.actionName" [disabled]="ReadOnly" (change)="Commit()">
+            @for (name of AvailableActionNames; track name) {
+              <option [value]="name">{{ name }}</option>
+            }
+          </select>
+        } @else {
+          <mj-alert Variant="warning" Size="sm"
+                    Message="No actions are available to assign. This step will not run until one is chosen.">
+          </mj-alert>
+        }
+      }
+      @default {
+        <!-- Cross-user assignment is rejected at submission until the authorization model lands
+             (#3524), so the panel states the rule rather than offering a picker that would fail. -->
+        <mj-alert Variant="info" Size="sm"
+                  Message="This step waits for you. Assigning it to someone else isn't available yet.">
+        </mj-alert>
+      }
+    }
+
+    @if (IncomingEdges.length > 0) {
+      <label class="mj-tgp__label">Runs after</label>
+      @for (edge of IncomingEdges; track edge.FromTempId) {
+        <div class="mj-tgp__edge">
+          <span class="mj-tgp__edge-name"><i class="fa-solid fa-arrow-right-long"></i> {{ edge.FromName }}</span>
+          <!-- Leaving this empty makes the edge unconditional, which is how a fallback is written. -->
+          <input class="mj-input mj-tgp__edge-condition" type="text"
+                 placeholder="Always — or a condition, e.g. output.severity > 3"
+                 [ngModel]="edge.Condition" [disabled]="ReadOnly"
+                 (blur)="CommitCondition(edge.FromTempId, $any($event.target).value)" />
+        </div>
+      }
+    }
+  }
+</div>

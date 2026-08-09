@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Accessibility Audit Dashboard</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+
+  .content { padding: 22px 28px 40px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+  .kpi { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px 18px; }
+  .kpi .label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; font-weight: 800; }
+  .kpi .value.good { color: var(--mj-status-success); }
+  .kpi .value.warn { color: var(--mj-status-warning); }
+  .kpi .value.err { color: var(--mj-status-error); }
+  .kpi .delta { font-size: 12px; font-weight: 600; margin-top: 4px; color: var(--mj-status-success); }
+  .kpi .delta.bad { color: var(--mj-status-error); }
+
+  .deadline-banner { background: var(--mj-status-warning-bg); border: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent); border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+  .deadline-banner i { color: var(--mj-status-warning); font-size: 18px; }
+  .deadline-banner b { display: block; }
+  .deadline-banner span.d { font-size: 12.5px; color: var(--mj-text-secondary); }
+
+  .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; align-items: start; }
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+  .card-body { padding: 0; }
+  .card-body.pad { padding: 18px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); padding: 10px 18px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+  td { padding: 11px 18px; border-bottom: 1px solid var(--mj-border-subtle); font-size: 13px; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .sev { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .sev-critical { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
+  .sev-serious { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .sev-moderate { background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+  .wcag-ref { font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--mj-text-secondary); background: var(--mj-bg-surface-sunken); padding: 1px 6px; border-radius: 4px; }
+  .loc { color: var(--mj-text-muted); font-size: 11.5px; }
+  .fix-link { color: var(--mj-brand-primary); font-weight: 600; font-size: 12px; cursor: default; white-space: nowrap; }
+
+  .fix-panel { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; }
+  .fix-panel .card-header { background: var(--mj-bg-surface-card); }
+  .fix-body { padding: 18px; }
+  .fix-title { font-weight: 700; font-size: 13.5px; margin-bottom: 4px; }
+  .fix-desc { font-size: 12.5px; color: var(--mj-text-secondary); margin-bottom: 14px; }
+  .code-block { background: #1e1e2e; color: #cdd6f4; border-radius: 8px; padding: 12px 14px; font-family: ui-monospace, 'SF Mono', monospace; font-size: 11.5px; line-height: 1.6; overflow-x: auto; margin-bottom: 8px; }
+  .code-block .del { color: #f38ba8; display: block; }
+  .code-block .add { color: #a6e3a1; display: block; }
+  .ai-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 8%, white); padding: 2px 8px; border-radius: 999px; margin-bottom: 10px; }
+  .fix-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .fix-actions .btn { font-size: 12px; padding: 6px 12px; }
+
+  .conformance-list { padding: 6px 0; }
+  .conf-row { display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .conf-row:last-child { border-bottom: none; }
+  .conf-name { flex: 1; font-size: 12.5px; font-weight: 600; }
+  .conf-name .path { display: block; font-size: 11px; font-weight: 400; color: var(--mj-text-muted); }
+  .conf-score { font-size: 13px; font-weight: 800; width: 40px; text-align: right; }
+  .conf-bar-track { width: 70px; height: 6px; background: var(--mj-bg-surface-sunken); border-radius: 999px; overflow: hidden; }
+  .conf-bar { height: 100%; border-radius: 999px; }
+
+  .footer-note { padding: 4px 28px 24px; color: var(--mj-text-muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-diagram-project"></i> MemberJunction</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Permissions</div>
+    <div class="nav-item"><i class="fa-solid fa-database"></i> Entity Admin</div>
+    <div class="nav-section">Dev Tools · New</div>
+    <div class="nav-item active"><i class="fa-solid fa-universal-access"></i> Accessibility Audit</div>
+    <div class="nav-item"><i class="fa-solid fa-palette"></i> Design Token Audit</div>
+    <div class="nav-item"><i class="fa-solid fa-vial"></i> Testing Framework</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-universal-access"></i> Accessibility Audit</h1>
+        <div class="sub">WCAG 2.1 AA conformance across generated dashboards &amp; entity forms · scans on every PR via <code>check:a11y</code></div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <div class="btn"><i class="fa-solid fa-file-export"></i> Export Report</div>
+        <div class="btn btn-primary"><i class="fa-solid fa-play"></i> Run Full Scan</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="deadline-banner">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div>
+          <b>ADA Title II conformance deadline: April 2027</b>
+          <span class="d">Your organization is classified as a smaller public entity. 34 of 61 scanned surfaces are already AA-conformant; 19 have only moderate-severity issues remaining.</span>
+        </div>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="label">Overall Conformance</div>
+          <div class="value good">86%</div>
+          <div class="delta"><i class="fa-solid fa-arrow-trend-up"></i> +4pts this month</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Critical Issues</div>
+          <div class="value err">3</div>
+          <div class="delta bad"><i class="fa-solid fa-arrow-trend-up"></i> +1 since last scan</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Serious Issues</div>
+          <div class="value warn">11</div>
+          <div class="delta"><i class="fa-solid fa-arrow-trend-down"></i> -5 since last scan</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Surfaces Scanned</div>
+          <div class="value">61</div>
+          <div class="delta" style="color:var(--mj-text-muted);">28 dashboards · 33 entity forms</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fa-solid fa-list-check"></i> Open Findings</h2>
+              <span style="font-size:12px; color:var(--mj-text-muted);">Sorted by severity</span>
+            </div>
+            <div class="card-body">
+              <table>
+                <thead>
+                  <tr><th>Issue</th><th>WCAG</th><th>Severity</th><th>Location</th><th></th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><b>Status dot conveys meaning by color alone</b><div class="loc">No text/icon alternative for red/green record status</div></td>
+                    <td><span class="wcag-ref">1.4.1</span></td>
+                    <td><span class="sev sev-critical"><i class="fa-solid fa-circle"></i> Critical</span></td>
+                    <td class="loc">Contacts List Grid<br>PredictiveStudio Dashboard</td>
+                    <td class="fix-link">Explain &amp; Fix →</td>
+                  </tr>
+                  <tr>
+                    <td><b>Form field missing accessible label</b><div class="loc">Generated "AltPhone" input has no &lt;label&gt; or aria-label</div></td>
+                    <td><span class="wcag-ref">1.3.1</span></td>
+                    <td><span class="sev sev-critical"><i class="fa-solid fa-circle"></i> Critical</span></td>
+                    <td class="loc">Contact Entity Form</td>
+                    <td class="fix-link">Explain &amp; Fix →</td>
+                  </tr>
+                  <tr>
+                    <td><b>Insufficient color contrast</b><div class="loc">Muted text 3.1:1 against card background, below 4.5:1 minimum</div></td>
+                    <td><span class="wcag-ref">1.4.3</span></td>
+                    <td><span class="sev sev-critical"><i class="fa-solid fa-circle"></i> Critical</span></td>
+                    <td class="loc">Knowledge Hub Tag Cloud</td>
+                    <td class="fix-link">Explain &amp; Fix →</td>
+                  </tr>
+                  <tr>
+                    <td><b>Grid rows not reachable via keyboard</b><div class="loc">Custom row-action buttons lack tabindex handling</div></td>
+                    <td><span class="wcag-ref">2.1.1</span></td>
+                    <td><span class="sev sev-serious"><i class="fa-solid fa-circle"></i> Serious</span></td>
+                    <td class="loc">Bulk Operations Dashboard</td>
+                    <td class="fix-link">Explain &amp; Fix →</td>
+                  </tr>
+                  <tr>
+                    <td><b>Modal dialog does not trap focus</b><div class="loc">Tab key exits confirm-delete dialog to background content</div></td>
+                    <td><span class="wcag-ref">2.4.3</span></td>
+                    <td><span class="sev sev-serious"><i class="fa-solid fa-circle"></i> Serious</span></td>
+                    <td class="loc">Entity Form Dialog (generic)</td>
+                    <td class="fix-link">Explain &amp; Fix →</td>
+                  </tr>
+                  <tr>
+                    <td><b>Icon-only button missing accessible name</b><div class="loc">"Refresh" toolbar button has no aria-label</div></td>
+                    <td><span class="wcag-ref">4.1.2</span></td>
+                    <td><span class="sev sev-moderate"><i class="fa-solid fa-circle"></i> Moderate</span></td>
+                    <td class="loc">Scheduling Dashboard</td>
+                    <td class="fix-link">Explain &amp; Fix →</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="fix-panel card">
+            <div class="card-header">
+              <h2><i class="fa-solid fa-wand-magic-sparkles"></i> Explain &amp; Suggest a Fix</h2>
+            </div>
+            <div class="fix-body">
+              <span class="ai-tag"><i class="fa-solid fa-robot"></i> AI-Proposed — review before applying</span>
+              <div class="fix-title">Status dot conveys meaning by color alone</div>
+              <div class="fix-desc">WCAG 1.4.1 requires that color not be the only visual means of conveying information. A colorblind user (≈8% of men) cannot distinguish the red "At Risk" dot from the green "Active" dot. Pairing the color with an icon and text fixes this for every generated grid that uses <code>StatusIndicatorComponent</code>.</div>
+              <div class="code-block">
+<span class="del">- &lt;span class="status-dot" [style.background]="color"&gt;&lt;/span&gt;</span>
+<span class="add">+ &lt;span class="status-dot" [style.background]="color"&gt;</span>
+<span class="add">+   &lt;i [class]="icon" aria-hidden="true"&gt;&lt;/i&gt;</span>
+<span class="add">+ &lt;/span&gt;</span>
+<span class="add">+ &lt;span class="sr-only"&gt;{{ statusLabel }}&lt;/span&gt;</span>
+              </div>
+              <div style="font-size:11.5px; color:var(--mj-text-muted);">Proposed change lives in <code>packages/Angular/Generic/ui-components/status-indicator</code> — fixing this one component resolves the finding on 14 generated surfaces.</div>
+              <div class="fix-actions">
+                <div class="btn btn-primary"><i class="fa-solid fa-code-branch"></i> Open as Draft PR</div>
+                <div class="btn"><i class="fa-solid fa-xmark"></i> Dismiss</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-chart-simple"></i> Conformance by Surface</h2></div>
+            <div class="card-body conformance-list">
+              <div class="conf-row">
+                <div class="conf-name">Contacts List Grid<span class="path">dashboards/data-explorer</span></div>
+                <div class="conf-bar-track"><div class="conf-bar" style="width:62%; background:var(--mj-status-error);"></div></div>
+                <div class="conf-score" style="color:var(--mj-status-error);">62%</div>
+              </div>
+              <div class="conf-row">
+                <div class="conf-name">Contact Entity Form<span class="path">core-entity-forms</span></div>
+                <div class="conf-bar-track"><div class="conf-bar" style="width:71%; background:var(--mj-status-warning);"></div></div>
+                <div class="conf-score" style="color:var(--mj-status-warning);">71%</div>
+              </div>
+              <div class="conf-row">
+                <div class="conf-name">Knowledge Hub<span class="path">dashboards/knowledge-hub</span></div>
+                <div class="conf-bar-track"><div class="conf-bar" style="width:79%; background:var(--mj-status-warning);"></div></div>
+                <div class="conf-score" style="color:var(--mj-status-warning);">79%</div>
+              </div>
+              <div class="conf-row">
+                <div class="conf-name">Scheduling Dashboard<span class="path">dashboards/scheduling</span></div>
+                <div class="conf-bar-track"><div class="conf-bar" style="width:91%; background:var(--mj-status-success);"></div></div>
+                <div class="conf-score" style="color:var(--mj-status-success);">91%</div>
+              </div>
+              <div class="conf-row">
+                <div class="conf-name">Home Dashboard<span class="path">dashboards/home</span></div>
+                <div class="conf-bar-track"><div class="conf-bar" style="width:97%; background:var(--mj-status-success);"></div></div>
+                <div class="conf-score" style="color:var(--mj-status-success);">97%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">Mockup — MemberJunction Weekly Exploration, 2026-08-07 · Idea 3: Accessibility-by-Default Framework Layer · Illustrative data only.</div>
+  </div>
+</body>
+</html>

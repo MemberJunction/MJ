@@ -63,7 +63,18 @@ jobs:
 
   build-and-publish:
     name: Build and publish new versions of NPM packages
-    timeout-minutes: 30
+    # 30 minutes was not enough and the failure mode is DESTRUCTIVE, not a clean retry.
+    # v6.1.0-edge.1 ran 30m16s and GitHub killed it mid-`changeset publish`, leaving the
+    # fixed-version group split across two versions on npm (~100 packages at the new version,
+    # ~200 at the old) with no version-bump commit, no tag, and no back-merge. A job timeout
+    # reports as "The operation was canceled", which is indistinguishable at a glance from
+    # someone clicking Cancel — the v5.49.0 split was attributed to an accidental click and
+    # may well have been this same ceiling.
+    #
+    # The budget is structurally tight: the build alone takes ~25 minutes, leaving ~5 for a
+    # publish loop that uploads ~300 packages serially. Every package added shrinks the margin.
+    # 120 leaves real headroom. This only bounds a hung job; it cannot make one publish more.
+    timeout-minutes: 120
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
@@ -168,8 +179,10 @@ jobs:
       - name: Build packages
         run: pnpm run build
 
-      # LTS process (plans/lts-process.md §4.2): no publish ever omits its explicit
-      # --tag. The channel is derived from the version grammar itself — an -edge.N
+      # LTS process (plans/lts-process.md §4.2): no publish ever completes without its
+      # channel tag asserted — derived here, cross-checked against pre.json before the
+      # publish, verified against the registry after it (pre mode forbids an explicit
+      # --tag). The channel comes from the version grammar itself — an -edge.N
       # prerelease goes to the `edge` dist-tag. Unsuffixed versions are era-gated:
       # era-5 (classic grammar, the bootstrap) publishes to `latest` — today's
       # behavior, unchanged. From era 6 on, an unsuffixed version is a candidate or
@@ -206,8 +219,9 @@ jobs:
         # registry has never heard of.
         #
         # 🚨 And in pre mode, pass NO --tag at all: changesets refuses a custom tag in pre
-        # mode ("Releasing under custom tag is not allowed in pre mode") — again exiting 0 —
-        # which is how the corrected-args form STILL publishes nothing. In pre mode the
+        # mode ("Releasing under custom tag is not allowed in pre mode") — that refusal at
+        # least exits 1, so the corrected-args form still published nothing, but visibly.
+        # In pre mode the
         # dist-tag comes from .changeset/pre.json's "tag" field; assert it matches the
         # channel step's derivation instead of passing it.
         #

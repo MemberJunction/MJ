@@ -333,26 +333,6 @@ export class ResourceResolver implements Resolve<void> {
           return;
         }
 
-        case 'report': {
-          // /app/:appName/report/:reportId
-          const reportId = param1;
-
-          this.tabService.OpenTab({
-            ApplicationId: app.ID,
-            Title: `Report - ${reportId}`,
-            Configuration: {
-              resourceType: 'Reports',
-              reportId,
-              recordId: reportId,
-              appName: appName,
-              appId: app.ID
-            },
-            ResourceRecordId: reportId,
-            IsPinned: false
-          });
-          return;
-        }
-
         case 'artifact': {
           // /app/:appName/artifact/:artifactId
           const artifactId = param1;

@@ -830,6 +830,80 @@
             "lastModified": "2026-08-05T22:40:18.397Z",
             "checksum": "ff4f7cbf5fb8ba7e9b4a9186e278208023a081bb7bae7d6e0f4d668fdd0db660"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT70 - External Agent Harness",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7D2B4F91-3A68-4C05-B1E7-9F60A2C8D453"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT71 - Task Graph Orchestration",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "03B972BB-3EC8-463C-A982-140153E65ACC"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:50:31.655Z",
+            "checksum": "1507265d2d71dc30e94c9029245664fd0653798aff251b78ca928b8c19765ac5"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT72 - Entity Graph (related-record collections)",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B4FE6167-1F8A-4B5C-A565-A008CE03BFD8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT73 - Entity Graph (client transport)",
+            "Sequence": 53,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0E1289E0-2D35-4F05-A032-9E6EB09E0990"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT74 - Task Graph Execution",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CA15CEC9-DB0B-45D2-917D-E83589CB32FC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT75 - Entity Actions",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BB2442FB-89D6-45AE-8002-11D2938F004F"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:50:31.726Z",
+            "checksum": "91d8a2f26f1f5ec8ceb4f8af36dc42701163fa21b47280d03bb21bdad61289cc"
+          }
         }
       ]
     },

@@ -331,31 +331,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Reports Section -->
-    <mj-collapsible-panel
-        SectionKey="mJReports"
-        SectionName="Reports"
-        Icon="fa-solid fa-chart-line"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJReports')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Reports','ConversationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Reports')"
-                [AllowLoad]="IsSectionExpanded('mJReports')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJReports', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Conversation Artifacts Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationArtifacts"

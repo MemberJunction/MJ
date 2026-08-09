@@ -309,7 +309,7 @@ export class ManageMetadataBase {
 
    /**
     * Produces a schema-qualified object reference.
-    * SQL Server: [schema].[object], PostgreSQL: schema."object"
+    * SQL Server: [schema].[object], PostgreSQL: "schema"."object"
     */
    protected qs(schema: string, object: string): string {
       return this.dialect.QuoteSchema(schema, object);
@@ -1693,6 +1693,7 @@ export class ManageMetadataBase {
       await import('@memberjunction/external-data-source-sqlserver');
       await import('@memberjunction/external-data-source-mysql');
       await import('@memberjunction/external-data-source-oracle');
+      await import('@memberjunction/external-data-source-databricks');
       const router = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
       if (!router) {
          logError('   Cannot sync external entity fields: no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources (and the relevant driver) are loaded in the CodeGen process.');
@@ -3936,6 +3937,42 @@ export class ManageMetadataBase {
       const conflictCheck = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ID = '${newEntityFieldUUID}' OR (EntityID = '${n.EntityID}' AND Name = '${n.FieldName}')`;
       const guard = this.dbProvider.wrapInsertWithConflictGuard(conflictCheck);
 
+      // Sequence is emitted as an expression evaluated AT APPLY TIME, not as the literal we computed
+      // against this database. That distinction is the whole point, so it is worth stating plainly.
+      //
+      // `n.Sequence` here is a TEMPORARY placeholder — `MAX(Sequence) + 100000 + ordinal` — that the
+      // renumber pass (spUpdateExistingEntityFieldsFromSchema, run live and again from
+      // R__RefreshMetadata) rewrites to a proper low value shortly afterwards. Locally that always
+      // works, which is exactly why the bug hides: by the time anyone looks, the number is correct.
+      //
+      // The generated INSERT, however, is appended verbatim to a migration. Flyway runs ALL versioned
+      // migrations before ANY repeatable script, so on a database built only from migrations the
+      // renumber never runs in between. Two migrations that add columns to the SAME entity within one
+      // release therefore both carry a placeholder computed from the same low MAX — and the second one
+      // collides on UQ_EntityField_EntityID_Sequence. The script does not SET XACT_ABORT ON, so that
+      // aborts only the statement; execution continues and the real failure surfaces later as an
+      // unrelated-looking FK violation on EntityFieldValue. (MJ#3670 is the instance that found this.)
+      //
+      // Computing from an apply-time MAX cannot collide, on any database, in any order. COALESCE
+      // rather than ISNULL so the emitted SQL stays valid for both providers.
+      //
+      // The offset is the field's RAW SCHEMA ORDINAL (SourceOrdinal), not a flat +1, so the ORDERING
+      // of a batch of new fields is encoded in the emitted value itself. Order is what actually
+      // matters here — the providers' positional save-capture requires base fields to sort before
+      // virtual ones — and a flat +1 would make that ordering depend on the order the INSERT
+      // statements happen to execute. That order is guaranteed today (the pending-fields query ends
+      // ORDER BY EntityID, Sequence and the batch preserves it), but it would be an implicit,
+      // unstated dependency: parallelise the inserts or drop that ORDER BY later and the ordering
+      // silently changes. Encoding the ordinal removes the dependency rather than relying on it.
+      //
+      // Distinctness holds regardless: MAX is re-evaluated per statement and every ordinal is >= 1,
+      // so each successive insert lands strictly above every existing row. The absolute values are
+      // throwaway — spUpdateExistingEntityFieldsFromSchema overwrites Sequence from the schema on
+      // the next pass (live, and from R__RefreshMetadata.sql).
+      const sourceOrdinal = typeof n.SourceOrdinal === 'number' && n.SourceOrdinal > 0 ? n.SourceOrdinal : 1;
+      const sequenceExpr =
+         `(SELECT COALESCE(MAX(${this.qi('Sequence')}), 0) FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ${this.qi('EntityID')} = '${n.EntityID}') + ${sourceOrdinal}`;
+
       return `
       ${guard.prefix}
          INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')}
@@ -3972,7 +4009,7 @@ export class ManageMetadataBase {
          (
             '${newEntityFieldUUID}',
             '${n.EntityID}', -- Entity: ${n.EntityName}
-            ${n.Sequence},
+            ${sequenceExpr},
             '${n.FieldName}',
             '${fieldDisplayName}',
             ${escapedDescription},
@@ -5080,8 +5117,12 @@ export class ManageMetadataBase {
          // idempotent. drop-schema clears an app's ApplicationEntity/EntityPermission/Entity rows but NOT
          // its Application row, so replaying this block would otherwise collide on the Application PK.
          const appCheckQuery = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'Application')} WHERE ${this.qi('ID')} = '${appID}'`;
-         const appInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath)
-                       VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', ${this.dialect.BooleanLiteral(true)})`;
+         // Schema-named bucket apps are plumbing (entity links, role grants, SchemaAutoAddNewEntities),
+         // not products — hide them from new users. Application.DefaultForNewUser defaults to 1 in the
+         // DB, so omitting the column here is what put raw '__mj_*'-named apps in every new user's
+         // app switcher while the human-authored metadata app stayed hidden.
+         const appInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath, DefaultForNewUser)
+                       VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', ${this.dialect.BooleanLiteral(true)}, ${this.dialect.BooleanLiteral(false)})`;
          const sSQL = this.conditionalInsert(appCheckQuery, appInsert);
          await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
          LogStatus(`Created new application ${appName} with Path: ${path}`);
@@ -5853,6 +5894,10 @@ export class ManageMetadataBase {
     *     `Sequence` from the metadata query).
     *  3. **Fresh pick** — if no flagged field is eligible, take the first eligible LLM
     *     candidate in ranked order.
+    *  4. **Preserve** — if there is still no winner, keep an existing flag on a
+    *     type-safe field rather than clearing it with no replacement (MJ #3551). Only
+    *     a flag on an actively-wrong field (PK / non-text / unbounded) is cleared with
+    *     nothing to replace it.
     *
     * Every NON-winner with `IsNameField=1` and `AutoUpdateIsNameField=1` is CLEARED, so
     * historical accumulation self-heals on the next analysis pass. Fields pinned with
@@ -5902,9 +5947,12 @@ export class ManageMetadataBase {
    /**
     * Picks the single IsNameField winner for an entity per the rules documented on
     * {@link applyNameFieldUpdates}: stable current winner → deterministic repair
-    * (literal `Name`, then field order) → first eligible LLM candidate. Returns null
-    * when nothing eligible exists (the entity simply has no name field — FK-name
-    * virtual columns are skipped for it, which beats pointing them at a PK or blob).
+    * (literal `Name`, then field order) → first eligible LLM candidate → PRESERVE an
+    * existing type-safe flag rather than clearing it with nothing to put in its place.
+    * Returns null only when every flagged field is actively WRONG (a PK, a non-text
+    * type, unbounded text) and the LLM named no usable replacement — there the entity
+    * genuinely ends with no name field, which beats pointing FK-name virtual columns
+    * at a uniqueidentifier or a blob.
     */
    protected selectNameFieldWinner(
       fields: Array<Record<string, unknown>>,
@@ -5915,8 +5963,7 @@ export class ManageMetadataBase {
          return eligibleFlagged[0];
       }
       if (eligibleFlagged.length > 1) {
-         const literalName = eligibleFlagged.find(f => (f.Name as string | undefined)?.trim().toLowerCase() === 'name');
-         return literalName ?? eligibleFlagged[0];
+         return this.preferLiteralNameField(eligibleFlagged);
       }
       for (const candidateName of rankedCandidates) {
          const candidate = fields.find(f => f.Name === candidateName);
@@ -5924,25 +5971,72 @@ export class ManageMetadataBase {
             return candidate;
          }
       }
+      // 4. PRESERVE — never CLEAR without REPLACING (MJ issue #3551). Nothing is
+      //    strictly eligible, but if the entity already carries a flag on a
+      //    type-safe field, keep it: "zero name fields" is not a valid outcome for
+      //    a pass whose whole job is to IDENTIFY one, and silently dropping the
+      //    deterministic answer is strictly worse than keeping a view-routed one.
+      //    Fields that are actively wrong (PK / non-text / MAX) fail the type check
+      //    and are still cleared, which is what the v5.40 guardrail was added for.
+      const typeSafeFlagged = fields.filter(f => f.IsNameField && this.isNameFieldTypeSafe(f));
+      if (typeSafeFlagged.length > 0) {
+         return this.preferLiteralNameField(typeSafeFlagged);
+      }
       return null;
+   }
+
+   /**
+    * Deterministic tie-break across several name-field candidates: the field
+    * literally called `Name` wins, else the first in field order (fields arrive
+    * ordered by `Sequence` from the metadata query). Mirrors `EntityInfo.NameField`'s
+    * runtime preference so CodeGen and runtime never disagree about which one it is.
+    */
+   protected preferLiteralNameField(candidates: Array<Record<string, unknown>>): Record<string, unknown> {
+      const literalName = candidates.find(f => (f.Name as string | undefined)?.trim().toLowerCase() === 'name');
+      return literalName ?? candidates[0];
    }
 
    /**
     * Returns true if the field is a sensible target for IsNameField (i.e. could
     * serve as the entity's human-readable display name). A name field must be
-    * BOUNDED TEXT ON THE BASE TABLE — so we reject primary keys, uniqueidentifiers,
-    * all non-text types, unbounded (MAX) text, and VIRTUAL fields. This stops Smart
-    * Field Identification from flagging a PK/uniqueidentifier as a name field, which
-    * would corrupt every related-entity name virtual field that joins to this entity
-    * (those resolve their SQL type from the related entity's NameField). Virtual
-    * fields are rejected because a view-only name column forces the FK-name join to
-    * target the VIEW instead of the base table — the self-referencing case is
-    * unbuildable on PostgreSQL and SQL Server (see the self-FK skip in the view
-    * generator), and a name that is itself a borrowed FK-name resolves circularly.
+    * BOUNDED TEXT — so we reject primary keys, uniqueidentifiers, all non-text
+    * types, and unbounded (MAX) text. This stops Smart Field Identification from
+    * flagging a PK/uniqueidentifier as a name field, which would corrupt every
+    * related-entity name virtual field that joins to this entity (those resolve
+    * their SQL type from the related entity's NameField).
+    *
+    * VIRTUAL fields are rejected too — with ONE carve-out. A view-only name column
+    * forces the FK-name join to target the VIEW instead of the base table: the
+    * self-referencing case is unbuildable on PostgreSQL and SQL Server (see the
+    * self-FK skip in the view generator), and a name that is itself a BORROWED
+    * FK-name (`_RelatedEntityNameFieldMap`) resolves circularly. But an **IS-A
+    * (Table-Per-Type) inherited** field is neither of those: it is the child's
+    * mirror of a real parent COLUMN, materialized by joining the parent's base
+    * table (`generateParentEntityFieldSelects`), and it is the only sensible
+    * display value the child has. Rejecting it left IS-A children with ZERO name
+    * fields — `selectNameFieldWinner` returned null and the clear-loop then wiped
+    * the `IsNameField=1` the deterministic pass had correctly set on `Name`
+    * (MJ issue #3551).
     */
    protected isFieldEligibleForNameField(field: Record<string, unknown>): boolean {
+      if (field.IsVirtual === true && !this.isInheritedISAField(field)) return false;
+      return this.isNameFieldTypeSafe(field);
+   }
+
+   /**
+    * The TYPE half of {@link isFieldEligibleForNameField}, with no virtuality
+    * opinion: a primary key, a non-text type, or unbounded (MAX) text can never be
+    * a name field, because those are the values that actively CORRUPT the
+    * related-entity name virtual fields that resolve their SQL type from this
+    * entity's NameField.
+    *
+    * Split out so the two halves can be applied separately: virtuality only makes
+    * a field a *worse* choice than a base-table column, while failing this check
+    * makes it a *wrong* one. `selectNameFieldWinner` clears the wrong ones even
+    * with no replacement, but preserves a merely-worse one (see its step 4).
+    */
+   protected isNameFieldTypeSafe(field: Record<string, unknown>): boolean {
       if (field.IsPrimaryKey === true) return false;
-      if (field.IsVirtual === true) return false;
       const type = (field.Type as string | undefined ?? '').toLowerCase();
       const textTypes = new Set(['nvarchar', 'varchar', 'char', 'nchar']);
       if (!textTypes.has(type)) return false;
@@ -5955,6 +6049,27 @@ export class ManageMetadataBase {
       const length = (field.Length ?? field.MaxLength) as number | undefined;
       if (length === -1) return false;
       return true;
+   }
+
+   /**
+    * Is this field an IS-A (Table-Per-Type) INHERITED field — the child entity's
+    * mirror of a column that physically lives on a parent table?
+    *
+    * Uses the same discriminator as the rest of this file (see
+    * `syncISAParentFields` and `buildParentChainContext`): `IsVirtual=1` AND
+    * `AllowUpdateAPI=1`. That pair is unambiguous — every virtual column
+    * discovered from a base VIEW is inserted with `AllowUpdateAPI=0` (the pending-
+    * fields SQL forces `IIF(IsVirtual = 1, 0, …)`), and the IS-A sync is the only
+    * thing that sets `AllowUpdateAPI=1` back on a virtual field. So a borrowed
+    * FK-name column can never satisfy it, which is exactly the separation the
+    * name-field guardrail needs.
+    */
+   protected isInheritedISAField(field: Record<string, unknown>): boolean {
+      const name = (field.Name as string | undefined) ?? '';
+      return field.IsVirtual === true
+         && field.AllowUpdateAPI === true
+         && field.IsPrimaryKey !== true
+         && !name.startsWith('__mj_');
    }
 
    /**
