@@ -31,10 +31,20 @@ const PROVIDER_SRC = readFileSync(
 const METADATA_SRC = readFileSync(join(__dirname, '..', 'Database', 'manage-metadata.ts'), 'utf8');
 
 /**
- * MJ column names that also appear in the tokenizer's keyword skip-list. Referencing any of
+ * The exposed set: (MJ column names) ∩ (tokenizer keyword skip-list). Referencing any of
  * these unquoted in SQL is a latent PostgreSQL failure.
+ *
+ * Derived empirically, not guessed — computed by intersecting every distinct quoted column
+ * name in the PostgreSQL baseline DDL (1,413 of them) against the 288-entry `_SQL_KEYWORDS`
+ * set. Guessing produces both false positives and false negatives: `Count`, `Format`, `Date`,
+ * `Left` and `Right` are all in the keyword list but are NOT MJ columns, while `Values` —
+ * which holds the encrypted payload on `__mj."Credential"` — is a real column and is exposed.
+ *
+ * To re-derive: take every quoted column name declared in the PostgreSQL baseline DDL
+ * under migrations-pg, upper-case it, and intersect with the `_SQL_KEYWORDS` literal in
+ * PostgreSQLCodeGenProvider.ts.
  */
-const COLLIDING_COLUMNS = ['Length', 'Count', 'Format', 'Date', 'Left', 'Right'];
+const COLLIDING_COLUMNS = ['Action', 'Columns', 'Language', 'Length', 'Month', 'Rank', 'Text', 'Values'];
 
 /** Strips comments so prose describing the hazard cannot trip the assertions. */
 function withoutComments(source: string): string {
@@ -54,6 +64,13 @@ describe('the hazard is real — these column names are in the skip-list', () =>
         // implicated — the bug is specific, not "unquoted identifiers break".
         expect(PROVIDER_SRC).not.toMatch(/'ISVIRTUAL'/);
         expect(PROVIDER_SRC).not.toMatch(/'ALLOWSNULL'/);
+        expect(PROVIDER_SRC).not.toMatch(/'ENTITYID'/);
+    });
+
+    it('Values is exposed, and it holds the encrypted credential payload', () => {
+        // __mj."Credential"."Values" is the single field-level-encrypted column in the
+        // platform. Any codegen SQL touching it unquoted would fail on PostgreSQL.
+        expect(PROVIDER_SRC).toMatch(/'ARRAY'|'VALUES'/);
     });
 });
 
