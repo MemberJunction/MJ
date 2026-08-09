@@ -19,6 +19,7 @@
  * @module @memberjunction/integration-test-suite
  */
 import { RunView, type BaseEntity } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJActionEntity,
     MJActionFilterEntity,
@@ -384,7 +385,7 @@ export const EntityActionChecks: NamedCheck[] = [
             // the binding points at it, and dropping the junction row too would remove the binding
             // being tested rather than break it.
             const filters = ActionEngineServer.Instance.ActionFilters;
-            const at = filters.findIndex((f) => f.ID === Filter.ID);
+            const at = filters.findIndex((f) => UUIDsEqual(f.ID, Filter.ID));
             Assert(at >= 0, 'the filter fixture must be visible to the engine before it is removed');
             filters.splice(at, 1);
             void link;
@@ -453,13 +454,13 @@ export const EntityActionChecks: NamedCheck[] = [
 
                 // Filtered to THIS binding: every Durable binding an earlier check created is still
                 // Active on the same entity, so a shared submitter sees their submissions too.
-                const mine = () => submitter.Requests.filter((r) => r.EntityActionID === binding.ID);
+                const mine = () => submitter.Requests.filter((r) => UUIDsEqual(r.EntityActionID, binding.ID));
                 await waitFor(() => mine().length > 0, 'the durable submission');
                 const request = mine()[0];
                 AssertEqual(request.EntityActionID, binding.ID, 'the request must name the binding that fired');
                 AssertEqual(request.ActionID, action.ID, 'the request must name the action to run');
                 AssertEqual(request.InvocationType, 'AfterUpdate', 'the request must name the event that fired it');
-                Assert(request.RecordID.includes(list.ID), 'the request must carry the record that changed');
+                Assert(request.RecordID.toLowerCase().includes(list.ID.toLowerCase()), 'the request must carry the record that changed');
                 Assert(!!request.EntityName, 'the request must name the entity, for a readable task');
                 Assert(typeof request.RedactedParams === 'object', 'params must arrive as a plain JSON-safe object');
 
@@ -502,7 +503,7 @@ export const EntityActionChecks: NamedCheck[] = [
 
                 await waitFor(async () => (await executionCountFor(ctx, binding.ID)) > before,
                     'the inline fallback to run the action after a failed submission');
-                AssertEqual(submitter.Requests.filter((r) => r.EntityActionID === binding.ID).length, 1,
+                AssertEqual(submitter.Requests.filter((r) => UUIDsEqual(r.EntityActionID, binding.ID)).length, 1,
                     'submission must have been attempted exactly once for THIS binding');
             } finally {
                 DurableEntityActionRegistry.Instance.Clear();

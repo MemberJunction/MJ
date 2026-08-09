@@ -12,13 +12,14 @@
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam } from '@memberjunction/actions-base';
 import { LogError } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { TaskActionRunner, TaskActionRunParams, TaskActionRunResult } from '@memberjunction/task-graph';
 
 export class TaskGraphActionRunner implements TaskActionRunner {
     public async RunActionForTask(params: TaskActionRunParams): Promise<TaskActionRunResult> {
         try {
             await ActionEngineServer.Instance.Config(false, params.ContextUser);
-            const action = ActionEngineServer.Instance.Actions.find((a) => a.ID === params.ActionID);
+            const action = ActionEngineServer.Instance.Actions.find((a) => UUIDsEqual(a.ID, params.ActionID));
             if (!action) {
                 return { Success: false, ErrorMessage: `Action ${params.ActionID} is not in the engine's metadata.` };
             }

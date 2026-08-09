@@ -19,7 +19,7 @@
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3",
-    "@memberjunction/unit-testing": "6.1.0-edge.0"
+    "@memberjunction/unit-testing": "6.1.0-edge.1"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.73.0",

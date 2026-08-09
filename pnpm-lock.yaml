@@ -550,8 +550,8 @@ importers:
         version: 15.7.0
     devDependencies:
       '@memberjunction/unit-testing':
-        specifier: 6.1.0-edge.0
-        version: 6.1.0-edge.0
+        specifier: 6.1.0-edge.1
+        version: link:../../UnitTesting
       '@types/lodash':
         specifier: ^4.17.23
         version: 4.17.23
@@ -1404,8 +1404,8 @@ importers:
         version: 13.0.0
     devDependencies:
       '@memberjunction/unit-testing':
-        specifier: 6.1.0-edge.0
-        version: 6.1.0-edge.0
+        specifier: 6.1.0-edge.1
+        version: link:../../UnitTesting
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -1432,8 +1432,8 @@ importers:
         version: link:../../../MJGlobal
     devDependencies:
       '@memberjunction/unit-testing':
-        specifier: 6.1.0-edge.0
-        version: 6.1.0-edge.0
+        specifier: 6.1.0-edge.1
+        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -1959,8 +1959,8 @@ importers:
         version: 6.18.0(ws@8.19.0)(zod@4.3.6)
     devDependencies:
       '@memberjunction/unit-testing':
-        specifier: 6.1.0-edge.0
-        version: 6.1.0-edge.0
+        specifier: 6.1.0-edge.1
+        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -2796,8 +2796,8 @@ importers:
         version: link:../../MJGlobal
     devDependencies:
       '@memberjunction/unit-testing':
-        specifier: 6.1.0-edge.0
-        version: 6.1.0-edge.0
+        specifier: 6.1.0-edge.1
+        version: link:../../UnitTesting
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -13850,8 +13850,8 @@ importers:
         version: 9.0.0(typescript@5.9.3)
     devDependencies:
       '@memberjunction/global':
-        specifier: 6.1.0-edge.0
-        version: 6.1.0-edge.0
+        specifier: 6.1.0-edge.1
+        version: link:../MJGlobal
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -14085,8 +14085,8 @@ importers:
         version: link:../TestingFramework/Engine
     devDependencies:
       '@memberjunction/global':
-        specifier: 6.1.0-edge.0
-        version: 6.1.0-edge.0
+        specifier: 6.1.0-edge.1
+        version: link:../MJGlobal
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -18309,9 +18309,6 @@ packages:
   '@mediapipe/tasks-vision@0.10.14':
     resolution: {integrity: sha512-vOifgZhkndgybdvoRITzRkIueWWSiCKuEUXXK6Q4FaJsFvRJuwgg++vqFUMlL0Uox62U5aEXFhHxlhV7Ja5e3Q==}
 
-  '@memberjunction/global@6.1.0-edge.0':
-    resolution: {integrity: sha512-6Cl0dVP2DJsMdoz3/7VPchQAoABmghHfjvgd3cKpaG4BysaRIW28uzK4mlprWxmt6u0hRxsKYgjfG24RddO3/g==}
-
   '@memberjunction/skyway-core@0.6.2':
     resolution: {integrity: sha512-qrwF6EaqlbwyDl0dnd0U7AaQqfkL9NbVGT/8dy3PO61bJXavrATex+Gy7bImiwsQgslZiwswIb2fzwi04n/vKA==}
     engines: {node: '>=18.0.0'}
@@ -18323,9 +18320,6 @@ packages:
   '@memberjunction/skyway-sqlserver@0.6.2':
     resolution: {integrity: sha512-2mVkECnMhGieU++ZesoK3NDMveBgamkpWKTeYo3T0r9OTxhISNrM6clXUuZOhq7vKCQwNPb2SY53/n60J+ecuw==}
     engines: {node: '>=18.0.0'}
-
-  '@memberjunction/unit-testing@6.1.0-edge.0':
-    resolution: {integrity: sha512-ywzw27anSHrhXwt+jbUS7cqHfJd6jCyHQg6NYDpLAHIO3pQGmDlIsoGH0nt1v19/gfJHjZo2gNhH/KWzRpbMcw==}
 
   '@mermaid-js/parser@0.6.3':
     resolution: {integrity: sha512-lnjOhe7zyHjc+If7yT4zoedx2vo4sHaTmtkl1+or8BRTnCtDmcTpAjpzDSfCZrshM5bCoz0GyidzadJAH1xobA==}
@@ -35641,12 +35635,6 @@ snapshots:
 
   '@mediapipe/tasks-vision@0.10.14': {}
 
-  '@memberjunction/global@6.1.0-edge.0':
-    dependencies:
-      lodash: 4.17.23
-      rxjs: 7.8.2
-      uuid: 13.0.0
-
   '@memberjunction/skyway-core@0.6.2':
     dependencies:
       crc-32: 1.2.2
@@ -35665,10 +35653,6 @@ snapshots:
       mssql: 11.0.1
     transitivePeerDependencies:
       - supports-color
-
-  '@memberjunction/unit-testing@6.1.0-edge.0':
-    dependencies:
-      '@memberjunction/global': 6.1.0-edge.0
 
   '@mermaid-js/parser@0.6.3':
     dependencies:
