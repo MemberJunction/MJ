@@ -302,7 +302,7 @@ export const MJActionExecutionLogSchema = z.object({
         * * Default Value: newsequentialid()`),
     ActionID: z.string().describe(`
         * * Field Name: ActionID
-        * * Display Name: Action ID
+        * * Display Name: Action
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)`),
     StartedAt: z.date().describe(`
@@ -328,7 +328,7 @@ export const MJActionExecutionLogSchema = z.object({
         * * Description: The outcome code returned by the action execution, indicating success, failure, or specific error conditions as defined in Action Result Codes.`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     RetentionPeriod: z.number().nullable().describe(`
@@ -353,7 +353,7 @@ export const MJActionExecutionLogSchema = z.object({
         * * Description: Human-readable summary message returned by the action - the reason for a refusal, or a short description of what was done. Not the action's output data: parameter values live in Params and ResultParams, and the outcome code in ResultCode.`),
     EntityActionID: z.string().nullable().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action ID
+        * * Display Name: Entity Action
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)
         * * Description: Optional. The Entity Action binding that caused this run. NULL when the action was invoked directly - from a resolver, a script, an agent step or a scheduled action.`),
@@ -365,13 +365,13 @@ export const MJActionExecutionLogSchema = z.object({
         * * Description: Optional. Which lifecycle event fired the binding - AfterUpdate, Validate, List and so on. Recorded separately from EntityActionID because one binding may be attached to several invocation types, and telling a Validate refusal apart from an AfterUpdate side effect is the first question anyone asks of this log.`),
     TargetEntityID: z.string().nullable().describe(`
         * * Field Name: TargetEntityID
-        * * Display Name: Target Entity ID
+        * * Display Name: Target Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Optional. The entity of the record this run operated on. Deliberately denormalized rather than joined through EntityActionID: it survives the binding being deleted or retargeted, and it lets the log be queried by record with no join. Kept generic because every invoker has a subject - not only Entity Actions.`),
     TargetRecordID: z.string().nullable().describe(`
         * * Field Name: TargetRecordID
-        * * Display Name: Target Record ID
+        * * Display Name: Target Record
         * * SQL Data Type: nvarchar(450)
         * * Description: Optional. The primary key of the record this run operated on, as text, paired with TargetEntityID. For multi-record invocation types (List, View) one log row is written per record, so this is always a single record.`),
     ResultParams: z.string().nullable().describe(`
@@ -393,7 +393,7 @@ export const MJActionExecutionLogSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     TargetEntity: z.string().nullable().describe(`
         * * Field Name: TargetEntity
-        * * Display Name: Target Entity
+        * * Display Name: Target Entity Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -16412,7 +16412,7 @@ export const MJEntitySchema = z.object({
         * * Description: Database schema containing this entity's table and view.`),
     VirtualEntity: z.boolean().describe(`
         * * Field Name: VirtualEntity
-        * * Display Name: Is Virtual Entity
+        * * Display Name: Virtual Entity
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this is a virtual entity without a physical database table.`),
@@ -16583,7 +16583,7 @@ export const MJEntitySchema = z.object({
         * * Description: When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.`),
     RelationshipDefaultDisplayType: z.union([z.literal('Dropdown'), z.literal('Search')]).describe(`
         * * Field Name: RelationshipDefaultDisplayType
-        * * Display Name: Default Display Type
+        * * Display Name: Relationship Default Display Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Search
     * * Value List Type: List
@@ -16599,12 +16599,12 @@ export const MJEntitySchema = z.object({
         * * Description: Indicates if the default user form was auto-generated for this entity.`),
     EntityObjectSubclassName: z.string().nullable().describe(`
         * * Field Name: EntityObjectSubclassName
-        * * Display Name: Subclass Name
+        * * Display Name: Entity Object Subclass Name
         * * SQL Data Type: nvarchar(255)
         * * Description: TypeScript class name for the entity subclass in the codebase.`),
     EntityObjectSubclassImport: z.string().nullable().describe(`
         * * Field Name: EntityObjectSubclassImport
-        * * Display Name: Subclass Import
+        * * Display Name: Entity Object Subclass Import
         * * SQL Data Type: nvarchar(255)
         * * Description: Import path for the entity subclass in the TypeScript codebase.`),
     PreferredCommunicationField: z.string().nullable().describe(`
@@ -16629,7 +16629,7 @@ export const MJEntitySchema = z.object({
         * * Default Value: getutcdate()`),
     ScopeDefault: z.string().nullable().describe(`
         * * Field Name: ScopeDefault
-        * * Display Name: Default Scope
+        * * Display Name: Scope Default
         * * SQL Data Type: nvarchar(100)
         * * Description: Optional, comma-delimited string indicating the default scope for entity visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for simple defaults for filtering entity visibility, not security enforcement.`),
     RowsToPackWithSchema: z.union([z.literal('All'), z.literal('None'), z.literal('Sample')]).describe(`
@@ -16710,7 +16710,7 @@ export const MJEntitySchema = z.object({
         * * Description: When true, CodeGen LLM can auto-configure full-text search settings (FullTextSearchEnabled, catalog, index, function) during code generation runs.`),
     AutoUpdateAllowUserSearchAPI: z.boolean().describe(`
         * * Field Name: AutoUpdateAllowUserSearchAPI
-        * * Display Name: Auto-Update Search API
+        * * Display Name: Auto-Update Allow User Search API
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.`),
@@ -16728,7 +16728,7 @@ export const MJEntitySchema = z.object({
         * * Description: When true, CodeGen generates geo-aware subclass code, adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields (address, lat/lng, etc.).`),
     AutoUpdateSupportsGeoCoding: z.boolean().describe(`
         * * Field Name: AutoUpdateSupportsGeoCoding
-        * * Display Name: Auto-Update Geo-Coding
+        * * Display Name: Auto-Update Supports Geo-Coding
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.`),
@@ -16777,6 +16777,12 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, this entity may have rows removed by DELETE statements that do not go through BaseEntity.Delete() — purge and retention routines, or integration sync reconciling a remote source. Default 0, meaning every delete is expected to flow through BaseEntity so that record-change tracking, entity actions, cascade handling and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, and additionally requires DeleteType = 'Hard' — a direct DELETE removes the row outright rather than setting DeletedAt, which would defeat soft delete.`),
+    EnableFieldLevelSecurity: z.boolean().describe(`
+        * * Field Name: EnableFieldLevelSecurity
+        * * Display Name: Enable Field-Level Security
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, field-level (column-level) security is enforced for this entity and every enforcement point consults EntityFieldPermission rows. When 0 (the default), field-level security is off entirely and any existing permission rows are retained but inactive. Enabling snapshots the entity's current entity-level permissions into per-field rows, so turning it on changes no behavior until an administrator tightens a field; disabling preserves the rows so re-enabling does not lose the configuration.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -17617,34 +17623,39 @@ export const MJEntityFieldPermissionSchema = z.object({
         * * Display Name: Role ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)`),
-    Type: z.union([z.literal('Allow'), z.literal('Deny')]).describe(`
-        * * Field Name: Type
-        * * Display Name: Access Type
-        * * SQL Data Type: nvarchar(10)
-        * * Default Value: Allow
+    ReadAccess: z.union([z.literal('Allow'), z.literal('Deny'), z.literal('No Access')]).describe(`
+        * * Field Name: ReadAccess
+        * * Display Name: Read Access
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: No Access
     * * Value List Type: List
     * * Possible Values 
     *   * Allow
     *   * Deny
-        * * Description: Allow (default) or Deny. Deny rows override matching Allow rows for the same access flag during EntityFieldInfo.GetUserFieldPermissions() aggregation, letting administrators carve out specific role exclusions without restructuring the Allow grants.`),
-    CanRead: z.boolean().describe(`
-        * * Field Name: CanRead
-        * * Display Name: Can Read
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: When 1 on an Allow row, this role may read the field's values. When 1 on a Deny row, this role is blocked from reading it regardless of any Allow grant. Enforced at the API output boundary (result projection and GraphQL field mapping) and by predicate validation, which rejects an ExtraFilter/OrderBy referencing an unreadable field.`),
-    CanUpdate: z.boolean().describe(`
-        * * Field Name: CanUpdate
-        * * Display Name: Can Update
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: When 1 on an Allow row, this role may modify the field's value on an existing record. When 1 on a Deny row, this role is blocked from modifying it regardless of any Allow grant. Enforced server-side before SQL generation; the client-side BaseEntity check is UX-level defense-in-depth only.`),
-    CanCreate: z.boolean().describe(`
-        * * Field Name: CanCreate
-        * * Display Name: Can Create
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: Reserved for a future release: whether this role may supply the field's value on INSERT. The column ships now so the schema stays additive, but it is NOT enforced in this release — only CanRead and CanUpdate are. Enforcement is deferred until the semantics for NOT NULL columns a user cannot populate are settled.`),
+    *   * No Access
+        * * Description: Whether this role may read the field's values. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default) and leaves the outcome to the user's other roles. Enforced at the API output boundary (result projection and GraphQL field mapping), by predicate validation which rejects an ExtraFilter/OrderBy/Aggregate referencing an unreadable field, and by the strongly-typed accessor path which throws.`),
+    UpdateAccess: z.union([z.literal('Allow'), z.literal('Deny'), z.literal('No Access')]).describe(`
+        * * Field Name: UpdateAccess
+        * * Display Name: Update Access
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+        * * Description: Whether this role may modify the field's value on an EXISTING record. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default). Requires ReadAccess = Allow — a field a user cannot see is one they cannot change. Enforced server-side before SQL generation; the client-side BaseEntity check is UX-level defense-in-depth only.`),
+    CreateAccess: z.union([z.literal('Allow'), z.literal('Deny'), z.literal('No Access')]).describe(`
+        * * Field Name: CreateAccess
+        * * Display Name: Create Access
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+        * * Description: Whether this role may supply the field's value when INSERTING a record. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default). Requires ReadAccess = Allow. When a user may not create a field, any value they supply is dropped and the column takes its default — the insert is not rejected, matching the read path where a denied field is simply absent rather than an error. A NOT NULL column with no default that a user cannot create makes records uncreatable for that user; restricted fields should be nullable or defaulted.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -33699,7 +33710,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: ActionID
-    * * Display Name: Action ID
+    * * Display Name: Action
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
     */
@@ -33765,7 +33776,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -33824,7 +33835,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action ID
+    * * Display Name: Entity Action
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)
     * * Description: Optional. The Entity Action binding that caused this run. NULL when the action was invoked directly - from a resolver, a script, an agent step or a scheduled action.
@@ -33852,7 +33863,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: TargetEntityID
-    * * Display Name: Target Entity ID
+    * * Display Name: Target Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Optional. The entity of the record this run operated on. Deliberately denormalized rather than joined through EntityActionID: it survives the binding being deleted or retargeted, and it lets the log be queried by record with no join. Kept generic because every invoker has a subject - not only Entity Actions.
@@ -33866,7 +33877,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: TargetRecordID
-    * * Display Name: Target Record ID
+    * * Display Name: Target Record
     * * SQL Data Type: nvarchar(450)
     * * Description: Optional. The primary key of the record this run operated on, as text, paired with TargetEntityID. For multi-record invocation types (List, View) one log row is written per record, so this is always a single record.
     */
@@ -33919,7 +33930,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: TargetEntity
-    * * Display Name: Target Entity
+    * * Display Name: Target Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get TargetEntity(): string | null {
@@ -77645,7 +77656,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: VirtualEntity
-    * * Display Name: Is Virtual Entity
+    * * Display Name: Virtual Entity
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this is a virtual entity without a physical database table.
@@ -78048,7 +78059,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: RelationshipDefaultDisplayType
-    * * Display Name: Default Display Type
+    * * Display Name: Relationship Default Display Type
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Search
     * * Value List Type: List
@@ -78080,7 +78091,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: EntityObjectSubclassName
-    * * Display Name: Subclass Name
+    * * Display Name: Entity Object Subclass Name
     * * SQL Data Type: nvarchar(255)
     * * Description: TypeScript class name for the entity subclass in the codebase.
     */
@@ -78093,7 +78104,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: EntityObjectSubclassImport
-    * * Display Name: Subclass Import
+    * * Display Name: Entity Object Subclass Import
     * * SQL Data Type: nvarchar(255)
     * * Description: Import path for the entity subclass in the TypeScript codebase.
     */
@@ -78152,7 +78163,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: ScopeDefault
-    * * Display Name: Default Scope
+    * * Display Name: Scope Default
     * * SQL Data Type: nvarchar(100)
     * * Description: Optional, comma-delimited string indicating the default scope for entity visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for simple defaults for filtering entity visibility, not security enforcement.
     */
@@ -78329,7 +78340,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AutoUpdateAllowUserSearchAPI
-    * * Display Name: Auto-Update Search API
+    * * Display Name: Auto-Update Allow User Search API
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.
@@ -78371,7 +78382,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AutoUpdateSupportsGeoCoding
-    * * Display Name: Auto-Update Geo-Coding
+    * * Display Name: Auto-Update Supports Geo-Coding
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.
@@ -78490,6 +78501,20 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
     set AllowDirectSQLDelete(value: boolean) {
         this.Set('AllowDirectSQLDelete', value);
+    }
+
+    /**
+    * * Field Name: EnableFieldLevelSecurity
+    * * Display Name: Enable Field-Level Security
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, field-level (column-level) security is enforced for this entity and every enforcement point consults EntityFieldPermission rows. When 0 (the default), field-level security is off entirely and any existing permission rows are retained but inactive. Enabling snapshots the entity's current entity-level permissions into per-field rows, so turning it on changes no behavior until an administrator tightens a field; disabling preserves the rows so re-enabling does not lose the configuration.
+    */
+    get EnableFieldLevelSecurity(): boolean {
+        return this.Get('EnableFieldLevelSecurity');
+    }
+    set EnableFieldLevelSecurity(value: boolean) {
+        this.Set('EnableFieldLevelSecurity', value);
     }
 
     /**
@@ -80631,7 +80656,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
  * * Schema: __mj
  * * Base Table: EntityFieldPermission
  * * Base View: vwEntityFieldPermissions
- * * @description Role-based field-level (column-level) security. Maps an entity field to a role with per-field Read/Update access flags and Allow/Deny semantics, mirroring EntityPermission at entity level. Allow rows OR-aggregate across the roles a user holds; a Deny row from any matching role subtracts from that aggregate. When NO rows exist for a field, access is fully open (backwards compatible) and governed solely by entity-level permissions; when rows exist but none match the user's roles, access is denied. Primary keys and MemberJunction system audit columns are never restrictable.
+ * * @description Role-based field-level (column-level) security. One row per (entity field, role), carrying three independent trinary verbs — ReadAccess, UpdateAccess and CreateAccess — each Allow, Deny or No Access. Rows are only consulted when the parent entity has EnableFieldLevelSecurity = 1. Across the roles a user holds, a verb resolves to (any Allow) AND NOT (any Deny); No Access is neutral and grants nothing while blocking nothing. Read is required for Update and Create, enforced per row by a CHECK constraint and again after aggregation. Primary keys and MemberJunction system audit columns are never restrictable.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -80654,6 +80679,40 @@ export class MJEntityFieldPermissionEntity extends BaseEntity<MJEntityFieldPermi
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Entity Field Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Users cannot be granted Create or Update access unless they are also granted Read access, ensuring logical consistency in permission assignments.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateReadAccessRequiredForCreateOrUpdate(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Users cannot be granted Create or Update access unless they are also granted Read access, ensuring logical consistency in permission assignments.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateReadAccessRequiredForCreateOrUpdate(result: ValidationResult) {
+        if (this.ReadAccess != null && this.UpdateAccess != null && this.CreateAccess != null) {
+            if ((this.UpdateAccess === "Allow" || this.CreateAccess === "Allow") && this.ReadAccess !== "Allow") {
+                result.Errors.push(new ValidationErrorInfo(
+                    "ReadAccess",
+                    "Read access must be set to 'Allow' if either Create or Update access is allowed.",
+                    this.ReadAccess,
+                    ValidationErrorType.Failure
+                ));
+            }
+        }
     }
 
     /**
@@ -80696,63 +80755,60 @@ export class MJEntityFieldPermissionEntity extends BaseEntity<MJEntityFieldPermi
     }
 
     /**
-    * * Field Name: Type
-    * * Display Name: Access Type
-    * * SQL Data Type: nvarchar(10)
-    * * Default Value: Allow
+    * * Field Name: ReadAccess
+    * * Display Name: Read Access
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: No Access
     * * Value List Type: List
     * * Possible Values 
     *   * Allow
     *   * Deny
-    * * Description: Allow (default) or Deny. Deny rows override matching Allow rows for the same access flag during EntityFieldInfo.GetUserFieldPermissions() aggregation, letting administrators carve out specific role exclusions without restructuring the Allow grants.
+    *   * No Access
+    * * Description: Whether this role may read the field's values. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default) and leaves the outcome to the user's other roles. Enforced at the API output boundary (result projection and GraphQL field mapping), by predicate validation which rejects an ExtraFilter/OrderBy/Aggregate referencing an unreadable field, and by the strongly-typed accessor path which throws.
     */
-    get Type(): 'Allow' | 'Deny' {
-        return this.Get('Type');
+    get ReadAccess(): 'Allow' | 'Deny' | 'No Access' {
+        return this.Get('ReadAccess');
     }
-    set Type(value: 'Allow' | 'Deny') {
-        this.Set('Type', value);
+    set ReadAccess(value: 'Allow' | 'Deny' | 'No Access') {
+        this.Set('ReadAccess', value);
     }
 
     /**
-    * * Field Name: CanRead
-    * * Display Name: Can Read
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: When 1 on an Allow row, this role may read the field's values. When 1 on a Deny row, this role is blocked from reading it regardless of any Allow grant. Enforced at the API output boundary (result projection and GraphQL field mapping) and by predicate validation, which rejects an ExtraFilter/OrderBy referencing an unreadable field.
+    * * Field Name: UpdateAccess
+    * * Display Name: Update Access
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+    * * Description: Whether this role may modify the field's value on an EXISTING record. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default). Requires ReadAccess = Allow — a field a user cannot see is one they cannot change. Enforced server-side before SQL generation; the client-side BaseEntity check is UX-level defense-in-depth only.
     */
-    get CanRead(): boolean {
-        return this.Get('CanRead');
+    get UpdateAccess(): 'Allow' | 'Deny' | 'No Access' {
+        return this.Get('UpdateAccess');
     }
-    set CanRead(value: boolean) {
-        this.Set('CanRead', value);
+    set UpdateAccess(value: 'Allow' | 'Deny' | 'No Access') {
+        this.Set('UpdateAccess', value);
     }
 
     /**
-    * * Field Name: CanUpdate
-    * * Display Name: Can Update
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: When 1 on an Allow row, this role may modify the field's value on an existing record. When 1 on a Deny row, this role is blocked from modifying it regardless of any Allow grant. Enforced server-side before SQL generation; the client-side BaseEntity check is UX-level defense-in-depth only.
+    * * Field Name: CreateAccess
+    * * Display Name: Create Access
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+    * * Description: Whether this role may supply the field's value when INSERTING a record. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default). Requires ReadAccess = Allow. When a user may not create a field, any value they supply is dropped and the column takes its default — the insert is not rejected, matching the read path where a denied field is simply absent rather than an error. A NOT NULL column with no default that a user cannot create makes records uncreatable for that user; restricted fields should be nullable or defaulted.
     */
-    get CanUpdate(): boolean {
-        return this.Get('CanUpdate');
+    get CreateAccess(): 'Allow' | 'Deny' | 'No Access' {
+        return this.Get('CreateAccess');
     }
-    set CanUpdate(value: boolean) {
-        this.Set('CanUpdate', value);
-    }
-
-    /**
-    * * Field Name: CanCreate
-    * * Display Name: Can Create
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: Reserved for a future release: whether this role may supply the field's value on INSERT. The column ships now so the schema stays additive, but it is NOT enforced in this release — only CanRead and CanUpdate are. Enforcement is deferred until the semantics for NOT NULL columns a user cannot populate are settled.
-    */
-    get CanCreate(): boolean {
-        return this.Get('CanCreate');
-    }
-    set CanCreate(value: boolean) {
-        this.Set('CanCreate', value);
+    set CreateAccess(value: 'Allow' | 'Deny' | 'No Access') {
+        this.Set('CreateAccess', value);
     }
 
     /**
