@@ -691,8 +691,6 @@ import {
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
     VisualizeResourceComponent,
-    WorkflowsDashboardComponent,
-    WorkflowsResourceComponent,
 } from '@memberjunction/ng-dashboards';
 
 // @memberjunction/ng-explorer-core (13 classes)
@@ -1316,8 +1314,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
     VisualizeResourceComponent,
-    WorkflowsDashboardComponent,
-    WorkflowsResourceComponent,
     ArtifactResource,
     ChatConversationsResource,
     ConversationFeedbackResource,

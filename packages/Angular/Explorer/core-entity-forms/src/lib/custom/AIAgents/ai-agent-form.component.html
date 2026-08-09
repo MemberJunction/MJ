@@ -114,23 +114,44 @@
           </button>
         </div>
       }
-      <!-- Single Pane Layout with Expander Panels -->
-      <div class="form-content">
-          <!-- Custom Agent Type Section (if defined) -->
-          @if (record.ID && agentType && agentType.UIFormSectionKey) {
-            <mj-accordion-panel id="custom"
-              [Expanded]="GetSectionExpanded('custom', agentType.UIFormSectionExpandedByDefault)">
-                <ng-template mjAccordionTitle>
-                    <i class="fa-solid fa-puzzle-piece"></i> {{ agentType.Name }} Configuration
-                </ng-template>
-                <div class="panel-content custom-agent-type-section" [style.display]="'block'">
-                  @if (loadingStates.customSection) {
-                    <mj-loading text="Loading {{ agentType.Name }} configuration..." size="medium"></mj-loading>
-                  }
-                  <ng-container #customSectionContainer></ng-container>
-                </div>
-            </mj-accordion-panel>
+      <!-- Tabs, not accordions. For an agent type that ships a designer, the diagram IS the agent;
+           leaving it as one collapsed panel among eleven made the record's most important view its
+           least reachable one. Invocations is offered for every agent, because "what runs this when
+           I'm not looking?" is a question you can ask of any of them. -->
+      @if (FormTabs.length > 1) {
+        <div class="agent-tabbar">
+          <mj-tab-nav [Tabs]="FormTabs" [ActiveKey]="ActiveFormTab || ''" (TabChange)="OnFormTabChange($event)"></mj-tab-nav>
+        </div>
+      }
+
+      @if (HasDesignerTab) {
+        <!-- Hidden with CSS rather than removed with @if: the designer holds UNSAVED edits, and
+             destroying it on a tab switch would discard them without a word. Keeping it mounted also
+             means the canvas keeps its zoom and node positions across trips to Details. -->
+        <div class="agent-pane agent-pane--designer" [class.agent-pane--hidden]="ActiveFormTab !== 'designer'">
+          @if (loadingStates.customSection) {
+            <mj-loading text="Loading {{ agentType?.Name }} configuration..." size="medium"></mj-loading>
           }
+          <ng-container #customSectionContainer></ng-container>
+        </div>
+      }
+
+      @if (record.ID) {
+        <div class="agent-pane agent-pane--invocations" [class.agent-pane--hidden]="ActiveFormTab !== 'invocations'">
+          <mj-agent-invocations
+            [Provider]="Provider"
+            [AgentID]="record.ID"
+            [Active]="ActiveFormTab === 'invocations'"
+            [ExposeAsAction]="record.ExposeAsAction"
+            [ParentAgentName]="record.Parent"
+            [ParentAgentID]="record.ParentID"
+            (RecordOpenRequested)="OnInvocationOpenRequested($event)">
+          </mj-agent-invocations>
+        </div>
+      }
+
+      <!-- Single Pane Layout with Expander Panels -->
+      <div class="form-content agent-pane" [class.agent-pane--hidden]="ActiveFormTab !== 'details'">
           <!-- Requests & History -->
           @if (record.ID) {
             <mj-accordion-panel id="history"

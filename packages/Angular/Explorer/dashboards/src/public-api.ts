@@ -216,12 +216,6 @@ export * from './ai-dashboards.module';
 export * from './actions-dashboards.module';
 export * from './testing-dashboards.module';
 export * from './scheduling-dashboards.module';
-// Workflows app — the Create Workflow front door + saved-workflow list (D18/D19)
-export * from './workflows-dashboards.module';
-export * from './Workflows/workflows-dashboard.component';
-export * from './Workflows/components/create-workflow.component';
-export * from './Workflows/components/workflows-resource.component';
-export * from './Workflows/workflows.types';
 export * from './communication-dashboards.module';
 export * from './credentials-dashboards.module';
 export * from './data-explorer-dashboards.module';

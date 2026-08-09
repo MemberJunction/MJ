@@ -8,7 +8,7 @@ import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJAIAgentFormComponent } from '../../generated/Entities/MJAIAgent/mjaiagent.form.component';
-import { MJDialogService } from '@memberjunction/ng-ui-components';
+import { MJDialogService, type TabConfig } from '@memberjunction/ng-ui-components';
 import { SharedService } from '@memberjunction/ng-shared';
 import { AIAgentManagementService } from './ai-agent-management.service';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
@@ -18,7 +18,7 @@ import { PromptSelectorResult } from './prompt-selector-dialog.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { PromptSelectorDialogComponent } from './prompt-selector-dialog.component';
-import { CreateAgentService, CreateAgentResult } from '@memberjunction/ng-agents';
+import { CreateAgentService, CreateAgentResult, type AgentInvocationOpenRequestedEventArgs } from '@memberjunction/ng-agents';
 import { SearchScopeChildGridColumn } from '@memberjunction/ng-search';
 // AgentPermissionsDialogComponent is now from @memberjunction/ng-agents (shown via ShowPermissionsDialog flag)
 
@@ -421,6 +421,84 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /** Tracked expanded/collapsed state for each panelbar section */
     public SectionStates: Record<string, boolean> = {};
 
+    // === Form Tabs ===
+    //
+    // For an agent type that ships a designer (Flow being the one that does today), the diagram IS
+    // the agent — burying it in a collapsed accordion below ten sibling panels, behind a dynamic
+    // component that only instantiates when that panel is expanded, made the most important view of
+    // the record the hardest one to reach. Tabs put it first.
+    //
+    // Every agent also gets Invocations, because "what runs this thing when I'm not looking?" is a
+    // question you can ask of any agent, not just a Flow.
+
+    /**
+     * Which pane is showing. Persisted per user, so returning to a record lands where you left.
+     *
+     * Starts null rather than `'details'`: null means "nobody has chosen yet", which lets
+     * {@link refreshFormTabs} fall through to the first tab — the designer, when the agent type has
+     * one. A hardcoded default would open every Flow agent on Details and bury its diagram again.
+     */
+    public ActiveFormTab: string | null = null;
+
+    /** Tab chrome, recomputed only when the agent type or record identity changes. */
+    public FormTabs: TabConfig[] = [];
+
+    /** True when this agent's type contributes a designer pane (Flow does; Loop does not). */
+    public get HasDesignerTab(): boolean {
+        return !!this.record?.ID && !!this.agentType?.UIFormSectionKey;
+    }
+
+    /**
+     * Rebuilds the tab strip.
+     *
+     * A field rather than a getter: a getter would allocate a new array on every change-detection
+     * pass, and `mj-tab-nav` would see a changed input each time.
+     */
+    private refreshFormTabs(): void {
+        const tabs: TabConfig[] = [];
+        if (this.HasDesignerTab) {
+            tabs.push({
+                key: 'designer',
+                label: this.designerTabLabel,
+                icon: this.agentType?.Name === 'Flow' ? 'fa-solid fa-diagram-project' : 'fa-solid fa-puzzle-piece',
+            });
+        }
+        tabs.push({ key: 'details', label: 'Details', icon: 'fa-solid fa-sliders' });
+        if (this.record?.ID) {
+            tabs.push({ key: 'invocations', label: 'Invocations', icon: 'fa-solid fa-tower-broadcast' });
+        }
+        this.FormTabs = tabs;
+
+        // Covers both "never chosen" and "chose a tab this agent no longer has" (its type changed, or
+        // this is an unsaved record with no Invocations yet). Either way, falling through to the
+        // first tab is what keeps every pane from being hidden at once.
+        if (!tabs.some((t) => t.key === this.ActiveFormTab)) {
+            this.ActiveFormTab = tabs[0]?.key ?? 'details';
+        }
+    }
+
+    /** What the designer pane is called. Flow gets the end-user word; other types get their own name. */
+    private get designerTabLabel(): string {
+        return this.agentType?.Name === 'Flow' ? 'Flow' : (this.agentType?.Name ?? 'Designer');
+    }
+
+    public OnFormTabChange(key: string): void {
+        this.ActiveFormTab = key;
+        this.persistPreferences();
+        // The designer's container is created once and kept mounted (see the template), so the only
+        // thing a tab switch has to do is make sure it got loaded — which matters when the user's
+        // saved tab was Details and the designer has therefore never been visible.
+        if (key === 'designer' && !this.customSectionLoadedForTab) {
+            this.setTrackedTimeout(() => this.loadCustomFormSection(), 0);
+        }
+        this.cdr.detectChanges();
+    }
+
+    /** Mirrors `customSectionLoaded` for the tab path without reaching into a private field from the template. */
+    private get customSectionLoadedForTab(): boolean {
+        return this.customSectionLoaded;
+    }
+
     // === Dropdown Data ===
     /** Model selection mode options for the dropdown */
     public modelSelectionModes = [
@@ -774,6 +852,13 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             // Start background timer for running time updates
             this.startRunningTimeUpdater();
         }
+
+        // Built unconditionally, not only on the agent-type path: a new record has no type to load
+        // from, and an agent whose TypeID is unset returns early from loadCurrentAgentType — either
+        // way the strip still needs its Details tab, and without this the form would render no tabs
+        // and no panes at all.
+        this.refreshFormTabs();
+        this.cdr.markForCheck();
     }
 
     /**
@@ -1137,6 +1222,9 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             console.error('Error loading agent type:', error);
             this.agentType = null;
         }
+        // The tab strip depends on the type (only some types ship a designer), so it cannot be built
+        // until the type is known.
+        this.refreshFormTabs();
     }
     
     /**
@@ -1211,6 +1299,9 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 const prefs = JSON.parse(raw);
                 this.HeaderCollapsed = prefs.headerCollapsed ?? false;
                 this.SectionStates = prefs.sectionStates ?? {};
+                // Validated against the real tab set in refreshFormTabs() — a stored key whose tab no
+                // longer exists must not leave every pane hidden.
+                this.ActiveFormTab = typeof prefs.activeTab === 'string' ? prefs.activeTab : null;
             }
         } catch (error) {
             console.error('Error loading AI Agent form preferences:', error);
@@ -1223,7 +1314,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         if (!this.preferencesLoaded) return;
         const prefs = {
             headerCollapsed: this.HeaderCollapsed,
-            sectionStates: this.SectionStates
+            sectionStates: this.SectionStates,
+            activeTab: this.ActiveFormTab
         };
         UserInfoEngine.Instance.SetSettingDebounced(
             MJAIAgentFormComponentExtended.PREFS_KEY,
@@ -3261,6 +3353,17 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         if (this.record.ParentID) {
             this.navigateToEntity('MJ: AI Agents', this.record.ParentID);
         }
+    }
+
+    /**
+     * Opens the substrate behind an invocation pathway.
+     *
+     * The Invocations widget names the row but never navigates to it — it is a `widgets`-layer
+     * component with no Router by construction. Translating that intent into navigation is exactly
+     * the job of this layer.
+     */
+    public OnInvocationOpenRequested(event: AgentInvocationOpenRequestedEventArgs): void {
+        this.navigateToEntity(event.EntityName, event.RecordID);
     }
 
     /**

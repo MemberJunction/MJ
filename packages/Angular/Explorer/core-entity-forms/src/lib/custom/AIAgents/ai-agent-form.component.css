@@ -2797,3 +2797,46 @@
     color: var(--mj-status-warning);
     border-color: color-mix(in srgb, var(--mj-status-warning) 25%, transparent);
 }
+
+/* ── Form tabs ───────────────────────────────────────────────────────────
+   Panes are hidden with `display: none`, never removed from the DOM. The
+   designer pane holds UNSAVED canvas edits; @if-ing it away on a tab switch
+   would discard them silently, and would also throw away the canvas's zoom and
+   node positions on every trip to Details. */
+
+.agent-tabbar {
+    flex: 0 0 auto;
+    padding: 8px 12px 0;
+    background: var(--mj-bg-page);
+}
+
+.agent-pane {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.agent-pane--hidden {
+    display: none;
+}
+
+.agent-pane--designer {
+    overflow: hidden;
+    padding: 8px 12px 12px;
+    background: var(--mj-bg-page);
+}
+
+/* The designer's dynamically-created section has no height of its own, so without
+   this the flow canvas collapses to zero and renders as an empty strip. */
+.agent-pane--designer > ng-component,
+.agent-pane--designer > * {
+    flex: 1;
+    min-height: 0;
+}
+
+.agent-pane--invocations {
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--mj-bg-page);
+}

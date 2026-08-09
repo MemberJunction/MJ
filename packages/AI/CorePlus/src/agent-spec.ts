@@ -4,6 +4,8 @@
  * the AgentSpec class which provides methods to manipulate and synchronize this spec with
  * the underlying agent metadata in the database.
  */
+import type { MJAIAgentEntity, MJAIAgentStepEntity } from '@memberjunction/core-entities';
+
 export interface AgentSpec {
     /**
      * Detailed markdown formatted requirements that explain the business goals of the agent without
@@ -35,9 +37,15 @@ export interface AgentSpec {
     TypeID?: string;
 
     /**
-     * Agent status - Active, Inactive, or Pending
+     * Agent status.
+     *
+     * Derived from the entity rather than restated, because a hand-copied union silently drifts from
+     * the CHECK constraint that actually decides what saves. This one had drifted: it read
+     * `'Inactive'`, which is not a value `AIAgent.Status` accepts, so every caller that set it —
+     * the Architect's validator, `WorkflowAgentWriter`'s Draft/Paused mapping — was writing a value
+     * the database rejects.
      */
-    Status?: 'Active' | 'Inactive' | 'Pending';
+    Status?: MJAIAgentEntity['Status'];
 
     /**
     * Font Awesome icon class (e.g., fa-robot, fa-brain) for the agent. Used as fallback when LogoURL is not set or fails to load.
@@ -316,7 +324,14 @@ export interface AgentStep {
     ID: string;
     Name: string;
     Description?: string;
-    StepType: 'Prompt' | 'Action' | 'Sub-Agent';
+    /**
+     * Derived from the entity rather than restated. The hand-copied union here read
+     * `'Prompt' | 'Action' | 'Sub-Agent'` and had already drifted: `AIAgentStep.StepType` also accepts
+     * `ForEach` and `While`, so anything authoring an agent through this spec — the Agent Manager
+     * above all — could not express a loop at all, even though the runner has executed them for
+     * releases. Deriving the type is what makes the next value CodeGen adds flow through for free.
+     */
+    StepType: MJAIAgentStepEntity['StepType'];
     /**
      * If this is the first step of the flow agent or not
      */
@@ -329,8 +344,37 @@ export interface AgentStep {
     PromptName?: string;
     PromptDescription?: string;
 
-    ActionOutputMapping?: string;
-    ActionInputMapping?: string;
+    /**
+     * Maps a step's inputs and outputs, as JSON text **or** as the object it parses to.
+     *
+     * Both shapes, because both are already in use and pretending otherwise made the type a lie:
+     * `AgentSpecSync` parses these into objects when reading a step back out and stringifies them
+     * when writing, the Architect's validator explicitly accepts either, and the prompt documents
+     * them as `string | object`. Declaring only `string` meant the one honest place — the read
+     * path — had to be typed `any` to compile.
+     */
+    ActionOutputMapping?: string | Record<string, unknown>;
+    ActionInputMapping?: string | Record<string, unknown>;
+
+    /**
+     * What runs on each pass of a `ForEach` or `While` step.
+     *
+     * A loop step is a *wrapper*: `LoopBodyType` says which of `ActionID` / `PromptID` / `SubAgentID`
+     * is the body, and the loop's own bounds live in {@link AgentStep.Configuration}. Ignored for the
+     * non-loop step types.
+     */
+    LoopBodyType?: MJAIAgentStepEntity['LoopBodyType'];
+
+    /**
+     * Step-specific settings, as a JSON string — the shape `AIAgentStep.Configuration` stores.
+     *
+     * For a loop step: `{ type, collectionPath?, itemVariable?, indexVariable?, maxIterations?,
+     * continueOnError?, condition? }`. Typed as a string rather than an object because that is what
+     * the column holds and what the runner parses; giving the spec a richer shape than the storage
+     * would put a translation step between authoring and execution, which is where the two would
+     * start to disagree.
+     */
+    Configuration?: string;
 
     Paths?: Array<AgentStepPath>
 }
