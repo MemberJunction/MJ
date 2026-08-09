@@ -26,6 +26,9 @@ class StubFlowEditor {
   @Input() AgentID: string | null = null;
   @Input() EditMode = false;
   @Input() FullScreen = false;
+  /** Defaults mirror the real editor's, so an unbound input is asserted as OFF rather than as absent. */
+  @Input() ShowSaveControls = false;
+  @Input() CanvasTitle: string | null = 'Flow Configuration';
   @Output() FlowSaved = new EventEmitter<void>();
   @Output() FullScreenToggled = new EventEmitter<boolean>();
 }
@@ -60,6 +63,28 @@ describe('FlowAgentFormSectionComponent (DOM)', () => {
     expect(editorInstance.AgentID).toBe('agent-123');
     expect(editorInstance.EditMode).toBe(true);
     expect(editor).not.toBeNull();
+  });
+
+  it('does NOT let the editor show its own save controls', () => {
+    // The agent form owns this record's save and contributes the flow to it. A Save button inside
+    // the canvas would be a second save button for the same record, with its own idea of what
+    // "saved" means — which is exactly the state this section exists to avoid.
+    const fixture = render((i) => {
+      i.record = recordWithId('agent-123');
+      i.EditMode = true;
+    });
+    const editor = fixture.debugElement.query((el) => el.name === 'mj-flow-agent-editor')
+      ?.componentInstance as StubFlowEditor;
+    expect(editor.ShowSaveControls).toBe(false);
+  });
+
+  it('suppresses the canvas title, because the form chrome already names the record', () => {
+    const fixture = render((i) => {
+      i.record = recordWithId('agent-123');
+    });
+    const editor = fixture.debugElement.query((el) => el.name === 'mj-flow-agent-editor')
+      ?.componentInstance as StubFlowEditor;
+    expect(editor.CanvasTitle).toBeNull();
   });
 
   it('renders the "save first" empty-state when there is no record', () => {

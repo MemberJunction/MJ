@@ -20,9 +20,11 @@
 
     <div class="mj-agent-editor-toolbar-center">
       <!-- Fullscreen title -->
-      <span class="mj-agent-editor-title">
-        <i class="fa-solid fa-diagram-project"></i> Flow Configuration
-      </span>
+      @if (CanvasTitle) {
+        <span class="mj-agent-editor-title">
+          <i class="fa-solid fa-diagram-project"></i> {{ CanvasTitle }}
+        </span>
+      }
 
       <!-- View Mode Toggle -->
       <div class="mj-agent-editor-view-toggle">
@@ -53,26 +55,27 @@
 
     <div class="mj-agent-editor-toolbar-right">
       <!-- Status indicators -->
-      @if (hasUnsavedChanges) {
+      @if (ShowSaveControls && hasUnsavedChanges) {
         <span class="mj-agent-editor-status mj-agent-editor-status--unsaved">
           <i class="fa-solid fa-circle"></i> Unsaved
         </span>
       }
-      @if (lastSaved) {
+      @if (ShowSaveControls && lastSaved) {
         <span class="mj-agent-editor-status">
           Saved {{ lastSaved | date:'shortTime' }}
         </span>
       }
 
-      <!-- Save + Cancel (when editing) -->
-      @if (isEditingActive) {
+      <!-- Save + Cancel — only when this editor owns persistence. When a host form owns the
+           record's save, a Save button here is a SECOND save button for the same record. -->
+      @if (ShowSaveControls && isEditingActive) {
         <button class="mj-agent-editor-btn mj-agent-editor-btn--primary"
           [disabled]="isSaving || !hasUnsavedChanges" (click)="Save()">
           <i class="fa-solid" [ngClass]="isSaving ? 'fa-spinner fa-spin' : 'fa-floppy-disk'"></i>
           {{ isSaving ? 'Saving...' : 'Save' }}
         </button>
       }
-      @if (fullscreenEditMode && !EditMode) {
+      @if (ShowSaveControls && fullscreenEditMode && !EditMode) {
         <button
           class="mj-agent-editor-btn"
           (click)="cancelFullscreenEdit()" title="Cancel editing">
@@ -80,12 +83,12 @@
         </button>
       }
 
-      @if (isEditingActive) {
+      @if (ShowSaveControls && isEditingActive) {
         <div class="mj-agent-editor-btn-divider"></div>
       }
 
       <!-- Fullscreen edit toggle (only when parent is NOT in edit mode) -->
-      @if (!EditMode && !fullscreenEditMode && userCanUpdate) {
+      @if (ShowSaveControls && !EditMode && !fullscreenEditMode && userCanUpdate) {
         <button
           class="mj-agent-editor-btn mj-agent-editor-btn--edit"
           (click)="toggleFullscreenEditMode()" title="Edit flow">

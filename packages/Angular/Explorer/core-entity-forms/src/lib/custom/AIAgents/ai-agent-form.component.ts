@@ -769,6 +769,16 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     
     /** Flag to indicate if there are unsaved changes */
     public hasUnsavedChanges = false;
+
+    /**
+     * Surfaces the type section's own edits to the toolbar and the navigate-away guard.
+     *
+     * A flow canvas edit changes no field on the agent row, so `record.Dirty` stays false and the
+     * form would otherwise report itself clean while the user is looking at unsaved steps.
+     */
+    public override get HasAdditionalUnsavedChanges(): boolean {
+        return this.customSectionComponent?.HasPendingChanges === true;
+    }
     
     // Emergency circuit breaker to prevent infinite loops
     private _changeDetectionCount = 0;
@@ -3299,9 +3309,29 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 }
             }
 
+            // A custom type section (the Flow designer today) may hold edits of its own — steps and
+            // paths the form knows nothing about. Queuing them here is what makes the record atomic:
+            // before this, the section's Save was the ONLY path that wrote them, so hiding that
+            // button would have made flow edits unsavable.
+            if (this.customSectionComponent) {
+                const contributed = await this.customSectionComponent.ContributeToSave(transactionGroup);
+                if (!contributed) {
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        `The ${this.agentType?.Name ?? 'type'} configuration could not be prepared for saving. Nothing was saved.`,
+                        'error',
+                        4000
+                    );
+                    return false;
+                }
+            }
+
             // Execute all operations atomically
             const success = await transactionGroup.Submit();
             if (success) {
+                // Only now is the section's work actually committed — telling it earlier would mark
+                // edits saved that a failed submit had discarded.
+                this.customSectionComponent?.OnHostSaveCompleted();
+
                 // Clear our local state since save was successful
                 this.hasUnsavedChanges = false;
                 
