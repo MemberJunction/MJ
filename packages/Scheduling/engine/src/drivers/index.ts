@@ -4,6 +4,7 @@
  */
 
 export * from './AgentScheduledJobDriver';
+export * from './ActionLogRetentionScheduledJobDriver';
 export * from './ActionScheduledJobDriver';
 export * from './IntegrationSyncScheduledJobDriver';
 export * from './IntegrationDiscoveryScheduledJobDriver';

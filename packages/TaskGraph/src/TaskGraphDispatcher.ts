@@ -49,6 +49,7 @@ import { IsReinvokeCapReached, MAX_REINVOKE_DEPTH, ParseTaskGraphParentMetadata,
 import {
     DEFAULT_DISPATCHER_CONFIG,
     ProviderFactory,
+    TaskActionRunner,
     TaskAgentRunner,
     TaskGraphDispatcherConfig,
     type TaskContinuationDeliverer,
@@ -101,6 +102,11 @@ export class TaskGraphDispatcher implements IShutdownable {
          * announces nothing.
          */
         private readonly observer?: TaskGraphObserver,
+        /**
+         * Optional. Absent means this host cannot run action nodes; they stay Pending and visible
+         * rather than being failed, because "nobody here can run this" is not "this ran and broke".
+         */
+        private readonly actionRunner?: TaskActionRunner,
     ) {
         this.config = { ...DEFAULT_DISPATCHER_CONFIG, ...config };
         this.claims = new TaskClaimStore(this.config.InstanceID, this.config.ClaimTTLSeconds);
@@ -310,14 +316,28 @@ export class TaskGraphDispatcher implements IShutdownable {
                 catch (e) { LogError(`[TaskGraphDispatcher] Task ${taskID} has malformed InputPayload: ${e}`); }
             }
 
-            const result = await this.agentRunner.RunAgentForTask({
-                TaskID: taskID,
-                AgentID: task.AgentID!,
-                InputPayload: inputPayload,
-                DependencyOutputs: dependencyOutputs,
-                Provider: provider,
-                ContextUser: this.contextUser,
-            });
+            // Which executor runs this node is decided by its assignment, which the Task table makes
+            // exclusive — so this is a branch on data, not a guess. Both branches are normalized to
+            // one shape here so the recording below stays a single path: an action node simply has
+            // no agent run to point at, since its forensics live in ActionExecutionLog.
+            const result: { Success: boolean; Output?: unknown; ErrorMessage?: string; AgentRunID?: string | null } =
+                task.ActionID
+                    ? { ...await this.actionRunner!.RunActionForTask({
+                        TaskID: taskID,
+                        ActionID: task.ActionID,
+                        InputPayload: inputPayload,
+                        DependencyOutputs: dependencyOutputs,
+                        Provider: provider,
+                        ContextUser: this.contextUser,
+                    }), AgentRunID: null }
+                    : await this.agentRunner.RunAgentForTask({
+                        TaskID: taskID,
+                        AgentID: task.AgentID!,
+                        InputPayload: inputPayload,
+                        DependencyOutputs: dependencyOutputs,
+                        Provider: provider,
+                        ContextUser: this.contextUser,
+                    });
 
             const recorded = await this.claims.CompleteClaimed(
                 provider,
@@ -674,7 +694,13 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // they cleared. Without a notification here a workflow simply stops, waiting on
                 // someone who was never told. That silent stall is the failure mode this exists to
                 // prevent, so it happens on the eligibility check rather than at submission.
-                if (!entity.AgentID) {
+                if (entity.ActionID) {
+                    // An action node this host has no runner for is left Pending rather than
+                    // claimed. Claiming it would take ownership of work this process cannot do, and
+                    // the claim would then have to expire before any host that CAN do it gets a
+                    // turn — a self-inflicted stall on a mixed deployment.
+                    if (!this.actionRunner) continue;
+                } else if (!entity.AgentID) {
                     await this.notifyHumanTaskReady(entity, provider);
                     continue;
                 }

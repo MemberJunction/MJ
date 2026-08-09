@@ -341,8 +341,12 @@ the gate. Run L2 and L3 after the SQL Server database finishes building.
 
 #### L1 file parity
 
-Run `node scripts/check-pg-migration-parity.mjs`. It needs no database, so run it
-immediately.
+Compare `migrations/vN/V*.sql` against `migrations-pg/vN/V*.pg.sql` folder by
+folder and list every T-SQL migration still missing a counterpart — that list IS
+this release's conversion work. (There is no longer a parity *script*: existence
+was ungated deliberately, because authoring counterparts is this build-engineer
+process, not feature-PR work. See `migrations/CLAUDE.md`.) It needs no database,
+so do it immediately.
 
 #### L2 counts: SQL Server against PG
 

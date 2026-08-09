@@ -14097,6 +14097,9 @@ importers:
 
   packages/TaskGraph:
     dependencies:
+      '@memberjunction/actions-base':
+        specifier: 6.1.0-edge.0
+        version: link:../Actions/Base
       '@memberjunction/ai-agents':
         specifier: 6.1.0-edge.0
         version: link:../AI/Agents
