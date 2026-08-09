@@ -30,6 +30,7 @@ import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 import { SQLLogging } from './Misc/sql_logging';
 import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult, resolveCodeGenDatabaseProvider } from './Database/codeGenDatabaseProvider';
 import { SystemIntegrityBase } from './Misc/system_integrity';
+import { reconcileFieldLevelSecurity } from './Database/reconcileFieldLevelSecurity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo } from '@memberjunction/core';
@@ -291,6 +292,13 @@ export class RunCodeGenBase {
         } else {
           succeedSpinner('Metadata management completed');
         }
+
+        // Field-level security reconciliation. Runs AFTER the refresh above so it sees the
+        // EntityField rows manageMetadata just created for newly-discovered columns: on an
+        // FLS-enabled entity a field with no permission rows is DENIED, so a column added
+        // without this step would be invisible to every user until something else reconciled.
+        // It also removes rows orphaned by a dropped column or a revoked role.
+        await reporter.phase('reconcileFieldPermissions', () => reconcileFieldLevelSecurity(provider, currentUser));
 
         const sqlOutputDir = outputDir('SQL', true);
         let sqlGenerationSucceeded = true;

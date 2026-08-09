@@ -22,15 +22,16 @@
 | W1 | Schema + CodeGen | **Done.** Migration `V202608082359__v6.1.x__Entity_Field_Permissions.sql`. CodeGen generated the value-list unions AND a `ValidateReadAccessRequiredForCreateOrUpdate` validator from the CHECK constraint, so the hand-written EFP validation the research doc planned is unnecessary. |
 | W2 | Aggregation | **Done.** Trinary truth table, post-aggregation Read-required clamp, `GetDeniedCreateFields`, `EnableFieldLevelSecurity` replacing `HasAnyFieldPermissions`. |
 | W3 | Cache reversal | **Done.** Server `fls:` segment, allowed-set widening and `entity_object` exemption all removed; client keeps its allowed-list key. Tier split lives only in `ComputeRunViewFLSFingerprintKey`. |
-| W4 | Lifecycle | **Partial.** Delta + applier + 2 of 3 adapters done. **Remaining:** CodeGen manage-metadata adapter (schema changes), adapter unit tests. |
+| W4 | Lifecycle | **Done.** Delta + applier + all 3 adapters (flag flip, entity permissions, CodeGen schema changes) + tests. |
 | W5 | Create enforcement + Get/Set throw | **Done.** `EntityField.CreateSuppressed`, `ApplyFieldLevelCreateSuppression`, `AssertFieldReadable` on `Get`/`Set`, `FieldSecurityDenialMessage` now shared. |
 | W6 | Metadata invalidation + docs | **Not started.** |
 
 ## Test baseline (all currently passing)
 
-MJCore 1998 · MJCoreEntitiesServer 419 · MJServer 826 (+56 skipped) ·
-GenericDatabaseProvider 894 (+5 skipped) · CodeGenLib 764 (+60 skipped) ·
-GraphQLDataProvider 274 · SQLServerDataProvider 87. Full build: 299 tasks.
+MJCore 1998 · MJCoreEntitiesServer 429 · MJServer 826 (+56 skipped) ·
+GenericDatabaseProvider 894 (+5 skipped) · CodeGenLib 771 (+60 skipped) ·
+GraphQLDataProvider 274 · SQLServerDataProvider 87 · ng-base-forms 196.
+Full build: 299 tasks. `mj standards check` passes.
 
 ## Integration tests — deferred to the END, deliberately
 
@@ -44,14 +45,17 @@ them into a tracked file.**
 
 ## Remaining work, in order
 
-### W4 finish
-1. **CodeGen manage-metadata adapter.** New column on an enabled entity currently has no rows,
-   so it is denied to everyone until some other adapter happens to fire. Hook
-   `ComputeFieldPermissionDelta` into the manage-metadata step (`ManageMetadataBase.manageMetadata`,
-   before the unconditional `provider.Refresh()`).
-2. **Adapter unit tests** — `MJEntityEntityServer`, the `MJEntityPermissionEntityServer`
-   reconciliation path, and `ReconcileFieldPermissions` itself. The pure delta has 16 tests;
-   these three have none.
+### W4 — DONE
+The CodeGen adapter is `reconcileFieldLevelSecurity` in `CodeGenLib/src/Database/`, called from
+`runCodeGen.ts` **after** the `provider.Refresh()` that follows `manageMetadata` — it must see the
+`EntityField` rows that pass just created, or it computes the delta from a field list predating
+the columns it exists to cover. Failures are logged, not fatal: reconciliation is a maintenance
+pass over data CodeGen does not own, and failing the run after schema/views/procs are written
+would trade a recoverable permissions gap for an unrecoverable half-finished build.
+
+Still untested by unit tests: `MJEntityEntityServer` and the `MJEntityPermissionEntityServer`
+reconciliation path (both are thin wiring over `ReconcileFieldPermissions`, which has 10 tests).
+The live flag-flip is the real oracle and belongs in the integration tier.
 
 ### W5 — DONE, but note the deferred client-UI consequence
 Shipped as designed: `EntityField.CreateSuppressed` (deliberately separate from `NotLoaded`,
