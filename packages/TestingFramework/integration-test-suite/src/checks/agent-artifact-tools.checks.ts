@@ -39,6 +39,7 @@ import type {
 import { ArtifactToolManager } from '@memberjunction/ai-agents';
 import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import type { AgentInvoker } from './_it-live-agent-harness';
+import { userTurn } from './agent-live-shared';
 import type { ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import {
     resolveClient, newMarker, loadAgentByName, settle,
@@ -215,13 +216,21 @@ async function attachArtifact(
 }
 
 /** Run IT: Artifact Reader from a conversation detail and return the persisted root run ID. */
-async function runReader(fx: ArtifactToolsFixture, conversationDetailId: string): Promise<string | undefined> {
+async function runReader(fx: ArtifactToolsFixture, conversationDetailId: string, userMessage: string): Promise<string | undefined> {
     if (!fx.Client || !fx.Reader) return undefined;
+    // 🚨 The instruction MUST be passed as the turn's message, not left implicit in the
+    // ConversationDetail. `conversationDetailId` links the run to the conversation and carries the
+    // ARTIFACTS; it does not deliver the user's text to the prompt — the production resolver builds
+    // `conversationMessages` from the conversation and passes them explicitly, and this harness must
+    // do the same. Passing `[]` here (as it originally did) meant the reader was told "call get_rows
+    // with this input" only in a database row the model never sees; it then guessed, and seven
+    // checks reported `model-noncompliance:` for an instruction that was never delivered. Its own
+    // reasoning gave it away: "User message does not explicitly restate a tool call in this turn".
     // Server-in-process (Q8): the reader runs against the conversation detail — the artifacts
     // reach the run via the MJ: Conversation Detail Artifacts junction + conversationDetailId,
     // exactly as the wire RunAIAgentFromConversationDetail path did, but synchronously.
     const result = await fx.Client.RunAIAgent(
-        { agent: fx.Reader, conversationDetailId, conversationMessages: [] } as unknown as ExecuteAgentParams
+        { agent: fx.Reader, conversationDetailId, conversationMessages: userTurn(userMessage) } as unknown as ExecuteAgentParams
     );
     await settle(2500); // let the fire-and-forget Tool/prompt step saves flush
     const runId = (result as unknown as { agentRun?: { ID?: string } }).agentRun?.ID;
@@ -260,11 +269,22 @@ async function interrogate(
 ): Promise<ToolStepResult> {
     const runId = await runWithCompliance(
         async () => {
-            const detailId = await attachArtifact(ctx, fx, typeName, mimeType, content, isBinary, toolInstruction(tool, input));
-            return runReader(fx, detailId);
+            const instruction = toolInstruction(tool, input);
+            const detailId = await attachArtifact(ctx, fx, typeName, mimeType, content, isBinary, instruction);
+            return runReader(fx, detailId, instruction);
         },
         async (id) => (await readToolResult(ctx, id))?.tool === tool,
-        label
+        label,
+        3,
+        // What the run ACTUALLY produced: the steps it took and what the model wrote. Distinguishes
+        // "the model declined" from "the tool was never advertised" and from "the response was empty".
+        async (id) => {
+            const steps = await readSteps(ctx.Provider, ctx.User, id);
+            const shape = steps.map((s) => s.StepType).join(' → ') || '(no steps)';
+            const runs = await readPromptRunsForAgent(ctx.Provider, ctx.User, [id], fx.ReaderID);
+            const said = runs.map((r) => (r.Result ?? '').slice(0, 700)).join('\n    ---\n') || '(no prompt runs)';
+            return `    steps:    ${shape}\n    model said: ${said}`;
+        }
     );
     const tr = await readToolResult(ctx, runId);
     Assert(!!tr && tr.tool === tool, `${label}: the instructed tool '${tool}' was invoked (P-artifact)`);
@@ -285,8 +305,9 @@ export const ArtifactToolsChecks: NamedCheck[] = [
             // "do not call any tool" → the reader completes immediately; we only prove the manifest reached the prompt.
             const runId = await runWithCompliance(
                 async () => {
-                    const detailId = await attachArtifact(ctx, fx, 'JSON', 'application/json', ASSET_JSON, false, 'Do not call any tool.');
-                    return runReader(fx, detailId);
+                    const instruction = 'Do not call any tool.';
+                    const detailId = await attachArtifact(ctx, fx, 'JSON', 'application/json', ASSET_JSON, false, instruction);
+                    return runReader(fx, detailId, instruction);
                 },
                 async (id) => (await readPromptRunsForAgent(ctx.Provider, ctx.User, [id], fx.ReaderID)).length > 0,
                 'AT1 manifest'
@@ -390,8 +411,9 @@ export const ArtifactToolsChecks: NamedCheck[] = [
             const fx = guardOrSkip('AT8'); if (!fx) return;
             const runId = await runWithCompliance(
                 async () => {
-                    const detailId = await attachArtifact(ctx, fx, 'JSON', 'application/json', '{ "truncated": ', false, toolInstruction('json_path', { path: '$.truncated' }));
-                    return runReader(fx, detailId);
+                    const instruction = toolInstruction('json_path', { path: '$.truncated' });
+                    const detailId = await attachArtifact(ctx, fx, 'JSON', 'application/json', '{ "truncated": ', false, instruction);
+                    return runReader(fx, detailId, instruction);
                 },
                 async (id) => (await readToolResult(ctx, id))?.tool === 'json_path',
                 'AT8 malformed-json'
@@ -420,8 +442,9 @@ export const ArtifactToolsChecks: NamedCheck[] = [
             const big = 'x'.repeat(60_000) + `\n${deepSentinel}\n` + 'y'.repeat(5_000);
             const runId = await runWithCompliance(
                 async () => {
-                    const detailId = await attachArtifact(ctx, fx, 'Generic Text', 'text/plain', big, false, toolInstruction('grep', { pattern: deepSentinel }));
-                    return runReader(fx, detailId);
+                    const instruction = toolInstruction('grep', { pattern: deepSentinel });
+                    const detailId = await attachArtifact(ctx, fx, 'Generic Text', 'text/plain', big, false, instruction);
+                    return runReader(fx, detailId, instruction);
                 },
                 async (id) => (await readToolResult(ctx, id))?.tool === 'grep',
                 'AT9 large-text'
@@ -431,9 +454,18 @@ export const ArtifactToolsChecks: NamedCheck[] = [
             Assert(matches.length === 1, 'AT9: the tool did not reach into the large (tools-only) artifact content');
 
             // The 60k body must NOT have been inlined into the prompt (tools-only delivery for large artifacts).
+            //
+            // 🚨 Assert on the BODY, not on the sentinel. An artifact tool result is appended to the
+            // conversation as a user turn ("Artifact tool result: ..."), so the very grep this check
+            // instructs necessarily echoes the matched line — sentinel and all — into the NEXT turn's
+            // prompt. A `!allMessages.includes(deepSentinel)` oracle therefore fires on its own
+            // success and reports a context blow-up that never happened. What actually distinguishes
+            // inlining from tools-only delivery is whether the 65k filler body travelled with the
+            // prompt, so that is what we test.
             const prompts = await readPromptRunsForAgent(ctx.Provider, ctx.User, [runId], fx.ReaderID);
             const allMessages = prompts.map((p) => p.Messages ?? '').join('\n');
-            Assert(!allMessages.includes(deepSentinel), 'AT9: large artifact CONTENT was inlined into the prompt (context blow-up)');
+            const bodyProbe = 'x'.repeat(10_000); // a slab only the inlined 60k body could contain
+            Assert(!allMessages.includes(bodyProbe), 'AT9: large artifact CONTENT was inlined into the prompt (context blow-up)');
         }
     }
 ];

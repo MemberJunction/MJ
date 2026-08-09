@@ -1,0 +1,92 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on ModelConfiguration (MJ: AI Model Types entity) so CodeGen emits",
+      "a typed ModelConfigurationObject accessor returning MJAIModelTypeEntity_IAIModelConfiguration.",
+      "The EntityField row must exist (created by a CodeGen pass over the new column) before",
+      "this @lookup resolves on push — see plans/model-configuration.md for the 4-step ordering."
+    ],
+    "fields": {
+      "Name": "MJ: AI Model Types"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAIModelConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAIModelConfiguration.ts"
+          },
+          "_comments": [
+            "ModelConfiguration field — type-wide default layer of the model-configuration cascade"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Model Types&Name=ModelConfiguration"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Model Types"
+    }
+  },
+  {
+    "_comments": [
+      "Sets JSONType metadata on ModelConfiguration (MJ: AI Models entity) — the per-model layer.",
+      "Same IAIModelConfiguration definition as the type and model-vendor levels: one shape,",
+      "three cascade layers."
+    ],
+    "fields": {
+      "Name": "MJ: AI Models"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAIModelConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAIModelConfiguration.ts"
+          },
+          "_comments": [
+            "ModelConfiguration field — per-model layer of the model-configuration cascade"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Models&Name=ModelConfiguration"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Models"
+    }
+  },
+  {
+    "_comments": [
+      "Sets JSONType metadata on ModelConfiguration (MJ: AI Model Vendors entity) — the",
+      "most-specific layer (this model on this provider) of the model-configuration cascade."
+    ],
+    "fields": {
+      "Name": "MJ: AI Model Vendors"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAIModelConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAIModelConfiguration.ts"
+          },
+          "_comments": [
+            "ModelConfiguration field — model-vendor (most specific) layer of the model-configuration cascade"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Model Vendors&Name=ModelConfiguration"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Model Vendors"
+    }
+  }
+]

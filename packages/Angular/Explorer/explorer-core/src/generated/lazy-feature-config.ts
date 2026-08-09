@@ -17,7 +17,7 @@
  * which silently merges all chunks into one.
  */
 
-// --- @memberjunction/ng-dashboards → ./actions-dashboards.module (7 entries) ---
+// --- @memberjunction/ng-dashboards → ./actions-dashboards.module (6 entries) ---
 const loadNgDashboardsActionsDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/actions-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/actions-dashboards.module').then(() => {})
@@ -41,7 +41,7 @@ const loadNgDashboardsComponentStudioDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/component-studio-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (34 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (36 entries) ---
 const loadNgDashboardsCoreDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/core-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/core-dashboards.module').then(() => {})
@@ -136,7 +136,6 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::ActionsEntitiesResource': loadNgDashboardsActionsDashboardsModule,
   'BaseResourceComponent::ActionsMonitorResource': loadNgDashboardsActionsDashboardsModule,
   'BaseResourceComponent::ActionsOverviewResource': loadNgDashboardsActionsDashboardsModule,
-  'BaseResourceComponent::ActionsScheduleResource': loadNgDashboardsActionsDashboardsModule,
   'BaseResourceComponent::ActionsSecurityResource': loadNgDashboardsActionsDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./ai-dashboards.module
@@ -191,6 +190,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::DashboardBrowserResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::EventMonitorInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::GraphQLConsoleInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::GridWidthLabInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::HomeDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::LayoutInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::LazyModuleStatusInspector': loadNgDashboardsCoreDashboardsModule,
@@ -201,6 +201,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::RealtimeRecordingsDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::SettingsExplorerInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::SystemDiagnosticsResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::TabStripLabInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::ThemeManagerResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::ThemeStudioResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::VersionHistoryDiffResource': loadNgDashboardsCoreDashboardsModule,
@@ -282,4 +283,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 114;
+export const LAZY_FEATURE_CONFIG_COUNT = 115;

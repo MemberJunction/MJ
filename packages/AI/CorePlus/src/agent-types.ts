@@ -155,6 +155,7 @@ export interface SecondaryDimension {
 // Exported directly from index.ts, not re-exported here
 import type { ForEachOperation } from './foreach-operation';
 import type { WhileOperation } from './while-operation';
+import type { TaskGraphSpec } from './task-graph/task-graph-spec';
 
 /**
  * Represents a media output that an agent has explicitly promoted to its outputs.
@@ -642,6 +643,23 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     planDetails?: { plan: string };
     /**
+     * The emitted task graph, set whenever a Loop agent produced one — whether it was dispatched
+     * (`step === 'Tasks'`) or constant-folded into an in-run `'Sub-Agent'` call (D9).
+     *
+     * **The fold is recorded, not silent.** The `TaskGraph` run step is written for every emitted
+     * graph, so run forensics show why a graph did or did not reach the dispatcher; a user who
+     * edits a two-node graph down to one can read the durability change off the run record instead
+     * of inferring it; and Save as Workflow (D17) attaches to the recorded spec, which makes the
+     * single-node case — the shape most likely to be worth promoting — promotable like any other.
+     */
+    taskGraph?: {
+        spec: TaskGraphSpec;
+        /** True when the graph was flattened to an in-run sub-agent call rather than dispatched. */
+        folded: boolean;
+        /** Why it folded. Absent when it did not. */
+        foldReason?: string;
+    };
+    /**
      * When true, the agent should terminate after executing the current step.
      * Used by ClientTools: the main loop needs `terminate: false` so it continues
      * to dispatch the tool execution, but `executeClientToolsStep` checks this
@@ -967,6 +985,20 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     parentAgentHierarchy?: string[];
     /** Optional parent depth for sub-agent execution */
     parentDepth?: number;
+
+    /**
+     * How many task-graph continuations led to this run, persisted to
+     * `AIAgentRun.ContinuationDepth`.
+     *
+     * Set only by the continuation deliverer when a finished graph restarts its submitting agent.
+     * Any graph this run subsequently submits inherits the value, which is what allows
+     * `MAX_REINVOKE_DEPTH` to bound a graph-reinvokes-agent-emits-graph chain — before this existed
+     * the depth restarted at zero on every hop and the cap could never fire.
+     *
+     * Distinct from `parentDepth`, which measures sub-agent nesting inside a single turn. A
+     * continuation is a NEW top-level turn caused by work that already completed.
+     */
+    continuationDepth?: number;
     /**
      * Optional parent step counts from root to immediate parent agent.
      * Used to build hierarchical step display (e.g., "2.1.3" for nested agents).

@@ -1,5 +1,78 @@
 # @memberjunction/ng-explorer-app
 
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ng-agent-client@6.1.0-edge.1
+  - @memberjunction/ng-auth-services@6.1.0-edge.1
+  - @memberjunction/ng-base-application@6.1.0-edge.1
+  - @memberjunction/ng-base-types@6.1.0-edge.1
+  - @memberjunction/ng-conversations@6.1.0-edge.1
+  - @memberjunction/ng-explorer-core@6.1.0-edge.1
+  - @memberjunction/ng-explorer-service-worker@6.1.0-edge.1
+  - @memberjunction/ng-feedback@6.1.0-edge.1
+  - @memberjunction/ng-notifications@6.1.0-edge.1
+  - @memberjunction/ng-shared@6.1.0-edge.1
+  - @memberjunction/ng-workspace-initializer@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/ng-bootstrap@6.1.0-edge.1
+  - @memberjunction/ai-agent-client@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [ea003fc]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+- Updated dependencies [8d0d45a]
+  - @memberjunction/ng-conversations@6.1.0-edge.0
+  - @memberjunction/ng-bootstrap@6.1.0-edge.0
+  - @memberjunction/ng-explorer-core@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ng-shared@6.1.0-edge.0
+  - @memberjunction/ng-base-application@6.1.0-edge.0
+  - @memberjunction/ng-auth-services@6.1.0-edge.0
+  - @memberjunction/ng-feedback@6.1.0-edge.0
+  - @memberjunction/ng-workspace-initializer@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/ng-base-types@6.1.0-edge.0
+  - @memberjunction/ng-notifications@6.1.0-edge.0
+  - @memberjunction/ai-agent-client@6.1.0-edge.0
+  - @memberjunction/ng-agent-client@6.1.0-edge.0
+  - @memberjunction/ng-explorer-service-worker@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

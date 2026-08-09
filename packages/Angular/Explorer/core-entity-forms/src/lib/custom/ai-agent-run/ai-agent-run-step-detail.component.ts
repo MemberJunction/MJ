@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
 import { TimelineItem } from './ai-agent-run-timeline.component';
 import { MJAIAgentRunStepEntity, MJAIAgentRunStepEntity_AgentSkillInvocation } from '@memberjunction/core-entities';
+import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 
 interface ScratchpadSnapshotView {
@@ -24,9 +25,17 @@ export class AIAgentRunStepDetailComponent {
   @Output() closePanel = new EventEmitter<void>();
   @Output() navigateToActionLog = new EventEmitter<string>();
   @Output() copyToClipboard = new EventEmitter<string>();
+  /**
+   * The user asked to promote this run's graph into a reusable workflow (D17).
+   *
+   * Intent only — this component renders a run, it does not persist agents. The host performs the
+   * conversion and the `AgentSpecSync` write, which keeps the one place that writes an agent the
+   * one place that writes an agent.
+   */
+  @Output() saveAsWorkflowRequested = new EventEmitter<TaskGraphSpec>();
 
   selectedItemJsonString = '{}';
-  detailPaneTab: 'json' | 'diff' | 'scratchpad' | 'skills' = 'diff';
+  detailPaneTab: 'json' | 'diff' | 'scratchpad' | 'skills' | 'graph' = 'diff';
   scratchpadSubTab: 'input' | 'output' | 'diff' = 'diff';
 
   constructor(private cdr: ChangeDetectorRef) {}
@@ -38,6 +47,10 @@ export class AIAgentRunStepDetailComponent {
       // the story there), scratchpad if available, otherwise json
       if (this.showStepPayloadDiff) {
         this.detailPaneTab = 'diff';
+      } else if (this.showGraphTab) {
+        // A TaskGraph step's whole content IS the graph; opening on the JSON would bury the one
+        // thing the step exists to show.
+        this.detailPaneTab = 'graph';
       } else if (this.showSkillsTab && this.selectedTimelineItem.data?.StepType === 'Skill') {
         this.detailPaneTab = 'skills';
       } else if (this.showScratchpadTab) {
@@ -200,6 +213,60 @@ export class AIAgentRunStepDetailComponent {
   /** Human-readable label for an invocation's activation type. */
   public GetActivationTypeLabel(inv: MJAIAgentRunStepEntity_AgentSkillInvocation): string {
     return inv.ActivationType === 'requested' ? 'User Requested' : 'Agent Self-Activated';
+  }
+
+  /**
+   * Whether the Workflow tab should be shown — true for a `TaskGraph` step that carries a spec.
+   *
+   * Phase 3 writes this step for EVERY emitted graph, dispatched or constant-folded, so a folded
+   * single-node graph is just as promotable as a dispatched one. That was the point of recording
+   * the fold rather than letting it vanish.
+   */
+  get showGraphTab(): boolean {
+    return this.stepTaskGraph !== null;
+  }
+
+  /**
+   * The `TaskGraphSpec` recorded on a `TaskGraph` step, or null.
+   *
+   * Read from InputData, falling back to OutputData: the step records the spec on the way in, and
+   * a malformed or absent payload simply means no tab rather than a broken panel.
+   */
+  get stepTaskGraph(): TaskGraphSpec | null {
+    if (!this.selectedTimelineItem || this.selectedTimelineItem.type !== 'step') return null;
+    if (this.selectedTimelineItem.data?.StepType !== 'TaskGraph') return null;
+
+    for (const raw of [this.selectedTimelineItem.data?.InputData, this.selectedTimelineItem.data?.OutputData]) {
+      if (!raw) continue;
+      try {
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        const spec = (parsed as { spec?: TaskGraphSpec })?.spec;
+        if (spec?.tasks?.length) return spec;
+      } catch {
+        // A step whose payload cannot be parsed shows no tab, which is honest — better than a
+        // canvas rendering half a graph.
+      }
+    }
+    return null;
+  }
+
+  /** True when the recorded graph was constant-folded rather than dispatched (D9). */
+  get stepTaskGraphWasFolded(): boolean {
+    if (!this.selectedTimelineItem) return false;
+    const raw = this.selectedTimelineItem.data?.InputData;
+    if (!raw) return false;
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return (parsed as { folded?: boolean })?.folded === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Asks the host to save this run's graph as a reusable workflow. */
+  public RequestSaveAsWorkflow(): void {
+    const spec = this.stepTaskGraph;
+    if (spec) this.saveAsWorkflowRequested.emit(spec);
   }
 
   /**
