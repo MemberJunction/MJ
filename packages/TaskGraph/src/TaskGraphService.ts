@@ -164,12 +164,12 @@ const TASK_TYPE_NAME = 'AI Workflow';
  * and `While` carry their loop definition in `Task.Configuration` and their repeated body in the
  * same `AgentID` / `ActionID` keys.
  *
- * `Prompt` and `External` are absent because nothing runs them yet — there is no prompt runner, and
- * an external step is completed by a system that has no way to report back. Both are legitimate
- * parts of the spec; persisting one would simply produce a task that waits forever.
+ * `Prompt` joins them now that `TaskPromptRunner` exists — it carries `Task.PromptID`. `External`
+ * remains absent: it is completed by a system that has no way to report back, so persisting one
+ * would produce a task that waits forever.
  */
 const DISPATCHABLE_KINDS: ReadonlyArray<TaskGraphSpecNode['kind']> = [
-    'Agent', 'Action', 'Human', 'ForEach', 'While',
+    'Agent', 'Action', 'Human', 'ForEach', 'While', 'Prompt',
 ];
 
 /**
@@ -333,6 +333,10 @@ export class TaskGraphService {
             if (!actionIDsByName.Success) {
                 return { Success: false, ErrorMessage: actionIDsByName.ErrorMessage };
             }
+            const promptIDsByName = await this.resolvePrompts(spec, context);
+            if (!promptIDsByName.Success) {
+                return { Success: false, ErrorMessage: promptIDsByName.ErrorMessage };
+            }
 
             const taskTypeID = await this.ensureTaskType(context);
 
@@ -340,7 +344,7 @@ export class TaskGraphService {
             //    edges last because they reference two child IDs that must both exist.
             const parentTaskID = await this.persistParent(spec, taskTypeID, context);
             const taskIDMap = await this.persistChildren(
-                spec, parentTaskID, taskTypeID, agentIDsByName.Map!, actionIDsByName.Map!, context,
+                spec, parentTaskID, taskTypeID, agentIDsByName.Map!, actionIDsByName.Map!, promptIDsByName.Map!, context,
             );
             await this.persistDependencies(spec, taskIDMap, context);
 
@@ -468,6 +472,40 @@ export class TaskGraphService {
      * read different entities and produce different error prose, and the shared shape is three
      * lines. Collapsing them would trade a readable failure message for a parameterized lookup.
      */
+    /**
+     * Maps every referenced prompt name to its ID.
+     *
+     * A prompt is addressed by name in the spec and stored as a foreign key on the row, exactly like
+     * agents and actions — a name in JSON cannot be joined, checked, or survive a rename.
+     */
+    private async resolvePrompts(
+        spec: TaskGraphSpec,
+        context: TaskGraphSubmitContext,
+    ): Promise<{ Success: boolean; Map?: Map<string, string>; ErrorMessage?: string }> {
+        const names = [...new Set(
+            spec.tasks.map((t) => ConfigOf(t, 'Prompt')?.promptName).filter((n): n is string => !!n),
+        )];
+        if (names.length === 0) return { Success: true, Map: new Map() };
+
+        const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
+        const result = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
+            { EntityName: 'MJ: AI Prompts', ExtraFilter: `Name IN (${quoted})`, Fields: ['ID', 'Name'], ResultType: 'simple' },
+            context.ContextUser,
+        );
+
+        const found = new Map((result.Results ?? []).map((r) => [r.Name, r.ID]));
+        const missing = names.filter((n) => !found.has(n));
+        if (missing.length > 0) {
+            return {
+                Success: false,
+                ErrorMessage:
+                    `Task graph "${spec.workflowName}" references ${missing.length} unknown prompt(s): ${missing.join(', ')}. ` +
+                    `Submitting would execute the graph with holes where those steps should be.`,
+            };
+        }
+        return { Success: true, Map: found };
+    }
+
     private async resolveActions(
         spec: TaskGraphSpec,
         context: TaskGraphSubmitContext,
@@ -548,6 +586,7 @@ export class TaskGraphService {
         taskTypeID: string,
         agentIDsByName: Map<string, string>,
         actionIDsByName: Map<string, string>,
+        promptIDsByName: Map<string, string>,
         context: TaskGraphSubmitContext,
     ): Promise<Map<string, string>> {
         const map = new Map<string, string>();
@@ -585,6 +624,9 @@ export class TaskGraphService {
                     // Assigned to the submitting user only — cross-user assignment stays rejected
                     // until the authorization model in #3524 lands.
                     task.UserID = context.ContextUser.ID;
+                    break;
+                case 'Prompt':
+                    task.PromptID = promptIDsByName.get(ConfigOf(node, 'Prompt')!.promptName)!;
                     break;
                 case 'ForEach':
                 case 'While': {

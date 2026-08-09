@@ -62,12 +62,46 @@ import {
     ProviderFactory,
     TaskActionRunner,
     TaskAgentRunner,
+    TaskPromptRunner,
     TaskGraphDispatcherConfig,
     type TaskContinuationDeliverer,
     type TaskContinuationParams,
     type TaskGraphFrame,
     type TaskGraphObserver,
 } from './types';
+
+/**
+ * What running one task body produced.
+ *
+ * `ChatMessage` is the odd one out and belongs here rather than in a runner-specific type: a prompt
+ * node can decide the workflow is finished and say so, and the dispatcher has to act on that after
+ * the body returns — skipping what remains rather than treating an early finish as abandoned work.
+ */
+type TaskBodyOutcome = {
+    Success: boolean;
+    Output?: unknown;
+    ErrorMessage?: string;
+    AgentRunID?: string | null;
+    ChatMessage?: string;
+};
+
+/** Deep-merges a prompt's JSON response into the payload, preserving what earlier steps established. */
+function deepMergePayload(
+    base: Record<string, unknown>,
+    incoming: Record<string, unknown>,
+): Record<string, unknown> {
+    const out: Record<string, unknown> = { ...base };
+    for (const [key, value] of Object.entries(incoming)) {
+        const existing = out[key];
+        const bothPlainObjects =
+            existing && typeof existing === 'object' && !Array.isArray(existing) &&
+            value && typeof value === 'object' && !Array.isArray(value);
+        out[key] = bothPlainObjects
+            ? deepMergePayload(existing as Record<string, unknown>, value as Record<string, unknown>)
+            : value;
+    }
+    return out;
+}
 
 /** A graph's children + edges, in both algorithm shape and mutable-entity shape. */
 type GraphState = {
@@ -138,6 +172,11 @@ export class TaskGraphDispatcher implements IShutdownable {
          * rather than being failed, because "nobody here can run this" is not "this ran and broke".
          */
         private readonly actionRunner?: TaskActionRunner,
+        /**
+         * Optional. Absent means this host cannot run prompt nodes; they stay Pending and visible
+         * rather than being failed, for the same reason action nodes do.
+         */
+        private readonly promptRunner?: TaskPromptRunner,
     ) {
         this.config = { ...DEFAULT_DISPATCHER_CONFIG, ...config };
         this.claims = new TaskClaimStore(this.config.InstanceID, this.config.ClaimTTLSeconds);
@@ -348,6 +387,13 @@ export class TaskGraphDispatcher implements IShutdownable {
             }
 
             const result = await this.runTaskBody(task, provider, inputPayload, dependencyOutputs);
+
+            // A prompt can end the workflow early and say why. Honour it before recording the
+            // outcome, so the remaining tasks are already Skipped by the time the rollup runs and
+            // the graph settles Complete rather than looking abandoned with work left Pending.
+            if (result.ChatMessage) {
+                await this.endGraphEarly(provider, task, result.ChatMessage);
+            }
 
             const recorded = await this.claims.CompleteClaimed(
                 provider,
@@ -578,6 +624,49 @@ export class TaskGraphDispatcher implements IShutdownable {
             // it is missing, and a graph marked Failed because its cost could not be summed would be
             // a far worse lie than a cost of null.
             LogError(`[TaskGraphDispatcher] Cost rollup failed for graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * Ends a graph early because a prompt said the work is finished.
+     *
+     * **Why `Skipped` and not `Cancelled`.** Nothing went wrong and nobody intervened — the workflow
+     * reached its own conclusion before running every drawn step, which is exactly what a reasoning
+     * step is for. `Cancelled` would tell a reader someone stopped it; `Skipped` says these routes
+     * were not taken, which is true and already the vocabulary the fork machinery uses.
+     *
+     * The message is written to the parent so the graph carries its own answer, rather than the
+     * answer living only on the step that produced it.
+     */
+    private async endGraphEarly(provider: IMetadataProvider, task: MJTaskEntity, message: string): Promise<void> {
+        if (!task.ParentID) return;
+        try {
+            LogStatus(`[TaskGraphDispatcher] '${task.Name}' ended the workflow early: ${message}`);
+
+            for (const sibling of await this.loadChildTasks(provider, task.ParentID)) {
+                if (sibling.ID === task.ID || sibling.Status !== 'Pending') continue;
+                sibling.Status = 'Skipped';
+                if (await sibling.Save()) {
+                    this.emit({
+                        Kind: 'TaskSkipped',
+                        ParentTaskID: task.ParentID,
+                        OwnerUserID: await this.resolveOwner(provider, task.ParentID),
+                        TaskID: sibling.ID,
+                        TaskName: sibling.Name,
+                        Status: 'Skipped',
+                    });
+                }
+            }
+
+            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+            if (await parent.Load(task.ParentID)) {
+                parent.OutputPayload = JSON.stringify({ message });
+                await parent.Save();
+            }
+        } catch (e) {
+            // The work itself succeeded; only the early-finish bookkeeping failed. Failing the task
+            // over that would discard a completed step's result.
+            LogError(`[TaskGraphDispatcher] Could not end graph early for ${task.ID}: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 
@@ -1119,7 +1208,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         inputPayload: unknown,
         dependencyOutputs: Map<string, unknown>,
-    ): Promise<{ Success: boolean; Output?: unknown; ErrorMessage?: string; AgentRunID?: string | null }> {
+    ): Promise<TaskBodyOutcome> {
         const payload = this.mergedPayload(inputPayload, dependencyOutputs);
         const config = task.ConfigurationObject;
 
@@ -1132,6 +1221,37 @@ export class TaskGraphDispatcher implements IShutdownable {
         const { params, errors } = BuildMappedInput(config?.inputMapping, { payload });
         for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${e}`);
         const effectiveInput = Object.keys(params).length > 0 ? params : inputPayload;
+
+        if (task.StepType === 'Prompt') {
+            if (!this.promptRunner) {
+                // Not a failure: "nobody here can run this" is not "this ran and did not work".
+                return { Success: false, AgentRunID: null, ErrorMessage: 'No prompt runner is loaded on this host.' };
+            }
+            const promptResult = await this.promptRunner.RunPromptForTask({
+                TaskID: task.ID,
+                PromptID: task.PromptID!,
+                InputPayload: effectiveInput,
+                DependencyOutputs: dependencyOutputs,
+                TemplateParameters: config?.prompt?.templateParameters,
+                Provider: provider,
+                ContextUser: this.contextUser,
+            });
+
+            // A prompt's response is DEEP-MERGED into the payload rather than replacing it. A prompt
+            // answers one question; replacing the payload with its answer would discard everything
+            // the steps before it established, which is how a late step loses the data it depends on.
+            const merged = promptResult.Success && promptResult.Output && typeof promptResult.Output === 'object'
+                ? deepMergePayload(payload, promptResult.Output as Record<string, unknown>)
+                : payload;
+
+            return {
+                Success: promptResult.Success,
+                AgentRunID: null,
+                ErrorMessage: promptResult.ErrorMessage,
+                Output: this.applyStepOutputMapping(task, merged, merged, config?.outputMapping),
+                ChatMessage: promptResult.ChatMessage,
+            };
+        }
 
         const raw = task.ActionID
             ? { ...await this.actionRunner!.RunActionForTask({
@@ -1167,7 +1287,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         payload: Record<string, unknown>,
         dependencyOutputs: Map<string, unknown>,
-    ): Promise<{ Success: boolean; Output?: unknown; ErrorMessage?: string; AgentRunID?: string | null }> {
+    ): Promise<TaskBodyOutcome> {
         const config = task.ConfigurationObject;
         const op = task.StepType === 'ForEach' ? config?.forEach : config?.while;
         if (!op) {

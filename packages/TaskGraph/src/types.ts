@@ -68,6 +68,53 @@ export type TaskActionRunner = {
     RunActionForTask(params: TaskActionRunParams): Promise<TaskActionRunResult>;
 };
 
+/** Everything running one prompt for one task node needs. */
+export type TaskPromptRunParams = {
+    TaskID: string;
+    PromptID: string;
+    /** Structured input from `Task.InputPayload`, after the node's input mapping. */
+    InputPayload: unknown;
+    /** Outputs of this node's satisfied prerequisites, in the same shape agent nodes receive. */
+    DependencyOutputs: Map<string, unknown>;
+    /** Template parameters declared on the node's configuration. */
+    TemplateParameters?: Record<string, string>;
+    Provider: IMetadataProvider;
+    ContextUser: UserInfo;
+};
+
+/** The outcome of one prompt node. */
+export type TaskPromptRunResult = {
+    Success: boolean;
+    /** The parsed JSON response, deep-merged into the payload by the dispatcher. */
+    Output?: unknown;
+    ErrorMessage?: string;
+    /** The `MJ: AI Prompt Runs` row, for provenance. */
+    PromptRunID?: string;
+    /**
+     * Set when the prompt asked to end the workflow and say something to a person.
+     *
+     * A prompt is the one node kind that can decide the workflow is *done* — it is the only one
+     * doing open-ended reasoning. The dispatcher honours it by skipping the remaining tasks and
+     * settling the parent Complete with this message, rather than treating an early finish as an
+     * abandoned graph.
+     */
+    ChatMessage?: string;
+};
+
+/**
+ * Runs one prompt for one task node.
+ *
+ * The fourth execution shape, and abstracted for the same reason as the others: this package must
+ * stay unit-testable without standing up the AI engine, and must not import it — the prompt runner
+ * lives in MJServer where the engine already does.
+ *
+ * **A host with no prompt runner is limited, not broken.** Prompt nodes stay Pending and visible,
+ * exactly like action nodes without an action runner.
+ */
+export type TaskPromptRunner = {
+    RunPromptForTask(params: TaskPromptRunParams): Promise<TaskPromptRunResult>;
+};
+
 /** What happened to a task or a graph, as a closed set a consumer can branch on. */
 export type TaskGraphFrameKind =
     /** A task was claimed by an instance and is about to run. */
