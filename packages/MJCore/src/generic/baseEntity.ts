@@ -1,6 +1,6 @@
 import { IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
-import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
+import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityDenialMessage, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
@@ -82,6 +82,33 @@ export class EntityField {
      */
     public MarkNotLoaded(): void {
         this._NotLoaded = true;
+    }
+
+    private _CreateSuppressed: boolean = false;
+
+    /**
+     * True when field-level security bars this user from supplying the field's value on INSERT,
+     * so the save path must omit it and let the column take its database default.
+     *
+     * Deliberately DISTINCT from {@link NotLoaded}, even though both end in "leave this
+     * parameter out of the SP call". `NotLoaded` means "the hydration source omitted this key"
+     * and carries consequences this must not: it suppresses the `_Clear` companion, exempts the
+     * field from required/null validation, and forces {@link Dirty} to false. A create-suppressed
+     * field, by contrast, holds a perfectly real value the user typed — it is simply not one they
+     * are permitted to supply. Conflating them would silently disarm validation on fields a user
+     * IS allowed to create.
+     *
+     * Set per-save by the create-path gate and cleared at the start of every save, because the
+     * answer depends on the acting user and the same entity object can be saved by different
+     * users over its lifetime.
+     */
+    public get CreateSuppressed(): boolean {
+        return this._CreateSuppressed;
+    }
+
+    /** Framework-internal: set by the save path's field-security create gate. */
+    public SetCreateSuppressed(suppressed: boolean): void {
+        this._CreateSuppressed = suppressed;
     }
 
     get Name(): string {
@@ -2417,6 +2444,7 @@ export abstract class BaseEntity<T = unknown> {
             if (this.EntityInfo?.HasInactiveFields) {
                 this.AssertFieldActiveStatus(FieldName, 'BaseEntity.Set');
             }
+            this.AssertFieldReadable(FieldName);
             this.SetLocal(FieldName, Value);
         }
     }
@@ -2435,6 +2463,34 @@ export abstract class BaseEntity<T = unknown> {
         const fi = this.EntityInfo?.FieldByName(fieldName);
         if (fi) {
             EntityFieldInfo.AssertEntityFieldActiveStatus(fi, caller);
+        }
+    }
+
+    /**
+     * Field-level security choke point for the strongly-typed accessor path. Throws when the
+     * acting user may not READ the field.
+     *
+     * Called by `Get()` and `Set()` — every generated typed accessor
+     * (`get Salary() { return this.Get('Salary'); }`) routes through them, so these two sites
+     * cover the whole typed surface. Gated on both READ, because a field a user cannot see is
+     * one they cannot meaningfully address by name at all; update and create denials are
+     * enforced on the write path, where a rejection can name a save rather than a keystroke.
+     *
+     * **Deliberately NOT called by `SetMany`.** That is the hydration and resolver-apply path —
+     * throwing there would break loading a record that merely CONTAINS a restricted column.
+     *
+     * **Fails open when no user resolves.** `ActiveUser` is legitimately null in plenty of
+     * server paths, and a gate that threw there would break unrelated code in ways that look
+     * nothing like field security.
+     *
+     * Framework-internal value machinery (`Dirty`, `Validate`, `GetAll`, hydration, save-SQL
+     * build) reads `EntityField.Value` directly and never routes through here — that exemption
+     * is load-bearing, not an oversight. Do not "fix" it.
+     */
+    private AssertFieldReadable(fieldName: string): void {
+        const denied = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedReadFields(u));
+        if (denied?.has(fieldName?.trim().toLowerCase())) {
+            throw new Error(FieldSecurityDenialMessage(fieldName, this.EntityInfo.Name));
         }
     }
 
@@ -2498,6 +2554,11 @@ export abstract class BaseEntity<T = unknown> {
         if (this.EntityInfo?.HasInactiveFields) {
             this.AssertFieldActiveStatus(FieldName, 'BaseEntity.Get');
         }
+
+        // Field security sits BEFORE the raw-mode fast path below, not after: an entity whose
+        // fields are not yet hydrated would otherwise return denied values straight out of _raw
+        // without the gate ever running.
+        this.AssertFieldReadable(FieldName);
 
         // Raw mode fast path: read directly from the cached data without building EntityField
         // instances. This is the dominant cost in engine warm-loads — generated typed getters
@@ -3293,6 +3354,7 @@ export abstract class BaseEntity<T = unknown> {
             const saveSubType = this.IsSaved ? 'update' : 'create';
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
             this.CheckFieldLevelUpdatePermissions() // field-level security — throws if a dirty field is not updatable by this user
+            this.ApplyFieldLevelCreateSuppression() // field-level security on INSERT — omits fields, never rejects
 
             // IS-A disjoint subtype enforcement: on CREATE, ensure parent record
             // isn't already claimed by another child type (e.g., can't create Meeting
@@ -3680,9 +3742,7 @@ export abstract class BaseEntity<T = unknown> {
      * it. The client-side occurrence is UX and defense-in-depth — fail fast with a clear
      * message before a network round-trip — and must never be relied on alone.
      *
-     * Only UPDATE is enforced. `CanCreate` ships in the schema but is deliberately not enforced
-     * in this release (see `EntityFieldPermissionInfo.CanCreate`) — the semantics for a NOT NULL
-     * column a user cannot populate are unsettled, and guessing would break inserts.
+     * UPDATE rejects; CREATE does not — see {@link ApplyFieldLevelCreateSuppression}.
      *
      * Note this checks DIRTY fields only. CLIENT-side that is safe on its own: nothing ever
      * nulls a restricted value in memory, so a field the user cannot see was never loaded as
@@ -3696,33 +3756,85 @@ export abstract class BaseEntity<T = unknown> {
      */
     protected CheckFieldLevelUpdatePermissions(): void {
         if (!this.IsSaved) {
-            return; // INSERT — CanCreate is not enforced in this release
+            return; // INSERT — handled by ApplyFieldLevelCreateSuppression, which never rejects
         }
-        if (!this.EntityInfo.EnableFieldLevelSecurity) {
-            return; // one boolean for the overwhelming majority of entities
-        }
-        const u: UserInfo = this.ActiveUser;
-        if (!u) {
-            return; // CheckPermissions has already thrown for a missing user
-        }
-
-        const denied = this.EntityInfo.GetDeniedUpdateFields(u);
-        if (denied.size === 0) {
+        const denied = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedUpdateFields(u));
+        if (!denied) {
             return;
         }
         for (const field of this.Fields) {
             if (field.Dirty && denied.has(field.Name.trim().toLowerCase())) {
                 LogDebug(
-                    `[FieldSecurity] Rejected save on '${this.EntityInfo.Name}' for user ${u.Email}: ` +
+                    `[FieldSecurity] Rejected save on '${this.EntityInfo.Name}': ` +
                     `field '${field.Name}' is not updatable by this user`
                 );
-                // Same deliberately ambiguous wording as the read path — never disclose whether
-                // a field is missing or merely forbidden.
-                throw new Error(
-                    `Field '${field.Name}' does not exist on entity '${this.EntityInfo.Name}' or you do not have access to it.`
-                );
+                throw new Error(FieldSecurityDenialMessage(field.Name, this.EntityInfo.Name));
             }
         }
+    }
+
+    /**
+     * Field-level security on the INSERT path: marks the fields this user may not supply so the
+     * save omits them and each column takes its database default.
+     *
+     * **This never rejects, and that is deliberate.** Rejecting would be inconsistent with the
+     * read path (a denied field is simply absent, not an error) and would leak information — an
+     * error naming `Salary` confirms the field exists and is restricted, which the ambiguous
+     * denial wording exists to prevent. Silently defaulting is also what an unrestricted user
+     * gets by leaving the field blank, so a restricted user creating a record ends up with the
+     * same record SHAPE rather than a failure.
+     *
+     * The cost is that a user who supplies a value for a create-denied field gets no feedback
+     * that it was dropped, which is why the drop is logged and why the admin UI should not
+     * render the field at all.
+     *
+     * Runs on every save (clearing prior marks first) because the answer depends on the acting
+     * user, and one entity object can be saved by different users over its lifetime.
+     */
+    protected ApplyFieldLevelCreateSuppression(): void {
+        for (const field of this.Fields) {
+            field.SetCreateSuppressed(false);
+        }
+        if (this.IsSaved) {
+            return; // UPDATE — CheckFieldLevelUpdatePermissions owns that path
+        }
+        const denied = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedCreateFields(u));
+        if (!denied) {
+            return;
+        }
+
+        const suppressed: string[] = [];
+        for (const field of this.Fields) {
+            if (denied.has(field.Name.trim().toLowerCase())) {
+                field.SetCreateSuppressed(true);
+                suppressed.push(field.Name);
+            }
+        }
+        if (suppressed.length > 0) {
+            LogDebug(
+                `[FieldSecurity] Create on '${this.EntityInfo.Name}': ` +
+                `omitted field(s) ${suppressed.join(', ')}; each column takes its default`
+            );
+        }
+    }
+
+    /**
+     * The denied-field set for the acting user, or null when field security does not apply —
+     * the entity has it switched off, no user resolves, or the user is denied nothing.
+     *
+     * Returning null rather than an empty Set lets callers skip their loop entirely, and keeps
+     * the three cheap short-circuits in one place instead of repeated at each gate.
+     */
+    private deniedFieldsForActiveUser(select: (user: UserInfo) => Set<string>): Set<string> | null {
+        if (!this.EntityInfo?.EnableFieldLevelSecurity) {
+            return null; // one boolean for the overwhelming majority of entities
+        }
+        const u: UserInfo = this.ActiveUser;
+        if (!u) {
+            return null; // no user resolves — fail open, see AssertFieldReadable
+        }
+        const denied = select(u);
+        return denied.size > 0 ? denied : null;
     }
 
     protected ThrowPermissionError(u: UserInfo, type: EntityPermissionType, additionalInfoMessage: string) {

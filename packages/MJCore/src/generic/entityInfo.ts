@@ -413,6 +413,25 @@ export const FieldPermissionAccess = {
 export type FieldPermissionAccess = typeof FieldPermissionAccess[keyof typeof FieldPermissionAccess];
 
 /**
+ * The single wording for "you cannot use this field", modelled on SQL Server's posture of never
+ * disclosing whether an object is missing or merely inaccessible.
+ *
+ * Naming the field is safe — the caller supplied it, so it tells them nothing they did not
+ * already know. Naming the REASON is not: confirming "this field exists and is restricted"
+ * turns any predicate into an oracle for probing which columns a deployment considers
+ * sensitive. The ambiguity also stays correct after
+ * [#3485](https://github.com/MemberJunction/MJ/issues/3485) tiers metadata and restricted fields
+ * stop shipping to clients at all, at which point "does not exist" becomes literally true from
+ * the client's vantage point.
+ *
+ * Lives here rather than on `ProviderBase` so the write path in `BaseEntity` can reach it
+ * without importing the provider layer, which imports `BaseEntity` in turn.
+ */
+export function FieldSecurityDenialMessage(fieldName: string, entityName: string): string {
+    return `Field '${fieldName}' does not exist on entity '${entityName}' or you do not have access to it.`;
+}
+
+/**
  * Field-level (column-level) security settings. Maps an entity FIELD to a role, carrying three
  * independent trinary verbs — Read, Update and Create. One row per (field, role).
  *
