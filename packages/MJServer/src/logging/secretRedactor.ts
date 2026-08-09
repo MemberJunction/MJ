@@ -64,7 +64,7 @@ export function redactArg(ctx: RedactionContext): unknown {
       //
       // Report it once per input type so the operator who enabled variables logging
       // learns which args are unprotected, rather than discovering it in a log file.
-      warnUnboundCrudInput(ctx.inputTypeName);
+      WarnUnboundCrudInput(ctx.inputTypeName);
     }
   }
 
@@ -96,7 +96,7 @@ export function redactArg(ctx: RedactionContext): unknown {
 const EMPTY_SET: ReadonlySet<string> = new Set<string>();
 
 /**
- * Input type names already reported by {@link warnUnboundCrudInput}. Warning once
+ * Input type names already reported by {@link WarnUnboundCrudInput}. Warning once
  * per type keeps a hot mutation from flooding the log with the same diagnostic.
  */
 const warnedUnboundInputTypes = new Set<string>();
@@ -107,7 +107,7 @@ const warnedUnboundInputTypes = new Set<string>();
  *
  * Exported for tests; not part of the redaction path's contract.
  */
-export function warnUnboundCrudInput(inputTypeName: string): void {
+export function WarnUnboundCrudInput(inputTypeName: string): void {
   if (warnedUnboundInputTypes.has(inputTypeName)) {
     return;
   }
@@ -120,6 +120,6 @@ export function warnUnboundCrudInput(inputTypeName: string): void {
 }
 
 /** Test seam — clears the once-per-type warning state. */
-export function resetUnboundCrudInputWarnings(): void {
+export function ResetUnboundCrudInputWarnings(): void {
   warnedUnboundInputTypes.clear();
 }

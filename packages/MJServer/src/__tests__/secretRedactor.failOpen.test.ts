@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { IMetadataProvider } from '@memberjunction/core';
-import { redactArg, resetUnboundCrudInputWarnings } from '../logging/secretRedactor.js';
+import { redactArg, ResetUnboundCrudInputWarnings } from '../logging/secretRedactor.js';
 
 /**
  * `redactArg` binds a GraphQL input type to an entity by NAME:
@@ -32,7 +32,7 @@ const CREDENTIAL_ENTITY = providerWith([
 ]);
 
 beforeEach(() => {
-    resetUnboundCrudInputWarnings();
+    ResetUnboundCrudInputWarnings();
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
 
