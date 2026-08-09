@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Permission Scope Section -->
+    <!-- Relationship Mapping Section -->
     <mj-collapsible-panel
-        SectionKey="permissionScope"
-        SectionName="Permission Scope"
-        Icon="fa fa-crosshairs"
+        SectionKey="relationshipMapping"
+        SectionName="Relationship Mapping"
+        Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -38,17 +38,17 @@
 
     </mj-collapsible-panel>
 
-    <!-- Access Rules Section -->
+    <!-- Access Permissions Section -->
     <mj-collapsible-panel
-        SectionKey="accessRules"
-        SectionName="Access Rules"
+        SectionKey="accessPermissions"
+        SectionName="Access Permissions"
         Icon="fa fa-lock"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Type"
+            FieldName="ReadAccess"
             Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -56,24 +56,16 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="CanRead"
-            Type="checkbox"
+            FieldName="UpdateAccess"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="CanUpdate"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="CanCreate"
-            Type="checkbox"
+            FieldName="CreateAccess"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
