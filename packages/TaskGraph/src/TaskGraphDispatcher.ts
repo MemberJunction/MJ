@@ -70,6 +70,16 @@ type GraphState = {
     unreachableTaskIDs: Set<string>;
 };
 
+/**
+ * Statuses at which an origin's outgoing conditions may be decided.
+ *
+ * `Skipped` is included: a branch that was not taken IS settled, and a condition on an edge leaving
+ * it should resolve rather than hang the graph forever.
+ */
+const TERMINAL_FOR_CONDITIONS: ReadonlySet<MJTaskEntity['Status']> = new Set<MJTaskEntity['Status']>([
+    'Complete', 'Failed', 'Cancelled', 'Skipped',
+]);
+
 export class TaskGraphDispatcher implements IShutdownable {
     private readonly config: TaskGraphDispatcherConfig;
     private readonly claims: TaskClaimStore;
@@ -790,19 +800,26 @@ export class TaskGraphDispatcher implements IShutdownable {
         const upstream = entityById.get(dep.DependsOnTaskID);
         if (!upstream) return 'keep';
 
+        // TERMINALITY GUARD — fixes a latent bug, not a hypothetical one.
+        //
+        // Without it, every conditional edge is evaluated on every poll cycle, including while its
+        // origin is still Pending. A condition like `succeeded` is then a DEFINITE FALSE, the edge
+        // is dropped, and the target is Blocked at wave one — permanently, before the origin ever
+        // ran. That kills any conditioned linear chain, which is the most common flow shape there
+        // is.
+        //
+        // A non-terminal origin is UNDECIDED, and 'keep' is the safe reading of undecided: the
+        // prerequisite gate already prevents the target starting early, so keeping the edge costs
+        // nothing and dropping it is irreversible.
+        if (!TERMINAL_FOR_CONDITIONS.has(upstream.Status)) return 'keep';
+
         let output: unknown = null;
         if (upstream.OutputPayload) {
             try { output = JSON.parse(upstream.OutputPayload); }
             catch { /* a malformed payload is not grounds to drop a prerequisite */ }
         }
 
-        const result = this.conditionEvaluator.Evaluate(dep.Condition!, {
-            status: upstream.Status,
-            succeeded: upstream.Status === 'Complete',
-            failed: upstream.Status === 'Failed',
-            output,
-            errorMessage: upstream.ErrorMessage ?? null,
-        });
+        const result = this.conditionEvaluator.Evaluate(dep.Condition!, this.buildConditionContext(upstream, output));
 
         if (!result.Success) {
             LogError(
@@ -813,6 +830,40 @@ export class TaskGraphDispatcher implements IShutdownable {
             return 'keep';
         }
         return result.Value ? 'keep' : 'drop';
+    }
+
+
+    /**
+     * Everything an edge condition can see — the SUPERSET of both dialects.
+     *
+     * A flow condition is written against `payload` / `stepResult` / `flowContext` / `data` /
+     * `context`; the dispatcher's own conditions are written against `status` / `succeeded` /
+     * `failed` / `output` / `errorMessage`. Compiling flows onto this engine without the flow
+     * dialect would make every `payload.x` condition evaluate against nothing — silently, since an
+     * undefined property is simply falsy. Both dialects are readable here so a condition means the
+     * same thing on either engine.
+     *
+     * `payload` is the ORIGIN task's post-step snapshot. There is deliberately no "graph-wide
+     * payload": each task's output is its own, and inventing a merged one would give conditions a
+     * value the flow engine never had.
+     */
+    private buildConditionContext(upstream: MJTaskEntity, output: unknown): Record<string, unknown> {
+        const envelope = (output && typeof output === 'object' ? output : {}) as Record<string, unknown>;
+        const succeeded = upstream.Status === 'Complete';
+        return {
+            // dispatcher dialect — unchanged
+            status: upstream.Status,
+            succeeded,
+            failed: upstream.Status === 'Failed',
+            output,
+            errorMessage: upstream.ErrorMessage ?? null,
+            // flow dialect
+            payload: envelope.payload ?? output,
+            stepResult: { Success: succeeded, step: upstream.Name, result: envelope.result ?? output },
+            flowContext: { currentStepId: upstream.ID, completedSteps: [], executionPath: [], stepCount: 0 },
+            data: envelope.data ?? {},
+            context: envelope.context ?? {},
+        };
     }
 
     /** Parsed `OutputPayload` of each completed dependency, keyed by that task's ID. */
