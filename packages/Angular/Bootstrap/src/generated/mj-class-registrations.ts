@@ -586,7 +586,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (105 classes)
+// @memberjunction/ng-dashboards (103 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -1333,7 +1333,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 613;
+export const CLASS_REGISTRATIONS_COUNT = 611;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

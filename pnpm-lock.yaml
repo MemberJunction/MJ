@@ -4557,9 +4557,6 @@ importers:
       '@memberjunction/ng-tabstrip':
         specifier: 6.1.0-edge.1
         version: link:../../Generic/tab-strip
-      '@memberjunction/ng-task-graph-editor':
-        specifier: 6.1.0-edge.1
-        version: link:../../Generic/task-graph-editor
       '@memberjunction/ng-testing':
         specifier: 6.1.0-edge.1
         version: link:../../Generic/Testing

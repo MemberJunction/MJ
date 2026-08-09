@@ -283,4 +283,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 117;
+export const LAZY_FEATURE_CONFIG_COUNT = 115;
