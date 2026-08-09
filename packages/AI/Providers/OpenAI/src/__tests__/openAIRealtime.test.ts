@@ -21,7 +21,13 @@ vi.mock('@memberjunction/ai', async () => {
     // rather than stubbing it, so this driver test asserts against shipped behavior. It lives in its
     // own module precisely so importing it here can't cascade into other mocked packages.
     const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
-    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation };
+    // Same reasoning for ResolveResponseDoneUsage — it is PURE and dependency-free, and it encodes
+    // the provider-specific rule for WHERE usage lives on a response.done frame. Stubbing it would
+    // let this test restate that rule and drift from reality, which is exactly how the xAI
+    // top-level-usage bug survived: the sibling xAI test asserted against a hand-written
+    // OpenAI-shaped frame and passed while real Grok sessions recorded nothing.
+    const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
+    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's

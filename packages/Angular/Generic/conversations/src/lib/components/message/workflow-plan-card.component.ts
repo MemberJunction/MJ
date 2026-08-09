@@ -27,6 +27,22 @@ export class SaveAsWorkflowRequestedEventArgs {
         public readonly Spec: TaskGraphSpec,
         /** The parent task the graph ran as, when it was dispatched. Absent for a folded graph. */
         public readonly ParentTaskID: string | null,
+        /**
+         * What to call it, as typed in the card.
+         *
+         * Asked here rather than in a dialog (ratified answer ④): one field and a button keeps the
+         * capture at two seconds. A saved workflow gets NO trigger from this path — it runs on
+         * demand until someone gives it a schedule — because the moment of saving is about capture,
+         * not scheduling.
+         */
+        public readonly Name: string,
+        /**
+         * True when the user asked to continue in the editor rather than just save.
+         *
+         * A secondary route on purpose: making the editor mandatory turns a two-second capture into
+         * a task, which is the friction that stops good one-off plans becoming reusable.
+         */
+        public readonly OpenInEditor: boolean = false,
     ) {}
 }
 
@@ -61,6 +77,16 @@ export class WorkflowPlanCardComponent {
     @Output() public SaveAsWorkflowRequested = new EventEmitter<SaveAsWorkflowRequestedEventArgs>();
     @Output() public ExpandedChange = new EventEmitter<boolean>();
 
+    /**
+     * The name to save under, seeded from the plan and editable in place.
+     *
+     * Held rather than read off the DOM so the empty-name guard is testable without a browser.
+     */
+    public SaveName = '';
+
+    /** True once the user has typed, so the seeded name stops being overwritten by the plan's. */
+    private nameTouched = false;
+
     public get StepCount(): number {
         return this.Spec?.tasks?.length ?? 0;
     }
@@ -93,9 +119,36 @@ export class WorkflowPlanCardComponent {
         this.ExpandedChange.emit(this.Expanded);
     }
 
-    public RequestSave(): void {
-        if (this.Spec && this.CanSave) {
-            this.SaveAsWorkflowRequested.emit(new SaveAsWorkflowRequestedEventArgs(this.Spec, this.ParentTaskID));
+    /**
+     * The name the field shows: what the user typed, else the plan's own name.
+     *
+     * Seeded rather than left blank because the plan already has a perfectly good name, and making
+     * someone invent one is the difference between saving and not bothering.
+     */
+    public get EffectiveName(): string {
+        return this.nameTouched ? this.SaveName : this.SaveName || (this.Spec?.workflowName ?? '');
+    }
+
+    public OnNameChanged(value: string): void {
+        this.nameTouched = true;
+        this.SaveName = value;
+    }
+
+    /** A workflow with no name is not saveable — there would be nothing to find it by later. */
+    public get CanCommit(): boolean {
+        return this.CanSave && this.EffectiveName.trim().length > 0;
+    }
+
+    public RequestSave(openInEditor: boolean = false): void {
+        if (this.Spec && this.CanCommit) {
+            this.SaveAsWorkflowRequested.emit(
+                new SaveAsWorkflowRequestedEventArgs(
+                    this.Spec,
+                    this.ParentTaskID,
+                    this.EffectiveName.trim(),
+                    openInEditor,
+                ),
+            );
         }
     }
 }
