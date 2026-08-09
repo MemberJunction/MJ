@@ -197,6 +197,14 @@ export type TaskGraphObserver = {
 export type TaskAgentRunParams = {
     /** The task row being executed. */
     TaskID: string;
+    /**
+     * How many continuation hops led to this run, from the graph's own metadata.
+     *
+     * Carried so the chain is BOUNDED. A flow that dispatches a graph containing itself recurses
+     * forever otherwise: each spawned run starts at depth zero, so `MAX_REINVOKE_DEPTH` compares
+     * against a permanent zero and never fires. The cap exists; this is what feeds it.
+     */
+    ContinuationDepth?: number;
     /** Agent assigned to the task. */
     AgentID: string;
     /** Parsed `Task.InputPayload`, if any. */

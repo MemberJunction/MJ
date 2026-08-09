@@ -30,6 +30,9 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 agent,
                 conversationMessages: [{ role: ChatMessageRole.user, content: this.buildPrompt(params) }],
                 contextUser: params.ContextUser,
+                // Inherited from the graph, so a graph this run goes on to emit is one hop deeper
+                // rather than starting the chain over. Without it MAX_REINVOKE_DEPTH never fires.
+                continuationDepth: params.ContinuationDepth ?? 0,
             });
 
             const success = result?.success === true;

@@ -68,6 +68,16 @@ export type TaskGraphSubmitContext = {
 export type TaskGraphParentMetadata = {
     continuation: 'message' | 'reinvoke' | 'none';
     reinvokeDepth: number;
+    /**
+     * How a failure propagates in this graph — persisted because the dispatcher that settles a graph
+     * is routinely not the process that accepted it, and the spec is gone by then.
+     *
+     * `'block'` (the default) makes a failed step terminal for its dependents. `'edges'` releases
+     * them along their drawn paths, which is what lets a workflow author a RECOVERY route. Compiled
+     * flows are `'edges'`; without persisting it, every recovery path a flow author draws is dead
+     * machinery — the edges exist and nothing ever follows them.
+     */
+    failureSemantics?: 'block' | 'edges';
     submittedByAgentRunID: string | null;
     /**
      * Who the graph belongs to.
@@ -104,6 +114,7 @@ export const MAX_REINVOKE_DEPTH = 5;
 const DEFAULT_PARENT_METADATA: TaskGraphParentMetadata = {
     continuation: 'message',
     reinvokeDepth: 0,
+    failureSemantics: 'block',
     submittedByAgentRunID: null,
     submittedByUserID: null,
 };
@@ -133,6 +144,7 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
             continuation: parsed.continuation === 'reinvoke' || parsed.continuation === 'none'
                 ? parsed.continuation
                 : 'message',
+            failureSemantics: parsed.failureSemantics === 'edges' ? 'edges' : 'block',
             reinvokeDepth: Number.isFinite(parsed.reinvokeDepth) ? Number(parsed.reinvokeDepth) : 0,
         };
     } catch {
@@ -319,6 +331,20 @@ export class TaskGraphService {
         if (unrunnable) {
             LogError(`[TaskGraphService] ${unrunnable}`);
             return { Success: false, ErrorMessage: unrunnable };
+        }
+
+        // 1c. Chain depth. A flow that dispatches a graph containing itself recurses without bound,
+        //     and each hop costs real money and real rows before anyone notices. The cap is checked
+        //     HERE rather than at execution because refusing to write the graph is the only point at
+        //     which nothing has happened yet.
+        const depth = context.ReinvokeDepth ?? 0;
+        if (depth >= MAX_REINVOKE_DEPTH) {
+            const message =
+                `"${spec.workflowName}" was not started: it is ${depth} levels deep in a chain of ` +
+                `workflows starting workflows, which is the limit. A workflow that reaches this is ` +
+                `almost always calling itself, directly or through another one.`;
+            LogError(`[TaskGraphService] ${message}`);
+            return { Success: false, ErrorMessage: message };
         }
 
         try {
@@ -570,6 +596,7 @@ export class TaskGraphService {
         parent.InputPayload = JSON.stringify({
             continuation: spec.continuation ?? 'message',
             reinvokeDepth: context.ReinvokeDepth ?? 0,
+            failureSemantics: spec.failureSemantics ?? 'block',
             submittedByAgentRunID: context.AgentRunID ?? null,
             submittedByUserID: context.ContextUser?.ID ?? null,
         } satisfies TaskGraphParentMetadata);

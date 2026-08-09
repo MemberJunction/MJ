@@ -27,14 +27,14 @@
 
 ## THE FIVE (in order — user approved this order)
 
-### [ ] 1a. XOR race — filter `skipSeedTaskIDs` in claiming
+### [x] 1a. XOR race — filter `skipSeedTaskIDs` in claiming
 **Where:** `packages/TaskGraph/src/TaskGraphDispatcher.ts`, `findClaimableTasks`.
 **Wrong:** claiming filters `holdTaskIDs` but **not** `skipSeedTaskIDs`, so a fork's losing branch
 can be claimed and executed in the tick before `Skipped` is written.
 **Done when:** losers are excluded from claiming; a unit test pins that a task in `skipSeedTaskIDs`
 is never returned as claimable.
 
-### [ ] 1b. R6 — definite-false ordinary edges settle `Skipped`, not `Blocked`
+### [x] 1b. R6 — definite-false ordinary edges settle `Skipped`, not `Blocked`
 **Where:** `TaskGraphDispatcher.propagateAndRollup` / `ComputeTasksToBlock` in
 `packages/AI/CorePlus/src/task-graph/graph-algorithms.ts`.
 **Wrong:** only XOR losers become `Skipped`. An ordinary conditional edge that evaluates definitely
@@ -46,7 +46,7 @@ cascade, exactly like XOR losers.
 `Blocked` — it was hiding this exact divergence. Make the simulator match the dispatcher, then fix
 both.
 
-### [ ] 2. Prompt runner (unbreaks a shipped agent)
+### [x] 2. Prompt runner (unbreaks a shipped agent)
 **Why now:** `User Onboarding Flow Agent` has **6 Prompt steps** and is refused at submission today.
 This is a live regression, not a future gap. `Task.PromptID` already exists in the schema.
 **Contract (plan §5.7):** payload injection at `CURRENT_PAYLOAD_PLACEHOLDER` + `flowContext`;
@@ -57,20 +57,23 @@ deep-merge the JSON response into the payload; a `Chat` escape ⇒ remaining tas
 `persistTasks` sets `PromptID`, and the User Onboarding agent submits.
 **Note:** until it lands, do not teach `kind:'Prompt'` in the loop prompt template.
 
-### [ ] 3. Depth chain + submit-time enforcement
+### [x] 3. Depth chain + submit-time enforcement
 **Where:** `packages/MJServer/src/services/TaskGraphAgentRunner.ts`, `TaskGraphService.Submit`.
 **Wrong:** graph-spawned runs never stamp `ContinuationDepth`, so a self-referencing flow recurses
 unbounded. Cap exists (`MAX_REINVOKE_DEPTH`) but nothing feeds it.
 **Done when:** the runner stamps depth (parent's + 1, read from the parent Task's metadata) and
 `Submit` refuses beyond the cap with a message naming the workflow.
 
-### [ ] 4. Refuse Flow-agent-as-sub-agent / scheduled target
+### [~] 4. Refuse Flow-agent-as-sub-agent / scheduled target
 **Wrong:** both report success-before-work; downstream proceeds on nothing. Most dangerous item in
 the review.
 **Done when:** submitting a Flow agent as a sub-agent step or a scheduled target fails **loudly** at
 submit, with a message saying an await path does not exist yet.
+**STATUS:** sub-agent half DONE (`FlowAgentType.DetermineInitialStep` refuses when `params.parentRun`
+is set). **Scheduled targets still open** — needs the equivalent guard wherever a scheduled job
+resolves its target agent.
 
-### [ ] 5. Wire `failureSemantics: 'edges'`
+### [x] 5. Wire `failureSemantics: 'edges'`
 **Wrong:** the compiler sets it; nothing persists or reads it. Recovery paths are dead machinery.
 **Done when:** persisted at submit (parent metadata), `handledFailureIDs` computed (a `Failed`
 origin **with a satisfied outgoing edge**), passed to `ComputeTasksToBlock` / `ComputeParentRollup`,
@@ -80,11 +83,11 @@ and `Failed`-decides in `ResolveExclusiveGroups` scoped to `'edges'` specs only.
 
 ## Also promised to the user
 
-### [ ] Max tree depth 100 + loud logging
+### [x] Max tree depth 100 + loud logging
 `MAX_AGENT_RUN_TREE_DEPTH` 50 → **100**. When the cap is hit: log loudly to server logs **and**
 persist the fact (so it is visible in the DB, not just in a log nobody reads).
 
-### [ ] PR comment covering #16, #3, #1
+### [x] PR comment covering #16, #3, #1
 Post **one** comment on PR #3692 addressed to the planner agent:
 - **#16 (three mapping dialects):** agree, but split — `flow-agent-type.ts` copies are behind the
   runtime refusal (dead code, low value); the **live `base-agent.ts` Loop-path clones** are the real

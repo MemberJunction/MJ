@@ -123,6 +123,14 @@ type GraphState = {
      * nor skipped: held, so a typo stalls visibly instead of firing every branch of a fork.
      */
     holdTaskIDs: Set<string>;
+    /**
+     * Failed tasks whose failure was HANDLED — they have a satisfied outgoing edge, so the workflow
+     * drew a route out of the failure and that route should be followed.
+     *
+     * Only populated under `failureSemantics: 'edges'`. Empty under `'block'`, where a failure is
+     * terminal for everything downstream regardless of what was drawn.
+     */
+    handledFailureIDs: Set<string>;
 };
 
 /**
@@ -492,7 +500,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Only failure-driven unsatisfiability reaches here now; not-taken branches were skipped
             // above. A task already Skipped is left alone rather than overwritten — the two passes
             // must not fight over the same row.
-            const toBlock = [...ComputeTasksToBlock(graph.nodes, graph.edges)].filter((id) => !toSkip.has(id));
+            const toBlock = [...ComputeTasksToBlock(graph.nodes, graph.edges, graph.handledFailureIDs)]
+                .filter((id) => !toSkip.has(id));
             for (const taskID of toBlock) {
                 const entity = graph.entityById.get(taskID);
                 if (!entity) continue;
@@ -522,7 +531,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // back empty transiently — it would mark live work finished and fire its continuation.
             // The outer guard covered the first load only.
             if (fresh.nodes.length === 0) continue;
-            const rollup = ComputeParentRollup(fresh.nodes);
+            const rollup = ComputeParentRollup(fresh.nodes, fresh.handledFailureIDs);
             const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
             if (!(await parent.Load(parentID))) continue;
             if (parent.Status !== rollup.status || parent.PercentComplete !== rollup.percentComplete) {
@@ -668,6 +677,64 @@ export class TaskGraphDispatcher implements IShutdownable {
             // over that would discard a completed step's result.
             LogError(`[TaskGraphDispatcher] Could not end graph early for ${task.ID}: ${e instanceof Error ? e.message : String(e)}`);
         }
+    }
+
+    /**
+     * How deep the continuation chain already is, read from the graph's parent metadata.
+     *
+     * A run started by a graph inherits that graph's depth **plus one**. Without this every spawned
+     * run begins at zero, so a self-referencing flow — one that dispatches a graph containing itself
+     * — recurses without bound while the cap it should be hitting compares against a permanent zero.
+     */
+    private async graphDepth(provider: IMetadataProvider, task: MJTaskEntity): Promise<number> {
+        if (!task.ParentID) return 0;
+        try {
+            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+            if (!(await parent.Load(task.ParentID))) return 0;
+            return ParseTaskGraphParentMetadata(parent.InputPayload).reinvokeDepth + 1;
+        } catch {
+            // An unreadable parent must not stop the work; depth zero is the safe reading, and the
+            // submit-time cap still guards the next hop.
+            return 0;
+        }
+    }
+
+    /**
+     * Which failures the workflow drew a way out of.
+     *
+     * A Failed task with a **satisfied outgoing edge** is a handled failure: its author drew a
+     * recovery route and that route is now live. Downstream work should be released along it, and the
+     * parent should not roll up Failed because of a step the workflow explicitly planned around.
+     *
+     * Scoped to `failureSemantics: 'edges'` on purpose. Under `'block'` — every agent-emitted graph —
+     * a failure is terminal for its dependents whatever edges exist, because nobody drew those edges
+     * as a recovery path; they are ordinary sequencing, and treating them as recovery would let a
+     * graph sail past a failure it never anticipated.
+     */
+    private async computeHandledFailures(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        nodes: TaskGraphNode[],
+        edges: TaskGraphEdge[],
+    ): Promise<Set<string>> {
+        const handled = new Set<string>();
+        // Cheap exit before touching the database: with no failures there is nothing to handle, and
+        // this runs on every poll for every active graph.
+        if (!nodes.some((n) => n.status === 'Failed')) return handled;
+
+        const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+        if (!(await parent.Load(parentTaskID))) return handled;
+        const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
+        if (meta.failureSemantics !== 'edges') return handled;
+
+        for (const node of nodes) {
+            if (node.status !== 'Failed') continue;
+            // "Has somewhere to go" is the test. An edge out of a failed step that survived condition
+            // evaluation IS the drawn recovery route; a failed step with no outgoing edges has none,
+            // and stays terminal.
+            if (edges.some((e) => e.dependsOnTaskId === node.id)) handled.add(node.id);
+        }
+        return handled;
     }
 
     /** The graph's child tasks, with the fields the rollup needs. */
@@ -973,6 +1040,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             return {
                 nodes: [], edges: [], entityById: new Map(),
                 unreachableTaskIDs: new Set(), skipSeedTaskIDs: new Set(), holdTaskIDs: new Set(),
+                handledFailureIDs: new Set(),
             };
         }
 
@@ -1057,13 +1125,16 @@ export class TaskGraphDispatcher implements IShutdownable {
         // waiting on it, and a node reached by an alternate branch is genuinely reachable.
         const unreachableTaskIDs = new Set([...droppedInto].filter((id) => !stillReachable.has(id)));
 
+        const nodes: TaskGraphNode[] = children.map((c) => ({ id: c.ID, status: c.Status as TaskGraphNodeStatus }));
+
         return {
-            nodes: children.map((c) => ({ id: c.ID, status: c.Status as TaskGraphNodeStatus })),
+            nodes,
             edges: liveEdges,
             entityById,
             unreachableTaskIDs,
             skipSeedTaskIDs: new Set(resolution.skipSeedTaskIDs),
             holdTaskIDs: new Set(resolution.holdTaskIDs),
+            handledFailureIDs: await this.computeHandledFailures(provider, parentTaskID, nodes, liveEdges),
         };
     }
 
@@ -1267,6 +1338,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 AgentID: task.AgentID!,
                 InputPayload: effectiveInput,
                 DependencyOutputs: dependencyOutputs,
+                ContinuationDepth: await this.graphDepth(provider, task),
                 Provider: provider,
                 ContextUser: this.contextUser,
             });
