@@ -4116,7 +4116,7 @@ export abstract class BaseEntity<T = unknown> {
         if (!this.IsSaved) {
             return; // INSERT — CanCreate is not enforced in this release
         }
-        if (!this.EntityInfo.HasAnyFieldPermissions) {
+        if (!this.EntityInfo.EnableFieldLevelSecurity) {
             return; // one boolean for the overwhelming majority of entities
         }
         const u: UserInfo = this.ActiveUser;

@@ -1,13 +1,14 @@
 /**
- * Field-Level Security — Workstream B DB-tier emission (SQL Server).
+ * Field-Level Security — DB-tier emission (SQL Server).
  *
- * Covers the three decided behaviors of the permission emitters:
- *   B1 — column-level DENY emission: explicit `Type='Deny'` + `CanRead` rows only, custom
- *        roles only (RoleSQLNameByID excludes standard roles), service-login backstop skips
- *        poisoned roles with a warning, unrestrictable targets filtered defensively.
- *   B2 — catalog-driven wipe-and-reassert: every live managed-scope permission entry gets a
- *        REVOKE preamble (object- and column-level) so grant/deny REMOVAL propagates.
- *   B3 — blank-SQLName roles log one app-tier-only INFO line per role per run.
+ * Covers three behaviors of the permission emitters:
+ *   - column-level DENY emission: explicit `ReadAccess='Deny'` rows only, on entities with
+ *     `EnableFieldLevelSecurity`, custom roles only (RoleSQLNameByID excludes standard roles),
+ *     service-login backstop skips poisoned roles with a warning, unrestrictable targets
+ *     filtered defensively.
+ *   - catalog-driven wipe-and-reassert: every live managed-scope permission entry gets a
+ *     REVOKE preamble (object- and column-level) so grant/deny REMOVAL propagates.
+ *   - blank-SQLName roles log one app-tier-only INFO line per role per run.
  *
  * All emission logic is synchronous string building against a mocked
  * FieldSecurityRunContext — no database.
@@ -44,6 +45,7 @@ function employeeEntity(opts: {
     bonusPerms?: Record<string, unknown>[];
     pkPerms?: Record<string, unknown>[];
     permissions?: Record<string, unknown>[];
+    enableFieldLevelSecurity?: boolean;
 } = {}): EntityInfo {
     return new EntityInfo({
         ID: 'entity-employees',
@@ -52,6 +54,7 @@ function employeeEntity(opts: {
         BaseTable: 'Employee',
         BaseView: 'vwEmployees',
         IncludeInAPI: true,
+        EnableFieldLevelSecurity: opts.enableFieldLevelSecurity ?? true,
         Permissions: opts.permissions ?? [
             { EntityID: 'entity-employees', RoleID: CUSTOM_ROLE_ID, Role: 'Payroll Auditors', RoleSQLName: 'cdp_payroll', CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: false },
         ],
@@ -64,8 +67,20 @@ function employeeEntity(opts: {
     });
 }
 
-function denyRow(fieldId: string, roleId: string, canRead = true): Record<string, unknown> {
-    return { ID: `p-${fieldId}-${roleId}`, EntityFieldID: fieldId, RoleID: roleId, Type: 'Deny', CanRead: canRead, CanUpdate: true };
+/**
+ * A row denying READ on `fieldId` for `roleId`. `readAccess` is parameterized so the tests can
+ * express the two non-Deny states — `No Access` (neutral, and NOT mirrored to the DB tier) and
+ * `Allow` — against the same shape.
+ */
+function denyRow(fieldId: string, roleId: string, readAccess: string = 'Deny'): Record<string, unknown> {
+    return {
+        ID: `p-${fieldId}-${roleId}`,
+        EntityFieldID: fieldId,
+        RoleID: roleId,
+        ReadAccess: readAccess,
+        UpdateAccess: readAccess === 'Allow' ? 'Allow' : 'Deny',
+        CreateAccess: 'No Access',
+    };
 }
 
 function makeContext(overrides: Partial<FieldSecurityRunContext> = {}): FieldSecurityRunContext {
@@ -97,7 +112,7 @@ beforeEach(() => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('generateViewPermissions — field-security DENY emission', () => {
-    it('emits a column DENY for an explicit Deny+CanRead row targeting a custom role', () => {
+    it('emits a column DENY for an explicit ReadAccess=Deny row targeting a custom role', () => {
         const provider = makeProvider(makeContext());
         const entity = employeeEntity({ salaryPerms: [denyRow('f-salary', CUSTOM_ROLE_ID)] });
         const sql = provider.generateViewPermissions(entity);
@@ -118,17 +133,30 @@ describe('generateViewPermissions — field-security DENY emission', () => {
         expect(sql.match(/DENY SELECT/g)).toHaveLength(1);
     });
 
-    it('NEVER synthesizes a DENY from Allow rows (allow-list restriction stays app-tier-only)', () => {
+    it('NEVER synthesizes a DENY from Allow rows', () => {
         const provider = makeProvider(makeContext());
-        const entity = employeeEntity({
-            salaryPerms: [{ ID: 'p1', EntityFieldID: 'f-salary', RoleID: CUSTOM_ROLE_ID, Type: 'Allow', CanRead: true, CanUpdate: true }],
-        });
+        const entity = employeeEntity({ salaryPerms: [denyRow('f-salary', CUSTOM_ROLE_ID, 'Allow')] });
         expect(provider.generateViewPermissions(entity)).not.toContain('DENY');
     });
 
-    it('ignores Deny rows whose CanRead flag is false (update-only denials have no SELECT mirror)', () => {
+    it('NEVER synthesizes a DENY from a No Access row — neutral is not a denial', () => {
+        // No Access blocks nothing on its own: another role's Allow still wins at the app tier.
+        // Mirroring it as a column DENY would make the DB tier STRICTER than the app tier,
+        // when it is meant to be a conservative subset.
         const provider = makeProvider(makeContext());
-        const entity = employeeEntity({ salaryPerms: [denyRow('f-salary', CUSTOM_ROLE_ID, false)] });
+        const entity = employeeEntity({ salaryPerms: [denyRow('f-salary', CUSTOM_ROLE_ID, 'No Access')] });
+        expect(provider.generateViewPermissions(entity)).not.toContain('DENY');
+    });
+
+    it('emits nothing when the entity has field security DISABLED', () => {
+        // Rows on a disabled entity are retained but inactive at the app tier. Mirroring them
+        // would make the two tiers disagree — and the DB tier is the one an administrator
+        // cannot see. Disabling therefore revokes the DENYs on the next run.
+        const provider = makeProvider(makeContext());
+        const entity = employeeEntity({
+            salaryPerms: [denyRow('f-salary', CUSTOM_ROLE_ID)],
+            enableFieldLevelSecurity: false,
+        });
         expect(provider.generateViewPermissions(entity)).not.toContain('DENY');
     });
 
