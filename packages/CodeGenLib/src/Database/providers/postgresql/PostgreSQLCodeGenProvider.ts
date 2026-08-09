@@ -2538,18 +2538,78 @@ WHERE p.prokind IN ('f', 'p')
         return j;
     }
 
-    /** Processes a word token - quotes it if it's a PascalCase identifier, not a keyword */
+    /**
+     * Processes a word token, quoting it when it is a mixed-case identifier.
+     *
+     * ## Why this no longer consults the keyword denylist
+     *
+     * The previous rule was "quote a PascalCase word UNLESS it appears in `_SQL_KEYWORDS`".
+     * That is a denylist, and denylists are wrong by construction here: the set of SQL
+     * keywords and the set of MJ column names OVERLAP. Every name in the intersection was
+     * passed through unquoted, folded to lower case on PostgreSQL, and failed with
+     * `column "..." does not exist` — or, worse, silently bound something else.
+     *
+     * The intersection is not guessable. Computed by hand it is exactly eight names —
+     * `Action`, `Columns`, `Language`, `Length`, `Month`, `Rank`, `Text`, `Values` — and
+     * neither the engineer who reported the class (issue #3604) nor the one who fixed its
+     * first instances predicted that set correctly from inspection. `Values` is the
+     * field-level-encrypted column on `__mj."Credential"`. It also grows silently: adding a
+     * column named `Rank` to any new entity re-opens the hole with nothing to signal it.
+     *
+     * ## The replacement discriminator: case, plus call syntax
+     *
+     * Generated SQL writes keywords, types and functions in ALL CAPS (`SELECT`, `FROM`,
+     * `VALUES (`, `LENGTH(`, `INT`), while MJ identifiers are mixed case (`Length`, `Values`,
+     * `EntityID`). That distinction is intrinsic to the two things rather than enumerated in
+     * a list, so it cannot drift:
+     *
+     *   - ALL CAPS            → keyword / type / function  → never quoted
+     *   - immediately calls   → `Coalesce(` → a function     → never quoted
+     *   - all lower           → unquoted PG identifier      → left alone (unchanged)
+     *   - `__mj_` prefixed    → internal, already lower      → left alone (unchanged)
+     *   - otherwise mixed case → an identifier               → QUOTED
+     *
+     * Verified against this codebase before the switch: `VALUES (` is written all-caps at
+     * every one of its call sites, and there are no mixed-case type casts (`AS Text`,
+     * `AS Date`), which are the two shapes that would break the case rule.
+     *
+     * `_SQL_KEYWORDS` is retained only as a belt-and-braces guard for ALL-CAPS words, where
+     * it is a no-op today — an all-caps word is never quoted by the case rule either. It is
+     * kept so that a future maintainer adding a mixed-case keyword has somewhere to express
+     * the exception, and so this change is reversible without restoring a deleted 288-entry
+     * literal.
+     */
     private processWord(sql: string, start: number, len: number, result: string[]): number {
         let j = start + 1;
         while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
         const word = sql.substring(start, j);
 
-        const isKeyword = PostgreSQLCodeGenProvider._SQL_KEYWORDS.has(word.toUpperCase());
         const startsUpper = /^[A-Z]/.test(word);
         const isAllLower = word === word.toLowerCase();
+        const isAllUpper = word === word.toUpperCase();
         const isMJInternal = word.startsWith('__mj_');
+        const isKeyword = PostgreSQLCodeGenProvider._SQL_KEYWORDS.has(word.toUpperCase());
 
-        if (!isKeyword && !isAllLower && !isMJInternal && startsUpper) {
+        // A word immediately followed by '(' is a function call, whatever its casing.
+        let k = j;
+        while (k < len && /[ \t]/.test(sql[k])) k++;
+        const isFunctionCall = sql[k] === '(';
+
+        // The denylist is consulted for ALL-CAPS words ONLY. That is the narrow band where
+        // it is unambiguous: MJ column names are PascalCase, so an all-caps word that also
+        // reads as a keyword (SELECT, FROM, VALUES, TEXT in a cast) is a keyword.
+        //
+        // For a MIXED-CASE word the denylist is deliberately NOT consulted — that lookup is
+        // precisely what produced the bug class, silently unquoting `Length`, `Values`,
+        // `Text` and five others because they double as SQL keywords.
+        //
+        // All-caps words that are NOT keywords are still identifiers and must be quoted:
+        // acronym columns like `ID` and `URL` are all-caps by nature, and a pure case rule
+        // would wrongly pass them through to fold into `id` / `url`.
+        const isIdentifier =
+            startsUpper && !isAllLower && !isMJInternal && !isFunctionCall && !(isAllUpper && isKeyword);
+
+        if (isIdentifier) {
             result.push(pgDialect.QuoteIdentifier(word));
         } else {
             result.push(word);
