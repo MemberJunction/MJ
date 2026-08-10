@@ -100,6 +100,21 @@ type GraphContext = {
     SubmittingAgentRunID: string | null;
 };
 
+/**
+ * Renders a loop's bindings as template values.
+ *
+ * Template parameters are strings; an item is usually an object. Objects are JSON-encoded rather
+ * than dropped, because `{{ field }}` printing `[object Object]` — or nothing at all — is exactly
+ * the silent failure this exists to prevent.
+ */
+function stringifyBindings(bindings: Record<string, unknown>): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(bindings)) {
+        out[key] = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    }
+    return out;
+}
+
 /** Deep-merges a prompt's JSON response into the payload, preserving what earlier steps established. */
 function deepMergePayload(
     base: Record<string, unknown>,
@@ -1034,6 +1049,14 @@ export class TaskGraphDispatcher implements IShutdownable {
                     // the claim would then have to expire before any host that CAN do it gets a
                     // turn — a self-inflicted stall on a mixed deployment.
                     if (!this.actionRunner) continue;
+                } else if (entity.PromptID) {
+                    // A prompt node — including a loop that repeats a prompt — is assigned through
+                    // PromptID and carries NEITHER ActionID nor AgentID. Without this branch it fell
+                    // through to the test below and was treated as a task waiting on a PERSON: the
+                    // workflow notified a human who had nothing to do and then stopped forever.
+                    // That is precisely the misclassification the step-kind rules warn about, and it
+                    // is silent — the graph sits In Progress looking like it is still working.
+                    if (!this.promptRunner) continue;
                 } else if (!entity.AgentID) {
                     await this.notifyHumanTaskReady(entity, provider);
                     continue;
@@ -1387,12 +1410,44 @@ export class TaskGraphDispatcher implements IShutdownable {
             };
         }
 
+        // A prompt body has no params of its own — it receives the payload (with the loop bindings
+        // merged in) through the placeholder, so an empty mapping is correct rather than missing.
         const bodyMapping = (op.action?.params ?? {}) as Record<string, unknown>;
         const invokeBody: LoopBodyInvoker = async ({ Bindings }) => {
             // Bindings go INTO the payload rather than beside it, so an authored mapping reaches the
             // current item the same way it reaches anything else: `payload.<itemVariable>`.
             const iterationPayload = { ...payload, ...Bindings };
             const resolved = ResolveMappedInput(bodyMapping, { payload: iterationPayload }) as Record<string, unknown>;
+
+            // A prompt body is checked FIRST because it is the only one whose id lives in its own
+            // column: a loop repeating a prompt has PromptID set and both ActionID and AgentID null,
+            // so falling through to the agent branch would dereference a null agent id.
+            if (task.StepType && task.PromptID && !task.ActionID) {
+                if (!this.promptRunner) {
+                    return { Success: false, ErrorMessage: 'No prompt runner is loaded on this host.' };
+                }
+                return this.promptRunner.RunPromptForTask({
+                    TaskID: task.ID,
+                    PromptID: task.PromptID,
+                    // The ITERATION payload, not the mapped params. An action body declares its
+                    // inputs and gets exactly those; a prompt body declares none — it receives the
+                    // whole payload through the placeholder, and the loop's item and index are
+                    // merged INTO that payload. Passing the mapped result here handed the prompt an
+                    // empty object, so every iteration asked the model to describe nothing and got
+                    // five confident answers about nothing back.
+                    InputPayload: iterationPayload,
+                    DependencyOutputs: dependencyOutputs,
+                    // The loop's bindings become TEMPLATE VARIABLES, so an author writes
+                    // `{{ field }}` for the item the loop is on — which is what `itemVariable` is
+                    // for, and what anyone reading the step's configuration expects. Reaching it
+                    // through the payload placeholder instead works but is not discoverable, and
+                    // getting it wrong is silent: the variable renders empty and the model answers
+                    // confidently about nothing.
+                    TemplateParameters: { ...stringifyBindings(Bindings), ...op.prompt?.templateParameters },
+                    Provider: provider,
+                    ContextUser: this.contextUser,
+                });
+            }
 
             return task.ActionID
                 ? this.actionRunner!.RunActionForTask({
@@ -1419,7 +1474,13 @@ export class TaskGraphDispatcher implements IShutdownable {
                 op as WhileOperation,
                 (iteration) => this.conditionEvaluator.Evaluate(
                     (op as WhileOperation).condition,
-                    { ...payload, iteration },
+                    // BOTH forms, because a workflow should not have two condition dialects. An
+                    // EDGE condition is written `payload.brandOK !== true`; a loop condition used
+                    // to see the payload's keys spread at the top level and nothing named `payload`,
+                    // so the same expression that routes an edge failed here with
+                    // "payload is not defined". The spread stays for conditions already written
+                    // against it.
+                    { ...payload, payload, iteration },
                 ),
                 invokeBody,
             );

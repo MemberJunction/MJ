@@ -287,6 +287,12 @@ function agentNamesIn(node: TaskGraphSpecNode): string[] {
     return names.filter((n): n is string => !!n);
 }
 
+/** Every prompt name a node references, including the prompt a loop repeats. */
+function promptNamesIn(node: TaskGraphSpecNode): string[] {
+    const names = [ConfigOf(node, 'Prompt')?.promptName, LoopOperationOf(node)?.prompt?.name];
+    return names.filter((n): n is string => !!n);
+}
+
 /** Every action name a node references, including the action a loop repeats. */
 function actionNamesIn(node: TaskGraphSpecNode): string[] {
     const names = [ConfigOf(node, 'Action')?.actionName, LoopOperationOf(node)?.action?.name];
@@ -508,9 +514,7 @@ export class TaskGraphService {
         spec: TaskGraphSpec,
         context: TaskGraphSubmitContext,
     ): Promise<{ Success: boolean; Map?: Map<string, string>; ErrorMessage?: string }> {
-        const names = [...new Set(
-            spec.tasks.map((t) => ConfigOf(t, 'Prompt')?.promptName).filter((n): n is string => !!n),
-        )];
+        const names = [...new Set(spec.tasks.flatMap(promptNamesIn))];
         if (names.length === 0) return { Success: true, Map: new Map() };
 
         const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
@@ -664,10 +668,11 @@ export class TaskGraphService {
                     const op = LoopOperationOf(node);
                     if (op?.action) task.ActionID = actionIDsByName.get(op.action.name)!;
                     else if (op?.subAgent) task.AgentID = agentIDsByName.get(op.subAgent.name)!;
+                    else if (op?.prompt) task.PromptID = promptIDsByName.get(op.prompt.name)!;
                     else {
                         throw new Error(
-                            `Task "${node.name}" is a loop with nothing to repeat. Choose an action ` +
-                            `or a sub-agent for it to run on each pass.`,
+                            `Task "${node.name}" is a loop with nothing to repeat. Choose an action, ` +
+                            `a prompt, or a sub-agent for it to run on each pass.`,
                         );
                     }
                     break;
