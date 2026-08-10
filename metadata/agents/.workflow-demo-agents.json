@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Schema Documentation Sweep",
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Demo",
-      "Description": "Finds MemberJunction entity fields that have no description and proposes one for each, then asks a person to approve them. A workflow demo that runs entirely on framework metadata \u2014 every install has undocumented fields, so it has real work to do on day one without any business data. The approval step is a genuine human-in-the-loop pause: the graph waits, every other branch keeps running, and answering releases it.",
+      "Description": "Finds MemberJunction entity fields that have no description and proposes one for each, then asks a person to approve them. A workflow demo that runs entirely on framework metadata — every install has undocumented fields, so it has real work to do on day one without any business data. The approval step is a genuine human-in-the-loop pause: the graph waits, every other branch keeps running, and answering releases it.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
       "Status": "Active",
       "ExecutionOrder": 0,
@@ -17,7 +17,7 @@
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "Find undocumented fields",
-            "Description": "Reads MJ: Entity Fields for rows with no Description. Capped low on purpose \u2014 this is a demo, and a sweep of every undocumented field in a stock install would be thousands of prompt calls.",
+            "Description": "Reads MJ: Entity Fields for rows with no Description. Capped low on purpose — this is a demo, and a sweep of every undocumented field in a stock install would be thousands of prompt calls.",
             "StartingStep": 1,
             "StepType": "Action",
             "ActionID": "@lookup:MJ: Actions.Name=Get Records",
@@ -49,7 +49,7 @@
                   "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Propose a description for each field&AgentID=@parent:AgentID",
                   "Condition": null,
                   "Priority": 100,
-                  "Description": "Feeds the records into the loop. Without this edge the two steps are disconnected and only the starting step is ever compiled \u2014 the workflow silently does half its job."
+                  "Description": "Feeds the records into the loop. Without this edge the two steps are disconnected and only the starting step is ever compiled — the workflow silently does half its job."
                 },
                 "primaryKey": {
                   "ID": "0000A923-0586-4175-A8FD-3192EA66FF02"
@@ -62,7 +62,7 @@
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "Propose a description for each field",
-            "Description": "One prompt call per field. A Prompt step rather than a sub-agent because there is nothing to reason about across turns \u2014 it is a single transformation of one field into one sentence, and an agent wrapper would add a reasoning loop, guardrails and a run record for no benefit.",
+            "Description": "One prompt call per field. A Prompt step rather than a sub-agent because there is nothing to reason about across turns — it is a single transformation of one field into one sentence, and an agent wrapper would add a reasoning loop, guardrails and a run record for no benefit.",
             "StartingStep": 0,
             "StepType": "ForEach",
             "LoopBodyType": "Prompt",
@@ -145,7 +145,7 @@
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "Research: broad",
-            "Description": "One half of the research join. Runs in parallel with the focused search \u2014 they are independent, so making them sequential would double the wait for no reason.",
+            "Description": "One half of the research join. Runs in parallel with the focused search — they are independent, so making them sequential would double the wait for no reason.",
             "StartingStep": 1,
             "StepType": "Action",
             "ActionID": "@lookup:MJ: Actions.Name=Web Search",
@@ -174,6 +174,22 @@
                 "primaryKey": {
                   "ID": "3A773E7E-7C54-40FA-BF6E-E4509A3E01C5"
                 }
+              },
+              {
+                "fields": {
+                  "OriginStepID": "@parent:ID",
+                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Research: focused&AgentID=@parent:AgentID",
+                  "Condition": null,
+                  "Priority": 100,
+                  "Description": "Reaches the second research angle. Both still feed the draft, so the join below still waits for BOTH."
+                },
+                "primaryKey": {
+                  "ID": "F3F2BAF1-4A77-490D-922D-8E5F4BDEC8D8"
+                },
+                "sync": {
+                  "lastModified": "2026-08-10T16:15:27.960Z",
+                  "checksum": "ca99fd6da072a98fe7d32f51ad5ac84af227961a8d867cf9306ca6194fb6ac08"
+                }
               }
             ]
           },
@@ -185,8 +201,8 @@
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "Research: focused",
-            "Description": "The other half of the join. A different search angle on purpose \u2014 the draft step is told both ran, so it is never writing from half the evidence.",
-            "StartingStep": 1,
+            "Description": "The other half of the research join, reached from the broad search. NOT a second starting step: a workflow has exactly one entry, and a step marked as a second one is pruned as unreachable — which is how this demo spent its early life drafting from half the evidence.",
+            "StartingStep": 0,
             "StepType": "Action",
             "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
             "ActionInputMapping": {
@@ -219,13 +235,17 @@
           },
           "primaryKey": {
             "ID": "F98FD583-6CD3-4E41-BF00-C2A097478465"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T16:15:27.863Z",
+            "checksum": "a948a6503f63bcdde67f1274aeebd5ee7282065be945368171257d236b4e103c"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "Draft the piece",
-            "Description": "The AND-join. Two paths lead here, so the dispatcher holds this step until both research steps have settled \u2014 that is what a graph gives you that a linear flow cannot.",
+            "Description": "The AND-join. Two paths lead here, so the dispatcher holds this step until both research steps have settled — that is what a graph gives you that a linear flow cannot.",
             "StartingStep": 0,
             "StepType": "Prompt",
             "PromptID": "@lookup:MJ: AI Prompts.Name=Workflow Demo: Draft Content",
@@ -296,7 +316,7 @@
                   "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Close out: gave up&AgentID=@parent:AgentID",
                   "Condition": "payload.brandOK !== true",
                   "Priority": 100,
-                  "Description": "The give-up branch. The loop hit its cap without the draft passing, and that has to be SAID \u2014 a workflow that gives up quietly is indistinguishable from one that succeeded."
+                  "Description": "The give-up branch. The loop hit its cap without the draft passing, and that has to be SAID — a workflow that gives up quietly is indistinguishable from one that succeeded."
                 },
                 "primaryKey": {
                   "ID": "41C2AEE5-E5CF-48E3-AFED-C08AC0D30393"
@@ -312,7 +332,7 @@
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "Close out: approved",
-            "Description": "One of an exclusive pair \u2014 exactly one of these two runs, and the other settles Skipped, which is a normal outcome and never rendered as a failure.",
+            "Description": "One of an exclusive pair — exactly one of these two runs, and the other settles Skipped, which is a normal outcome and never rendered as a failure.",
             "StartingStep": 0,
             "StepType": "Prompt",
             "PromptID": "@lookup:MJ: AI Prompts.Name=Workflow Demo: Final Note",
@@ -335,7 +355,7 @@
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "Close out: gave up",
-            "Description": "The other half of the exclusive pair. Sets needsHuman so the stalled work is findable \u2014 the whole point of a give-up branch is that someone learns about it.",
+            "Description": "The other half of the exclusive pair. Sets needsHuman so the stalled work is findable — the whole point of a give-up branch is that someone learns about it.",
             "StartingStep": 0,
             "StepType": "Prompt",
             "PromptID": "@lookup:MJ: AI Prompts.Name=Workflow Demo: Final Note",
