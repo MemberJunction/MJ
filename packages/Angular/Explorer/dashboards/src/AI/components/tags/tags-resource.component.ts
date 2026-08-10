@@ -23,7 +23,8 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseEntity, CompositeKey, Metadata, RunQuery, RunView } from '@memberjunction/core';
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
-import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine, MJTagEntity, MJTagSynonymEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
+import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledJobEntity, MJContentItemDuplicateEntity, UserInfoEngine, MJTagEntity, MJTagSynonymEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
+import { BuildSingleStaticParamConfiguration, ResolveActionJobTypeID } from '../../../shared/action-scheduled-job';
 import { TagEngineBase } from '@memberjunction/tag-engine-base';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
@@ -163,10 +164,10 @@ interface SourceCard {
     EntityID: string;
     EntityDocumentID: string;
     RequiresFileType: boolean;
-    /** FK to ScheduledAction entity, null if no schedule configured */
-    ScheduledActionID: string | null;
-    /** Denormalized name of the linked ScheduledAction */
-    ScheduledActionName: string | null;
+    /** FK to the Scheduled Job that runs this source, null if no schedule configured */
+    ScheduledJobID: string | null;
+    /** Denormalized name of the linked Scheduled Job */
+    ScheduledJobName: string | null;
     /** Human-readable schedule description (parsed from cron) */
     ScheduleDescription: string | null;
 }
@@ -759,8 +760,8 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     /** Tag node currently displayed in treemap drill-in */
     public TreemapDrillInNode: TaxTreeNode | null = null;
 
-    /** Cached ScheduledAction entities, keyed by normalized ID */
-    private scheduledActionsCache = new Map<string, MJScheduledActionEntity>();
+    /** Cached Scheduled Job entities, keyed by normalized ID */
+    private scheduledJobsCache = new Map<string, MJScheduledJobEntity>();
 
     /**
      * Whether the currently selected source type is "Entity", which switches
@@ -1428,8 +1429,8 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount : 0;
             this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount : 0;
 
-            // Load ScheduledAction entities referenced by sources so cron descriptions are available
-            await this.loadScheduledActionsForSources();
+            // Load Scheduled Job entities referenced by sources so cron descriptions are available
+            await this.loadScheduledJobsForSources();
 
             this.buildNavItems();
             this.buildKPIMetrics();
@@ -1583,9 +1584,9 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             const lastRunStatus = lastRun ? (lastRun['Status'] as string)?.toLowerCase() : null;
             const hasError = lastRunStatus === 'error' || lastRunStatus === 'failed';
 
-            const scheduledActionID = (source['ScheduledActionID'] as string | null) ?? null;
-            const scheduledActionName = (source['ScheduledAction'] as string | null) ?? null;
-            const cronExpr = scheduledActionID ? this.getScheduledActionCron(scheduledActionID) : null;
+            const scheduledJobID = (source['ScheduledJobID'] as string | null) ?? null;
+            const scheduledJobName = (source['ScheduledJob'] as string | null) ?? null;
+            const cronExpr = scheduledJobID ? this.getScheduledJobCron(scheduledJobID) : null;
 
             return {
                 ID: id,
@@ -1609,8 +1610,8 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 EntityID: (source['EntityID'] as string) ?? '',
                 EntityDocumentID: (source['EntityDocumentID'] as string) ?? '',
                 RequiresFileType: this.sourceTypeRequiresFileType(source['ContentSourceTypeID'] as string),
-                ScheduledActionID: scheduledActionID,
-                ScheduledActionName: scheduledActionName,
+                ScheduledJobID: scheduledJobID,
+                ScheduledJobName: scheduledJobName,
                 ScheduleDescription: cronExpr ? CronToHumanReadable(cronExpr) : null,
             };
         });
@@ -2217,8 +2218,8 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     }
 
     /**
-     * Saves a new ScheduledAction for the current source, links it
-     * via ContentSource.ScheduledActionID, and creates the default
+     * Saves a new Scheduled Job (type: Action) for the current source, links it
+     * via ContentSource.ScheduledJobID, and creates the default
      * action params for the Autotag and Vectorize action.
      */
     public async SaveSchedule(): Promise<void> {
@@ -2241,35 +2242,43 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 return;
             }
 
-            // 2. Create the ScheduledAction
-            const scheduledAction = await md.GetEntityObject<MJScheduledActionEntity>('MJ: Scheduled Actions');
-            scheduledAction.NewRecord();
-            scheduledAction.Name = `Autotag: ${card.Name}`;
-            scheduledAction.Description = `Automated classification pipeline for content source "${card.Name}"`;
-            scheduledAction.ActionID = actionID;
-            scheduledAction.Type = 'Custom';
-            scheduledAction.CronExpression = this.ScheduleCron;
-            scheduledAction.CustomCronExpression = this.ScheduleCron;
-            scheduledAction.Status = this.ScheduleEnabled ? 'Active' : 'Disabled';
-            scheduledAction.Timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            // 2. Resolve the 'Action' scheduled-job type
+            const jobTypeID = await ResolveActionJobTypeID(md);
+            if (!jobTypeID) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Could not find the "Action" scheduled job type. Please check scheduling configuration.',
+                    'error', 5000
+                );
+                return;
+            }
 
-            const saved = await scheduledAction.Save();
+            // 3. Create the Scheduled Job — action + source-ID parameter ride in Configuration.
+            const scheduledJob = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
+            scheduledJob.NewRecord();
+            scheduledJob.JobTypeID = jobTypeID;
+            scheduledJob.Name = `Autotag: ${card.Name}`;
+            scheduledJob.Description = `Automated classification pipeline for content source "${card.Name}"`;
+            scheduledJob.CronExpression = this.ScheduleCron;
+            scheduledJob.Status = this.ScheduleEnabled ? 'Active' : 'Disabled';
+            scheduledJob.Timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            scheduledJob.Configuration = await BuildSingleStaticParamConfiguration(
+                md, actionID, 'EntityNames', card.ID, '[Classify]'
+            );
+
+            const saved = await scheduledJob.Save();
             if (!saved) {
-                const errorDetail = scheduledAction.LatestResult?.Message ?? 'Unknown error';
+                const errorDetail = scheduledJob.LatestResult?.CompleteMessage ?? 'Unknown error';
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to create schedule: ${errorDetail}`, 'error', 5000
                 );
                 return;
             }
 
-            // 3. Create ScheduledActionParam for sourceIDs
-            await this.createSourceIDParam(scheduledAction.ID, actionID, card.ID);
+            // 4. Link the Scheduled Job to the ContentSource
+            await this.linkScheduleToSource(card.ID, scheduledJob.ID);
 
-            // 4. Link ScheduledAction to ContentSource
-            await this.linkScheduleToSource(card.ID, scheduledAction.ID);
-
-            // 5. Cache the new action for cron display
-            this.scheduledActionsCache.set(NormalizeUUID(scheduledAction.ID), scheduledAction);
+            // 5. Cache the new job for cron display
+            this.scheduledJobsCache.set(NormalizeUUID(scheduledJob.ID), scheduledJob);
 
             MJNotificationService.Instance.CreateSimpleNotification(
                 `Schedule created: ${CronToHumanReadable(this.ScheduleCron)}`, 'success', 3000
@@ -2288,11 +2297,11 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     }
 
     /**
-     * Removes the schedule from a source card by unlinking the ScheduledActionID.
+     * Removes the schedule from a source card by unlinking the ScheduledJobID.
      * @param card The source card to remove the schedule from
      */
     public async RemoveSchedule(card: SourceCard): Promise<void> {
-        if (!card.ScheduledActionID) return;
+        if (!card.ScheduledJobID) return;
         if (!(await this.confirmService.ConfirmDelete({ title: 'Remove Schedule', message: `Remove the schedule "${card.ScheduleDescription ?? 'schedule'}" from "${card.Name}"?`, confirmText: 'Remove' }))) return;
 
         try {
@@ -2321,39 +2330,39 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         return CronToHumanReadable(cron);
     }
 
-    /** Looks up the cron expression for a cached ScheduledAction by ID */
-    private getScheduledActionCron(scheduledActionID: string): string | null {
-        const cached = this.scheduledActionsCache.get(NormalizeUUID(scheduledActionID));
+    /** Looks up the cron expression for a cached Scheduled Job by ID */
+    private getScheduledJobCron(scheduledJobID: string): string | null {
+        const cached = this.scheduledJobsCache.get(NormalizeUUID(scheduledJobID));
         return cached?.CronExpression ?? null;
     }
 
     /**
-     * Loads ScheduledAction entities referenced by content sources into the local cache.
+     * Loads Scheduled Job entities referenced by content sources into the local cache.
      * Called during initial data load so cron descriptions are available for card rendering.
      */
-    private async loadScheduledActionsForSources(): Promise<void> {
+    private async loadScheduledJobsForSources(): Promise<void> {
         const actionIDs = this.contentSourcesRaw
-            .map(s => s['ScheduledActionID'] as string | null)
+            .map(s => s['ScheduledJobID'] as string | null)
             .filter((id): id is string => id != null);
 
         if (actionIDs.length === 0) return;
 
         const uniqueIDs = [...new Set(actionIDs.map(id => NormalizeUUID(id)))];
         // Skip IDs already cached
-        const toLoad = uniqueIDs.filter(id => !this.scheduledActionsCache.has(id));
+        const toLoad = uniqueIDs.filter(id => !this.scheduledJobsCache.has(id));
         if (toLoad.length === 0) return;
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const filter = toLoad.map(id => `'${id}'`).join(',');
-        const result = await rv.RunView<MJScheduledActionEntity>({
-            EntityName: 'MJ: Scheduled Actions',
+        const result = await rv.RunView<MJScheduledJobEntity>({
+            EntityName: 'MJ: Scheduled Jobs',
             ExtraFilter: `ID IN (${filter})`,
             ResultType: 'entity_object',
         });
 
         if (result.Success) {
             for (const action of result.Results) {
-                this.scheduledActionsCache.set(NormalizeUUID(action.ID), action);
+                this.scheduledJobsCache.set(NormalizeUUID(action.ID), action);
             }
         }
     }
@@ -2375,48 +2384,14 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     }
 
     /**
-     * Creates a ScheduledActionParam that passes the source ID to the action.
-     * Looks up the "EntityNames" action param and sets the source ID as its value.
+     * Links (or unlinks) a Scheduled Job to a ContentSource by updating
+     * the ContentSource.ScheduledJobID field.
      */
-    private async createSourceIDParam(scheduledActionID: string, actionID: string, sourceID: string): Promise<void> {
-        // Find the "EntityNames" action param to get its ID
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const paramResult = await rv.RunView<{ ID: string; Name: string }>({
-            EntityName: 'MJ: Action Params',
-            ExtraFilter: `ActionID = '${actionID}' AND Name = 'EntityNames'`,
-            Fields: ['ID', 'Name'],
-            ResultType: 'simple',
-            MaxRows: 1,
-        });
-
-        if (!paramResult.Success || paramResult.Results.length === 0) {
-            console.warn('[Classify] Could not find EntityNames action param for source ID scheduling');
-            return;
-        }
-
-        const md = this.ProviderToUse;
-        const param = await md.GetEntityObject<MJScheduledActionParamEntity>('MJ: Scheduled Action Params');
-        param.NewRecord();
-        param.ScheduledActionID = scheduledActionID;
-        param.ActionParamID = paramResult.Results[0].ID;
-        param.ValueType = 'Static';
-        param.Value = sourceID;
-
-        const saved = await param.Save();
-        if (!saved) {
-            console.warn('[Classify] Failed to save schedule param:', param.LatestResult?.Message);
-        }
-    }
-
-    /**
-     * Links (or unlinks) a ScheduledAction to a ContentSource by updating
-     * the ContentSource.ScheduledActionID field.
-     */
-    private async linkScheduleToSource(sourceID: string, scheduledActionID: string | null): Promise<void> {
+    private async linkScheduleToSource(sourceID: string, scheduledJobID: string | null): Promise<void> {
         const md = this.ProviderToUse;
         const entity = await md.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources');
         await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: sourceID }]));
-        entity.ScheduledActionID = scheduledActionID;
+        entity.ScheduledJobID = scheduledJobID;
         const saved = await entity.Save();
         if (!saved) {
             throw new Error(entity.LatestResult?.Message ?? 'Failed to update content source');
@@ -3055,7 +3030,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({ EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' });
         if (result.Success) this.contentSourcesRaw = result.Results;
-        await this.loadScheduledActionsForSources();
+        await this.loadScheduledJobsForSources();
         this.buildSourceCards();
         this.buildNavItems();
         this.cdr.detectChanges();

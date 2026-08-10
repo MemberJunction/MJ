@@ -1,4 +1,4 @@
-import { BaseEntity, EntityFieldExtendedType, EntityFieldInfo, EntityFieldValueListType, EntityInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
+import { BaseEntity, EntityFieldExtendedType, EntityFieldInfo, EntityFieldValueListType, EntityInfo, EntityRelationshipInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
 import ts from 'typescript';
@@ -48,6 +48,34 @@ function SafeCodeName(field: EntityFieldInfo): string {
     const raw = field.CodeName;
     return BASE_ENTITY_RESERVED_NAMES.has(raw) ? `${raw}_` : raw;
 }
+
+/**
+ * The parsed shape of `EntityRelationship.RelatedRecordCollection` — the policy half of a
+ * `DeclareRelatedRecords(...)` declaration.
+ *
+ * Mirrors `metadata/entities/JSONType-interfaces/IRelatedRecordCollectionConfig.ts`, which is the
+ * definition pushed into `EntityField.JSONTypeDefinition`. Keep the two in step when adding an
+ * option; this local copy exists so CodeGen can validate the blob without importing metadata.
+ *
+ * `RelatedEntity` and `RelatedEntityJoinField` are deliberately absent — they are columns on the
+ * same `EntityRelationship` row, and duplicating them here would create two sources of truth.
+ */
+export type RelatedRecordCollectionConfig = {
+  /** Generated property name on the entity subclass, e.g. `Lines`. Must be a valid TS identifier. */
+  Name: string;
+  /** When the collection populates itself. Defaults to `'explicit'`. */
+  Load?: 'explicit' | 'immediate' | 'lazy' | 'never';
+  Source?: 'database' | 'cache';
+  ReadOnly?: boolean;
+  /** What removal means. Defaults to `'delete'`. */
+  OnRemove?: 'delete' | 'orphan' | 'refuse';
+  /** `OrderBy` clause applied when loading. */
+  OrderBy?: string;
+  /** Automatic gap-free sequence numbering. */
+  Sequence?: { Field: string; From?: number };
+  /** Whether the collection empties itself after a successful save. Defaults to `false`. */
+  ClearAfterSave?: boolean;
+};
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
@@ -474,6 +502,8 @@ export const loadModule = () => {
           ? '\n' + Array.from(jsonTypeDefinitions).join('\n\n') + '\n'
           : '';
 
+      const relatedRecordCollections = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(entity);
+
       let sRet: string = `
 ${jsonTypeBlock}
 /**
@@ -487,7 +517,7 @@ ${jsonTypeBlock}
  * @public${deprecatedFlag}
  */
 ${includeFileHeader ? subClassImportStatement : ''}@RegisterClass(BaseEntity, '${entity.Name}')
-export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}
+export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${relatedRecordCollections}${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}
 
 ${fields}
 }
@@ -496,6 +526,298 @@ ${fields}
 
       return sRet;
     }
+  }
+
+  /**
+   * Emits `DeclareRelatedRecords(...)` declarations for every relationship on this entity whose
+   * `RelatedRecordCollection` column holds a config object.
+   *
+   * A related-record collection makes a parent and its related rows load, validate and persist as
+   * one unit — see `guides/TRANSACTIONS_AND_BATCHING_GUIDE.md`. Before this generator, every
+   * application hand-wrote the declaration on a subclass; now two columns plus one JSON blob on
+   * `EntityRelationship` produce it.
+   *
+   * **Two option values come from the row's own columns, not the JSON**: `RelatedEntity` and
+   * `RelatedEntityJoinField`. Duplicating them inside the blob would create two sources of truth
+   * that can disagree, with the JSON copy winning silently.
+   *
+   * Emitted as a field initialiser rather than constructor code because generated subclasses have
+   * no constructor — TypeScript runs initialisers immediately after `super()`, by which point
+   * `EntityInfo` and the provider are both set, which is everything `DeclareRelatedRecords` needs.
+   *
+   * @param entity - The entity being generated.
+   * @returns The declarations block, or an empty string when the entity declares none (the
+   *          overwhelmingly common case, which must add nothing to the generated output).
+   */
+  public static GenerateRelatedRecordCollections(entity: EntityInfo): string {
+    const declared = (entity.RelatedEntities ?? []).filter(
+      r => r.RelatedRecordCollection && r.RelatedRecordCollection.trim().length > 0,
+    );
+    if (declared.length === 0) {
+      return '';
+    }
+
+    const blocks: string[] = [];
+    const seenNames = new Set<string>();
+
+    for (const relationship of declared) {
+      const config = EntitySubClassGeneratorBase.ParseRelatedRecordCollectionConfig(entity, relationship);
+      if (!config) {
+        continue; // ParseRelatedRecordCollectionConfig already logged the reason
+      }
+
+      // A duplicate property name would emit a class with two identical members — a TypeScript
+      // error in a 100k-line generated file, which is a miserable thing to diagnose. Refuse here,
+      // where the offending metadata row can be named.
+      const nameKey = config.Name.trim().toLowerCase();
+      if (seenNames.has(nameKey)) {
+        logError(
+          `[RelatedRecordCollection] ${entity.Name}: duplicate collection name '${config.Name}' ` +
+          `(relationship to ${relationship.RelatedEntity}). Names must be unique per entity; skipping.`,
+        );
+        continue;
+      }
+      seenNames.add(nameKey);
+
+      blocks.push(EntitySubClassGeneratorBase.RenderRelatedRecordCollection(entity, relationship, config));
+    }
+
+    return blocks.length > 0 ? '\n' + blocks.join('\n') : '';
+  }
+
+  /**
+   * Parses and validates one relationship's `RelatedRecordCollection` JSON.
+   *
+   * Invalid metadata is **skipped with a logged error rather than throwing**: a single malformed
+   * row must not abort a whole CodeGen run and leave the repository with no generated entities at
+   * all. The property simply does not appear, and the log names the row.
+   *
+   * @param entity - The owning entity, for error messages.
+   * @param relationship - The relationship carrying the config.
+   * @returns The validated config, or null when it cannot be used.
+   */
+  public static ParseRelatedRecordCollectionConfig(
+    entity: EntityInfo,
+    relationship: EntityRelationshipInfo,
+  ): RelatedRecordCollectionConfig | null {
+    const label = `${entity.Name} → ${relationship.RelatedEntity}`;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(relationship.RelatedRecordCollection);
+    } catch (e) {
+      logError(
+        `[RelatedRecordCollection] ${label}: RelatedRecordCollection is not valid JSON ` +
+        `(${e instanceof Error ? e.message : String(e)}); skipping.`,
+      );
+      return null;
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      logError(`[RelatedRecordCollection] ${label}: expected a JSON object; skipping.`);
+      return null;
+    }
+
+    const config = parsed as RelatedRecordCollectionConfig;
+
+    if (!config.Name || typeof config.Name !== 'string' || config.Name.trim().length === 0) {
+      logError(`[RelatedRecordCollection] ${label}: 'Name' is required and must be a non-empty string; skipping.`);
+      return null;
+    }
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(config.Name.trim())) {
+      // Name becomes a class member identifier. Anything else emits code that will not compile.
+      logError(
+        `[RelatedRecordCollection] ${label}: 'Name' ('${config.Name}') is not a valid TypeScript ` +
+        `identifier; skipping.`,
+      );
+      return null;
+    }
+
+    // The join field is read from the ROW, not the JSON — without it there is no way to filter
+    // related records, so the declaration cannot be generated.
+    if (!relationship.RelatedEntityJoinField || relationship.RelatedEntityJoinField.trim().length === 0) {
+      logError(
+        `[RelatedRecordCollection] ${label}: relationship has no RelatedEntityJoinField, so the ` +
+        `related records cannot be filtered to this parent; skipping.`,
+      );
+      return null;
+    }
+
+    // Many-to-many has no single owning foreign key, so the parent/child persistence semantics a
+    // collection provides (stamp the FK, delete orphans) do not apply.
+    if (relationship.Type && relationship.Type.trim().toLowerCase() !== 'one to many') {
+      logError(
+        `[RelatedRecordCollection] ${label}: only 'One To Many' relationships can be declared as ` +
+        `related-record collections (found '${relationship.Type}'); skipping.`,
+      );
+      return null;
+    }
+
+    const loadModes = ['explicit', 'immediate', 'lazy', 'never'];
+    if (config.Load && !loadModes.includes(config.Load)) {
+      logError(`[RelatedRecordCollection] ${label}: invalid Load '${config.Load}'; skipping.`);
+      return null;
+    }
+    const sources = ['database', 'cache'];
+    if (config.Source && !sources.includes(config.Source)) {
+      logError(`[RelatedRecordCollection] ${label}: invalid Source '${config.Source}'; skipping.`);
+      return null;
+    }
+    if (config.ReadOnly !== undefined && typeof config.ReadOnly !== 'boolean') {
+      logError(`[RelatedRecordCollection] ${label}: ReadOnly must be a boolean; skipping.`);
+      return null;
+    }
+
+    // `lazy` fills on a property read, and a getter cannot await. Only a cache lookup is
+    // synchronous, and only SHARING the engine's instances is synchronous — copying needs
+    // GetEntityObject. So lazy requires both cache and read-only. Rejecting here beats emitting a
+    // declaration that compiles and then never fills.
+    const source = config.Source ?? 'database';
+    const readOnly = config.ReadOnly ?? source === 'cache';
+    if (config.Load === 'lazy') {
+      if (source !== 'cache') {
+        logError(
+          `[RelatedRecordCollection] ${label}: Load 'lazy' requires Source 'cache' (a property getter ` +
+          `cannot await a database load); skipping.`,
+        );
+        return null;
+      }
+      if (!readOnly) {
+        logError(
+          `[RelatedRecordCollection] ${label}: Load 'lazy' requires ReadOnly (a writable cache-backed ` +
+          `collection must copy records, which is async); skipping.`,
+        );
+        return null;
+      }
+    }
+    const removalModes = ['delete', 'orphan', 'refuse'];
+    if (config.OnRemove && !removalModes.includes(config.OnRemove)) {
+      logError(`[RelatedRecordCollection] ${label}: invalid OnRemove '${config.OnRemove}'; skipping.`);
+      return null;
+    }
+    if (config.Sequence && (!config.Sequence.Field || typeof config.Sequence.Field !== 'string')) {
+      logError(`[RelatedRecordCollection] ${label}: Sequence requires a 'Field'; skipping.`);
+      return null;
+    }
+
+    return config;
+  }
+
+  /**
+   * Renders one validated declaration.
+   *
+   * @param entity - The owning entity.
+   * @param relationship - The relationship supplying `RelatedEntity` / `RelatedEntityJoinField`.
+   * @param config - The validated policy object.
+   * @returns The TypeScript field initialiser.
+   */
+  protected static RenderRelatedRecordCollection(
+    entity: EntityInfo,
+    relationship: EntityRelationshipInfo,
+    config: RelatedRecordCollectionConfig,
+  ): string {
+    const name = config.Name.trim();
+    // `RelatedEntityClassName` is the entity's BASE class name (e.g. `MJActionParam`); the generated
+    // subclass this file actually emits is that plus the `Entity` suffix (`MJActionParamEntity`) —
+    // the same `${entity.ClassName}Entity` convention used where the classes are declared. Emitting
+    // the bare name produced a file that could not compile: `Cannot find name 'MJActionParam'`.
+    // Fixture-based generator tests cannot catch this, because nothing there resolves the symbol;
+    // it only surfaced on a real CodeGen run against real metadata.
+    const relatedBase = relationship.RelatedEntityClassName?.trim();
+    // When metadata has no class name, fall back to BaseEntity so the declaration still compiles —
+    // untyped is a worse developer experience, but a build break is worse still.
+    const relatedClass = relatedBase ? `${relatedBase}Entity` : 'BaseEntity';
+
+    // Source and mutability are invisible at the call site otherwise, and both change what the
+    // caller may safely do with the records — so they are spelled out rather than left to the
+    // metadata row nobody reading this file has open.
+    const source = config.Source ?? 'database';
+    const readOnly = config.ReadOnly ?? source === 'cache';
+    const docLines: string[] = [];
+    if (source === 'cache') {
+      docLines.push(
+        ` **Source: cache.** Records come from whichever loaded BaseEngine already caches`,
+        ` '${relationship.RelatedEntity}', discovered via BaseEngineRegistry — zero queries. Falls back to a`,
+        ` database load when no loaded engine offers it.`,
+      );
+      docLines.push(
+        readOnly
+          ? ` **These are the engine's own entity instances, not copies.** Do not modify them: you would be`
+          : ` Writable, so records are COPIED out of the cache on load — the engine's instances are never`,
+      );
+      docLines.push(
+        readOnly
+          ? ` mutating shared cached state that other holders can see.`
+          : ` mutated in place.`,
+      );
+    }
+    if (readOnly) {
+      docLines.push(
+        ` **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,`,
+        ` and it never reports Dirty.`,
+      );
+    }
+    if (config.Load === 'lazy') {
+      docLines.push(
+        ` **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no`,
+        ` loaded engine caches '${relationship.RelatedEntity}', reading it THROWS rather than returning an`,
+        ` empty array — a lazy declaration asserts that such an engine exists.`,
+      );
+    }
+
+    const lines: string[] = [
+      `Name: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(name)}'`,
+      `RelatedEntity: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(relationship.RelatedEntity)}'`,
+      `RelatedEntityJoinField: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(relationship.RelatedEntityJoinField)}'`,
+    ];
+    if (config.OrderBy) {
+      lines.push(`OrderBy: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(config.OrderBy)}'`);
+    }
+    if (config.Load) {
+      lines.push(`Load: '${config.Load}'`);
+    }
+    if (config.OnRemove) {
+      lines.push(`OnRemove: '${config.OnRemove}'`);
+    }
+    if (config.Source) {
+      lines.push(`Source: '${config.Source}'`);
+    }
+    if (config.ReadOnly !== undefined) {
+      lines.push(`ReadOnly: ${config.ReadOnly}`);
+    }
+    if (config.Sequence) {
+      const from = typeof config.Sequence.From === 'number' ? config.Sequence.From : 1;
+      lines.push(
+        `Sequence: { Field: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(config.Sequence.Field)}', From: ${from} }`,
+      );
+    }
+    if (config.ClearAfterSave === true) {
+      lines.push('ClearAfterSave: true');
+    }
+
+    return `
+  /**
+  * Related records: ${relationship.RelatedEntity}
+  *
+  * Loads, validates and persists as one unit with this ${entity.Name} record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the '${entity.Name} → ${relationship.RelatedEntity}' relationship; edit that row, not this file.
+  *${docLines.join('\n  *')}
+  */
+  public readonly ${name} = this.DeclareRelatedRecords<${relatedClass}>({
+      ${lines.join(',\n        ')},
+  });
+`;
+  }
+
+  /**
+   * Escapes a value for safe embedding in a single-quoted TypeScript string literal.
+   *
+   * @param value - The raw value.
+   * @returns The escaped value.
+   */
+  protected static EscapeSingleQuotes(value: string): string {
+    return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   }
 
   /**

@@ -70,10 +70,10 @@ export interface SourceCard {
     EntityID: string;
     EntityDocumentID: string;
     RequiresFileType: boolean;
-    /** FK to ScheduledAction entity, null if no schedule configured */
-    ScheduledActionID: string | null;
-    /** Denormalized name of the linked ScheduledAction */
-    ScheduledActionName: string | null;
+    /** FK to the Scheduled Job that runs this source, null if no schedule configured */
+    ScheduledJobID: string | null;
+    /** Denormalized name of the linked Scheduled Job */
+    ScheduledJobName: string | null;
     /** Human-readable schedule description (parsed from cron) */
     ScheduleDescription: string | null;
 }

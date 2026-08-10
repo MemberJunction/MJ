@@ -97,8 +97,8 @@ import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
 import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
 import { ScoredCandidate } from '@memberjunction/core';
 import { QueueManager } from '@memberjunction/queue';
-import { EntityActionEngineServer } from '@memberjunction/actions';
-import { ActionResult } from '@memberjunction/actions-base';
+import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
+import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -446,17 +446,37 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Handles entity actions (non-AI) for save, delete, or validate operations.
      * Uses EntityActionEngineServer to discover and run active actions.
+     *
+     * **After-hooks run under `EntityActionDispatchGuard`; before-hooks and Validate do not.**
+     * The guard suppresses an action re-entering itself on the same record (the enrich-and-write-back
+     * loop) and coalesces a burst of saves into one pending rerun. Neither belongs on the
+     * synchronous half of the pipeline: `Validate` and `Before*` participate in the save and can
+     * abort it, so skipping one would let a record through that should have been refused, and
+     * deferring one would decide the save's outcome after it had already happened.
+     *
+     * **An After-hook binding may also ask to run durably** (`EntityAction.RunMode = 'Durable'`).
+     * After-hooks are dispatched fire-and-forget, so a process that dies mid-flight loses the work
+     * with nothing to retry it; durable dispatch hands it to the task-graph substrate instead (D14).
+     * `Validate` and `Before*` ignore RunMode entirely — deferring work that decides whether the
+     * save succeeds is not a durability improvement, it is a different feature.
      */
     protected override async HandleEntityActions(
         entity: BaseEntity,
         baseType: 'save' | 'delete' | 'validate',
         before: boolean,
         user: UserInfo,
+        originatingEntityActionIDs?: string[],
     ): Promise<ActionResult[]> {
+        // FIRST STATEMENT, and deliberately before the first `await`. After-hooks are dispatched
+        // fire-and-forget, and the moment this method yields, the save completes and `finalizeSave()`
+        // reloads the entity — resetting every field's OldValue to its new value. A change context
+        // built any later would report that nothing changed. Everything below this line may yield;
+        // nothing above it does.
+        const entityChange = BuildEntityChangeContext(entity);
         try {
             const engine = EntityActionEngineServer.Instance;
             await engine.Config(false, user);
-            const newRecord = entity.IsSaved ? false : true;
+            const newRecord = entityChange.IsCreate;
             const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';
             const invocationType = baseType === 'validate' ? 'Validate' : before ? 'Before' + baseTypeType : 'After' + baseTypeType;
             const invocationTypeEntity = engine.InvocationTypes.find((i) => i.Name === invocationType);
@@ -465,19 +485,44 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 return [];
             }
 
+            // Only the after-hooks are guarded — they are the fire-and-forget half, and the only
+            // half an action's own write-back can re-enter.
+            const guarded = baseType !== 'validate' && !before;
             const activeActions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType, 'Active');
             const results: ActionResult[] = [];
             for (const a of activeActions) {
-                const result = await engine.RunEntityAction({
-                    EntityAction: a,
-                    EntityObject: entity,
-                    InvocationType: invocationTypeEntity,
-                    ContextUser: user,
-                });
-                // null means the binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls
-                // outside it — the action never ran, so there is no result to report.
-                if (result) {
-                    results.push(result);
+                if (guarded && originatingEntityActionIDs?.some((id) => UUIDsEqual(id, a.ID))) {
+                    // The caller declared this save IS this action's write-back. Used by work that
+                    // detached from the async context the guard tracks — see
+                    // EntitySaveOptions.OriginatingEntityActionIDs.
+                    continue;
+                }
+
+                const runOnce = async () => {
+                    // Durability is NOT decided here. A binding's RunMode is honoured inside the
+                    // invocation path, after its scope check and its filters — deciding it at this
+                    // level would hand the work over before either gate ran.
+                    const result = await engine.RunEntityAction({
+                        EntityAction: a,
+                        EntityObject: entity,
+                        InvocationType: invocationTypeEntity,
+                        ContextUser: user,
+                        EntityChange: entityChange,
+                    });
+                    // null means the binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls
+                    // outside it — the action never ran, so there is no result to report.
+                    if (result) {
+                        results.push(result);
+                    }
+                };
+
+                if (guarded) {
+                    await EntityActionDispatchGuard.Instance.Dispatch(
+                        BuildEntityActionDispatchKey(a.ID, entity.EntityInfo.ID, entity.PrimaryKey.ToString()),
+                        runOnce,
+                    );
+                } else {
+                    await runOnce();
                 }
             }
             return results;
@@ -563,7 +608,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     protected override async OnBeforeSaveExecute(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<void> {
         if (options.SkipEntityActions !== true)
-            await this.HandleEntityActions(entity, 'save', true, user);
+            await this.HandleEntityActions(entity, 'save', true, user, options.OriginatingEntityActionIDs);
         if (options.SkipEntityAIActions !== true)
             await this.HandleEntityAIActions(entity, 'save', true, user);
 
@@ -583,7 +628,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (options.SkipEntityAIActions !== true)
             this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
         if (options.SkipEntityActions !== true)
-            this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
+            this.HandleEntityActions(entity, 'save', false, user, options.OriginatingEntityActionIDs); // NO AWAIT INTENTIONALLY
     }
 
     protected override async OnSaveCompleted(entity: BaseEntity, saveSQLResult: SaveSQLResult, user: UserInfo, options: EntitySaveOptions, context: SaveContext): Promise<Record<string, unknown> | null> {
@@ -612,13 +657,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             entity.EntityInfo.AllowMultipleSubtypes &&
             entity.EntityInfo.TrackRecordChanges
         )
+            // No explicit connectionSource: sibling writes must land in the same transaction as the
+            // save that triggered them, which is what happens by default — ExecuteSQL runs on the
+            // provider's ambient transaction when no source is given.
             ? this.PropagateRecordChangesToSiblings(
                 entity.EntityInfo,
                 overlappingChangeData,
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
-                entity.ProviderTransaction ? { connectionSource: entity.ProviderTransaction } : undefined,
             )
             : null;
 
@@ -647,14 +694,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     protected override async OnBeforeDeleteExecute(entity: BaseEntity, user: UserInfo, options: EntityDeleteOptions): Promise<void> {
         if (false === options?.SkipEntityActions)
-            await this.HandleEntityActions(entity, 'delete', true, user);
+            await this.HandleEntityActions(entity, 'delete', true, user, options?.OriginatingEntityActionIDs);
         if (false === options?.SkipEntityAIActions)
             await this.HandleEntityAIActions(entity, 'delete', true, user);
     }
 
     protected override OnAfterDeleteExecute(entity: BaseEntity, user: UserInfo, options: EntityDeleteOptions): void {
         if (false === options?.SkipEntityActions)
-            this.HandleEntityActions(entity, 'delete', false, user);
+            this.HandleEntityActions(entity, 'delete', false, user, options?.OriginatingEntityActionIDs);
         if (false === options?.SkipEntityAIActions)
             this.HandleEntityAIActions(entity, 'delete', false, user);
 
@@ -1624,13 +1671,33 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // caller's OrderBy — BuildKeysetSeekClause already validated that any caller-provided
             // OrderBy referenced the PK and we use the resolved direction.
             let rawOrderBy: string;
+            let orderByIsPkFallback = false;
             if (usingKeyset) {
                 rawOrderBy = `${keysetPkColumnName} ${keysetDirection}`;
             } else {
                 rawOrderBy = params.OrderBy ? (params.OrderBy as string) : (viewEntity ? viewEntity.OrderByClause ?? '' : '');
+                if (rawOrderBy.trim().length === 0 && maxRowsForQuery > 0 && entityInfo.FirstPrimaryKey) {
+                    // ── DETERMINISM FALLBACK ──
+                    // A row-LIMITED query with no ORDER BY returns an ARBITRARY subset: `TOP N` /
+                    // `LIMIT N` without an ordering is undefined by definition, and the engine is
+                    // free to return different rows run to run (or between two runs of the *same*
+                    // walk). Order by the PK so "the first N rows" means something.
+                    //
+                    // This is what broke keyset (AfterKey) pagination end to end. Page 1 of a walk
+                    // has no cursor yet, so `usingKeyset` is false and it landed here unordered,
+                    // while page 2+ force `ORDER BY <pk>` + `<pk> > @afterKey`. The two pages were
+                    // ordered differently, so a walk both RE-RETURNED page-1 rows and could silently
+                    // MISS others. Reproduced as 4 duplicates in an 8-row page (IT25 V10).
+                    //
+                    // OFFSET pagination already had exactly this fallback (see the pagination block
+                    // below); it was simply never applied to the TOP/LIMIT path. Same PK, so a
+                    // keyset walk's page 1 now agrees with every later page.
+                    rawOrderBy = this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name);
+                    orderByIsPkFallback = true;
+                }
             }
             const orderBy: string = rawOrderBy.length > 0
-                ? (usingKeyset ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
+                ? (usingKeyset || orderByIsPkFallback ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
                 : '';
 
             // View run logging (SQL Server-specific, others return null)
@@ -1643,16 +1710,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     viewSQL = logResult.executeViewSQL;
                     userViewRunID = logResult.runID;
                 } else if (orderBy.length > 0) {
-                    if (!usingKeyset && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+                    if (!usingKeyset && !orderByIsPkFallback && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
                     viewSQL += ` ORDER BY ${orderBy}`;
                 }
             } else if (orderBy.length > 0) {
-                if (!usingKeyset && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+                if (!usingKeyset && !orderByIsPkFallback && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
                 viewSQL += ` ORDER BY ${orderBy}`;
             }
 
             // ── Pagination / Non-paginated limit ──
             if (usingPagination && entityInfo.FirstPrimaryKey) {
+                // Belt-and-braces: the determinism fallback above already supplies ORDER BY <PK>
+                // for every row-limited query (pagination included), so `orderBy` is normally
+                // non-empty here. Kept because OFFSET/FETCH is a hard SYNTAX error without an
+                // ORDER BY — if the fallback above is ever narrowed, this must still hold.
                 if (!orderBy) {
                     viewSQL += ` ORDER BY ${this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name)}`;
                 }
@@ -3146,6 +3217,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * execute → paginate → audit → cache store. Platform providers inherit this; only
      * `ExecuteSQL()` is platform-specific.
      */
+
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // Route ad-hoc SQL queries to dedicated handler
         if (params.SQL) {

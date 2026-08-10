@@ -254,8 +254,6 @@ export class HomeAppPinService {
         return pin.Configuration['viewId'] === config['viewId'];
       case 'Queries':
         return pin.Configuration['queryId'] === config['queryId'];
-      case 'Reports':
-        return pin.Configuration['reportId'] === config['reportId'];
       case 'Records':
         return pin.Configuration['Entity'] === config['Entity']
             && pin.Configuration['recordId'] === config['recordId'];

@@ -33,5 +33,6 @@
   "peacock.color": "#162B4C",
   "typescript.tsdk": "node_modules/typescript/lib",
   "claudeCode.allowDangerouslySkipPermissions": true,
-  "claudeCode.initialPermissionMode": "bypassPermissions"
+  "claudeCode.initialPermissionMode": "bypassPermissions",
+  "npm.packageManager": "pnpm"
 }

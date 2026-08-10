@@ -159,9 +159,9 @@ describe('PostgreSQLCodeGenProvider', () => {
 
             const sql = provider.generateBaseView(context);
             expect(sql).toContain('CREATE OR REPLACE VIEW');
-            expect(sql).toContain('__mj."vwTestEntities"');
+            expect(sql).toContain('"__mj"."vwTestEntities"');
             expect(sql).toContain('t.*');
-            expect(sql).toContain('__mj."TestEntity" AS t');
+            expect(sql).toContain('"__mj"."TestEntity" AS t');
         });
 
         it('should include soft delete WHERE clause', () => {
@@ -550,7 +550,7 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(indexes.length).toBe(1);
             expect(indexes[0]).toContain('CREATE INDEX IF NOT EXISTS');
             expect(indexes[0]).toContain('"CategoryID"');
-            expect(indexes[0]).toContain('__mj."TestEntity"');
+            expect(indexes[0]).toContain('"__mj"."TestEntity"');
         });
 
         it('should not create index for PK fields', () => {

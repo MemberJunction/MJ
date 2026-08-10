@@ -8,7 +8,8 @@ import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJAIAgentFormComponent } from '../../generated/Entities/MJAIAgent/mjaiagent.form.component';
-import { MJDialogService } from '@memberjunction/ng-ui-components';
+import { MJDialogService, type TabConfig } from '@memberjunction/ng-ui-components';
+import { BuildAgentFormTabs, HasDesignerTab, type AgentFormTabContext } from './agent-form-tabs';
 import { SharedService } from '@memberjunction/ng-shared';
 import { AIAgentManagementService } from './ai-agent-management.service';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
@@ -18,7 +19,7 @@ import { PromptSelectorResult } from './prompt-selector-dialog.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { PromptSelectorDialogComponent } from './prompt-selector-dialog.component';
-import { CreateAgentService, CreateAgentResult } from '@memberjunction/ng-agents';
+import { CreateAgentService, CreateAgentResult, type AgentInvocationOpenRequestedEventArgs } from '@memberjunction/ng-agents';
 import { SearchScopeChildGridColumn } from '@memberjunction/ng-search';
 // AgentPermissionsDialogComponent is now from @memberjunction/ng-agents (shown via ShowPermissionsDialog flag)
 
@@ -421,6 +422,73 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /** Tracked expanded/collapsed state for each panelbar section */
     public SectionStates: Record<string, boolean> = {};
 
+    // === Form Tabs ===
+    //
+    // For an agent type that ships a designer (Flow being the one that does today), the diagram IS
+    // the agent — burying it in a collapsed accordion below ten sibling panels, behind a dynamic
+    // component that only instantiates when that panel is expanded, made the most important view of
+    // the record the hardest one to reach. Tabs put it first.
+    //
+    // Every agent also gets Invocations, because "what runs this thing when I'm not looking?" is a
+    // question you can ask of any agent, not just a Flow.
+
+    /**
+     * Which pane is showing. Persisted per user, so returning to a record lands where you left.
+     *
+     * Starts null rather than `'details'`: null means "nobody has chosen yet", which lets
+     * {@link refreshFormTabs} fall through to the first tab — the designer, when the agent type has
+     * one. A hardcoded default would open every Flow agent on Details and bury its diagram again.
+     */
+    public ActiveFormTab: string | null = null;
+
+    /** Tab chrome, recomputed only when the agent type or record identity changes. */
+    public FormTabs: TabConfig[] = [];
+
+    /** True when this agent's type contributes a designer pane (Flow does; Loop does not). */
+    public get HasDesignerTab(): boolean {
+        return HasDesignerTab(this.formTabContext);
+    }
+
+    /** The slice of state the tab rules read — kept small so the rules stay unit-testable. */
+    private get formTabContext(): AgentFormTabContext {
+        return {
+            AgentTypeName: this.agentType?.Name ?? null,
+            UIFormSectionKey: this.agentType?.UIFormSectionKey ?? null,
+            HasRecordID: !!this.record?.ID,
+        };
+    }
+
+    /**
+     * Rebuilds the tab strip.
+     *
+     * A field rather than a getter: a getter would allocate a new array on every change-detection
+     * pass, and `mj-tab-nav` would see a changed input each time. The rules themselves live in
+     * `agent-form-tabs.ts` — they are small, but each has a failure mode that renders as a blank
+     * form rather than an error, and none is reachable in a test from inside this component.
+     */
+    private refreshFormTabs(): void {
+        const plan = BuildAgentFormTabs(this.formTabContext, this.ActiveFormTab);
+        this.FormTabs = plan.Tabs;
+        this.ActiveFormTab = plan.ActiveKey;
+    }
+
+    public OnFormTabChange(key: string): void {
+        this.ActiveFormTab = key;
+        this.persistPreferences();
+        // The designer's container is created once and kept mounted (see the template), so the only
+        // thing a tab switch has to do is make sure it got loaded — which matters when the user's
+        // saved tab was Details and the designer has therefore never been visible.
+        if (key === 'designer' && !this.customSectionLoadedForTab) {
+            this.setTrackedTimeout(() => this.loadCustomFormSection(), 0);
+        }
+        this.cdr.detectChanges();
+    }
+
+    /** Mirrors `customSectionLoaded` for the tab path without reaching into a private field from the template. */
+    private get customSectionLoadedForTab(): boolean {
+        return this.customSectionLoaded;
+    }
+
     // === Dropdown Data ===
     /** Model selection mode options for the dropdown */
     public modelSelectionModes = [
@@ -699,8 +767,28 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     // === Transaction-based editing support ===
     /** Now using BaseFormComponent's PendingRecords system exclusively */
     
+    /**
+     * True until the form knows what it is going to render.
+     *
+     * The tab strip and every pane depend on the agent's TYPE, which is loaded asynchronously. Until
+     * it arrives there are no tabs, no designer pane, and `ActiveFormTab` is null — so the details
+     * pane is hidden too and the form renders its header over an empty area for as long as the load
+     * takes. That reads as a broken page, not as a slow one.
+     */
+    public IsFormInitializing = true;
+
     /** Flag to indicate if there are unsaved changes */
     public hasUnsavedChanges = false;
+
+    /**
+     * Surfaces the type section's own edits to the toolbar and the navigate-away guard.
+     *
+     * A flow canvas edit changes no field on the agent row, so `record.Dirty` stays false and the
+     * form would otherwise report itself clean while the user is looking at unsaved steps.
+     */
+    public override get HasAdditionalUnsavedChanges(): boolean {
+        return this.customSectionComponent?.HasPendingChanges === true;
+    }
     
     // Emergency circuit breaker to prevent infinite loops
     private _changeDetectionCount = 0;
@@ -733,7 +821,18 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      */
     async ngOnInit() {
         await super.ngOnInit();
+        try {
+            await this.initializeForm();
+        } finally {
+            // In a finally on purpose: a failure part-way through init must still reveal the form.
+            // Stranding the spinner would turn a partial load into a page that never arrives.
+            this.IsFormInitializing = false;
+            this.cdr.markForCheck();
+        }
+    }
 
+    /** The async work ngOnInit performs. Extracted so its completion can be signalled in one place. */
+    private async initializeForm(): Promise<void> {
         // Restore user preferences (header state, section expand/collapse)
         this.loadUserPreferences();
 
@@ -774,6 +873,13 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             // Start background timer for running time updates
             this.startRunningTimeUpdater();
         }
+
+        // Built unconditionally, not only on the agent-type path: a new record has no type to load
+        // from, and an agent whose TypeID is unset returns early from loadCurrentAgentType — either
+        // way the strip still needs its Details tab, and without this the form would render no tabs
+        // and no panes at all.
+        this.refreshFormTabs();
+        this.cdr.markForCheck();
     }
 
     /**
@@ -1141,6 +1247,9 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             console.error('Error loading agent type:', error);
             this.agentType = null;
         }
+        // The tab strip depends on the type (only some types ship a designer), so it cannot be built
+        // until the type is known.
+        this.refreshFormTabs();
     }
     
     /**
@@ -1215,6 +1324,9 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 const prefs = JSON.parse(raw);
                 this.HeaderCollapsed = prefs.headerCollapsed ?? false;
                 this.SectionStates = prefs.sectionStates ?? {};
+                // Validated against the real tab set in refreshFormTabs() — a stored key whose tab no
+                // longer exists must not leave every pane hidden.
+                this.ActiveFormTab = typeof prefs.activeTab === 'string' ? prefs.activeTab : null;
             }
         } catch (error) {
             console.error('Error loading AI Agent form preferences:', error);
@@ -1227,7 +1339,8 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         if (!this.preferencesLoaded) return;
         const prefs = {
             headerCollapsed: this.HeaderCollapsed,
-            sectionStates: this.SectionStates
+            sectionStates: this.SectionStates,
+            activeTab: this.ActiveFormTab
         };
         UserInfoEngine.Instance.SetSettingDebounced(
             MJAIAgentFormComponentExtended.PREFS_KEY,
@@ -3221,9 +3334,29 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 }
             }
 
+            // A custom type section (the Flow designer today) may hold edits of its own — steps and
+            // paths the form knows nothing about. Queuing them here is what makes the record atomic:
+            // before this, the section's Save was the ONLY path that wrote them, so hiding that
+            // button would have made flow edits unsavable.
+            if (this.customSectionComponent) {
+                const contributed = await this.customSectionComponent.ContributeToSave(transactionGroup);
+                if (!contributed) {
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        `The ${this.agentType?.Name ?? 'type'} configuration could not be prepared for saving. Nothing was saved.`,
+                        'error',
+                        4000
+                    );
+                    return false;
+                }
+            }
+
             // Execute all operations atomically
             const success = await transactionGroup.Submit();
             if (success) {
+                // Only now is the section's work actually committed — telling it earlier would mark
+                // edits saved that a failed submit had discarded.
+                this.customSectionComponent?.OnHostSaveCompleted();
+
                 // Clear our local state since save was successful
                 this.hasUnsavedChanges = false;
                 
@@ -3265,6 +3398,17 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         if (this.record.ParentID) {
             this.navigateToEntity('MJ: AI Agents', this.record.ParentID);
         }
+    }
+
+    /**
+     * Opens the substrate behind an invocation pathway.
+     *
+     * The Invocations widget names the row but never navigates to it — it is a `widgets`-layer
+     * component with no Router by construction. Translating that intent into navigation is exactly
+     * the job of this layer.
+     */
+    public OnInvocationOpenRequested(event: AgentInvocationOpenRequestedEventArgs): void {
+        this.navigateToEntity(event.EntityName, event.RecordID);
     }
 
     /**

@@ -1,4 +1,5 @@
 import { BaseEngine, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
+import { EntityChangeContext } from './EntityChangeContext';
 import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { MJActionEntityExtended } from "./MJActionEntityExtended";
 
@@ -269,6 +270,30 @@ export class RunActionParams<TContext = any> {
     * Optional, the input and output parameters as defined in the metadata for the action.
     */
    public Params: ActionParam[];
+
+   /**
+    * What changed about the record, when this run was dispatched by an entity action.
+    *
+    * Present only on the entity-action path — a directly invoked action has no record transition to
+    * describe. This is what makes a *transition* filter possible ("when Status becomes Approved"),
+    * as opposed to a state filter over current values, which was all a filter could see before.
+    */
+   public EntityChange?: EntityChangeContext;
+
+   /**
+    * When set, replaces *executing* the action — after validation and filters have passed.
+    *
+    * The seam durable dispatch hangs on. Submitting the work before this point would hand it over
+    * without the scope check and without the binding's filters ever running, so a scoped durable
+    * trigger would fire for every record and a filtered one on every save. Deferring *here* means
+    * the two paths share one gate: whatever decides an inline run should happen decides a durable
+    * one should be submitted.
+    *
+    * **Returning `null` declines the deferral** and the action executes normally. That is what makes
+    * the fallback free: a handoff that could not be completed becomes an ordinary run rather than
+    * requiring the deferral to reimplement execution.
+    */
+   public DeferExecution?: (params: RunActionParams) => Promise<ActionResultSimple | null>;
 
    /**
     * Optional context object that provides runtime-specific information to the action.

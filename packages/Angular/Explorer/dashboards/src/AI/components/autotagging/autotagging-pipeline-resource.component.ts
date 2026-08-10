@@ -11,7 +11,7 @@ import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewChi
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { BaseEntity, BaseEntityEvent, CompositeKey, RunView } from '@memberjunction/core';
-import { ResourceData, KnowledgeHubMetadataEngine, MJScheduledActionEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, KnowledgeHubMetadataEngine, MJScheduledJobEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID, MJGlobal, MJEventType } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
@@ -217,8 +217,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // The quick-schedule dialog (state + save/remove logic) moved to
     // ClassifySourcesTabComponent.
 
-    /** Cached ScheduledAction entities, keyed by normalized ID */
-    private scheduledActionsCache = new Map<string, MJScheduledActionEntity>();
+    /** Cached Scheduled Job entities, keyed by normalized ID */
+    private scheduledJobsCache = new Map<string, MJScheduledJobEntity>();
 
     // ── Detail panels ──
     // The Source Detail slide-in (state, pagination, status filter, retry, badge
@@ -278,9 +278,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public get TotalRunHistoryCount(): number {
         return this.totalRunHistoryCount;
     }
-    /** Exposes the cached ScheduledAction entities to the Sources tab via `[ScheduledActions]`. */
-    public get ScheduledActionsCache(): Map<string, MJScheduledActionEntity> {
-        return this.scheduledActionsCache;
+    /** Exposes the cached Scheduled Job entities to the Sources tab via `[ScheduledJobs]`. */
+    public get ScheduledJobsCache(): Map<string, MJScheduledJobEntity> {
+        return this.scheduledJobsCache;
     }
     /** Exposes the EntityRecordDocument ID→RecordID cache to the Sources tab via `[EntityRecordDocCache]`. */
     public get EntityRecordDocCacheMap(): Map<string, string> {
@@ -792,8 +792,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount : 0;
             this.totalRunHistoryCount = runsResult.Success ? runsResult.TotalRowCount : 0;
 
-            // Load ScheduledAction entities referenced by sources so cron descriptions are available
-            await this.loadScheduledActionsForSources();
+            // Load Scheduled Job entities referenced by sources so cron descriptions are available
+            await this.loadScheduledJobsForSources();
 
             this.buildNavItems();
             this.buildKPIMetrics();
@@ -958,7 +958,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     // buildSourceCards() + the source-detail/schedule helpers
     // (resolveEntityRecordID, resolveEntityName, countTagsBySource,
-    // getLastRunBySource, getScheduledActionCron, resolveEmbeddingModelName,
+    // getLastRunBySource, getScheduledJobCron, resolveEmbeddingModelName,
     // resolveVectorIndexName, loadContentItemsForSource, loadRunHistoryForSource)
     // moved to ClassifySourcesTabComponent.
 
@@ -1187,39 +1187,39 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     // DeleteSource(), the quick-schedule dialog (Open/Close/Save/Remove + cron
-    // label/preview helpers + getScheduledActionCron, findAutotagActionID,
+    // label/preview helpers + getScheduledJobCron, findAutotagActionID,
     // createSourceIDParam, linkScheduleToSource) moved to
-    // ClassifySourcesTabComponent. loadScheduledActionsForSources() stays here
+    // ClassifySourcesTabComponent. loadScheduledJobsForSources() stays here
     // because the host's LoadPipelineData / refreshSourcesTab populate the cache
-    // it exposes to the tab via [ScheduledActions].
+    // it exposes to the tab via [ScheduledJobs].
 
     /**
-     * Loads ScheduledAction entities referenced by content sources into the local cache.
+     * Loads Scheduled Job entities referenced by content sources into the local cache.
      * Called during initial data load so cron descriptions are available for card rendering.
      */
-    private async loadScheduledActionsForSources(): Promise<void> {
+    private async loadScheduledJobsForSources(): Promise<void> {
         const actionIDs = this.contentSourcesRaw
-            .map(s => s['ScheduledActionID'] as string | null)
+            .map(s => s['ScheduledJobID'] as string | null)
             .filter((id): id is string => id != null);
 
         if (actionIDs.length === 0) return;
 
         const uniqueIDs = [...new Set(actionIDs.map(id => NormalizeUUID(id)))];
         // Skip IDs already cached
-        const toLoad = uniqueIDs.filter(id => !this.scheduledActionsCache.has(id));
+        const toLoad = uniqueIDs.filter(id => !this.scheduledJobsCache.has(id));
         if (toLoad.length === 0) return;
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const filter = toLoad.map(id => `'${id}'`).join(',');
-        const result = await rv.RunView<MJScheduledActionEntity>({
-            EntityName: 'MJ: Scheduled Actions',
+        const result = await rv.RunView<MJScheduledJobEntity>({
+            EntityName: 'MJ: Scheduled Jobs',
             ExtraFilter: `ID IN (${filter})`,
             ResultType: 'entity_object',
         });
 
         if (result.Success) {
             for (const action of result.Results) {
-                this.scheduledActionsCache.set(NormalizeUUID(action.ID), action);
+                this.scheduledJobsCache.set(NormalizeUUID(action.ID), action);
             }
         }
     }
@@ -1618,7 +1618,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({ EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' });
         if (result.Success) this.contentSourcesRaw = result.Results;
-        await this.loadScheduledActionsForSources();
+        await this.loadScheduledJobsForSources();
         // The new contentSourcesRaw reference flows to ClassifySourcesTabComponent
         // via [Sources]="ContentSourcesRaw", which rebuilds its cards on input change.
         this.buildNavItems();

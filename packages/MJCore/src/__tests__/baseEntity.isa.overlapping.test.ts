@@ -347,9 +347,6 @@ describe('Delete safety for overlapping subtypes', () => {
             FindISAChildEntities: vi.fn().mockResolvedValue([
                 { ChildEntityName: 'Volunteers' }  // Volunteer still exists
             ]),
-            BeginISATransaction: vi.fn().mockResolvedValue({ id: 'mock-txn' }),
-            CommitISATransaction: vi.fn().mockResolvedValue(undefined),
-            RollbackISATransaction: vi.fn().mockResolvedValue(undefined),
             ProviderType: 'Database',
             Save: vi.fn().mockResolvedValue({}),
         };
@@ -391,9 +388,6 @@ describe('Delete safety for overlapping subtypes', () => {
         const mockProvider = {
             Delete: vi.fn().mockResolvedValue(true),
             FindISAChildEntities: vi.fn().mockResolvedValue([]),  // No remaining children
-            BeginISATransaction: vi.fn().mockResolvedValue({ id: 'mock-txn' }),
-            CommitISATransaction: vi.fn().mockResolvedValue(undefined),
-            RollbackISATransaction: vi.fn().mockResolvedValue(undefined),
             ProviderType: 'Database',
             Save: vi.fn().mockResolvedValue({}),
         };
@@ -426,9 +420,6 @@ describe('Delete safety for overlapping subtypes', () => {
         const mockProvider = {
             Delete: vi.fn().mockResolvedValue(true),
             FindISAChildEntities: vi.fn(),
-            BeginISATransaction: vi.fn().mockResolvedValue({ id: 'mock-txn' }),
-            CommitISATransaction: vi.fn().mockResolvedValue(undefined),
-            RollbackISATransaction: vi.fn().mockResolvedValue(undefined),
             ProviderType: 'Database',
             Save: vi.fn().mockResolvedValue({}),
         };
