@@ -7,11 +7,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { UUIDsEqual } from '@memberjunction/global';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import {
-  FindAgentRunTreeNodes,
-  LoadAgentRunTree,
-  MAX_AGENT_RUN_TREE_DEPTH,
-} from '@memberjunction/ai-core-plus';
+import { FindAgentRunTreeNodes, type AgentRunTreeNode } from '@memberjunction/ai-core-plus';
 import { ProjectRunTreeToTimeline } from './run-tree-timeline-projection';
 export interface TimelineItem {
   id: string;
@@ -50,6 +46,15 @@ export interface TimelineItem {
 })
 export class AIAgentRunTimelineComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @Input() aiAgentRunId!: string;
+
+  /**
+   * The run's execution tree, loaded ONCE by the form and shared with every tab.
+   *
+   * Received rather than fetched: three tabs need the same structure, and letting each load its own
+   * issues the same recursive query three times AND lets the tabs disagree — a tab that loaded a
+   * second earlier shows a different run than the one beside it.
+   */
+  @Input() RunTree: AgentRunTreeNode | null = null;
   @Input() dataHelper!: AIAgentRunDataHelper; // Data helper passed from parent
   @Output() itemSelected = new EventEmitter<TimelineItem>();
   @Output() navigateToEntity = new EventEmitter<{ entityName: string; recordId: string }>();
@@ -429,26 +434,18 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
     this.expandingGraphIDs.add(item.id);
     this.cdr.markForCheck();
     try {
-      const result = await LoadAgentRunTree(this.aiAgentRunId, this.RunQueryToUse);
-      if (result.ErrorMessage) {
-        this.error = result.ErrorMessage;
+      if (!this.RunTree) {
+        this.error = 'The run tree is not loaded yet, so this workflow cannot be expanded.';
         return;
       }
 
       // The graph hangs off THIS step in the tree, so the subtree to splice in is the node whose id
       // matches the step — not the whole run, which is already on screen above it.
-      const stepNode = result.Root
-        ? FindAgentRunTreeNodes(result.Root, (n) => n.NodeID === item.id)[0] ?? null
-        : null;
+      const stepNode = FindAgentRunTreeNodes(this.RunTree, (n) => n.NodeID === item.id)[0] ?? null;
 
       item.children = ProjectRunTreeToTimeline(stepNode, item.level + 1, true);
       item.childrenLoaded = true;
       item.hasNoChildren = item.children.length === 0;
-      if (result.Truncated) {
-        // Said out loud rather than swallowed: a tree cut off at the depth cap looks complete, and
-        // someone would reasonably conclude the workflow did less than it did.
-        this.error = `This workflow nests deeper than ${MAX_AGENT_RUN_TREE_DEPTH} levels; the view below is truncated.`;
-      }
     } catch (e) {
       this.error = e instanceof Error ? e.message : String(e);
     } finally {
