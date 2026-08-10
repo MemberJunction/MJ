@@ -43,7 +43,10 @@ const STRANGER_ID = '00000000-0000-4000-8000-0000000000CC';
 const KNOWN_DRIVER_DIVISORS: Readonly<Record<string, number>> = {
     PerMillionTokens: 1_000_000,
     PerHundredThousandTokens: 100_000,
-    PerThousandTokens: 1_000
+    PerThousandTokens: 1_000,
+    TimePerHour: 3_600,
+    TimePerMinute: 60,
+    PerImage: 1
 };
 
 /** Loud, uniform skip-as-pass note. */
@@ -125,14 +128,15 @@ export const AiCostChecks: NamedCheck[] = [
                     }
                 }
             }
-            // KNOWN PRODUCT GAP (bug register B60): three SHIPPED price-unit types
-            // (PerImage/TimePerMinute/TimePerHour) have no registered calculator, so runs priced
-            // by them are silently uncosted. This is logged for the product owner — pin it as a
-            // loud WARNING here rather than reddening the deterministic gate on a tracked issue.
-            // The real invariant AC1 guards is the built-in divisor math, asserted next.
-            if (unresolved.length > 0) {
-                console.warn(`  ⚠ ai-cost.AC1 (B60): price-unit driver(s) with NO calculator — runs priced by them are silently uncosted: ${unresolved.join('; ')}`);
-            }
+            // Hard assert since the B60 driver gap closed: PerImage/TimePerMinute/TimePerHour now
+            // have registered calculators, so every SHIPPED unit type resolves. Any future unit
+            // type added without one makes runs priced by it silently uncosted (CalculateAndSetCost
+            // logs and returns), which is exactly the drift this gate exists to catch — a warning
+            // would let it ship.
+            Assert(
+                unresolved.length === 0,
+                `price-unit driver(s) with NO calculator — runs priced by them would be silently uncosted: ${unresolved.join('; ')}`
+            );
             Assert(badMath.length === 0, `built-in unit-type divisor drift: ${badMath.join('; ')}`);
             console.log(`      → ${unitTypes.length} unit type(s) resolved; built-in divisors verified`);
         }

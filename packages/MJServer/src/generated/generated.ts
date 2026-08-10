@@ -18761,6 +18761,16 @@ export class MJAIPromptRun_ {
     @Field(() => Int, {nullable: true, description: `Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.`}) 
     TokensCacheWriteRollup?: number;
         
+    @Field(() => Float, {nullable: true, description: `Quantity of continuous input consumed by this run, expressed in the base measure named by UnitsKind (e.g. seconds of audio submitted for transcription). NULL for token-billed runs, which use the Tokens* columns instead.`}) 
+    InputUnitsUsed?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Quantity of continuous output produced by this run, expressed in the base measure named by UnitsKind (e.g. seconds of audio synthesized, or images generated). NULL for token-billed runs.`}) 
+    OutputUnitsUsed?: number;
+        
+    @Field({nullable: true, description: `Base measure of the continuous units recorded in InputUnitsUsed / OutputUnitsUsed. NULL for token-billed runs. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type driver converts.`}) 
+    @MaxLength(20)
+    UnitsKind?: string;
+        
     @Field() 
     @MaxLength(255)
     Prompt: string;
@@ -19105,6 +19115,15 @@ export class CreateMJAIPromptRunInput {
     @Field(() => Int, { nullable: true })
     TokensCacheWriteRollup: number | null;
 
+    @Field(() => Float, { nullable: true })
+    InputUnitsUsed: number | null;
+
+    @Field(() => Float, { nullable: true })
+    OutputUnitsUsed: number | null;
+
+    @Field({ nullable: true })
+    UnitsKind: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -19372,6 +19391,15 @@ export class UpdateMJAIPromptRunInput {
 
     @Field(() => Int, { nullable: true })
     TokensCacheWriteRollup?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    InputUnitsUsed?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    OutputUnitsUsed?: number | null;
+
+    @Field({ nullable: true })
+    UnitsKind?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

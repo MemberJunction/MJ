@@ -20,28 +20,21 @@ vi.mock('groq-sdk', () => ({
     },
 }));
 
-vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: Function) => target,
-}));
-
-vi.mock('@memberjunction/ai', () => {
-    class BaseModel {
-        protected _apiKey: string;
-        constructor(apiKey: string) {
-            this._apiKey = apiKey;
-        }
-    }
-    class BaseAudioGenerator extends BaseModel {}
-    class SpeechResult {
-        success!: boolean;
-        errorMessage?: string;
-        content!: string;
-        data?: Buffer;
-    }
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
     return {
-        BaseModel,
-        BaseAudioGenerator,
-        SpeechResult,
+        ...actual,
+        RegisterClass: () => (target: Function) => target,
+    };
+});
+
+// The real module, with only ErrorAnalyzer stubbed. BaseAudioGenerator owns the split-and-join
+// transcription loop, so hand-stubbing it here would mean the split tests below exercise a
+// reimplementation rather than the code that ships.
+vi.mock('@memberjunction/ai', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai')>();
+    return {
+        ...actual,
         ErrorAnalyzer: { analyzeError: () => ({}) },
     };
 });
@@ -137,9 +130,9 @@ describe('GroqAudioGenerator — single-pass transcription', () => {
         expect(sent.temperature).toBe(0.2);
     });
 
-    it('requests the json response format', async () => {
+    it('requests the verbose_json response format, the only one that returns the billable duration', async () => {
         await makeGenerator().SpeechToText({ model: '', audioData: audio(64) });
-        expect(transcribe.mock.calls[0][0].response_format).toBe('json');
+        expect(transcribe.mock.calls[0][0].response_format).toBe('verbose_json');
     });
 
     it('uses the supplied file name so the container format can be inferred', async () => {
@@ -159,6 +152,59 @@ describe('GroqAudioGenerator — single-pass transcription', () => {
         expect(result.success).toBe(true);
         expect(transcribe).toHaveBeenCalledTimes(1);
         expect(g.Splitter.Split).not.toHaveBeenCalled();
+    });
+});
+
+describe('GroqAudioGenerator — billable duration', () => {
+    it('reports the reported duration as usage in seconds', async () => {
+        transcribe.mockResolvedValue({ text: 'hello world', duration: 128.5 });
+        const result = await makeGenerator().SpeechToText({ model: '', audioData: audio(64) });
+        expect(result.usage?.unitKind).toBe('Seconds');
+        expect(result.usage?.inputUnits).toBe(128.5);
+        expect(result.usage?.outputUnits).toBe(0);
+        // Transcription is not token work — leaving stale token counts here would corrupt rollups.
+        expect(result.usage?.promptTokens).toBe(0);
+        expect(result.usage?.completionTokens).toBe(0);
+    });
+
+    it('sums duration across split pieces, which is what the provider bills', async () => {
+        const g = makeGenerator();
+        g.Splitter = { Split: async () => [audio(10 * MB, 1), audio(10 * MB, 2), audio(6 * MB, 3)] };
+        transcribe
+            .mockResolvedValueOnce({ text: 'one', duration: 600 })
+            .mockResolvedValueOnce({ text: 'two', duration: 600 })
+            .mockResolvedValueOnce({ text: 'three', duration: 342.25 });
+
+        const result = await g.SpeechToText({ model: '', audioData: audio(26 * MB) });
+        expect(result.success).toBe(true);
+        expect(result.usage?.inputUnits).toBe(1542.25);
+    });
+
+    it('reports NO usage when the provider omits the duration, rather than billing the run as free', async () => {
+        transcribe.mockResolvedValue({ text: 'hello world' });
+        const result = await makeGenerator().SpeechToText({ model: '', audioData: audio(64) });
+        expect(result.success).toBe(true);
+        expect(result.usage).toBeUndefined();
+    });
+
+    it('reports NO usage when the duration is not a usable number', async () => {
+        transcribe.mockResolvedValue({ text: 'hello world', duration: Number.NaN });
+        const result = await makeGenerator().SpeechToText({ model: '', audioData: audio(64) });
+        expect(result.success).toBe(true);
+        expect(result.usage).toBeUndefined();
+    });
+
+    it('voids the whole duration when any single piece fails to report one', async () => {
+        const g = makeGenerator();
+        g.Splitter = { Split: async () => [audio(10 * MB, 1), audio(10 * MB, 2)] };
+        transcribe
+            .mockResolvedValueOnce({ text: 'one', duration: 600 })
+            .mockResolvedValueOnce({ text: 'two' });
+
+        const result = await g.SpeechToText({ model: '', audioData: audio(26 * MB) });
+        expect(result.success).toBe(true);
+        // 600 would understate the bill while looking like a complete answer.
+        expect(result.usage).toBeUndefined();
     });
 });
 

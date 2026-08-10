@@ -1,6 +1,24 @@
 import { RegisterClass } from "@memberjunction/global";
-import { BaseAudioGenerator, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
-import { OpenAI } from "openai";
+import { AudioSplitter, BaseAudioGenerator, TextToSpeechParams, SpeechResult, SpeechToTextParams, TranscriptionPiece, VoiceInfo, AudioModel, ModelUsage, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
+import { OpenAI, toFile } from "openai";
+
+/**
+ * OpenAI's documented upload ceiling for the transcription endpoint. Requests above it are
+ * rejected outright, so it is a hard boundary rather than a tuning knob.
+ */
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Leave headroom under the ceiling: multipart framing and the form fields ride along with the
+ * audio, and a piece sized exactly at the limit fails for the overhead alone.
+ */
+const SPLIT_TARGET_BYTES = 24 * 1024 * 1024;
+
+/**
+ * OpenAI's transcription model. Note this endpoint serves Whisper large-v2 weights, not the v3
+ * checkpoint other providers host under the "Whisper Large v3" name.
+ */
+const DEFAULT_TRANSCRIPTION_MODEL = "whisper-1";
 
 @RegisterClass(BaseAudioGenerator, "OpenAIAudioGenerator")
 export class OpenAIAudioGenerator extends BaseAudioGenerator {
@@ -10,6 +28,12 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
         super(apiKey);
         this._openAI = new OpenAI({apiKey: apiKey});
     }
+
+    /**
+     * Optional splitter used only when audio exceeds OpenAI's upload ceiling. See
+     * {@link AudioSplitter} for why splitting is injected rather than bundled.
+     */
+    public Splitter: AudioSplitter | null = null;
 
     public async CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult> {
         const speechResult = new SpeechResult();
@@ -35,8 +59,82 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
         return speechResult;
     }
 
+    /**
+     * Transcribes audio to text using OpenAI's Whisper endpoint.
+     *
+     * Audio above the 25MB upload ceiling requires an {@link AudioSplitter} on {@link Splitter};
+     * without one, oversized audio fails with a message naming the option rather than silently
+     * transcribing a truncated prefix. Pieces are transcribed sequentially — see
+     * {@link BaseAudioGenerator.TranscribeWithSplitting}.
+     */
     public async SpeechToText(params: SpeechToTextParams): Promise<SpeechResult> {
-        throw new Error("Method not implemented.");
+        const result = new SpeechResult();
+        try {
+            const audio = this.resolveAudio(params);
+            const model = params.model || DEFAULT_TRANSCRIPTION_MODEL;
+
+            const transcription = await this.TranscribeWithSplitting(
+                audio,
+                MAX_UPLOAD_BYTES,
+                SPLIT_TARGET_BYTES,
+                this.Splitter,
+                "OpenAI",
+                (piece) => this.transcribeOne(piece, model, params)
+            );
+
+            if (transcription.text.trim().length === 0) {
+                // Whisper returns an empty string both for silence and for audio it could not
+                // decode. Reported as success, an empty transcript gets stored as if it were
+                // the content.
+                throw new Error("Transcription returned no text; the audio may be silent or in an unsupported format");
+            }
+
+            result.success = true;
+            result.content = transcription.text;
+            if (transcription.durationSeconds != null) {
+                // OpenAI bills whisper-1 per minute of audio, so duration is the billable
+                // quantity — without it a transcription run prices as free.
+                result.usage = ModelUsage.ForMedia("Seconds", transcription.durationSeconds);
+            }
+        } catch (error) {
+            const errorInfo = ErrorAnalyzer.analyzeError(error, 'OpenAI Whisper');
+            result.success = false;
+            result.errorMessage = error?.message || 'Unknown error occurred';
+            console.error(`OpenAI Whisper error:`, error, errorInfo);
+        }
+        return result;
+    }
+
+    /**
+     * Resolve the audio bytes from whichever of the two input forms the caller used.
+     */
+    private resolveAudio(params: SpeechToTextParams): Buffer {
+        if (params.audioData && params.audioData.byteLength > 0) {
+            return params.audioData;
+        }
+        if (params.audioFile && params.audioFile.length > 0) {
+            return Buffer.from(params.audioFile, 'base64');
+        }
+        throw new Error('SpeechToText requires either audioData (Buffer) or audioFile (base 64 string)');
+    }
+
+    private async transcribeOne(audio: Buffer, model: string, params: SpeechToTextParams): Promise<TranscriptionPiece> {
+        // `verbose_json` rather than `json` purely for the `duration` field — the quantity OpenAI
+        // bills by. The transcript text is identical between the two formats.
+        const response = await this._openAI.audio.transcriptions.create({
+            file: await toFile(audio, params.fileName || 'audio.mp3'),
+            model,
+            response_format: 'verbose_json',
+            language: params.language,
+            prompt: params.prompt,
+            temperature: params.temperature
+        });
+
+        const duration = typeof response.duration === 'number' && isFinite(response.duration) && response.duration >= 0
+            ? response.duration
+            : undefined;
+
+        return { text: response.text ?? '', durationSeconds: duration };
     }
 
     public async GetVoices(): Promise<VoiceInfo[]> {
@@ -60,6 +158,15 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
                 supportsStyle: false,
                 supportsSpeakerBoost: false,
                 supportsFineTuning: false
+            },
+            {
+                id: DEFAULT_TRANSCRIPTION_MODEL,
+                name: "Whisper 1",
+                supportsTextToSpeech: false,
+                supportsVoiceConversion: false,
+                supportsStyle: false,
+                supportsSpeakerBoost: false,
+                supportsFineTuning: false
             }
         ];
     }
@@ -69,6 +176,6 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
     }
 
     public async GetSupportedMethods() {
-        return ["CreateSpeech", "GetVoices", "GetModels"];
+        return ["CreateSpeech", "SpeechToText", "GetVoices", "GetModels"];
     }
 }

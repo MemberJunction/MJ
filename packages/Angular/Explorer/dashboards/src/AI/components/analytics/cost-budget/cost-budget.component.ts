@@ -91,7 +91,9 @@ interface ModelCostRow {
     UnitType: string | null;
 }
 
-// AIModelCost UnitType name -> token divisor, matching the BasePriceUnitType driver classes.
+// AIModelCost UnitType name -> token divisor, matching the token BasePriceUnitType driver classes.
+// Non-token unit types (Per Minute, Per Hour, Per Image) are deliberately absent: this map feeds
+// token-cache-savings math, which has no meaning for a model billed by audio duration or by image.
 const UNIT_DIVISORS: Record<string, number> = {
     'Per Million Tokens': 1_000_000,
     'Per Hundred Thousand Tokens': 100_000,
@@ -767,7 +769,13 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     private buildCacheRateMap(rows: ModelCostRow[]): void {
         this.cacheRates.clear();
         for (const row of rows) {
-            const divisor = UNIT_DIVISORS[row.UnitType ?? ''] ?? 1_000_000;
+            const divisor = UNIT_DIVISORS[row.UnitType ?? ''];
+            if (divisor === undefined) {
+                // A non-token unit type (per minute/hour/image). Defaulting to the per-1M-token
+                // divisor would divide an hourly audio rate by a million and report a savings
+                // figure that is pure noise; no rate at all is the honest answer.
+                continue;
+            }
             const inputRate = (row.InputPricePerUnit ?? 0) / divisor;
             // Cache read/write fall back to the input rate when no distinct rate is recorded — exactly
             // as the server-side cost calculator does — which makes the corresponding savings term 0.

@@ -66,12 +66,31 @@ export class BaseParams {
 }
 
 /**
- * Represents token usage and cost information for an AI model execution.
- * 
+ * The base measure a model's usage is counted in.
+ *
+ * `Tokens` is the default and is carried by the token fields on {@link ModelUsage}. The other
+ * kinds are *continuous* measures — what a model bills for when tokens are not the unit of work —
+ * and are carried by {@link ModelUsage.inputUnits} / {@link ModelUsage.outputUnits}.
+ *
+ * Always the BASE measure, never the billing measure: audio billed per hour is still counted in
+ * `Seconds`, and the price unit type driver does the conversion. That keeps one recorded quantity
+ * valid across vendors who bill the same model per minute and per hour.
+ */
+export type ModelUsageUnitKind = 'Tokens' | 'Seconds' | 'Characters' | 'Images';
+
+/**
+ * Represents usage and cost information for an AI model execution.
+ *
  * This class tracks the number of tokens used in both the prompt (input) and
  * completion (output) phases of an AI model execution, along with optional
  * cost information when provided by the AI provider.
- * 
+ *
+ * For models whose unit of work is not a token — speech-to-text priced per minute of audio,
+ * image generation priced per image — the quantity lives in {@link inputUnits} /
+ * {@link outputUnits} with {@link unitKind} naming its measure. Continuous quantities are never
+ * folded into the token fields: a run that reports 90 "tokens" meaning 90 minutes corrupts every
+ * token rollup and dashboard downstream of it.
+ *
  * @class ModelUsage
  * @since 2.43.0
  */
@@ -193,6 +212,47 @@ export class ModelUsage {
      */
     get totalTokens(): number {
         return this.promptTokens + this.completionTokens;
+    }
+
+    /**
+     * The base measure {@link inputUnits} / {@link outputUnits} are counted in. `undefined` means
+     * the execution was token-billed and only the token fields are meaningful.
+     */
+    unitKind?: ModelUsageUnitKind
+
+    /**
+     * Continuous input quantity consumed by the execution, in {@link unitKind}'s base measure —
+     * e.g. seconds of audio submitted for transcription. Undefined for token-billed executions.
+     *
+     * Left undefined rather than zeroed when a provider does not report the quantity: a zero here
+     * prices as free, which is a worse answer than "no usage recorded".
+     */
+    inputUnits?: number
+
+    /**
+     * Continuous output quantity produced by the execution, in {@link unitKind}'s base measure —
+     * e.g. seconds of audio synthesized, or number of images generated. Undefined for
+     * token-billed executions.
+     */
+    outputUnits?: number
+
+    /**
+     * Builds usage for a continuous-media execution, with the token fields zeroed.
+     *
+     * @param kind The base measure being counted — never the billing measure
+     * @param inputUnits Quantity consumed on the input side
+     * @param outputUnits Quantity produced on the output side; defaults to 0
+     */
+    public static ForMedia(
+        kind: Exclude<ModelUsageUnitKind, 'Tokens'>,
+        inputUnits: number,
+        outputUnits: number = 0
+    ): ModelUsage {
+        const usage = new ModelUsage(0, 0);
+        usage.unitKind = kind;
+        usage.inputUnits = inputUnits;
+        usage.outputUnits = outputUnits;
+        return usage;
     }
 }
 

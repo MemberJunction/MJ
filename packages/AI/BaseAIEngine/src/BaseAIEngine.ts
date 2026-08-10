@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
-import { AIModelConfiguration, ParseModelConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
+import { UUIDsEqual, NormalizeUUID, MJGlobal } from "@memberjunction/global";
+import { AIModelConfiguration, ModelUsage, ParseModelConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
@@ -37,6 +37,7 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAIAgentSkillEntity,
          MJAISkillPermissionEntity,
          ArtifactMetadataEngine} from "@memberjunction/core-entities";
+import { BasePriceUnitType, NormalizedUsage } from "./PriceUnitTypes";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { AISkillPermissionHelper, EffectiveSkillPermissions } from "./AISkillPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
@@ -587,7 +588,84 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         
         return null;
     }
- 
+
+    /**
+     * Prices a model execution from its reported usage, whatever measure that usage is in.
+     *
+     * This is the costing surface for callers that hold a result but no `MJ: AI Prompt Runs` row —
+     * transcription and image actions, downstream applications, anything invoking a provider
+     * directly. Prompt runs get the same math automatically when they save.
+     *
+     * Returns null, having logged why, when the model has no active cost row, when its unit type
+     * has no registered driver, or when the driver prices a different measure than the usage
+     * reports. A null is "we do not know what this cost" — never treat it as zero, which would
+     * quietly report paid work as free.
+     *
+     * @param modelID The model that ran
+     * @param vendorID The vendor that served it — pricing is per model AND vendor
+     * @param usage Usage as reported by the provider
+     * @param processingType 'Realtime' or 'Batch' (defaults to 'Realtime')
+     */
+    public CalculateModelCost(
+        modelID: string,
+        vendorID: string,
+        usage: ModelUsage,
+        processingType: 'Realtime' | 'Batch' = 'Realtime'
+    ): { cost: number; currency: string } | null {
+        const activeCost = this.GetActiveModelCost(modelID, vendorID, processingType);
+        if (!activeCost) {
+            LogError(`No active ${processingType} cost configuration found for Model: ${modelID}, Vendor: ${vendorID}`);
+            return null;
+        }
+
+        const calculator = this.GetPriceCalculator(activeCost);
+        if (!calculator) {
+            return null;
+        }
+
+        const usageKind = usage.unitKind ?? 'Tokens';
+        if (calculator.UnitKind !== usageKind) {
+            LogError(
+                `Cost row for Model ${modelID} / Vendor ${vendorID} is priced in ${calculator.UnitKind} but the run ` +
+                `reported usage in ${usageKind}; refusing to price it. Correct the cost row's unit type.`
+            );
+            return null;
+        }
+
+        const normalized: NormalizedUsage = usageKind === 'Tokens'
+            ? {
+                input: usage.promptTokens ?? 0,
+                output: usage.completionTokens ?? 0,
+                cacheRead: usage.cacheReadTokens ?? 0,
+                cacheWrite: usage.cacheWriteTokens ?? 0
+              }
+            : { input: usage.inputUnits ?? 0, output: usage.outputUnits ?? 0 };
+
+        return { cost: calculator.CalculateCost(activeCost, normalized), currency: activeCost.Currency };
+    }
+
+    /**
+     * Resolves the price unit type driver a cost row is priced by, logging and returning null when
+     * the row points at a unit type this deployment has no calculator for.
+     */
+    public GetPriceCalculator(activeCost: MJAIModelCostEntity): BasePriceUnitType | null {
+        const priceUnitType = this.ModelPriceUnitTypes.find(put => UUIDsEqual(put.ID, activeCost.UnitTypeID));
+        if (!priceUnitType) {
+            LogError(`Price unit type not found: ${activeCost.UnitTypeID}`);
+            return null;
+        }
+
+        const calculator = MJGlobal.Instance.ClassFactory.CreateInstance<BasePriceUnitType>(
+            BasePriceUnitType,
+            priceUnitType.DriverClass
+        );
+        if (!calculator) {
+            LogError(`Failed to create price calculator for driver class: ${priceUnitType.DriverClass}`);
+            return null;
+        }
+        return calculator;
+    }
+
 
     public get Agents(): MJAIAgentEntityExtended[] {
         return this.GetConfigData<MJAIAgentEntityExtended>('_agents');

@@ -7161,6 +7161,26 @@ export const MJAIPromptRunSchema = z.object({
         * * Display Name: Tokens Cache Write (Rollup)
         * * SQL Data Type: int
         * * Description: Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.`),
+    InputUnitsUsed: z.number().nullable().describe(`
+        * * Field Name: InputUnitsUsed
+        * * Display Name: Input Units Used
+        * * SQL Data Type: decimal(19, 8)
+        * * Description: Quantity of continuous input consumed by this run, expressed in the base measure named by UnitsKind (e.g. seconds of audio submitted for transcription). NULL for token-billed runs, which use the Tokens* columns instead.`),
+    OutputUnitsUsed: z.number().nullable().describe(`
+        * * Field Name: OutputUnitsUsed
+        * * Display Name: Output Units Used
+        * * SQL Data Type: decimal(19, 8)
+        * * Description: Quantity of continuous output produced by this run, expressed in the base measure named by UnitsKind (e.g. seconds of audio synthesized, or images generated). NULL for token-billed runs.`),
+    UnitsKind: z.union([z.literal('Characters'), z.literal('Images'), z.literal('Seconds')]).nullable().describe(`
+        * * Field Name: UnitsKind
+        * * Display Name: Units Kind
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Characters
+    *   * Images
+    *   * Seconds
+        * * Description: Base measure of the continuous units recorded in InputUnitsUsed / OutputUnitsUsed. NULL for token-billed runs. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type driver converts.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -52997,6 +53017,50 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
     set TokensCacheWriteRollup(value: number | null) {
         this.Set('TokensCacheWriteRollup', value);
+    }
+
+    /**
+    * * Field Name: InputUnitsUsed
+    * * Display Name: Input Units Used
+    * * SQL Data Type: decimal(19, 8)
+    * * Description: Quantity of continuous input consumed by this run, expressed in the base measure named by UnitsKind (e.g. seconds of audio submitted for transcription). NULL for token-billed runs, which use the Tokens* columns instead.
+    */
+    get InputUnitsUsed(): number | null {
+        return this.Get('InputUnitsUsed');
+    }
+    set InputUnitsUsed(value: number | null) {
+        this.Set('InputUnitsUsed', value);
+    }
+
+    /**
+    * * Field Name: OutputUnitsUsed
+    * * Display Name: Output Units Used
+    * * SQL Data Type: decimal(19, 8)
+    * * Description: Quantity of continuous output produced by this run, expressed in the base measure named by UnitsKind (e.g. seconds of audio synthesized, or images generated). NULL for token-billed runs.
+    */
+    get OutputUnitsUsed(): number | null {
+        return this.Get('OutputUnitsUsed');
+    }
+    set OutputUnitsUsed(value: number | null) {
+        this.Set('OutputUnitsUsed', value);
+    }
+
+    /**
+    * * Field Name: UnitsKind
+    * * Display Name: Units Kind
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Characters
+    *   * Images
+    *   * Seconds
+    * * Description: Base measure of the continuous units recorded in InputUnitsUsed / OutputUnitsUsed. NULL for token-billed runs. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type driver converts.
+    */
+    get UnitsKind(): 'Characters' | 'Images' | 'Seconds' | null {
+        return this.Get('UnitsKind');
+    }
+    set UnitsKind(value: 'Characters' | 'Images' | 'Seconds' | null) {
+        this.Set('UnitsKind', value);
     }
 
     /**

@@ -133,6 +133,8 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
 
   // Per model+vendor cache pricing (currency-per-token), loaded from AIModelCost for the cost split.
   private cacheRates = new Map<string, { inputRate: number; outputRate: number; cacheReadRate: number; cacheWriteRate: number }>();
+  // Token unit types only. Non-token unit types (Per Minute, Per Hour, Per Image) are deliberately
+  // absent — this map drives token-rate math, which has no meaning for duration- or image-billed models.
   private static readonly UNIT_DIVISORS: Record<string, number> = {
     'Per Million Tokens': 1_000_000, 'Per Hundred Thousand Tokens': 100_000, 'Per Thousand Tokens': 1_000
   };
@@ -437,7 +439,12 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     });
     if (!res.Success) return;
     for (const row of res.Results || []) {
-      const divisor = AIAgentRunAnalyticsComponent.UNIT_DIVISORS[row.UnitType ?? ''] ?? 1_000_000;
+      const divisor = AIAgentRunAnalyticsComponent.UNIT_DIVISORS[row.UnitType ?? ''];
+      if (divisor === undefined) {
+        // A non-token unit type (per minute/hour/image). Defaulting to the per-1M-token divisor
+        // would divide an hourly audio rate by a million and report token rates that are noise.
+        continue;
+      }
       const input = (row.InputPricePerUnit ?? 0) / divisor;
       this.cacheRates.set(this.rateKey(row.ModelID, row.VendorID), {
         inputRate: input,

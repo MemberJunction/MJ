@@ -1,7 +1,79 @@
 import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
-import { RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { RegisterClass } from "@memberjunction/global";
+import { ModelUsageUnitKind } from "@memberjunction/ai";
 import { MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
-import { AIEngineBase, BasePriceUnitType } from "@memberjunction/ai-engine-base";
+import { AIEngineBase, BasePriceUnitType, NormalizedUsage } from "@memberjunction/ai-engine-base";
+
+/**
+ * What a prompt run recorded about the work it did, in whichever measure applies.
+ *
+ * Token counts and continuous units are both present because they are not alternatives at the
+ * schema level — `UnitsKind` is what says which pair is meaningful.
+ */
+export type RecordedRunUsage = {
+    tokensPrompt: number;
+    tokensCacheRead: number;
+    tokensCacheWrite: number;
+    tokensCompletion: number;
+    /** Null means the run was token-billed. */
+    unitsKind: MJAIPromptRunEntityExtended['UnitsKind'];
+    inputUnits: number;
+    outputUnits: number;
+};
+
+/** Either the quantities to price, or the reason they cannot be priced. */
+export type NormalizeUsageResult =
+    | { ok: true; usage: NormalizedUsage }
+    | { ok: false; reason: string };
+
+/**
+ * Whether a run recorded any work at all worth pricing.
+ *
+ * Token input is the TOTAL the provider processed: net-new plus cache reads plus cache writes. A
+ * heavily-cached call can have zero net-new prompt tokens and still incur input cost, so the gate
+ * is on the total rather than net-new alone. Continuous-media runs legitimately record zero tokens
+ * — their work is measured in seconds or images — so units count as usage too.
+ */
+export function hasRecordedUsage(recorded: RecordedRunUsage): boolean {
+    const totalInputTokens = recorded.tokensPrompt + recorded.tokensCacheRead + recorded.tokensCacheWrite;
+    const totalUnits = recorded.inputUnits + recorded.outputUnits;
+    return totalInputTokens > 0 || recorded.tokensCompletion > 0 || totalUnits > 0;
+}
+
+/**
+ * Maps a run's recorded usage onto the quantities a driver of `driverUnitKind` prices, refusing
+ * when the two disagree about what is being measured.
+ *
+ * The refusal matters: a transcription run measured in seconds, handed to a per-1M-tokens driver,
+ * would be priced by dividing seconds by a million — a cost of approximately zero that looks like
+ * a real answer. Refusing surfaces the misconfigured cost row instead of hiding it behind a number.
+ */
+export function normalizeRecordedUsage(
+    recorded: RecordedRunUsage,
+    driverUnitKind: ModelUsageUnitKind
+): NormalizeUsageResult {
+    const recordedKind: ModelUsageUnitKind = recorded.unitsKind ?? 'Tokens';
+    if (driverUnitKind !== recordedKind) {
+        return {
+            ok: false,
+            reason: `run recorded usage in ${recordedKind} but its cost row is priced in ${driverUnitKind}`
+        };
+    }
+
+    if (recordedKind === 'Tokens') {
+        return {
+            ok: true,
+            usage: {
+                input: recorded.tokensPrompt,
+                output: recorded.tokensCompletion,
+                cacheRead: recorded.tokensCacheRead,
+                cacheWrite: recorded.tokensCacheWrite
+            }
+        };
+    }
+
+    return { ok: true, usage: { input: recorded.inputUnits, output: recorded.outputUnits } };
+}
 
 /**
  * Server-side subclass for MJAIPromptRunEntity that automatically calculates costs
@@ -69,14 +141,9 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
             return false;
         }
         
-        // Must have token usage to calculate (at least one input or output token > 0). Input is the
-        // TOTAL input the provider processed: net-new (TokensPrompt) + cache reads + cache writes.
-        // A heavily-cached call can have TokensPrompt === 0 yet still incur input cost via cache
-        // tokens, so we gate on the total rather than net-new alone.
-        const totalInputTokens =
-            (this.TokensPrompt ?? 0) + (this.TokensCacheRead ?? 0) + (this.TokensCacheWrite ?? 0);
-        const totalCompletionTokens = this.TokensCompletion ?? 0;
-        if (totalInputTokens <= 0 && totalCompletionTokens <= 0) {
+        // Must have recorded usage of SOME kind — tokens for an LLM run, seconds or images for a
+        // continuous-media one. Gating on tokens alone is what left media runs silently uncosted.
+        if (!hasRecordedUsage(this.RecordedUsage())) {
             return false;
         }
         
@@ -108,41 +175,27 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
                 return;
             }
             
-            // Get the price unit type to understand the normalization
-            const priceUnitType = AIEngineBase.Instance.ModelPriceUnitTypes.find(
-                put => UUIDsEqual(put.ID, activeCost.UnitTypeID)
-            );
-            
-            if (!priceUnitType) {
-                LogError(`Price unit type not found: ${activeCost.UnitTypeID}`);
-                return;
-            }
-            
-            // Calculate costs using the driver class
-            const priceCalculator = MJGlobal.Instance.ClassFactory.CreateInstance<BasePriceUnitType>(
-                BasePriceUnitType,
-                priceUnitType.DriverClass
-            );
-            
+            // Resolve the calculator the cost row's unit type names (logs and returns null when
+            // the unit type or its driver class is missing)
+            const priceCalculator = AIEngineBase.Instance.GetPriceCalculator(activeCost);
             if (!priceCalculator) {
-                LogError(`Failed to create price calculator for driver class: ${priceUnitType.DriverClass}`);
                 return;
             }
-            
-            // Price each input bucket at its own rate: uncached/net-new (TokensPrompt) at the
-            // standard input rate, cache reads/writes at CacheReadPricePerUnit/CacheWritePricePerUnit
-            // when the cost row records them. When those cache rates are NULL the calculator falls
-            // back to the input rate, so the result is identical to the prior single-bucket behavior
-            // for models without cache pricing — while models that DO have cache rates get the
-            // (usually much cheaper) cached-token cost instead of being billed as full input.
-            const normalizedCost = priceCalculator.CalculateNormalizedCostWithCache(
-                activeCost,
-                this.TokensPrompt ?? 0,
-                this.TokensCacheRead ?? 0,
-                this.TokensCacheWrite ?? 0,
-                this.TokensCompletion ?? 0
-            );
-            
+
+            const usage = this.BuildNormalizedUsage(priceCalculator);
+            if (!usage) {
+                return;
+            }
+
+            // Token pricing prices each input bucket at its own rate: uncached/net-new (TokensPrompt)
+            // at the standard input rate, cache reads/writes at CacheReadPricePerUnit /
+            // CacheWritePricePerUnit when the cost row records them. When those cache rates are NULL
+            // the calculator falls back to the input rate, so the result is identical to the prior
+            // single-bucket behavior for models without cache pricing — while models that DO have
+            // cache rates get the (usually much cheaper) cached-token cost instead of being billed as
+            // full input. Continuous-media pricing ignores the cache buckets entirely.
+            const normalizedCost = priceCalculator.CalculateCost(activeCost, usage);
+
             // Set the cost fields
             this.Cost = normalizedCost;
             this.CostCurrency = activeCost.Currency;
@@ -159,7 +212,33 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
             // Don't throw - we don't want to prevent saving just because cost calc failed
         }
     }
-    
+
+    /** This run's recorded usage, with nulls collapsed to zero for the pure helpers above. */
+    protected RecordedUsage(): RecordedRunUsage {
+        return {
+            tokensPrompt: this.TokensPrompt ?? 0,
+            tokensCacheRead: this.TokensCacheRead ?? 0,
+            tokensCacheWrite: this.TokensCacheWrite ?? 0,
+            tokensCompletion: this.TokensCompletion ?? 0,
+            unitsKind: this.UnitsKind,
+            inputUnits: this.InputUnitsUsed ?? 0,
+            outputUnits: this.OutputUnitsUsed ?? 0
+        };
+    }
+
+    /**
+     * Turns this run's recorded usage into the quantities the resolved calculator prices, or null
+     * (having logged why) when the two disagree about what is being measured.
+     */
+    protected BuildNormalizedUsage(priceCalculator: BasePriceUnitType): NormalizedUsage | null {
+        const result = normalizeRecordedUsage(this.RecordedUsage(), priceCalculator.UnitKind);
+        if (result.ok === false) {
+            LogError(`Cannot cost AIPromptRun ${this.ID}: ${result.reason}. Correct the cost row's unit type.`);
+            return null;
+        }
+        return result.usage;
+    }
+
     /**
      * Triggers cost rollup calculation on the parent prompt run
      */

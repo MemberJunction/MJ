@@ -5,6 +5,8 @@
  * - PerMillionTokens
  * - PerThousandTokens
  * - PerHundredThousandTokens
+ * - TimePerMinute / TimePerHour (continuous audio, quantities in seconds)
+ * - PerImage
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -31,6 +33,10 @@ import {
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
     PerHundredThousandTokensPriceUnitType,
+    TimePerMinutePriceUnitType,
+    TimePerHourPriceUnitType,
+    PerImagePriceUnitType,
+    PRICE_UNIT_TYPE_DIVISORS,
 } from '../PriceUnitTypes';
 
 type MockCost = {
@@ -246,5 +252,139 @@ describe('Cross-calculator consistency', () => {
 
         expect(resultM).toBeCloseTo(resultK, 10);
         expect(resultM).toBeCloseTo(resultHK, 10);
+    });
+});
+
+describe('TimePerMinutePriceUnitType', () => {
+    let calculator: TimePerMinutePriceUnitType;
+
+    beforeEach(() => {
+        calculator = new TimePerMinutePriceUnitType();
+    });
+
+    it('measures in Seconds, not Tokens', () => {
+        expect(calculator.UnitKind).toBe('Seconds');
+    });
+
+    it('prices 90 seconds at OpenAI whisper-1 list pricing ($0.006/min)', () => {
+        const cost = createMockCost(0.006, 0);
+        expect(calculator.CalculateNormalizedCost(cost as never, 90, 0)).toBeCloseTo(0.009, 10);
+    });
+
+    it('prices output audio seconds at the output rate', () => {
+        const cost = createMockCost(0, 0.015);
+        expect(calculator.CalculateNormalizedCost(cost as never, 0, 120)).toBeCloseTo(0.03, 10);
+    });
+
+    it('returns 0 for zero duration', () => {
+        const cost = createMockCost(0.006, 0.015);
+        expect(calculator.CalculateNormalizedCost(cost as never, 0, 0)).toBe(0);
+    });
+
+    it('satisfies the AC1 divisor probe: one minute in + one minute out costs input + output', () => {
+        const cost = createMockCost(2.5, 10);
+        expect(calculator.CalculateNormalizedCost(cost as never, 60, 60)).toBeCloseTo(12.5, 10);
+    });
+});
+
+describe('TimePerHourPriceUnitType', () => {
+    let calculator: TimePerHourPriceUnitType;
+
+    beforeEach(() => {
+        calculator = new TimePerHourPriceUnitType();
+    });
+
+    it('measures in Seconds — the recorded quantity is always seconds regardless of the rate period', () => {
+        expect(calculator.UnitKind).toBe('Seconds');
+    });
+
+    it('prices 90 minutes of audio at Groq whisper-large-v3 list pricing ($0.111/hr)', () => {
+        const cost = createMockCost(0.111, 0);
+        expect(calculator.CalculateNormalizedCost(cost as never, 5400, 0)).toBeCloseTo(0.1665, 10);
+    });
+
+    it('agrees with the per-minute driver for an equivalent rate', () => {
+        const perHour = new TimePerHourPriceUnitType();
+        const perMinute = new TimePerMinutePriceUnitType();
+        // $0.36/hour is the same rate as $0.006/minute
+        const hourly = createMockCost(0.36, 0);
+        const perMin = createMockCost(0.006, 0);
+        const seconds = 4321;
+        expect(perHour.CalculateNormalizedCost(hourly as never, seconds, 0))
+            .toBeCloseTo(perMinute.CalculateNormalizedCost(perMin as never, seconds, 0), 10);
+    });
+
+    it('satisfies the AC1 divisor probe: one hour in + one hour out costs input + output', () => {
+        const cost = createMockCost(2.5, 10);
+        expect(calculator.CalculateNormalizedCost(cost as never, 3600, 3600)).toBeCloseTo(12.5, 10);
+    });
+});
+
+describe('PerImagePriceUnitType', () => {
+    let calculator: PerImagePriceUnitType;
+
+    beforeEach(() => {
+        calculator = new PerImagePriceUnitType();
+    });
+
+    it('measures in Images', () => {
+        expect(calculator.UnitKind).toBe('Images');
+    });
+
+    it('prices generated images off the output rate, which is where image cost rows carry it', () => {
+        const cost = createMockCost(0, 0.04);
+        expect(calculator.CalculateNormalizedCost(cost as never, 0, 3)).toBeCloseTo(0.12, 10);
+    });
+
+    it('returns 0 when nothing was generated', () => {
+        const cost = createMockCost(0, 0.04);
+        expect(calculator.CalculateNormalizedCost(cost as never, 0, 0)).toBe(0);
+    });
+
+    it('satisfies the AC1 divisor probe: one image in + one image out costs input + output', () => {
+        const cost = createMockCost(2.5, 10);
+        expect(calculator.CalculateNormalizedCost(cost as never, 1, 1)).toBeCloseTo(12.5, 10);
+    });
+});
+
+describe('CalculateCost — the quantity-based entry point', () => {
+    it('defaults to Tokens for drivers that predate continuous-media pricing', () => {
+        expect(new PerMillionTokensPriceUnitType().UnitKind).toBe('Tokens');
+    });
+
+    it('is identical to CalculateNormalizedCostWithCache for token drivers, including cache buckets', () => {
+        const calculator = new PerMillionTokensPriceUnitType();
+        const cost = createMockCost(3.0, 15.0, 0.3, 3.75);
+        const viaUsage = calculator.CalculateCost(cost as never, {
+            input: 400_000, output: 200_000, cacheRead: 300_000, cacheWrite: 100_000
+        });
+        const viaLegacy = calculator.CalculateNormalizedCostWithCache(cost as never, 400_000, 300_000, 100_000, 200_000);
+        expect(viaUsage).toBeCloseTo(viaLegacy, 10);
+    });
+
+    it('treats omitted cache buckets as zero', () => {
+        const calculator = new PerThousandTokensPriceUnitType();
+        const cost = createMockCost(0.003, 0.015);
+        expect(calculator.CalculateCost(cost as never, { input: 1000, output: 2000 }))
+            .toBeCloseTo(0.003 + 0.03, 10);
+    });
+
+    it('folds cache buckets into input for the time drivers, which never see them non-zero', () => {
+        const calculator = new TimePerMinutePriceUnitType();
+        const cost = createMockCost(0.006, 0);
+        expect(calculator.CalculateCost(cost as never, { input: 60, output: 0 })).toBeCloseTo(0.006, 10);
+    });
+});
+
+describe('PRICE_UNIT_TYPE_DIVISORS', () => {
+    it('covers every shipped driver class, so consumers never have to guess a scale', () => {
+        expect(PRICE_UNIT_TYPE_DIVISORS).toEqual({
+            PerMillionTokens: 1_000_000,
+            PerHundredThousandTokens: 100_000,
+            PerThousandTokens: 1_000,
+            TimePerHour: 3_600,
+            TimePerMinute: 60,
+            PerImage: 1
+        });
     });
 });
