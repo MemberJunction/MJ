@@ -55,7 +55,13 @@ WITH Tree AS (
         r.TotalCost                                          AS Cost,
         r.TotalTokensUsed                                    AS Tokens,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100))           AS SourceEntity,
-        CAST(NULL AS NVARCHAR(50))                           AS PromptRunID
+        CAST(NULL AS NVARCHAR(50))                           AS PromptRunID,
+        -- What KIND of work this node is, in its own vocabulary: a run step's StepType
+        -- ('Prompt', 'Actions', 'Sub-Agent', 'Validation', …) or a task's ('Agent', 'Action',
+        -- 'ForEach', 'While', 'Human', …). Carried because every visual consumer colours and
+        -- icons by kind — without it a renderer can only draw undifferentiated boxes, which is
+        -- what forced the visualizations to keep reading raw step rows.
+        CAST(NULL AS NVARCHAR(50))                           AS SourceKind
     FROM ${flyway:defaultSchema}.vwAIAgentRuns r
     WHERE r.ID = '{{ agentRunID }}'
 
@@ -78,7 +84,8 @@ WITH Tree AS (
         CAST(NULL AS DECIMAL(18, 6)),
         CAST(NULL AS INT),
         CAST('MJ: AI Agent Run Steps' AS NVARCHAR(100)),
-        CAST(NULL AS NVARCHAR(50))
+        CAST(NULL AS NVARCHAR(50)),
+        CAST(s.StepType AS NVARCHAR(50))
     FROM Tree t
     INNER JOIN ${flyway:defaultSchema}.vwAIAgentRunSteps s
         ON s.AgentRunID = t.NodeID
@@ -103,7 +110,8 @@ WITH Tree AS (
         CAST(NULL AS DECIMAL(18, 6)),
         CAST(NULL AS INT),
         CAST('MJ: Tasks' AS NVARCHAR(100)),
-        CAST(NULL AS NVARCHAR(50))
+        CAST(NULL AS NVARCHAR(50)),
+        CAST('TaskGraph' AS NVARCHAR(50))
     FROM Tree t
     INNER JOIN ${flyway:defaultSchema}.vwAIAgentRunSteps s
         ON s.ID = t.NodeID
@@ -131,7 +139,8 @@ WITH Tree AS (
         CAST(NULL AS DECIMAL(18, 6)),
         CAST(NULL AS INT),
         CAST('MJ: Tasks' AS NVARCHAR(100)),
-        CAST(JSON_VALUE(tk.Configuration, '$.runtime.promptRunID') AS NVARCHAR(50))
+        CAST(JSON_VALUE(tk.Configuration, '$.runtime.promptRunID') AS NVARCHAR(50)),
+        CAST(tk.StepType AS NVARCHAR(50))
     FROM Tree t
     INNER JOIN ${flyway:defaultSchema}.vwTasks tk
         ON tk.ParentID = t.NodeID
@@ -156,6 +165,7 @@ WITH Tree AS (
         r.TotalCost,
         r.TotalTokensUsed,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100)),
+        CAST(NULL AS NVARCHAR(50)),
         CAST(NULL AS NVARCHAR(50))
     FROM Tree t
     INNER JOIN ${flyway:defaultSchema}.vwTasks tk
@@ -189,6 +199,7 @@ SELECT
     COALESCE(t.Cost, pr.Cost)                               AS Cost,
     COALESCE(t.Tokens, pr.TokensUsed)                       AS Tokens,
     t.SourceEntity,
+    t.SourceKind,
     t.NodeID                                                AS SourceID
 FROM Tree t
 LEFT JOIN ${flyway:defaultSchema}.vwAIPromptRuns pr
