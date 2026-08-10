@@ -302,7 +302,13 @@ export class ScheduledGeocodingAction extends BaseAction {
             MaxRows: ScheduledGeocodingAction.PAGE_SIZE,
             AfterKey: lastSeenKey,
             BypassCache: true,
-            ResultType: 'entity_object'
+            ResultType: 'entity_object',
+            // The caller takes page 1's TotalRowCount as the run's denominator, so it has to
+            // be the full filtered count, not this page's size. Keyset paging seeks with
+            // AfterKey and passes no StartRow, so this is a capped-but-not-paginated read and
+            // no longer counts unless asked. The sibling offset loader passes StartRow and so
+            // still gets the count implicitly — which is why only this path needs the opt-in.
+            ReturnTotalRowCount: true
         }, contextUser);
 
         return {
