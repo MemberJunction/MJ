@@ -212,7 +212,7 @@ describe('graph queries', () => {
         // An action step has no agent either. Reading "no agent" as "a person" is what put steps in
         // the graph claiming to wait on someone nobody had asked for.
         expect(IsHumanTask(task({ kind: 'Action' as const, configuration: { actionName: 'Send Email' } }))).toBe(false);
-        expect(IsHumanTask(task({ agentName: undefined }))).toBe(false);
+        expect(IsHumanTask(task({ kind: 'Agent' as const, configuration: { agentName: '' } }))).toBe(false);
     });
 });
 
@@ -230,7 +230,7 @@ describe('assignment shapes', () => {
     });
 
     it('reads an unassigned step as an agent step rather than guessing "person"', () => {
-        expect(GetTaskNodeType(task({ agentName: undefined }))).toBe('AgentTask');
+        expect(GetTaskNodeType(task({ kind: 'Agent' as const, configuration: { agentName: '' } }))).toBe('AgentTask');
     });
 
     it('says so when a step has no assignee, instead of showing a blank subtitle', () => {
