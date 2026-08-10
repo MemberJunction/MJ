@@ -261,9 +261,14 @@ SELECT
     -- computation — which is exactly the mixed-basis arithmetic this query exists to replace.
     COALESCE(t.PromptTokens, pr.TokensPrompt)               AS PromptTokens,
     COALESCE(t.CompletionTokens, pr.TokensCompletion)       AS CompletionTokens,
-    t.SourceEntity,
+    -- Where clicking this node should GO. For a Prompt task that is the prompt run, not the Task
+    -- row: the run carries the messages, the model, the tokens and the result, which is the whole
+    -- reason someone clicks a prompt step. Pointing at the Task instead showed a row whose only
+    -- interesting content was a foreign key to the thing they wanted. Every other node keeps its own
+    -- record, and a prompt task whose run is missing falls back to its Task rather than to nothing.
+    CASE WHEN pr.ID IS NOT NULL THEN 'MJ: AI Prompt Runs' ELSE t.SourceEntity END AS SourceEntity,
     t.SourceKind,
-    t.NodeID                                                AS SourceID
+    CASE WHEN pr.ID IS NOT NULL THEN CAST(pr.ID AS NVARCHAR(50)) ELSE t.NodeID END AS SourceID
 FROM Tree t
 LEFT JOIN [__mj].[vwAIPromptRuns] pr
     ON pr.ID = t.PromptRunID

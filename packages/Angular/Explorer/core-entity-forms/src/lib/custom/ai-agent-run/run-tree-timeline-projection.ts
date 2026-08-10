@@ -34,6 +34,36 @@ const NODE_PRESENTATION: Record<AgentRunTreeNodeType, { icon: string; color: str
 };
 
 /**
+ * How a task presents itself, by what it actually DOES.
+ *
+ * `NODE_PRESENTATION` is keyed by node TYPE, so every task in a workflow resolved to the same
+ * generic diagram glyph — a prompt step, a loop and an approval were visually identical, and the row
+ * `type` that says otherwise was painted over by the explicit icon. Mapping the row type onto the
+ * timeline's vocabulary is only half the job; a reader distinguishes rows by their icon long before
+ * reading the subtitle.
+ *
+ * Colour still says "workflow" via `provenance`, so these icons differentiate KIND without costing
+ * the visual grouping that tells you this work ran on the dispatcher.
+ */
+const TASK_KIND_PRESENTATION: Record<string, { icon: string; color: string }> = {
+    Action: { icon: 'fa-solid fa-bolt', color: 'var(--mj-color-info)' },
+    Prompt: { icon: 'fa-solid fa-comment-dots', color: 'var(--mj-color-info)' },
+    Agent: { icon: 'fa-solid fa-robot', color: 'var(--mj-color-info)' },
+    ForEach: { icon: 'fa-solid fa-repeat', color: 'var(--mj-color-info)' },
+    While: { icon: 'fa-solid fa-rotate', color: 'var(--mj-color-info)' },
+    Human: { icon: 'fa-solid fa-user-check', color: 'var(--mj-color-info)' },
+    External: { icon: 'fa-solid fa-arrow-up-right-from-square', color: 'var(--mj-color-info)' },
+};
+
+/** A node's icon and colour: by task kind when it has one, by structural role otherwise. */
+function presentationOf(node: AgentRunTreeNode): { icon: string; color: string } {
+    if (node.NodeType === 'Task' && node.SourceKind) {
+        return TASK_KIND_PRESENTATION[node.SourceKind] ?? NODE_PRESENTATION.Task;
+    }
+    return NODE_PRESENTATION[node.NodeType] ?? NODE_PRESENTATION.Step;
+}
+
+/**
  * The timeline's item type for each tree node kind.
  *
  * A `Task` deliberately does NOT get its own row type. A workflow step that runs an action IS an
@@ -108,7 +138,7 @@ export function ProjectRunTreeToTimeline(
 
 /** One node as a timeline row. */
 function toTimelineItem(node: AgentRunTreeNode, level: number, parentID: string | undefined): TimelineItem {
-    const presentation = NODE_PRESENTATION[node.NodeType] ?? NODE_PRESENTATION.Step;
+    const presentation = presentationOf(node);
 
     return {
         id: node.NodeID,

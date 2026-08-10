@@ -190,4 +190,45 @@ describe('ProjectRunTreeToTimeline', () => {
 
         expect(items[0].startTime.getTime()).toBeGreaterThan(Date.now());
     });
+
+    it('gives each task kind its OWN icon, instead of one glyph for every workflow step', () => {
+        // The row `type` was already correct — and then the icon was set from a map keyed by node
+        // TYPE, so every Task resolved to the same generic diagram glyph and painted over it. On a
+        // real run a prompt step, a loop and an approval were visually identical, which is how a
+        // workflow reads as undifferentiated boxes even though the projection knew better.
+        const items = ProjectRunTreeToTimeline(node({
+            NodeID: 'graph', NodeType: 'TaskGraph', Name: 'Content Pipeline',
+            Children: [
+                node({ NodeID: 't1', NodeType: 'Task', SourceKind: 'Action', Name: 'Research' }),
+                node({ NodeID: 't2', NodeType: 'Task', SourceKind: 'Prompt', Name: 'Draft' }),
+                node({ NodeID: 't3', NodeType: 'Task', SourceKind: 'While', Name: 'Review' }),
+                node({ NodeID: 't4', NodeType: 'Task', SourceKind: 'Human', Name: 'Approve' }),
+            ],
+        }));
+        const iconOf = (id: string) => items.find((i) => i.id === id)!.icon;
+
+        expect(new Set([iconOf('t1'), iconOf('t2'), iconOf('t3'), iconOf('t4')]).size).toBe(4);
+        expect(iconOf('t2')).toContain('comment-dots');   // a prompt looks like a prompt
+        expect(iconOf('t3')).toContain('rotate');         // a loop looks like a loop
+    });
+
+    it('still marks kind-iconed tasks as workflow provenance', () => {
+        // Differentiating the icon must not cost the grouping that says "this ran on the
+        // dispatcher" — that is what tells a reader where to go when a step fails.
+        const items = ProjectRunTreeToTimeline(node({
+            NodeID: 'graph', NodeType: 'TaskGraph',
+            Children: [node({ NodeID: 't', NodeType: 'Task', SourceKind: 'Prompt', Name: 'Draft' })],
+        }));
+
+        expect(items.find((i) => i.id === 't')?.provenance).toBe('workflow');
+    });
+
+    it('falls back to the generic task icon for a kind it has never seen', () => {
+        // A new node kind should render as a plain workflow step rather than as nothing.
+        const items = ProjectRunTreeToTimeline(
+            node({ NodeID: 't', NodeType: 'Task', SourceKind: 'SomethingNew', Name: 'Future' }),
+        );
+
+        expect(items[0].icon).toContain('diagram-next');
+    });
 });
