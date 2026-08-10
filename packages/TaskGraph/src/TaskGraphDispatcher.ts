@@ -1034,6 +1034,14 @@ export class TaskGraphDispatcher implements IShutdownable {
                     // the claim would then have to expire before any host that CAN do it gets a
                     // turn — a self-inflicted stall on a mixed deployment.
                     if (!this.actionRunner) continue;
+                } else if (entity.PromptID) {
+                    // A prompt node — including a loop that repeats a prompt — is assigned through
+                    // PromptID and carries NEITHER ActionID nor AgentID. Without this branch it fell
+                    // through to the test below and was treated as a task waiting on a PERSON: the
+                    // workflow notified a human who had nothing to do and then stopped forever.
+                    // That is precisely the misclassification the step-kind rules warn about, and it
+                    // is silent — the graph sits In Progress looking like it is still working.
+                    if (!this.promptRunner) continue;
                 } else if (!entity.AgentID) {
                     await this.notifyHumanTaskReady(entity, provider);
                     continue;
