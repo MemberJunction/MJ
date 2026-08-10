@@ -53,26 +53,37 @@ import type { BrowserAction } from '../types/browser.js';
 import { ComputerUseAuthConfig } from '../types/auth.js';
 import { SettleConfig, DEFAULT_BUSY_MARKERS, LoopConfig } from '../types/app-profile.js';
 import type { SettleReason } from '../types/app-profile.js';
-import { resolveSettleExit } from './settle-decision.js';
-import { computeStateSignature, detectLoop, stateRepeatThresholdFor } from './loop-detection.js';
-import { evaluateAuthDetour } from './auth-detour.js';
-import { CancellationError, abortableDelay, timeBudgetExpiryReason } from './run-limits.js';
-import { serializeInteractiveElements } from './element-serializer.js';
-import { evaluateBatchStop, DEFAULT_MAX_ACTIONS_PER_BATCH } from './action-batch.js';
-import { gateImpossibleVerdict, DEFAULT_IMPOSSIBLE_QUORUM } from './terminal-verdict.js';
-import { formatDiagnosticsDigest } from './digests.js';
-import { traceUrlMatches } from './trace-url.js';
+import {
+    resolveSettleExit,
+    computeStateSignature,
+    detectLoop,
+    stateRepeatThresholdFor,
+    evaluateAuthDetour,
+    CancellationError,
+    abortableDelay,
+    timeBudgetExpiryReason,
+    evaluateBatchStop,
+    DEFAULT_MAX_ACTIONS_PER_BATCH,
+} from './step-control.js';
+import { serializeInteractiveElements, formatDiagnosticsDigest } from './perception.js';
+import { traceUrlMatches, hashGoal } from './trace.js';
 import {
     planReplayActions,
     evaluatePrecondition,
     evaluatePostcondition,
     targetSelector,
-} from './replay-step.js';
-import type { GuardResult } from './replay-step.js';
-import { reresolveTarget, shouldAcceptHeal, isSelectorHealable } from './heal-decision.js';
-import { executeGoalPostconditions, evaluatePreludeLanding } from './postcondition.js';
-import { makeJudgeCacheKey, JudgeVerdictCache } from './judge-cache.js';
+    reresolveTarget,
+    shouldAcceptHeal,
+    isSelectorHealable,
+} from './replay.js';
+import type { GuardResult } from './replay.js';
 import {
+    gateImpossibleVerdict,
+    DEFAULT_IMPOSSIBLE_QUORUM,
+    executeGoalPostconditions,
+    evaluatePreludeLanding,
+    makeJudgeCacheKey,
+    JudgeVerdictCache,
     isCheckpointRun,
     latchDeterministic,
     latchVisualFromVerdict,
@@ -82,9 +93,8 @@ import {
     synthesizeCheckpointVerdict,
     findCheckpoint,
     checkpointVisualCriteria,
-} from './checkpoint.js';
-import { hashGoal } from './trace-recorder.js';
-import { buildFailureMemo } from './failure-memo.js';
+    buildFailureMemo,
+} from './verdict.js';
 import type { ComputerUseFailureReason } from '../types/results.js';
 import { ComputerUseTrace, ReplayInfo, ReplayStepResult, TraceStep, TraceAction, TraceTarget } from '../types/trace.js';
 import {

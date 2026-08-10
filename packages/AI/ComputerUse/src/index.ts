@@ -40,16 +40,11 @@ export * from './prompts/default-controller.js';
 export * from './engine/RunContext.js';
 export * from './engine/ResponseParser.js';
 export * from './engine/ComputerUseEngine.js';
-export * from './engine/trace-url.js';
-export * from './engine/trace-recorder.js';
-export * from './engine/trace-keying.js';
-export * from './engine/replay-step.js';
-export * from './engine/heal-decision.js';
-export * from './engine/postcondition.js';
-export * from './engine/checkpoint.js';
-export * from './engine/judge-cache.js';
-export * from './engine/trace-diff.js';
-export * from './engine/failure-memo.js';
+export * from './engine/trace.js';
+export * from './engine/replay.js';
+export * from './engine/verdict.js';
+export * from './engine/step-control.js';
+export * from './engine/perception.js';
 
 // ─── Tool Exports ──────────────────────────────────────────
 export * from './tools/ToolProvider.js';

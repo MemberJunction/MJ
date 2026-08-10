@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+    distillGoalPostconditions,
+    executeGoalPostconditions,
+    evaluatePreludeLanding,
     isCheckpointRun,
     latchDeterministic,
     latchVisualFromVerdict,
@@ -10,12 +13,120 @@ import {
     findCheckpoint,
     checkpointVisualCriteria,
     CheckpointLatch,
-} from '../engine/checkpoint.js';
-import { RunCheckpoint } from '../types/params.js';
-import { GoalPostcondition, TraceTarget } from '../types/trace.js';
-import { JudgeVerdict } from '../types/judge.js';
+    makeJudgeCacheKey,
+    JudgeVerdictCache,
+    gateImpossibleVerdict,
+    DEFAULT_IMPOSSIBLE_QUORUM,
+    buildFailureMemo,
+    DEFAULT_FAILURE_MEMO_MAX_CHARS,
+} from '../engine/verdict.js';
+import { StepRecord, JudgeVerdict } from '../types/judge.js';
 import { InteractiveElement } from '../types/browser.js';
+import { GoalPostcondition, TraceTarget } from '../types/trace.js';
+import { RunCheckpoint } from '../types/params.js';
 import type { CriterionVerdict } from '../judge/rubric.js';
+
+// ─── from postcondition ───
+
+const UUID = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
+
+function el(role: string, name: string, selector = ''): InteractiveElement {
+    const e = new InteractiveElement();
+    e.Role = role; e.Name = name; e.Selector = selector;
+    return e;
+}
+
+describe('distillGoalPostconditions', () => {
+    it('distills a normalized final-URL postcondition', () => {
+        const step = new StepRecord();
+        step.UrlAfter = `http://localhost:4200/app/record/${UUID}`;
+        const posts = distillGoalPostconditions({ finalStep: step });
+        expect(posts[0].Kind).toBe('url');
+        expect(posts[0].UrlPattern).toBe('http://localhost:4200/app/record/{uuid}');
+    });
+
+    it('distills up to 3 landmark heading presence postconditions', () => {
+        const step = new StepRecord();
+        step.UrlAfter = 'http://x/app/data';
+        step.InteractiveElements = [
+            el('heading', 'Data Explorer', '#h1'),
+            el('heading', 'Members', '#h2'),
+            el('heading', 'Details', '#h3'),
+            el('heading', 'Extra', '#h4'),   // 4th ignored (cap 3)
+            el('button', 'Save', '#save'),   // non-heading ignored
+        ];
+        const posts = distillGoalPostconditions({ finalStep: step });
+        const visible = posts.filter(p => p.Kind === 'visible');
+        expect(visible).toHaveLength(3);
+        expect(visible.map(p => p.Target?.Name)).toEqual(['Data Explorer', 'Members', 'Details']);
+    });
+
+    it('returns [] when there is no URL and no headings', () => {
+        expect(distillGoalPostconditions({})).toEqual([]);
+    });
+});
+
+describe('executeGoalPostconditions', () => {
+    function urlPost(pattern: string): GoalPostcondition {
+        return Object.assign(new GoalPostcondition(), { Kind: 'url', UrlPattern: pattern });
+    }
+    function visiblePost(role: string, name: string): GoalPostcondition {
+        const p = new GoalPostcondition();
+        p.Kind = 'visible';
+        p.Target = Object.assign(new TraceTarget(), { Role: role, Name: name });
+        return p;
+    }
+
+    it('passes when the URL matches and the element is present', () => {
+        const r = executeGoalPostconditions(
+            [urlPost('/app/data'), visiblePost('heading', 'Data Explorer')],
+            { url: 'http://x/app/data/list', elements: [el('heading', 'Data Explorer Page')] },
+        );
+        expect(r.passed).toBe(true);
+    });
+
+    it('fails when the URL does not match', () => {
+        const r = executeGoalPostconditions([urlPost('/app/data')], { url: 'http://x/app/home', elements: [] });
+        expect(r.passed).toBe(false);
+        expect(r.results[0].detail).toContain('did not match');
+    });
+
+    it('fails when an expected element is absent', () => {
+        const r = executeGoalPostconditions([visiblePost('heading', 'Missing')], { url: 'http://x', elements: [el('heading', 'Present')] });
+        expect(r.passed).toBe(false);
+    });
+
+    it("supports 'absent' postconditions (e.g. no error toast)", () => {
+        const absent = Object.assign(new GoalPostcondition(), {
+            Kind: 'absent',
+            Target: Object.assign(new TraceTarget(), { Role: 'alert', Name: 'Error' }),
+        });
+        expect(executeGoalPostconditions([absent], { url: 'http://x', elements: [el('heading', 'OK')] }).passed).toBe(true);
+        expect(executeGoalPostconditions([absent], { url: 'http://x', elements: [el('alert', 'Error occurred')] }).passed).toBe(false);
+    });
+});
+
+
+describe('evaluatePreludeLanding', () => {
+    it('lands trivially when nothing is declared', () => {
+        expect(evaluatePreludeLanding({ hasSelector: false, selectorVisible: false, hasUrl: false, urlMatched: false }).landed).toBe(true);
+    });
+    it('fails when a declared selector is not visible', () => {
+        const r = evaluatePreludeLanding({ hasSelector: true, selectorVisible: false, hasUrl: false, urlMatched: false });
+        expect(r.landed).toBe(false);
+        expect(r.reason).toContain('element not visible');
+    });
+    it('fails when a declared URL pattern does not match', () => {
+        const r = evaluatePreludeLanding({ hasSelector: false, selectorVisible: false, hasUrl: true, urlMatched: false });
+        expect(r.landed).toBe(false);
+        expect(r.reason).toContain('unexpected URL');
+    });
+    it('lands when the declared selector is visible and URL matches', () => {
+        expect(evaluatePreludeLanding({ hasSelector: true, selectorVisible: true, hasUrl: true, urlMatched: true }).landed).toBe(true);
+    });
+});
+
+// ─── from checkpoint ───
 
 // ─── fixtures ──────────────────────────────────────────────
 function urlCp(name: string, pattern: string): RunCheckpoint {
@@ -49,12 +160,6 @@ function visualCp(name: string, criteria: string[]): RunCheckpoint {
     return cp;
 }
 
-function el(role: string, name: string): InteractiveElement {
-    const e = new InteractiveElement();
-    e.Role = role;
-    e.Name = name;
-    return e;
-}
 
 function verdict(criteria: Array<{ criterion: string; met: boolean }>): JudgeVerdict {
     const v = new JudgeVerdict();
@@ -286,5 +391,151 @@ describe('countMetCheckpoints', () => {
 
     it('returns 0 for an empty checkpoint list', () => {
         expect(countMetCheckpoints([], new Map())).toBe(0);
+    });
+});
+
+// ─── from judge-cache ───
+
+const UUID_A = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
+const UUID_B = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+describe('makeJudgeCacheKey', () => {
+    it('is stable for the same goal/url/state', () => {
+        expect(makeJudgeCacheKey('g1', 'http://x/app/data', 's1')).toBe(makeJudgeCacheKey('g1', 'http://x/app/data', 's1'));
+    });
+
+    it('normalizes the URL (per-record UUIDs key the same)', () => {
+        const a = makeJudgeCacheKey('g1', `http://x/r/${UUID_A}`, 's1');
+        const b = makeJudgeCacheKey('g1', `http://x/r/${UUID_B}`, 's1');
+        expect(a).toBe(b);
+    });
+
+    it('differs when the state hash differs', () => {
+        expect(makeJudgeCacheKey('g1', 'http://x', 's1')).not.toBe(makeJudgeCacheKey('g1', 'http://x', 's2'));
+    });
+});
+
+describe('JudgeVerdictCache', () => {
+    it('stores and retrieves verdicts by key', () => {
+        const cache = new JudgeVerdictCache();
+        const v = Object.assign(new JudgeVerdict(), { Impossible: true, Reason: 'no permission' });
+        const key = makeJudgeCacheKey('g', 'http://x', 's');
+
+        expect(cache.has(key)).toBe(false);
+        cache.set(key, v);
+        expect(cache.has(key)).toBe(true);
+        expect(cache.get(key)).toBe(v);
+        expect(cache.size).toBe(1);
+    });
+
+    it('clears', () => {
+        const cache = new JudgeVerdictCache();
+        cache.set(makeJudgeCacheKey('g', 'http://x', 's'), new JudgeVerdict());
+        cache.clear();
+        expect(cache.size).toBe(0);
+    });
+});
+
+// ─── from terminal-verdict ───
+
+describe('gateImpossibleVerdict', () => {
+    const base = { impossible: true, pageLoading: false, priorCount: 0, quorum: 2 };
+
+    it('does not accept the first Impossible (needs a quorum)', () => {
+        const r = gateImpossibleVerdict(base);
+        expect(r.accept).toBe(false);
+        expect(r.newCount).toBe(1);
+        expect(r.suppressed).toBe(false);
+    });
+
+    it('accepts the second concurring Impossible', () => {
+        const r = gateImpossibleVerdict({ ...base, priorCount: 1 });
+        expect(r.accept).toBe(true);
+        expect(r.newCount).toBe(2);
+    });
+
+    it('resets the count on a non-Impossible verdict', () => {
+        const r = gateImpossibleVerdict({ ...base, impossible: false, priorCount: 1 });
+        expect(r.accept).toBe(false);
+        expect(r.newCount).toBe(0);
+    });
+
+    it('suppresses Impossible while the page is loading and holds the count', () => {
+        const r = gateImpossibleVerdict({ ...base, pageLoading: true, priorCount: 1 });
+        expect(r.accept).toBe(false);
+        expect(r.suppressed).toBe(true);
+        expect(r.newCount).toBe(1); // held — neither built toward nor cleared
+    });
+
+    it('a loading boot screen never reaches quorum on its own', () => {
+        let count = 0;
+        for (let i = 0; i < 5; i++) {
+            const r = gateImpossibleVerdict({ impossible: true, pageLoading: true, priorCount: count, quorum: 2 });
+            count = r.newCount;
+            expect(r.accept).toBe(false);
+        }
+        expect(count).toBe(0);
+    });
+
+    it('honors a quorum of 1 (accept immediately)', () => {
+        expect(gateImpossibleVerdict({ ...base, quorum: 1 }).accept).toBe(true);
+    });
+
+    it('exposes a sane default quorum', () => {
+        expect(DEFAULT_IMPOSSIBLE_QUORUM).toBe(2);
+    });
+});
+
+// ─── from failure-memo ───
+
+describe('buildFailureMemo', () => {
+    it('states the terminal status and reason', () => {
+        const memo = buildFailureMemo({ status: 'Failed', failureReason: 'LoopDetected', finalUrl: 'http://x/app/data' });
+        expect(memo).toContain('Failed (LoopDetected)');
+        expect(memo).toContain('/app/data');
+    });
+
+    it('includes judge reason + distinct feedback', () => {
+        const memo = buildFailureMemo({
+            status: 'MaxStepsReached',
+            judgeReason: 'the record was never saved',
+            judgeFeedback: 'click Save, not Cancel',
+        });
+        expect(memo).toContain('the record was never saved');
+        expect(memo).toContain('click Save, not Cancel');
+    });
+
+    it('does not duplicate feedback identical to the reason', () => {
+        const memo = buildFailureMemo({ status: 'Failed', judgeReason: 'same', judgeFeedback: 'same' });
+        expect(memo.match(/same/g)).toHaveLength(1);
+    });
+
+    it('surfaces loop evidence as "avoid repeating"', () => {
+        const memo = buildFailureMemo({ status: 'Failed', loopEvidence: 'visited /app/switcher 4×' });
+        expect(memo).toContain('Avoid repeating: visited /app/switcher 4×');
+    });
+
+    it('renders a deduped recent-path trail excluding the final URL', () => {
+        const memo = buildFailureMemo({
+            status: 'Failed',
+            finalUrl: 'http://x/app/data',
+            recentUrls: ['http://x/app/home', 'http://x/app/home', 'http://x/app/switcher', 'http://x/app/data'],
+        });
+        expect(memo).toContain('Recent path: /app/home → /app/switcher');
+        expect(memo).not.toContain('/app/data →');   // final excluded from the trail
+    });
+
+    it('bounds the memo to the char cap', () => {
+        const memo = buildFailureMemo({
+            status: 'Failed',
+            judgeReason: 'x'.repeat(2000),
+        }, 120);
+        expect(memo.length).toBeLessThanOrEqual(120);
+        expect(memo.endsWith('…')).toBe(true);
+    });
+
+    it('uses the default cap when unspecified', () => {
+        const memo = buildFailureMemo({ status: 'Failed', judgeReason: 'y'.repeat(5000) });
+        expect(memo.length).toBeLessThanOrEqual(DEFAULT_FAILURE_MEMO_MAX_CHARS);
     });
 });

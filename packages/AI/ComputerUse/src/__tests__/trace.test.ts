@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { isRecordableRun, recordTrace, hashGoal } from '../engine/trace-recorder.js';
+import {
+    normalizeTraceUrl,
+    traceUrlMatches,
+    UUID_TOKEN,
+    isRecordableRun,
+    recordTrace,
+    hashGoal,
+    decideReplayTier,
+    goalMatchesTrace,
+    DEFAULT_HEAL_RATE_DEMOTE_THRESHOLD,
+    diffTraces,
+} from '../engine/trace.js';
 import { ComputerUseResult } from '../types/results.js';
 import { StepRecord, JudgeVerdict } from '../types/judge.js';
 import {
@@ -14,6 +25,88 @@ import {
     BrowserAction,
 } from '../types/browser.js';
 import { ToolCallRecord } from '../types/tools.js';
+import { ComputerUseTrace, TraceStep, TraceTarget, TraceActionMethod } from '../types/trace.js';
+
+// ─── from trace-url ───
+
+const UUID_A = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
+const UUID_B = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+describe('normalizeTraceUrl', () => {
+    it('replaces path UUIDs with a stable token so per-record URLs key equal', () => {
+        const a = normalizeTraceUrl(`http://localhost:4200/app/record/${UUID_A}`);
+        const b = normalizeTraceUrl(`http://localhost:4200/app/record/${UUID_B}`);
+        expect(a).toBe(b);
+        expect(a).toBe(`http://localhost:4200/app/record/${UUID_TOKEN}`);
+    });
+
+    it('normalizes UUID casing to the same token regardless of source case', () => {
+        const lower = normalizeTraceUrl(`http://x/r/${UUID_A.toLowerCase()}`);
+        const upper = normalizeTraceUrl(`http://x/r/${UUID_A.toUpperCase()}`);
+        expect(lower).toBe(upper);
+    });
+
+    it('drops the hash fragment', () => {
+        expect(normalizeTraceUrl('http://x/app/home#section-2')).toBe('http://x/app/home');
+    });
+
+    it('sorts query params by name for order-independence', () => {
+        const a = normalizeTraceUrl('http://x/p?b=2&a=1&c=3');
+        const b = normalizeTraceUrl('http://x/p?c=3&a=1&b=2');
+        expect(a).toBe(b);
+        expect(a).toBe('http://x/p?a=1&b=2&c=3');
+    });
+
+    it('drops volatile query params (case-insensitive) but keeps the rest', () => {
+        const out = normalizeTraceUrl('http://x/p?keep=1&_ts=999&Token=abc', ['_ts', 'token']);
+        expect(out).toBe('http://x/p?keep=1');
+    });
+
+    it('replaces UUIDs inside query values too', () => {
+        const out = normalizeTraceUrl(`http://x/p?id=${UUID_A}`);
+        expect(out).toBe(`http://x/p?id=${UUID_TOKEN}`);
+    });
+
+    it('returns empty string for empty/whitespace input', () => {
+        expect(normalizeTraceUrl('')).toBe('');
+        expect(normalizeTraceUrl('   ')).toBe('');
+    });
+
+    it('normalizes UUIDs in an unparseable path-only string without throwing', () => {
+        expect(normalizeTraceUrl(`/app/record/${UUID_A}`)).toBe(`/app/record/${UUID_TOKEN}`);
+    });
+});
+
+describe('traceUrlMatches (guards)', () => {
+    it('matches a path-fragment pattern against a full URL', () => {
+        expect(traceUrlMatches('/app/data', 'http://localhost:4200/app/data/list?x=1')).toBe(true);
+    });
+
+    it('is UUID-insensitive on both sides', () => {
+        expect(traceUrlMatches(
+            `http://x/r/${UUID_A}`,
+            `http://x/r/${UUID_B}`,
+        )).toBe(true);
+    });
+
+    it('fails when the path does not contain the pattern', () => {
+        expect(traceUrlMatches('/app/data', 'http://localhost:4200/app/home')).toBe(false);
+    });
+
+    it('an empty pattern matches anything (no constraint recorded)', () => {
+        expect(traceUrlMatches('', 'http://x/whatever')).toBe(true);
+    });
+
+    it('honors volatile params when comparing', () => {
+        expect(traceUrlMatches(
+            'http://x/p?a=1',
+            'http://x/p?a=1&_ts=12345',
+            ['_ts'],
+        )).toBe(true);
+    });
+});
+
+// ─── from trace-recorder ───
 
 const RECORDED_AT = '2026-07-21T10:00:00.000Z';
 const UUID = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
@@ -226,5 +319,149 @@ describe('hashGoal (goal freezing)', () => {
     });
     it('changes when the goal is reworded', () => {
         expect(hashGoal('Open the Data Explorer')).not.toBe(hashGoal('Close the Data Explorer'));
+    });
+});
+
+// ─── from trace-keying ───
+
+const GOAL = 'Open the Data Explorer and confirm the heading';
+
+function traceFor(goal: string, buildHash = ''): ComputerUseTrace {
+    const t = new ComputerUseTrace();
+    t.TestId = 'T1';
+    t.GoalHash = hashGoal(goal);
+    t.AppBuildHash = buildHash;
+    return t;
+}
+
+describe('goalMatchesTrace', () => {
+    it('matches identical (whitespace-normalized) goals', () => {
+        expect(goalMatchesTrace(traceFor(GOAL), `  ${GOAL}  `)).toBe(true);
+    });
+    it('does not match a reworded goal', () => {
+        expect(goalMatchesTrace(traceFor(GOAL), 'Close the Data Explorer')).toBe(false);
+    });
+});
+
+describe('decideReplayTier', () => {
+    it('→ llm when there is no trace', () => {
+        expect(decideReplayTier({ trace: null, currentGoal: GOAL }).tier).toBe('llm');
+    });
+
+    it('→ llm when the goal was reworded since record', () => {
+        const d = decideReplayTier({ trace: traceFor(GOAL, 'b1'), currentGoal: 'A different goal', currentBuildHash: 'b1' });
+        expect(d.tier).toBe('llm');
+        expect(d.reason).toContain('goal text changed');
+    });
+
+    it('→ llm when the heal rate crossed the demote threshold', () => {
+        const d = decideReplayTier({
+            trace: traceFor(GOAL, 'b1'), currentGoal: GOAL, currentBuildHash: 'b1',
+            healRate: DEFAULT_HEAL_RATE_DEMOTE_THRESHOLD,
+        });
+        expect(d.tier).toBe('llm');
+        expect(d.reason).toContain('heal rate');
+    });
+
+    it('→ replay on an exact build match (goal unchanged, heal rate low)', () => {
+        const d = decideReplayTier({
+            trace: traceFor(GOAL, 'build-abc'), currentGoal: GOAL, currentBuildHash: 'build-abc', healRate: 0.1,
+        });
+        expect(d.tier).toBe('replay');
+    });
+
+    it('→ replay-with-heal when the build hash differs', () => {
+        const d = decideReplayTier({
+            trace: traceFor(GOAL, 'build-old'), currentGoal: GOAL, currentBuildHash: 'build-new',
+        });
+        expect(d.tier).toBe('replay-with-heal');
+        expect(d.reason).toContain('differs');
+    });
+
+    it('→ replay-with-heal (the safe default) when build identity is unavailable', () => {
+        const d = decideReplayTier({ trace: traceFor(GOAL), currentGoal: GOAL });
+        expect(d.tier).toBe('replay-with-heal');
+        expect(d.reason).toContain('unavailable');
+    });
+
+    it('does not demote below the threshold', () => {
+        const d = decideReplayTier({
+            trace: traceFor(GOAL, 'b1'), currentGoal: GOAL, currentBuildHash: 'b1',
+            healRate: DEFAULT_HEAL_RATE_DEMOTE_THRESHOLD - 0.01,
+        });
+        expect(d.tier).toBe('replay');
+    });
+});
+
+// ─── from trace-diff ───
+
+function step(method: TraceActionMethod, opts: { role?: string; name?: string; selector?: string; url?: string } = {}): TraceStep {
+    const s = new TraceStep();
+    s.Action.Method = method;
+    s.UrlBefore = opts.url ?? 'http://x/app/home';
+    if (opts.role || opts.name || opts.selector) {
+        s.Action.Target = Object.assign(new TraceTarget(), { Role: opts.role, Name: opts.name, Selector: opts.selector });
+    }
+    return s;
+}
+function trace(steps: TraceStep[]): ComputerUseTrace {
+    const t = new ComputerUseTrace();
+    t.TestId = 'T1'; t.Steps = steps;
+    return t;
+}
+
+describe('diffTraces', () => {
+    it('reports no drift for semantically identical traces', () => {
+        const a = trace([step('click', { role: 'button', name: 'Save', selector: '#save' })]);
+        const b = trace([step('click', { role: 'button', name: 'Save', selector: '#save' })]);
+        const d = diffTraces(a, b);
+        expect(d.identical).toBe(true);
+        expect(d.meaningfulDrift).toBe(0);
+        expect(d.summary).toContain('no drift');
+    });
+
+    it('classifies a same-role+name selector change as minor selector-drift (not meaningful)', () => {
+        const a = trace([step('click', { role: 'button', name: 'Save', selector: '#old' })]);
+        const b = trace([step('click', { role: 'button', name: 'Save', selector: '#new' })]);
+        const d = diffTraces(a, b);
+        expect(d.identical).toBe(false);
+        expect(d.meaningfulDrift).toBe(0);
+        expect(d.changedSteps[0].kind).toBe('selector-drift');
+        expect(d.summary).toContain('healable');
+    });
+
+    it('flags a changed role/name as meaningful target drift', () => {
+        const a = trace([step('click', { role: 'button', name: 'Save', selector: '#s' })]);
+        const b = trace([step('click', { role: 'button', name: 'Submit', selector: '#s' })]);
+        const d = diffTraces(a, b);
+        expect(d.meaningfulDrift).toBe(1);
+        expect(d.changedSteps[0].kind).toBe('target-changed');
+    });
+
+    it('flags a changed action method as meaningful', () => {
+        const a = trace([step('click', { role: 'button', name: 'X', selector: '#s' })]);
+        const b = trace([step('type', { role: 'button', name: 'X', selector: '#s' })]);
+        expect(diffTraces(a, b).changedSteps[0].kind).toBe('method-changed');
+    });
+
+    it('flags a changed entry URL as meaningful', () => {
+        const a = trace([step('click', { role: 'link', name: 'Go', url: 'http://x/app/home' })]);
+        const b = trace([step('click', { role: 'link', name: 'Go', url: 'http://x/app/data' })]);
+        expect(diffTraces(a, b).changedSteps[0].kind).toBe('url-changed');
+    });
+
+    it('counts added and removed steps as meaningful drift', () => {
+        const a = trace([step('click', { role: 'button', name: 'A', selector: '#a' })]);
+        const b = trace([
+            step('click', { role: 'button', name: 'A', selector: '#a' }),
+            step('click', { role: 'button', name: 'B', selector: '#b' }),
+        ]);
+        const added = diffTraces(a, b);
+        expect(added.addedSteps).toBe(1);
+        expect(added.meaningfulDrift).toBe(1);
+
+        const removed = diffTraces(b, a);
+        expect(removed.removedSteps).toBe(1);
+        expect(removed.meaningfulDrift).toBe(1);
     });
 });

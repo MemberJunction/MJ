@@ -19,7 +19,7 @@
 import type { Locator, Page } from 'playwright';
 import { InteractiveElement, BoundingBox } from '../types/browser.js';
 import { TraceTarget } from '../types/trace.js';
-import { reresolveTarget, shouldAcceptHeal } from '../engine/heal-decision.js';
+import { reresolveTarget, shouldAcceptHeal } from '../engine/replay.js';
 
 /** Raw per-element record the in-page probe returns (plain JSON, browser context). */
 interface RawInteractiveElement {

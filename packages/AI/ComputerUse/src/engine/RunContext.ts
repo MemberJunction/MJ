@@ -17,9 +17,9 @@
 import { RunComputerUseParams } from '../types/params.js';
 import { StepRecord, JudgeVerdict } from '../types/judge.js';
 import type { InteractiveElement } from '../types/browser.js';
-import type { CheckpointLatch } from './checkpoint.js';
-import { summarizeOlderSteps, DEFAULT_MAX_VERBATIM_STEPS } from './digests.js';
-import { distillActionError } from './action-batch.js';
+import type { CheckpointLatch } from './verdict.js';
+import { summarizeOlderSteps, DEFAULT_MAX_VERBATIM_STEPS } from './perception.js';
+import { distillActionError } from './step-control.js';
 
 export class RunContext {
     /** Immutable reference to the original run parameters */
