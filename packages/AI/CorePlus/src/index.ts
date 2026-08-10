@@ -31,6 +31,7 @@ export * from './task-graph/task-graph-submitter';
 export * from './task-graph/graph-traversal-engine';
 export * from './task-graph/payload-mapping';
 export * from './agent-run-tree';
+export * from './agent-run-tree-loader';
 export * from './task-graph/graph-layout';
 export * from './task-graph/task-rows-to-spec';
 export * from './task-graph/task-graph-to-agent-spec';
