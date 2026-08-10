@@ -6,10 +6,14 @@ the description it should have.
 ## The field
 
 ```json
-{{ field }}
+{{ _CURRENT_PAYLOAD.field }}
 ```
 
-## The workflow payload so far
+A loop binds its item INTO the payload rather than beside it, so the current field is
+`_CURRENT_PAYLOAD.field` — the same way any other payload value is reached. `{{ field }}` on its own
+is empty, and produces a confident description of nothing.
+
+## The whole payload, for context
 
 ```json
 {{ _CURRENT_PAYLOAD }}
