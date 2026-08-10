@@ -5128,7 +5128,14 @@ export class ManageMetadataBase {
          // not products — hide them from new users. Application.DefaultForNewUser defaults to 1 in the
          // DB, so omitting the column here is what put raw '__mj_*'-named apps in every new user's
          // app switcher while the human-authored metadata app stayed hidden.
-         const appInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath, DefaultForNewUser)
+         // Identifiers are quoted explicitly. This statement runs through LogSQLAndExecute,
+         // which calls ds.query() directly and — unlike runQuery / runQueryWithParams — does
+         // NOT route through qsql(), so the auto-quoter never sees it. The bare column list
+         // therefore reached PostgreSQL as authored: `ID` folded to `id` and the insert failed
+         // with `column "id" of relation "Application" does not exist`, so CodeGen could not
+         // create the bucket application for a new schema at all. Found by running IS-A
+         // end-to-end against a live PostgreSQL database.
+         const appInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (${this.qi('ID')}, ${this.qi('Name')}, ${this.qi('Description')}, ${this.qi('SchemaAutoAddNewEntities')}, ${this.qi('Path')}, ${this.qi('AutoUpdatePath')}, ${this.qi('DefaultForNewUser')})
                        VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', ${this.dialect.BooleanLiteral(true)}, ${this.dialect.BooleanLiteral(false)})`;
          const sSQL = this.conditionalInsert(appCheckQuery, appInsert);
          await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
