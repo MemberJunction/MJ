@@ -487,7 +487,17 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * total, a validation decision — is then wrong in a way nothing downstream can detect. Only
      * saves use the boolean-return convention.
      *
-     * @param force - Reload even if already loaded.
+     * Loading over UNSAVED WORK also throws, for the same reason. `Add()` and `Create()` do not mark
+     * a collection loaded, so a collection that has only ever been appended to still has
+     * `loaded === false` — and the early return above therefore does *not* protect it. A `Load()`
+     * from anywhere (a lazy read, a refresh, a sibling component) would replace `items` wholesale
+     * and take the caller's unsaved children with it, along with any queued deletions. Nothing
+     * reports that; the screen simply shows fewer rows than the user typed.
+     *
+     * Pass `force` to discard deliberately — that is what a refresh means, and saying so is cheap.
+     *
+     * @param force - Reload even if already loaded, discarding any unsaved children and removals.
+     * @throws When the collection has unsaved changes and `force` is not set.
      */
     public async Load(force = false): Promise<void> {
         if (this.LoadMode === 'never') {
@@ -498,6 +508,14 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         }
         if (this.loaded && !force) {
             return;
+        }
+        if (this.Dirty && !force) {
+            throw new Error(
+                `RelatedRecordCollection '${this.Name}': cannot load over unsaved changes — ` +
+                    `${this.items.filter(i => !i.IsSaved).length} unsaved child record(s) and ` +
+                    `${this.removed.length} pending removal(s) would be discarded. ` +
+                    `Save the parent first, or pass force to discard them deliberately.`,
+            );
         }
 
         // Cache first when declared. A hit costs zero queries; a miss falls straight through to the

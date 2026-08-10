@@ -33,26 +33,26 @@
             @if (item.children && item.children.length > 0) {
               <ng-container *ngTemplateOutlet="recursiveSteps; context: { $implicit: item.children }"></ng-container>
             }
-            <!-- A TaskGraph step stands in for a whole graph of Task rows. Expanding it reveals the
-                 graph itself rather than a wall of JSON: the edges are where the interesting answers
-                 live (which branch was taken, and why), and a vertical list cannot show an edge. -->
+            <!-- A TaskGraph step stands in for a whole graph of Task rows. Its steps render as
+                 ORDINARY ROWS, colour-coded for provenance — they are steps, and squeezing a diagram
+                 into the column made them the only work in a run that could not be read, selected or
+                 navigated like everything else. The canvas lives in the detail panel, where edges
+                 (which branch was taken, and why) have the room they need. -->
             @if (item.type === 'step' && item.data?.StepType === 'TaskGraph') {
-              <div class="timeline-task-graph">
-                @if (GetGraphParentTaskID(item); as parentTaskID) {
-                  <mj-task-graph-run-view
-                    [ParentTaskID]="parentTaskID"
-                    [WorkflowName]="item.data?.StepName || 'Workflow'"
-                    [LiveUpdates]="true"
-                    Height="300px"
-                    (NodeSelected)="OnGraphNodeSelected($event)">
-                  </mj-task-graph-run-view>
-                } @else {
-                  <div class="no-children">
-                    <i class="fas fa-info-circle"></i>
-                    This workflow was recorded but never reached the dispatcher.
-                  </div>
-                }
-              </div>
+              @if (IsExpandingGraph(item)) {
+                <div class="loading-children">
+                  <i class="fas fa-spinner fa-spin"></i> Loading workflow steps...
+                </div>
+              } @else if (!GetGraphParentTaskID(item)) {
+                <div class="no-children">
+                  <i class="fas fa-info-circle"></i>
+                  This workflow was recorded but never reached the dispatcher.
+                </div>
+              } @else if (item.childrenLoaded && item.hasNoChildren) {
+                <div class="no-children">
+                  <i class="fas fa-info-circle"></i> This workflow has no steps yet.
+                </div>
+              }
             }
             <!-- For actual sub-run items (from the initial load) - legacy support -->
             @if (item.type === 'subrun' && item.data?.ID) {
