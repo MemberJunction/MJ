@@ -1,7 +1,7 @@
 import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { MJTaskEntity, ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 
 /** A settled-or-running graph, projected for the list. */
@@ -80,7 +80,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     }
 
     public get SelectedRun(): WorkflowRunRow | null {
-        return this.Runs.find((r) => r.ID === this.SelectedRunID) ?? null;
+        return this.Runs.find((r) => UUIDsEqual(r.ID, this.SelectedRunID ?? '')) ?? null;
     }
 
     async loadData(): Promise<void> {
@@ -142,7 +142,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     }
 
     public OnSelectRun(run: WorkflowRunRow): void {
-        this.SelectedRunID = this.SelectedRunID === run.ID ? null : run.ID;
+        this.SelectedRunID = UUIDsEqual(this.SelectedRunID ?? '', run.ID) ? null : run.ID;
         this.publishAgentContext();
         this.cdr.markForCheck();
     }
@@ -231,7 +231,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
                 Handler: async (params: Record<string, unknown>) => {
                     const wanted = String(params['run'] ?? '').trim().toLowerCase();
                     const match =
-                        this.Runs.find((r) => r.ID.toLowerCase() === wanted) ??
+                        this.Runs.find((r) => UUIDsEqual(r.ID, wanted)) ??
                         this.Runs.find((r) => r.Name.trim().toLowerCase() === wanted) ??
                         this.Runs.find((r) => r.Name.toLowerCase().includes(wanted));
                     if (!match) {
