@@ -17,6 +17,7 @@
  * @module @memberjunction/ai-core-plus
  */
 import type { MJAIAgentStepEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from './graph-algorithms';
 import {
     TaskNode,
@@ -171,7 +172,7 @@ export function CompileFlowToTaskGraph(
     }));
     const cycle = DetectCycle(cycleNodes, cycleEdges);
     if (cycle.hasCycle) {
-        const names = cycle.path.map((id) => compiledSteps.find((s) => s.ID === id)?.Name ?? id);
+        const names = cycle.path.map((id) => compiledSteps.find((s) => UUIDsEqual(s.ID, id))?.Name ?? id);
         errors.push({
             Code: 'LoopDetected',
             Message: `These steps form a loop: ${names.join(' → ')}. A workflow runs each step once, so express repetition with a ForEach or While step instead.`,

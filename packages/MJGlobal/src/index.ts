@@ -20,6 +20,7 @@ export * from './fieldRules'
 export * from './SQLExpressionValidator'
 export * from './warningManager'
 export * from './EncryptionUtils'
+export * from './TokenEndpointErrors'
 export * from './KeyedSerialTaskQueue'
 
 // NOTE: TelemetryManager has moved to @memberjunction/core
