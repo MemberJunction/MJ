@@ -21360,5 +21360,80 @@
     "primaryKey": {
       "ID": "B0DFE543-E954-4639-AE14-E56EC763356E"
     }
+  },
+  {
+    "fields": {
+      "Name": "Inkling Small",
+      "PowerRank": 17,
+      "Description": "Thinking Machines Lab's distilled open-weights sibling to Inkling, released July 30, 2026 with full Apache 2.0 weights on Hugging Face. 276B total / 12B active mixture-of-experts, multimodal (text + image + audio), variable thinking effort, and a context window up to 1M tokens architecturally. NOTE: served context is provider-specific — OpenRouter (`thinkingmachines/inkling-small`) currently serves 524,288 input tokens with a 262,144 max output. Thinking Machines Lab's own tables show Small ahead of full Inkling on Humanity's Last Exam (text-only) and SWE-bench Verified while trailing on SimpleQA — a distillation trade-off, not a strict subset of capability. Direct Tinker API meters prefill/sampled/training/cached-prefill tokens rather than input/output (promotional launch rates $0.58/$1.44/$1.73/$0.116 per 1M), which does not map cleanly onto MJ's per-1M-input/output cost schema — the cost row here uses the OpenRouter route ($0.45/$1.20 per 1M) instead, matching how the base Inkling entry handled the same asymmetry.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 2,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Thinking Machines Lab",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C1B4D2FA-EF19-42BB-A73D-1D0B058A32F1"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "thinkingmachines/inkling-small",
+            "MaxInputTokens": 524288,
+            "MaxOutputTokens": 262144,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "B45FCCAD-77DD-4C42-86BA-937F428D103B"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-07-30T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.45,
+            "OutputPricePerUnit": 1.2,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Inkling Small on OpenRouter (`thinkingmachines/inkling-small`) at $0.45 input / $1.20 output per 1M tokens as of the July 30, 2026 open-weights release. Direct Tinker API is priced by prefill/sampled/training/cached-prefill tokens (promotional launch rates $0.58/$1.44/$1.73/$0.116 per 1M), which does not map to MJ's input/output cost schema — hence the OpenRouter route is used here, mirroring how the base Inkling record handled the same asymmetry. Some third-party aggregators cite $0.30/$1.20 for the direct Thinking Machines rate; the OpenRouter number is the one recorded because it matches an actually invoiceable input/output route. If Thinking Machines publishes a token-model rate card, add a second cost row rather than editing this one. Sources: https://thinkingmachines.ai/news/inkling-small/ ; https://openrouter.ai/thinkingmachines/inkling-small ; https://artificialanalysis.ai/models/inkling-small ; https://venturebeat.com/technology/thinking-machines-debuts-inkling-small-open-source-ai-model-nearing-performance-of-predecessor-at-about-1-4-size ; https://dataconomy.com/2026/07/31/thinking-machines-launches-open-source-inkling-small-model/",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "C47FD9FC-EFEF-4C39-B306-0481E8944D97"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0FC7BBBA-9505-4927-9114-2356C01E53E6"
+    }
   }
 ]
