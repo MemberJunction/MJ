@@ -94,11 +94,11 @@ export function formatShortDate(dateStr: string): string {
 }
 
 /** Date + time (e.g. "Mar 5, 2:05 PM"). Echoes the input on parse failure. */
-export function formatDate(dateStr: string): string {
+export function formatDate(dateStr: Date | string): string {
     try {
         return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     } catch {
-        return dateStr;
+        return String(dateStr);
     }
 }
 
