@@ -283,40 +283,40 @@ export class RunViewParams {
      * BaseEntity-derived objects instead of simple objects. This is useful if you want to work with the data in a more strongly typed manner and/or
      * if you plan to do any update/delete operations on the data after it is returned. The 'count_only' option will return no rows, but the TotalRowCount property of the RunViewResult object will be populated.
      *
-     * ## `'simple'` returns the RAW shape, and `T` is not checked against it
+     * ## What `'simple'` rows actually contain — and what `T` does and does not check
      *
-     * This matters more than it sounds, because getting it wrong is silent.
+     * `'simple'` returns plain row objects, but the pipeline normalizes their VALUES to the shapes
+     * the generated entity types declare, identically on every tier: `Date` columns hold real
+     * `Date`s and numeric columns hold `number`s, whether the call ran server-side against the
+     * database or in a browser over GraphQL, and whether it was a fresh query or a cache hit.
+     * (`NULL` stays `NULL`, an unparseable value is left as-is rather than becoming `Invalid
+     * Date`, and integer strings beyond `Number.MAX_SAFE_INTEGER` stay strings to preserve
+     * BIGINT precision.)
      *
-     * `'simple'` hands back **exactly what the transport carried** — no `BaseEntity` is constructed
-     * and no conversion happens anywhere in the pipeline. Over GraphQL that means a `DATETIME`
-     * column arrives as an **ISO string**, not a `Date`.
-     *
-     * `'entity_object'` is different: every row goes through `BaseEntity`, whose `Get`/`SetLocal`
-     * convert a string or number into a real `Date` when the field's `TSType` is `Date`. So the
-     * generated `get OrderDate(): Date` is only honest on this path.
-     *
-     * `RunView<T>` takes a **caller-supplied** `T` with no relationship to `ResultType`. Passing a
-     * generated entity type to a `'simple'` read compiles perfectly and is wrong at runtime:
+     * `RunView<T>` still takes a **caller-supplied** `T` the compiler does not verify, so know
+     * what a plain row can and cannot honor when you pass a generated entity type:
      *
      * ```typescript
-     * // WRONG — declares Date, receives string. Compiles. Fails quietly.
+     * // Date and numeric fields are truthful on simple rows:
      * const rows = await rv.RunView<OrderEntity>({ EntityName: 'Orders', ResultType: 'simple' });
-     * rows[0].OrderDate.getFullYear();       // not a function
-     * String(rows[0].OrderDate).slice(0, 4); // reads a year today, reads "Mon " if it ever IS a Date
+     * rows.Results[0].OrderDate.getFullYear();   // works — a real Date on every tier
      *
-     * // RIGHT — ask for entities when you want entity types
-     * const rows = await rv.RunView<OrderEntity>({ EntityName: 'Orders', ResultType: 'entity_object' });
-     *
-     * // ALSO RIGHT — take the raw shape and say so
-     * const rows = await rv.RunView<{ ID: string; OrderDate: string }>({ EntityName: 'Orders' });
+     * // But a plain row is still not an entity:
+     * rows.Results[0].Save();                    // compiles, crashes — no entity methods
+     * // ...and a closed-union column (e.g. Status) holds whatever string the database held.
      * ```
      *
-     * The failure mode is what makes this worth a paragraph: a date compared with `<` against a
-     * string, or sorted with `localeCompare`, produces an ORDER rather than an error. Downstream
-     * arithmetic still balances — it is simply built on the wrong sequence, and nothing reports it.
+     * Two caveats worth knowing:
+     * - **`Fields` narrowing**: if you narrowed the query with `Fields`, non-selected properties
+     *   simply don't exist on the rows, whatever `T` claims.
+     * - **View-only runs**: a call that passes only `ViewID`/`ViewName` (no `EntityName` and no
+     *   loaded `ViewEntity`) skips normalization, since the entity is not synchronously
+     *   resolvable that deep in the pipeline. Pass `EntityName` alongside the view identifier to
+     *   get normalized rows.
      *
-     * Rule of thumb: **want entity types, ask for entity objects.** Choose `'simple'` when you want
-     * cheap rows and are prepared to treat them as raw database output.
+     * Rule of thumb: **want entity behavior — methods, validation, save, related records — ask
+     * for entity objects.** Choose `'simple'` for cheap read-only rows; its dates and numbers
+     * are already the types your entity declares.
      */
     ResultType?: 'simple' | 'entity_object' | 'count_only';
 
