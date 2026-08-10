@@ -119,6 +119,7 @@ function projectRow(raw: unknown): AgentRunTreeRow {
         Cost: toNumber(r['Cost']),
         Tokens: toNumber(r['Tokens']),
         SourceEntity: String(r['SourceEntity'] ?? ''),
+        SourceKind: r['SourceKind'] == null ? null : String(r['SourceKind']),
         SourceID: String(r['SourceID'] ?? r['NodeID'] ?? ''),
     };
 }

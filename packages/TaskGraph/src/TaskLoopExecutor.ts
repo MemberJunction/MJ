@@ -84,7 +84,16 @@ export async function RunForEachLoop(
     if (!Array.isArray(collection)) {
         return failedLoop(
             `The loop's collection '${op.collectionPath}' did not resolve to a list, so there is ` +
-            `nothing to iterate over. Check that the step producing it ran before this one.`,
+            `nothing to iterate over. ` +
+            // The overwhelmingly common cause, and invisible without being told: a bare name is a
+            // LITERAL in the mapping dialect, not a path. `fields` is the string "fields"; the
+            // payload value is `payload.fields`. Both produce this same error, and only one of them
+            // is about a step that has not run yet — so say which to check first.
+            (looksLikeUnprefixedPath(op.collectionPath)
+                ? `'${op.collectionPath}' has no prefix, so it is read as the literal text ` +
+                  `"${op.collectionPath}" rather than a payload value — did you mean ` +
+                  `'payload.${op.collectionPath}'?`
+                : `Check that the step producing it ran before this one.`),
         );
     }
 
@@ -288,6 +297,17 @@ function resolveCollection(collectionPath: string, ctx: PayloadMappingContext): 
         try { return JSON.parse(resolved); } catch { return resolved; }
     }
     return resolved;
+}
+
+/**
+ * True for a bare name that was probably meant as a payload path.
+ *
+ * Deliberately narrow: only an unprefixed, dot-free identifier. Anything carrying a recognized
+ * prefix was written deliberately, and a dotted path without one is a different mistake worth its
+ * own message rather than this guess.
+ */
+function looksLikeUnprefixedPath(collectionPath: string): boolean {
+    return /^[A-Za-z_][A-Za-z0-9_]*$/.test(collectionPath);
 }
 
 /** A loop that never got as far as its first iteration, with the reason an author can act on. */

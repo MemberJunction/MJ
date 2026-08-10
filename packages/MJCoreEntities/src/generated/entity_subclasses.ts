@@ -2727,7 +2727,7 @@ export const MJAIAgentRequestSchema = z.object({
         * * Description: Current status of the request (Requested, Approved, Rejected, Canceled).`),
     Request: z.string().describe(`
         * * Field Name: Request
-        * * Display Name: Request
+        * * Display Name: Request Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Details of what the AI Agent is requesting.`),
     Response: z.string().nullable().describe(`
@@ -2737,7 +2737,7 @@ export const MJAIAgentRequestSchema = z.object({
         * * Description: Response provided by the human to the agent request.`),
     ResponseByUserID: z.string().nullable().describe(`
         * * Field Name: ResponseByUserID
-        * * Display Name: Response By User
+        * * Display Name: Responded By User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Populated when a user responds indicating which user responded to the request.`),
@@ -2816,17 +2816,23 @@ export const MJAIAgentRequestSchema = z.object({
     *   * Conversation
     *   * Dashboard
         * * Description: Identifies where the response originated: Conversation (handled by chat resolver), Dashboard (slide-in panel), or API (external integration). Used by the server-side entity subclass to determine whether agent resumption is needed.`),
+    OriginatingTaskID: z.string().nullable().describe(`
+        * * Field Name: OriginatingTaskID
+        * * Display Name: Originating Task
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
+        * * Description: The workflow step (MJ: Tasks row) waiting on this request, when it came from a task graph rather than from a running agent. Distinct from OriginatingAgentRunStepID: a task graph outlives the agent run that submitted it, so the task — not the run — is what resumes when a person answers. NULL for requests raised by a run directly.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
     RequestForUser: z.string().nullable().describe(`
         * * Field Name: RequestForUser
-        * * Display Name: Request For User Name
+        * * Display Name: Target User
         * * SQL Data Type: nvarchar(100)`),
     ResponseByUser: z.string().nullable().describe(`
         * * Field Name: ResponseByUser
-        * * Display Name: Response By User Name
+        * * Display Name: Responded By
         * * SQL Data Type: nvarchar(100)`),
     RequestType: z.string().nullable().describe(`
         * * Field Name: RequestType
@@ -2843,6 +2849,10 @@ export const MJAIAgentRequestSchema = z.object({
     ResumingAgentRun: z.string().nullable().describe(`
         * * Field Name: ResumingAgentRun
         * * Display Name: Resuming Agent Run Name
+        * * SQL Data Type: nvarchar(255)`),
+    OriginatingTask: z.string().nullable().describe(`
+        * * Field Name: OriginatingTask
+        * * Display Name: Originating Task Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -4184,7 +4194,7 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    StepType: z.union([z.literal('Action'), z.literal('ForEach'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Action'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
@@ -4192,6 +4202,7 @@ export const MJAIAgentStepSchema = z.object({
     * * Possible Values 
     *   * Action
     *   * ForEach
+    *   * Human
     *   * Prompt
     *   * Sub-Agent
     *   * While
@@ -40420,7 +40431,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: Request
-    * * Display Name: Request
+    * * Display Name: Request Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Details of what the AI Agent is requesting.
     */
@@ -40446,7 +40457,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: ResponseByUserID
-    * * Display Name: Response By User
+    * * Display Name: Responded By User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: Populated when a user responds indicating which user responded to the request.
@@ -40632,6 +40643,20 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
     }
 
     /**
+    * * Field Name: OriginatingTaskID
+    * * Display Name: Originating Task
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
+    * * Description: The workflow step (MJ: Tasks row) waiting on this request, when it came from a task graph rather than from a running agent. Distinct from OriginatingAgentRunStepID: a task graph outlives the agent run that submitted it, so the task — not the run — is what resumes when a person answers. NULL for requests raised by a run directly.
+    */
+    get OriginatingTaskID(): string | null {
+        return this.Get('OriginatingTaskID');
+    }
+    set OriginatingTaskID(value: string | null) {
+        this.Set('OriginatingTaskID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
@@ -40642,7 +40667,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: RequestForUser
-    * * Display Name: Request For User Name
+    * * Display Name: Target User
     * * SQL Data Type: nvarchar(100)
     */
     get RequestForUser(): string | null {
@@ -40651,7 +40676,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: ResponseByUser
-    * * Display Name: Response By User Name
+    * * Display Name: Responded By
     * * SQL Data Type: nvarchar(100)
     */
     get ResponseByUser(): string | null {
@@ -40692,6 +40717,15 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
     */
     get ResumingAgentRun(): string | null {
         return this.Get('ResumingAgentRun');
+    }
+
+    /**
+    * * Field Name: OriginatingTask
+    * * Display Name: Originating Task Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get OriginatingTask(): string | null {
+        return this.Get('OriginatingTask');
     }
 }
 
@@ -44370,15 +44404,16 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Possible Values 
     *   * Action
     *   * ForEach
+    *   * Human
     *   * Prompt
     *   * Sub-Agent
     *   * While
     * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)
     */
-    get StepType(): 'Action' | 'ForEach' | 'Prompt' | 'Sub-Agent' | 'While' {
+    get StepType(): 'Action' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'ForEach' | 'Prompt' | 'Sub-Agent' | 'While') {
+    set StepType(value: 'Action' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -110633,6 +110668,8 @@ export interface MJTaskEntity_ITaskForEachConfiguration {
     action?: MJTaskEntity_ITaskLoopActionBody;
     /** Run this sub-agent once per iteration. */
     subAgent?: MJTaskEntity_ITaskLoopSubAgentBody;
+    /** A prompt run once per loop iteration. */
+    prompt?: MJTaskEntity_ITaskLoopPromptBody;
 }
 
 /**
@@ -110656,6 +110693,24 @@ export interface MJTaskEntity_ITaskWhileConfiguration {
     action?: MJTaskEntity_ITaskLoopActionBody;
     /** Run this sub-agent once per iteration. */
     subAgent?: MJTaskEntity_ITaskLoopSubAgentBody;
+    /** A prompt run once per loop iteration. */
+    prompt?: MJTaskEntity_ITaskLoopPromptBody;
+}
+
+/**
+ * A prompt run once per loop iteration.
+ *
+ * The cheapest loop body there is — one model call per item, with no agent wrapper, no reasoning
+ * loop and no run record. Right when an iteration is a single transformation (classify this,
+ * describe this column); wrong the moment an iteration has to decide what to do next.
+ */
+export interface MJTaskEntity_ITaskLoopPromptBody {
+    /** Prompt name. Resolved to `Task.PromptID` at submission, so it is a real foreign key. */
+    name: string;
+    /** Values bound into the template, alongside the loop's own item and index bindings. */
+    templateParameters?: Record<string, string>;
+    /** JSON mapping from the prompt's response into the payload, applied per iteration. */
+    outputMapping?: string;
 }
 
 /** An action run once per loop iteration. */
@@ -110743,6 +110798,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     /**
     * Validate() method override for MJ: Tasks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * PercentComplete: This rule ensures that if a percent complete value is provided, it must be between 0 and 100 inclusive.
+    * * Table-Level: A record can be associated with at most one context: either a User, an Agent, an Action, or a Prompt. Specifying more than one of these references is not allowed.
     * @public
     * @method
     * @override
@@ -110750,6 +110806,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidatePercentCompleteWithinZeroAndOneHundred(result);
+        this.ValidateAtMostOneContextField(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -110764,6 +110821,37 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     public ValidatePercentCompleteWithinZeroAndOneHundred(result: ValidationResult) {
     	if (this.PercentComplete != null && (this.PercentComplete < 0 || this.PercentComplete > 100)) {
     		result.Errors.push(new ValidationErrorInfo("PercentComplete", "PercentComplete must be between 0 and 100 if specified.", this.PercentComplete, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * A record can be associated with at most one context: either a User, an Agent, an Action, or a Prompt. Specifying more than one of these references is not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateAtMostOneContextField(result: ValidationResult) {
+    	let count = 0;
+    	if (this.UserID != null) {
+    		count++;
+    	}
+    	if (this.AgentID != null) {
+    		count++;
+    	}
+    	if (this.ActionID != null) {
+    		count++;
+    	}
+    	if (this.PromptID != null) {
+    		count++;
+    	}
+    
+    	if (count > 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"Only one of UserID, AgentID, ActionID, or PromptID can be specified for a single record.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 

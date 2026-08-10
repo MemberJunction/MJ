@@ -55,4 +55,19 @@ export interface WhileOperation {
          */
         context?: unknown;
     };
+    /**
+     * Execute a prompt per iteration.
+     *
+     * The cheapest loop body there is: one model call per item with no agent wrapper, no reasoning
+     * loop, no guardrails and no run record. Right whenever an iteration is a single transformation
+     * — classify this, extract these fields, describe this column — and wrong the moment an
+     * iteration needs to decide what to do next, which is what a sub-agent is for.
+     */
+    prompt?: {
+        name: string;
+        /** Values bound into the prompt's template, alongside the loop's own item and index. */
+        templateParameters?: Record<string, string>;
+        /** JSON mapping from the prompt's response into the payload, per iteration. */
+        outputMapping?: string;
+    };
 }
