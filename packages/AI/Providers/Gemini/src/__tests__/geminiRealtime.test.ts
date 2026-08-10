@@ -602,3 +602,123 @@ describe('C6: cross-provider config-bag safety (shared-key scrubbing)', () => {
         }
     });
 });
+
+describe('C7: agnostic voice → Gemini speechConfig (issue #3721)', () => {
+    it('maps the driver-neutral voice key to speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName (never raw)', async () => {
+        const driver = new TestGeminiRealtime('k');
+        await driver.StartSession(makeParams({ Config: { voice: 'Kore' } }));
+        const config = driver.LastConnectArgs!.Config as LiveConnectConfig & Record<string, unknown>;
+        expect(config.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName).toBe('Kore');
+        // The neutral key must be CONSUMED, not spread raw: LiveConnectConfig has no `voice`
+        // property, and the SDK's allowlist config converter drops unknown keys silently — which
+        // is exactly how an authored voice went missing before this mapping existed.
+        expect(config.voice).toBeUndefined();
+    });
+
+    it('omits speechConfig ENTIRELY when no voice is authored (an undefined key still enters the token field mask)', async () => {
+        const driver = new TestGeminiRealtime('k');
+        await driver.StartSession(makeParams({ Config: { temperature: 0.2 } }));
+        // Absence, not `undefined`: BuildConstraintConfig forwards speechConfig into
+        // liveConnectConstraints, and the mint turns the provided KEYS into a field mask — so a
+        // present-but-undefined key would widen the mask and 400 the token.
+        expect('speechConfig' in driver.LastConnectArgs!.Config).toBe(false);
+    });
+
+    it('a raw speechConfig that already names a voice WINS over the neutral key — and says so', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            await driver.StartSession(makeParams({
+                Config: {
+                    voice: 'Kore',
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } },
+                },
+            }));
+            const config = driver.LastConnectArgs!.Config;
+            expect(config.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName).toBe('Puck');
+            // The more specific vendor-native value wins, but the discarded voice is NOT silent —
+            // a silently-dropped voice is the whole bug class this maps around.
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('Kore'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('merges at the LEAF: a raw speechConfig that sets only languageCode still receives the authored voice', async () => {
+        const driver = new TestGeminiRealtime('k');
+        await driver.StartSession(makeParams({
+            Config: { voice: 'Kore', speechConfig: { languageCode: 'en-US' } },
+        }));
+        const speechConfig = driver.LastConnectArgs!.Config.speechConfig;
+        // Neither half may be lost. Block-level winner-takes-all would drop the voice here — the
+        // same silent drop as #3721, just narrower.
+        expect(speechConfig?.languageCode).toBe('en-US');
+        expect(speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName).toBe('Kore');
+    });
+
+    it('never injects a voiceConfig alongside multiSpeakerVoiceConfig (mutually exclusive) or a replicated voice', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            // multiSpeakerVoiceConfig: mutually exclusive with voiceConfig, and the SDK's
+            // tLiveSpeechConfig THROWS on it for live sessions — never make that shape worse.
+            const multi = new TestGeminiRealtime('k');
+            await multi.StartSession(makeParams({
+                Config: { voice: 'Kore', speechConfig: { multiSpeakerVoiceConfig: { speakerVoiceConfigs: [] } } },
+            }));
+            expect(multi.LastConnectArgs!.Config.speechConfig?.voiceConfig).toBeUndefined();
+
+            // A replicated (cloned) voice is a voice decision too, so it stands.
+            const replicated = new TestGeminiRealtime('k');
+            await replicated.StartSession(makeParams({
+                Config: { voice: 'Kore', speechConfig: { voiceConfig: { replicatedVoiceConfig: { voiceSample: {} } } } },
+            }));
+            const voiceConfig = replicated.LastConnectArgs!.Config.speechConfig?.voiceConfig;
+            expect(voiceConfig?.replicatedVoiceConfig).toBeDefined();
+            expect(voiceConfig?.prebuiltVoiceConfig).toBeUndefined();
+
+            // Both discards are reported, not silent.
+            expect(warn).toHaveBeenCalledTimes(2);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('treats a blank voice as absent rather than sending an empty voiceName', async () => {
+        const driver = new TestGeminiRealtime('k');
+        await driver.StartSession(makeParams({ Config: { voice: '   ' } }));
+        expect('speechConfig' in driver.LastConnectArgs!.Config).toBe(false);
+        expect((driver.LastConnectArgs!.Config as Record<string, unknown>).voice).toBeUndefined();
+    });
+
+    it('reports a NON-STRING voice as malformed — not as a foreign provider key — and never sends it raw', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            await driver.StartSession(makeParams({ Config: { voice: 42 } }));
+            expect((driver.LastConnectArgs!.Config as Record<string, unknown>).voice).toBeUndefined();
+            expect('speechConfig' in driver.LastConnectArgs!.Config).toBe(false);
+            // `voice` IS a Gemini-meaningful key, so the scrub message ("OpenAI-protocol/transport
+            // keys ... do not apply to Gemini Live") would be a lie about a plain config typo.
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('not a string'));
+            expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('Scrubbed non-Gemini config key'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('client-direct: the voice is token-LOCKED and carried to the browser (both halves, one mapping)', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { voice: 'Kore' } }));
+
+        // speechConfig is a generation-level field, so it IS mask-safe — the mint locks it under
+        // lockAdditionalFields: [], making the server's voice authoritative even if a client tampers.
+        const locked = driver.MintParams!.config!.liveConnectConstraints!.config as LiveConnectConfig;
+        expect(locked.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName).toBe('Kore');
+
+        // ...and the browser applies the server-built config verbatim, so this one mapping serves the
+        // client-direct topology too — no second translation site.
+        const sc = cfg.SessionConfig as { config: LiveConnectConfig & Record<string, unknown> };
+        expect(sc.config.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName).toBe('Kore');
+        expect(sc.config.voice).toBeUndefined();
+    });
+});

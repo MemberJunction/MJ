@@ -7,6 +7,7 @@ import {
     type LiveServerMessage,
     type LiveServerContent,
     type LiveConnectConfig,
+    type SpeechConfig,
     type FunctionDeclaration,
     type FunctionCall,
     type FunctionResponse,
@@ -278,11 +279,6 @@ export class GeminiRealtime extends BaseRealtimeModel {
     }
 
     /**
-     * Builds the {@link LiveConnectConfig} from the Core session params: audio response modality,
-     * input/output transcription, system instruction, mapped tools, plus any provider-specific
-     * overrides from the open config bag.
-     */
-    /**
      * Projects the full connect config down to the fields Gemini's ephemeral-token API accepts
      * as `liveConnectConstraints.config`. The token mint converts the provided keys into a
      * field mask over `BidiGenerateContentSetup`, and only generation-level fields are valid
@@ -313,6 +309,55 @@ export class GeminiRealtime extends BaseRealtimeModel {
         return constraint;
     }
 
+    /**
+     * Translates the driver-NEUTRAL `voice` config-bag key into Gemini's nested speech shape
+     * (`speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName`).
+     *
+     * Every realtime driver in the family reads the same neutral `voice` key, which is what makes a
+     * voice authorable without knowing which vendor will run the session (issue #3530). Gemini is the
+     * one vendor whose SDK has no `voice` field, so the key has to be mapped here or it is dropped
+     * before the wire (issue #3721).
+     *
+     * Precedence is per-key at the LEAF, not per-block: a caller-supplied raw `speechConfig` is the
+     * more specific value and keeps whatever it says, but a raw block that only sets e.g.
+     * `languageCode` still receives the authored voice. Block-level winner-takes-all would re-create
+     * the same silent drop in a narrower case.
+     *
+     * @param voice The neutral voice id, already trimmed; `undefined` when none is authored.
+     * @param existing Any raw `speechConfig` the caller merged in via the config bag.
+     * @returns The speech config to apply (absent when there is nothing to say), plus the voice that
+     *          was discarded because the raw block already decided it — the caller logs it, keeping
+     *          this a pure calculation.
+     */
+    private static buildSpeechConfig(voice: string | undefined, existing: SpeechConfig | undefined): { SpeechConfig?: SpeechConfig; DroppedVoice?: string } {
+        if (!voice) {
+            return { SpeechConfig: existing };
+        }
+        // Does the raw block already decide the voice? Any of three shapes counts: a named prebuilt
+        // voice, a cloned/replicated voice, or a multi-speaker config (mutually exclusive with
+        // `voiceConfig` — the SDK rejects the pair on a live session, so injecting there would turn a
+        // discarded voice into a dead session).
+        const rawAlreadyDecidesVoice =
+            existing?.voiceConfig?.prebuiltVoiceConfig?.voiceName != null ||
+            existing?.voiceConfig?.replicatedVoiceConfig != null ||
+            existing?.multiSpeakerVoiceConfig != null;
+        if (rawAlreadyDecidesVoice) {
+            return { SpeechConfig: existing, DroppedVoice: voice };
+        }
+        return {
+            SpeechConfig: {
+                ...existing,
+                voiceConfig: { ...existing?.voiceConfig, prebuiltVoiceConfig: { voiceName: voice } },
+            },
+        };
+    }
+
+    /**
+     * Builds the {@link LiveConnectConfig} from the Core session params: audio response modality,
+     * input/output transcription, system instruction, mapped tools, the neutral `voice` key mapped
+     * via {@link GeminiRealtime.buildSpeechConfig}, plus any provider-specific overrides from the
+     * open config bag.
+     */
     private buildConnectConfig(params: RealtimeSessionParams): LiveConnectConfig {
         const config: LiveConnectConfig = {
             responseModalities: [Modality.AUDIO],
@@ -323,8 +368,9 @@ export class GeminiRealtime extends BaseRealtimeModel {
         if (params.Tools && params.Tools.length > 0) {
             config.tools = [{ functionDeclarations: GeminiRealtime.MapToolsToFunctionDeclarations(params.Tools) }];
         }
-        // The open config bag is merged last so per-conversation overrides (voice, language,
-        // turn-taking) win over the defaults above. Cast through the shared JSON object shape.
+        // The open config bag is merged last so per-conversation overrides (generation parameters,
+        // language, turn-taking) win over the defaults above. Cast through the shared JSON object
+        // shape. Keys with a Gemini-native translation are consumed BEFORE the merge, never spread.
         if (params.Config) {
             // Pull the host-NEUTRAL meeting flag out before merging — it is NOT a Gemini config key, and a
             // blind copy would send it raw. In meeting mode we disable Gemini's AUTOMATIC activity detection
@@ -335,22 +381,30 @@ export class GeminiRealtime extends BaseRealtimeModel {
             const cfg = { ...(params.Config as Record<string, unknown>) };
             const disableAutoResponse = cfg.disableAutoResponse === true;
             delete cfg.disableAutoResponse;
+            // Consume the driver-NEUTRAL `voice` key the same way: it is not a Gemini config field
+            // (LiveConnectConfig has no `voice`), so spreading it raw sends nothing — the SDK's
+            // config converter is a path allowlist and drops unknown keys silently. Gemini takes an
+            // output voice at speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName instead.
+            const rawVoice = cfg.voice;
+            delete cfg.voice;
+            const voice = typeof rawVoice === 'string' ? rawVoice.trim() : undefined;
+            if (rawVoice !== undefined && typeof rawVoice !== 'string') {
+                // Reported separately from the shared-key scrub below: `voice` IS meaningful to
+                // Gemini, so describing it as a foreign OpenAI-protocol key would misdiagnose what is
+                // simply a malformed value.
+                console.warn(`[GeminiRealtime] Ignored the session config bag's \`voice\` because it is not a string (got ${typeof rawVoice}) — expected a Gemini prebuilt voice name.`);
+            }
             // Scrub the MJ-side keys shared across the realtime driver family (OpenAI-protocol
             // feature knobs + transport settings). They are NOT Gemini config keys — a co-agent
             // config carrying e.g. `effortLevel` or `mcpTools` must be SAFE on a Gemini session,
             // not spread raw into the Live SDK where strictness varies by version. Scrubbed keys
             // are diag-logged so config typos / cross-provider keys stop being silent.
+            // The two keys Gemini translates natively (`disableAutoResponse`, `voice`) were already
+            // consumed and deleted above, so the loop only ever sees keys with no Gemini mapping —
+            // no per-key exemption needed here.
             const scrubbed: string[] = [];
             for (const key of REALTIME_SHARED_CONFIG_KEYS) {
-                if (key === 'disableAutoResponse') {
-                    continue; // consumed above (Gemini-native translation)
-                }
                 if (key in cfg) {
-                    // `voice` IS meaningful to Gemini through its provider-voice settings pact —
-                    // only scrub the keys Gemini has no native mapping for.
-                    if (key === 'voice') {
-                        continue;
-                    }
                     delete cfg[key];
                     scrubbed.push(key);
                 }
@@ -359,6 +413,13 @@ export class GeminiRealtime extends BaseRealtimeModel {
                 console.warn(`[GeminiRealtime] Scrubbed non-Gemini config key(s) from the session bag: ${scrubbed.join(', ')} — these are OpenAI-protocol/transport keys and do not apply to Gemini Live.`);
             }
             Object.assign(config, cfg as Partial<LiveConnectConfig>);
+            const speech = GeminiRealtime.buildSpeechConfig(voice, config.speechConfig);
+            if (speech.SpeechConfig) {
+                config.speechConfig = speech.SpeechConfig;
+            }
+            if (speech.DroppedVoice) {
+                console.warn(`[GeminiRealtime] Ignored the neutral voice "${speech.DroppedVoice}" — the session config bag supplies its own speechConfig, which already names a voice. Author one or the other, not both.`);
+            }
             if (disableAutoResponse) {
                 config.realtimeInputConfig = {
                     ...(config.realtimeInputConfig ?? {}),
