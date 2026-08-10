@@ -39,7 +39,57 @@ updated behind both gates; cost rollup via the never-written `AIAgentRun …Roll
 design this plan didn't have); a real offline differential suite (synthetic fixtures); total in-run
 refusal at the `createStepForFlowNode` choke point.
 
-### Status update (2026-08-09, post-dispatch — per builder report, not yet independently verified)
+### Status update (2026-08-10 — post-merge review of #3696/#3698/#3701/#3710, VERIFIED; full findings: [#3698 comment 5242160684](https://github.com/MemberJunction/MJ/pull/3698#issuecomment-5242160684), [#3710 comment 5242163422](https://github.com/MemberJunction/MJ/pull/3710#issuecomment-5242163422))
+
+**Verified delivered**: XOR claim-race fix; R6 (dispatcher + pure layer + simulator aligned); depth
+chain (top-level, cap at Submit); `failureSemantics` persisted + wired to block/rollup; R5
+`maxIterations: 0` parity + JSDoc fixed at source; sub-agent + scheduled refusals; **Prompt
+runner** (Chat escape → Skipped siblings → parent Complete; `PromptRunID` recorded on failure
+too); both templates v2; **Workflows app restored** under NEW id `E29BDE35-…` with the D18 guard
+back — **correction to the 2026-08-09 note: the retirement migration STAYS** (no Flyway rewrite;
+old-id delete + new-id sync converge on one app — the shipped choice, and the right one); run-tree
+stored query (`GetAgentRunTree`, predicate-bounded, prompt-cost join in final SELECT);
+`Configuration.runtime` slice in the guarded UPDATE; HITL via `AIAgentRequest` +
+`AIAgentStep.StepType='Human'`; two demo agents; **tests/suite records now declarative metadata**
+(clean-checkout deterministic tier finally possible).
+
+**Severe open defects found by the review** (fix order in the #3698 comment):
+1. 🔴 Run-tree cycle — #3710's `parent.AgentRunID` stamp + the tree query's `TaskGraph`-node
+   member → `Root: null`, blank run UI for every post-#3710 workflow run.
+2. 🔴 `failureSemantics` recovery **deadlock** — `handledFailureIDs` never threads into
+   eligibility; recovery targets never run; graphs hang In Progress forever (worse than pre-fix).
+3. 🔴 Approving a workflow human step **spawns a duplicate workflow** — the legacy
+   `MJAIAgentRequestEntityServer` resume hook arms on the request shape HITL creates; needs an
+   `OriginatingTaskID` guard.
+4. 🔴 Content Pipeline demo's While can never pass (loop threading absent — item 13) — flagship
+   demo dead-on-arrival, approved branch unreachable.
+5. 🟠 **Deterministic tier red at HEAD three ways**: TX4 still asserts pre-R6 `Blocked`; WD1
+   asserts 2 steps vs 3; WD2 structurally never-green (object-form `dependsOn` vs
+   `includes(<string>)`, inverted filter). Merged without a green tier.
+6. 🟠 XOR race reintroduced for `unreachableTaskIDs` (not in the claim filter); Failed-decides
+   unscoped (`{Complete,Failed}` for all graphs contra §5.3); prose prompt responses trigger the
+   Chat escape and "successfully" end whole workflows.
+7. 🟠 **R7 NOT implemented** — correction to the 2026-08-09 note: `rollUpCostToSubmittingRun`
+   is still live at every settlement; two cost authorities disagree on prompt-bearing workflows
+   (the rollup is prompt-blind). Remove per R7 or re-rule. (#3698's `ParentRunID` claim was dead
+   code at its own merge; #3710 made it live — and detonated defect 1.)
+8. 🟠 Loop bodies are second-class everywhere: no depth/`ParentRunID` stamping (invisible to
+   tree + both cost systems; depth chain restarts at 0; **Flow-as-loop-body evades the sub-agent
+   refusal**); sub-agent bodies still get `{}`; per-iteration `promptRunID`s lost;
+   `op.prompt.outputMapping` written by the compiler, consumed by nothing.
+9. 🟠 HITL hardening set: Cancelled-request permanent stall; `assignToUserID` silently
+   discarded (submitter hard-assigned); expiry decorative (nothing sets `ExpiresAt`; `DueAt`
+   unmapped); no caller-authz on respond; dead `type:'Task'` notification deep-link; D17 Human
+   arm + editor palette missing (metadata files are the only authoring path).
+10. 🟡 UUID sweep re-broken by #3701/#3698 code (4 violations; MJGlobal backstop red);
+    assorted stale prose (incl. "0 means unlimited" directly above the R5 fix).
+
+**Scorecard: the eight remaining punch-list items (#4, #10, #12–15, #17, #18) — zero shipped in
+this range.** #4 (input snapshot) remains the highest-priority open item: running workflows still
+evaluate `data.*`/`context.*` against `{}`, and the conversation dialect is now *pinned by test as
+unresolved*.
+
+### Superseded status note (2026-08-09, pre-verification — kept for the record)
 
 - **Prompt runner LANDED** — the onboarding-flow brick (P0 item 2) is closed; the loop prompt
   teaches `kind:'Prompt'` again.
