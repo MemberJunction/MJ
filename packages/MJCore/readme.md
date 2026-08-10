@@ -565,6 +565,43 @@ if (typedResult.Success) {
 }
 ```
 
+#### `ResultType`: `'simple'` is the RAW row, and `T` is not checked against it
+
+`ResultType` defaults to `'simple'`, and the difference is not just convenience — it changes what the
+VALUES are.
+
+| | `'simple'` (default) | `'entity_object'` |
+|---|---|---|
+| What you get | exactly what the transport carried — no `BaseEntity` is constructed | `BaseEntity`-derived instances |
+| A `DATETIME` column | an **ISO string** over GraphQL | a real `Date` (`BaseEntity` converts on `Get`/`Set`) |
+| Save / delete the row | no | yes |
+| `IncludeRelatedRecords` | not available | yes |
+| Cost | one plain object per row | field hydration per row |
+
+`RunView<T>` takes a **caller-supplied** `T` with no relationship to `ResultType`. Passing a
+generated entity type to a `'simple'` read compiles perfectly and is wrong at runtime:
+
+```typescript
+// WRONG — declares Date, receives string. Compiles. Fails quietly.
+const rows = await rv.RunView<UserEntity>({ EntityName: 'Users', ResultType: 'simple' });
+rows.Results[0].CreatedAt.getFullYear();   // not a function
+
+// RIGHT — ask for entities when you want entity types
+const rows = await rv.RunView<UserEntity>({ EntityName: 'Users', ResultType: 'entity_object' });
+
+// ALSO RIGHT — take the raw shape and say so
+const rows = await rv.RunView<{ ID: string; CreatedAt: string }>({ EntityName: 'Users' });
+```
+
+The failure mode is what makes this worth stating. A date compared with `<` against a string, or
+sorted with `localeCompare`, produces an **order** rather than an error — so downstream totals still
+balance, they are simply built on the wrong sequence, and nothing reports it. Real example: an
+oldest-first payment allocator that sorted correctly on ISO strings would, the day it received
+`Date`s, sort alphabetically by weekday name while every allocation still summed to the payment.
+
+**Rule of thumb: want entity types, ask for entity objects.** Choose `'simple'` when you want cheap
+rows and are prepared to treat them as raw database output.
+
 #### Batch Multiple Views
 
 Use `RunViews` (plural) to execute multiple independent queries in a single operation.
