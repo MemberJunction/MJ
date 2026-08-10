@@ -78,7 +78,13 @@ stored query (`GetAgentRunTree`, predicate-bounded, prompt-cost join in final SE
    `rollUpCostToSubmittingRun` stops doing its own math (mixed-basis, prompt-blind) and writes
    `SumAgentRunTreeCost(LoadAgentRunTree(submittingRunID))` at settlement — one basis,
    prompt-aware by construction, structurally identical to the tree. **Must land after the
-   run-tree cycle fix** or it materializes a broken tree. (Historical note stands: #3698's
+   run-tree cycle fix** or it materializes a broken tree. **→ IMPLEMENTED in PR #3723**
+   (`1a42288e7`): refuses-not-guesses on load-error/truncation/graph-unreachable, WD5 encodes the
+   ruling as an equality test with a planted absurd rollup, and the query header carries the
+   non-circularity guard. Reviewer flag open: refusal paths can leave a *stale* prior rollup —
+   null the column when non-null. **Interim ruling recorded (same PR): cross-user
+   `assignToUserID` is REFUSED at submit until #3524** (better than batch-4's "honor" — no authz
+   model exists); "honor" becomes the #3524-unlock work. (Historical note stands: #3698's
    `ParentRunID` claim was dead code at its own merge; #3710 made it live — and detonated
    defect 1.)
 8. 🟠 Loop bodies are second-class everywhere: no depth/`ParentRunID` stamping (invisible to
