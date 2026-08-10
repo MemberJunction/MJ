@@ -30,6 +30,7 @@ export * from './checks/record-process-facade.checks';
 export * from './checks/entity-actions.checks';
 export * from './checks/task-graph-execution.checks';
 export * from './checks/task-graph-orchestration.checks';
+export * from './checks/workflow-demo-agents.checks';
 export * from './checks/record-process.checks';
 export * from './checks/remote-op-ai-authoring.checks';
 export * from './checks/remote-op-wire-progress.checks';
