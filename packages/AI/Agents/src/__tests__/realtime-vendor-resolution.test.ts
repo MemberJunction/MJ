@@ -31,6 +31,9 @@ function vendor(
     status = 'Active'
 ): unknown {
     return {
+        // `ID` is the MODEL-VENDOR row's own PK (surfaced as ModelVendorID) — deliberately distinct from
+        // `VendorID` below, because the ModelConfiguration cascade keys off the row, not the vendor.
+        ID: `mv-${driverClass}`,
         ModelID: modelID,
         DriverClass: driverClass,
         Priority: priority,
@@ -52,9 +55,21 @@ describe('SelectRealtimeVendorForModel', () => {
         engineState.ModelVendors = [vendor('m1', 'LowDriver', 1), vendor('m1', 'HighDriver', 9)];
         expect(SelectRealtimeVendorForModel('m1', allKeyed)).toEqual({
             VendorID: 'v-HighDriver',
+            ModelVendorID: 'mv-HighDriver',
             DriverClass: 'HighDriver',
             APIName: 'api-HighDriver'
         });
+    });
+
+    it('returns the MODEL-VENDOR row id as ModelVendorID, not the vendor id', () => {
+        // The ModelConfiguration catalog cascade (AIModelType < AIModel < AIModelVendor) keys its
+        // most-specific layer off the model-vendor ROW. Confusing it with VendorID would silently read
+        // the wrong layer's defaults, so the two must stay distinguishable here.
+        engineState.ModelVendors = [vendor('m1', 'CatalogDriver', 1)];
+        const selection = SelectRealtimeVendorForModel('m1', allKeyed);
+        expect(selection?.ModelVendorID).toBe('mv-CatalogDriver');
+        expect(selection?.VendorID).toBe('v-CatalogDriver');
+        expect(selection?.ModelVendorID).not.toBe(selection?.VendorID);
     });
 
     it('falls PAST a keyless higher-priority vendor instead of dead-ending', () => {
@@ -87,9 +102,11 @@ describe('SelectRealtimeVendorForModel', () => {
     });
 
     it('defaults absent VendorID / APIName to empty strings', () => {
-        engineState.ModelVendors = [{ ModelID: 'm1', DriverClass: 'BareDriver', Priority: 1, Status: 'Active' }];
+        // `ID` is present because it is the row's PK — always populated, unlike the optional FK/name.
+        engineState.ModelVendors = [{ ID: 'mv-bare', ModelID: 'm1', DriverClass: 'BareDriver', Priority: 1, Status: 'Active' }];
         expect(SelectRealtimeVendorForModel('m1', allKeyed)).toEqual({
             VendorID: '',
+            ModelVendorID: 'mv-bare',
             DriverClass: 'BareDriver',
             APIName: ''
         });

@@ -65,6 +65,9 @@ flowchart TD
 - **Entity Action Invocation** — Bind actions to entity CRUD lifecycle events (BeforeCreate, AfterUpdate, etc.)
 - **Batch Entity Actions** — Run actions against Lists or Views of records with consolidated results
 - **Script Evaluation** — Entity action params support runtime script evaluation with entity context
+- **Transition Filters** — Filters see the values on *both* sides of a save, so a gate can express "when Status *becomes* Approved" rather than only "when Status *is* Approved"
+- **Durable Dispatch** — An `After*` binding can opt into surviving a process restart (`EntityAction.RunMode = 'Durable'`)
+- **Execution-Log Retention** — Each log row is stamped with the retention its action declared, and a scheduled purge enforces it
 
 ## Usage
 
@@ -261,7 +264,7 @@ classDiagram
     }
 
     class Validate {
-        +InvokeAction(params) EntityActionResult
+        <<no overrides>>
     }
 
     EntityActionInvocationBase <|-- SingleRecord
@@ -270,8 +273,102 @@ classDiagram
 
     note for SingleRecord "Registered for: Read, BeforeCreate,\nBeforeUpdate, BeforeDelete, AfterCreate,\nAfterUpdate, AfterDelete, SingleRecord"
     note for MultipleRecords "Registered for: List, View"
-    note for Validate "Registered for: Validate"
+    note for Validate "Registered for: Validate.\nDeliberately EMPTY — it inherits SingleRecord\nso scope resolution and provenance stay true\nfor Validate, rather than drifting in a copy."
 ```
+
+### Transition Filters — deciding on the change, not the end state
+
+An entity action bound to `AfterUpdate` used to see only the record's *current* state, so "when an
+invoice crosses 90 days" and "when Status becomes Approved" were inexpressible: the second is
+indistinguishable from "when Status **is** Approved", which is true on every subsequent save too.
+
+`EntityChangeContext` (in `@memberjunction/actions-base`) carries both sides of the save to the place
+filters run. It is built from `EntityField.OldValue`, which `BaseEntity` has tracked all along — no
+new tracking, just carrying what already existed to where it was needed.
+
+Inside an Action Filter's `Code`, the change is available on `ActionFilterContext`:
+
+```javascript
+// "when Status becomes Approved" — fires once, on the transition
+return ActionFilterContext.DidFieldChangeToValue('Status', 'Approved');
+
+// the raw before/after bags, for anything the shorthands do not cover
+const { OldValues, NewValues } = ActionFilterContext;
+return NewValues.Amount > 100 && OldValues.Amount <= 100;
+```
+
+| Name | Meaning |
+|---|---|
+| `DidFieldChange(field)` | the field's value actually differs across this save |
+| `DidFieldChangeToValue(field, value)` | …and its new value equals `value` (compared loosely, so `'1'` matches `1`) |
+| `OldValues` / `NewValues` | both sides, by field name |
+| `change` | the full `EntityChangeContext`, or `undefined` when there was no save behind the run |
+
+Three behaviours worth knowing:
+
+- **A create reports no changes.** A record whose Status started at `Approved` did not *become*
+  anything, so `DidFieldChange` is false for every field on an insert.
+- **Absence reads as false.** A direct invocation or a List/View fan-out has no save behind it, so
+  the helpers answer false rather than guessing — filters gate execution, and firing on a question
+  nobody could answer is the wrong default.
+- **Evaluation is fail-closed.** A filter that throws, returns a non-boolean, or cannot be resolved
+  prevents the run. That is why an `EntityActionFilter` row with `Status = 'Disabled'` is *skipped*
+  rather than consulted: a disabled gate that was still evaluated would not be inert, it would block
+  the action permanently.
+
+**A prevented run still writes an `ActionExecutionLog` row**, carrying
+`ACTION_PREVENTED_BY_FILTER_MESSAGE` as its `Message`. That is deliberate — an operator needs to see
+that a filter refused, rather than wondering why nothing happened. It does mean *"a log row exists"*
+is not the same question as *"the action ran"*, and code (or a test) that conflates the two will
+report a working filter as a failure to gate.
+
+> **Behaviour change.** Until this release the refusal branch logged that row and then executed the
+> action anyway, so filters recorded preventing things they did not prevent. They now genuinely
+> prevent. If you have `ActionFilter` rows configured, actions that were firing despite them will
+> stop — which is what the rows always asked for.
+
+### Durable dispatch — `After*` work that survives a restart
+
+`After*` entity actions are dispatched fire-and-forget so a user's save is not held open by work that
+happens afterwards. The cost is that a process dying mid-flight loses the action, with nothing to
+retry it.
+
+Setting `EntityAction.RunMode = 'Durable'` routes that dispatch to the task-graph substrate instead:
+the work becomes a single-node durable graph with the claim protocol, restart recovery and orphan
+reclaim that already exist there. It is per-binding and defaults to `Inline`, because durability
+costs a Task row, a dispatcher hop of latency, and the action's parameters persisted at rest.
+
+```typescript
+binding.RunMode = 'Durable';   // MJ: Entity Actions
+await binding.Save();
+```
+
+Four things the mode does *not* change:
+
+- **`Validate` and `Before*` ignore it entirely.** Those run inside the save and can abort it;
+  deferring them would decide the save's outcome after it had already happened.
+- **A host with no submitter runs inline.** `RunMode = 'Durable'` asks for the work to be harder to
+  lose, so refusing to run it where the durable path is unavailable would make opting in *less*
+  reliable than leaving it off. The same fallback covers a failed submission, with the reason logged.
+- **Parameters are redacted before they are persisted.** A parameter the binding marked as not-logged
+  arrives at the durable runner absent, not secret.
+- **The self-trigger guard does not follow the work.** `EntityActionDispatchGuard` tracks origin
+  through `AsyncLocalStorage`, which a dispatcher in another process is definitionally outside of. A
+  durable action that writes back to its own record must set
+  `EntitySaveOptions.OriginatingEntityActionIDs` — the explicit channel for exactly this case.
+
+### Execution-log retention
+
+`Action.RetentionPeriod` (days; `NULL` means indefinite) is stamped onto each `ActionExecutionLog` row
+when the run starts, so the row is self-describing. Retention is therefore decided at write time:
+editing an action's retention changes what is kept *going forward* rather than retroactively deleting
+history written under the previous policy.
+
+Enforcement is a scheduled job (`Action Log Retention`), opt-in like every maintenance driver — the
+job type activates nothing until someone creates a `MJ: Scheduled Job` of it with a cron expression.
+It purges oldest-first, bounded per run, and reports when it stopped at its ceiling rather than
+because it was finished. Rows with no retention are kept unless the job is explicitly configured with
+`DefaultRetentionDays`.
 
 ### Class Hierarchy
 

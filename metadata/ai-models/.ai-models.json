@@ -10227,10 +10227,10 @@
   {
     "fields": {
       "Name": "Claude Opus 4.1",
-      "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window. DEPRECATION ANNOUNCED 2026-06-05: claude-opus-4-1-20250805 retires August 5, 2026 — which falls 5 days after the 2026-07-31 research window and therefore INSIDE the v5.51.0 support window. IsActive remains true because the retirement has not yet occurred; flip it to false in the first weekly report dated on/after 2026-08-05, matching the Grok 4 and Mistral summer-2026 precedent of deactivating only once retired. RECOMMENDED REPLACEMENT UPDATED 2026-07-24: migrate to claude-opus-5 (this report added it) rather than claude-opus-4-8 — Opus 5 is now the current Opus flagship at the same $5/$25 per-1M pricing as 4.8 and is Anthropic's official post-4.1 migration target. Source: https://platform.claude.com/docs/en/about-claude/models/migration-guide#migrating-from-claude-opus-4-8-to-claude-opus-5 ; https://platform.claude.com/docs/en/about-claude/model-deprecations",
+      "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window. RETIRED 2026-08-05: claude-opus-4-1-20250805 was deprecated 2026-06-05 and reached hard retirement on the Claude API on August 5, 2026 (60-day window); calls now fail permanently. IsActive was flipped to false in the 2026-08-08 weekly report — the first report dated on/after the retirement date, exactly as the 2026-07-31 and 2026-08-03 reports specified, and matching the Grok 4 and Mistral summer-2026 precedent of deactivating only once retirement has actually occurred. RECOMMENDED REPLACEMENT: migrate to claude-opus-5 (per the 2026-07-24 update) rather than claude-opus-4-8 — Opus 5 is the current Opus flagship at the same $5/$25 per-1M pricing as 4.8 and is Anthropic's official post-4.1 migration target. Source: https://platform.claude.com/docs/en/about-claude/models/migration-guide#migrating-from-claude-opus-4-8-to-claude-opus-5 ; https://platform.claude.com/docs/en/about-claude/model-deprecations",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 19,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 7,
       "CostRank": 3,
       "InheritTypeModalities": true
@@ -10381,8 +10381,8 @@
       "ID": "2C5EA224-85A1-4D09-ABA6-0D52F2E6AFBB"
     },
     "sync": {
-      "lastModified": "2026-07-31T18:53:05.729Z",
-      "checksum": "92ceff0c8c41770e3db4d8f46bb763a74f509af882c0540ba27de758507a68d3"
+      "lastModified": "2026-08-08T15:49:41.070Z",
+      "checksum": "5d7486a8c05898325d291be27daf03c0b271ce1a77de646ed66d940288952759"
     }
   },
   {
@@ -16952,6 +16952,120 @@
   },
   {
     "fields": {
+      "Name": "Qwen 3.8 Max",
+      "PowerRank": 21,
+      "Description": "Alibaba Cloud's flagship Qwen 3.8 series reasoning model, generally available via Alibaba Cloud Model Studio on 2026-08-03 (API id qwen3.8-max). Successor to Qwen 3.7 Max. Features a 1M token context window billed at a single flat rate across the whole window (no long-context price tier), 991.8K max input standard / 983.6K in Thinking Mode, and 131K max output. reasoning_effort defaults to 'xhigh' and preserve_thinking is on by default, so thinking tokens bill as output tokens — budget above the headline output rate. Open weights were announced for release on Hugging Face and ModelScope shortly after launch.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 7,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "AFB84A68-C285-4CEB-961A-BA898F663E24"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:41.602Z",
+            "checksum": "98ce0a4e83ae6a9cb3f3b849a20a4cbef8e8d1deb8e82010c412576efe27537a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "QwenLLM",
+            "APIName": "qwen3.8-max",
+            "MaxInputTokens": 991800,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E5A97BB4-FB39-4867-97A0-965DB56F7D57"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:41.632Z",
+            "checksum": "708d12df7a903f287f98175ea0edc62e40cdb347242c898f49b8a8f2ba5feaa6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3.8-max",
+            "MaxInputTokens": 991800,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "11BEE934-FB55-4250-86AA-C79D3BBF6010"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:41.646Z",
+            "checksum": "56b48c4c26298c14497dbbf675ad560a4b7e9764fda66986d1c06772bf390804"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "StartedAt": "2026-08-03T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 6,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.8 Max pricing on Alibaba Cloud Model Studio at global API general availability, 2026-08-03. $2.00/1M input, $6.00/1M output, $0.25/1M cached (implicit) input. Flat rate across the entire 1M context window — unlike other Qwen tiers there is no long-prompt price step-up. Limits: 1M context, 991.8K max input (983.6K in Thinking Mode), 131K max output. NOTE: reasoning_effort defaults to 'xhigh' with preserve_thinking on, so thinking tokens bill at the output rate and effective cost runs above the headline $6. Sources: https://aireiter.com/blog/qwen3-8-max-api-pricing ; https://www.techrepublic.com/article/news-alibaba-qwen3-8-max-pricing-open-weights/",
+            "CacheReadPricePerUnit": 0.25,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "F1DEAEE7-F67D-402D-91F3-DACFD4E570B5"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:41.674Z",
+            "checksum": "7204929d7763fa7c1216447ee6ee2ae209f228bad5f33e0c5dc9e82fe55eca47"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CD31949A-2E85-4410-A216-777571F47E72"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T15:49:41.130Z",
+      "checksum": "fd418688c6f328c6e188ff850fce1be77d4a5e1db8ce9469b24722ab69d28cfe"
+    }
+  },
+  {
+    "fields": {
       "Name": "Claude Opus 4.8",
       "PowerRank": 24,
       "Description": "Anthropic's frontier flagship released May 28, 2026, simultaneously available on Anthropic API, Amazon Bedrock, Vertex AI, and Microsoft Foundry. Same headline pricing ($5/$25 per 1M) and 1M context window as Opus 4.7, with meaningful capability gains in reasoning and judgement. Features 128K max output (300K via batch beta `output-300k-2026-03-24`), high-resolution image input (up to 2576px), adaptive thinking with default `effort=high`, and task budgets (beta). Uses the new Opus tokenizer introduced in 4.7. Note: temperature, top_p, top_k parameters return 400 errors when set to non-default values. Knowledge cutoff January 2026.",
@@ -17739,7 +17853,7 @@
     "fields": {
       "Name": "Grok Voice",
       "PowerRank": 11,
-      "Description": "xAI's Grok Voice Agent API — a streaming, full-duplex, tool-calling speech-to-speech realtime model. OpenAI-Realtime-API compatible (WebSocket endpoint wss://api.x.ai/v1/realtime, Base64-encoded PCM16 @ 24 kHz audio), so the MJ driver reuses the OpenAI SDK pointed at xAI's base URL. Supports custom function tools plus xAI's built-in web search, X search, and RAG. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GrokRealtime).",
+      "Description": "xAI's Grok Voice Agent API — a streaming, full-duplex, tool-calling speech-to-speech realtime model. OpenAI-Realtime-API compatible (WebSocket endpoint wss://api.x.ai/v1/realtime, Base64-encoded PCM16 @ 24 kHz audio), so the MJ driver reuses the OpenAI SDK pointed at xAI's base URL. Supports custom function tools plus xAI's built-in web search, X search, and RAG. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GrokRealtime). Superseded by Grok Voice Think Fast 2.0 (announced July 29, 2026); xAI's grok-voice-latest alias resolves to Think Fast 2.0 as of August 5, 2026, while this entry's pinned grok-voice API name continues to serve the prior generation.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
       "IsActive": true,
       "SpeedRank": 8,
@@ -17776,8 +17890,8 @@
       "ID": "19A9861F-1178-437D-941A-A4382B7D5FCA"
     },
     "sync": {
-      "lastModified": "2026-06-16T01:17:09.499Z",
-      "checksum": "eae22eb04791813f6810953f043e681547227784bdd0d02cafb5babb6084f665"
+      "lastModified": "2026-08-08T15:49:41.143Z",
+      "checksum": "74aadbca335367bf51ebababd281b86f1494ca2b5c3f094ceef7dfbeaf477a3a"
     }
   },
   {
@@ -21050,6 +21164,201 @@
     "sync": {
       "lastModified": "2026-07-31T18:53:06.281Z",
       "checksum": "44335a233fb0fb335593efa45b401ea4d90a8100894e3dbdffec1afcafdaf3f9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grok Voice Think Fast 2.0",
+      "PowerRank": 12,
+      "Description": "xAI's second-generation speech-to-speech realtime voice model, announced July 29, 2026; the grok-voice-latest alias resolves to it as of August 5, 2026. Reasons while speaking rather than pausing to think — ~60% fewer reasoning tokens than Think Fast 1.0 at ~0.70s time-to-first-audio. Transcription WER 1.5-2.0x better than dedicated STT (Deepgram Nova 3, ElevenLabs Scribe v2) on xAI's 24-language eval, widening to ~10x in noisy environments; 20+ languages with automatic language detection. OpenAI-Realtime-API compatible (WebSocket endpoint wss://api.x.ai/v1/realtime), so the MJ driver reuses the OpenAI SDK pointed at xAI's base URL. Supports custom function tools plus xAI's built-in web search, X search, collections search, and remote MCP tools. Priced per minute of audio ($0.08/min API list price). Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GrokRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Grok Voice"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "E7131979-6EC6-420E-AB53-B7D931181B11"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:41.851Z",
+            "checksum": "589fefbcfaf2edd0e8453043d35596d031d25a6754b3ff1e585b43da0091b57b"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GrokRealtime",
+            "APIName": "grok-voice-think-fast-2.0",
+            "MaxInputTokens": 128000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "85C4AD09-757C-4739-95AA-236B02B5E8D7"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:41.864Z",
+            "checksum": "1cc34aa3e8048db77fd6cde58e085898e6e7dc7aaf2a8d895cf88e2077e0ce79"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "StartedAt": "2026-07-29T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Minutes",
+            "InputPricePerUnit": 0.08,
+            "OutputPricePerUnit": 0,
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Minute",
+            "ProcessingType": "Realtime",
+            "Comments": "Grok Voice Think Fast 2.0 API list pricing on x.ai as of the July 29, 2026 announcement: $0.08 per minute of audio, expressed as a single blended session rate in InputPricePerUnit with OutputPricePerUnit set to 0 so per-minute consumers multiply elapsed minutes by one rate and never double-count. First cost row in the catalog on the Minutes price type / Per Minute unit. The Grok Voice Agent Builder product lists $0.05/min but is a separate SKU, not the raw realtime API. Cache pricing does not apply to per-minute audio billing (both cache columns null)."
+          },
+          "primaryKey": {
+            "ID": "3466CD84-31F6-40D0-A0A0-A35448BB65C4"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:41.886Z",
+            "checksum": "ba6ef72cddcb2f01682a476392939c8dc6c16fc53484f02b3f70b0db0bf8f8c1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9E9C9FBD-0092-4873-9D47-D45E3026DDA0"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T15:49:41.740Z",
+      "checksum": "f8264e632f1f8c79f132564f6ea3e5dbde9dd63789f005309bcae864b186282a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Whisper Large v3",
+      "Description": "OpenAI's Whisper Large v3 speech recognition model. Multilingual transcription across 90+ languages with strong accuracy on accented speech, background noise and domain vocabulary.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Speech to Text",
+      "PowerRank": 9,
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 8,
+      "ModelSelectionInsights": "Choose over Turbo when transcription accuracy matters more than latency - long-form content kept as a record, or audio with heavy accents, crosstalk or specialist vocabulary. Does NOT support speaker diarization on any vendor here; use AssemblyAI or Deepgram when speaker labels are required. Groq caps uploads at 25MB per request, so longer audio must be split before transcription.",
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active",
+            "DriverClass": "GroqAudioGenerator",
+            "APIName": "whisper-large-v3",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "FECDBACF-2EA8-428B-982F-AD0CAFFCBCEC"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "29DE17F3-F01F-4292-B840-4747D915D1F6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8778F6F5-7738-48CF-BA67-694DE686639C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Whisper Large v3 Turbo",
+      "Description": "A distilled, substantially faster variant of Whisper Large v3, trading a small amount of accuracy for a large reduction in transcription time and cost.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Speech to Text",
+      "PowerRank": 8,
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 9,
+      "ModelSelectionInsights": "The default choice for bulk or latency-sensitive transcription. Prefer Whisper Large v3 when the transcript is the durable artifact rather than an intermediate step. Same 25MB Groq upload cap and same absence of diarization as Large v3.",
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active",
+            "DriverClass": "GroqAudioGenerator",
+            "APIName": "whisper-large-v3-turbo",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "4086CA48-C3A0-4E8E-93BC-E8A34E032B85"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "9BBB4DEE-A12F-46C4-AFCC-B6D391C2F2F1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B0DFE543-E954-4639-AE14-E56EC763356E"
     }
   }
 ]

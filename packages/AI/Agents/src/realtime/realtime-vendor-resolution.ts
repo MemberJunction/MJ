@@ -21,6 +21,13 @@ import { AIEngine } from '@memberjunction/aiengine';
 export interface RealtimeVendorSelection {
     /** The chosen `MJ: AI Vendors` row id (empty string when the vendor row carries none). */
     VendorID: string;
+    /**
+     * The chosen `MJ: AI Model Vendors` ROW id — NOT the vendor id. This is the most-specific layer of
+     * the `ModelConfiguration` catalog cascade (`AIModelType` < `AIModel` < `AIModelVendor`), so it must
+     * ride along with the driver identifiers: a caller that resolves a vendor in order to mint a session
+     * also needs it to read that session's catalog defaults.
+     */
+    ModelVendorID: string;
     /** The vendor's `DriverClass` — the `ClassFactory` key AND the per-provider voice-settings match key. */
     DriverClass: string;
     /** The vendor API name passed to the provider as the model id. */
@@ -58,7 +65,7 @@ export function SelectRealtimeVendorForModel(
 
     for (const v of vendors) {
         if (resolveAPIKey(v.DriverClass!)) {
-            return { VendorID: v.VendorID ?? '', DriverClass: v.DriverClass!, APIName: v.APIName ?? '' };
+            return { VendorID: v.VendorID ?? '', ModelVendorID: v.ID, DriverClass: v.DriverClass!, APIName: v.APIName ?? '' };
         }
     }
     return null;

@@ -178,7 +178,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="InputPayload"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -186,7 +186,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="OutputPayload"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -220,6 +220,40 @@
             [ShowLabel]="true"
             FieldName="ClaimExpiresAt"
             Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ActionID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="StepType"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="PromptID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -258,10 +292,10 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Task Dependencies (Task ID) Section -->
+    <!-- Task Dependencies (Task) Section -->
     <mj-collapsible-panel
         SectionKey="mJTaskDependenciesTaskID"
-        SectionName="Task Dependencies (Task ID)"
+        SectionName="Task Dependencies (Task)"
         Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"

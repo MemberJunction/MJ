@@ -7,9 +7,12 @@
  * `@memberjunction/ai-core-plus`, which both this dispatcher and the in-run executor consume.
  */
 export * from './types';
-export * from './TaskGraphSpec';
-export * from './TaskGraphValidator';
 export * from './TaskGraphService';
 export * from './TaskClaimStore';
+export * from './DispatcherConditionEvaluator';
 export * from './TaskGraphDispatcher';
-export * from './TaskGraphDetection';
+export * from './TaskGraphSubmitterImpl';
+export * from './WorkflowSpecSync';
+export * from './operations/TaskGraphOperations';
+export * from './operations/WorkflowDraftOperation';
+export * from './operations/WorkflowOperations';
