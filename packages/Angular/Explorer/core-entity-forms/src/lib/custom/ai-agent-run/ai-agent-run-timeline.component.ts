@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { Subject, Observable, combineLatest } from 'rxjs';
 import { takeUntil, map, shareReplay, filter } from 'rxjs/operators';
-import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity, MJAIPromptRunEntity, MJTaskEntity } from '@memberjunction/core-entities';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -351,6 +351,44 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
   /**
    * TrackBy function for timeline items
    */
+  /**
+   * The graph a TaskGraph step submitted, read from the step's own output.
+   *
+   * `executeTasksStep` records `parentTaskID` there whether or not submission succeeded, because a
+   * rejected graph is the case where forensics matter most. A step with no id therefore means the
+   * graph never reached the dispatcher — a real state the caller renders differently, which is why
+   * this returns null rather than an empty string.
+   */
+  GetGraphParentTaskID(item: TimelineItem): string | null {
+    const raw = item?.data?.OutputData;
+    if (!raw) return null;
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const id = parsed?.parentTaskID;
+      return typeof id === 'string' && id.length > 0 ? id : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * A step inside the graph was selected.
+   *
+   * An Agent node carries the run it started, so selecting one offers the same navigation a
+   * Sub-Agent step already does — that link is the seam between the two views, and without it a
+   * dispatched sub-agent run is unreachable from the run that caused it.
+   */
+  OnGraphNodeSelected(event: { TaskID: string; Task: MJTaskEntity | null }): void {
+    const agentRunID = event.Task?.AgentRunID;
+    if (agentRunID) {
+      this.navigateToEntity.emit({ entityName: 'MJ: AI Agent Runs', recordId: agentRunID });
+      return;
+    }
+    if (event.Task?.ActionID) {
+      this.navigateToEntity.emit({ entityName: 'MJ: Tasks', recordId: event.TaskID });
+    }
+  }
+
   trackByItemId(index: number, item: TimelineItem): string {
     return item.id;
   }

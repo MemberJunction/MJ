@@ -5730,6 +5730,9 @@ importers:
       '@memberjunction/ng-base-types':
         specifier: 6.1.0-edge.1
         version: link:../base-types
+      '@memberjunction/ng-shared-generic':
+        specifier: 6.1.0-edge.1
+        version: link:../shared
       '@memberjunction/ng-ui-components':
         specifier: 6.1.0-edge.1
         version: link:../ui-components
@@ -5809,6 +5812,9 @@ importers:
       '@memberjunction/ng-shared-generic':
         specifier: 6.1.0-edge.1
         version: link:../shared
+      '@memberjunction/ng-task-graph-editor':
+        specifier: 6.1.0-edge.1
+        version: link:../task-graph-editor
       '@memberjunction/ng-ui-components':
         specifier: 6.1.0-edge.1
         version: link:../ui-components
@@ -7304,6 +7310,9 @@ importers:
       '@memberjunction/ng-code-editor':
         specifier: 6.1.0-edge.1
         version: link:../code-editor
+      '@memberjunction/ng-shared-generic':
+        specifier: 6.1.0-edge.1
+        version: link:../shared
       '@memberjunction/ng-ui-components':
         specifier: 6.1.0-edge.1
         version: link:../ui-components
@@ -8503,6 +8512,9 @@ importers:
       '@memberjunction/core':
         specifier: 6.1.0-edge.1
         version: link:../../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0-edge.1
+        version: link:../../../MJCoreEntities
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../../MJGlobal

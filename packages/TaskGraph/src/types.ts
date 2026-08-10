@@ -68,6 +68,53 @@ export type TaskActionRunner = {
     RunActionForTask(params: TaskActionRunParams): Promise<TaskActionRunResult>;
 };
 
+/** Everything running one prompt for one task node needs. */
+export type TaskPromptRunParams = {
+    TaskID: string;
+    PromptID: string;
+    /** Structured input from `Task.InputPayload`, after the node's input mapping. */
+    InputPayload: unknown;
+    /** Outputs of this node's satisfied prerequisites, in the same shape agent nodes receive. */
+    DependencyOutputs: Map<string, unknown>;
+    /** Template parameters declared on the node's configuration. */
+    TemplateParameters?: Record<string, string>;
+    Provider: IMetadataProvider;
+    ContextUser: UserInfo;
+};
+
+/** The outcome of one prompt node. */
+export type TaskPromptRunResult = {
+    Success: boolean;
+    /** The parsed JSON response, deep-merged into the payload by the dispatcher. */
+    Output?: unknown;
+    ErrorMessage?: string;
+    /** The `MJ: AI Prompt Runs` row, for provenance. */
+    PromptRunID?: string;
+    /**
+     * Set when the prompt asked to end the workflow and say something to a person.
+     *
+     * A prompt is the one node kind that can decide the workflow is *done* — it is the only one
+     * doing open-ended reasoning. The dispatcher honours it by skipping the remaining tasks and
+     * settling the parent Complete with this message, rather than treating an early finish as an
+     * abandoned graph.
+     */
+    ChatMessage?: string;
+};
+
+/**
+ * Runs one prompt for one task node.
+ *
+ * The fourth execution shape, and abstracted for the same reason as the others: this package must
+ * stay unit-testable without standing up the AI engine, and must not import it — the prompt runner
+ * lives in MJServer where the engine already does.
+ *
+ * **A host with no prompt runner is limited, not broken.** Prompt nodes stay Pending and visible,
+ * exactly like action nodes without an action runner.
+ */
+export type TaskPromptRunner = {
+    RunPromptForTask(params: TaskPromptRunParams): Promise<TaskPromptRunResult>;
+};
+
 /** What happened to a task or a graph, as a closed set a consumer can branch on. */
 export type TaskGraphFrameKind =
     /** A task was claimed by an instance and is about to run. */
@@ -78,6 +125,15 @@ export type TaskGraphFrameKind =
     | 'TaskFailed'
     /** A task was blocked because a prerequisite failed or became unreachable. */
     | 'TaskBlocked'
+    /**
+     * A task was NOT TAKEN because another branch of an exclusive fan-out won.
+     *
+     * Distinct from `TaskBlocked` on purpose: blocked means something went wrong upstream and the
+     * viewer should look for a cause; skipped means the workflow chose a different route and there
+     * is nothing to investigate. Rendering them the same would send people hunting for bugs that do
+     * not exist.
+     */
+    | 'TaskSkipped'
     /** A human task became actionable and is waiting on its assignee. */
     | 'TaskAwaitingHuman'
     /** Every node has reached a terminal state; `Status` is the graph's rolled-up outcome. */
@@ -141,6 +197,26 @@ export type TaskGraphObserver = {
 export type TaskAgentRunParams = {
     /** The task row being executed. */
     TaskID: string;
+    /**
+     * The agent run that submitted this graph, when there was one.
+     *
+     * Becomes the spawned run's `ParentRunID`, which is what makes a workflow's total cost a single
+     * indexed sum over `RootParentRunID` instead of a walk. Null for a graph nobody's run submitted
+     * — a schedule, MCP, or a person — and that is a real case, not a missing value.
+     *
+     * Note this is a run→run link: the task graph sits BETWEEN the two conceptually but cannot be
+     * the parent, because the column points at a run. The graph is recovered through
+     * `Task.AgentRunID` and `Task.ParentID`.
+     */
+    SubmittingAgentRunID?: string | null;
+    /**
+     * How many continuation hops led to this run, from the graph's own metadata.
+     *
+     * Carried so the chain is BOUNDED. A flow that dispatches a graph containing itself recurses
+     * forever otherwise: each spawned run starts at depth zero, so `MAX_REINVOKE_DEPTH` compares
+     * against a permanent zero and never fires. The cap exists; this is what feeds it.
+     */
+    ContinuationDepth?: number;
     /** Agent assigned to the task. */
     AgentID: string;
     /** Parsed `Task.InputPayload`, if any. */

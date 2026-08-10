@@ -21256,5 +21256,109 @@
       "lastModified": "2026-08-08T15:49:41.740Z",
       "checksum": "f8264e632f1f8c79f132564f6ea3e5dbde9dd63789f005309bcae864b186282a"
     }
+  },
+  {
+    "fields": {
+      "Name": "Whisper Large v3",
+      "Description": "OpenAI's Whisper Large v3 speech recognition model. Multilingual transcription across 90+ languages with strong accuracy on accented speech, background noise and domain vocabulary.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Speech to Text",
+      "PowerRank": 9,
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 8,
+      "ModelSelectionInsights": "Choose over Turbo when transcription accuracy matters more than latency - long-form content kept as a record, or audio with heavy accents, crosstalk or specialist vocabulary. Does NOT support speaker diarization on any vendor here; use AssemblyAI or Deepgram when speaker labels are required. Groq caps uploads at 25MB per request, so longer audio must be split before transcription.",
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active",
+            "DriverClass": "GroqAudioGenerator",
+            "APIName": "whisper-large-v3",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "FECDBACF-2EA8-428B-982F-AD0CAFFCBCEC"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "29DE17F3-F01F-4292-B840-4747D915D1F6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8778F6F5-7738-48CF-BA67-694DE686639C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Whisper Large v3 Turbo",
+      "Description": "A distilled, substantially faster variant of Whisper Large v3, trading a small amount of accuracy for a large reduction in transcription time and cost.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Speech to Text",
+      "PowerRank": 8,
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 9,
+      "ModelSelectionInsights": "The default choice for bulk or latency-sensitive transcription. Prefer Whisper Large v3 when the transcript is the durable artifact rather than an intermediate step. Same 25MB Groq upload cap and same absence of diarization as Large v3.",
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active",
+            "DriverClass": "GroqAudioGenerator",
+            "APIName": "whisper-large-v3-turbo",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "4086CA48-C3A0-4E8E-93BC-E8A34E032B85"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "9BBB4DEE-A12F-46C4-AFCC-B6D391C2F2F1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B0DFE543-E954-4639-AE14-E56EC763356E"
+    }
   }
 ]

@@ -1,6 +1,6 @@
 import {
   Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy,
-  ChangeDetectorRef, ViewEncapsulation, ChangeDetectionStrategy, HostListener
+  ChangeDetectorRef, ElementRef, ViewEncapsulation, ChangeDetectionStrategy, HostListener
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { FFlowComponent, FCanvasComponent, FZoomDirective, FCreateConnectionEvent,
@@ -66,7 +66,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   public get EmptyStateTitle(): string {
     return this.ReadOnly
       ? 'No steps defined for this flow'
-      : 'Drag steps from the palette to start building your flow';
+      : 'Click a step in the palette — or drag one onto the canvas — to start building your flow';
   }
 
   // ── Outputs ─────────────────────────────────────────────────
@@ -92,6 +92,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   @ViewChild(FFlowComponent) protected fFlow: FFlowComponent | undefined;
   @ViewChild(FCanvasComponent) protected fCanvas: FCanvasComponent | undefined;
   @ViewChild('fZoomRef') protected fZoom: FZoomDirective | undefined;
+  @ViewChild('canvasArea') protected canvasArea: ElementRef<HTMLElement> | undefined;
 
   // ── Internal State ──────────────────────────────────────────
   protected zoomLevel = 100;
@@ -117,6 +118,12 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private initialized = false;
   private lastConnectionClickTime = 0;
+
+  /** How many click-placed nodes are cascaded before the offset wraps back to the viewport centre. */
+  private static readonly CLICK_CASCADE_STEPS = 6;
+  /** Pixels (canvas units) each cascaded click-placed node is offset by. */
+  private static readonly CLICK_CASCADE_OFFSET = 40;
+  private clickPlacementIndex = 0;
 
   constructor(
     private cdr: ChangeDetectorRef,
@@ -417,11 +424,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   /** External item dropped from palette */
   protected onCreateNode(event: FCreateNodeEvent): void {
-    if (this.ReadOnly) return;
-    this.pushUndoState();
-
-    const nodeType = event.data as string;
-    const config = this.NodeTypes.find(nt => nt.Type === nodeType);
+    const config = this.NodeTypes.find(nt => nt.Type === (event.data as string));
     if (!config) return;
 
     // event.rect is already normalized to canvas coordinates by Foblex's
@@ -429,13 +432,47 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     // Do NOT pass it through getPositionInFlow() again — that double-normalizes
     // and places the node far from the actual drop point.
     // Use the center of the preview rect (≈ cursor position at drop time).
-    const dropPosition: FlowPosition = {
+    this.addNodeFromPalette(config, {
       X: event.rect.x + event.rect.width / 2,
       Y: event.rect.y + event.rect.height / 2
-    };
+    });
+  }
 
+  /**
+   * A palette entry was clicked (or activated from the keyboard) rather than dragged.
+   *
+   * Deliberately routed into the SAME `addNodeFromPalette` the drop path uses. A separate
+   * click-only creation path would be a second way for a node to come into existence, and the two
+   * would drift — which is exactly the failure this fixes, one level up.
+   */
+  protected onPaletteNodeTypeActivated(config: FlowNodeTypeConfig): void {
+    this.addNodeFromPalette(config, this.nextClickDropPosition());
+  }
+
+  /** The one place a palette-originated node is created and announced. */
+  private addNodeFromPalette(config: FlowNodeTypeConfig, dropPosition: FlowPosition): void {
+    if (this.ReadOnly) return;
+    this.pushUndoState();
     const newNode = this.createDefaultNode(config, dropPosition);
     this.NodeAdded.emit({ Node: newNode, DropPosition: dropPosition });
+  }
+
+  /**
+   * Where a clicked step lands: the middle of what the author is currently looking at, cascaded so
+   * consecutive clicks don't bury each other under one box.
+   *
+   * A click carries no coordinates, so *some* position has to be invented. The viewport centre is
+   * the only choice that is guaranteed on screen at any zoom or pan — placing at the canvas origin
+   * would drop steps off-screen the moment the author has scrolled anywhere.
+   */
+  private nextClickDropPosition(): FlowPosition {
+    const rect = this.canvasArea?.nativeElement.getBoundingClientRect();
+    const scale = this.canvasScale || 1;
+    const centerX = ((rect?.width ?? 800) / 2 - this.canvasPosition.x) / scale;
+    const centerY = ((rect?.height ?? 600) / 2 - this.canvasPosition.y) / scale;
+
+    const step = (this.clickPlacementIndex++ % FlowEditorComponent.CLICK_CASCADE_STEPS) * FlowEditorComponent.CLICK_CASCADE_OFFSET;
+    return { X: Math.round(centerX + step), Y: Math.round(centerY + step) };
   }
 
   /** Selection changed in Foblex */
@@ -548,21 +585,31 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   }
 
   protected onContextMenuAction(action: FlowContextMenuAction): void {
+    // Capture the target BEFORE closing: hideContextMenu() nulls contextMenuNode and
+    // contextMenuConnection, so reading them afterwards found nothing and every branch below fell
+    // through — the menu closed and neither Remove nor Edit did anything, for nodes or connections.
+    const targetType = this.contextMenuTargetType;
+    const node = this.contextMenuNode;
+    const connection = this.contextMenuConnection;
+
     this.hideContextMenu();
 
     if (action === 'edit') {
-      if (this.contextMenuTargetType === 'node' && this.contextMenuNode) {
-        this.NodeEditRequested.emit(this.contextMenuNode);
-      } else if (this.contextMenuTargetType === 'connection' && this.contextMenuConnection) {
-        this.ConnectionEditRequested.emit(this.contextMenuConnection);
+      if (targetType === 'node' && node) {
+        this.NodeEditRequested.emit(node);
+      } else if (targetType === 'connection' && connection) {
+        this.ConnectionEditRequested.emit(connection);
       }
     } else if (action === 'remove') {
-      this.pushUndoState();
-      if (this.contextMenuTargetType === 'node' && this.contextMenuNode) {
-        this.removeNodeById(this.contextMenuNode.ID);
-      } else if (this.contextMenuTargetType === 'connection' && this.contextMenuConnection) {
-        this.removeConnectionById(this.contextMenuConnection.ID);
+      if (targetType === 'node' && node) {
+        this.pushUndoState();
+        this.removeNodeById(node.ID);
+      } else if (targetType === 'connection' && connection) {
+        this.pushUndoState();
+        this.removeConnectionById(connection.ID);
       }
+      // pushUndoState moved inside the branches: pushing before knowing there IS a target left an
+      // undo entry for an action that never happened, so the next Ctrl+Z did nothing visible.
     }
   }
 

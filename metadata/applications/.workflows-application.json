@@ -13,6 +13,12 @@
         "ResourceType": "Custom",
         "DriverClass": "WorkflowsResource",
         "isDefault": true
+      },
+      {
+        "Label": "Runs",
+        "Icon": "fa-solid fa-timeline",
+        "ResourceType": "Custom",
+        "DriverClass": "WorkflowRunsResource"
       }
     ]
   },
@@ -20,6 +26,6 @@
     "MJ: Application Entities": []
   },
   "primaryKey": {
-    "ID": "A715122C-F912-4BF5-B4BB-9B94DFDD2A9E"
+    "ID": "E29BDE35-88CA-4AC0-8810-1DE5F4DFF2FB"
   }
 }

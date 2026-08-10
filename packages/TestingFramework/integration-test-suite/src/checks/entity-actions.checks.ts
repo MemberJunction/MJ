@@ -19,7 +19,7 @@
  * @module @memberjunction/integration-test-suite
  */
 import { RunView, type BaseEntity } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     MJActionEntity,
     MJActionFilterEntity,
@@ -460,7 +460,7 @@ export const EntityActionChecks: NamedCheck[] = [
                 AssertEqual(request.EntityActionID, binding.ID, 'the request must name the binding that fired');
                 AssertEqual(request.ActionID, action.ID, 'the request must name the action to run');
                 AssertEqual(request.InvocationType, 'AfterUpdate', 'the request must name the event that fired it');
-                Assert(request.RecordID.toLowerCase().includes(list.ID.toLowerCase()), 'the request must carry the record that changed');
+                Assert(NormalizeUUID(request.RecordID).includes(NormalizeUUID(list.ID)), 'the request must carry the record that changed');
                 Assert(!!request.EntityName, 'the request must name the entity, for a readable task');
                 Assert(typeof request.RedactedParams === 'object', 'params must arrive as a plain JSON-safe object');
 

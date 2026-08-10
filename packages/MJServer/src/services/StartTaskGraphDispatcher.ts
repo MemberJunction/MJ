@@ -18,6 +18,7 @@
  */
 import { UserInfo } from '@memberjunction/core';
 import { LoadTaskGraphOperations, TaskGraphDispatcher } from '@memberjunction/task-graph';
+import { TaskGraphPromptRunner } from './TaskGraphPromptRunner.js';
 import sql from 'mssql';
 import { DurableEntityActionRegistry } from '@memberjunction/actions-base';
 import { CreateTaskGraphProviderFactory } from './TaskGraphProviderFactory.js';
@@ -61,6 +62,10 @@ export async function StartTaskGraphDispatcher(
         // Action nodes — the third execution shape, beside agents and people. Durable After* entity
         // actions land as these.
         new TaskGraphActionRunner(),
+        // Prompt nodes. Without this a Flow agent with a Prompt step submits and then
+        // stalls on a task nothing can execute — which is why the shipped User Onboarding
+        // Flow Agent could not run at all before this seam existed.
+        new TaskGraphPromptRunner(),
     );
     await dispatcher.Start();
 

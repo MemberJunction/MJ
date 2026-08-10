@@ -51,7 +51,8 @@ The task graph is submitted as `nextStep.type = 'Tasks'` in your response. Here 
                     "tempId": "task1",
                     "name": "Research Data",
                     "description": "Query associations database for revenue and location data",
-                    "agentName": "Research Agent",
+                    "kind": "Agent",
+                    "configuration": { "agentName": "Research Agent" },
                     "dependsOn": [],
                     "inputPayload": {
                         "query": "associations with 5-30M revenue in USA"
@@ -61,7 +62,8 @@ The task graph is submitted as `nextStep.type = 'Tasks'` in your response. Here 
                     "tempId": "task2",
                     "name": "Analyze Market Segments",
                     "description": "Analyze the research data by subsection",
-                    "agentName": "Analysis Agent",
+                    "kind": "Agent",
+                    "configuration": { "agentName": "Analysis Agent" },
                     "dependsOn": ["task1"],
                     "inputPayload": {
                         "data": "@task1.output",
@@ -72,7 +74,8 @@ The task graph is submitted as `nextStep.type = 'Tasks'` in your response. Here 
                     "tempId": "task3",
                     "name": "Create GTM Report",
                     "description": "Generate go-to-market strategy based on analysis",
-                    "agentName": "Marketing Agent",
+                    "kind": "Agent",
+                    "configuration": { "agentName": "Marketing Agent" },
                     "dependsOn": ["task2"],
                     "inputPayload": {
                         "analysis": "@task2.output",

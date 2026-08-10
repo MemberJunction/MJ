@@ -238,8 +238,8 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
             const spec: TaskGraphSpec = {
                 workflowName,
                 tasks: [
-                    { tempId: 'a', name: 'A', description: 'A', agentName: await resolveAgentName(ctx), dependsOn: ['b'] },
-                    { tempId: 'b', name: 'B', description: 'B', agentName: await resolveAgentName(ctx), dependsOn: ['a'] },
+                    { tempId: 'a', name: 'A', description: 'A', kind: 'Agent' as const, configuration: { agentName: await resolveAgentName(ctx) }, dependsOn: ['b'] },
+                    { tempId: 'b', name: 'B', description: 'B', kind: 'Agent' as const, configuration: { agentName: await resolveAgentName(ctx) }, dependsOn: ['a'] },
                 ],
             };
             const result = await new TaskGraphService().Submit(spec, await buildSubmitContext(ctx));
@@ -261,8 +261,8 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
             const spec: TaskGraphSpec = {
                 workflowName,
                 tasks: [
-                    { tempId: 'a', name: 'A', description: 'A', agentName: await resolveAgentName(ctx), dependsOn: [] },
-                    { tempId: 'b', name: 'B', description: 'B', agentName: 'ThisAgentDoesNotExist_MJCheck', dependsOn: [] },
+                    { tempId: 'a', name: 'A', description: 'A', kind: 'Agent' as const, configuration: { agentName: await resolveAgentName(ctx) }, dependsOn: [] },
+                    { tempId: 'b', name: 'B', description: 'B', kind: 'Agent' as const, configuration: { agentName: 'ThisAgentDoesNotExist_MJCheck' }, dependsOn: [] },
                 ],
             };
             const result = await new TaskGraphService().Submit(spec, await buildSubmitContext(ctx));
@@ -286,8 +286,8 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
                 workflowName: 'mj-integration-test-valid-graph (safe to delete)',
                 reasoning: 'integration check: happy path',
                 tasks: [
-                    { tempId: 'a', name: 'First', description: 'first', agentName, dependsOn: [], inputPayload: { marker: 'TG6' } },
-                    { tempId: 'b', name: 'Second', description: 'second', agentName, dependsOn: ['a'] },
+                    { tempId: 'a', name: 'First', description: 'first', kind: 'Agent' as const, configuration: { agentName }, dependsOn: [], inputPayload: { marker: 'TG6' } },
+                    { tempId: 'b', name: 'Second', description: 'second', kind: 'Agent' as const, configuration: { agentName }, dependsOn: ['a'] },
                 ],
             };
             const result = await new TaskGraphService().Submit(spec, await buildSubmitContext(ctx));
@@ -429,12 +429,12 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
             const spec: TaskGraphSpec = {
                 workflowName: 'mj-integration-test-conditional-edge (safe to delete)',
                 tasks: [
-                    { tempId: 'a', name: 'Check', description: 'check', agentName, dependsOn: [] },
+                    { tempId: 'a', name: 'Check', description: 'check', kind: 'Agent' as const, configuration: { agentName }, dependsOn: [] },
                     {
                         tempId: 'b',
                         name: 'Escalate',
                         description: 'escalate',
-                        agentName,
+                        kind: 'Agent' as const, configuration: { agentName },
                         dependsOn: [{ tempId: 'a', condition: 'output.severity > 3' }],
                     },
                 ],
@@ -624,7 +624,7 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
                 status: 'Draft',
                 graph: {
                     workflowName: 'mj-integration-test-workflow (safe to delete)',
-                    tasks: [{ tempId: 'a', name: 'Handle change', description: 'handle it', agentName, dependsOn: [] }],
+                    tasks: [{ tempId: 'a', name: 'Handle change', description: 'handle it', kind: 'Agent' as const, configuration: { agentName }, dependsOn: [] }],
                 },
                 triggers: [{ type: 'EntityEvent', entityName: watched, invocationType: 'Update' }],
             };
@@ -744,7 +744,7 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
                 status: 'Draft',
                 graph: {
                     workflowName: 'mj-integration-test-scoped-workflow (safe to delete)',
-                    tasks: [{ tempId: 'a', name: 'Handle change', description: 'handle it', agentName, dependsOn: [] }],
+                    tasks: [{ tempId: 'a', name: 'Handle change', description: 'handle it', kind: 'Agent' as const, configuration: { agentName }, dependsOn: [] }],
                 },
                 triggers: [{
                     type: 'EntityEvent',
@@ -810,7 +810,7 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
                 status: 'Draft',
                 graph: {
                     workflowName: `mj-integration-test-shared-entity-${label} (safe to delete)`,
-                    tasks: [{ tempId: 'a', name: 'Handle change', description: 'handle it', agentName, dependsOn: [] }],
+                    tasks: [{ tempId: 'a', name: 'Handle change', description: 'handle it', kind: 'Agent' as const, configuration: { agentName }, dependsOn: [] }],
                 },
                 triggers: [{ type: 'EntityEvent', entityName: watched, invocationType: 'Update' }],
             });

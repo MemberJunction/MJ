@@ -33,6 +33,27 @@
             @if (item.children && item.children.length > 0) {
               <ng-container *ngTemplateOutlet="recursiveSteps; context: { $implicit: item.children }"></ng-container>
             }
+            <!-- A TaskGraph step stands in for a whole graph of Task rows. Expanding it reveals the
+                 graph itself rather than a wall of JSON: the edges are where the interesting answers
+                 live (which branch was taken, and why), and a vertical list cannot show an edge. -->
+            @if (item.type === 'step' && item.data?.StepType === 'TaskGraph') {
+              <div class="timeline-task-graph">
+                @if (GetGraphParentTaskID(item); as parentTaskID) {
+                  <mj-task-graph-run-view
+                    [ParentTaskID]="parentTaskID"
+                    [WorkflowName]="item.data?.StepName || 'Workflow'"
+                    [LiveUpdates]="true"
+                    Height="300px"
+                    (NodeSelected)="OnGraphNodeSelected($event)">
+                  </mj-task-graph-run-view>
+                } @else {
+                  <div class="no-children">
+                    <i class="fas fa-info-circle"></i>
+                    This workflow was recorded but never reached the dispatcher.
+                  </div>
+                }
+              </div>
+            }
             <!-- For actual sub-run items (from the initial load) - legacy support -->
             @if (item.type === 'subrun' && item.data?.ID) {
               <mj-ai-agent-run-timeline

@@ -26,12 +26,24 @@ import {
     type TaskGraphEdge,
     type TaskGraphNode,
     type TaskGraphNodeStatus,
+
+    ResolveExclusiveGroups,
+    type EdgeConditionOutcome,
+
+    ComputeSkipCascade,
+    ApplyOutputMapping,
+    BuildMappedInput,
+    ResolveMappedInput,
+    type ForEachOperation,
+    type WhileOperation,
 } from '@memberjunction/ai-core-plus';
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { IShutdownable, ShutdownRegistry } from '@memberjunction/global';
-import { MJTaskEntity, MJTaskDependencyEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
+import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
 import { DispatcherConditionEvaluator } from './DispatcherConditionEvaluator';
+import { RunForEachLoop, RunWhileLoop, type LoopBodyInvoker } from './TaskLoopExecutor';
 import { NotificationEngine } from '@memberjunction/notifications';
 
 /** Metadata-seeded notification type for human tasks (metadata/notifications/.task-assignment-type.json). */
@@ -51,12 +63,60 @@ import {
     ProviderFactory,
     TaskActionRunner,
     TaskAgentRunner,
+    TaskPromptRunner,
     TaskGraphDispatcherConfig,
     type TaskContinuationDeliverer,
     type TaskContinuationParams,
     type TaskGraphFrame,
     type TaskGraphObserver,
 } from './types';
+
+/**
+ * What running one task body produced.
+ *
+ * `ChatMessage` is the odd one out and belongs here rather than in a runner-specific type: a prompt
+ * node can decide the workflow is finished and say so, and the dispatcher has to act on that after
+ * the body returns — skipping what remains rather than treating an early finish as abandoned work.
+ */
+type TaskBodyOutcome = {
+    Success: boolean;
+    Output?: unknown;
+    ErrorMessage?: string;
+    AgentRunID?: string | null;
+    ChatMessage?: string;
+    /**
+     * The prompt run a Prompt step produced.
+     *
+     * An Agent step's cost is reachable through `AgentRunID`; a Prompt step has no agent run, so
+     * without this its spend has no path back from the Task and a run-tree cost rollup silently
+     * omits it. Recorded into the step's `Configuration.runtime` when the outcome is written.
+     */
+    PromptRunID?: string;
+};
+
+/** What a task's position in its graph tells the runner: how deep, and who submitted it. */
+type GraphContext = {
+    Depth: number;
+    SubmittingAgentRunID: string | null;
+};
+
+/** Deep-merges a prompt's JSON response into the payload, preserving what earlier steps established. */
+function deepMergePayload(
+    base: Record<string, unknown>,
+    incoming: Record<string, unknown>,
+): Record<string, unknown> {
+    const out: Record<string, unknown> = { ...base };
+    for (const [key, value] of Object.entries(incoming)) {
+        const existing = out[key];
+        const bothPlainObjects =
+            existing && typeof existing === 'object' && !Array.isArray(existing) &&
+            value && typeof value === 'object' && !Array.isArray(value);
+        out[key] = bothPlainObjects
+            ? deepMergePayload(existing as Record<string, unknown>, value as Record<string, unknown>)
+            : value;
+    }
+    return out;
+}
 
 /** A graph's children + edges, in both algorithm shape and mutable-entity shape. */
 type GraphState = {
@@ -68,7 +128,35 @@ type GraphState = {
      * not taken, so they can never legitimately run.
      */
     unreachableTaskIDs: Set<string>;
+    /**
+     * Targets of a LOSING exclusive edge. These become `Skipped`, not `Blocked` — a branch that was
+     * not taken is a normal outcome, and blocking it would poison the parent rollup.
+     */
+    skipSeedTaskIDs: Set<string>;
+    /**
+     * Targets of an UNDECIDED exclusive group (some condition could not be evaluated). Neither run
+     * nor skipped: held, so a typo stalls visibly instead of firing every branch of a fork.
+     */
+    holdTaskIDs: Set<string>;
+    /**
+     * Failed tasks whose failure was HANDLED — they have a satisfied outgoing edge, so the workflow
+     * drew a route out of the failure and that route should be followed.
+     *
+     * Only populated under `failureSemantics: 'edges'`. Empty under `'block'`, where a failure is
+     * terminal for everything downstream regardless of what was drawn.
+     */
+    handledFailureIDs: Set<string>;
 };
+
+/**
+ * Statuses at which an origin's outgoing conditions may be decided.
+ *
+ * `Skipped` is included: a branch that was not taken IS settled, and a condition on an edge leaving
+ * it should resolve rather than hang the graph forever.
+ */
+const TERMINAL_FOR_CONDITIONS: ReadonlySet<MJTaskEntity['Status']> = new Set<MJTaskEntity['Status']>([
+    'Complete', 'Failed', 'Cancelled', 'Skipped',
+]);
 
 export class TaskGraphDispatcher implements IShutdownable {
     private readonly config: TaskGraphDispatcherConfig;
@@ -107,6 +195,11 @@ export class TaskGraphDispatcher implements IShutdownable {
          * rather than being failed, because "nobody here can run this" is not "this ran and broke".
          */
         private readonly actionRunner?: TaskActionRunner,
+        /**
+         * Optional. Absent means this host cannot run prompt nodes; they stay Pending and visible
+         * rather than being failed, for the same reason action nodes do.
+         */
+        private readonly promptRunner?: TaskPromptRunner,
     ) {
         this.config = { ...DEFAULT_DISPATCHER_CONFIG, ...config };
         this.claims = new TaskClaimStore(this.config.InstanceID, this.config.ClaimTTLSeconds);
@@ -316,28 +409,14 @@ export class TaskGraphDispatcher implements IShutdownable {
                 catch (e) { LogError(`[TaskGraphDispatcher] Task ${taskID} has malformed InputPayload: ${e}`); }
             }
 
-            // Which executor runs this node is decided by its assignment, which the Task table makes
-            // exclusive — so this is a branch on data, not a guess. Both branches are normalized to
-            // one shape here so the recording below stays a single path: an action node simply has
-            // no agent run to point at, since its forensics live in ActionExecutionLog.
-            const result: { Success: boolean; Output?: unknown; ErrorMessage?: string; AgentRunID?: string | null } =
-                task.ActionID
-                    ? { ...await this.actionRunner!.RunActionForTask({
-                        TaskID: taskID,
-                        ActionID: task.ActionID,
-                        InputPayload: inputPayload,
-                        DependencyOutputs: dependencyOutputs,
-                        Provider: provider,
-                        ContextUser: this.contextUser,
-                    }), AgentRunID: null }
-                    : await this.agentRunner.RunAgentForTask({
-                        TaskID: taskID,
-                        AgentID: task.AgentID!,
-                        InputPayload: inputPayload,
-                        DependencyOutputs: dependencyOutputs,
-                        Provider: provider,
-                        ContextUser: this.contextUser,
-                    });
+            const result = await this.runTaskBody(task, provider, inputPayload, dependencyOutputs);
+
+            // A prompt can end the workflow early and say why. Honour it before recording the
+            // outcome, so the remaining tasks are already Skipped by the time the rollup runs and
+            // the graph settles Complete rather than looking abandoned with work left Pending.
+            if (result.ChatMessage) {
+                await this.endGraphEarly(provider, task, result.ChatMessage);
+            }
 
             const recorded = await this.claims.CompleteClaimed(
                 provider,
@@ -347,6 +426,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     OutputPayload: result.Output != null ? JSON.stringify(result.Output) : null,
                     ErrorMessage: result.ErrorMessage ?? null,
                     AgentRunID: result.AgentRunID ?? null,
+                    Configuration: this.configurationWithRuntime(task, result.PromptRunID),
                 },
                 this.contextUser,
             );
@@ -394,7 +474,50 @@ export class TaskGraphDispatcher implements IShutdownable {
             const graph = await this.loadGraphState(provider, parentID);
             if (graph.nodes.length === 0) continue;
 
-            const toBlock = new Set([...ComputeTasksToBlock(graph.nodes, graph.edges), ...graph.unreachableTaskIDs]);
+            // SKIPS FIRST — before blocking, before eligibility. A task whose gating predecessors
+            // are all Skipped is simultaneously "eligible" (Skipped satisfies a prerequisite) and
+            // "to be skipped"; deciding eligibility first would dispatch the branch nobody took.
+            //
+            // `unreachableTaskIDs` seeds this too, and that is a correction (R6). A target whose only
+            // route in was an ordinary conditional edge that evaluated DEFINITELY FALSE is a branch
+            // that was not taken — semantically identical to an XOR loser — yet it used to settle
+            // `Blocked`. That made `Blocked` mean two unrelated things: "the workflow chose another
+            // route" and "something upstream broke". A reader cannot tell those apart, so every
+            // conditional workflow looked half-failed and people went hunting for bugs that did not
+            // exist. `Blocked` is now reserved for FAILURE-driven unsatisfiability.
+            const skipSeeds = new Set([...graph.skipSeedTaskIDs, ...graph.unreachableTaskIDs]);
+            const toSkip = new Set([
+                ...skipSeeds,
+                ...ComputeSkipCascade(graph.nodes, graph.edges, [...skipSeeds]),
+            ]);
+            for (const taskID of toSkip) {
+                const entity = graph.entityById.get(taskID);
+                if (!entity || entity.Status !== 'Pending') continue;
+                entity.Status = 'Skipped';
+                if (await entity.Save()) {
+                    LogStatus(`[TaskGraphDispatcher] Skipped '${entity.Name}' (${taskID}) — another branch was taken.`);
+                    // Announced separately from TaskBlocked because it means something different to
+                    // a viewer: nothing went wrong, this route simply was not the one chosen.
+                    this.emit({
+                        Kind: 'TaskSkipped',
+                        ParentTaskID: parentID,
+                        OwnerUserID: await this.resolveOwner(provider, parentID),
+                        TaskID: taskID,
+                        TaskName: entity.Name,
+                        Status: 'Skipped',
+                    });
+                    // Keep the in-memory graph consistent so the blocking pass below and the rollup
+                    // both see the skip rather than a stale Pending.
+                    const node = graph.nodes.find((n) => n.id === taskID);
+                    if (node) node.status = 'Skipped';
+                }
+            }
+
+            // Only failure-driven unsatisfiability reaches here now; not-taken branches were skipped
+            // above. A task already Skipped is left alone rather than overwritten — the two passes
+            // must not fight over the same row.
+            const toBlock = [...ComputeTasksToBlock(graph.nodes, graph.edges, graph.handledFailureIDs)]
+                .filter((id) => !toSkip.has(id));
             for (const taskID of toBlock) {
                 const entity = graph.entityById.get(taskID);
                 if (!entity) continue;
@@ -424,7 +547,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // back empty transiently — it would mark live work finished and fire its continuation.
             // The outer guard covered the first load only.
             if (fresh.nodes.length === 0) continue;
-            const rollup = ComputeParentRollup(fresh.nodes);
+            const rollup = ComputeParentRollup(fresh.nodes, fresh.handledFailureIDs);
             const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
             if (!(await parent.Load(parentID))) continue;
             if (parent.Status !== rollup.status || parent.PercentComplete !== rollup.percentComplete) {
@@ -446,9 +569,207 @@ export class TaskGraphDispatcher implements IShutdownable {
                     CompletedCount: fresh.nodes.filter((n) => n.status === 'Complete').length,
                     TotalCount: fresh.nodes.length,
                 });
+                await this.rollUpCostToSubmittingRun(provider, parent);
                 await this.deliverContinuation(provider, parent, fresh);
             }
         }
+    }
+
+    /**
+     * Credits a finished graph's spending back to the agent run that submitted it.
+     *
+     * **Why this cannot happen during the run.** `BaseAgent` totals a run by walking its steps in
+     * memory at finalization — but a submitting run *ends at submission*. Submit-and-detach is the
+     * point: the run returns as soon as the graph is durable, and the graph executes afterwards,
+     * possibly minutes later on a different instance. At the moment the run computes its totals the
+     * spending has not happened yet, so there is nothing to count. The only place the number can be
+     * known is here, when the graph settles.
+     *
+     * **Why the `…Rollup` columns and not the plain ones.** `AIAgentRun` has carried six `…Rollup`
+     * columns since v3 that nothing has ever written — they exist for exactly this distinction:
+     *
+     * - `TotalCost` — what the run itself spent. For a Flow agent that is genuinely near zero: it
+     *   compiled a graph and handed it off. This value is already final and is never rewritten here,
+     *   so nothing that reads it today changes meaning, and no guardrail that already evaluated
+     *   against it is retroactively falsified.
+     * - `TotalCostRollup` — the run plus everything it caused. Provisional until the graph settles,
+     *   which is now.
+     *
+     * A graph with no submitting run (a scheduled job, a remote-operation caller) simply has nobody
+     * to credit — its own Task rows still carry the truth, and this returns quietly.
+     */
+    private async rollUpCostToSubmittingRun(provider: IMetadataProvider, parent: MJTaskEntity): Promise<void> {
+        const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
+        if (!meta.submittedByAgentRunID) return;
+
+        try {
+            const children = await this.loadChildTasks(provider, parent.ID);
+            const runIDs = [...new Set(children.map((c) => c.AgentRunID).filter((id): id is string => !!id))];
+
+            const submitting = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+            if (!(await submitting.Load(meta.submittedByAgentRunID))) return;
+
+            // Start from what the run itself spent, so the rollup is a superset rather than a
+            // replacement — a Loop agent that both reasoned AND dispatched a graph paid for both.
+            let cost = submitting.TotalCost ?? 0;
+            let tokens = submitting.TotalTokensUsed ?? 0;
+            let promptTokens = submitting.TotalPromptTokensUsed ?? 0;
+            let completionTokens = submitting.TotalCompletionTokensUsed ?? 0;
+
+            for (const runID of runIDs) {
+                const nested = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+                if (!(await nested.Load(runID))) continue;
+                // Prefer the nested run's OWN rollup: if that agent dispatched a graph of its own,
+                // its rollup already includes it, and reading TotalCost would lose a whole subtree.
+                cost += nested.TotalCostRollup ?? nested.TotalCost ?? 0;
+                tokens += nested.TotalTokensUsedRollup ?? nested.TotalTokensUsed ?? 0;
+                promptTokens += nested.TotalPromptTokensUsedRollup ?? nested.TotalPromptTokensUsed ?? 0;
+                completionTokens += nested.TotalCompletionTokensUsedRollup ?? nested.TotalCompletionTokensUsed ?? 0;
+            }
+
+            submitting.TotalCostRollup = cost;
+            submitting.TotalTokensUsedRollup = tokens;
+            submitting.TotalPromptTokensUsedRollup = promptTokens;
+            submitting.TotalCompletionTokensUsedRollup = completionTokens;
+
+            if (!(await submitting.Save())) {
+                LogError(
+                    `[TaskGraphDispatcher] Could not record graph cost against run ${meta.submittedByAgentRunID}: ` +
+                    `${submitting.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                );
+                return;
+            }
+
+            LogStatus(
+                `[TaskGraphDispatcher] Credited graph ${parent.ID} to run ${meta.submittedByAgentRunID}: ` +
+                `${runIDs.length} nested run(s), ${tokens} token(s), cost ${cost}.`,
+            );
+        } catch (e) {
+            // A failed rollup must never fail the graph. The work finished; only the accounting for
+            // it is missing, and a graph marked Failed because its cost could not be summed would be
+            // a far worse lie than a cost of null.
+            LogError(`[TaskGraphDispatcher] Cost rollup failed for graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * Ends a graph early because a prompt said the work is finished.
+     *
+     * **Why `Skipped` and not `Cancelled`.** Nothing went wrong and nobody intervened — the workflow
+     * reached its own conclusion before running every drawn step, which is exactly what a reasoning
+     * step is for. `Cancelled` would tell a reader someone stopped it; `Skipped` says these routes
+     * were not taken, which is true and already the vocabulary the fork machinery uses.
+     *
+     * The message is written to the parent so the graph carries its own answer, rather than the
+     * answer living only on the step that produced it.
+     */
+    private async endGraphEarly(provider: IMetadataProvider, task: MJTaskEntity, message: string): Promise<void> {
+        if (!task.ParentID) return;
+        try {
+            LogStatus(`[TaskGraphDispatcher] '${task.Name}' ended the workflow early: ${message}`);
+
+            for (const sibling of await this.loadChildTasks(provider, task.ParentID)) {
+                if (sibling.ID === task.ID || sibling.Status !== 'Pending') continue;
+                sibling.Status = 'Skipped';
+                if (await sibling.Save()) {
+                    this.emit({
+                        Kind: 'TaskSkipped',
+                        ParentTaskID: task.ParentID,
+                        OwnerUserID: await this.resolveOwner(provider, task.ParentID),
+                        TaskID: sibling.ID,
+                        TaskName: sibling.Name,
+                        Status: 'Skipped',
+                    });
+                }
+            }
+
+            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+            if (await parent.Load(task.ParentID)) {
+                parent.OutputPayload = JSON.stringify({ message });
+                await parent.Save();
+            }
+        } catch (e) {
+            // The work itself succeeded; only the early-finish bookkeeping failed. Failing the task
+            // over that would discard a completed step's result.
+            LogError(`[TaskGraphDispatcher] Could not end graph early for ${task.ID}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * How deep the continuation chain already is, read from the graph's parent metadata.
+     *
+     * A run started by a graph inherits that graph's depth **plus one**. Without this every spawned
+     * run begins at zero, so a self-referencing flow — one that dispatches a graph containing itself
+     * — recurses without bound while the cap it should be hitting compares against a permanent zero.
+     */
+    private async graphContext(provider: IMetadataProvider, task: MJTaskEntity): Promise<GraphContext> {
+        if (!task.ParentID) return { Depth: 0, SubmittingAgentRunID: null };
+        try {
+            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+            if (!(await parent.Load(task.ParentID))) return { Depth: 0, SubmittingAgentRunID: null };
+            return {
+                Depth: ParseTaskGraphParentMetadata(parent.InputPayload).reinvokeDepth + 1,
+                // The graph's own row carries the run that submitted it. One load answers both
+                // questions, which is why they are resolved together rather than in two passes.
+                SubmittingAgentRunID: parent.AgentRunID,
+            };
+        } catch {
+            // An unreadable parent must not stop the work; depth zero is the safe reading, and the
+            // submit-time cap still guards the next hop.
+            return { Depth: 0, SubmittingAgentRunID: null };
+        }
+    }
+
+    /**
+     * Which failures the workflow drew a way out of.
+     *
+     * A Failed task with a **satisfied outgoing edge** is a handled failure: its author drew a
+     * recovery route and that route is now live. Downstream work should be released along it, and the
+     * parent should not roll up Failed because of a step the workflow explicitly planned around.
+     *
+     * Scoped to `failureSemantics: 'edges'` on purpose. Under `'block'` — every agent-emitted graph —
+     * a failure is terminal for its dependents whatever edges exist, because nobody drew those edges
+     * as a recovery path; they are ordinary sequencing, and treating them as recovery would let a
+     * graph sail past a failure it never anticipated.
+     */
+    private async computeHandledFailures(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        nodes: TaskGraphNode[],
+        edges: TaskGraphEdge[],
+    ): Promise<Set<string>> {
+        const handled = new Set<string>();
+        // Cheap exit before touching the database: with no failures there is nothing to handle, and
+        // this runs on every poll for every active graph.
+        if (!nodes.some((n) => n.status === 'Failed')) return handled;
+
+        const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+        if (!(await parent.Load(parentTaskID))) return handled;
+        const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
+        if (meta.failureSemantics !== 'edges') return handled;
+
+        for (const node of nodes) {
+            if (node.status !== 'Failed') continue;
+            // "Has somewhere to go" is the test. An edge out of a failed step that survived condition
+            // evaluation IS the drawn recovery route; a failed step with no outgoing edges has none,
+            // and stays terminal.
+            if (edges.some((e) => e.dependsOnTaskId === node.id)) handled.add(node.id);
+        }
+        return handled;
+    }
+
+    /** The graph's child tasks, with the fields the rollup needs. */
+    private async loadChildTasks(provider: IMetadataProvider, parentID: string): Promise<MJTaskEntity[]> {
+        const result = await RunView.FromMetadataProvider(provider).RunView<MJTaskEntity>(
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `ParentID='${parentID}'`,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            },
+            this.contextUser,
+        );
+        return (result.Success ? result.Results : []) ?? [];
     }
 
     /**
@@ -684,7 +1005,20 @@ export class TaskGraphDispatcher implements IShutdownable {
         for (const parentID of await this.findActiveGraphIDs(provider)) {
             if (claimable.length >= limit) break;
             const graph = await this.loadGraphState(provider, parentID);
-            for (const node of ComputeEligibleTasks(graph.nodes, graph.edges)) {
+            // HOLD is what makes "a broken condition stalls visibly" true rather than merely stated.
+            // An undecided exclusive group keeps all its edges, and a kept edge on a Complete origin
+            // is a SATISFIED prerequisite — so without this filter every branch of the fork would be
+            // eligible at once and all of them would run. A typo must not multiply a fork.
+            //
+            // The losers of a DECIDED group must be filtered for the same reason, and this is a race
+            // rather than a rule: they are marked Skipped by the propagation pass, but between the
+            // moment the group resolves and the moment that write lands, their incoming edge is still
+            // a satisfied prerequisite on a Complete origin. A poll landing in that window would
+            // claim and execute the branch the workflow chose NOT to take — irreversibly, since the
+            // action has already run by the time Skipped is written over it.
+            const eligible = ComputeEligibleTasks(graph.nodes, graph.edges)
+                .filter((n) => !graph.holdTaskIDs.has(n.id) && !graph.skipSeedTaskIDs.has(n.id));
+            for (const node of eligible) {
                 const entity = graph.entityById.get(node.id);
                 if (!entity) continue;
 
@@ -723,7 +1057,13 @@ export class TaskGraphDispatcher implements IShutdownable {
             this.contextUser,
         );
         const children = (childrenResult.Success ? childrenResult.Results : []) ?? [];
-        if (children.length === 0) return { nodes: [], edges: [], entityById: new Map(), unreachableTaskIDs: new Set() };
+        if (children.length === 0) {
+            return {
+                nodes: [], edges: [], entityById: new Map(),
+                unreachableTaskIDs: new Set(), skipSeedTaskIDs: new Set(), holdTaskIDs: new Set(),
+                handledFailureIDs: new Set(),
+            };
+        }
 
         const idList = children.map((c) => `'${c.ID}'`).join(',');
         const depsResult = await rv.RunView<MJTaskDependencyEntity>(
@@ -751,7 +1091,33 @@ export class TaskGraphDispatcher implements IShutdownable {
         // unreachable instead, and blocked before anything can claim it.
         const droppedInto = new Set<string>();
         const stillReachable = new Set<string>();
-        for (const d of deps) {
+
+        // EXCLUSIVE edges are exempt from the generic machinery below, and that exemption is
+        // load-bearing. An XOR loser is by definition condition-false, so the ordinary path would
+        // record it as unreachable and Block it — and a Blocked child poisons the parent rollup, so
+        // every fork would settle the graph as Blocked. Losers must become Skipped instead, which
+        // only ResolveExclusiveGroups can decide.
+        const exclusive = deps.filter((d) => !!d.ExclusiveGroup);
+        const ordinary = deps.filter((d) => !d.ExclusiveGroup);
+
+        const resolution = ResolveExclusiveGroups(
+            exclusive.map((d) => ({
+                id: d.ID,
+                taskId: d.TaskID,
+                dependsOnTaskId: d.DependsOnTaskID,
+                exclusiveGroup: d.ExclusiveGroup!,
+                originStatus: (entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending') as TaskGraphNodeStatus,
+                priority: d.Priority ?? 0,
+                sequence: d.Sequence ?? 0,
+                conditionOutcome: this.evaluateExclusiveCondition(d, entityById),
+            })),
+            // A flow's failure handling is its outgoing edges, so a Failed origin still decides its
+            // group. For a loop-agent graph the set is Complete-only and nothing changes.
+            new Set<TaskGraphNodeStatus>(['Complete', 'Failed']),
+        );
+        const loserEdgeIDs = new Set(resolution.loserEdgeIDs);
+
+        for (const d of ordinary) {
             if (d.Condition?.trim()) {
                 const outcome = this.evaluateEdgeCondition(d, entityById);
                 if (outcome === 'drop') { droppedInto.add(d.TaskID); continue; }
@@ -764,15 +1130,32 @@ export class TaskGraphDispatcher implements IShutdownable {
             });
         }
 
+        for (const d of exclusive) {
+            // A losing edge is removed rather than left to gate: its target is being skipped, and a
+            // live edge into a skipped task would keep the graph waiting on a branch nobody took.
+            if (loserEdgeIDs.has(d.ID)) continue;
+            stillReachable.add(d.TaskID);
+            liveEdges.push({
+                taskId: d.TaskID,
+                dependsOnTaskId: d.DependsOnTaskID,
+                dependencyType: d.DependencyType as TaskGraphEdge['dependencyType'],
+            });
+        }
+
         // Only unreachable when EVERY route in was cut. A node still holding a live edge is simply
         // waiting on it, and a node reached by an alternate branch is genuinely reachable.
         const unreachableTaskIDs = new Set([...droppedInto].filter((id) => !stillReachable.has(id)));
 
+        const nodes: TaskGraphNode[] = children.map((c) => ({ id: c.ID, status: c.Status as TaskGraphNodeStatus }));
+
         return {
-            nodes: children.map((c) => ({ id: c.ID, status: c.Status as TaskGraphNodeStatus })),
+            nodes,
             edges: liveEdges,
             entityById,
             unreachableTaskIDs,
+            skipSeedTaskIDs: new Set(resolution.skipSeedTaskIDs),
+            holdTaskIDs: new Set(resolution.holdTaskIDs),
+            handledFailureIDs: await this.computeHandledFailures(provider, parentTaskID, nodes, liveEdges),
         };
     }
 
@@ -790,19 +1173,26 @@ export class TaskGraphDispatcher implements IShutdownable {
         const upstream = entityById.get(dep.DependsOnTaskID);
         if (!upstream) return 'keep';
 
+        // TERMINALITY GUARD — fixes a latent bug, not a hypothetical one.
+        //
+        // Without it, every conditional edge is evaluated on every poll cycle, including while its
+        // origin is still Pending. A condition like `succeeded` is then a DEFINITE FALSE, the edge
+        // is dropped, and the target is Blocked at wave one — permanently, before the origin ever
+        // ran. That kills any conditioned linear chain, which is the most common flow shape there
+        // is.
+        //
+        // A non-terminal origin is UNDECIDED, and 'keep' is the safe reading of undecided: the
+        // prerequisite gate already prevents the target starting early, so keeping the edge costs
+        // nothing and dropping it is irreversible.
+        if (!TERMINAL_FOR_CONDITIONS.has(upstream.Status)) return 'keep';
+
         let output: unknown = null;
         if (upstream.OutputPayload) {
             try { output = JSON.parse(upstream.OutputPayload); }
             catch { /* a malformed payload is not grounds to drop a prerequisite */ }
         }
 
-        const result = this.conditionEvaluator.Evaluate(dep.Condition!, {
-            status: upstream.Status,
-            succeeded: upstream.Status === 'Complete',
-            failed: upstream.Status === 'Failed',
-            output,
-            errorMessage: upstream.ErrorMessage ?? null,
-        });
+        const result = this.conditionEvaluator.Evaluate(dep.Condition!, this.buildConditionContext(upstream, output));
 
         if (!result.Success) {
             LogError(
@@ -813,6 +1203,65 @@ export class TaskGraphDispatcher implements IShutdownable {
             return 'keep';
         }
         return result.Value ? 'keep' : 'drop';
+    }
+
+
+
+    /**
+     * An exclusive edge's condition as a three-way outcome.
+     *
+     * `ResolveExclusiveGroups` needs to tell "false" from "could not be evaluated": the first loses
+     * the branch, the second holds the whole group. The generic keep/drop path cannot express that
+     * difference, which is why exclusive edges take this route instead.
+     */
+    private evaluateExclusiveCondition(
+        dep: MJTaskDependencyEntity,
+        entityById: Map<string, MJTaskEntity>,
+    ): EdgeConditionOutcome {
+        if (!dep.Condition?.trim()) return 'satisfied';
+        const upstream = entityById.get(dep.DependsOnTaskID);
+        if (!upstream) return 'unevaluable';
+
+        let output: unknown = null;
+        if (upstream.OutputPayload) {
+            try { output = JSON.parse(upstream.OutputPayload); } catch { /* malformed payload */ }
+        }
+        const result = this.conditionEvaluator.Evaluate(dep.Condition, this.buildConditionContext(upstream, output));
+        if (!result.Success) return 'unevaluable';
+        return result.Value ? 'satisfied' : 'unsatisfied';
+    }
+
+    /**
+     * Everything an edge condition can see — the SUPERSET of both dialects.
+     *
+     * A flow condition is written against `payload` / `stepResult` / `flowContext` / `data` /
+     * `context`; the dispatcher's own conditions are written against `status` / `succeeded` /
+     * `failed` / `output` / `errorMessage`. Compiling flows onto this engine without the flow
+     * dialect would make every `payload.x` condition evaluate against nothing — silently, since an
+     * undefined property is simply falsy. Both dialects are readable here so a condition means the
+     * same thing on either engine.
+     *
+     * `payload` is the ORIGIN task's post-step snapshot. There is deliberately no "graph-wide
+     * payload": each task's output is its own, and inventing a merged one would give conditions a
+     * value the flow engine never had.
+     */
+    private buildConditionContext(upstream: MJTaskEntity, output: unknown): Record<string, unknown> {
+        const envelope = (output && typeof output === 'object' ? output : {}) as Record<string, unknown>;
+        const succeeded = upstream.Status === 'Complete';
+        return {
+            // dispatcher dialect — unchanged
+            status: upstream.Status,
+            succeeded,
+            failed: upstream.Status === 'Failed',
+            output,
+            errorMessage: upstream.ErrorMessage ?? null,
+            // flow dialect
+            payload: envelope.payload ?? output,
+            stepResult: { Success: succeeded, step: upstream.Name, result: envelope.result ?? output },
+            flowContext: { currentStepId: upstream.ID, completedSteps: [], executionPath: [], stepCount: 0 },
+            data: envelope.data ?? {},
+            context: envelope.context ?? {},
+        };
     }
 
     /** Parsed `OutputPayload` of each completed dependency, keyed by that task's ID. */
@@ -833,5 +1282,272 @@ export class TaskGraphDispatcher implements IShutdownable {
             catch (e) { LogError(`[TaskGraphDispatcher] Task ${dep.DependsOnTaskID} has malformed OutputPayload: ${e}`); }
         }
         return outputs;
+    }
+
+    /**
+     * Runs one task's body, whatever kind of step it is.
+     *
+     * **Routing is on `StepType`, not on which key happens to be set.** A loop step carries the same
+     * `ActionID` or `AgentID` as an ordinary step — that key is what the loop *repeats* — so the old
+     * `task.ActionID ? action : agent` test would have run a loop exactly once and called it done.
+     * `StepType` is the only field that distinguishes them.
+     *
+     * Every branch is normalized to one shape so the recording path above stays single: an action has
+     * no agent run to point at, because its forensics live in `ActionExecutionLog` instead.
+     */
+    private async runTaskBody(
+        task: MJTaskEntity,
+        provider: IMetadataProvider,
+        inputPayload: unknown,
+        dependencyOutputs: Map<string, unknown>,
+    ): Promise<TaskBodyOutcome> {
+        const payload = this.mergedPayload(inputPayload, dependencyOutputs);
+        const config = task.ConfigurationObject;
+
+        // A loop's own step type decides how many times its body runs; the body itself is dispatched
+        // through the very same runners as a one-shot step.
+        if (task.StepType === 'ForEach' || task.StepType === 'While') {
+            return this.runLoopTask(task, provider, payload, dependencyOutputs);
+        }
+
+        const { params, errors } = BuildMappedInput(config?.inputMapping, { payload });
+        for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${e}`);
+        const effectiveInput = Object.keys(params).length > 0 ? params : inputPayload;
+
+        if (task.StepType === 'Prompt') {
+            if (!this.promptRunner) {
+                // Not a failure: "nobody here can run this" is not "this ran and did not work".
+                return { Success: false, AgentRunID: null, ErrorMessage: 'No prompt runner is loaded on this host.' };
+            }
+            const promptResult = await this.promptRunner.RunPromptForTask({
+                TaskID: task.ID,
+                PromptID: task.PromptID!,
+                InputPayload: effectiveInput,
+                DependencyOutputs: dependencyOutputs,
+                TemplateParameters: config?.prompt?.templateParameters,
+                Provider: provider,
+                ContextUser: this.contextUser,
+            });
+
+            // A prompt's response is DEEP-MERGED into the payload rather than replacing it. A prompt
+            // answers one question; replacing the payload with its answer would discard everything
+            // the steps before it established, which is how a late step loses the data it depends on.
+            const merged = promptResult.Success && promptResult.Output && typeof promptResult.Output === 'object'
+                ? deepMergePayload(payload, promptResult.Output as Record<string, unknown>)
+                : payload;
+
+            return {
+                Success: promptResult.Success,
+                AgentRunID: null,
+                ErrorMessage: promptResult.ErrorMessage,
+                Output: this.applyStepOutputMapping(task, merged, merged, config?.outputMapping),
+                ChatMessage: promptResult.ChatMessage,
+                // Returned even when the prompt FAILED. A failed prompt still cost tokens, and a
+                // cost rollup that silently omits failures under-reports exactly the runs someone
+                // is most likely to be investigating.
+                PromptRunID: promptResult.PromptRunID,
+            };
+        }
+
+        const raw = task.ActionID
+            ? { ...await this.actionRunner!.RunActionForTask({
+                TaskID: task.ID,
+                ActionID: task.ActionID,
+                InputPayload: effectiveInput,
+                DependencyOutputs: dependencyOutputs,
+                Provider: provider,
+                ContextUser: this.contextUser,
+            }), AgentRunID: null }
+            : await this.runAgentNode(task, provider, effectiveInput, dependencyOutputs);
+
+        return { ...raw, Output: this.applyStepOutputMapping(task, payload, raw.Output, config?.outputMapping) };
+    }
+
+    /**
+     * Runs a loop step: its body once per iteration, with the item and index in scope.
+     *
+     * The loop's own `Configuration` supplies the definition; the row's `ActionID` / `AgentID`
+     * supplies what to repeat. Per-iteration inputs are resolved fresh each pass — the bindings are
+     * merged into the payload before the mapping is applied, which is how a body can reference the
+     * current item at all.
+     */
+    private async runLoopTask(
+        task: MJTaskEntity,
+        provider: IMetadataProvider,
+        payload: Record<string, unknown>,
+        dependencyOutputs: Map<string, unknown>,
+    ): Promise<TaskBodyOutcome> {
+        const config = task.ConfigurationObject;
+        const op = task.StepType === 'ForEach' ? config?.forEach : config?.while;
+        if (!op) {
+            return {
+                Success: false,
+                AgentRunID: null,
+                ErrorMessage: `"${task.Name}" is a ${task.StepType} step with no loop settings, so there is nothing to repeat.`,
+            };
+        }
+
+        const bodyMapping = (op.action?.params ?? {}) as Record<string, unknown>;
+        const invokeBody: LoopBodyInvoker = async ({ Bindings }) => {
+            // Bindings go INTO the payload rather than beside it, so an authored mapping reaches the
+            // current item the same way it reaches anything else: `payload.<itemVariable>`.
+            const iterationPayload = { ...payload, ...Bindings };
+            const resolved = ResolveMappedInput(bodyMapping, { payload: iterationPayload }) as Record<string, unknown>;
+
+            return task.ActionID
+                ? this.actionRunner!.RunActionForTask({
+                    TaskID: task.ID,
+                    ActionID: task.ActionID,
+                    InputPayload: resolved,
+                    DependencyOutputs: dependencyOutputs,
+                    Provider: provider,
+                    ContextUser: this.contextUser,
+                })
+                : this.agentRunner.RunAgentForTask({
+                    TaskID: task.ID,
+                    AgentID: task.AgentID!,
+                    InputPayload: resolved,
+                    DependencyOutputs: dependencyOutputs,
+                    Provider: provider,
+                    ContextUser: this.contextUser,
+                });
+        };
+
+        const outcome = task.StepType === 'ForEach'
+            ? await RunForEachLoop(op as ForEachOperation, { payload }, invokeBody)
+            : await RunWhileLoop(
+                op as WhileOperation,
+                (iteration) => this.conditionEvaluator.Evaluate(
+                    (op as WhileOperation).condition,
+                    { ...payload, iteration },
+                ),
+                invokeBody,
+            );
+
+        return {
+            Success: outcome.Success,
+            AgentRunID: null,
+            ErrorMessage: outcome.ErrorMessage,
+            Output: this.applyStepOutputMapping(task, payload, outcome.Output, op.action?.outputMapping ?? config?.outputMapping),
+        };
+    }
+
+    /**
+     * Files a step's result into the payload it hands downstream.
+     *
+     * **This is what makes a branch condition possible.** A workflow that branches on
+     * `payload.stockPrice` has that value only because this step mapped `CurrentPrice -> stockPrice`.
+     * Without it the condition reads `undefined` — merely falsy — so the workflow takes the other
+     * branch, finishes, and reports success with nothing to indicate anything went wrong.
+     *
+     * The incoming payload is carried through as well as the update, so a value written three steps
+     * back is still readable here. Returning only this step's own output is what used to limit a
+     * condition's view to its immediate predecessor.
+     */
+    private applyStepOutputMapping(
+        task: MJTaskEntity,
+        payload: Record<string, unknown>,
+        output: unknown,
+        outputMapping: string | undefined,
+    ): unknown {
+        if (!outputMapping) return output ?? payload;
+
+        const source = output && typeof output === 'object' ? output as Record<string, unknown> : { value: output };
+        const { updates, errors } = ApplyOutputMapping(source, outputMapping);
+        for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${e}`);
+
+        return { ...payload, ...updates };
+    }
+
+    /**
+     * Runs an Agent step, telling the runner where in the graph it sits.
+     *
+     * Depth and provenance are read together because they come from the same row: the graph's parent
+     * task knows both how many continuation hops led here and which run submitted it.
+     */
+    private async runAgentNode(
+        task: MJTaskEntity,
+        provider: IMetadataProvider,
+        effectiveInput: unknown,
+        dependencyOutputs: Map<string, unknown>,
+    ): Promise<TaskBodyOutcome> {
+        const context = await this.graphContext(provider, task);
+        return this.agentRunner.RunAgentForTask({
+            TaskID: task.ID,
+            AgentID: task.AgentID!,
+            InputPayload: effectiveInput,
+            DependencyOutputs: dependencyOutputs,
+            ContinuationDepth: context.Depth,
+            SubmittingAgentRunID: context.SubmittingAgentRunID,
+            Provider: provider,
+            ContextUser: this.contextUser,
+        });
+    }
+
+    /**
+     * The step's Configuration with this run's artefacts folded in, or `undefined` to leave it be.
+     *
+     * **Merged into the authored bag, never written over it.** The Configuration column holds the
+     * step's definition — its loop body, its mappings, its policy, the position someone dragged it
+     * to. Writing a fresh object containing only `runtime` would erase all of that the first time a
+     * prompt step completed, which is the kind of loss that surfaces much later as a workflow that
+     * mysteriously stopped mapping its output.
+     *
+     * Returns `undefined` when there is nothing to record, so the guarded write omits the column
+     * rather than rewriting it with what it already held.
+     */
+    private configurationWithRuntime(task: MJTaskEntity, promptRunID: string | undefined): string | undefined {
+        if (!promptRunID) return undefined;
+
+        const existing = this.parseConfiguration(task);
+        const merged: MJTaskEntity_ITaskStepConfiguration = {
+            ...existing,
+            runtime: { ...existing?.runtime, promptRunID },
+        };
+        return JSON.stringify(merged);
+    }
+
+    /**
+     * Reads a step's Configuration bag, tolerating a row whose JSON cannot be parsed.
+     *
+     * Unparseable configuration is logged rather than thrown: the step has already RUN by the time
+     * this is called, and refusing to record its outcome because its definition is malformed would
+     * discard the result of real work and leave the task claimed until the claim lapsed.
+     */
+    private parseConfiguration(task: MJTaskEntity): MJTaskEntity_ITaskStepConfiguration | undefined {
+        if (!task.Configuration) return undefined;
+        try {
+            return JSON.parse(task.Configuration) as MJTaskEntity_ITaskStepConfiguration;
+        } catch (e) {
+            LogError(
+                `[TaskGraphDispatcher] Task ${task.ID} has unparseable Configuration; ` +
+                `recording runtime artefacts against an empty bag. ${e instanceof Error ? e.message : String(e)}`,
+            );
+            return undefined;
+        }
+    }
+
+    /**
+     * The payload a step sees: everything its prerequisites produced, plus its own declared input.
+     *
+     * **Why the outputs are merged rather than kept per-task.** A flow carried ONE payload that
+     * accumulated as it went, so a condition on the edge into step C could read a value step A wrote.
+     * Handing each task only its immediate predecessor's output would silently narrow that: the
+     * condition reads `undefined`, which is falsy, and the workflow quietly takes a different route
+     * than the flow it was compiled from. Merging in dependency order restores the accumulation.
+     *
+     * Later prerequisites win on a key collision, matching a flow's own last-write-wins behaviour.
+     */
+    private mergedPayload(inputPayload: unknown, dependencyOutputs: Map<string, unknown>): Record<string, unknown> {
+        const merged: Record<string, unknown> = {};
+        for (const output of dependencyOutputs.values()) {
+            if (output && typeof output === 'object' && !Array.isArray(output)) {
+                Object.assign(merged, output as Record<string, unknown>);
+            }
+        }
+        if (inputPayload && typeof inputPayload === 'object' && !Array.isArray(inputPayload)) {
+            Object.assign(merged, inputPayload as Record<string, unknown>);
+        }
+        return merged;
     }
 }
