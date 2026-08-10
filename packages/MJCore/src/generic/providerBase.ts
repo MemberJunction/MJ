@@ -3572,6 +3572,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param contextUser - The user context for permissions
      */
     protected async TransformSimpleObjectToEntityObject(param: RunViewParams, result: RunViewResult, contextUser?: UserInfo) {
+        // Opt-in typing of RAW rows. Deliberately before the entity branch and mutually exclusive
+        // with it: entity objects already convert on Get/Set, so coercing them would be pure waste.
+        this.CoerceSimpleRowTypes(param, result);
+
         if (param.ResultType === 'entity_object' && result && result.Success && result.Results?.length > 0) {
             result.Results = await TransformSimpleObjectToEntityObject(this, param.EntityName, result.Results, contextUser);
 
@@ -3588,6 +3592,92 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 );
             }
         }
+    }
+
+    /**
+     * Converts `Date` and numeric columns on RAW rows, when the caller asked for it.
+     *
+     * OPT-IN, and off by default, because turning it on by default would break working code
+     * silently. `'simple'` has always returned the transport's own shape, so anything reading a date
+     * column as a string — `String(row.DueDate).slice(0, 10)`, a `<` comparison, a `localeCompare`
+     * sort — is correct TODAY and would start receiving a `Date` with no compiler involvement. That
+     * is the same class of silent wrongness this option exists to remove, pointed the other way.
+     *
+     * ## What it does and does not buy you
+     *
+     * It makes the VALUES match a generated entity type for dates and numbers. It does NOT make the
+     * type honest in general: a `Status` column typed as a closed union still receives whatever
+     * string the database held, and no runtime pass can change that. Treat this as "fewer wrong
+     * values", not "the type is now true" — if you want the type to be true, ask for entity objects.
+     *
+     * ## Cost
+     *
+     * The field list is computed ONCE per view from `EntityInfo`, not per row — a per-cell metadata
+     * lookup is what would make this expensive, and it is the obvious way to write it. What remains
+     * is one `new Date()` per date cell plus one shallow object copy per row (see below), so the
+     * cost scales with rows × date columns and is small next to the query. It is still opt-in:
+     * `'simple'` exists for callers who want plain rows and nothing done to them, and that promise
+     * is worth keeping.
+     *
+     * ## Why it COPIES rather than mutating in place
+     *
+     * In-place is the obvious implementation and it is wrong here. On a cache hit the rows handed
+     * back can be the cache's OWN objects — `ProjectRowsToFields` deliberately returns the original
+     * array when the projection would be a no-op, which is the common case. Writing `Date`s into
+     * those objects would poison the cache entry, so the NEXT reader of the same fingerprint — one
+     * that never asked for coercion — would silently receive `Date`s where the contract promises
+     * strings. That is a cross-caller version of exactly the bug this option exists to prevent.
+     */
+    protected CoerceSimpleRowTypes(param: RunViewParams, result: RunViewResult): void {
+        if (!param.CoerceTypes || param.ResultType === 'entity_object') {
+            return;
+        }
+        if (!result?.Success || !result.Results?.length || !param.EntityName) {
+            return;
+        }
+
+        const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName.trim().toLowerCase());
+        if (!entity) {
+            // A name that resolves to nothing is already a failed query elsewhere; coercion is not
+            // the place to raise it, and guessing field types would be worse than leaving the rows.
+            return;
+        }
+
+        // ONCE per view, not once per cell.
+        const dateFields = entity.Fields.filter(f => f.TSType === EntityFieldTSType.Date).map(f => f.CodeName || f.Name);
+        const numberFields = entity.Fields.filter(f => f.TSType === EntityFieldTSType.Number).map(f => f.CodeName || f.Name);
+        if (!dateFields.length && !numberFields.length) {
+            return;
+        }
+
+        result.Results = (result.Results as Array<Record<string, unknown>>).map(row => {
+            if (!row || typeof row !== 'object') return row;
+            const copy = { ...row };
+
+            for (const field of dateFields) {
+                const value = copy[field];
+                if (typeof value === 'string' || typeof value === 'number') {
+                    const date = new Date(value);
+                    // An unparseable value is LEFT ALONE rather than written as `Invalid Date`.
+                    // A caller can see the original and reason about it; `Invalid Date` renders as
+                    // that string and destroys the evidence.
+                    if (!Number.isNaN(date.getTime())) {
+                        copy[field] = date;
+                    }
+                }
+            }
+
+            for (const field of numberFields) {
+                const value = copy[field];
+                if (typeof value === 'string' && value.trim() !== '') {
+                    const num = Number(value);
+                    if (!Number.isNaN(num)) {
+                        copy[field] = num;
+                    }
+                }
+            }
+            return copy;
+        });
     }
 
     /**

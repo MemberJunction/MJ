@@ -286,6 +286,42 @@ export class RunViewParams {
     ResultType?: 'simple' | 'entity_object' | 'count_only';
 
     /**
+     * Convert `Date` and numeric columns on `'simple'` rows to real `Date`s and `number`s.
+     *
+     * **Optional, off by default, and deliberately so.** `'simple'` has always returned the
+     * transport's own shape, so code reading a date column as a string — `String(row.DueDate).slice(0, 10)`,
+     * a `<` comparison, a `localeCompare` sort — is correct today and would silently start receiving
+     * a `Date` if this defaulted on. That is the same class of quiet wrongness the option exists to
+     * remove, pointed the other way, so it has to be asked for.
+     *
+     * ```typescript
+     * const rows = await rv.RunView<OrderEntityType>({
+     *     EntityName: 'Orders',
+     *     ResultType: 'simple',
+     *     CoerceTypes: true,          // rows[0].OrderDate is now a Date
+     * });
+     * ```
+     *
+     * ## What it buys, and what it does not
+     *
+     * It makes the VALUES match a generated entity type for dates and numbers. It does **not** make
+     * the type honest in general — a `Status` column typed as a closed union still receives whatever
+     * string the database held, and no runtime pass can change that. Read it as "fewer wrong
+     * values", not "the type is now true". If you want the type to be true, use
+     * `ResultType: 'entity_object'`.
+     *
+     * ## Cost
+     *
+     * The field list is computed once per view from `EntityInfo`, not per row, so what remains is
+     * one `new Date()` per date cell — small next to the query itself. Ignored entirely when
+     * `ResultType` is `'entity_object'`, since `BaseEntity` already converts on `Get`/`Set`.
+     *
+     * An unparseable value is left as-is rather than written as `Invalid Date`, so the original is
+     * still there to reason about.
+     */
+    CoerceTypes?: boolean;
+
+    /**
      * Names of {@link RelatedRecordCollection} companions to populate on the returned entity objects, using
      * **one batched query per collection** across the entire result set.
      *
