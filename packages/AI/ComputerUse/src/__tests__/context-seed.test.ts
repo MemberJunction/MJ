@@ -58,7 +58,7 @@ function seed(): ContextSeed {
     return s;
 }
 
-describe('BaseBrowserAdapter G4 defaults (CU-G4)', () => {
+describe('BaseBrowserAdapter warm-seed defaults', () => {
     it('CaptureContextSeed defaults to null; SeedContext to a no-op', async () => {
         const a = new MinimalAdapter();
         await expect(a.CaptureContextSeed('http://x')).resolves.toBeNull();
@@ -66,7 +66,7 @@ describe('BaseBrowserAdapter G4 defaults (CU-G4)', () => {
     });
 });
 
-describe('ComputerUseEngine warm-seed plumbing (CU-G4)', () => {
+describe('ComputerUseEngine warm-seed plumbing', () => {
     async function runReplay(params: RunComputerUseParams, adapter: SeedFakeAdapter) {
         const engine = new ComputerUseEngine();
         engine.SetBrowserAdapter(adapter);

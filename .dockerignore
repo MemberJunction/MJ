@@ -1,4 +1,4 @@
-# Docker build-context hygiene (DR-C1, docker-regression-reliability-plan).
+# Docker build-context hygiene
 #
 # Every image in this repo builds with the repo root as its context
 # (docker/regression/docker-compose.test.yml, docker-compose.cross-server.yml,

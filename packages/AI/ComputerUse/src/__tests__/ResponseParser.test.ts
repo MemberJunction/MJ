@@ -85,7 +85,7 @@ That should work.`;
             expect(result.RequestJudgement).toBe(false);
         });
 
-        it('should parse checkpointReached when present (CU-D8) and leave it undefined otherwise', () => {
+        it('should parse checkpointReached when present and leave it undefined otherwise', () => {
             const withSignal = ResponseParser.ParseControllerResponse(
                 JSON.stringify({ reasoning: 'arrived', actions: [], checkpointReached: 'agents-list' })
             );
@@ -178,7 +178,7 @@ That should work.`;
             }
         });
 
-        it('should parse Selector + Modifiers on Click (CU-A6)', () => {
+        it('should parse Selector + Modifiers on Click', () => {
             const actions = parseActions([
                 { Type: 'Click', Selector: 'button:has-text("Save")', Modifiers: ['Shift', 'ControlOrMeta'] },
             ]);
@@ -189,7 +189,7 @@ That should work.`;
             }
         });
 
-        it('should parse Selector on Type/Scroll/Wait and normalize modifier aliases (CU-A6)', () => {
+        it('should parse Selector on Type/Scroll/Wait and normalize modifier aliases', () => {
             const [type, scroll, wait, keypress] = parseActions([
                 { Type: 'Type', Selector: 'input[name="email"]', Text: 'a@b.com' },
                 { Type: 'Scroll', selector: 'tr:has-text("Total")' },
@@ -203,7 +203,7 @@ That should work.`;
             if (keypress.Type === 'Keypress') expect(keypress.Modifiers).toEqual(['Control', 'Meta']);
         });
 
-        it('should parse a scroll-at point from either casing (CU-A8)', () => {
+        it('should parse a scroll-at point from either casing', () => {
             const [upper, lower] = parseActions([
                 { Type: 'Scroll', X: 130, Y: 500, DeltaY: 300 },
                 { Type: 'Scroll', x: 40, y: 60, deltaY: -200 },
@@ -219,7 +219,7 @@ That should work.`;
             }
         });
 
-        it('should ignore a half-specified scroll point rather than scrolling at the page corner (CU-A8)', () => {
+        it('should ignore a half-specified scroll point rather than scrolling at the page corner', () => {
             // A lone axis cannot identify a point; defaulting the other to 0 would
             // silently wheel at the top-left corner instead of the intended pane.
             const [onlyX, onlyY, neither] = parseActions([
@@ -235,7 +235,7 @@ That should work.`;
             }
         });
 
-        it('should accept a scroll point at the origin (CU-A8)', () => {
+        it('should accept a scroll point at the origin', () => {
             // 0 is a legitimate coordinate — the guard must test for presence, not truthiness.
             const [action] = parseActions([{ Type: 'Scroll', X: 0, Y: 0, DeltaY: 100 }]);
             if (action.Type === 'Scroll') {
@@ -244,7 +244,7 @@ That should work.`;
             }
         });
 
-        it('should leave Selector/Modifiers undefined when absent or empty/invalid (CU-A6)', () => {
+        it('should leave Selector/Modifiers undefined when absent or empty/invalid', () => {
             const [plainClick, blankSelector] = parseActions([
                 { Type: 'Click', X: 1, Y: 2 },
                 { Type: 'Click', X: 1, Y: 2, Selector: '   ', Modifiers: ['bogus'] },
@@ -259,7 +259,7 @@ That should work.`;
             }
         });
 
-        it('should parse self-tracked state: evaluation/memory/plan (CU-E2)', () => {
+        it('should parse self-tracked state: evaluation/memory/plan', () => {
             const input = JSON.stringify({
                 reasoning: 'r', actions: [],
                 evaluation: 'the field filled',

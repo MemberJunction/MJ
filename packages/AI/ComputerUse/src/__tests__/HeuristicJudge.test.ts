@@ -3,7 +3,7 @@ import { HeuristicJudge } from '../judge/HeuristicJudge.js';
 import { JudgeContext, StepRecord } from '../types/judge.js';
 import { ComputerUseError } from '../types/errors.js';
 
-// Stuck detection now compares shared perceptual hashes (CU-F6/B2), not raw
+// Stuck detection now compares shared perceptual hashes, not raw
 // base64 strings. Two distinct 16-hex fingerprints > 3 bits apart read as
 // "different"; identical fingerprints read as "unchanged".
 const HASH_SAME = 'aaaaaaaaaaaaaaaa';
@@ -82,7 +82,7 @@ describe('HeuristicJudge', () => {
         });
     });
 
-    describe('detectStuckState — via Evaluate (perceptual-hash based, CU-B2)', () => {
+    describe('detectStuckState — via Evaluate (perceptual-hash based)', () => {
         it('should detect stuck state when N consecutive frames are visually unchanged (default threshold 3)', async () => {
             const judge = new HeuristicJudge();
             const ctx = createContext({
@@ -386,7 +386,7 @@ describe('HeuristicJudge', () => {
             expect(verdict.Reason).toContain('loop');
         });
     });
-    describe('Evaluate — checkpoint tour suppression (CU-D8)', () => {
+    describe('Evaluate — checkpoint tour suppression', () => {
         it('does not preempt with a stuck verdict on a checkpoint tour', async () => {
             const judge = new HeuristicJudge();
             const ctx = createContext({

@@ -78,14 +78,14 @@ export default class TestSuite extends Command {
     }),
     'max-suite-duration': Flags.integer({
       description:
-        'Suite wall-clock budget in SECONDS (DR-D4). Once elapsed, dispatch of new ' +
+        'Suite wall-clock budget in SECONDS. Once elapsed, dispatch of new ' +
         'tests stops and the run finalizes gracefully with partial results (the ' +
         'in-flight test still finishes). Overrides the suite\'s MaxExecutionTimeMS. ' +
         'Guarantees the run terminates even if individual tests hang.',
     }),
     'circuit-breaker': Flags.boolean({
       description:
-        'Abort the run early (DR-D7) when it is doomed: a sliding window of ' +
+        'Abort the run early when it is doomed: a sliding window of ' +
         'environment-class failures (degrading host) or the --max-failures cap ' +
         '(broken deploy). Recommended for CI. Default off.',
       default: false,

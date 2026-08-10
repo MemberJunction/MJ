@@ -8,7 +8,7 @@ function input(actualOutput: Record<string, unknown>): OracleInput {
     return { actualOutput } as unknown as OracleInput;
 }
 
-describe('NoConsoleErrorsOracle (CU-D2)', () => {
+describe('NoConsoleErrorsOracle', () => {
     const oracle = new NoConsoleErrorsOracle();
 
     it('passes when there are no diagnostics', async () => {
@@ -40,7 +40,7 @@ describe('NoConsoleErrorsOracle (CU-D2)', () => {
     });
 });
 
-describe('DomAssertOracle (CU-D2)', () => {
+describe('DomAssertOracle', () => {
     const oracle = new DomAssertOracle();
     const elements = [
         { role: 'button', name: 'Save Record', selector: 'xpath=/x' },

@@ -137,7 +137,7 @@ class JudgeScriptEngine extends ComputerUseEngine {
     }
 }
 
-describe('ComputerUseEngine.Replay (CU-C2)', () => {
+describe('ComputerUseEngine.Replay', () => {
     it('replays a happy path to Completed with all steps hit', async () => {
         const engine = new ComputerUseEngine();
         const adapter = new FakeAdapter();
@@ -175,7 +175,7 @@ describe('ComputerUseEngine.Replay (CU-C2)', () => {
         expect(result.Replay?.Steps).toHaveLength(1);           // fail-fast: step 2 never ran
         expect(result.Replay?.Steps[0].Outcome).toBe('diverged');
         expect(result.Replay?.Steps[0].Detail).toContain('precondition');
-        // CU-B6: a non-passing terminal carries a retry memo.
+        // A non-passing terminal carries a retry memo.
         expect(result.FailureMemo).toBeTruthy();
         expect(result.FailureMemo).toContain('Failed');
     });
@@ -221,7 +221,7 @@ describe('ComputerUseEngine.Replay (CU-C2)', () => {
         expect(adapter.typed).toEqual([{ selector: '#name', text: 'Co-Acme-2026' }]);
     });
 
-    it('scores Completed only when goal postconditions are met (CU-C5)', async () => {
+    it('scores Completed only when goal postconditions are met', async () => {
         const engine = new ComputerUseEngine();
         const adapter = new FakeAdapter();
         adapter.visible.set('#nav', true);
@@ -241,7 +241,7 @@ describe('ComputerUseEngine.Replay (CU-C2)', () => {
         expect(result.Status).toBe('Completed');
     });
 
-    it('fails when all steps hit but a goal postcondition is unmet (CU-C5)', async () => {
+    it('fails when all steps hit but a goal postcondition is unmet', async () => {
         const engine = new ComputerUseEngine();
         const adapter = new FakeAdapter();
         adapter.visible.set('#nav', true);
@@ -306,7 +306,7 @@ describe('ComputerUseEngine.Replay end-state judge (Option 1 — goal-completion
     });
 });
 
-describe('ComputerUseEngine.Replay checkpoint tours (CU-D8 on the replay tier)', () => {
+describe('ComputerUseEngine.Replay checkpoint tours (on the replay tier)', () => {
     function tourTrace(): ComputerUseTrace {
         return trace([clickStep('#nav', { postUrl: '/app/data' })]);
     }

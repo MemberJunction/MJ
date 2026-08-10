@@ -31,7 +31,7 @@ const gradient = makePng(64, 48, (x) => {
     return [v, v, v];
 });
 
-describe('perceptual-hash (CU-F6)', () => {
+describe('perceptual-hash', () => {
     it('produces a 16-char hex (64-bit) hash for a valid PNG', () => {
         const h = computePerceptualHash(gradient);
         expect(h).toMatch(/^[0-9a-f]{16}$/);

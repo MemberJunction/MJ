@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readSuiteComputerUseConfig, mergeComputerUseConfig } from '../test-driver/suite-config';
 import { ComputerUseTestConfig } from '../test-driver/types';
 
-describe('readSuiteComputerUseConfig (RI-E3)', () => {
+describe('readSuiteComputerUseConfig', () => {
     it('returns the block when suiteContext.computerUse is a plain object', () => {
         const block = { elementGrounding: true, generation: { temperature: 0 } };
         expect(readSuiteComputerUseConfig({ computerUse: block })).toEqual(block);
@@ -24,7 +24,7 @@ describe('readSuiteComputerUseConfig (RI-E3)', () => {
     });
 });
 
-describe('mergeComputerUseConfig (RI-E3 / D7 precedence)', () => {
+describe('mergeComputerUseConfig (/ D7 precedence)', () => {
     it('per-test top-level keys win over the suite block', () => {
         const suite = { elementGrounding: true, headless: true };
         const perTest: ComputerUseTestConfig = { elementGrounding: false };

@@ -4,7 +4,7 @@ import { join, dirname, relative } from 'path';
 import { fileURLToPath } from 'url';
 
 /**
- * CU-E7 layering gate. `@memberjunction/computer-use` (Layer 1) MUST stay
+ * Layering gate. `@memberjunction/computer-use` (Layer 1) MUST stay
  * application-agnostic — no hardcoded selectors, routes, marker text, or
  * behavior for any specific app under test. App-specific signals enter only
  * as opaque runtime config / prompt data supplied by Layer 2.
@@ -45,7 +45,7 @@ function collectSourceFiles(dir: string): string[] {
     return out;
 }
 
-describe('Computer Use Layer-1 app-agnostic gate (CU-E7)', () => {
+describe('Computer Use Layer-1 app-agnostic gate', () => {
     const files = collectSourceFiles(SRC_DIR);
 
     it('finds source files to scan', () => {

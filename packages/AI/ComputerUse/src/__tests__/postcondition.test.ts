@@ -12,7 +12,7 @@ function el(role: string, name: string, selector = ''): InteractiveElement {
     return e;
 }
 
-describe('distillGoalPostconditions (CU-C5)', () => {
+describe('distillGoalPostconditions', () => {
     it('distills a normalized final-URL postcondition', () => {
         const step = new StepRecord();
         step.UrlAfter = `http://localhost:4200/app/record/${UUID}`;
@@ -42,7 +42,7 @@ describe('distillGoalPostconditions (CU-C5)', () => {
     });
 });
 
-describe('executeGoalPostconditions (CU-C5)', () => {
+describe('executeGoalPostconditions', () => {
     function urlPost(pattern: string): GoalPostcondition {
         return Object.assign(new GoalPostcondition(), { Kind: 'url', UrlPattern: pattern });
     }
@@ -83,7 +83,7 @@ describe('executeGoalPostconditions (CU-C5)', () => {
 });
 
 
-describe('evaluatePreludeLanding (CU-C6)', () => {
+describe('evaluatePreludeLanding', () => {
     it('lands trivially when nothing is declared', () => {
         expect(evaluatePreludeLanding({ hasSelector: false, selectorVisible: false, hasUrl: false, urlMatched: false }).landed).toBe(true);
     });

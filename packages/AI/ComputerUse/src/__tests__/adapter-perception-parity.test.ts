@@ -4,7 +4,7 @@ import { PlaywrightBrowserAdapter } from '../browser/PlaywrightBrowserAdapter.js
 import { SharedContextBrowserAdapter } from '../browser/SharedContextBrowserAdapter.js';
 
 /**
- * CU-A3 parity gate. `SharedContextBrowserAdapter` — the adapter the regression
+ * Perception-parity gate. `SharedContextBrowserAdapter` — the adapter the regression
  * suite runs on — must expose the SAME perception surface as
  * `PlaywrightBrowserAdapter`. Historically SCBA overrode only navigation /
  * screenshot / action, silently inheriting BaseBrowserAdapter's no-op
@@ -39,7 +39,7 @@ function overrides(ctor: { prototype: object }, method: string): boolean {
     return proto(ctor)[method] !== proto(BaseBrowserAdapter)[method];
 }
 
-describe('adapter perception parity (CU-A3)', () => {
+describe('adapter perception parity', () => {
     it('BaseBrowserAdapter defines every perception method (the no-op baseline)', () => {
         for (const m of PERCEPTION_SURFACE) {
             expect(typeof proto(BaseBrowserAdapter)[m]).toBe('function');
@@ -69,7 +69,7 @@ describe('adapter perception parity (CU-A3)', () => {
 });
 
 /**
- * RI-C4.1 warm-seed parity. The warm-seed (CU-G4) capture/restore was overridden
+ * Warm-seed parity. The warm-seed capture/restore was overridden
  * only on PlaywrightBrowserAdapter; SCBA — the adapter the suite runs on —
  * inherited the base no-op (`CaptureContextSeed` → null, `SeedContext` → no-op),
  * so the whole warm-seed optimization silently did nothing in suite mode. Both
@@ -79,7 +79,7 @@ describe('adapter perception parity (CU-A3)', () => {
  */
 const WARM_SEED_SURFACE = ['CaptureContextSeed', 'SeedContext'] as const;
 
-describe('adapter warm-seed parity (RI-C4.1)', () => {
+describe('adapter warm-seed parity', () => {
     it('BaseBrowserAdapter defines both warm-seed methods (the no-op baseline)', () => {
         for (const m of WARM_SEED_SURFACE) {
             expect(typeof proto(BaseBrowserAdapter)[m]).toBe('function');

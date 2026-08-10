@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { gateImpossibleVerdict, DEFAULT_IMPOSSIBLE_QUORUM } from '../engine/terminal-verdict.js';
 
-describe('gateImpossibleVerdict (CU-D6)', () => {
+describe('gateImpossibleVerdict', () => {
     const base = { impossible: true, pageLoading: false, priorCount: 0, quorum: 2 };
 
     it('does not accept the first Impossible (needs a quorum)', () => {

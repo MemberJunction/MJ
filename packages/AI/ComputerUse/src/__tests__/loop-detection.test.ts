@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { normalizeUrlForLoop, computeStateSignature, detectLoop , stateRepeatThresholdFor } from '../engine/loop-detection.js';
 
-describe('normalizeUrlForLoop (CU-B1)', () => {
+describe('normalizeUrlForLoop', () => {
     it('strips the hash fragment', () => {
         expect(normalizeUrlForLoop('http://h/app/x#frag')).toBe('http://h/app/x');
     });
@@ -21,7 +21,7 @@ describe('normalizeUrlForLoop (CU-B1)', () => {
     });
 });
 
-describe('computeStateSignature (CU-B1)', () => {
+describe('computeStateSignature', () => {
     it('combines normalized URL and hash', () => {
         expect(computeStateSignature('http://h/app#x', 'abc123', [])).toBe('http://h/app|abc123');
     });
@@ -37,7 +37,7 @@ describe('computeStateSignature (CU-B1)', () => {
     });
 });
 
-describe('detectLoop (CU-B1)', () => {
+describe('detectLoop', () => {
     it('returns null below the repeat threshold', () => {
         expect(detectLoop(['a', 'b', 'a'], 3)).toBeNull();
     });

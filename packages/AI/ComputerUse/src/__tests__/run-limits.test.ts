@@ -8,7 +8,7 @@ import {
     WALL_CLOCK_GRACE_FACTOR,
 } from '../engine/run-limits.js';
 
-describe('CancellationError (CU-B8)', () => {
+describe('CancellationError', () => {
     it('is an Error with a distinct name for instanceof / catch discrimination', () => {
         const e = new CancellationError();
         expect(e).toBeInstanceOf(Error);
@@ -17,7 +17,7 @@ describe('CancellationError (CU-B8)', () => {
     });
 });
 
-describe('abortableDelay (CU-B8)', () => {
+describe('abortableDelay', () => {
     it('resolves immediately when the signal is already aborted', async () => {
         const ac = new AbortController();
         ac.abort();
@@ -57,7 +57,7 @@ describe('abortableDelay (CU-B8)', () => {
  */
 const watchdogMs = (t: number) => t + Math.max(30_000, Math.round(t * 0.25));
 
-describe('timeBudgetExpiryReason (CU-B4 graceful expiry)', () => {
+describe('timeBudgetExpiryReason (graceful expiry)', () => {
     it('returns null when no budget is configured', () => {
         expect(timeBudgetExpiryReason(999_999, 0, 0)).toBeNull();
         expect(timeBudgetExpiryReason(999_999, 0, undefined)).toBeNull();

@@ -30,7 +30,7 @@ function makeConfig(overrides: Partial<BrowserConfig> = {}): BrowserConfig {
 }
 
 // A locator returned by page.locator() — only the methods the adapter uses.
-// `evaluateAll`/`nth` back the CU-A7 ambiguous-selector narrowing: the adapter
+// `evaluateAll`/`nth` back the ambiguous-selector narrowing: the adapter
 // measures every match, then acts on the chosen one.
 interface MockLocator {
     focus: ReturnType<typeof vi.fn>;
@@ -187,7 +187,7 @@ describe('PlaywrightBrowserAdapter selector branches — Click', () => {
         expect(page.mouse.click).not.toHaveBeenCalled();
     });
 
-    it('narrows an ambiguous selector to the innermost match instead of throwing (CU-A7)', async () => {
+    it('narrows an ambiguous selector to the innermost match instead of throwing', async () => {
         // Regression guard for the strict-mode violations that turned into false
         // LoopDetected failures: `div:has-text(...)` matches the whole ancestor
         // chain, and Playwright's strict APIs reject a multi-match outright.
@@ -283,7 +283,7 @@ describe('PlaywrightBrowserAdapter selector branches — Scroll', () => {
         expect(page.mouse.move).not.toHaveBeenCalled();
     });
 
-    it('moves the pointer over the point before the wheel so overlays scroll (CU-A8)', async () => {
+    it('moves the pointer over the point before the wheel so overlays scroll', async () => {
         // The app-switcher case: the dropdown has its own overflow-y pane, and a
         // wheel dispatched at the default pointer position scrolls the page behind
         // it instead — leaving items below the fold permanently unreachable.
@@ -300,7 +300,7 @@ describe('PlaywrightBrowserAdapter selector branches — Scroll', () => {
             .toBeLessThan(page.mouse.wheel.mock.invocationCallOrder[0]);
     });
 
-    it('prefers Selector over a scroll point when both are supplied (CU-A8)', async () => {
+    it('prefers Selector over a scroll point when both are supplied', async () => {
         const adapter = await launchedAdapter();
         const action = Object.assign(new ScrollAction(), { Selector: '.footer', X: 10, Y: 20, DeltaY: 50 });
 

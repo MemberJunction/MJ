@@ -98,7 +98,7 @@ describe('runWithRetries', () => {
         expect(onBeforeRetry.mock.calls[0][1].status).toBe('Failed'); // lastResult
     });
 
-    // CU-F3: superseded attempts must be preserved for flake diagnosis.
+    // Superseded attempts must be preserved for flake diagnosis.
     it('does not set priorAttempts when the first attempt passes', async () => {
         const { fn } = sequence('Passed');
         const r = await runWithRetries(fn, fixedRetries(2));
@@ -130,11 +130,11 @@ describe('runWithRetries', () => {
     });
 });
 
-// RI-D2: the memo round-trip. A superseded attempt carries the engine's failure
+// The memo round-trip. A superseded attempt carries the engine's failure
 // memo + category, and each retry is HANDED the accumulated prior attempts so it
 // can feed the last failure forward to its engine (non-blind retry).
-describe('runWithRetries — non-blind retry (RI-D2)', () => {
-    /** A failing result carrying the RI-D2 diagnostics a driver would surface. */
+describe('runWithRetries — non-blind retry', () => {
+    /** A failing result carrying the diagnostics a driver would surface. */
     function failWithMemo(memo: string, category: FailureCategory): TestRunResult {
         return { ...makeResult('Failed'), failureMemo: memo, failureCategory: category };
     }

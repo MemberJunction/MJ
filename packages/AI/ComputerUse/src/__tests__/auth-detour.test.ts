@@ -3,7 +3,7 @@ import { isAuthDetourUrl, evaluateAuthDetour } from '../engine/auth-detour.js';
 
 const PATTERNS = ['auth0.com', 'login.microsoftonline.com', '/u/consent'];
 
-describe('isAuthDetourUrl (CU-B7)', () => {
+describe('isAuthDetourUrl', () => {
     it('matches a host pattern anywhere in the URL, case-insensitively', () => {
         expect(isAuthDetourUrl('https://dev-abc.us.AUTH0.com/authorize?x=1', PATTERNS)).toBe(true);
         expect(isAuthDetourUrl('https://login.microsoftonline.com/common/oauth2', PATTERNS)).toBe(true);
@@ -27,7 +27,7 @@ describe('isAuthDetourUrl (CU-B7)', () => {
     });
 });
 
-describe('evaluateAuthDetour (CU-B7)', () => {
+describe('evaluateAuthDetour', () => {
     it('reports no detour for an app URL', () => {
         const d = evaluateAuthDetour('http://localhost:4201/app', PATTERNS, 0, 2);
         expect(d.isDetour).toBe(false);

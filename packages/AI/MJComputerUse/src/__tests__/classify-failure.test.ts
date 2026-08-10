@@ -17,7 +17,7 @@ function sig(overrides: Partial<FailureSignals> = {}): FailureSignals {
     };
 }
 
-describe('classifyFailure (CU-F5)', () => {
+describe('classifyFailure', () => {
     it('returns null for a completed run', () => {
         expect(classifyFailure(sig({ status: 'Completed' }))).toBeNull();
     });

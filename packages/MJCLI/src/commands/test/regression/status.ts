@@ -13,7 +13,7 @@ import {
 export default class TestRegressionStatus extends Command {
   static description =
     'Show how far along and how healthy the current (or a specified) run is — ' +
-    'progress, pass/fail/flaky counts, and container health — from the DR-D5 ' +
+    'progress, pass/fail/flaky counts, and container health — from the ' +
     'incremental snapshot, without waiting for the run to finish.';
 
   static examples = [

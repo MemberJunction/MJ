@@ -204,7 +204,7 @@ describe('composeApplicationContext', () => {
     });
 });
 
-describe('findUnresolvedPlaceholders (CU-F7)', () => {
+describe('findUnresolvedPlaceholders', () => {
     it('returns [] for a fully-resolved string', () => {
         expect(findUnresolvedPlaceholders('http://localhost:4200/app')).toEqual([]);
     });

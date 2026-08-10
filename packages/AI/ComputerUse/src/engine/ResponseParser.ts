@@ -79,7 +79,7 @@ export class ResponseParser {
             response.Actions = ResponseParser.parseActions(parsed.actions ?? []);
             response.ToolCalls = ResponseParser.parseToolCalls(parsed.toolCalls ?? []);
             response.RequestJudgement = parsed.requestJudgement ?? false;
-            response.CheckpointReached = ResponseParser.toStateString(parsed.checkpointReached);   // tour signal (CU-D8)
+            response.CheckpointReached = ResponseParser.toStateString(parsed.checkpointReached);   // tour signal
             // Self-tracked agent state — optional, tolerant of absence.
             response.Evaluation = ResponseParser.toStateString(parsed.evaluation);
             response.Memory = ResponseParser.toStateString(parsed.memory);

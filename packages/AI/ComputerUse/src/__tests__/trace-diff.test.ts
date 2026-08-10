@@ -17,7 +17,7 @@ function trace(steps: TraceStep[]): ComputerUseTrace {
     return t;
 }
 
-describe('diffTraces (CU-C7)', () => {
+describe('diffTraces', () => {
     it('reports no drift for semantically identical traces', () => {
         const a = trace([step('click', { role: 'button', name: 'Save', selector: '#save' })]);
         const b = trace([step('click', { role: 'button', name: 'Save', selector: '#save' })]);

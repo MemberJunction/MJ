@@ -14,7 +14,7 @@ export default class TestRegressionBuild extends Command {
     'entity forms are missing OR stale vs the current schema (migrations + ' +
     'AssociationDB + MJ version), this first invokes `gen-forms` (~5 min) to ' +
     'regenerate them, so the explorer/api images never bake a schema that no ' +
-    'longer matches the DB (DR-C5).';
+    'longer matches the DB.';
 
   static examples = [
     '<%= config.bin %> <%= command.id %>',

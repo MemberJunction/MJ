@@ -6,7 +6,7 @@ function el(overrides: Partial<InteractiveElement> = {}): InteractiveElement {
     return Object.assign(new InteractiveElement(), overrides);
 }
 
-describe('serializeInteractiveElements (CU-A4)', () => {
+describe('serializeInteractiveElements', () => {
     it('renders indexed role + quoted name lines', () => {
         const out = serializeInteractiveElements([
             el({ Index: 12, Role: 'button', Name: 'Save Record', Selector: '#save' }),

@@ -21,7 +21,7 @@ function withTarget(action: Partial<TraceAction>, selector?: string): TraceStep 
     return s;
 }
 
-describe('substituteVariables (CU-C2)', () => {
+describe('substituteVariables', () => {
     it('replaces %name% with the provided value', () => {
         expect(substituteVariables('Create %recordName% now', { recordName: 'Acme' })).toBe('Create Acme now');
     });
@@ -33,7 +33,7 @@ describe('substituteVariables (CU-C2)', () => {
     });
 });
 
-describe('planReplayActions (CU-C2)', () => {
+describe('planReplayActions', () => {
     it('rehydrates a selector click', () => {
         const [a] = planReplayActions(withTarget({ Method: 'click', Button: 'left', ClickCount: 2 }, '#save'));
         expect(a.Type).toBe('Click');
@@ -71,7 +71,7 @@ describe('planReplayActions (CU-C2)', () => {
     });
 });
 
-describe('evaluatePrecondition (CU-C2 fail-fast)', () => {
+describe('evaluatePrecondition (fail-fast)', () => {
     const pre = (o: Partial<StepPrecondition>): StepPrecondition => Object.assign(new StepPrecondition(), o);
 
     it('fails when a URL pattern does not match', () => {
@@ -94,7 +94,7 @@ describe('evaluatePrecondition (CU-C2 fail-fast)', () => {
     });
 });
 
-describe('evaluatePostcondition (CU-C2)', () => {
+describe('evaluatePostcondition', () => {
     it('passes when no postcondition recorded', () => {
         expect(evaluatePostcondition(undefined, { urlMatched: false, expectVisibleOk: false, expectChecked: false }).pass).toBe(true);
     });

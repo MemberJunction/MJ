@@ -4,7 +4,7 @@ import { normalizeTraceUrl, traceUrlMatches, UUID_TOKEN } from '../engine/trace-
 const UUID_A = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
 const UUID_B = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
-describe('normalizeTraceUrl (CU-C1/C4)', () => {
+describe('normalizeTraceUrl', () => {
     it('replaces path UUIDs with a stable token so per-record URLs key equal', () => {
         const a = normalizeTraceUrl(`http://localhost:4200/app/record/${UUID_A}`);
         const b = normalizeTraceUrl(`http://localhost:4200/app/record/${UUID_B}`);
@@ -49,7 +49,7 @@ describe('normalizeTraceUrl (CU-C1/C4)', () => {
     });
 });
 
-describe('traceUrlMatches (CU-C2 guards)', () => {
+describe('traceUrlMatches (guards)', () => {
     it('matches a path-fragment pattern against a full URL', () => {
         expect(traceUrlMatches('/app/data', 'http://localhost:4200/app/data/list?x=1')).toBe(true);
     });

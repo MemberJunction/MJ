@@ -13,7 +13,7 @@ function traceFor(goal: string, buildHash = ''): ComputerUseTrace {
     return t;
 }
 
-describe('goalMatchesTrace (CU-C4)', () => {
+describe('goalMatchesTrace', () => {
     it('matches identical (whitespace-normalized) goals', () => {
         expect(goalMatchesTrace(traceFor(GOAL), `  ${GOAL}  `)).toBe(true);
     });
@@ -22,7 +22,7 @@ describe('goalMatchesTrace (CU-C4)', () => {
     });
 });
 
-describe('decideReplayTier (CU-C4)', () => {
+describe('decideReplayTier', () => {
     it('→ llm when there is no trace', () => {
         expect(decideReplayTier({ trace: null, currentGoal: GOAL }).tier).toBe('llm');
     });

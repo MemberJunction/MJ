@@ -58,7 +58,7 @@ export default class TestRegressionUp extends Command {
     'api-memory': Flags.string({ description: 'MJAPI container memory limit (MJ_REGRESSION_API_MEM_LIMIT), e.g. 12g. Default 10g.' }),
     metadata: Flags.string({ description: 'Directory of your test + test-suite metadata (pushed before the run). Requires --bacpac.' }),
     'skip-forms-check': Flags.boolean({
-      description: 'Skip the DR-C5 tripwire that refuses to start the self-contained stack when the ' +
+      description: 'Skip the tripwire that refuses to start the self-contained stack when the ' +
         'baked entity forms are missing or stale vs the current schema. Override only when you know ' +
         'the images already carry current forms.',
       default: false,
@@ -224,7 +224,7 @@ export default class TestRegressionUp extends Command {
 
     const childEnv: NodeJS.ProcessEnv = {
       ...process.env,
-      RUN_ID: process.env.RUN_ID || mintRunId(), // DR-F1: host-owned run identity
+      RUN_ID: process.env.RUN_ID || mintRunId(), // host-owned run identity
       MJ_IMAGE: (flags.image as string) ?? AGENTIC_TEST_RUNNER_IMAGE,
       MJ_EXPLORER_IMAGE: (flags['explorer-image'] as string) ?? 'memberjunction/explorer:latest',
       BACPAC_DIR: path.dirname(abs),

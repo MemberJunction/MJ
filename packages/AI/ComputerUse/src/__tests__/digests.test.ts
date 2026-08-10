@@ -8,7 +8,7 @@ function ev(partial: Partial<BrowserDiagnosticEvent>): BrowserDiagnosticEvent {
     return { timestamp: '2026-01-01T00:00:00Z', type: 'console', message: 'm', ...partial };
 }
 
-describe('formatDiagnosticsDigest (CU-A7)', () => {
+describe('formatDiagnosticsDigest', () => {
     it('returns empty for no events', () => {
         expect(formatDiagnosticsDigest([])).toBe('');
     });
@@ -61,7 +61,7 @@ function step(n: number, urlAfter: string, error = false): StepRecord {
     return s;
 }
 
-describe('summarizeOlderSteps (CU-E4)', () => {
+describe('summarizeOlderSteps', () => {
     it('returns empty for no steps', () => {
         expect(summarizeOlderSteps([])).toBe('');
     });

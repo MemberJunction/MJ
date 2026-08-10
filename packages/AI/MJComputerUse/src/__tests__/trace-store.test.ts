@@ -23,7 +23,7 @@ function sampleTrace(testId = 'ABC-123'): ComputerUseTrace {
     return t;
 }
 
-describe('traceFileName (RI-B2)', () => {
+describe('traceFileName', () => {
     it('uses the human-readable T### name prefix when present', () => {
         expect(traceFileName({ ID: 'uuid-1', Name: 'T053 - Discard Unsaved Edit' })).toBe('T053.trace.json');
         expect(traceFileName({ ID: 'uuid-1', Name: 'T001 - Login Smoke' })).toBe('T001.trace.json');
@@ -41,7 +41,7 @@ describe('traceFileName (RI-B2)', () => {
     });
 });
 
-describe('deserializeTrace (RI-B2)', () => {
+describe('deserializeTrace', () => {
     it('round-trips a serialized trace', () => {
         const json = JSON.stringify(sampleTrace('T007'));
         const back = deserializeTrace(json);
@@ -66,7 +66,7 @@ describe('deserializeTrace (RI-B2)', () => {
     });
 });
 
-describe('resolveTraceDir / resolveTraceOutDir (RI-B2)', () => {
+describe('resolveTraceDir / resolveTraceOutDir', () => {
     const saved = { dir: process.env.CU_TRACE_DIR, out: process.env.CU_TRACE_OUT_DIR };
     afterEach(() => {
         process.env.CU_TRACE_DIR = saved.dir;
@@ -88,7 +88,7 @@ describe('resolveTraceDir / resolveTraceOutDir (RI-B2)', () => {
     });
 });
 
-describe('persistCandidateTrace + loadTrace round-trip (RI-B2)', () => {
+describe('persistCandidateTrace + loadTrace round-trip', () => {
     let dir: string;
     beforeEach(async () => {
         dir = path.join(os.tmpdir(), `mj-trace-store-test-${process.pid}`);

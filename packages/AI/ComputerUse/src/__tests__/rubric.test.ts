@@ -5,7 +5,7 @@ function c(criterion: string, met: boolean): CriterionVerdict {
     return { criterion, met, evidence: '' };
 }
 
-describe('evaluateRubric (CU-D1)', () => {
+describe('evaluateRubric', () => {
     it('is Done only when every criterion is met', () => {
         const r = evaluateRubric([c('a', true), c('b', true), c('c', true)]);
         expect(r.done).toBe(true);

@@ -80,12 +80,12 @@ describe('SharedContextBrowserAdapter — MouseMove action', () => {
     });
 });
 
-describe('SharedContextBrowserAdapter — perception (delegates to shared helpers, CU-A3)', () => {
+describe('SharedContextBrowserAdapter — perception (delegates to shared helpers)', () => {
     it('GetAccessibilitySnapshot maps the real page snapshot (no longer the base no-op null)', async () => {
         const adapter = await launchedAdapter();
         const snapshot = await adapter.GetAccessibilitySnapshot();
         // Proves SCBA now runs real perception (page.accessibility.snapshot),
-        // not the inherited base no-op that always returned null pre-CU-A3.
+        // not the inherited base no-op that always returned null earlier.
         expect(snapshot).not.toBeNull();
         expect(snapshot?.Role).toBe('WebArea');
         expect(page.accessibility.snapshot).toHaveBeenCalledTimes(1);

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { computeDivergence } from '../test-driver/divergence.js';
 
-describe('computeDivergence (CU-D7)', () => {
+describe('computeDivergence', () => {
     it('all three agreeing (done) is unanimous', () => {
         const r = computeDivergence({ selfReportDone: true, judgeDone: true, oraclesPassed: true });
         expect(r.selfVsJudgeAgree).toBe(true);

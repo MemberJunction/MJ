@@ -1341,7 +1341,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                         failureReason: result.FailureReason,
                     },
                 });
-                this.logToTestRun(context, 'info', `Retained failure trace (${Math.round(buffer.byteLength / 1024)}KB) as a TestRunOutput (CU-F4)`);
+                this.logToTestRun(context, 'info', `Retained failure trace (${Math.round(buffer.byteLength / 1024)}KB) as a TestRunOutput`);
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);

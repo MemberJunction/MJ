@@ -17,7 +17,7 @@ const step = (o: {
     Postcondition: o.postUrl ? { UrlPattern: o.postUrl } : undefined,
 });
 
-describe('classifyTraceDiff (RI-B3)', () => {
+describe('classifyTraceDiff', () => {
     it('classifies a missing baseline as new', () => {
         const r = classifyTraceDiff(null, { Steps: [step({ name: 'Save' })] });
         expect(r.kind).toBe('new');

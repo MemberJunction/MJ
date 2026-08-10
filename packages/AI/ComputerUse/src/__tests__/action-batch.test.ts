@@ -104,7 +104,7 @@ describe('distillActionError', () => {
 });
 
 
-describe('isPageChangingAction (CU-B5)', () => {
+describe('isPageChangingAction', () => {
     it('flags navigation actions', () => {
         for (const t of ['Navigate', 'GoBack', 'GoForward', 'Refresh'] as const) {
             expect(isPageChangingAction(t)).toBe(true);
@@ -117,7 +117,7 @@ describe('isPageChangingAction (CU-B5)', () => {
     });
 });
 
-describe('evaluateBatchStop (CU-B5)', () => {
+describe('evaluateBatchStop', () => {
     const base = { actionType: 'Click' as const, success: true, urlChanged: false, executedCount: 1, maxActions: 4 };
 
     it('continues on a clean in-page action under the cap', () => {

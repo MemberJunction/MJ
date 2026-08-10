@@ -4,7 +4,7 @@ import { classifyChange } from '../commands/compare';
 type Summary = { Status: string; Score: number | null; Flaky?: boolean };
 const t = (Status: string, Score: number | null = 1, Flaky?: boolean): Summary => ({ Status, Score, Flaky });
 
-describe('classifyChange (DR-D8 retry-aware compare)', () => {
+describe('classifyChange (retry-aware compare)', () => {
     it('new / removed when a test appears or disappears', () => {
         expect(classifyChange(undefined, t('Passed'))).toBe('new');
         expect(classifyChange(t('Passed'), undefined)).toBe('removed');
@@ -23,7 +23,7 @@ describe('classifyChange (DR-D8 retry-aware compare)', () => {
         expect(classifyChange(t('Failed', 0.5), t('Failed', 0.7))).toBe('improvement');
     });
 
-    // The DR-D8 headline: a clean pass that becomes a pass-on-retry is surfaced,
+    // The headline: a clean pass that becomes a pass-on-retry is surfaced,
     // not buried in "unchanged".
     it('flaky when a stable pass becomes a flaky pass', () => {
         expect(classifyChange(t('Passed', 1, false), t('Passed', 1, true))).toBe('flaky');

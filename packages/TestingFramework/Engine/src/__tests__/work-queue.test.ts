@@ -98,7 +98,7 @@ describe('drainQueue', () => {
         expect(rows.sort()).toEqual(['a', 'c']);
     });
 
-    it('sheds workers via the admit gate but worker 0 still drains the whole queue (DR-D3)', async () => {
+    it('sheds workers via the admit gate but worker 0 still drains the whole queue', async () => {
         const src = items('a', 'b', 'c', 'd', 'e', 'f');
         const runsByWorker: Record<number, number> = {};
         // Gate: worker 0 always proceeds; workers ≥1 shed immediately (degraded).
@@ -114,7 +114,7 @@ describe('drainQueue', () => {
         expect(runsByWorker[2]).toBeUndefined();
     });
 
-    it('honors interDispatchDelayMs between items without dropping work (DR-D9)', async () => {
+    it('honors interDispatchDelayMs between items without dropping work', async () => {
         vi.useFakeTimers();
         try {
             const src = items('a', 'b', 'c');
@@ -132,7 +132,7 @@ describe('drainQueue', () => {
         }
     });
 
-    it('aborts EVERY worker (incl. worker 0) when shouldAbort trips (DR-D7)', async () => {
+    it('aborts EVERY worker (incl. worker 0) when shouldAbort trips', async () => {
         const src = items('a', 'b', 'c', 'd', 'e', 'f');
         const ran: string[] = [];
         let aborted = false;
@@ -146,7 +146,7 @@ describe('drainQueue', () => {
         expect(rows.length).toBe(ran.length);
     });
 
-    it('stops dispatching new items once the wall-clock deadline passes (DR-D4)', async () => {
+    it('stops dispatching new items once the wall-clock deadline passes', async () => {
         const src = items('a', 'b', 'c', 'd', 'e');
         let clock = 1000;
         const now = () => clock;

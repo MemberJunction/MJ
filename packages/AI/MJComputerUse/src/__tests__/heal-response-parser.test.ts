@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { MJComputerUseEngine } from '../engine/MJComputerUseEngine';
 
-// RI-C2: the LLM heal call itself is live-gated (deferred to RI-C1 dispatch), but
+// The LLM heal call itself is live-gated (deferred to tier dispatch), but
 // its response parser is pure + static, so it is fully unit-testable here. It is
 // the one piece of the heal seam whose correctness does not depend on a live model.
 const parse = MJComputerUseEngine.parseHealResponse;
 
-describe('MJComputerUseEngine.parseHealResponse (RI-C2)', () => {
+describe('MJComputerUseEngine.parseHealResponse', () => {
     it('parses a plain {index, confidence} object', () => {
         expect(parse('{"index":2,"confidence":0.86}')).toEqual({ index: 2, confidence: 0.86 });
     });

@@ -9,7 +9,7 @@ import {
 
 export default class TestRegressionDown extends Command {
   static description =
-    'Stop the regression stack. The DB volume is KEPT by default (DR-B2) so the ' +
+    'Stop the regression stack. The DB volume is KEPT by default so the ' +
     'run stays inspectable/resumable; pass --volumes to wipe it.';
 
   static examples = [

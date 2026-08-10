@@ -65,7 +65,7 @@ function fastProfile(): AppProfile {
     return p;
 }
 
-describe('ComputerUseEngine prelude (CU-C6)', () => {
+describe('ComputerUseEngine prelude', () => {
     it('runs the scripted prelude before the agentic loop (zero LLM)', async () => {
         const engine = new PreludeProbeEngine();
         const adapter = new NavFakeAdapter();

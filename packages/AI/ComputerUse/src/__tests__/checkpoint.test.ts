@@ -199,7 +199,7 @@ describe('unlatchedVisualCriteria', () => {
     });
 });
 
-describe('findCheckpoint + checkpointVisualCriteria (CU-D8 Phase B scoping)', () => {
+describe('findCheckpoint + checkpointVisualCriteria (checkpoint scoping)', () => {
     it('findCheckpoint matches case-insensitively and trims', () => {
         const cps = [visualCp('Agents List', ['x'])];
         expect(findCheckpoint(cps, '  agents list ')?.Name).toBe('Agents List');

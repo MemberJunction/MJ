@@ -27,7 +27,7 @@ function mkResult(over: Partial<TestRunResult>): TestRunResult {
     };
 }
 
-describe('IncrementalResultsSink (DR-D5)', () => {
+describe('IncrementalResultsSink', () => {
     let dir: string;
     let out: string;
 
@@ -64,7 +64,7 @@ describe('IncrementalResultsSink (DR-D5)', () => {
         expect(lines[0]).toMatchObject({ isFinal: true, status: 'Passed', workerIndex: 0 });
     });
 
-    it('persists the failure category into the lineage (DR-D8)', () => {
+    it('persists the failure category into the lineage', () => {
         const sink = IncrementalResultsSink.forOutput(out, 'S')!;
         sink.onTestComplete(mkResult({ testId: 't1', testName: 'Alpha', status: 'Failed', score: 0, failureCategory: 'infra' }));
         expect(readJsonl()[0].failureCategory).toBe('infra');
@@ -122,7 +122,7 @@ describe('IncrementalResultsSink (DR-D5)', () => {
         expect(sink.completedCount).toBe(1);
     });
 
-    // DR-D4: in-flight tracking makes a running (or wedged) worker visible in the
+    // In-flight tracking makes a running (or wedged) worker visible in the
     // partial snapshot that `status` reads.
     it('tracks in-flight tests via onTestStart and clears them on completion', () => {
         const sink = IncrementalResultsSink.forOutput(out, 'S')!;

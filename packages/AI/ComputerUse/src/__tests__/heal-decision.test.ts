@@ -14,7 +14,7 @@ function target(role?: string, name?: string): TraceTarget {
     return t;
 }
 
-describe('reresolveTarget (CU-C3)', () => {
+describe('reresolveTarget', () => {
     it('confidently re-resolves a unique role+name match (element moved)', () => {
         const r = reresolveTarget(target('button', 'Save'), [
             el(0, 'link', 'Home', '#home'),
@@ -61,7 +61,7 @@ describe('shouldAcceptHeal (mabl gate)', () => {
     });
 });
 
-describe('isSelectorHealable (CU-C3 flow-vs-selector drift)', () => {
+describe('isSelectorHealable (flow-vs-selector drift)', () => {
     it('treats precondition/action divergence as selector-healable', () => {
         expect(isSelectorHealable('precondition — target never became visible')).toBe(true);
         expect(isSelectorHealable('action Click failed — not found')).toBe(true);

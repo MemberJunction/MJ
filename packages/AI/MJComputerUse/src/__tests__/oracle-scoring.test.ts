@@ -6,7 +6,7 @@ function res(oracleType: string, passed: boolean, advisory?: boolean): OracleRes
     return { oracleType, passed, score: passed ? 1 : 0, message: '', advisory };
 }
 
-describe('oracle-scoring (CU-D3)', () => {
+describe('oracle-scoring', () => {
     describe('isOracleAdvisory', () => {
         it('defaults step-count to advisory', () => {
             expect(isOracleAdvisory('step-count')).toBe(true);
@@ -47,7 +47,7 @@ describe('oracle-scoring (CU-D3)', () => {
         });
 
         it('a failing advisory oracle does not appear among gating results', () => {
-            // The scenario CU-D3 fixes: step-count "fails" but must not gate.
+            // The scenario this fixes: step-count "fails" but must not gate.
             const results = [res('goal-completion', true), res('step-count', false, true)];
             const gating = partitionGatingOracles(results);
             expect(gating.every(r => r.passed)).toBe(true);

@@ -302,7 +302,7 @@ export class ComputerUseEngine {
             return result;
         } catch (error) {
             if (error instanceof CancellationError) {
-                this.log('Replay cancelled mid-step (CU-B8) — returning Cancelled');
+                this.log('Replay cancelled mid-step — returning Cancelled');
                 result = this.buildResult(context, 'Cancelled', false);
                 result.Replay = replay;
                 return result;
@@ -478,7 +478,7 @@ export class ComputerUseEngine {
             return;
         }
         try {
-            this.log(`Restoring warm-seed context snapshot for ${seed.Origin} (CU-G4)`);
+            this.log(`Restoring warm-seed context snapshot for ${seed.Origin}`);
             await this.browserAdapter.SeedContext(seed);
         } catch (error) {
             this.logError('Context seed restore failed (falling back to a cold boot)', error);
@@ -614,7 +614,7 @@ export class ComputerUseEngine {
         if (!prelude || prelude.Actions.length === 0) {
             return;
         }
-        this.log(`Running deterministic prelude — ${prelude.Actions.length} scripted actions (zero LLM, CU-C6)`);
+        this.log(`Running deterministic prelude — ${prelude.Actions.length} scripted actions (zero LLM)`);
         try {
             for (const action of prelude.Actions) {
                 this.ensureNotCancelled();
@@ -652,9 +652,9 @@ export class ComputerUseEngine {
             : false;
         const landing = evaluatePreludeLanding({ hasSelector, selectorVisible, hasUrl, urlMatched });
         if (!landing.landed) {
-            this.logError(`Prelude landing check failed — ${landing.reason} (agent will start from the current page; CU-C6)`);
+            this.logError(`Prelude landing check failed — ${landing.reason} (agent will start from the current page)`);
         } else {
-            this.log('Prelude landed as expected (CU-C6)');
+            this.log('Prelude landed as expected');
         }
     }
 
@@ -733,7 +733,7 @@ export class ComputerUseEngine {
                 step = await this.executeSingleStep(context, stepNumber);
             } catch (error) {
                 if (error instanceof CancellationError) {
-                    this.log('Run cancelled mid-step (CU-B8) — returning Cancelled');
+                    this.log('Run cancelled mid-step — returning Cancelled');
                     return this.buildResult(context, 'Cancelled', false, this.terminalVerdict(context, lastVerdict));
                 }
                 throw error;
@@ -765,11 +765,11 @@ export class ComputerUseEngine {
                     stateSignatures.length = 0;
                     loopTrips = 0;
                     context.LoopEvidence = undefined;
-                    this.log(`Step ${stepNumber} — checkpoint progress (${metBefore} → ${metAfter}); loop detection reset (CU-D8)`);
+                    this.log(`Step ${stepNumber} — checkpoint progress (${metBefore} → ${metAfter}); loop detection reset`);
                 }
                 if (allCheckpointsMet(context.Params.Checkpoints, context.CheckpointState)) {
                     const verdict = synthesizeCheckpointVerdict(context.Params.Checkpoints, context.CheckpointState);
-                    this.log(`Step ${stepNumber} — all ${context.Params.Checkpoints.length} checkpoints reached; completing (CU-D8)`);
+                    this.log(`Step ${stepNumber} — all ${context.Params.Checkpoints.length} checkpoints reached; completing`);
                     const result = this.buildResult(context, 'Completed', true, verdict);
                     this.onRunComplete(result);
                     return result;
@@ -819,9 +819,9 @@ export class ComputerUseEngine {
                     });
                     impossibleCount = impossibleGate.newCount;
                     if (impossibleGate.suppressed) {
-                        this.log(`Step ${stepNumber} — judge said impossible but the page is still loading; not accepting it (CU-D6)`);
+                        this.log(`Step ${stepNumber} — judge said impossible but the page is still loading; not accepting it`);
                     } else if (step.JudgeVerdict.Impossible && !impossibleGate.accept) {
-                        this.log(`Step ${stepNumber} — impossible verdict ${impossibleCount}/${DEFAULT_IMPOSSIBLE_QUORUM}; need a concurring verdict before ending (CU-D6)`);
+                        this.log(`Step ${stepNumber} — impossible verdict ${impossibleCount}/${DEFAULT_IMPOSSIBLE_QUORUM}; need a concurring verdict before ending`);
                     } else if (impossibleGate.accept) {
                         this.log(`Step ${stepNumber} — goal confirmed impossible (${impossibleCount} concurring verdicts): ${step.JudgeVerdict.Reason}`);
                         const result = this.buildResult(context, 'Impossible', false, lastVerdict);
@@ -840,7 +840,7 @@ export class ComputerUseEngine {
                 !step.JudgeVerdict.Done && !step.JudgeVerdict.Impossible) {
                 consecutiveJudgeDisagreements++;
                 if (consecutiveJudgeDisagreements >= ComputerUseEngine.MAX_CONSECUTIVE_JUDGE_DISAGREEMENTS) {
-                    this.log(`Step ${stepNumber} — controller declared completion ${consecutiveJudgeDisagreements}× but the judge disagreed each time; ending as Failed (CU-B3)`);
+                    this.log(`Step ${stepNumber} — controller declared completion ${consecutiveJudgeDisagreements}× but the judge disagreed each time; ending as Failed`);
                     const result = this.buildResult(context, 'Failed', false, lastVerdict);
                     this.onRunComplete(result);
                     return result;
@@ -860,7 +860,7 @@ export class ComputerUseEngine {
                     loopTrips++;
                     if (loopTrips >= loopCfg.TerminateAfterTrips) {
                         // A truthful early verdict beats 20 more wasted steps.
-                        this.log(`Step ${stepNumber} — loop persisted ${loopTrips} trips (${loop.kind}); terminating as Failed/LoopDetected (CU-B1)`);
+                        this.log(`Step ${stepNumber} — loop persisted ${loopTrips} trips (${loop.kind}); terminating as Failed/LoopDetected`);
                         const verdict = await this.finalVerdictOnTermination(context, stepNumber, lastVerdict);
                         const result = this.buildResult(context, 'Failed', false, verdict, 'LoopDetected');
                         this.onRunComplete(result);
@@ -945,10 +945,10 @@ export class ComputerUseEngine {
             const asserts = cp.Assertions ?? [];
             const visual = cp.VisualCriteria ?? [];
             if (asserts.length === 0 && visual.length === 0) {
-                this.log(`WARNING: checkpoint "${cp.Name}" declares no assertions or visual criteria — it latches vacuously (CU-D8)`);
+                this.log(`WARNING: checkpoint "${cp.Name}" declares no assertions or visual criteria — it latches vacuously`);
             }
             if (!grounding && asserts.some(a => a.Kind === 'visible' || a.Kind === 'absent')) {
-                this.log(`WARNING: checkpoint "${cp.Name}" has visible/absent assertions but ElementGrounding is off — those never latch; use url assertions or enable ElementGrounding (CU-D8)`);
+                this.log(`WARNING: checkpoint "${cp.Name}" has visible/absent assertions but ElementGrounding is off — those never latch; use url assertions or enable ElementGrounding`);
             }
         }
     }
@@ -1089,14 +1089,14 @@ export class ComputerUseEngine {
         context.AuthDetourCount++;
 
         if (decision.shouldTerminate) {
-            this.logError(`Step ${stepNumber} — auth detour #${context.AuthDetourCount} to ${currentUrl}; exceeded MaxDetours (${authCfg.MaxDetours}). Terminating as Failed/AuthDetour — an infrastructure/session fault, not an agent failure (CU-B7)`);
+            this.logError(`Step ${stepNumber} — auth detour #${context.AuthDetourCount} to ${currentUrl}; exceeded MaxDetours (${authCfg.MaxDetours}). Terminating as Failed/AuthDetour — an infrastructure/session fault, not an agent failure`);
             const verdict = await this.forceFinalJudge(context, stepNumber, lastVerdict);
             const result = this.buildResult(context, 'Failed', false, verdict, 'AuthDetour');
             this.onRunComplete(result);
             return { result, recoveryMs: 0 };
         }
 
-        this.log(`Step ${stepNumber} — auth detour #${context.AuthDetourCount} detected (${currentUrl}); recovering (re-apply auth + navigate to start URL), not charging the agent (CU-B7)`);
+        this.log(`Step ${stepNumber} — auth detour #${context.AuthDetourCount} detected (${currentUrl}); recovering (re-apply auth + navigate to start URL), not charging the agent`);
         const recoveryMs = await this.recoverFromAuthDetour(context);
         return { recoveryMs };
     }
@@ -1206,7 +1206,7 @@ export class ComputerUseEngine {
             if (!gp.passed) {
                 return this.buildReplayResult(context, replay, false, `goal postconditions failed: ${gp.detail}`);
             }
-            this.log(`Replay — all ${trace.GoalPostconditions.length} goal postconditions met (CU-C5)`);
+            this.log(`Replay — all ${trace.GoalPostconditions.length} goal postconditions met`);
         }
 
         // Judge the replayed end-state for goal-completion parity with the LLM tier,
@@ -1284,7 +1284,7 @@ export class ComputerUseEngine {
                 latchVisualFromVerdict(checkpoints, context.CheckpointState, verdict, stepNumber);
             }
         } else {
-            this.log(`Replay — all checkpoint sections latched deterministically; no judge call needed (CU-D8)`);
+            this.log(`Replay — all checkpoint sections latched deterministically; no judge call needed`);
         }
 
         const verdict = synthesizeCheckpointVerdict(checkpoints, context.CheckpointState);
@@ -1626,7 +1626,7 @@ export class ComputerUseEngine {
         step.StartedAt = Date.now();
         step.UrlBefore = this.browserAdapter.CurrentUrl;
         step.Url = step.UrlBefore;        // back-compat alias for UrlBefore
-        step.UrlAfter = step.UrlBefore;   // updated after actions run (CU-A8)
+        step.UrlAfter = step.UrlBefore;   // updated after actions run
 
         try {
             this.log(`Step ${stepNumber}/${context.Params.MaxSteps}`);
@@ -1704,7 +1704,7 @@ export class ComputerUseEngine {
                     this.log(`Step ${stepNumber} — controller signaled unknown checkpoint "${name}" (ignored)`);
                 } else if (checkpointVisualCriteria(context.Params.Checkpoints, context.CheckpointState, name).length > 0) {
                     signaledCheckpoint = name;
-                    this.log(`Step ${stepNumber} — controller reached checkpoint "${name}"; forcing scoped judge (CU-D8)`);
+                    this.log(`Step ${stepNumber} — controller reached checkpoint "${name}"; forcing scoped judge`);
                 }
             }
 
@@ -1758,7 +1758,7 @@ export class ComputerUseEngine {
                 (controllerRequestedJudgement || signaledCheckpoint !== undefined || (scheduledJudge && !stateUnchanged));
 
             if (scheduledJudge && stateUnchanged && !controllerRequestedJudgement) {
-                this.log(`Step ${stepNumber} — skipping judge: visible state unchanged since last judged step (CU-G5)`);
+                this.log(`Step ${stepNumber} — skipping judge: visible state unchanged since last judged step`);
             }
 
             if (runJudge) {
@@ -2060,7 +2060,7 @@ export class ComputerUseEngine {
                 const scaled = new ScrollAction();
                 scaled.DeltaX = Math.round(action.DeltaX * scaleX);
                 scaled.DeltaY = Math.round(action.DeltaY * scaleY);
-                scaled.Selector = action.Selector;   // CU-A6: preserve scroll-into-view target
+                scaled.Selector = action.Selector;   // preserve scroll-into-view target
                 // the scroll-at point scales like a click coordinate.
                 if (action.X !== undefined && action.Y !== undefined) {
                     scaled.X = Math.round(action.X * scaleX);
@@ -2112,10 +2112,10 @@ export class ComputerUseEngine {
         request.StepNumber = stepNumber;
         request.MaxSteps = context.Params.MaxSteps;
         request.CurrentUrl = context.CurrentUrl;
-        request.Hints = context.Params.Hints;   // per-test UI hints (CU-E5)
-        request.PreviousAttemptSummary = context.Params.PreviousAttemptSummary;   // non-blind retry (CU-B6)
-        request.CurrentDate = new Date().toISOString().slice(0, 10);   // current date (CU-E3)
-        request.Memory = context.LastMemory;   // echo self-tracked state (CU-E2)
+        request.Hints = context.Params.Hints;   // per-test UI hints
+        request.PreviousAttemptSummary = context.Params.PreviousAttemptSummary;   // non-blind retry
+        request.CurrentDate = new Date().toISOString().slice(0, 10);   // current date
+        request.Memory = context.LastMemory;   // echo self-tracked state
         request.Plan = context.LastPlan;
         // Thread the cancellation signal so an in-flight controller call aborts
         // promptly on Stop(); consumed by Layer 2, not template data.
@@ -2448,7 +2448,7 @@ export class ComputerUseEngine {
         if (cacheKey) {
             const cached = this.judgeCache!.get(cacheKey);
             if (cached) {
-                this.log(`Step ${stepNumber} — judge verdict served from the cross-attempt cache (CU-C5)`);
+                this.log(`Step ${stepNumber} — judge verdict served from the cross-attempt cache`);
                 return cached;
             }
         }
@@ -2464,9 +2464,9 @@ export class ComputerUseEngine {
         judgeContext.CurrentUrl = context.CurrentUrl;
         judgeContext.ControllerRequestedJudgement = controllerRequestedJudgement;
         judgeContext.CurrentDiagnosticsDigest = currentDiagnosticsDigest;
-        judgeContext.ValidationCriteria = this.activeJudgeCriteria(context, signaledCheckpoint);   // rubric judging (CU-D1); tour visual criteria (CU-D8)
-        judgeContext.IsCheckpointTour = isCheckpointRun(context.Params.Checkpoints);   // suppress navigation-shape heuristics on a tour (CU-D8)
-        judgeContext.Signal = this.abortController.signal;   // abort in-flight judge call on Stop() (CU-B8)
+        judgeContext.ValidationCriteria = this.activeJudgeCriteria(context, signaledCheckpoint);   // rubric judging; tour visual criteria
+        judgeContext.IsCheckpointTour = isCheckpointRun(context.Params.Checkpoints);   // suppress navigation-shape heuristics on a tour
+        judgeContext.Signal = this.abortController.signal;   // abort in-flight judge call on Stop()
 
         const verdict = await this.judge.Evaluate(judgeContext);
         if (cacheKey) {

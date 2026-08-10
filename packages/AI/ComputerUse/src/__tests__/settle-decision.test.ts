@@ -15,7 +15,7 @@ function signals(overrides: Partial<SettlePollSignals> = {}): SettlePollSignals 
     };
 }
 
-describe('resolveSettleExit (CU-A1/A2)', () => {
+describe('resolveSettleExit', () => {
     it('keeps polling until the adaptive floor elapses, even when fully settled', () => {
         expect(resolveSettleExit(signals({ hashStable: true, elapsedMs: 200, floorMs: 500 }))).toBeNull();
         // Same signals past the floor → exits.

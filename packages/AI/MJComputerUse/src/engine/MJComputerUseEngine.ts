@@ -188,7 +188,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     public override async Run(params: MJRunComputerUseParams): Promise<ComputerUseResult> {
         this.contextUser = params.ContextUser;
         this.agentRunId = params.AgentRunId;
-        this.controllerGeneration = params.ControllerGeneration;   // per-test determinism knobs (CU-E6)
+        this.controllerGeneration = params.ControllerGeneration;   // per-test determinism knobs
         this.lastPromptRunId = undefined;
         this.lastJudgePromptRunId = undefined;
 

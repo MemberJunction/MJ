@@ -115,7 +115,7 @@ describe('TestEngineBase', () => {
       expect(engine.GetTestsForSuite('suite-123')).toEqual([]);
     });
 
-    // DR-D9: the O(n) rewrite must preserve behavior — only this suite's tests,
+    // The O(n) rewrite must preserve behavior — only this suite's tests,
     // sorted by Sequence, dropping join rows whose test doesn't exist.
     it('returns only the suite members, ordered by sequence', () => {
       const inject = engine as unknown as {

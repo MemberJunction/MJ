@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { shouldCaptureArtifact, shouldRetainArtifact } from '../test-driver/artifact-retention.js';
 
-describe('shouldCaptureArtifact (CU-F4)', () => {
+describe('shouldCaptureArtifact', () => {
     it('captures for retain-on-failure and on', () => {
         expect(shouldCaptureArtifact('retain-on-failure')).toBe(true);
         expect(shouldCaptureArtifact('on')).toBe(true);
@@ -12,7 +12,7 @@ describe('shouldCaptureArtifact (CU-F4)', () => {
     });
 });
 
-describe('shouldRetainArtifact (CU-F4)', () => {
+describe('shouldRetainArtifact', () => {
     it('on: keeps regardless of outcome', () => {
         expect(shouldRetainArtifact('on', true)).toBe(true);
         expect(shouldRetainArtifact('on', false)).toBe(true);

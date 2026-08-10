@@ -8,7 +8,7 @@ import { computeAppBuildHash, gitRevisionShort } from '../lib/regression/docker-
 // against a real repo; a fresh tmp dir is outside any repo for the null path.
 const REPO_DIR = process.cwd();
 
-describe('gitRevisionShort (RI-A1)', () => {
+describe('gitRevisionShort', () => {
   it('returns a 12-char short SHA (optionally -dirty) inside the repo', () => {
     const rev = gitRevisionShort(REPO_DIR);
     expect(rev).not.toBeNull();
@@ -25,7 +25,7 @@ describe('gitRevisionShort (RI-A1)', () => {
   });
 });
 
-describe('computeAppBuildHash (RI-A1 / Decision D2)', () => {
+describe('computeAppBuildHash', () => {
   it('composes <gitSha>:<schemaHash> inside the repo', () => {
     const hash = computeAppBuildHash(REPO_DIR);
     // git short SHA (12 hex, optional -dirty) : schema fingerprint (16 hex)

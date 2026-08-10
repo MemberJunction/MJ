@@ -6,7 +6,7 @@ import { findMonorepoRoot, isInsideMonorepo } from '../lib/regression/docker-hel
 
 const SENTINEL = 'docker/regression/docker-compose.test.yml';
 
-describe('findMonorepoRoot (DR-F7)', () => {
+describe('findMonorepoRoot', () => {
   let root: string;
 
   beforeEach(() => {

@@ -5,7 +5,7 @@ const GiB = 1024 ** 3;
 const MiB = 1024 ** 2;
 const KiB = 1024;
 
-describe('parseMemoryToBytes (DR-F5)', () => {
+describe('parseMemoryToBytes', () => {
   it('parses g / m / k suffixes', () => {
     expect(parseMemoryToBytes('8g')).toBe(8 * GiB);
     expect(parseMemoryToBytes('512m')).toBe(512 * MiB);
@@ -31,7 +31,7 @@ describe('parseMemoryToBytes (DR-F5)', () => {
   });
 });
 
-describe('suggestWorkers — DR-A4 formula', () => {
+describe('suggestWorkers — worker formula', () => {
   it('derives (mem - 1GiB reserve) / 1.5GiB per worker, floored', () => {
     expect(suggestWorkers(7 * GiB)).toBe(4); // (7-1)/1.5 = 4
     expect(suggestWorkers(4 * GiB)).toBe(2); // (3)/1.5 = 2

@@ -45,7 +45,7 @@ function completedResult(steps: StepRecord[]): ComputerUseResult {
     return r;
 }
 
-describe('isRecordableRun (CU-C1 gate)', () => {
+describe('isRecordableRun (gate)', () => {
     it('accepts a clean Completed + Done run', () => {
         const step = new StepRecord();
         step.StepNumber = 1;
@@ -108,7 +108,7 @@ function clickEl(index: number): ClickElementAction {
     return a;
 }
 
-describe('recordTrace (CU-C1 distillation)', () => {
+describe('recordTrace (distillation)', () => {
     it('stamps the envelope fields', () => {
         const trace = recordTrace({
             result: completedResult([]),
@@ -219,7 +219,7 @@ describe('recordTrace (CU-C1 distillation)', () => {
     });
 });
 
-describe('hashGoal (CU-C4 goal freezing)', () => {
+describe('hashGoal (goal freezing)', () => {
     it('is stable and whitespace-insensitive', () => {
         expect(hashGoal('Open the   Data Explorer')).toBe(hashGoal('Open the Data Explorer'));
         expect(hashGoal(' Open the Data Explorer ')).toBe(hashGoal('Open the Data Explorer'));

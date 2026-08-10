@@ -265,7 +265,7 @@ export function formsFingerprintStatus(root: string = process.cwd()): FormsFinge
     return { fresh: false, reason: 'generated forms are missing (.docker-generated/ not populated)', current, recorded };
   }
   if (recorded === null) {
-    return { fresh: false, reason: 'generated forms have no fingerprint (generated before DR-C5, or manually)', current, recorded };
+    return { fresh: false, reason: 'generated forms have no fingerprint (generated before fingerprinting was added, or manually)', current, recorded };
   }
   if (recorded !== current) {
     return {

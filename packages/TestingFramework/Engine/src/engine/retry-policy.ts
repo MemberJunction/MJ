@@ -121,7 +121,7 @@ export function maxExtraAttemptsForCategory(category: FailureCategory, requested
         case 'infra':
         case 'auth-detour':
         default:
-            return ceiling; // env/transient — full budget (health-gated in DR-D3)
+            return ceiling; // env/transient — full budget (health-gated by admission control)
     }
 }
 

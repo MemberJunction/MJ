@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildFailureMemo, DEFAULT_FAILURE_MEMO_MAX_CHARS } from '../engine/failure-memo.js';
 
-describe('buildFailureMemo (CU-B6)', () => {
+describe('buildFailureMemo', () => {
     it('states the terminal status and reason', () => {
         const memo = buildFailureMemo({ status: 'Failed', failureReason: 'LoopDetected', finalUrl: 'http://x/app/data' });
         expect(memo).toContain('Failed (LoopDetected)');

@@ -10,7 +10,7 @@ import {
   GENERATED_FORMS_DIR,
 } from '../lib/regression/docker-helpers.js';
 
-/** Lay down the three schema inputs the fingerprint hashes (DR-C5 / DR-B1). */
+/** Lay down the three schema inputs the fingerprint hashes. */
 function makeSchemaFixture(
   root: string,
   opts: { migration?: string; demo?: string; version?: string } = {},

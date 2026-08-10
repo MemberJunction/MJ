@@ -90,7 +90,7 @@ function trace(steps: TraceStep[]): ComputerUseTrace {
     return t;
 }
 
-describe('ComputerUseEngine.Replay self-heal (CU-C3)', () => {
+describe('ComputerUseEngine.Replay self-heal', () => {
     it('heals a drifted selector by re-resolving role+name, then rewrites the trace', async () => {
         const engine = new ComputerUseEngine();
         const adapter = new HealFakeAdapter();
