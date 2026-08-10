@@ -27,6 +27,8 @@ const row = (over: Partial<AgentRunTreeRow> & Pick<AgentRunTreeRow, 'NodeID' | '
     DurationMs: null,
     Cost: null,
     Tokens: null,
+    PromptTokens: null,
+    CompletionTokens: null,
     SourceEntity: 'MJ: AI Agent Runs',
     SourceID: over.NodeID,
     ...over,
@@ -121,6 +123,39 @@ describe('traversal helpers', () => {
         // the near-zero cost of a run that dispatched all its real work.
         const totals = SumAgentRunTreeCost(BuildAgentRunTree(deepRun())!);
         expect(totals.Cost).toBeCloseTo(0.08);
+    });
+
+    it('sums the prompt/completion split on the same basis as the total', () => {
+        // All four numbers are written to AIAgentRun's …Rollup columns at settlement. Deriving two
+        // of them here and the other two somewhere else is how one run ends up described by two
+        // arithmetics that disagree.
+        const totals = SumAgentRunTreeCost(BuildAgentRunTree([
+            row({ NodeID: 'run', NodeType: 'Run', Name: 'R', Tokens: 300, PromptTokens: 200, CompletionTokens: 100 }),
+            row({
+                NodeID: 'nested', ParentNodeID: 'run', Depth: 1, NodeType: 'Run', Name: 'Sub',
+                Tokens: 30, PromptTokens: 20, CompletionTokens: 10,
+            }),
+        ])!);
+
+        expect(totals).toEqual({ Cost: 0, Tokens: 330, PromptTokens: 220, CompletionTokens: 110 });
+    });
+
+    it('counts a nested run ONCE — the property that lets the total be cached back onto the run', () => {
+        // 🔒 The load-bearing invariant. Since v6.1 the dispatcher writes this sum into
+        // TotalCostRollup, so the column is an OUTPUT of the tree. It is only safe because every
+        // node reports its OWN spend: if the query is ever "improved" to select TotalCostRollup for
+        // a Run node, that written total becomes an INPUT too, and each settlement folds the previous
+        // one back in — compounding, silently, with no error anywhere.
+        //
+        // Here the nested run spent 0.04 and its own step spent 0.01. A rollup-valued node would
+        // report 0.05 for the run AND 0.01 for the step, totalling 0.06 for 0.05 of real spend.
+        const totals = SumAgentRunTreeCost(BuildAgentRunTree([
+            row({ NodeID: 'run', NodeType: 'Run', Name: 'R', Cost: 0.10 }),
+            row({ NodeID: 'nested', ParentNodeID: 'run', Depth: 1, NodeType: 'Run', Name: 'Sub', Cost: 0.04 }),
+            row({ NodeID: 'nested-step', ParentNodeID: 'nested', Depth: 2, NodeType: 'Step', Name: 'Prompt', Cost: 0.01 }),
+        ])!);
+
+        expect(totals.Cost).toBeCloseTo(0.15);
     });
 
     it('formats a readable outline, so a failed assertion names the node', () => {

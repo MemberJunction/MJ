@@ -84,6 +84,16 @@ export type AgentRunTreeRow = {
     /** What this node itself spent. Null where the concept does not apply, e.g. a Task. */
     Cost: number | null;
     Tokens: number | null;
+    /**
+     * The prompt/completion split of {@link Tokens}, on the same per-node own-spend basis.
+     *
+     * Present because the settlement-time rollup writes four columns on `AIAgentRun`. A tree that
+     * answered only cost and total tokens would leave the other two to a second computation on a
+     * different basis — and two numbers describing one run that were derived differently is the
+     * defect this tree exists to remove, not a detail to leave to callers.
+     */
+    PromptTokens: number | null;
+    CompletionTokens: number | null;
 
     /**
      * Where to go when someone clicks it — the entity name and record id.
@@ -203,14 +213,29 @@ export function FindAgentRunTreeNodes(
 }
 
 /** What a run cost in total, including every nested run and dispatched graph. */
-export function SumAgentRunTreeCost(root: AgentRunTreeNode): { Cost: number; Tokens: number } {
-    let Cost = 0;
-    let Tokens = 0;
+export type AgentRunTreeTotals = {
+    Cost: number;
+    Tokens: number;
+    PromptTokens: number;
+    CompletionTokens: number;
+};
+
+/**
+ * What a run cost in total, including every nested run and dispatched graph.
+ *
+ * A plain SUM is correct **only because every node reports its OWN spend** — see the header of
+ * `get-agent-run-tree.sql`. If a node ever carried a rollup, this would double-count each nested
+ * run once per level of nesting.
+ */
+export function SumAgentRunTreeCost(root: AgentRunTreeNode): AgentRunTreeTotals {
+    const totals: AgentRunTreeTotals = { Cost: 0, Tokens: 0, PromptTokens: 0, CompletionTokens: 0 };
     for (const node of WalkAgentRunTree(root)) {
-        Cost += node.Cost ?? 0;
-        Tokens += node.Tokens ?? 0;
+        totals.Cost += node.Cost ?? 0;
+        totals.Tokens += node.Tokens ?? 0;
+        totals.PromptTokens += node.PromptTokens ?? 0;
+        totals.CompletionTokens += node.CompletionTokens ?? 0;
     }
-    return { Cost, Tokens };
+    return totals;
 }
 
 /**

@@ -19,9 +19,16 @@
 
   COST IS PER-NODE AND NEVER A ROLLUP
   -----------------------------------
-  Each Run row reports TotalCost / TotalTokensUsed — its OWN spend, deliberately NOT
-  TotalCostRollup. The rollup already includes descendants, so summing rollups across a tree
-  double-counts every nested run. With own-cost, a total is an honest SUM over the returned rows.
+  Each Run row reports TotalCost / TotalTokensUsed (and the prompt/completion split) — its OWN
+  spend, deliberately NOT TotalCostRollup. The rollup already includes descendants, so summing
+  rollups across a tree double-counts every nested run. With own-cost, a total is an honest SUM
+  over the returned rows.
+
+  🚨 DO NOT "improve" this to read the …Rollup columns. Since v6.1 the settlement-time cost rollup
+  on AIAgentRun is WRITTEN FROM this query (TaskGraphDispatcher.rollUpCostToSubmittingRun sums the
+  tree). Reading a rollup here would make the column an input to its own computation: every
+  re-settlement would fold the previous total back in and inflate it, compounding, with no error and
+  no visible symptom until someone questions a bill. Own-cost is what keeps the write-back idempotent.
 
   Prompt steps get their cost by joining through Configuration.runtime.promptRunID: a Prompt task
   has no agent run, so without that join its spend is invisible and a total silently under-reports.
@@ -54,6 +61,8 @@ WITH Tree AS (
         r.CompletedAt                                        AS CompletedAt,
         r.TotalCost                                          AS Cost,
         r.TotalTokensUsed                                    AS Tokens,
+        r.TotalPromptTokensUsed                              AS PromptTokens,
+        r.TotalCompletionTokensUsed                          AS CompletionTokens,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100))           AS SourceEntity,
         CAST(NULL AS NVARCHAR(50))                           AS PromptRunID,
         -- What KIND of work this node is, in its own vocabulary: a run step's StepType
@@ -83,6 +92,8 @@ WITH Tree AS (
         -- free one.
         CAST(NULL AS DECIMAL(18, 6)),
         CAST(NULL AS INT),
+        CAST(NULL AS INT),
+        CAST(NULL AS INT),
         CAST('MJ: AI Agent Run Steps' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
         CAST(s.StepType AS NVARCHAR(50))
@@ -108,6 +119,8 @@ WITH Tree AS (
         tk.StartedAt,
         tk.CompletedAt,
         CAST(NULL AS DECIMAL(18, 6)),
+        CAST(NULL AS INT),
+        CAST(NULL AS INT),
         CAST(NULL AS INT),
         CAST('MJ: Tasks' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
@@ -137,6 +150,8 @@ WITH Tree AS (
         -- member, and the prompt run must be an outer join because most tasks are not prompts. So
         -- the id is carried here and joined once in the final SELECT.
         CAST(NULL AS DECIMAL(18, 6)),
+        CAST(NULL AS INT),
+        CAST(NULL AS INT),
         CAST(NULL AS INT),
         CAST('MJ: Tasks' AS NVARCHAR(100)),
         CAST(JSON_VALUE(tk.Configuration, '$.runtime.promptRunID') AS NVARCHAR(50)),
@@ -168,6 +183,8 @@ WITH Tree AS (
         r.CompletedAt,
         r.TotalCost,
         r.TotalTokensUsed,
+        r.TotalPromptTokensUsed,
+        r.TotalCompletionTokensUsed,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
         CAST(NULL AS NVARCHAR(50))
@@ -197,6 +214,8 @@ WITH Tree AS (
         r.CompletedAt,
         r.TotalCost,
         r.TotalTokensUsed,
+        r.TotalPromptTokensUsed,
+        r.TotalCompletionTokensUsed,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
         CAST(NULL AS NVARCHAR(50))
@@ -236,6 +255,12 @@ SELECT
     -- whichever kind it is.
     COALESCE(t.Cost, pr.Cost)                               AS Cost,
     COALESCE(t.Tokens, pr.TokensUsed)                       AS Tokens,
+    -- The prompt/completion split, on the SAME basis as Tokens. Carried rather than left to the
+    -- caller because the settlement-time cost rollup writes four columns on AIAgentRun, and a tree
+    -- that answered only two of them would force the other two back onto a second, differently-based
+    -- computation — which is exactly the mixed-basis arithmetic this query exists to replace.
+    COALESCE(t.PromptTokens, pr.TokensPrompt)               AS PromptTokens,
+    COALESCE(t.CompletionTokens, pr.TokensCompletion)       AS CompletionTokens,
     t.SourceEntity,
     t.SourceKind,
     t.NodeID                                                AS SourceID

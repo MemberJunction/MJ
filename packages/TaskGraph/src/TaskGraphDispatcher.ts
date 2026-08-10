@@ -36,9 +36,14 @@ import {
     ResolveMappedInput,
     type ForEachOperation,
     type WhileOperation,
+
+    LoadAgentRunTree,
+    SumAgentRunTreeCost,
+    WalkAgentRunTree,
+    type AgentRunTreeNode,
 } from '@memberjunction/ai-core-plus';
-import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
-import { IShutdownable, ShutdownRegistry } from '@memberjunction/global';
+import { IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { IShutdownable, ShutdownRegistry, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
@@ -57,6 +62,19 @@ const HUMAN_TASK_NOTIFICATION_TYPE = 'Task Assignment';
  * from reclamation, so this value is never mistaken for a live claim.
  */
 const HUMAN_TASK_NOTIFIED_MARKER = '__human-notified__';
+
+/**
+ * The run-query capability of a provider, when it has one.
+ *
+ * `IMetadataProvider` does not extend `IRunQueryProvider`, but every provider that ships implements
+ * both. Narrowing by CAPABILITY rather than casting states that honestly: a provider that genuinely
+ * cannot run queries returns undefined and the caller reports it, instead of the call failing later
+ * behind a type assertion that claimed it could.
+ */
+function asRunQueryProvider(provider: IMetadataProvider): IRunQueryProvider | undefined {
+    const candidate = provider as unknown as Partial<IRunQueryProvider>;
+    return typeof candidate.RunQuery === 'function' ? (candidate as IRunQueryProvider) : undefined;
+}
 import { IsReinvokeCapReached, MAX_REINVOKE_DEPTH, ParseTaskGraphParentMetadata, type TaskGraphParentMetadata } from './TaskGraphService';
 import {
     DEFAULT_DISPATCHER_CONFIG,
@@ -493,6 +511,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // between "answered and moving" and "answered and apparently still stuck".
             await this.expireOverdueRequests(provider, parentID);
             await this.settleAnsweredHumanTasks(provider, parentID);
+            await this.reopenCancelledHumanTasks(provider, parentID);
 
             const graph = await this.loadGraphState(provider, parentID);
             if (graph.nodes.length === 0) continue;
@@ -618,54 +637,97 @@ export class TaskGraphDispatcher implements IShutdownable {
      * - `TotalCostRollup` — the run plus everything it caused. Provisional until the graph settles,
      *   which is now.
      *
+     * **The tree is the authority; these columns are its settlement-time cache.** The total is a SUM
+     * over `GetAgentRunTree`, not arithmetic of its own. The previous version walked the graph's
+     * child tasks and added each one's agent run, which was wrong in two ways that no test could
+     * see: a `Prompt` task has no agent run at all, so every prompt step's spend was simply missing;
+     * and it read each nested run's `…Rollup ?? …Total`, mixing a descendant-inclusive number with an
+     * own-spend one and depending on whether that nested graph happened to have settled yet. The
+     * tree already models every one of those cases — it reaches prompt runs through
+     * `Configuration.runtime.promptRunID`, and it descends into nested runs and their graphs
+     * structurally — so summing it cannot disagree with what the run viewer shows, because it IS
+     * what the run viewer shows.
+     *
+     * **This refuses rather than guesses.** A tree that failed to load, hit the depth cap, or does
+     * not contain the settling graph would still produce a number — a lower bound. Writing one would
+     * put an authoritative-looking total in a column every cost surface reads. Each of those cases
+     * logs and leaves the column alone, so `?? TotalCost` keeps its honest meaning: not settled.
+     *
      * A graph with no submitting run (a scheduled job, a remote-operation caller) simply has nobody
      * to credit — its own Task rows still carry the truth, and this returns quietly.
      */
     private async rollUpCostToSubmittingRun(provider: IMetadataProvider, parent: MJTaskEntity): Promise<void> {
         const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
         if (!meta.submittedByAgentRunID) return;
+        const runID = meta.submittedByAgentRunID;
 
         try {
-            const children = await this.loadChildTasks(provider, parent.ID);
-            const runIDs = [...new Set(children.map((c) => c.AgentRunID).filter((id): id is string => !!id))];
-
-            const submitting = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
-            if (!(await submitting.Load(meta.submittedByAgentRunID))) return;
-
-            // Start from what the run itself spent, so the rollup is a superset rather than a
-            // replacement — a Loop agent that both reasoned AND dispatched a graph paid for both.
-            let cost = submitting.TotalCost ?? 0;
-            let tokens = submitting.TotalTokensUsed ?? 0;
-            let promptTokens = submitting.TotalPromptTokensUsed ?? 0;
-            let completionTokens = submitting.TotalCompletionTokensUsed ?? 0;
-
-            for (const runID of runIDs) {
-                const nested = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
-                if (!(await nested.Load(runID))) continue;
-                // Prefer the nested run's OWN rollup: if that agent dispatched a graph of its own,
-                // its rollup already includes it, and reading TotalCost would lose a whole subtree.
-                cost += nested.TotalCostRollup ?? nested.TotalCost ?? 0;
-                tokens += nested.TotalTokensUsedRollup ?? nested.TotalTokensUsed ?? 0;
-                promptTokens += nested.TotalPromptTokensUsedRollup ?? nested.TotalPromptTokensUsed ?? 0;
-                completionTokens += nested.TotalCompletionTokensUsedRollup ?? nested.TotalCompletionTokensUsed ?? 0;
+            const runQuery = asRunQueryProvider(provider);
+            if (!runQuery) {
+                LogError(`[TaskGraphDispatcher] Cannot roll up cost for run ${runID}: provider cannot run queries.`);
+                return;
             }
 
-            submitting.TotalCostRollup = cost;
-            submitting.TotalTokensUsedRollup = tokens;
-            submitting.TotalPromptTokensUsedRollup = promptTokens;
-            submitting.TotalCompletionTokensUsedRollup = completionTokens;
+            const tree = await LoadAgentRunTree(runID, runQuery, this.contextUser);
+
+            // Each of these means the sum would be a LOWER BOUND, and the column's whole contract is
+            // that it equals the tree. A known-low number presented as a total is worse than no
+            // number: the readers all fall back to TotalCost when this is null, which at least
+            // *says* it is the run's own spend rather than claiming to be the whole story.
+            if (tree.ErrorMessage || !tree.Root) {
+                LogError(
+                    `[TaskGraphDispatcher] Not recording cost for run ${runID}: ` +
+                    `${tree.ErrorMessage ?? 'the run tree came back empty'}.`,
+                );
+                return;
+            }
+            if (tree.Truncated) {
+                LogError(
+                    `[TaskGraphDispatcher] Not recording cost for run ${runID}: the run tree hit the depth ` +
+                    `cap, so any total would silently under-report. Graph ${parent.ID} still carries its own costs.`,
+                );
+                return;
+            }
+            // The graph that just settled must appear in the tree. If it does not, the tree stopped
+            // at the run — the submitting step never recorded its parentTaskID — and the sum is
+            // merely the run's own spend wearing the name of a rollup. That is precisely the silent
+            // under-count this rewrite exists to remove, so it is reported rather than written.
+            if (!this.treeContainsGraph(tree.Root, parent.ID)) {
+                LogError(
+                    `[TaskGraphDispatcher] Not recording cost for run ${runID}: graph ${parent.ID} is not ` +
+                    `reachable from it, so the tree cannot see the work. Did the submitting step record parentTaskID?`,
+                );
+                return;
+            }
+
+            const totals = SumAgentRunTreeCost(tree.Root);
+
+            const submitting = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+            if (!(await submitting.Load(runID))) {
+                LogError(`[TaskGraphDispatcher] Could not load run ${runID} to record graph cost against it.`);
+                return;
+            }
+
+            // Assignment, never accumulation. The tree already contains the run's own spend as its
+            // ROOT node, and it reads own-cost everywhere, so recomputing from scratch on every
+            // settlement lands on the same answer — which is what makes this safe to call again when
+            // a second graph settles, or when the terminal check is re-evaluated after a HITL wait.
+            submitting.TotalCostRollup = totals.Cost;
+            submitting.TotalTokensUsedRollup = totals.Tokens;
+            submitting.TotalPromptTokensUsedRollup = totals.PromptTokens;
+            submitting.TotalCompletionTokensUsedRollup = totals.CompletionTokens;
 
             if (!(await submitting.Save())) {
                 LogError(
-                    `[TaskGraphDispatcher] Could not record graph cost against run ${meta.submittedByAgentRunID}: ` +
+                    `[TaskGraphDispatcher] Could not record graph cost against run ${runID}: ` +
                     `${submitting.LatestResult?.CompleteMessage ?? 'unknown error'}`,
                 );
                 return;
             }
 
             LogStatus(
-                `[TaskGraphDispatcher] Credited graph ${parent.ID} to run ${meta.submittedByAgentRunID}: ` +
-                `${runIDs.length} nested run(s), ${tokens} token(s), cost ${cost}.`,
+                `[TaskGraphDispatcher] Credited graph ${parent.ID} to run ${runID}: ` +
+                `${tree.Rows.length} node(s), ${totals.Tokens} token(s), cost ${totals.Cost}.`,
             );
         } catch (e) {
             // A failed rollup must never fail the graph. The work finished; only the accounting for
@@ -673,6 +735,21 @@ export class TaskGraphDispatcher implements IShutdownable {
             // a far worse lie than a cost of null.
             LogError(`[TaskGraphDispatcher] Cost rollup failed for graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
         }
+    }
+
+    /**
+     * Whether the settling graph is actually reachable from the submitting run's tree.
+     *
+     * Matched on the graph's parent Task id, which is the node the `TaskGraph` member of the query
+     * emits. A run that submitted a graph but recorded no `parentTaskID` produces a tree that stops
+     * at the run — structurally indistinguishable, at the SUM, from a run that never dispatched
+     * anything. This is the check that tells those two apart.
+     */
+    private treeContainsGraph(root: AgentRunTreeNode, parentTaskID: string): boolean {
+        for (const node of WalkAgentRunTree(root)) {
+            if (node.NodeType === 'TaskGraph' && UUIDsEqual(node.NodeID, parentTaskID)) return true;
+        }
+        return false;
     }
 
     /**
@@ -1271,6 +1348,55 @@ export class TaskGraphDispatcher implements IShutdownable {
             if (!(await task.Save())) {
                 LogError(
                     `[TaskGraphDispatcher] Could not settle human task ${task.ID}: ` +
+                    `${task.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                );
+            }
+        }
+    }
+
+    /**
+     * Re-opens a human step whose request was CANCELLED.
+     *
+     * `answeredRequestFor` deliberately excludes `Canceled`, because cancelling withdraws the ASK
+     * rather than deciding the step — the task is supposed to keep waiting "for whatever replaces
+     * it". Nothing replaced it. `raiseHumanRequest` refuses to raise twice (the notified marker on
+     * `ClaimedBy` is what stops the notification storm), so a cancelled request left the task Pending
+     * with no open request and no path to acquiring one: a workflow waiting forever on a question
+     * nobody is being asked.
+     *
+     * Clearing the marker is the whole fix — the next poll sees an un-notified Pending human task
+     * and raises a fresh request, which is exactly the replacement the design assumed. Bounded by
+     * human action: it takes another person cancelling again to come back here.
+     */
+    private async reopenCancelledHumanTasks(provider: IMetadataProvider, graphID: string): Promise<void> {
+        const waiting = await RunView.FromMetadataProvider(provider).RunView<MJTaskEntity>(
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter:
+                    `ParentID='${graphID}' AND StepType='Human' AND Status='Pending' ` +
+                    `AND ClaimedBy='${HUMAN_TASK_NOTIFIED_MARKER}'`,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            },
+            this.contextUser,
+        );
+        if (!waiting.Success) return;
+
+        for (const task of waiting.Results ?? []) {
+            // Only when there is nothing live AND nothing terminal. A task with an open request is
+            // simply waiting; one with a terminal request is settled on the next pass by
+            // settleAnsweredHumanTasks, and re-raising either would ask the same question twice.
+            if (await this.findOpenRequest(provider, task.ID)) continue;
+            if (await this.answeredRequestFor(provider, task.ID)) continue;
+
+            LogStatus(
+                `[TaskGraphDispatcher] The request for '${task.Name}' was cancelled and nothing ` +
+                `replaced it; asking again.`,
+            );
+            task.ClaimedBy = null;
+            if (!(await task.Save())) {
+                LogError(
+                    `[TaskGraphDispatcher] Could not re-open cancelled human task ${task.ID}: ` +
                     `${task.LatestResult?.CompleteMessage ?? 'unknown error'}`,
                 );
             }

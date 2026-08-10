@@ -38,6 +38,7 @@ import {
     type WhileOperation,
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /** Context a submission carries beyond the graph itself. */
 export type TaskGraphSubmitContext = {
@@ -311,6 +312,36 @@ export function FindUnrunnableKinds(spec: TaskGraphSpec): string | null {
     );
 }
 
+/**
+ * Reports human steps assigned to someone other than the submitter, or `null` when there are none.
+ *
+ * Cross-user assignment needs an authorization model (#3524) — deciding that A may put work in B's
+ * inbox is a permissions question, not a graph question. Until it lands, a workflow can only ask the
+ * person who started it.
+ *
+ * **Why refuse rather than reassign.** Persist wrote `task.UserID = submitter` unconditionally, so
+ * an authored `assignToUserID` was overwritten in silence. Every layer above accepts the field —
+ * the flow compiler reads it into the spec, the validator passes it, the spec type declares it — so
+ * silence here is indistinguishable from support: the graph submits, a step appears in the WRONG
+ * person's inbox, the named person is never told, and the author has no reason to suspect any of it.
+ * Refusing while the graph is still the author's to edit is the only point at which saying so costs
+ * nothing.
+ */
+export function FindCrossUserAssignments(spec: TaskGraphSpec, submitterUserID: string): string | null {
+    const offenders = spec.tasks.filter((t) => {
+        const assignTo = ConfigOf(t, 'Human')?.assignToUserID;
+        return !!assignTo && !UUIDsEqual(assignTo, submitterUserID);
+    });
+    if (offenders.length === 0) return null;
+
+    const detail = offenders.map((t) => `"${t.name}"`).join(', ');
+    return (
+        `"${spec.workflowName}" was not started: ${detail} asks a person other than whoever runs the ` +
+        `workflow. Assigning a step to someone else is not available yet (#3524) — a workflow can ` +
+        `only ask the person who started it. Remove assignToUserID from those steps.`
+    );
+}
+
 export class TaskGraphService {
     /**
      * Validates and persists a task graph, returning as soon as it is durable.
@@ -337,6 +368,17 @@ export class TaskGraphService {
         if (unrunnable) {
             LogError(`[TaskGraphService] ${unrunnable}`);
             return { Success: false, ErrorMessage: unrunnable };
+        }
+
+        // 1b-ii. Assignability. Same question, narrower: this dispatcher can only ask the person who
+        //        submitted the graph. Persist used to overwrite an authored `assignToUserID` with
+        //        the submitter and say nothing, so a step meant for someone else landed in the
+        //        wrong inbox and the named person was never told. The compiler accepts the field and
+        //        the validator passes it, which makes silence here indistinguishable from support.
+        const misassigned = FindCrossUserAssignments(spec, context.ContextUser.ID);
+        if (misassigned) {
+            LogError(`[TaskGraphService] ${misassigned}`);
+            return { Success: false, ErrorMessage: misassigned };
         }
 
         // 1c. Chain depth. A flow that dispatches a graph containing itself recurses without bound,
@@ -658,7 +700,8 @@ export class TaskGraphService {
                     break;
                 case 'Human':
                     // Assigned to the submitting user only — cross-user assignment stays rejected
-                    // until the authorization model in #3524 lands.
+                    // until the authorization model in #3524 lands, and `findCrossUserAssignments`
+                    // has already refused any graph that asked for someone else.
                     task.UserID = context.ContextUser.ID;
                     break;
                 case 'Prompt':
