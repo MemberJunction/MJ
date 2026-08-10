@@ -41,7 +41,10 @@ const REQUIRED_CONFIG_FIELDS: Record<TaskGraphNodeKind, readonly string[]> = {
     Human: [],
     Prompt: ['promptName'],
     ForEach: ['collectionPath', 'itemVariable'],
-    While: ['condition', 'itemVariable'],
+    // A While loop has NO items — it repeats until a condition stops holding — so `itemVariable`
+    // is a ForEach concept and requiring it here rejected every valid While graph with a message
+    // about a setting that does not apply to it.
+    While: ['condition'],
     External: ['domain'],
 };
 

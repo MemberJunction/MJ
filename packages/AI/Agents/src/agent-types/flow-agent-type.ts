@@ -1199,6 +1199,20 @@ export class FlowAgentType extends BaseAgentType {
             });
         }
 
+        // A workflow SUBMITS and detaches — it returns a handle, not a result. That is right for a
+        // person starting one, and wrong for anything that needs the answer: a caller awaiting this
+        // gets "started" and proceeds as though the work were done, on a payload the workflow has not
+        // produced yet. Refusing loudly is the only honest option until an await path exists, because
+        // the alternative is success-before-work, silently, at every call site.
+        if (params.parentRun) {
+            return this.createNextStep('Failed', {
+                errorMessage:
+                    `'${params.agent.Name}' is a workflow, and a workflow cannot be used as a sub-agent step yet. ` +
+                    `It returns as soon as its steps are scheduled, so the calling agent would continue before any ` +
+                    `of the work had happened. Start it on its own, or fold its steps into the calling workflow.`
+            });
+        }
+
         const compiled = CompileFlowAgentToTaskGraph(params.agent.ID, params.agent.Name, params.agent.Description ?? undefined);
         if (!compiled.Success || !compiled.Spec) {
             return this.createNextStep('Failed', {
