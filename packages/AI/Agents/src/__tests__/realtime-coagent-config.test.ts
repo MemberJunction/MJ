@@ -10,6 +10,7 @@ import {
     ParseRealtimeTypeConfiguration,
     ResolveEffectiveRealtimeConfig,
     GetProviderVoiceSettings,
+    MatchProviderVoiceSettings,
     GetSessionTuningSettings,
     BuildVoiceMannerSection,
     GetNarrationPaceMs,
@@ -228,6 +229,80 @@ describe('GetProviderVoiceSettings', () => {
         expect(GetProviderVoiceSettings(null, 'OpenAIRealtime')).toBeNull();
         expect(GetProviderVoiceSettings(CONFIG, null)).toBeNull();
         expect(GetProviderVoiceSettings(CONFIG, '')).toBeNull();
+    });
+
+    // ── Provider-AGNOSTIC voice (issue #3530) ────────────────────────────────────────────────────
+    // A host authors `realtime.voice.default.voice` without knowing which vendor will run, and the
+    // framework files it onto whichever driver it resolved. Every realtime driver reads the neutral
+    // `voice` bag key, so one authored value is consumable by all of them.
+    describe('provider-agnostic voice', () => {
+        const AGNOSTIC: RealtimeCoAgentConfig = { realtime: { voice: { default: { voice: 'Rachel' } } } };
+
+        it('reaches a driver that has NO provider entry at all', () => {
+            expect(GetProviderVoiceSettings(AGNOSTIC, 'ElevenLabsRealtime')).toEqual({ voice: 'Rachel' });
+            expect(GetProviderVoiceSettings(AGNOSTIC, 'InworldRealtime')).toEqual({ voice: 'Rachel' });
+            expect(GetProviderVoiceSettings(AGNOSTIC, 'OpenAIRealtime')).toEqual({ voice: 'Rachel' });
+        });
+
+        it('WINS the voice key over a matching provider entry (a runtime pick must beat authored metadata)', () => {
+            // The regression this guards: the picker now emits the agnostic slot, so if a co-agent's
+            // pre-existing providers.openai.voice outranked it, the user's explicit choice would be
+            // silently ignored on the most common path.
+            const both: RealtimeCoAgentConfig = {
+                realtime: { voice: { default: { voice: 'verse' }, providers: { openai: { voice: 'alloy' } } } }
+            };
+            expect(GetProviderVoiceSettings(both, 'OpenAIRealtime')).toEqual({ voice: 'verse' });
+        });
+
+        it('leaves the matched provider bag’s OTHER (opaque) keys intact', () => {
+            const both: RealtimeCoAgentConfig = {
+                realtime: {
+                    voice: {
+                        default: { voice: 'verse' },
+                        providers: { openai: { voice: 'alloy', language: 'en', someOpaqueKnob: 3 } }
+                    }
+                }
+            };
+            expect(GetProviderVoiceSettings(both, 'OpenAIRealtime'))
+                .toEqual({ voice: 'verse', language: 'en', someOpaqueKnob: 3 });
+        });
+
+        it('does NOT mask an unmatched provider bag — the match is separately answerable', () => {
+            // The agnostic voice makes GetProviderVoiceSettings truthy for EVERY driver, so it cannot
+            // answer "did an authored provider key match?". Callers that need that question (the
+            // dropped-settings warning) must ask MatchProviderVoiceSettings, or the warning goes dead
+            // on exactly the path that emits an agnostic voice.
+            const both: RealtimeCoAgentConfig = {
+                realtime: {
+                    voice: { default: { voice: 'verse' }, providers: { openai: { voice: 'alloy', language: 'en' } } }
+                }
+            };
+            expect(MatchProviderVoiceSettings(both, 'ElevenLabsRealtime')).toBeNull();
+            expect(GetProviderVoiceSettings(both, 'ElevenLabsRealtime')).toEqual({ voice: 'verse' });
+            expect(MatchProviderVoiceSettings(both, 'OpenAIRealtime')).toEqual({ voice: 'alloy', language: 'en' });
+        });
+
+        it('changes NOTHING when no agnostic voice is authored (every pre-existing config)', () => {
+            expect(GetProviderVoiceSettings(CONFIG, 'OpenAIRealtime')).toEqual({ voice: 'alloy' });
+            expect(GetProviderVoiceSettings(CONFIG, 'AcmeRealtime')).toBeNull();
+            const personaOnly: RealtimeCoAgentConfig = { realtime: { voice: { default: { tone: 'warm' } } } };
+            expect(GetProviderVoiceSettings(personaOnly, 'OpenAIRealtime')).toBeNull();
+        });
+
+        it('survives normalization (trimmed; blank and non-string dropped)', () => {
+            // Normalization runs in the cascade, not in the raw parse — a key normalizeVoice does not
+            // carry through is silently lost, which is the exact failure mode this issue is about.
+            const normalize = (raw: unknown) => ResolveEffectiveRealtimeConfig(null, JSON.stringify(raw), null);
+
+            const parsed = normalize({ realtime: { voice: { default: { tone: 'warm', voice: '  Rachel  ' } } } });
+            expect(parsed.realtime?.voice?.default?.voice).toBe('Rachel');
+            expect(parsed.realtime?.voice?.default?.tone).toBe('warm');
+
+            expect(normalize({ realtime: { voice: { default: { voice: '   ' } } } })
+                .realtime?.voice?.default?.voice).toBeUndefined();
+            expect(normalize({ realtime: { voice: { default: { voice: 7 } } } })
+                .realtime?.voice?.default?.voice).toBeUndefined();
+        });
     });
 });
 
