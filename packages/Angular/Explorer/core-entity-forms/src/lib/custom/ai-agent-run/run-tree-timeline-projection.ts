@@ -33,13 +33,42 @@ const NODE_PRESENTATION: Record<AgentRunTreeNodeType, { icon: string; color: str
     Task: { icon: 'fa-solid fa-diagram-next', color: 'var(--mj-color-info)' },
 };
 
-/** The timeline's item type for each tree node kind. */
+/**
+ * The timeline's item type for each tree node kind.
+ *
+ * A `Task` deliberately does NOT get its own row type. A workflow step that runs an action IS an
+ * action, and rendering it as a generic "workflow step" threw away the action displayer — icon,
+ * status treatment, navigation — that every other action row in the timeline already gets. Tasks map
+ * onto the SAME vocabulary as run steps and pick up the same presentation; what marks them as
+ * dispatcher work is `provenance`, which styles them without changing what they are.
+ */
 const NODE_ITEM_TYPE: Record<AgentRunTreeNodeType, TimelineItem['type']> = {
     Run: 'subrun',
     Step: 'step',
+    // The graph itself keeps a distinct type — it is a container, not a step, and the visual break
+    // between "the run" and "the workflow it submitted" is worth preserving.
     TaskGraph: 'taskgraph',
     Task: 'task',
 };
+
+/** A task's own kind, mapped onto the row types the timeline already knows how to render. */
+const TASK_KIND_TO_ITEM_TYPE: Record<string, TimelineItem['type']> = {
+    Action: 'action',
+    Prompt: 'prompt',
+    Agent: 'subrun',
+    ForEach: 'step',
+    While: 'step',
+    Human: 'step',
+    External: 'step',
+};
+
+/** The row type for a node: a task by its kind, anything else by its structural role. */
+function itemTypeOf(node: AgentRunTreeNode): TimelineItem['type'] {
+    if (node.NodeType === 'Task' && node.SourceKind) {
+        return TASK_KIND_TO_ITEM_TYPE[node.SourceKind] ?? 'task';
+    }
+    return NODE_ITEM_TYPE[node.NodeType] ?? 'step';
+}
 
 /**
  * Flattens a run tree into timeline rows, in display order.
@@ -83,7 +112,10 @@ function toTimelineItem(node: AgentRunTreeNode, level: number, parentID: string 
 
     return {
         id: node.NodeID,
-        type: NODE_ITEM_TYPE[node.NodeType] ?? 'step',
+        type: itemTypeOf(node),
+        // Marks the row as dispatcher work WITHOUT changing what it is. Styling keys off this, so a
+        // workflow's action still renders as an action and still reads as part of the workflow.
+        provenance: node.NodeType === 'Task' || node.NodeType === 'TaskGraph' ? 'workflow' : undefined,
         title: node.Name,
         subtitle: describeNode(node),
         status: node.Status,
@@ -116,7 +148,9 @@ function describeNode(node: AgentRunTreeNode): string {
             parts.push('Workflow — runs on the dispatcher');
             break;
         case 'Task':
-            parts.push('Workflow step');
+            // Names the kind rather than saying "workflow step" for all of them. "Action" or
+            // "Prompt" is what a reader needs; the provenance styling already says it is workflow.
+            parts.push(node.SourceKind ? `${node.SourceKind} step` : 'Workflow step');
             break;
         case 'Run':
             parts.push('Agent run');
