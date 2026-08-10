@@ -16,6 +16,9 @@
 
 import { serve, MJServerOptions } from '@memberjunction/server';
 import { cosmiconfigSync } from 'cosmiconfig';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import path from 'node:path';
 
 /**
  * Configuration options for creating an MJ Server
@@ -49,6 +52,63 @@ export interface MJServerConfig {
 }
 
 /**
+ * True when the error is a module-RESOLUTION failure (the module could not be found or
+ * reached), as opposed to a module that was found but threw while loading — the latter is
+ * a real error that must surface. ESM raises ERR_MODULE_NOT_FOUND, CommonJS resolution
+ * (createRequire) raises MODULE_NOT_FOUND, and an exports-map mismatch raises
+ * ERR_PACKAGE_PATH_NOT_EXPORTED. Some ESM loader shims (ts-node's, notably — the loader
+ * MJAPI runs under) throw resolution failures as PLAIN Errors with no code at all, so
+ * when there is no code, recognize Node's own resolver message instead.
+ */
+function isResolutionFailure(error: unknown): boolean {
+  const { code, message } = (error as { code?: string; message?: string }) ?? {};
+  if (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND' || code === 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
+    return true;
+  }
+  return code === undefined && typeof message === 'string' && /^Cannot find (package|module) /.test(message);
+}
+
+/**
+ * Imports a runtime-configured package from the HOST application's context.
+ *
+ * A bare `import(pkgName)` resolves from THIS package (server-bootstrap), which cannot
+ * declare packages whose names are only known at runtime — mj.config.cjs supplies them.
+ * npm's hoisted node_modules let that bare import resolve by accident; pnpm's strict
+ * per-package layout does not, because the packages are declared by (and linked into) the
+ * HOST application, e.g. MJAPI. So: try the bare import first (identical behavior to
+ * before on npm layouts), and when the module cannot be resolved, retry from each host
+ * anchor — the working directory, the mj.config.cjs that named the package, and the
+ * process entrypoint. (Dynamic import is justified here as runtime plugin discovery:
+ * the names come from configuration, not code.)
+ */
+async function importFromHost(pkgName: string, configFilePath?: string): Promise<Record<string, unknown>> {
+  try {
+    return (await import(pkgName)) as Record<string, unknown>;
+  } catch (error: unknown) {
+    if (!isResolutionFailure(error)) {
+      throw error;
+    }
+    const anchors = [
+      path.join(process.cwd(), 'package.json'),
+      configFilePath,
+      process.argv[1],
+    ].filter((anchor): anchor is string => typeof anchor === 'string' && anchor.length > 0);
+    for (const anchor of anchors) {
+      try {
+        const hostRequire = createRequire(anchor);
+        const resolved = hostRequire.resolve(pkgName);
+        return (await import(pathToFileURL(resolved).href)) as Record<string, unknown>;
+      } catch (retryError: unknown) {
+        if (!isResolutionFailure(retryError)) {
+          throw retryError;
+        }
+      }
+    }
+    throw error; // no anchor resolved it — surface the original bare-import failure
+  }
+}
+
+/**
  * Discovers and loads generated packages from the workspace based on configuration.
  *
  * Generated packages (entities, actions, resolvers) register themselves via side effects when imported.
@@ -56,7 +116,7 @@ export interface MJServerConfig {
  *
  * @param config - The loaded MemberJunction configuration
  */
-async function discoverAndLoadGeneratedPackages(configResult: { config: Record<string, unknown> }): Promise<void> {
+async function discoverAndLoadGeneratedPackages(configResult: { config: Record<string, unknown>; configFilePath?: string }): Promise<void> {
   const codeGeneration = configResult.config?.codeGeneration as Record<string, Record<string, string>> | undefined;
   if (!codeGeneration?.packages) {
     // Common case for app deployments that import their generated package directly —
@@ -78,7 +138,7 @@ async function discoverAndLoadGeneratedPackages(configResult: { config: Record<s
       const pkgName = pkgConfig.name;
       try {
         // Dynamic import to trigger side effects (class registration)
-        await import(pkgName);
+        await importFromHost(pkgName, configResult.configFilePath);
         console.log(`  Loaded generated package: ${pkgName}`);
       } catch (error: unknown) {
         // Not finding a package is expected in some cases (e.g., no forms generated yet)
@@ -136,7 +196,7 @@ interface DynamicServerPackage {
  * @returns absolute resolver-file paths to add to `serve()`'s resolver globs (empty when
  *          no Open App server packages are installed — the common case).
  */
-async function loadDynamicAppPackages(configResult: { config: Record<string, unknown> }): Promise<string[]> {
+async function loadDynamicAppPackages(configResult: { config: Record<string, unknown>; configFilePath?: string }): Promise<string[]> {
   const dynamicPackages = configResult.config?.dynamicPackages as { server?: DynamicServerPackage[] } | undefined;
   const serverPackages = dynamicPackages?.server;
   const resolverPaths: string[] = [];
@@ -154,7 +214,7 @@ async function loadDynamicAppPackages(configResult: { config: Record<string, unk
     }
     try {
       // Dynamic import to trigger side effects (class registration).
-      const mod = (await import(pkgName)) as Record<string, unknown>;
+      const mod = await importFromHost(pkgName, configResult.configFilePath);
       // Invoke the declared startup export, if any (e.g. a registration kicker).
       const startup = entry.StartupExport ? mod[entry.StartupExport] : undefined;
       if (typeof startup === 'function') {

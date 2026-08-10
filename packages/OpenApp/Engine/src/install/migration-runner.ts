@@ -172,8 +172,12 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
 
     try {
         // Use variables to prevent TypeScript from resolving the modules at compile time.
-        // The skyway provider packages are published as (optional) dependencies of the
-        // host process (e.g. MJCLI). Install the one matching the target platform.
+        // The skyway packages are declared as optionalDependencies of THIS package (and as
+        // regular dependencies of hosts like MJCLI), so a bare specifier resolves under both
+        // npm's hoisted layout and pnpm's strict per-package layout — a bare dynamic import
+        // resolves from the importing module, not the host entrypoint, so a host-provides
+        // contract alone cannot work under pnpm (MJ#3677). The import stays dynamic so this
+        // module compiles and loads even when the optional packages are not installed.
         const skywayModuleId = '@memberjunction/skyway-core';
         const { Skyway } = await import(skywayModuleId);
         const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders, platform, TransactionMode);
@@ -219,9 +223,9 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
 }
 
 /**
- * Creates the Skyway database provider matching the target platform. The
- * provider packages are optional peer dependencies of the host process —
- * install the one matching your database. Mirrors MJCLI's `createSkywayProvider`.
+ * Creates the Skyway database provider matching the target platform. The provider
+ * packages are optionalDependencies of this package — only the one matching the
+ * target database needs to be installed. Mirrors MJCLI's `createSkywayProvider`.
  */
 async function CreateSkywayProvider(platform: DatabasePlatform, dbConfig: SkywayConfig['Database']): Promise<unknown> {
     if (platform === 'postgresql') {
