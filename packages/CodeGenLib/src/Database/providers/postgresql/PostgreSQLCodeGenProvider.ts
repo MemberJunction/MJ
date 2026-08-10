@@ -12,7 +12,7 @@ import {
 import { configInfo, mj_core_schema } from '../../../Config/config';
 import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
 import { buildMetadataSupportObjectsSQL } from './metadataSupportObjects';
-import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
+import { PostgreSQLDialect, DatabasePlatform, SQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
 import {
     shouldIncludeFieldInParams,
     useJsonArgShape,
@@ -1667,111 +1667,17 @@ $if_view_exists$;
     // ─── METADATA MANAGEMENT: SQL QUOTING ────────────────────────────
 
     /**
-     * SQL keywords that should NOT be quoted even when they match PascalCase patterns.
-     */
-    private static readonly _SQL_KEYWORDS = new Set([
-        // DML/DDL keywords
-        'SELECT', 'INSERT', 'INTO', 'UPDATE', 'DELETE', 'FROM', 'WHERE', 'AND', 'OR', 'NOT',
-        'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS', 'FULL', 'ON', 'AS', 'SET',
-        'VALUES', 'NULL', 'LIKE', 'IN', 'EXISTS', 'BETWEEN', 'CASE', 'WHEN', 'THEN',
-        'ELSE', 'END', 'ORDER', 'BY', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET', 'UNION',
-        'ALL', 'CREATE', 'ALTER', 'DROP', 'TABLE', 'INDEX', 'VIEW', 'EXEC', 'DECLARE',
-        'BEGIN', 'COMMIT', 'ROLLBACK', 'TRANSACTION', 'TRUE', 'FALSE', 'IS', 'ASC', 'DESC',
-        'DISTINCT', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'CONSTRAINT', 'DEFAULT',
-        'IF', 'OBJECT', 'TOP', 'WITH', 'OVER', 'PARTITION', 'ROW_NUMBER', 'RANK',
-        'DENSE_RANK', 'LAG', 'LEAD', 'FIRST_VALUE', 'LAST_VALUE', 'ROWS', 'RANGE',
-        'PRECEDING', 'FOLLOWING', 'UNBOUNDED', 'CURRENT', 'ROW', 'FETCH', 'NEXT', 'ONLY',
-        'SCHEMA', 'CASCADE', 'RESTRICT', 'NO', 'ACTION', 'TRIGGER', 'FUNCTION', 'PROCEDURE',
-        'RETURNS', 'RETURN', 'EXECUTE', 'CALL', 'RAISE', 'NOTICE', 'EXCEPTION', 'PERFORM',
-        'GRANT', 'REVOKE', 'TO', 'USAGE', 'PRIVILEGES', 'OWNER',
-        // DDL sub-keywords
-        'ADD', 'COLUMN', 'DO', 'RENAME', 'COMMENT', 'UNIQUE', 'CHECK',
-        'CONFLICT', 'NOTHING', 'EXCLUDED', 'ZONE', 'AT', 'FOR', 'EACH', 'OF',
-        'BEFORE', 'AFTER', 'INSTEAD', 'USING', 'ANY', 'SOME',
-        'ENABLE', 'DISABLE', 'GENERATED', 'ALWAYS', 'IDENTITY',
-        'SECURITY', 'DEFINER', 'INVOKER', 'FORCE', 'COPY',
-        'TEMPORARY', 'TEMP', 'RECURSIVE', 'MATERIALIZED', 'CONCURRENTLY',
-        // PL/pgSQL control flow
-        'NEW', 'OLD', 'FOUND', 'LOOP', 'WHILE', 'EXIT', 'CONTINUE',
-        'ELSIF', 'ELSEIF', 'STRICT',
-        // Transaction / constraint control (used by SET CONSTRAINTS ALL IMMEDIATE
-        // emitted before ALTER TABLE so deferred trigger events flush). Without
-        // CONSTRAINTS / IMMEDIATE / DEFERRED in the keyword set, the tokenizer
-        // double-quotes them as identifiers and PG rejects the resulting SQL.
-        'CONSTRAINTS', 'IMMEDIATE', 'DEFERRED', 'SAVEPOINT', 'RELEASE',
-        // SQL Server types
-        'NVARCHAR', 'VARCHAR', 'UNIQUEIDENTIFIER', 'DATETIMEOFFSET', 'DATETIME', 'DATETIME2',
-        'BIGINT', 'SMALLINT', 'TINYINT', 'FLOAT', 'REAL', 'DECIMAL', 'NUMERIC', 'MONEY',
-        'BIT', 'INT', 'TEXT', 'NTEXT', 'IMAGE', 'BINARY', 'VARBINARY', 'CHAR', 'NCHAR',
-        'XML', 'GEOGRAPHY', 'GEOMETRY', 'HIERARCHYID', 'SQL_VARIANT', 'SYSNAME',
-        'NEWSEQUENTIALID', 'NEWID', 'GETUTCDATE', 'GETDATE', 'SYSDATETIMEOFFSET',
-        'OBJECT_ID', 'SCOPE_IDENTITY',
-        // Aggregate / scalar functions
-        'COUNT', 'MAX', 'MIN', 'SUM', 'AVG', 'COALESCE', 'CAST', 'CONVERT', 'ISNULL',
-        'LEN', 'LENGTH', 'DATALENGTH', 'LOWER', 'UPPER', 'LTRIM', 'RTRIM', 'TRIM', 'REPLACE',
-        'SUBSTRING', 'CHARINDEX', 'PATINDEX', 'STUFF', 'CONCAT', 'FORMAT',
-        'LEFT', 'RIGHT', 'POSITION', 'OVERLAY', 'EXTRACT', 'GREATEST', 'LEAST',
-        'DATEADD', 'DATEDIFF', 'DATEPART', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE',
-        'SECOND', 'NOW', 'CURRENT_TIMESTAMP',
-        // PostgreSQL specific
-        'BOOLEAN', 'SERIAL', 'BIGSERIAL', 'UUID', 'JSONB', 'JSON', 'ARRAY', 'TIMESTAMPTZ',
-        'TIMESTAMP', 'DATE', 'TIME', 'INTERVAL', 'CITEXT', 'INET', 'MACADDR',
-        'GEN_RANDOM_UUID', 'TO_CHAR', 'TO_DATE', 'TO_TIMESTAMP', 'TO_NUMBER',
-        'STRING_AGG', 'ARRAY_AGG', 'UNNEST', 'LATERAL', 'ILIKE',
-        'LANGUAGE', 'PLPGSQL', 'VOLATILE', 'STABLE', 'IMMUTABLE', 'SETOF', 'RECORD',
-        'INOUT', 'OUT', 'VARIADIC', 'PARALLEL', 'SAFE', 'UNSAFE',
-        // information_schema column names
-        'TABLE_SCHEMA', 'TABLE_NAME', 'TABLE_CATALOG', 'COLUMN_NAME', 'DATA_TYPE',
-        'IS_NULLABLE', 'COLUMN_DEFAULT', 'CHARACTER_MAXIMUM_LENGTH', 'NUMERIC_PRECISION',
-        'NUMERIC_SCALE', 'ORDINAL_POSITION', 'COLUMN_COMMENT',
-        // MJ SQL constructs
-        'INFORMATION_SCHEMA', 'COLUMNS', 'TABLES', 'ROUTINES',
-    ]);
-
-    /**
      * Quotes mixed-case identifiers in a SQL string for PostgreSQL compatibility.
-     * Uses a tokenizer approach to skip string literals, already-quoted identifiers,
-     * dollar-quoted blocks, and SQL keywords. Any remaining PascalCase word gets
-     * double-quoted to preserve case.
+     *
+     * The tokenizer lives in `@memberjunction/sql-dialect` and is shared with
+     * `PostgreSQLDataProvider.autoQuoteIdentifiers`, so codegen-time and runtime SQL are
+     * quoted by one implementation rather than two hand-synced copies. See
+     * {@link AutoQuotePostgreSQLIdentifiers} for the quoting rule and its rationale.
+     *
+     * @inheritdoc
      */
     quoteSQLForExecution(sql: string): string {
-        const result: string[] = [];
-        let i = 0;
-        const len = sql.length;
-
-        while (i < len) {
-            const ch = sql[i];
-
-            if (ch === "'") {
-                i = this.skipSingleQuotedString(sql, i, len, result);
-                continue;
-            }
-            if (ch === '$') {
-                i = this.skipDollarQuotedBlock(sql, i, len, result);
-                continue;
-            }
-            if (ch === '"') {
-                i = this.skipDoubleQuotedIdentifier(sql, i, len, result);
-                continue;
-            }
-            if (ch === '[') {
-                i = this.skipBracketedIdentifier(sql, i, len, result);
-                continue;
-            }
-            if (ch === '@') {
-                i = this.skipAtParameter(sql, i, len, result);
-                continue;
-            }
-            if (/[a-zA-Z_]/.test(ch)) {
-                i = this.processWord(sql, i, len, result);
-                continue;
-            }
-
-            result.push(ch);
-            i++;
-        }
-
-        return result.join('');
+        return AutoQuotePostgreSQLIdentifiers(sql);
     }
 
     // ─── METADATA MANAGEMENT: DEFAULT VALUE PARSING ──────────────────
@@ -2462,99 +2368,6 @@ WHERE p.prokind IN ('f', 'p')
     WHERE schemaname = '${schema}'
       AND tablename = '${tableName}'
       AND indexname = '${indexName}'`;
-    }
-
-    // ─── TOKENIZER HELPERS (for quoteSQLForExecution) ────────────────
-
-    /** Skips a single-quoted string literal, handling escaped quotes ('') */
-    private skipSingleQuotedString(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len) {
-            if (sql[j] === "'" && j + 1 < len && sql[j + 1] === "'") {
-                j += 2;
-            } else if (sql[j] === "'") {
-                j++;
-                break;
-            } else {
-                j++;
-            }
-        }
-        result.push(sql.substring(start, j));
-        return j;
-    }
-
-    /** Skips a dollar-quoted block ($$ ... $$ or $tag$ ... $tag$) */
-    private skipDollarQuotedBlock(sql: string, start: number, len: number, result: string[]): number {
-        let tagEnd = start + 1;
-        if (tagEnd < len && sql[tagEnd] === '$') {
-            // Simple $$ tag
-            tagEnd = start + 2;
-        } else {
-            // Look for $identifier$ pattern
-            while (tagEnd < len && /[a-zA-Z0-9_]/.test(sql[tagEnd])) tagEnd++;
-            if (tagEnd < len && sql[tagEnd] === '$') {
-                tagEnd++;
-            } else {
-                // Not a dollar-quote, just a $ character
-                result.push(sql[start]);
-                return start + 1;
-            }
-        }
-        const tag = sql.substring(start, tagEnd);
-        const closePos = sql.indexOf(tag, tagEnd);
-        if (closePos !== -1) {
-            const blockEnd = closePos + tag.length;
-            result.push(sql.substring(start, blockEnd));
-            return blockEnd;
-        }
-        // No closing tag found, pass through rest of string
-        result.push(sql.substring(start));
-        return len;
-    }
-
-    /** Skips an already double-quoted identifier */
-    private skipDoubleQuotedIdentifier(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len && sql[j] !== '"') j++;
-        if (j < len) j++;
-        result.push(sql.substring(start, j));
-        return j;
-    }
-
-    /** Skips a square-bracketed identifier (SQL Server style) */
-    private skipBracketedIdentifier(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len && sql[j] !== ']') j++;
-        if (j < len) j++;
-        result.push(sql.substring(start, j));
-        return j;
-    }
-
-    /** Skips an @-prefixed parameter */
-    private skipAtParameter(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
-        result.push(sql.substring(start, j));
-        return j;
-    }
-
-    /** Processes a word token - quotes it if it's a PascalCase identifier, not a keyword */
-    private processWord(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
-        const word = sql.substring(start, j);
-
-        const isKeyword = PostgreSQLCodeGenProvider._SQL_KEYWORDS.has(word.toUpperCase());
-        const startsUpper = /^[A-Z]/.test(word);
-        const isAllLower = word === word.toLowerCase();
-        const isMJInternal = word.startsWith('__mj_');
-
-        if (!isKeyword && !isAllLower && !isMJInternal && startsUpper) {
-            result.push(pgDialect.QuoteIdentifier(word));
-        } else {
-            result.push(word);
-        }
-        return j;
     }
 
     // ─── COMPLEX SQL GENERATION HELPERS ──────────────────────────────
