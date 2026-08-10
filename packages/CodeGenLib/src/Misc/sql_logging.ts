@@ -4,8 +4,6 @@ import { logError, logStatus } from "./status_logging";
 import * as fs from 'fs';
 import path from 'path';
 
-const DEFAULT_SS_SQL_OUTPUT_FOLDER = './migrations/v5/';
-const DEFAULT_PG_SQL_OUTPUT_FOLDER = './migrations-pg/v5/';
 
 /**
  * Utility class for logging SQL to a run file that can be fresh for each run or appended to depending on the settings in the configuration
@@ -34,13 +32,17 @@ export class SQLLogging {
                 return; // we are not doing anything here....
 
             if (config.folderPath) {
-                // On PostgreSQL, swap the default SQL Server output folder for the
-                // PG-equivalent so CodeGen audit SQL lands in migrations-pg/v5/ alongside
-                // the rest of the PG tooling. Users who explicitly override folderPath are
-                // honored as-is.
+                // On PostgreSQL, redirect the migrations root so CodeGen audit SQL lands in
+                // migrations-pg/ alongside the rest of the PG tooling.
+                //
+                // This rewrites the root rather than exact-matching one version folder. The
+                // previous exact match was pinned to the v5 default, so once the repo moved on to
+                // v6 a perfectly ordinary './migrations/v6/' no longer matched and PG CodeGen
+                // wrote its audit SQL into the SQL Server tree — silently, and into the wrong
+                // version folder. Paths outside ./migrations/ are still honored as-is.
                 let folderPath = config.folderPath;
-                if (dbPlatform() === 'postgresql' && folderPath === DEFAULT_SS_SQL_OUTPUT_FOLDER) {
-                    folderPath = DEFAULT_PG_SQL_OUTPUT_FOLDER;
+                if (dbPlatform() === 'postgresql') {
+                    folderPath = folderPath.replace(/^(\.\/)?migrations\//, '$1migrations-pg/');
                 }
 
                 const dirExists: boolean = fs.existsSync(folderPath);

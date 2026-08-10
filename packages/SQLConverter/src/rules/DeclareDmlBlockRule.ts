@@ -62,6 +62,10 @@ export class DeclareDmlBlockRule implements IConversionRule {
     // Convert common functions (ISNULL → COALESCE, etc.)
     result = convertCommonFunctions(result);
 
+    // Table variables have no PL/pgSQL declaration form — rewrite them to temp tables
+    // BEFORE convertDeclare, so they land in the block body, not the DECLARE section.
+    result = this.convertTableVariables(result);
+
     // Extract DECLARE variables and convert types
     result = this.convertDeclare(result);
 
@@ -108,6 +112,9 @@ export class DeclareDmlBlockRule implements IConversionRule {
     // Convert UPDATE alias SET alias.col FROM table alias JOIN → PG UPDATE FROM
     result = this.convertUpdateFrom(result);
 
+    // Convert DELETE alias FROM table alias JOIN other ON ... → PG DELETE ... USING
+    result = this.convertDeleteFrom(result);
+
     // Convert RETURN; to RETURN; (same in PL/pgSQL)
     // (already valid syntax)
 
@@ -137,7 +144,11 @@ export class DeclareDmlBlockRule implements IConversionRule {
    */
   private convertDeclare(sql: string): string {
     return sql.replace(
-      /^(\s*)DECLARE\s+(.+?);\s*$/gim,
+      // Indent is horizontal whitespace only: `\s*` also matches the newline of a
+      // preceding blank line, which put a blank line between the emitted DECLARE and
+      // its declarations — and wrapInDoBlock treats a blank line as the end of the
+      // DECLARE section, so the declaration was emitted in the body instead.
+      /^([ \t]*)DECLARE\s+(.+?);\s*$/gim,
       (_match, indent: string, varList: string) => {
         const vars = this.splitTopLevel(varList, ',');
         const converted = vars.map(v => this.convertDeclareItem(v.trim(), indent));
@@ -322,6 +333,14 @@ export class DeclareDmlBlockRule implements IConversionRule {
     let result = sql.replace(/\bIF\b\s+([\s\S]*?)\bBEGIN\b/gi, (_match, cond: string) => {
       return `IF ${cond.trim()} THEN`;
     });
+    // T-SQL closes the THEN branch and opens the ELSE branch with `END ELSE BEGIN`;
+    // PL/pgSQL needs a bare `ELSE`. Without this the END is not followed by any of the
+    // tokens the standalone-END rule below looks for, so it survives verbatim and PG
+    // reports `syntax error at or near "ELSE"`. The BEGIN-less form covers a
+    // single-statement ELSE branch.
+    result = result.replace(/\bEND\b\s*\bELSE\b\s*\bBEGIN\b/gi, 'ELSE');
+    result = result.replace(/\bEND\b\s*\bELSE\b/gi, 'ELSE');
+
     // Convert standalone END (that closes IF) → END IF;
     // This is tricky — need to be careful not to break nested blocks. The trailing
     // `\s*$` alternative catches an END that closes the whole block (no newline after
@@ -354,6 +373,8 @@ export class DeclareDmlBlockRule implements IConversionRule {
           declareLines.push('  ' + trimmed);
           continue;
         }
+        // A blank line inside the DECLARE section is formatting, not its end.
+        if (!trimmed) continue;
         // End of DECLARE section
         pastDeclare = true;
       }
@@ -383,6 +404,80 @@ export class DeclareDmlBlockRule implements IConversionRule {
     out.push(...bodyLines);
     out.push('END $mj$;');
     return out.join('\n');
+  }
+
+  /**
+   * Convert a T-SQL table variable to a transaction-scoped temp table:
+   *
+   *     DECLARE @Consumers TABLE (EntityID uniqueidentifier PRIMARY KEY);
+   *  →  CREATE TEMP TABLE v_Consumers (EntityID uniqueidentifier PRIMARY KEY) ON COMMIT DROP;
+   *
+   * PL/pgSQL has no table-variable type, so the old output was `v_Consumers TABLE;` — not a
+   * valid declaration, and the block failed to apply. ON COMMIT DROP matches the table
+   * variable's lifetime (the migration's transaction). The `v_` prefix keeps it consistent
+   * with convertVariableRefs, which rewrites `@Consumers` references to `v_Consumers`.
+   * Column types are normalised by the generic type pass later in PostProcess.
+   */
+  private convertTableVariables(sql: string): string {
+    const re = /^([ \t]*)DECLARE\s+@(\w+)\s+TABLE\s*\(/gim;
+    let result = sql;
+    let m: RegExpExecArray | null;
+    // Rebuild left-to-right: each rewrite changes lengths, so re-scan from the start.
+    while ((m = re.exec(result)) !== null) {
+      const openParen = result.indexOf('(', m.index + m[0].length - 1);
+      const closeParen = DeclareDmlBlockRule.findCloseParen(result, openParen);
+      if (closeParen < 0) break;
+      const cols = result.slice(openParen + 1, closeParen);
+      const after = result.slice(closeParen + 1).replace(/^\s*;/, '');
+      result =
+        `${result.slice(0, m.index)}${m[1]}CREATE TEMP TABLE v_${m[2]} (${cols}) ON COMMIT DROP;${after}`;
+      re.lastIndex = 0;
+    }
+    return result;
+  }
+
+  /** Index of the `)` matching the `(` at openPos, ignoring parens inside string literals. */
+  private static findCloseParen(sql: string, openPos: number): number {
+    let depth = 0;
+    let inStr = false;
+    for (let i = openPos; i < sql.length; i++) {
+      const c = sql[i];
+      if (inStr) {
+        if (c === "'") { if (sql[i + 1] === "'") i++; else inStr = false; }
+        continue;
+      }
+      if (c === "'") inStr = true;
+      else if (c === '(') depth++;
+      else if (c === ')') { depth--; if (depth === 0) return i; }
+    }
+    return -1;
+  }
+
+  /**
+   * Convert T-SQL's delete-with-join to PG's USING form:
+   *
+   *     DELETE ef FROM tbl ef JOIN other c ON <cond> WHERE <pred>
+   *  →  DELETE FROM tbl ef USING other c WHERE <cond> AND <pred>
+   *
+   * The DELETE analogue of convertUpdateFrom. PG keeps the target alias, so unlike the
+   * UPDATE form there is no need to rewrite alias-qualified column references.
+   * A plain `DELETE FROM x` never matches (its first word after DELETE is FROM).
+   */
+  private convertDeleteFrom(sql: string): string {
+    return sql.replace(
+      /DELETE\s+(\w+)\s+FROM\s+([\s\S]+?)(?=\s*;|\s*$)/gi,
+      (_match, alias: string, fromClause: string) => {
+        const m = fromClause.match(
+          /^((?:\w+\.)?(?:"[^"]+"|\w+))\s+(\w+)\s+(?:INNER\s+)?JOIN\s+([\s\S]+?)\s+ON\s+([\s\S]+?)(?:\s+WHERE\s+([\s\S]+))?$/i
+        );
+        if (!m) return _match;
+        const [, table, tableAlias, joinTable, joinCond, whereCond] = m;
+        if (tableAlias.toLowerCase() !== alias.toLowerCase()) return _match;
+        let out = `DELETE FROM ${table} ${tableAlias}\nUSING ${joinTable}\nWHERE ${joinCond}`;
+        if (whereCond) out += `\n  AND ${whereCond}`;
+        return out;
+      }
+    );
   }
 
   /**

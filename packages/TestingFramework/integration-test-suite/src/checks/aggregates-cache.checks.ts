@@ -34,6 +34,19 @@ function connStrOf(provider: IMetadataProvider): string {
     return (provider as unknown as { InstanceConnectionString?: string }).InstanceConnectionString ?? '';
 }
 
+/**
+ * `MAX(<last-updated column>)`, quoted for the running backend.
+ *
+ * An aggregate `expression` reaches the database verbatim, so a bare `__mj_UpdatedAt` is only
+ * safe where identifiers fold case-insensitively. PostgreSQL folds unquoted identifiers to
+ * lowercase and then rejects `column "__mj_updatedat" does not exist`. Quoting through the
+ * provider keeps the check testing aggregate caching rather than identifier casing.
+ */
+function maxUpdatedAtExpr(provider: IMetadataProvider): string {
+    const quote = (provider as unknown as { QuoteIdentifier?: (n: string) => string }).QuoteIdentifier;
+    return `MAX(${quote ? quote.call(provider, '__mj_UpdatedAt') : '__mj_UpdatedAt'})`;
+}
+
 /** Always-true, column-AGNOSTIC, unique-per-tag predicate → a deterministic cold slot. */
 function coldFilter(tag: string): string {
     return `'${tag}' <> 'zzz-cache-test-marker'`;
@@ -45,7 +58,7 @@ export async function CheckAgg1_FingerprintIncludesAggregates(ctx: IntegrationCh
     const connStr = connStrOf(ctx.Provider);
     const base: RunViewParams = { EntityName: entityName, ResultType: 'simple' };
     const withSum: RunViewParams = { ...base, Aggregates: [{ expression: 'COUNT(*)', alias: 'Cnt' }] };
-    const withMax: RunViewParams = { ...base, Aggregates: [{ expression: 'MAX(__mj_UpdatedAt)', alias: 'MaxUpd' }] };
+    const withMax: RunViewParams = { ...base, Aggregates: [{ expression: maxUpdatedAtExpr(ctx.Provider), alias: 'MaxUpd' }] };
 
     const fpNone = LocalCacheManager.Instance.GenerateRunViewFingerprint(base, connStr);
     const fpSum = LocalCacheManager.Instance.GenerateRunViewFingerprint(withSum, connStr);
@@ -87,7 +100,7 @@ export async function CheckAgg3_ResultOrderSurvivesCache(ctx: IntegrationCheckCo
     const entityName = aggEntity(ctx);
     const rv = new RunView();
     const A: AggregateExpression = { expression: 'COUNT(*)', alias: 'Cnt' };
-    const B: AggregateExpression = { expression: 'MAX(__mj_UpdatedAt)', alias: 'MaxUpd' };
+    const B: AggregateExpression = { expression: maxUpdatedAtExpr(ctx.Provider), alias: 'MaxUpd' };
     const filter = coldFilter('agg3');
 
     // Warm the slot with [A, B].

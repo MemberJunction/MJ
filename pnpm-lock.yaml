@@ -14208,6 +14208,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.1
         version: link:../../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../MJGlobal
@@ -14260,6 +14263,10 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+    optionalDependencies:
+      '@memberjunction/postgresql-dataprovider':
+        specifier: 6.1.0-edge.1
+        version: link:../../PostgreSQLDataProvider
 
   packages/TestingFramework/Engine:
     dependencies:

@@ -19,6 +19,84 @@ describe('DeclareDmlBlockRule', () => {
     });
   });
 
+  describe('table variables and delete-joins', () => {
+    it('should convert a DECLARE @x TABLE variable to a transaction-scoped temp table', () => {
+      // PL/pgSQL has no table-variable type; the old output was `v_Consumers TABLE;`,
+      // which fails with `syntax error at or near "v_Consumers"`.
+      const sql = `DECLARE @Consumers TABLE (EntityID uniqueidentifier PRIMARY KEY);
+INSERT INTO @Consumers (EntityID) VALUES ('3E248F34-2837-EF11-86D4-6045BDEE16E6');`;
+      const result = convert(sql);
+      expect(result).toMatch(/CREATE TEMP TABLE v_Consumers \([\s\S]*?\) ON COMMIT DROP;/);
+      expect(result).not.toMatch(/v_Consumers\s+TABLE\s*;/);
+      // TEMP/COMMIT are keywords here, not identifiers
+      expect(result).not.toContain('"TEMP"');
+      expect(result).not.toContain('"COMMIT"');
+      // the body still references the same name
+      expect(result).toContain('INSERT INTO v_Consumers');
+    });
+
+    it('should convert DELETE alias FROM ... JOIN to PG DELETE ... USING', () => {
+      const sql = `DECLARE @Consumers TABLE (EntityID uniqueidentifier PRIMARY KEY);
+DELETE ef
+FROM [__mj].[EntityField] ef
+JOIN @Consumers c ON c.EntityID = ef.[EntityID]
+WHERE ef.[Name] = 'EntityAction';`;
+      const result = convert(sql);
+      expect(result).toMatch(/DELETE FROM __mj\."EntityField" ef/);
+      expect(result).toMatch(/USING v_Consumers c/);
+      expect(result).not.toMatch(/DELETE\s+ef\s*\n?\s*FROM/);
+      expect(result).not.toContain('"USING"');
+    });
+
+    it('should leave a plain DELETE FROM untouched', () => {
+      const sql = `DECLARE @x INT;
+DELETE FROM [__mj].[EntityField] WHERE [Name] = 'X';`;
+      const result = convert(sql);
+      expect(result).toContain('DELETE FROM __mj."EntityField"');
+      expect(result).not.toContain('USING');
+    });
+  });
+
+  describe('DECLARE section placement', () => {
+    it('should keep declarations in the DECLARE section when a blank line precedes DECLARE', () => {
+      // The indent capture used to swallow the preceding newline, emitting a blank line
+      // between DECLARE and its declarations; wrapInDoBlock read that blank line as the
+      // end of the section and put the declaration in the body, where PG rejects it with
+      // `syntax error at or near "v_AppID"`.
+      const sql = `/* a leading block comment
+   second line */
+
+DECLARE @AppID UNIQUEIDENTIFIER = 'A715122C-F912-4BF5-B4BB-9B94DFDD2A9E';
+
+DELETE FROM [__mj].[Application] WHERE [ID] = @AppID;`;
+      const result = convert(sql);
+      expect(result).toMatch(/DO \$mj\$\s*\nDECLARE\n\s+v_AppID UUID := 'A715122C-F912-4BF5-B4BB-9B94DFDD2A9E';\s*\nBEGIN/);
+      // the declaration must NOT appear after BEGIN
+      const afterBegin = result.slice(result.indexOf('BEGIN'));
+      expect(afterBegin).not.toMatch(/v_AppID\s+UUID/);
+    });
+  });
+
+  describe('IF / ELSE blocks', () => {
+    it('should convert END ELSE BEGIN to a bare ELSE', () => {
+      // Left verbatim, PG reports `syntax error at or near "ELSE"`.
+      const sql = `DECLARE @AppID UNIQUEIDENTIFIER = 'A715122C-F912-4BF5-B4BB-9B94DFDD2A9E';
+IF EXISTS (SELECT 1 FROM [__mj].[Application] WHERE [ID] = @AppID)
+BEGIN
+    DELETE FROM [__mj].[Application] WHERE [ID] = @AppID;
+END
+ELSE
+BEGIN
+    PRINT 'nothing to retire';
+END`;
+      const result = convert(sql);
+      expect(result).toMatch(/\bELSE\b/);
+      expect(result).not.toMatch(/END\s+ELSE/i);
+      expect(result).not.toMatch(/ELSE\s+BEGIN/i);
+      expect(result).toMatch(/END IF;/);
+    });
+  });
+
   describe('sys.default_constraints simplification', () => {
     it('should replace sys.default_constraints + ADD DEFAULT FOR with ALTER COLUMN SET DEFAULT', () => {
       const sql = `DECLARE @constraintName NVARCHAR(256);

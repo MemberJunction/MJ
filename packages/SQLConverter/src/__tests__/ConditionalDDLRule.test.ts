@@ -61,6 +61,39 @@ END`;
     });
   });
 
+  describe('guarded constraint drop', () => {
+    it('should convert IF EXISTS(check_constraints) DROP CONSTRAINT to DROP CONSTRAINT IF EXISTS', () => {
+      // Without this the DROP is lost entirely and the paired ADD CONSTRAINT later in the
+      // same migration fails with `constraint "CK_Task_Assignment" ... already exists`.
+      const sql = `IF EXISTS (
+    SELECT 1
+    FROM sys.check_constraints cc
+    INNER JOIN sys.schemas s ON s.schema_id = cc.schema_id
+    INNER JOIN sys.tables t ON t.object_id = cc.parent_object_id
+    WHERE cc.name = N'CK_Task_Assignment'
+      AND s.name = N'__mj'
+      AND t.name = N'Task'
+)
+BEGIN
+    ALTER TABLE [__mj].[Task] DROP CONSTRAINT [CK_Task_Assignment];
+END`;
+      const result = convert(sql);
+      expect(result).toContain('ALTER TABLE __mj."Task" DROP CONSTRAINT IF EXISTS "CK_Task_Assignment";');
+      // the redundant T-SQL catalog guard must not survive
+      expect(result).not.toMatch(/sys\./i);
+      expect(result).not.toMatch(/\bIF\s+EXISTS\s*\(/i);
+    });
+
+    it('should leave a non-drop IF EXISTS body to the generic DO-block path', () => {
+      const sql = `IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Task')
+BEGIN
+    UPDATE [__mj].[Task] SET [Status] = 'X';
+END`;
+      const result = convert(sql);
+      expect(result).not.toContain('DROP CONSTRAINT IF EXISTS');
+    });
+  });
+
   describe('conditional index conversion', () => {
     it('should convert IF NOT EXISTS sys.indexes CREATE INDEX to CREATE INDEX IF NOT EXISTS', () => {
       const sql = `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Users_Email' AND object_id = OBJECT_ID('__mj.Users'))

@@ -792,6 +792,10 @@ const PASCAL_QUOTE_KEYWORDS = new Set([
   'UNION', 'ALL', 'DISTINCT', 'BETWEEN', 'CASE', 'WHEN', 'COALESCE',
   'CAST', 'MAX', 'MIN', 'COUNT', 'SUM', 'AVG', 'NOW', 'CURRENT_USER',
   'INFORMATION_SCHEMA', 'NONCLUSTERED', 'CLUSTERED', 'NO',
+  // Emitted by the table-variable → temp-table rewrite (CREATE TEMP TABLE … ON COMMIT DROP)
+  // and the delete-join rewrite (DELETE … USING …). Quoted as identifiers these produce
+  // `CREATE "TEMP" TABLE` / `ON "COMMIT" DROP`, which PostgreSQL cannot parse.
+  'TEMP', 'COMMIT', 'USING',
   // SQL functions that should not be quoted
   'LENGTH', 'SUBSTRING', 'REPLACE', 'LTRIM', 'RTRIM', 'TRIM', 'UPPER', 'LOWER',
   'POSITION', 'OVERLAY', 'EXTRACT', 'FLOOR', 'CEIL', 'ROUND', 'ABS',

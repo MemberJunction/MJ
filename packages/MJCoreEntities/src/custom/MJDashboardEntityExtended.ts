@@ -56,8 +56,17 @@ export class MJDashboardEntityExtended extends MJDashboardEntity  {
             return result;
         }
 
-        // For existing records (not new), check edit permission
-        if (this.IsSaved) {
+        // For existing records (not new), check edit permission.
+        //
+        // Only enforce when the engine actually holds the dashboard cache. GetDashboardPermissions
+        // reads its backing array directly, so an engine that was never Config()'d looks identical
+        // to "this dashboard grants you nothing" — and every caller is refused, the owner included.
+        // That is not hypothetical: any process using the default `task` startup mode defers engine
+        // pre-warm, which is why `mj sync push` failed on a dashboard whose UserID *was* the
+        // pushing user. Validate() is synchronous and cannot await Config(), so the honest choice
+        // is to skip a check we cannot evaluate rather than deny on missing data. Entity-level
+        // permissions and RLS still apply underneath; this gate is an additional app-level rule.
+        if (this.IsSaved && DashboardEngine.Instance.Loaded) {
             const permissions = DashboardEngine.Instance.GetDashboardPermissions(this.ID, currentUser.ID);
 
             if (!permissions.CanEdit) {
@@ -86,7 +95,9 @@ export class MJDashboardEntityExtended extends MJDashboardEntity  {
             return false;
         }
 
-        // Check delete permission
+        // Check delete permission. Unlike Validate(), this path is async, so it can load the
+        // engine rather than guess — an unconfigured cache would otherwise refuse the owner.
+        await DashboardEngine.Instance.Config(false, currentUser, this.ProviderToUse as any as IMetadataProvider);
         const permissions = DashboardEngine.Instance.GetDashboardPermissions(this.ID, currentUser.ID);
 
         if (!permissions.CanDelete) {

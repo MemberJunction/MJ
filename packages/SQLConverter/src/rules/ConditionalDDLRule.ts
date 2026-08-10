@@ -77,6 +77,10 @@ export class ConditionalDDLRule implements IConversionRule {
     // (prevents GETUTCDATE from being quoted as "GETUTCDATE" before conversion to NOW())
     result = convertCommonFunctions(result);
 
+    // Try guarded constraint drop → PG-native DROP CONSTRAINT IF EXISTS
+    const dropConstraintResult = this.tryConvertGuardedDropConstraint(result);
+    if (dropConstraintResult) return dropConstraintResult + '\n';
+
     // Try CREATE INDEX IF NOT EXISTS pattern first (no BEGIN/END wrapper)
     const indexResult = this.tryConvertConditionalIndex(result);
     if (indexResult) return indexResult + '\n';
@@ -107,6 +111,46 @@ export class ConditionalDDLRule implements IConversionRule {
     result = convertBooleanLiteralComparisons(result, context.TableColumns);
 
     return result + '\n';
+  }
+
+  /**
+   * Convert a guarded constraint drop to PG's native idempotent form:
+   *
+   *     IF EXISTS (SELECT 1 FROM sys.check_constraints cc JOIN ... WHERE cc.name = 'CK_X')
+   *     BEGIN
+   *         ALTER TABLE [s].[T] DROP CONSTRAINT [CK_X];
+   *     END
+   *
+   * becomes
+   *
+   *     ALTER TABLE s."T" DROP CONSTRAINT IF EXISTS "CK_X";
+   *
+   * The T-SQL guard exists only because SQL Server has no DROP CONSTRAINT IF EXISTS, so
+   * the whole catalog query is redundant on PG and its joins (sys.schemas / sys.tables)
+   * have no direct pg_constraint analogue worth reconstructing.
+   *
+   * Returns null unless the guarded body consists solely of DROP CONSTRAINT statements,
+   * so anything richer keeps falling through to the generic DO-block conversion.
+   */
+  private tryConvertGuardedDropConstraint(sql: string): string | null {
+    const ifMatch = sql.match(/IF\s+EXISTS\s*\(/i);
+    if (!ifMatch || ifMatch.index === undefined) return null;
+    const openPos = sql.indexOf('(', ifMatch.index);
+    const closePos = ConditionalDDLRule.findCloseParen(sql, openPos);
+    if (closePos < 0) return null;
+
+    const body = sql.slice(closePos + 1).replace(/^\s*BEGIN\b/i, '').replace(/\bEND\s*;?\s*$/i, '');
+    const statements = body.split(';').map(s => s.trim()).filter(Boolean);
+    if (statements.length === 0) return null;
+
+    const dropRe = /^ALTER\s+TABLE\s+(\S+)\s+DROP\s+CONSTRAINT\s+("?[\w]+"?)$/i;
+    const converted: string[] = [];
+    for (const statement of statements) {
+      const m = statement.match(dropRe);
+      if (!m) return null;
+      converted.push(`ALTER TABLE ${m[1]} DROP CONSTRAINT IF EXISTS ${m[2]};`);
+    }
+    return converted.join('\n');
   }
 
   /** Convert IF NOT EXISTS (sys.indexes...) CREATE INDEX → CREATE INDEX IF NOT EXISTS */

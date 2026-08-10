@@ -40,8 +40,14 @@ module.exports = {
     checkModules: ['@memberjunction/integration-test-suite'],
   },
 
+  dbPlatform: process.env.DB_PLATFORM || 'sqlserver',
   dbHost: process.env.DB_HOST || 'localhost',
-  dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 1433,
+  // Default port follows the platform. With DB_PLATFORM unset this is the SQL Server default
+  // exactly as before, so existing setups — including integration.yml, which sets neither
+  // variable — are unaffected.
+  dbPort: process.env.DB_PORT
+    ? parseInt(process.env.DB_PORT)
+    : (process.env.DB_PLATFORM === 'postgresql' ? 5432 : 1433),
   dbDatabase: process.env.DB_DATABASE,
   dbUsername: process.env.DB_USERNAME,
   dbPassword: process.env.DB_PASSWORD,

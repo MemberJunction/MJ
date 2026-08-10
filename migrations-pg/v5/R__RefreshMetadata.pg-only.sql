@@ -38,3 +38,32 @@ UPDATE ${flyway:defaultSchema}."EntityField" ef
    AND c.column_name  = ef."Name"
    AND ef."IsVirtual" = false
    AND ef."AllowsNull" <> (c.is_nullable = 'YES');
+
+-- ----------------------------------------------------------------------------
+-- Orphaned EntityField rows — the second thing that genuinely drifts on the migrate-only path.
+--
+-- A migration can drop a column, or re-insert a virtual field that an earlier migration in the
+-- same run deleted (baked CodeGen INSERTs do exactly that), leaving EntityField rows describing
+-- columns the base view does not have. Every read of that entity's base view then fails with
+-- `column "X" does not exist`, which takes out BaseEngine loads and `mj sync push` with them.
+-- Measured on a from-scratch v6 database: 6 such rows across 5 entities — 4 of them created when
+-- a fix migration's DELETE was undone by the very next migration's baked INSERTs.
+--
+-- SQL Server's R__RefreshMetadata clears these via spDeleteUnneededEntityFields on every deploy.
+-- The PostgreSQL function already ships (emitted by metadataSupportObjects.ts) with the same
+-- external-entity and scoping guards — it simply was never called from here.
+--
+-- The other five routines in the SQL Server file stay deliberately absent:
+--   * spRecompileAllViews has no PostgreSQL equivalent — PG freezes a view's column list at
+--     creation and there is no sp_refreshview. That gap is real, is tracked separately, and
+--     cannot be closed from this file.
+--   * spUpdateExistingEntitiesFromSchema / spUpdateExistingEntityFieldsFromSchema /
+--     spSetDefaultColumnWidthWhereNeeded / spUpdateSchemaInfoFromDatabase would rewrite Sequence
+--     from PG physical column order — the cosmetic difference this file's header already states
+--     it will not touch.
+--
+-- Idempotent: a database with no orphans deletes nothing.
+DO $$
+BEGIN
+  PERFORM ${flyway:defaultSchema}."spDeleteUnneededEntityFields"('sys,staging');
+END $$;

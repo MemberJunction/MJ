@@ -26,6 +26,15 @@ export class AlterTableRule implements IConversionRule {
     result = result.replace(/\bON\s+\[?PRIMARY\]?/gi, '');
     result = result.replace(/\bON\s+"PRIMARY"/g, '');
 
+    // T-SQL's WITH CHECK / WITH NOCHECK prefix on ADD CONSTRAINT says whether to validate
+    // existing rows; PG expresses that as NOT VALID on the constraint itself (added below for
+    // CHECK constraints), so the prefix is dropped. Anchored on the following ADD so the
+    // `WITH CHECK CHECK CONSTRAINT` enable form handled just below is left intact. Applies to
+    // every constraint kind — the pre-existing NOCHECK strip lived inside the FOREIGN KEY
+    // branch, so a `WITH CHECK ADD CONSTRAINT ... CHECK (...)` reached PG verbatim and failed
+    // with `syntax error at or near "WITH"`.
+    result = result.replace(/\bWITH\s+(?:NO)?CHECK\s+(?=ADD\b)/gi, '');
+
     // ENABLE_CONSTRAINT: WITH CHECK CHECK CONSTRAINT → skip or just comment
     if (/WITH\s+CHECK\s+CHECK\s+CONSTRAINT/i.test(result)) {
       // PG constraints are always enforced, so this is a no-op
@@ -148,6 +157,12 @@ export class AlterTableRule implements IConversionRule {
     'VALID', 'LENGTH', 'COALESCE', 'CAST', 'TRIM', 'UPPER', 'LOWER',
     'REPLACE', 'SUBSTRING', 'POSITION', 'ABS', 'ROUND', 'FLOOR', 'CEILING',
     'NOW', 'EXTRACT', 'DATE', 'TIME', 'TIMESTAMP', 'INTERVAL',
+    // A CASE expression inside a CHECK body — the shape MJ uses for mutual-exclusion
+    // constraints — emitted `"CASE" "WHEN" … "END"` and the migration failed to apply.
+    // This set is a denylist (issue #3604): a keyword absent from it is silently quoted
+    // as an identifier. Deriving the gap against the shipped migrations rather than by
+    // inspection (2,084 CHECK bodies across 67 files) returned exactly these five.
+    'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
   ]);
 
   /** Quote PascalCase column names inside CHECK(...) bodies, preserving string literals

@@ -1462,9 +1462,15 @@ END $$;
     // ─── METADATA MANAGEMENT: STORED PROCEDURE CALLS ─────────────────
 
     /** @inheritdoc */
-    callRoutineSQL(schema: string, routineName: string, params: string[], _paramNames?: string[]): string {
+    callRoutineSQL(schema: string, routineName: string, params: string[], _paramNames?: string[], expectsResultSet: boolean = true): string {
         const qualifiedName = pgDialect.QuoteSchema(schema, routineName);
         const paramList = params.join(', ');
+        if (!expectsResultSet) {
+            // PERFORM runs the routine and discards its result — the only form that works for a
+            // side-effect routine declared `RETURNS SETOF record` with no OUT parameters, which
+            // `SELECT * FROM fn(...)` rejects with "a column definition list is required".
+            return `DO $$ BEGIN PERFORM ${qualifiedName}(${paramList}); END $$`;
+        }
         return `SELECT * FROM ${qualifiedName}(${paramList})`;
     }
 

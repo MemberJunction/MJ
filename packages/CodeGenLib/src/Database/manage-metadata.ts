@@ -2373,10 +2373,14 @@ export class ManageMetadataBase {
          return false;
       }
 
-      // Validate that all identified PK fields exist on the entity
-      const validPKs = primaryKeys.filter(pk =>
-         entity.Fields.some(f => f.Name.toLowerCase() === pk.toLowerCase())
-      );
+      // Resolve each identified PK to the field's ACTUAL name, rather than keeping the spelling the
+      // model returned. The match is case-insensitive, so an LLM answering `orderid` for a column
+      // named `OrderID` passed validation and was then used verbatim in the UPDATE below — which
+      // matches nothing on PostgreSQL (case-sensitive), while still reporting success. Same-cased
+      // answers are unaffected, so SQL Server behaviour does not change.
+      const validPKs = primaryKeys
+         .map(pk => entity.Fields.find(f => f.Name.toLowerCase() === pk.toLowerCase())?.Name)
+         .filter((name): name is string => !!name);
       if (validPKs.length === 0) {
          return false;
       }
@@ -3066,7 +3070,10 @@ export class ManageMetadataBase {
                // the below could fail if there are non-core dependencies on the entity, but that's ok, we will flag that in the console
                // for the admin to handle manually
                try {
-                  const sqlDelete = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteEntityWithCoreDependencies', [`'${e.ID}'`], ['EntityID']);
+                  // expectsResultSet=false: this routine only has side effects, and on PostgreSQL it
+                  // is a `RETURNS SETOF record` function with no OUT parameters, which cannot be
+                  // invoked as `SELECT * FROM ...`.
+                  const sqlDelete = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteEntityWithCoreDependencies', [`'${e.ID}'`], ['EntityID'], false);
                   await this.LogSQLAndExecute(pool, sqlDelete, `SQL text to remove entity ${e.Name}`);
                   logStatus(`      > Removed metadata for table ${e.SchemaName}.${e.BaseTable}`);
 
