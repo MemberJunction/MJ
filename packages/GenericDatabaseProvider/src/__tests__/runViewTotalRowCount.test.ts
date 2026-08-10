@@ -144,6 +144,11 @@ function makeEntity(name: string, userViewMaxRows: number): EntityInfo {
         DatetimeFields: [],
         AllowAllRowsAPI: true,
         GetUserRowLevelSecurityWhereClause: () => '',
+        // `next` routes RunView's RLS step through GetEffectiveRowFilterWhereClause, which
+        // composes the role layer with API-key row filters; GetUserRowLevelSecurityWhereClause
+        // is now deprecated as role-only. RunView calls the effective form, so the mock has to
+        // answer it or every path under test throws before reaching the count decision.
+        GetEffectiveRowFilterWhereClause: () => '',
     } as unknown as EntityInfo;
 }
 
