@@ -100,6 +100,21 @@ type GraphContext = {
     SubmittingAgentRunID: string | null;
 };
 
+/**
+ * Renders a loop's bindings as template values.
+ *
+ * Template parameters are strings; an item is usually an object. Objects are JSON-encoded rather
+ * than dropped, because `{{ field }}` printing `[object Object]` — or nothing at all — is exactly
+ * the silent failure this exists to prevent.
+ */
+function stringifyBindings(bindings: Record<string, unknown>): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(bindings)) {
+        out[key] = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    }
+    return out;
+}
+
 /** Deep-merges a prompt's JSON response into the payload, preserving what earlier steps established. */
 function deepMergePayload(
     base: Record<string, unknown>,
@@ -1414,9 +1429,21 @@ export class TaskGraphDispatcher implements IShutdownable {
                 return this.promptRunner.RunPromptForTask({
                     TaskID: task.ID,
                     PromptID: task.PromptID,
-                    InputPayload: resolved,
+                    // The ITERATION payload, not the mapped params. An action body declares its
+                    // inputs and gets exactly those; a prompt body declares none — it receives the
+                    // whole payload through the placeholder, and the loop's item and index are
+                    // merged INTO that payload. Passing the mapped result here handed the prompt an
+                    // empty object, so every iteration asked the model to describe nothing and got
+                    // five confident answers about nothing back.
+                    InputPayload: iterationPayload,
                     DependencyOutputs: dependencyOutputs,
-                    TemplateParameters: op.prompt?.templateParameters,
+                    // The loop's bindings become TEMPLATE VARIABLES, so an author writes
+                    // `{{ field }}` for the item the loop is on — which is what `itemVariable` is
+                    // for, and what anyone reading the step's configuration expects. Reaching it
+                    // through the payload placeholder instead works but is not discoverable, and
+                    // getting it wrong is silent: the variable renders empty and the model answers
+                    // confidently about nothing.
+                    TemplateParameters: { ...stringifyBindings(Bindings), ...op.prompt?.templateParameters },
                     Provider: provider,
                     ContextUser: this.contextUser,
                 });

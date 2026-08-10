@@ -6,12 +6,11 @@ the description it should have.
 ## The field
 
 ```json
-{{ _CURRENT_PAYLOAD.field }}
+{{ field }}
 ```
 
-A loop binds its item INTO the payload rather than beside it, so the current field is
-`_CURRENT_PAYLOAD.field` — the same way any other payload value is reached. `{{ field }}` on its own
-is empty, and produces a confident description of nothing.
+`field` is the loop's `itemVariable` — the loop binds each item under that name as a template
+variable, so the step's configuration and this template use the same word for the same thing.
 
 ## The whole payload, for context
 
