@@ -73,12 +73,14 @@ describe('RunForEachLoop', () => {
         expect(seen).toHaveLength(2);
     });
 
-    it('treats maxIterations of 0 as UNLIMITED, not as zero', async () => {
-        // Read as a limit, 0 runs the loop zero times — indistinguishable from an empty collection.
-        // ForEachOperation documents it as unlimited, and that is what the dispatcher must honour.
+    it('treats maxIterations of 0 as ZERO iterations, matching the in-run engine', () => {
+        // The operation types' JSDoc claimed 0 meant unlimited, but both engines have always computed
+        // Math.min(collection.length, maxIterations ?? default) — so zero has always meant zero. This
+        // engine replaces that one, and running a loop its author had effectively disabled would be a
+        // silent behaviour change. Parity beats the comment; the comment was corrected instead.
         const { seen, invoke } = recorder();
-        await RunForEachLoop({ collectionPath: 'static:[1,2,3]', maxIterations: 0 }, {}, invoke);
-        expect(seen).toHaveLength(3);
+        return RunForEachLoop({ collectionPath: 'static:[1,2,3]', maxIterations: 0 }, {}, invoke)
+            .then(() => expect(seen).toHaveLength(0));
     });
 
     it('applies a default ceiling when none is set', async () => {

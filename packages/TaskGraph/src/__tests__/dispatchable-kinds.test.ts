@@ -17,7 +17,9 @@
  * named, because the person who can fix it is the workflow's author, not an operator reading Task
  * rows.
  *
- * The dispatchable set grows as runners land — loops moved into it when `TaskLoopExecutor` shipped.
+ * The dispatchable set grows as runners land — loops moved in with `TaskLoopExecutor`, and prompts
+ * with `TaskPromptRunner` (which unbroke the shipped User Onboarding Flow Agent, whose six Prompt
+ * steps were refused at submission).
  * When it grows again, these expectations are supposed to fail: that is the reminder that the
  * refusal message and the persistence switch both need the same edit.
  */
@@ -41,11 +43,12 @@ describe('FindUnrunnableKinds', () => {
             TaskNode.Human(base('c', 'Approve'), {}),
             TaskNode.ForEach(base('d', 'ForEach Loop Demo'), { collectionPath: 'static:[1,2,3]' }),
             TaskNode.While(base('e', 'Retry until settled'), { condition: 'payload.done !== true' }),
+            TaskNode.Prompt(base('f', 'Classify the request'), { promptName: 'Classifier' }),
         ]));
         expect(result).toBeNull();
     });
 
-    it.each(['Prompt', 'External'] as const)('refuses a %s step, which nothing can run yet', (kind) => {
+    it.each(['External'] as const)('refuses a %s step, which nothing can run yet', (kind) => {
         // Both are legitimate parts of the spec — there is simply no runner. Persisting one would
         // produce a task that waits forever, which reads as a workflow politely in progress.
         const node = { ...base('x', 'Unsupported step'), kind, configuration: {} } as TaskGraphSpecNode;
@@ -58,16 +61,16 @@ describe('FindUnrunnableKinds', () => {
     it('reports EVERY unrunnable step, not just the first', () => {
         // A one-at-a-time refusal makes fixing a workflow an N-round trip through the editor.
         const nodes = [
-            { ...base('a', 'First prompt'), kind: 'Prompt', configuration: {} },
-            { ...base('b', 'Second prompt'), kind: 'External', configuration: {} },
+            { ...base('a', 'First external'), kind: 'External', configuration: {} },
+            { ...base('b', 'Second external'), kind: 'External', configuration: {} },
         ] as TaskGraphSpecNode[];
         const result = FindUnrunnableKinds(graph(nodes));
-        expect(result).toContain('First prompt');
-        expect(result).toContain('Second prompt');
+        expect(result).toContain('First external');
+        expect(result).toContain('Second external');
     });
 
     it('names the workflow, so a refusal read from a log identifies its subject', () => {
-        const node = { ...base('a', 'Ask the model'), kind: 'Prompt', configuration: {} } as TaskGraphSpecNode;
+        const node = { ...base('a', 'Ask the model'), kind: 'External', configuration: {} } as TaskGraphSpecNode;
         expect(FindUnrunnableKinds(graph([node]))).toContain('Demo Flow Agent');
     });
 });

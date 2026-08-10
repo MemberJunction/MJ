@@ -220,6 +220,11 @@ function compiledOrder(flow: Flow): string[] {
         for (const t of spec.tasks) {
             for (const d of (t.dependsOn ?? []).map(NormalizeDependency)) {
                 if (d.exclusiveGroup || !d.condition) continue;
+                // An ordinary conditional edge that is definitely false skips its target, exactly
+                // like an XOR loser. This simulator modelled that from the start; the real dispatcher
+                // used to write Blocked here, and because nothing pinned the two together the
+                // divergence sat hidden behind a green differential suite. Both now Skip (R6), and
+                // Blocked is reserved for failure-driven unsatisfiability.
                 if (CONTEXT[d.condition] === false && status.get(t.tempId) === 'Pending') status.set(t.tempId, 'Skipped');
             }
         }
