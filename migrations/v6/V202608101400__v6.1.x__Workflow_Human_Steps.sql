@@ -63,12 +63,10 @@ ADD CONSTRAINT FK_AIAgentRequest_OriginatingTask
     FOREIGN KEY (OriginatingTaskID) REFERENCES ${flyway:defaultSchema}.Task(ID);
 GO
 
--- The dispatcher asks "is this task still waiting on someone?" on every poll, for every eligible
--- human task. Without an index that is a scan of every request ever made, several times a minute.
-CREATE NONCLUSTERED INDEX IX_AIAgentRequest_OriginatingTask
-    ON ${flyway:defaultSchema}.AIAgentRequest (OriginatingTaskID)
-    WHERE OriginatingTaskID IS NOT NULL;
-GO
+-- NO index here on purpose. The dispatcher does query this column on every poll, so one is needed —
+-- but CodeGen creates it automatically for foreign keys (IDX_AUTO_MJ_FKEY_AIAgentRequest_
+-- OriginatingTaskID). Adding a hand-written one leaves two indexes competing on the same column,
+-- and only one of them is understood by the tooling that maintains them.
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
