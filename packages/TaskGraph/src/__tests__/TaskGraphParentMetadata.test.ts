@@ -27,6 +27,10 @@ describe('ParseTaskGraphParentMetadata', () => {
             reinvokeDepth: 2,
             submittedByAgentRunID: 'run-1',
             submittedByUserID: 'user-1',
+            // Persisted because the instance that settles a graph is routinely not the one that
+            // accepted it, and the spec is long gone by then — without this every recovery path a
+            // flow author draws is dead machinery.
+            failureSemantics: 'edges',
         };
         expect(ParseTaskGraphParentMetadata(JSON.stringify(written))).toEqual(written);
     });
@@ -52,6 +56,14 @@ describe('ParseTaskGraphParentMetadata', () => {
             continuationDeliveredAt: '2026-08-07T00:00:00.000Z',
         });
         expect(ParseTaskGraphParentMetadata(raw).continuationDeliveredAt).toBe('2026-08-07T00:00:00.000Z');
+    });
+
+    it('defaults failureSemantics to block for a graph written before it existed', () => {
+        // 'block' is the conservative reading: a failure stays terminal for its dependents unless the
+        // graph explicitly said its edges are recovery routes. Defaulting to 'edges' would let an old
+        // graph sail past a failure nobody planned around.
+        const raw = JSON.stringify({ continuation: 'message', reinvokeDepth: 0, submittedByAgentRunID: null });
+        expect(ParseTaskGraphParentMetadata(raw).failureSemantics).toBe('block');
     });
 
     it.each([null, undefined, ''])('defaults to message for %p', (raw) => {

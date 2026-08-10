@@ -68,6 +68,16 @@ export type TaskGraphSubmitContext = {
 export type TaskGraphParentMetadata = {
     continuation: 'message' | 'reinvoke' | 'none';
     reinvokeDepth: number;
+    /**
+     * How a failure propagates in this graph — persisted because the dispatcher that settles a graph
+     * is routinely not the process that accepted it, and the spec is gone by then.
+     *
+     * `'block'` (the default) makes a failed step terminal for its dependents. `'edges'` releases
+     * them along their drawn paths, which is what lets a workflow author a RECOVERY route. Compiled
+     * flows are `'edges'`; without persisting it, every recovery path a flow author draws is dead
+     * machinery — the edges exist and nothing ever follows them.
+     */
+    failureSemantics?: 'block' | 'edges';
     submittedByAgentRunID: string | null;
     /**
      * Who the graph belongs to.
@@ -104,6 +114,7 @@ export const MAX_REINVOKE_DEPTH = 5;
 const DEFAULT_PARENT_METADATA: TaskGraphParentMetadata = {
     continuation: 'message',
     reinvokeDepth: 0,
+    failureSemantics: 'block',
     submittedByAgentRunID: null,
     submittedByUserID: null,
 };
@@ -133,6 +144,7 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
             continuation: parsed.continuation === 'reinvoke' || parsed.continuation === 'none'
                 ? parsed.continuation
                 : 'message',
+            failureSemantics: parsed.failureSemantics === 'edges' ? 'edges' : 'block',
             reinvokeDepth: Number.isFinite(parsed.reinvokeDepth) ? Number(parsed.reinvokeDepth) : 0,
         };
     } catch {
@@ -164,12 +176,12 @@ const TASK_TYPE_NAME = 'AI Workflow';
  * and `While` carry their loop definition in `Task.Configuration` and their repeated body in the
  * same `AgentID` / `ActionID` keys.
  *
- * `Prompt` and `External` are absent because nothing runs them yet — there is no prompt runner, and
- * an external step is completed by a system that has no way to report back. Both are legitimate
- * parts of the spec; persisting one would simply produce a task that waits forever.
+ * `Prompt` joins them now that `TaskPromptRunner` exists — it carries `Task.PromptID`. `External`
+ * remains absent: it is completed by a system that has no way to report back, so persisting one
+ * would produce a task that waits forever.
  */
 const DISPATCHABLE_KINDS: ReadonlyArray<TaskGraphSpecNode['kind']> = [
-    'Agent', 'Action', 'Human', 'ForEach', 'While',
+    'Agent', 'Action', 'Human', 'ForEach', 'While', 'Prompt',
 ];
 
 /**
@@ -275,6 +287,12 @@ function agentNamesIn(node: TaskGraphSpecNode): string[] {
     return names.filter((n): n is string => !!n);
 }
 
+/** Every prompt name a node references, including the prompt a loop repeats. */
+function promptNamesIn(node: TaskGraphSpecNode): string[] {
+    const names = [ConfigOf(node, 'Prompt')?.promptName, LoopOperationOf(node)?.prompt?.name];
+    return names.filter((n): n is string => !!n);
+}
+
 /** Every action name a node references, including the action a loop repeats. */
 function actionNamesIn(node: TaskGraphSpecNode): string[] {
     const names = [ConfigOf(node, 'Action')?.actionName, LoopOperationOf(node)?.action?.name];
@@ -321,6 +339,20 @@ export class TaskGraphService {
             return { Success: false, ErrorMessage: unrunnable };
         }
 
+        // 1c. Chain depth. A flow that dispatches a graph containing itself recurses without bound,
+        //     and each hop costs real money and real rows before anyone notices. The cap is checked
+        //     HERE rather than at execution because refusing to write the graph is the only point at
+        //     which nothing has happened yet.
+        const depth = context.ReinvokeDepth ?? 0;
+        if (depth >= MAX_REINVOKE_DEPTH) {
+            const message =
+                `"${spec.workflowName}" was not started: it is ${depth} levels deep in a chain of ` +
+                `workflows starting workflows, which is the limit. A workflow that reaches this is ` +
+                `almost always calling itself, directly or through another one.`;
+            LogError(`[TaskGraphService] ${message}`);
+            return { Success: false, ErrorMessage: message };
+        }
+
         try {
             // 2. Resolve every agent and action BEFORE writing anything. An unresolvable name is a
             //    hard error, not a skipped node: silently dropping a task executes the graph with
@@ -333,6 +365,10 @@ export class TaskGraphService {
             if (!actionIDsByName.Success) {
                 return { Success: false, ErrorMessage: actionIDsByName.ErrorMessage };
             }
+            const promptIDsByName = await this.resolvePrompts(spec, context);
+            if (!promptIDsByName.Success) {
+                return { Success: false, ErrorMessage: promptIDsByName.ErrorMessage };
+            }
 
             const taskTypeID = await this.ensureTaskType(context);
 
@@ -340,7 +376,7 @@ export class TaskGraphService {
             //    edges last because they reference two child IDs that must both exist.
             const parentTaskID = await this.persistParent(spec, taskTypeID, context);
             const taskIDMap = await this.persistChildren(
-                spec, parentTaskID, taskTypeID, agentIDsByName.Map!, actionIDsByName.Map!, context,
+                spec, parentTaskID, taskTypeID, agentIDsByName.Map!, actionIDsByName.Map!, promptIDsByName.Map!, context,
             );
             await this.persistDependencies(spec, taskIDMap, context);
 
@@ -468,6 +504,38 @@ export class TaskGraphService {
      * read different entities and produce different error prose, and the shared shape is three
      * lines. Collapsing them would trade a readable failure message for a parameterized lookup.
      */
+    /**
+     * Maps every referenced prompt name to its ID.
+     *
+     * A prompt is addressed by name in the spec and stored as a foreign key on the row, exactly like
+     * agents and actions — a name in JSON cannot be joined, checked, or survive a rename.
+     */
+    private async resolvePrompts(
+        spec: TaskGraphSpec,
+        context: TaskGraphSubmitContext,
+    ): Promise<{ Success: boolean; Map?: Map<string, string>; ErrorMessage?: string }> {
+        const names = [...new Set(spec.tasks.flatMap(promptNamesIn))];
+        if (names.length === 0) return { Success: true, Map: new Map() };
+
+        const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
+        const result = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
+            { EntityName: 'MJ: AI Prompts', ExtraFilter: `Name IN (${quoted})`, Fields: ['ID', 'Name'], ResultType: 'simple' },
+            context.ContextUser,
+        );
+
+        const found = new Map((result.Results ?? []).map((r) => [r.Name, r.ID]));
+        const missing = names.filter((n) => !found.has(n));
+        if (missing.length > 0) {
+            return {
+                Success: false,
+                ErrorMessage:
+                    `Task graph "${spec.workflowName}" references ${missing.length} unknown prompt(s): ${missing.join(', ')}. ` +
+                    `Submitting would execute the graph with holes where those steps should be.`,
+            };
+        }
+        return { Success: true, Map: found };
+    }
+
     private async resolveActions(
         spec: TaskGraphSpec,
         context: TaskGraphSubmitContext,
@@ -525,6 +593,11 @@ export class TaskGraphService {
         parent.ConversationDetailID = context.ConversationDetailID ?? null;
         parent.Status = 'In Progress';
         parent.PercentComplete = 0;
+        // The run that submitted this graph, in the COLUMN and not only in the metadata JSON below.
+        // A json field cannot be joined, so provenance that lives only there is unavailable to any
+        // query — which is how a human step ended up with no agent to ask on behalf of, and how a
+        // dispatched run had no parent to roll its cost up to.
+        parent.AgentRunID = context.AgentRunID ?? null;
         // The parent row carries what happens AFTER the graph settles. It lives here rather than in
         // dispatcher memory because the dispatcher that finishes a graph is frequently not the
         // process that accepted it — a restart, a second instance, or simply a long-running graph
@@ -532,6 +605,7 @@ export class TaskGraphService {
         parent.InputPayload = JSON.stringify({
             continuation: spec.continuation ?? 'message',
             reinvokeDepth: context.ReinvokeDepth ?? 0,
+            failureSemantics: spec.failureSemantics ?? 'block',
             submittedByAgentRunID: context.AgentRunID ?? null,
             submittedByUserID: context.ContextUser?.ID ?? null,
         } satisfies TaskGraphParentMetadata);
@@ -548,6 +622,7 @@ export class TaskGraphService {
         taskTypeID: string,
         agentIDsByName: Map<string, string>,
         actionIDsByName: Map<string, string>,
+        promptIDsByName: Map<string, string>,
         context: TaskGraphSubmitContext,
     ): Promise<Map<string, string>> {
         const map = new Map<string, string>();
@@ -586,6 +661,9 @@ export class TaskGraphService {
                     // until the authorization model in #3524 lands.
                     task.UserID = context.ContextUser.ID;
                     break;
+                case 'Prompt':
+                    task.PromptID = promptIDsByName.get(ConfigOf(node, 'Prompt')!.promptName)!;
+                    break;
                 case 'ForEach':
                 case 'While': {
                     // A loop's key points at what it REPEATS, not at the loop itself. That keeps the
@@ -595,10 +673,11 @@ export class TaskGraphService {
                     const op = LoopOperationOf(node);
                     if (op?.action) task.ActionID = actionIDsByName.get(op.action.name)!;
                     else if (op?.subAgent) task.AgentID = agentIDsByName.get(op.subAgent.name)!;
+                    else if (op?.prompt) task.PromptID = promptIDsByName.get(op.prompt.name)!;
                     else {
                         throw new Error(
-                            `Task "${node.name}" is a loop with nothing to repeat. Choose an action ` +
-                            `or a sub-agent for it to run on each pass.`,
+                            `Task "${node.name}" is a loop with nothing to repeat. Choose an action, ` +
+                            `a prompt, or a sub-agent for it to run on each pass.`,
                         );
                     }
                     break;

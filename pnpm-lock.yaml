@@ -4557,6 +4557,9 @@ importers:
       '@memberjunction/ng-tabstrip':
         specifier: 6.1.0-edge.1
         version: link:../../Generic/tab-strip
+      '@memberjunction/ng-task-graph-editor':
+        specifier: 6.1.0-edge.1
+        version: link:../../Generic/task-graph-editor
       '@memberjunction/ng-testing':
         specifier: 6.1.0-edge.1
         version: link:../../Generic/Testing
@@ -5785,6 +5788,9 @@ importers:
       '@memberjunction/ng-shared-generic':
         specifier: 6.1.0-edge.1
         version: link:../shared
+      '@memberjunction/ng-task-graph-editor':
+        specifier: 6.1.0-edge.1
+        version: link:../task-graph-editor
       '@memberjunction/ng-ui-components':
         specifier: 6.1.0-edge.1
         version: link:../ui-components
@@ -8482,6 +8488,9 @@ importers:
       '@memberjunction/core':
         specifier: 6.1.0-edge.1
         version: link:../../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0-edge.1
+        version: link:../../../MJCoreEntities
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../../MJGlobal

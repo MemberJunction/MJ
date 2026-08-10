@@ -226,6 +226,21 @@
 .timeline-item[data-type="prompt"] {
   border-left: 3px solid var(--mj-brand-primary);
 }
+
+/* Dispatcher provenance.
+   A workflow step ran on the task-graph dispatcher and OUTLIVES the agent run that submitted it —
+   genuinely a different thing from a step the run executed itself. Someone reading a failure needs
+   to know which they are looking at before they know where to go next, so the two are visually
+   distinct rather than differing only by an icon. The graph header carries the tint; its steps carry
+   the rail, so a run reads as "everything under this line is dispatcher work". */
+.timeline-item[data-type="taskgraph"] {
+  border-left: 3px solid var(--mj-status-info);
+  background: color-mix(in srgb, var(--mj-status-info) 6%, var(--mj-bg-surface));
+}
+
+.timeline-item[data-type="task"] {
+  border-left: 3px solid color-mix(in srgb, var(--mj-status-info) 55%, transparent);
+}
 /* ============================================================
    Skill observability — badges on steps touched by skills
    ============================================================ */

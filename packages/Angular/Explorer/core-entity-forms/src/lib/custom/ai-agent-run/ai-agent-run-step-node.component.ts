@@ -20,7 +20,10 @@ export class AIAgentRunStepNodeComponent {
   }
 
   get isSubAgent(): boolean {
-    return this.item.type === 'subrun' || (this.item.type === 'step' && this.item.data?.StepType === 'Sub-Agent');
+    // A TaskGraph step expands too: it stands in for a whole graph of Task rows, and without the
+    // affordance the run stops at "Task Graph: X" with no way to see what actually ran.
+    return this.item.type === 'subrun' ||
+      (this.item.type === 'step' && (this.item.data?.StepType === 'Sub-Agent' || this.item.data?.StepType === 'TaskGraph'));
   }
 
   get isParentStep(): boolean {
@@ -56,6 +59,8 @@ export class AIAgentRunStepNodeComponent {
           return 'View Prompt Run';
         case 'sub-agent':
           return 'View Agent Run';
+        case 'taskgraph':
+          return 'View Workflow Run';
         default:
           return 'View Details';
       }

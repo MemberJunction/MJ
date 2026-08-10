@@ -71,6 +71,36 @@ export interface ITaskStepConfiguration {
      * in the shape they drew, while a machine-authored graph still renders legibly.
      */
     layout?: ITaskStepLayout;
+
+    /**
+     * What actually happened when this step ran — written by the dispatcher, never by an author.
+     *
+     * Everything else in this bag is a step's *definition*; this is its *history*. It lives here
+     * rather than in columns of its own for the same reason as the rest: nothing in it is ever a SQL
+     * predicate, and a column per runtime artefact would be a migration every time a new step kind
+     * produced one.
+     */
+    runtime?: ITaskStepRuntime;
+}
+
+/**
+ * The runtime artefacts a completed step points at.
+ *
+ * **This exists because cost was unreachable for prompt steps.** A workflow's spend is aggregated by
+ * walking the run tree: an Agent step reaches its cost through `Task.AgentRunID` → the run's own
+ * totals. A Prompt step has no agent run — the dispatcher executes the prompt directly — so its
+ * `AIPromptRun`, and with it every token and dollar it spent, had no path back from the Task at all.
+ * The runner returned the id and the dispatcher dropped it on the floor.
+ */
+export interface ITaskStepRuntime {
+    /**
+     * The `MJ: AI Prompt Runs` row this step produced, when it was a Prompt step.
+     *
+     * Set on the step's LAST execution. A retried step overwrites it rather than accumulating: the
+     * prompt runs themselves are the durable history, and this is the pointer to the one whose
+     * output the payload actually carries.
+     */
+    promptRunID?: string;
 }
 
 /** A step's position and size on the canvas, in canvas units. */
@@ -126,6 +156,8 @@ export interface ITaskForEachConfiguration {
     action?: ITaskLoopActionBody;
     /** Run this sub-agent once per iteration. */
     subAgent?: ITaskLoopSubAgentBody;
+    /** A prompt run once per loop iteration. */
+    prompt?: ITaskLoopPromptBody;
 }
 
 /**
@@ -149,6 +181,24 @@ export interface ITaskWhileConfiguration {
     action?: ITaskLoopActionBody;
     /** Run this sub-agent once per iteration. */
     subAgent?: ITaskLoopSubAgentBody;
+    /** A prompt run once per loop iteration. */
+    prompt?: ITaskLoopPromptBody;
+}
+
+/**
+ * A prompt run once per loop iteration.
+ *
+ * The cheapest loop body there is — one model call per item, with no agent wrapper, no reasoning
+ * loop and no run record. Right when an iteration is a single transformation (classify this,
+ * describe this column); wrong the moment an iteration has to decide what to do next.
+ */
+export interface ITaskLoopPromptBody {
+    /** Prompt name. Resolved to `Task.PromptID` at submission, so it is a real foreign key. */
+    name: string;
+    /** Values bound into the template, alongside the loop's own item and index bindings. */
+    templateParameters?: Record<string, string>;
+    /** JSON mapping from the prompt's response into the payload, applied per iteration. */
+    outputMapping?: string;
 }
 
 /** An action run once per loop iteration. */

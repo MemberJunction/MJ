@@ -7534,6 +7534,10 @@ export class MJAIAgentRequest_ {
     @MaxLength(20)
     ResponseSource?: string;
         
+    @Field({nullable: true, description: `The workflow step (MJ: Tasks row) waiting on this request, when it came from a task graph rather than from a running agent. Distinct from OriginatingAgentRunStepID: a task graph outlives the agent run that submitted it, so the task — not the run — is what resumes when a person answers. NULL for requests raised by a run directly.`}) 
+    @MaxLength(36)
+    OriginatingTaskID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -7561,6 +7565,10 @@ export class MJAIAgentRequest_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     ResumingAgentRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    OriginatingTask?: string;
         
 }
 
@@ -7625,6 +7633,9 @@ export class CreateMJAIAgentRequestInput {
 
     @Field({ nullable: true })
     ResponseSource: string | null;
+
+    @Field({ nullable: true })
+    OriginatingTaskID: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -7692,6 +7703,9 @@ export class UpdateMJAIAgentRequestInput {
 
     @Field({ nullable: true })
     ResponseSource?: string | null;
+
+    @Field({ nullable: true })
+    OriginatingTaskID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -85525,6 +85539,9 @@ export class MJTask_ {
     @Field(() => [MJTaskDependency_])
     MJTaskDependencies_DependsOnTaskIDArray: MJTaskDependency_[]; // Link to MJTaskDependencies
     
+    @Field(() => [MJAIAgentRequest_])
+    MJAIAgentRequests_OriginatingTaskIDArray: MJAIAgentRequest_[]; // Link to MJAIAgentRequests
+    
     @Field(() => [MJTask_])
     MJTasks_ParentIDArray: MJTask_[]; // Link to MJTasks
     
@@ -85776,6 +85793,16 @@ export class MJTaskResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTaskDependencies')} WHERE ${provider.QuoteIdentifier('DependsOnTaskID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Task Dependencies', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjtask_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Task Dependencies', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentRequest_])
+    async MJAIAgentRequests_OriginatingTaskIDArray(@Root() mjtask_: MJTask_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Requests', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentRequests')} WHERE ${provider.QuoteIdentifier('OriginatingTaskID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjtask_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Requests', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
