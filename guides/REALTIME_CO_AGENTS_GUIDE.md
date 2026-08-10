@@ -290,7 +290,7 @@ The pure implementation is `packages/AI/Agents/src/realtime/realtime-coagent-con
 { "realtime": {
     "modelPreference": "<AI Model name or ID>",
     "voice": { "default": { "tone": "…", "speakingStyle": "…" },
-               "providers": { "openai": { "voice": "alloy" }, "elevenlabs": { "voiceId": "…" },
+               "providers": { "openai": { "voice": "alloy" }, "elevenlabs": { "voice": "<voice id>" },
                               "gemini": { "voice": "…" }, "assemblyai": { "voice": "…" } } },
     "allowUserModelOverride": true,
     "narration": { "paceMs": 8000 } } }
@@ -300,7 +300,7 @@ The pure implementation is `packages/AI/Agents/src/realtime/realtime-coagent-con
 
 - **`modelPreference`** (Name or ID) participates in realtime-model selection *between* the explicit runtime choice and the default: explicit `preferredModelId` (strict, fails loud, authorization-gated when deviating) → configured preference (**tolerant** — an unsatisfiable metadata preference logs and falls through, mirroring the chain's metadata steps) → highest-PowerRank default.
 - **`voice.default` (tone / speakingStyle)** is appended to the server-built companion system prompt as a short **"Voice & manner"** section, right after the co-agent's own prompt.
-- **`voice.providers.<provider>`** is matched to the resolved vendor's `DriverClass` by normalized prefix (`openai` ↔ `OpenAIRealtime`, …) and merged into the session's open **`Config` bag** — the same opaque per-driver pact every other config entry rides (a caller-supplied runtime `Config` wins per key). Server-bridged reach today: **OpenAI** spreads the bag into `session.update`; **Gemini** merges it last; **AssemblyAI** maps `voice` → `output.voice`. **ElevenLabs** provisions voice on its managed agent and does not consume a per-session bag (per-driver TODO). **Client-direct reach**: `OpenAIRealtime.CreateClientSession` does not yet fold `params.Config` into the minted session (per-driver TODO) — the resolver instead surfaces the full resolved config as **`EffectiveConfigJson`** on `StartRealtimeClientSessionResult` so client drivers can apply provider voice settings browser-side.
+- **`voice.providers.<provider>`** is matched to the resolved vendor's `DriverClass` by normalized prefix (`openai` ↔ `OpenAIRealtime`, …) and merged into the session's open **`Config` bag** — the same opaque per-driver pact every other config entry rides (a caller-supplied runtime `Config` wins per key). Server-bridged reach today: **OpenAI** spreads the bag into `session.update`; **Gemini** merges it last; **AssemblyAI** maps `voice` → `output.voice`; **ElevenLabs** maps `voice` → the `tts.voice_id` entry of its `conversation_config_override` (on BOTH topologies — its managed agent enables the `tts.voiceId` override so each session can carry its own voice). **Client-direct reach**: `OpenAIRealtime.CreateClientSession` does not yet fold `params.Config` into the minted session (per-driver TODO) — the resolver instead surfaces the full resolved config as **`EffectiveConfigJson`** on `StartRealtimeClientSessionResult` so client drivers can apply provider voice settings browser-side.
 - **`narration.paceMs`** drives spoken-progress spacing: server-bridged, it feeds `RealtimeSessionRunnerDeps.NarrationPaceMs` (replacing the built-in 8 s spacing floor); client-direct, pacing is enforced client-side, so the value is surfaced as **`NarrationPaceMs`** on the start result.
 
 **Runtime override precedence & authorization** (`configOverridesJson` on `StartRealtimeClientSession`):
@@ -657,7 +657,7 @@ Honest ledger of what is *not* done on this branch, so nobody reads aspiration i
 | Non-target server tools on the client-direct relay (action wiring through `executeNonTargetTool`) | **Later phase** — structured "not available" today; the server-bridged path already executes actions |
 | Channel-grained permissions, multi-party sessions, audio retention/consent | **Out of scope** for this iteration (see plan) |
 | `RealtimeClientSessionService` ↔ `BaseAgent` prepare-logic duplication | **Known debt** — the service's doc header calls for a future shared `RealtimeSessionPreparer`; until then the two are kept in sync intentionally (the shared `realtime-narration.ts` and `realtime-coagent-config.ts` modules are the first extracted pieces — both paths consume the same effective-config merge) |
-| Per-driver voice plumbing for the effective config (`realtime.voice.providers`) | **Partially shipped** — provider-matched settings flow into the open `Config` bag (server-bridged: OpenAI spread, Gemini merge-last, AssemblyAI `voice` mapping). **TODOs**: `OpenAIRealtime.CreateClientSession` does not fold `params.Config` into the minted client-direct session (clients apply `EffectiveConfigJson` instead); the ElevenLabs server driver provisions voice on its managed agent and consumes no per-session bag |
+| Per-driver voice plumbing for the effective config (`realtime.voice.providers`) | **Partially shipped** — provider-matched settings flow into the open `Config` bag (server-bridged: OpenAI spread, Gemini merge-last, AssemblyAI `voice` mapping; ElevenLabs `voice` → `tts.voice_id` on both topologies). **TODOs**: `OpenAIRealtime.CreateClientSession` does not fold `params.Config` into the minted client-direct session (clients apply `EffectiveConfigJson` instead); the native voice picker (`BuildRealtimeConfigOverridesJson` / `BuildRealtimeOverridesJson`) still hardcodes the `openai` provider key, so a runtime voice pick cannot target any other provider |
 
 ---
 
@@ -752,6 +752,19 @@ The effective co-agent config gained a `session` sub-section that flows into the
 ```
 
 `GetSessionTuningSettings` projects the section onto the flat bag keys; each driver translates a key to its native wire field **only when its profile confirms support** and scrubs it otherwise — a shared config is safe on every provider (Gemini additionally warns on scrubbed foreign keys via `REALTIME_SHARED_CONFIG_KEYS`). Grok's GA gates are OFF pending xAI docs; flipping them is a one-line profile change.
+
+### Turn detection — catalog-driven, per model (`ModelConfiguration`)
+
+Turn detection is configurable through the same pact, with an extra base layer sourced from the **model catalog** (see [`plans/model-configuration.md`](../plans/model-configuration.md)). The `ModelConfiguration` JSONType column exists on `MJ: AI Model Types` < `MJ: AI Models` < `MJ: AI Model Vendors` (inherit-with-override, deep-merged per key by `AIEngine.GetEffectiveModelConfiguration`), and its `Realtime.TurnDetection` section is folded into the session Config bag as the normalized `turnDetection` key on **both** topologies. Full precedence, lowest to highest:
+
+```
+profile hard default
+  < ModelConfiguration cascade (type < model < model-vendor)   ← the catalog declares what the model supports
+  < realtime.session.turnDetection (agent/app config cascade)  ← agents/apps refine it
+  < runtime configOverridesJson (raw audio.input.turn_detection — auth-gated escape hatch, unchanged)
+```
+
+The normalized shape is `{ Mode: 'default' | 'serverVad' | 'semanticVad' | 'native', Eagerness?, Threshold?, SilenceDurationMs? }`. Each OpenAI-protocol profile declares its `supportedTurnModes` and maps the vocabulary via `MapNormalizedTurnDetection`; an unsupported mode is **diag-logged and falls back to the profile default** — a shared catalog never rejects a session. `'native'` is the deliberate forward slot: when a provider documents a smarter full-duplex turn mode (e.g. for the Grok Voice Think Fast family), its profile adds `'native'` + the mapping once, and the catalog opts models in via metadata with no further driver changes. Meeting mode (`disableAutoResponse`) composes on top of whatever mode wins — `create_response`/`interrupt_response` always reflect the bridge's floor control, and a live `Reconfigure` rebuilds the session's actual mode (it no longer hardcodes `server_vad`). GPT Realtime 2.1 / 2.1-mini are seeded to `semanticVad` in `metadata/ai-models/.ai-models.json`; delete that seed to return to the provider default.
 
 ### Multi-channel cost attribution
 `RealtimeUsage` now carries per-modality token detail (`InputTokenDetails`/`OutputTokenDetails`: text/audio/image/cached). The OpenAI driver maps the GA `response.done` detail blocks, the session runner accumulates them field-wise across turns, and the checkpoint persists the detail as JSON on the realtime `AIPromptRun.Result` — so audio-vs-text pricing (audio-in ~8× text-in on GPT Realtime 2.1) is attributable instead of blended.

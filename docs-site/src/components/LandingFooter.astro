@@ -1,0 +1,44 @@
+---
+/**
+ * Landing-page footer: the brand bar from the mockup — lockup plus the ™ /
+ * license line.
+ *
+ * Landing only, by design. Doc pages already end in Starlight's content footer
+ * (edit link, last-updated, prev/next pagination), and stacking a second
+ * full-width footer under that reads as clutter. The mark stays visible on
+ * every page via the fixed header regardless.
+ *
+ * Rendered as a SIBLING of `.mjd-landing`, not a child, so its background and
+ * rule run edge to edge instead of stopping at the landing's 1120px column.
+ *
+ * Both lockups are emitted and swapped with CSS on `data-theme` rather than a
+ * <picture> with prefers-color-scheme — the media-query form keys off the OS
+ * setting, which can disagree with the site's own theme toggle. That mismatch
+ * is exactly the bug on the /overview/ README logo.
+ */
+import logoOnLight from '../assets/MJ_logo_wide.png';
+import logoOnDark from '../assets/MJ_logo_wide_dark.png';
+---
+
+<div class="mjd-brandbar">
+  <div class="mjd-brandbar__inner">
+    <a class="mjd-brandbar__home" href="/">
+      <img
+        class="mjd-brandbar__logo mjd-brandbar__logo--on-light"
+        src={logoOnLight.src}
+        width={logoOnLight.width}
+        height={logoOnLight.height}
+        alt="MemberJunction"
+      />
+      <img
+        class="mjd-brandbar__logo mjd-brandbar__logo--on-dark"
+        src={logoOnDark.src}
+        width={logoOnDark.width}
+        height={logoOnDark.height}
+        alt=""
+        aria-hidden="true"
+      />
+    </a>
+    <p class="mjd-brandbar__legal">MemberJunction™ downloadable software · ISC License · A Blue Cypress product</p>
+  </div>
+</div>

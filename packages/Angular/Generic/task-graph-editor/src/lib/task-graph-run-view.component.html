@@ -1,0 +1,34 @@
+@if (ErrorMessage) {
+  <mj-alert Variant="error" [Message]="ErrorMessage"></mj-alert>
+} @else if (IsLoading) {
+  <div class="run-view-loading">Loading the workflow&rsquo;s steps&hellip;</div>
+} @else if (!Spec || Spec.tasks.length === 0) {
+  <mj-empty-state
+    Icon="fa-solid fa-diagram-project"
+    Title="No steps yet"
+    Message="This workflow has not created any steps.">
+  </mj-empty-state>
+} @else {
+  <div class="run-view">
+    <div class="run-view-summary">
+      <span class="run-view-count">{{ CompletedCount }} of {{ TotalCount }} complete</span>
+      @if (SkippedCount > 0) {
+        <span class="run-view-skipped">{{ SkippedCount }} not taken</span>
+      }
+    </div>
+
+    <div class="run-view-canvas" [style.height]="Height">
+      <mj-task-graph-editor
+        [Spec]="Spec"
+        [RuntimeStatus]="RuntimeStatus"
+        [ReadOnly]="true"
+        [ShowToolbar]="false"
+        [ShowPalette]="false"
+        [ShowProperties]="false"
+        [ShowMinimap]="false"
+        [ShowStatusBar]="false"
+        (SelectionChanged)="OnSelectionChanged($event)">
+      </mj-task-graph-editor>
+    </div>
+  </div>
+}

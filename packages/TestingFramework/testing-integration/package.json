@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/testing-integration",
   "type": "module",
-  "version": "6.0.0",
+  "version": "6.1.0-edge.1",
   "description": "MemberJunction Integration Test bootstrap library, IntegrationCheck registry, and IntegrationTestDriver. Installs an instrumented LocalCacheManager as the first caller and owns its process.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,20 +17,20 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "6.0.0",
-    "@memberjunction/core-entities": "6.0.0",
-    "@memberjunction/global": "6.0.0",
-    "@memberjunction/testing-engine": "6.0.0",
-    "@memberjunction/testing-engine-base": "6.0.0",
-    "@memberjunction/sqlserver-dataprovider": "6.0.0",
-    "@memberjunction/graphql-dataprovider": "6.0.0",
-    "@memberjunction/server-bootstrap-lite": "6.0.0",
+    "@memberjunction/core": "6.1.0-edge.1",
+    "@memberjunction/core-entities": "6.1.0-edge.1",
+    "@memberjunction/global": "6.1.0-edge.1",
+    "@memberjunction/testing-engine": "6.1.0-edge.1",
+    "@memberjunction/testing-engine-base": "6.1.0-edge.1",
+    "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.1",
+    "@memberjunction/graphql-dataprovider": "6.1.0-edge.1",
+    "@memberjunction/server-bootstrap-lite": "6.1.0-edge.1",
     "cosmiconfig": "9.0.0",
     "dotenv": "17.2.4",
     "mssql": "^12.2.0"
   },
   "optionalDependencies": {
-    "@memberjunction/postgresql-dataprovider": "6.0.0"
+    "@memberjunction/postgresql-dataprovider": "6.1.0-edge.1"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

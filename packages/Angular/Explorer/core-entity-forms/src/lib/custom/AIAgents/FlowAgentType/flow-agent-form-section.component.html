@@ -1,8 +1,12 @@
 @if (AgentID) {
+    <!-- ShowSaveControls is left off: the agent form owns this record's save, and this section
+         contributes the flow to it via ContributeToSave. A Save button here would be a second save
+         button for the same record, with its own idea of what "saved" means. -->
     <mj-flow-agent-editor
         [AgentID]="AgentID"
         [EditMode]="EditMode"
         [FullScreen]="IsFullScreen"
+        [CanvasTitle]="null"
         (FlowSaved)="OnFlowSaved()"
         (FullScreenToggled)="OnFullScreenToggled($event)">
     </mj-flow-agent-editor>

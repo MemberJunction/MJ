@@ -1,0 +1,16 @@
+---
+/**
+ * Starlight SiteTitle override: renders the default logo link, then appends the
+ * documented-line version pill from the landing mockup.
+ *
+ * The pill tracks the LINE this build documents. Every deployed version gets
+ * its own build with DOCS_VERSION set (see .github/workflows/docs.yml) and this
+ * tooling overlaid from next, so the value MUST come from the environment —
+ * a literal here shows the wrong line on every other version's site.
+ */
+import Default from '@astrojs/starlight/components/SiteTitle.astro';
+import { documentedLine } from '../lib/documented-line.mjs';
+---
+
+<Default><slot /></Default>
+<span class="mjd-version-pill" aria-label={`Documenting the ${documentedLine} line`}>{documentedLine}</span>

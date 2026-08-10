@@ -23,6 +23,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Version Installations"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:34:42.063Z",
+      "checksum": "9fc721a4f85ae15cb5db87bbe382c5e9b66716a9d02759525a1ac1e2483040ba"
     }
   },
   {
@@ -39,6 +43,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User View Run Details"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:34:42.027Z",
+      "checksum": "48ed7e28083b07e028b0417bf44d9cf9a6bfb27975bd35e11096c93cc0894fb2"
     }
   }
 ]
