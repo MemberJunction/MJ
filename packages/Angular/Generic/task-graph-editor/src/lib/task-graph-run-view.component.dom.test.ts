@@ -32,9 +32,9 @@ describe('TaskGraphRunViewComponent (DOM)', () => {
     /** Fake provider that serves tasks/dependencies by entity name and records what was asked. */
     function graphProvider(tasks: TaskRunRow[] = TASKS, edges: TaskRunEdge[] = EDGES) {
         const queried: string[] = [];
-        const provider = createFakeProvider({
+        const provider = createFakeProvider<TaskRunRow | TaskRunEdge>({
             runViewResults: (params: RunViewParams) => {
-                queried.push(params.EntityName);
+                queried.push(params.EntityName ?? '');
                 return params.EntityName === 'MJ: Tasks' ? tasks : edges;
             },
         });

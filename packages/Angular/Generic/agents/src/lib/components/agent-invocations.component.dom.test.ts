@@ -63,8 +63,11 @@ function invocationProvider(rows: Partial<Record<string, unknown[]>> = {}) {
     const queried: string[] = [];
     const provider = createFakeProvider({
         runViewResults: (params: RunViewParams) => {
-            queried.push(params.EntityName);
-            return rows[params.EntityName] ?? [];
+            // EntityName is optional on RunViewParams (a view can be named by ID instead);
+            // every query this component issues names its entity, so '' is the never-taken branch.
+            const entityName = params.EntityName ?? '';
+            queried.push(entityName);
+            return rows[entityName] ?? [];
         },
     });
     return { provider, queried };
