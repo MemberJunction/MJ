@@ -2,7 +2,7 @@
 interface WhileOperation {
     condition: string;  // Boolean expression evaluated before each iteration
     itemVariable?: string;  // Variable name for attempt context (default: "attempt")
-    maxIterations?: number;  // Maximum iterations (undefined=100, 0=unlimited, >0=limit)
+    maxIterations?: number;  // Maximum iterations. `undefined` takes the default (100); any other value is the limit,
     continueOnError?: boolean;  // Continue processing if an iteration fails (default: false)
     delayBetweenIterationsMs?: number;  // Delay between iterations in milliseconds (default: 0)
     action?: {

@@ -223,6 +223,14 @@ export * from './lists-dashboards.module';
 export * from './routines-dashboards.module';
 export * from './component-studio-dashboards.module';
 export * from './predictive-studio-dashboards.module';
+
+// Workflows app — the workflow list, the Create Workflow front door, and the run history (D18/D19).
+export * from './workflows-dashboards.module';
+export * from './Workflows/workflows-dashboard.component';
+export * from './Workflows/components/create-workflow.component';
+export * from './Workflows/components/workflows-resource.component';
+export * from './Workflows/components/workflow-runs-resource.component';
+export * from './Workflows/workflows.types';
 export { PredictiveStudioEngine } from './PredictiveStudio/engine/predictive-studio.engine';
 export * from './DatabaseDesigner/database-designer-dashboards.module';
 export { DatabaseDesignerDashboardComponent, LoadDatabaseDesignerDashboard } from './DatabaseDesigner/components/database-designer-dashboard.component';

@@ -75,6 +75,59 @@
           <as-split-area
             [size]="70">
             <div class="chat-area">
+              @if (EffectiveMode === 'workflow') {
+                <!-- You do not talk to a workflow. Its first step is compiled from its own graph, so
+                     a composer here would discard whatever was typed and reply with a sentence that
+                     is not an answer to it. Start it, optionally with input, and watch it run. -->
+                <div class="workflow-pane">
+                  <div class="workflow-section">
+                    <label class="workflow-label" for="workflowPayload">
+                      Starting payload <span class="workflow-optional">&mdash; optional</span>
+                    </label>
+                    <textarea
+                      id="workflowPayload"
+                      class="mj-textarea workflow-payload"
+                      [(ngModel)]="WorkflowStartingPayload"
+                      [rows]="4"
+                      spellcheck="false"
+                      placeholder='{ "ticker": "NVDA" }'
+                      [disabled]="isExecuting"></textarea>
+                    @if (WorkflowPayloadError) {
+                      <mj-alert Variant="error" [Message]="WorkflowPayloadError"></mj-alert>
+                    }
+                  </div>
+
+                  <div class="workflow-actions">
+                    <button mjButton variant="primary" (click)="RunWorkflow()" [disabled]="isExecuting">
+                      @if (isExecuting) {
+                        <i class="fa-solid fa-spinner fa-spin"></i> Starting&hellip;
+                      } @else {
+                        <i class="fa-solid fa-play"></i> Run workflow
+                      }
+                    </button>
+                    <span class="workflow-hint">
+                      Runs on the dispatcher &mdash; you can close this and it keeps running.
+                    </span>
+                  </div>
+
+                  @if (WorkflowParentTaskID) {
+                    <div class="workflow-section workflow-graph">
+                      <label class="workflow-label">Last run</label>
+                      <mj-task-graph-run-view
+                        [ParentTaskID]="WorkflowParentTaskID"
+                        [WorkflowName]="entity?.Name || 'Workflow'"
+                        [LiveUpdates]="true"
+                        Height="320px">
+                      </mj-task-graph-run-view>
+                    </div>
+                  } @else {
+                    <mj-empty-state
+                      Icon="fa-solid fa-diagram-project"
+                      Title="Not run yet"
+                      Message="Run the workflow to watch its steps execute." />
+                  }
+                </div>
+              } @else {
               <!-- Messages Container -->
               <div class="messages-container" #messagesContainer>
                 @if (conversationMessages.length === 0) {
@@ -219,6 +272,7 @@
                   </div>
                 }
               </div>
+              }
             </div>
           </as-split-area>
           <!-- Sidebar (Right Pane) -->
@@ -350,7 +404,7 @@
                       [autoExpand]="true"
                       (viewRunClick)="navigateToAgentRun($event)"
                       [runId]="getLastRunId()"
-                      [runType]="mode">
+                      [runType]="MonitorRunType">
                     </mj-agent-execution-monitor>
                   </div>
                 }

@@ -89,7 +89,7 @@ export async function RunForEachLoop(
     }
 
     const limit = iterationLimit(op.maxIterations, DEFAULT_FOREACH_MAX_ITERATIONS);
-    const items = limit === null ? collection : collection.slice(0, limit);
+    const items = collection.slice(0, limit);
     if (items.length < collection.length) {
         // Truncation is announced. A silent cap reads downstream as "the collection was that size".
         LogStatus(
@@ -134,7 +134,7 @@ export async function RunWhileLoop(
     let failed = 0;
     let index = 0;
 
-    while (limit === null || index < limit) {
+    while (index < limit) {
         const verdict = evaluateCondition(index);
         if (!verdict.Success) {
             return {
@@ -165,7 +165,7 @@ export async function RunWhileLoop(
         if (op.delayBetweenIterationsMs) await delay(op.delayBetweenIterationsMs);
     }
 
-    if (limit !== null && index >= limit) {
+    if (index >= limit) {
         // Hitting the ceiling is reported, not treated as normal completion: the condition was still
         // true, so the work is unfinished and saying otherwise would hide it.
         LogError(`[TaskLoopExecutor] While loop stopped at its ${limit}-iteration ceiling with its condition still true.`);
@@ -274,11 +274,10 @@ function summarize(results: unknown[], succeeded: number, failed: number, contin
  * means unlimited**, and a positive number is the limit. The zero case is the one worth stating —
  * read as a limit it would run the loop zero times, which looks exactly like an empty collection.
  */
-function iterationLimit(maxIterations: number | undefined, fallback: number): number | null {
-    if (maxIterations === undefined) return fallback;
-    if (maxIterations === 0) return null;
-    return maxIterations;
+function iterationLimit(maxIterations: number | undefined, fallback: number): number {
+    return maxIterations === undefined ? fallback : maxIterations;
 }
+
 
 /** Resolves a collection path through the shared mapping dialect, parsing a JSON literal if given one. */
 function resolveCollection(collectionPath: string, ctx: PayloadMappingContext): unknown {
