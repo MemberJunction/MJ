@@ -1,5 +1,5 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, convertCommonFunctions, transformCodeOnly, removeNPrefix, convertBooleanLiteralComparisons, collectBooleanColumnNames } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, convertCommonFunctions, transformCodeOnly, removeNPrefix, convertBooleanLiteralComparisons, collectBooleanColumnNames, quoteConstraintNames } from './ExpressionHelpers.js';
 
 export class AlterTableRule implements IConversionRule {
   Name = 'AlterTableRule';
@@ -92,20 +92,9 @@ export class AlterTableRule implements IConversionRule {
     // Remove N prefix from strings
     result = removeNPrefix(result);
 
-    // Quote mixed-case constraint names in ADD / DROP CONSTRAINT clauses.
-    // T-SQL is case-insensitive, so CodeGen often emits `DROP CONSTRAINT CK_EntityField_ExtendedType`
-    // without quotes. PG folds unquoted identifiers to lowercase at lookup time,
-    // then can't find the real mixed-case constraint. Quote any constraint name
-    // that contains uppercase and isn't already quoted.
-    result = result.replace(
-      /\b(ADD|DROP)\s+CONSTRAINT\s+([A-Za-z_]\w*)\b/gi,
-      (_m, verb, name: string) => {
-        if (/[A-Z]/.test(name) && !name.startsWith('"')) {
-          return `${verb} CONSTRAINT "${name}"`;
-        }
-        return _m;
-      }
-    );
+    // Quote mixed-case constraint names so they survive folding. Shared with CreateTableRule
+    // so the two sites cannot drift apart again — see quoteConstraintNames.
+    result = quoteConstraintNames(result);
 
     // Quote PascalCase column names inside FK/PK/UNIQUE column lists and REFERENCES(col)
     result = this.quoteConstraintColumns(result);

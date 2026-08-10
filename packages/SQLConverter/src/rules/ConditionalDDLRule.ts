@@ -16,7 +16,35 @@
  *   END $$;
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, convertCommonFunctions, removeNPrefix, castBooleanInsertValues, convertBooleanLiteralComparisons } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, convertCommonFunctions, removeNPrefix, castBooleanInsertValues, convertBooleanLiteralComparisons, stripComments } from './ExpressionHelpers.js';
+
+/** One migration placeholder — `${mjSchema}`, `${flyway:defaultSchema}` — as it appears in source SQL. */
+const PLACEHOLDER = /\$\{[\w:.-]+\}/;
+
+/**
+ * True when the identifier is made up only of migration placeholders and plain identifier
+ * characters, and so is still a legal unquoted identifier once the placeholders are substituted
+ * as plain text. It must contain at least one placeholder — a purely literal name is handled by
+ * the simpler check at the call site.
+ */
+function isPlaceholderIdentifier(name: string): boolean {
+  if (!PLACEHOLDER.test(name)) return false;
+  const withoutPlaceholders = name.replace(new RegExp(PLACEHOLDER, 'g'), '');
+  return /^\w*$/.test(withoutPlaceholders);
+}
+
+/**
+ * Lowercases the literal parts of a placeholder identifier and leaves each `${...}` verbatim —
+ * the placeholder's contents name a migration variable and are matched exactly at substitution
+ * time, so folding them would break the lookup. The substituted value folds on its own once the
+ * identifier is emitted unquoted.
+ */
+function lowerCaseOutsidePlaceholders(name: string): string {
+  return name.replace(
+    new RegExp(`(${PLACEHOLDER.source})|([^$]+)`, 'g'),
+    (match, placeholder: string | undefined) => (placeholder ? placeholder : match.toLowerCase())
+  );
+}
 
 export class ConditionalDDLRule implements IConversionRule {
   Name = 'ConditionalDDLRule';
@@ -209,11 +237,43 @@ export class ConditionalDDLRule implements IConversionRule {
     // Extract the schema name from CREATE SCHEMA — handles both [X], "X", and bare X.
     // EXEC('CREATE SCHEMA [X]') after PostProcess identifier conversion may already be
     // EXEC('CREATE SCHEMA "X"'), so accept either bracket or quote forms.
-    const schemaMatch = sql.match(/CREATE\s+SCHEMA\s+(?:\[([^\]]+)\]|"([^"]+)"|(\w+))/i);
+    //
+    // Match against the COMMENT-STRIPPED batch. A migration that explains itself above the
+    // statement ("-- ... the guarded CREATE SCHEMA form ...") otherwise has its prose matched
+    // first, and the rule emits a schema named after a word in the comment while the real
+    // statement is dropped — creating a phantom schema and silently omitting the one every
+    // table below it depends on.
+    const schemaMatch = stripComments(sql).match(
+      /CREATE\s+SCHEMA\s+(?:\[([^\]]+)\]|"([^"]+)"|(\w+))/i);
     if (!schemaMatch) return null;
     const schemaName = schemaMatch[1] || schemaMatch[2] || schemaMatch[3];
     if (!schemaName) return null;
 
+    // Emit the name UNQUOTED so PostgreSQL folds it to lowercase.
+    //
+    // Every reference to this schema is emitted unquoted too — convertIdentifiers turns
+    // `[Schema].[Name]` into `Schema."Name"`, leaving the schema bare — so a quoted CREATE here
+    // produces a case-preserved schema that none of those references resolve to. In practice the
+    // migration set then creates BOTH: `__mj_BizAppsSecureMessaging` from this line and
+    // `__mj_bizappssecuremessaging` from an unquoted CREATE elsewhere, with the tables landing in
+    // one and an arbitrary subset of references pointing at the other.
+    //
+    // Lowercase is the correct target: it is what MJ's PostgreSQL CodeGen emits and what a live
+    // MJ PostgreSQL database holds. A name that is not a plain identifier still has to be quoted,
+    // since it cannot survive unquoted at all.
+    //
+    // A name built from a migration placeholder — `[${mjSchema}_BizAppsCommon]`, how an open app
+    // names a sibling app's schema — also has to come out unquoted: convertIdentifiers deliberately
+    // leaves placeholder schema REFERENCES unquoted, so quoting the CREATE reproduces defect 6 for
+    // exactly the case the placeholder exists to serve. The placeholder is substituted as plain
+    // text at apply time, so `${mjSchema}_BizAppsCommon` becomes `__mj_BizAppsCommon` unquoted and
+    // folds to `__mj_bizappscommon` — the same thing every reference to it folds to.
+    const literalOnly = /^[A-Za-z_]\w*$/.test(schemaName);
+    if (literalOnly) return `CREATE SCHEMA IF NOT EXISTS ${schemaName.toLowerCase()};`;
+    if (isPlaceholderIdentifier(schemaName)) {
+      return `CREATE SCHEMA IF NOT EXISTS ${lowerCaseOutsidePlaceholders(schemaName)};`;
+    }
+    // Anything else cannot survive unquoted at all, so it stays quoted.
     return `CREATE SCHEMA IF NOT EXISTS "${schemaName}";`;
   }
 

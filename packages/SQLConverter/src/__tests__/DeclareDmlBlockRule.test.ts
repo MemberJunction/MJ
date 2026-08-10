@@ -186,5 +186,20 @@ END`;
       expect(result).toMatch(/^DO \$mj\$/m);
       expect(result).toMatch(/END \$mj\$;/);
     });
+
+    it('converts SELECT TOP inside a DECLARE initializer, on one line', () => {
+      // The initializer is an expression no other pass in this rule sees — while the whole item
+      // was being dropped, that did not matter. Preserved verbatim, `SELECT TOP 1` reaches PG as
+      // `syntax error at or near "1"`. convertTopToLimit puts LIMIT on its own line, which would
+      // split the declaration and break the line-based DECLARE-section assembly, so it is folded
+      // back to one line. Verified live on PG 17: the block applies and seeds its row.
+      const sql = `DECLARE @PersonID UNIQUEIDENTIFIER = (SELECT TOP 1 [ID] FROM [__mj].[Person]);
+INSERT INTO [__mj].[Log] ([ID], [PersonID]) VALUES (NEWID(), @PersonID);`;
+      const result = convert(sql);
+      expect(result).toContain('v_PersonID UUID := (SELECT "ID" FROM __mj."Person" LIMIT 1);');
+      expect(result).not.toContain('TOP 1');
+      // The declaration stays a single line inside the DECLARE section.
+      expect(result).not.toMatch(/^\s*LIMIT 1/m);
+    });
   });
 });
