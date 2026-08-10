@@ -43,8 +43,8 @@ function paramsWith(enableTaskGraphs: boolean | undefined): ExecuteAgentParams {
 const spec: TaskGraphSpec = {
     workflowName: 'Harness-emitted graph',
     tasks: [
-        { tempId: 'a', name: 'Gather', description: 'gather', agentName: 'Query Builder', dependsOn: [] },
-        { tempId: 'b', name: 'Report', description: 'report', agentName: 'Sage', dependsOn: ['a'] },
+        { tempId: 'a', name: 'Gather', description: 'gather', kind: 'Agent' as const, configuration: { agentName: 'Query Builder' }, dependsOn: [] },
+        { tempId: 'b', name: 'Report', description: 'report', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['a'] },
     ],
 };
 
@@ -88,8 +88,8 @@ describe('HarnessAgentType — inherited task-graph capability gate', () => {
         const cyclic: TaskGraphSpec = {
             workflowName: 'Cyclic',
             tasks: [
-                { tempId: 'a', name: 'A', description: 'a', agentName: 'Sage', dependsOn: ['b'] },
-                { tempId: 'b', name: 'B', description: 'b', agentName: 'Sage', dependsOn: ['a'] },
+                { tempId: 'a', name: 'A', description: 'a', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['b'] },
+                { tempId: 'b', name: 'B', description: 'b', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['a'] },
             ],
         };
         const result = await agent.DetermineNextStep(emit(cyclic), paramsWith(true), {}, {});
