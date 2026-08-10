@@ -166,9 +166,14 @@ while `spCreateEntityFieldPermission` executes on another, putting the inserts o
 transaction entirely. Worth checking whether `RunInEntityTransaction`'s scope and
 `BaseEntity.Save()`'s SQL execution resolve to the same connection.
 
-**This must be resolved before the PR.** A partially applied flag flip leaves an entity whose
-rows say one thing and whose flag says another, and on an enabled entity a missing row denies —
-so the failure mode is a silent lockout.
+**Written up separately as a general platform issue** —
+[`entity-transaction-atomicity-gap.md`](./entity-transaction-atomicity-gap.md) — because the
+mechanism is not FLS-specific: any server-side code using `RunInEntityTransaction` to write
+several records relies on the same guarantee.
+
+For FLS specifically it must be resolved before the PR. A partially applied flag flip leaves an
+entity whose rows say one thing and whose flag says another, and on an enabled entity a missing
+row denies — so the failure mode is a silent lockout.
 
 ## Not yet run
 
