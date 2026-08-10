@@ -1,5 +1,5 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, convertCommonFunctions, transformCodeOnly, removeNPrefix, convertBooleanLiteralComparisons, collectBooleanColumnNames, quoteConstraintNames } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, convertCommonFunctions, transformCodeOnly, removeNPrefix, convertBooleanLiteralComparisons, collectBooleanColumnNames, QuoteConstraintNames } from './ExpressionHelpers.js';
 
 export class AlterTableRule implements IConversionRule {
   Name = 'AlterTableRule';
@@ -102,8 +102,8 @@ export class AlterTableRule implements IConversionRule {
     result = removeNPrefix(result);
 
     // Quote mixed-case constraint names so they survive folding. Shared with CreateTableRule
-    // so the two sites cannot drift apart again — see quoteConstraintNames.
-    result = quoteConstraintNames(result);
+    // so the two sites cannot drift apart again — see QuoteConstraintNames.
+    result = QuoteConstraintNames(result);
 
     // Quote PascalCase column names inside FK/PK/UNIQUE column lists and REFERENCES(col)
     result = this.quoteConstraintColumns(result);

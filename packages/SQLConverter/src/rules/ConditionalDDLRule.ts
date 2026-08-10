@@ -16,7 +16,7 @@
  *   END $$;
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, convertCommonFunctions, removeNPrefix, castBooleanInsertValues, convertBooleanLiteralComparisons, stripComments } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, convertCommonFunctions, removeNPrefix, castBooleanInsertValues, convertBooleanLiteralComparisons, StripComments } from './ExpressionHelpers.js';
 
 /** One migration placeholder — `${mjSchema}`, `${flyway:defaultSchema}` — as it appears in source SQL. */
 const PLACEHOLDER = /\$\{[\w:.-]+\}/;
@@ -287,7 +287,7 @@ export class ConditionalDDLRule implements IConversionRule {
     // first, and the rule emits a schema named after a word in the comment while the real
     // statement is dropped — creating a phantom schema and silently omitting the one every
     // table below it depends on.
-    const schemaMatch = stripComments(sql).match(
+    const schemaMatch = StripComments(sql).match(
       /CREATE\s+SCHEMA\s+(?:\[([^\]]+)\]|"([^"]+)"|(\w+))/i);
     if (!schemaMatch) return null;
     const schemaName = schemaMatch[1] || schemaMatch[2] || schemaMatch[3];

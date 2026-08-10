@@ -97,7 +97,7 @@ export function transformCodeOnly(sql: string, transform: (code: string) => stri
  * raw batch means a comment can win — a migration that documents itself above a statement gets the
  * prose matched instead of the code, and the rule acts on a word from the comment.
  */
-export function stripComments(sql: string): string {
+export function StripComments(sql: string): string {
   return segmentSQL(sql)
     .map((seg) => (seg.type === 'comment' ? '' : seg.text))
     .join('');
@@ -115,7 +115,7 @@ export function stripComments(sql: string): string {
  * narrower one keeps rejecting exactly the rows the migration was written to allow. Nothing fails
  * loudly; the only trace is one non-fatal error in the install log.
  */
-export function quoteConstraintNames(sql: string): string {
+export function QuoteConstraintNames(sql: string): string {
   return transformCodeOnly(sql, (code) =>
     code.replace(/\bCONSTRAINT\s+([A-Za-z_]\w*)\b/gi, (match, name: string) =>
       (/[A-Z]/.test(name) ? `CONSTRAINT "${name}"` : match)));

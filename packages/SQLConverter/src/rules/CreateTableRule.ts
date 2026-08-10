@@ -6,7 +6,7 @@
  * Also tracks column types in ConversionContext for downstream INSERT boolean casting.
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, removeNPrefix, quoteConstraintNames } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, removeNPrefix, QuoteConstraintNames } from './ExpressionHelpers.js';
 
 export class CreateTableRule implements IConversionRule {
   Name = 'CreateTableRule';
@@ -48,8 +48,8 @@ export class CreateTableRule implements IConversionRule {
 
     // Phase 4a: Quote mixed-case constraint names, matching AlterTableRule. Inline CREATE TABLE
     // constraints were the only site left unquoted, which is what let a later ALTER TABLE
-    // DROP CONSTRAINT miss them. See quoteConstraintNames.
-    result = quoteConstraintNames(result);
+    // DROP CONSTRAINT miss them. See QuoteConstraintNames.
+    result = QuoteConstraintNames(result);
 
     // Phase 5: Remove SQL Server keywords (BEFORE column quoting so
     // CLUSTERED/NONCLUSTERED don't block the PK/UNIQUE constraint regex)
