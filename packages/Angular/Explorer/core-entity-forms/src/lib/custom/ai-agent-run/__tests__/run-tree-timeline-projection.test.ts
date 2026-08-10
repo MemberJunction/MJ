@@ -25,6 +25,7 @@ function node(partial: Partial<AgentRunTreeNode> & { NodeID: string }): AgentRun
         Cost: partial.Cost ?? null,
         Tokens: partial.Tokens ?? null,
         SourceEntity: partial.SourceEntity ?? 'MJ: AI Agent Run Steps',
+        SourceKind: partial.SourceKind ?? null,
         SourceID: partial.SourceID ?? partial.NodeID,
         Children: partial.Children ?? [],
     } as AgentRunTreeNode;
@@ -97,6 +98,8 @@ describe('ProjectRunTreeToTimeline', () => {
         const items = ProjectRunTreeToTimeline(sampleTree());
         const types = Object.fromEntries(items.map((i) => [i.id, i.type]));
 
+        // Tasks map onto the SAME row vocabulary as run steps, so they pick up the same displayers.
+        // These fixtures carry no SourceKind, so they fall back to the generic row type.
         expect(types).toEqual({
             run: 'subrun',
             step: 'step',
@@ -105,6 +108,25 @@ describe('ProjectRunTreeToTimeline', () => {
             'task-b': 'task',
             subrun: 'subrun',
         });
+    });
+
+    it('renders a task by its KIND, so an action gets the action displayer', () => {
+        const tree = node({
+            NodeID: 'g', NodeType: 'TaskGraph', Name: 'Graph',
+            Children: [
+                node({ NodeID: 'a', NodeType: 'Task', Name: 'Search', SourceKind: 'Action' }),
+                node({ NodeID: 'p', NodeType: 'Task', Name: 'Draft', SourceKind: 'Prompt' }),
+                node({ NodeID: 's', NodeType: 'Task', Name: 'Delegate', SourceKind: 'Agent' }),
+            ],
+        });
+        const items = ProjectRunTreeToTimeline(tree);
+        const typeOf = (id: string) => items.find((i) => i.id === id)?.type;
+
+        expect(typeOf('a')).toBe('action');
+        expect(typeOf('p')).toBe('prompt');
+        expect(typeOf('s')).toBe('subrun');
+        // …while still being marked as dispatcher work.
+        expect(items.filter((i) => i.provenance === 'workflow')).toHaveLength(4);
     });
 
     it('can splice a subtree under an existing row', () => {

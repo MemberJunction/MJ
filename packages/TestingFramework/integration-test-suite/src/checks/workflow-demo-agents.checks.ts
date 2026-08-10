@@ -25,6 +25,7 @@
  * creates and the bundle Teardown removes.
  */
 import { RunView, type IMetadataProvider, type IRunQueryProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 import { BuildAgentRunTree, LoadAgentRunTree } from '@memberjunction/ai-core-plus';
 import { MJAIAgentEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
@@ -121,6 +122,17 @@ async function compile(ctx: IntegrationCheckContext, agent: MJAIAgentEntity): Pr
     return result.Spec!;
 }
 
+/**
+ * The task id a dependency points at, in either form it can take.
+ *
+ * A dependency is normally an object carrying the id plus its condition; the bare-string form
+ * survives from older specs. Reading only one of them is how an assertion ends up permanently false
+ * while looking correct.
+ */
+function dependencyId(dep: unknown): string {
+    return typeof dep === 'string' ? dep : String((dep as { tempId?: string })?.tempId ?? '');
+}
+
 /** The node with this name, or a failure that names what WAS found. */
 function nodeNamed(spec: TaskGraphSpec, name: string): TaskGraphSpecNode {
     const match = spec.tasks.find((t) => t.name === name);
@@ -150,10 +162,12 @@ export const WorkflowDemoAgentChecks: NamedCheck[] = [
             );
             Assert(steps.Success, `could not read agent steps: ${steps.ErrorMessage}`);
 
-            const sweepSteps = (steps.Results ?? []).filter((s) => s.AgentID.toLowerCase() === sweep.ID.toLowerCase());
-            const pipelineSteps = (steps.Results ?? []).filter((s) => s.AgentID.toLowerCase() === pipeline.ID.toLowerCase());
+            const sweepSteps = (steps.Results ?? []).filter((s) => UUIDsEqual(s.AgentID, sweep.ID));
+            const pipelineSteps = (steps.Results ?? []).filter((s) => UUIDsEqual(s.AgentID, pipeline.ID));
 
-            AssertEqual(sweepSteps.length, 2, `${SCHEMA_SWEEP} should have 2 steps`);
+            // 3, not 2: the sweep gained its Human approval step when HITL landed. This assertion
+            // was merged stale — the demo changed in the same range and the check did not.
+            AssertEqual(sweepSteps.length, 3, `${SCHEMA_SWEEP} should have 3 steps`);
             AssertEqual(pipelineSteps.length, 6, `${CONTENT_PIPELINE} should have 6 steps`);
 
             console.log(`      → ${SCHEMA_SWEEP}: ${sweepSteps.length} steps · ${CONTENT_PIPELINE}: ${pipelineSteps.length} steps`);
@@ -169,9 +183,13 @@ export const WorkflowDemoAgentChecks: NamedCheck[] = [
             // The AND-join. Asserted on the compiled EDGES rather than on the two research steps
             // existing, because two steps pointing at a third is the only thing that actually makes
             // the draft wait for both — and it is exactly what a careless edit drops.
+            // Dependencies are OBJECTS, not bare strings, and they point BACKWARD — a node lists
+            // what it depends ON. The original assertion did `.includes(<string>)` against object
+            // form (always false) with the direction inverted, so it could never be green in either
+            // reading; it was merged without a passing run.
             const draft = nodeNamed(spec, 'Draft the piece');
-            const intoDraft = spec.tasks.filter((t) => (t.dependsOn ?? []).includes(draft.tempId));
-            AssertEqual(intoDraft.length, 2, 'the draft step must join BOTH research steps, not one');
+            const draftDeps = (draft.dependsOn ?? []).map(dependencyId);
+            AssertEqual(draftDeps.length, 2, 'the draft step must join BOTH research steps, not one');
 
             // The bounded loop. An unbounded revision loop on a model that will not converge is the
             // failure mode this cap exists to prevent, so the cap itself is the assertion.
@@ -186,7 +204,7 @@ export const WorkflowDemoAgentChecks: NamedCheck[] = [
             const approved = nodeNamed(spec, 'Close out: approved');
             const gaveUp = nodeNamed(spec, 'Close out: gave up');
             for (const [node, label] of [[approved, 'approved'], [gaveUp, 'gave up']] as const) {
-                const edges = (node.dependsOn ?? []);
+                const edges = (node.dependsOn ?? []).map(dependencyId);
                 Assert(edges.includes(review.tempId), `the '${label}' branch must follow the review step`);
             }
             Assert(
@@ -255,7 +273,7 @@ export const WorkflowDemoAgentChecks: NamedCheck[] = [
             Assert(!tree.ErrorMessage, `the run-tree query failed: ${tree.ErrorMessage}`);
             AssertEqual(tree.Rows.length, 1, 'a run with no steps must return exactly its own node');
             AssertEqual(tree.Root?.NodeType, 'Run', 'the root of a run tree must be the run');
-            AssertEqual(tree.Root?.NodeID.toLowerCase(), run.ID.toLowerCase(), 'the root must be the run asked for');
+            Assert(UUIDsEqual(tree.Root?.NodeID ?? '', run.ID), 'the root must be the run asked for');
             AssertEqual(tree.Truncated, false, 'a one-node tree cannot be truncated');
 
             // The assembler is pure and must agree with what the loader returned — if these ever

@@ -176,7 +176,8 @@ export function FindUnknownDependencyRefs(
  */
 export function ComputeEligibleTasks(
     nodes: readonly TaskGraphNode[],
-    edges: readonly TaskGraphEdge[]
+    edges: readonly TaskGraphEdge[],
+    handledFailureIDs: ReadonlySet<string> = new Set()
 ): TaskGraphNode[] {
     const statusById = new Map(nodes.map((n) => [n.id, n.status]));
     const prerequisites = buildDependsOnAdjacency(edges.filter(isGatingEdge));
@@ -186,9 +187,16 @@ export function ComputeEligibleTasks(
         const deps = prerequisites.get(node.id) ?? [];
         // Skipped satisfies: a join downstream of an exclusive fork is reached by whichever branch
         // ran, and the branches that did not run must not hold it hostage forever.
+        //
+        // A HANDLED failure satisfies too, and without that a recovery path is unreachable: under
+        // `failureSemantics: 'edges'` a Failed origin with a satisfied outgoing edge is not Blocked
+        // and not Skipped, so its target was never blocked, never skipped, and never ELIGIBLE. The
+        // graph sat In Progress forever. Before the failure-semantics work it at least settled
+        // Failed; the recovery machinery turned a wrong answer into no answer, which is worse.
         return deps.every((depId) => {
             const st = statusById.get(depId);
-            return st !== undefined && SATISFIES_DEPENDENT.has(st);
+            if (st === undefined) return false;
+            return SATISFIES_DEPENDENT.has(st) || (st === 'Failed' && handledFailureIDs.has(depId));
         });
     });
 }
