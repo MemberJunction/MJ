@@ -198,6 +198,18 @@ export type TaskAgentRunParams = {
     /** The task row being executed. */
     TaskID: string;
     /**
+     * The agent run that submitted this graph, when there was one.
+     *
+     * Becomes the spawned run's `ParentRunID`, which is what makes a workflow's total cost a single
+     * indexed sum over `RootParentRunID` instead of a walk. Null for a graph nobody's run submitted
+     * — a schedule, MCP, or a person — and that is a real case, not a missing value.
+     *
+     * Note this is a run→run link: the task graph sits BETWEEN the two conceptually but cannot be
+     * the parent, because the column points at a run. The graph is recovered through
+     * `Task.AgentRunID` and `Task.ParentID`.
+     */
+    SubmittingAgentRunID?: string | null;
+    /**
      * How many continuation hops led to this run, from the graph's own metadata.
      *
      * Carried so the chain is BOUNDED. A flow that dispatches a graph containing itself recurses

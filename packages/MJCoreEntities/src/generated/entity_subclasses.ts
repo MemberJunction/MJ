@@ -110484,6 +110484,36 @@ export interface MJTaskEntity_ITaskStepConfiguration {
      * in the shape they drew, while a machine-authored graph still renders legibly.
      */
     layout?: MJTaskEntity_ITaskStepLayout;
+
+    /**
+     * What actually happened when this step ran — written by the dispatcher, never by an author.
+     *
+     * Everything else in this bag is a step's *definition*; this is its *history*. It lives here
+     * rather than in columns of its own for the same reason as the rest: nothing in it is ever a SQL
+     * predicate, and a column per runtime artefact would be a migration every time a new step kind
+     * produced one.
+     */
+    runtime?: MJTaskEntity_ITaskStepRuntime;
+}
+
+/**
+ * The runtime artefacts a completed step points at.
+ *
+ * **This exists because cost was unreachable for prompt steps.** A workflow's spend is aggregated by
+ * walking the run tree: an Agent step reaches its cost through `Task.AgentRunID` → the run's own
+ * totals. A Prompt step has no agent run — the dispatcher executes the prompt directly — so its
+ * `AIPromptRun`, and with it every token and dollar it spent, had no path back from the Task at all.
+ * The runner returned the id and the dispatcher dropped it on the floor.
+ */
+export interface MJTaskEntity_ITaskStepRuntime {
+    /**
+     * The `MJ: AI Prompt Runs` row this step produced, when it was a Prompt step.
+     *
+     * Set on the step's LAST execution. A retried step overwrites it rather than accumulating: the
+     * prompt runs themselves are the durable history, and this is the pointer to the one whose
+     * output the payload actually carries.
+     */
+    promptRunID?: string;
 }
 
 /** A step's position and size on the canvas, in canvas units. */

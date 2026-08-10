@@ -40,6 +40,7 @@ import {
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { IShutdownable, ShutdownRegistry } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
+import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
 import { DispatcherConditionEvaluator } from './DispatcherConditionEvaluator';
 import { RunForEachLoop, RunWhileLoop, type LoopBodyInvoker } from './TaskLoopExecutor';
@@ -83,6 +84,20 @@ type TaskBodyOutcome = {
     ErrorMessage?: string;
     AgentRunID?: string | null;
     ChatMessage?: string;
+    /**
+     * The prompt run a Prompt step produced.
+     *
+     * An Agent step's cost is reachable through `AgentRunID`; a Prompt step has no agent run, so
+     * without this its spend has no path back from the Task and a run-tree cost rollup silently
+     * omits it. Recorded into the step's `Configuration.runtime` when the outcome is written.
+     */
+    PromptRunID?: string;
+};
+
+/** What a task's position in its graph tells the runner: how deep, and who submitted it. */
+type GraphContext = {
+    Depth: number;
+    SubmittingAgentRunID: string | null;
 };
 
 /** Deep-merges a prompt's JSON response into the payload, preserving what earlier steps established. */
@@ -411,6 +426,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     OutputPayload: result.Output != null ? JSON.stringify(result.Output) : null,
                     ErrorMessage: result.ErrorMessage ?? null,
                     AgentRunID: result.AgentRunID ?? null,
+                    Configuration: this.configurationWithRuntime(task, result.PromptRunID),
                 },
                 this.contextUser,
             );
@@ -686,16 +702,21 @@ export class TaskGraphDispatcher implements IShutdownable {
      * run begins at zero, so a self-referencing flow — one that dispatches a graph containing itself
      * — recurses without bound while the cap it should be hitting compares against a permanent zero.
      */
-    private async graphDepth(provider: IMetadataProvider, task: MJTaskEntity): Promise<number> {
-        if (!task.ParentID) return 0;
+    private async graphContext(provider: IMetadataProvider, task: MJTaskEntity): Promise<GraphContext> {
+        if (!task.ParentID) return { Depth: 0, SubmittingAgentRunID: null };
         try {
             const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-            if (!(await parent.Load(task.ParentID))) return 0;
-            return ParseTaskGraphParentMetadata(parent.InputPayload).reinvokeDepth + 1;
+            if (!(await parent.Load(task.ParentID))) return { Depth: 0, SubmittingAgentRunID: null };
+            return {
+                Depth: ParseTaskGraphParentMetadata(parent.InputPayload).reinvokeDepth + 1,
+                // The graph's own row carries the run that submitted it. One load answers both
+                // questions, which is why they are resolved together rather than in two passes.
+                SubmittingAgentRunID: parent.AgentRunID,
+            };
         } catch {
             // An unreadable parent must not stop the work; depth zero is the safe reading, and the
             // submit-time cap still guards the next hop.
-            return 0;
+            return { Depth: 0, SubmittingAgentRunID: null };
         }
     }
 
@@ -1321,6 +1342,10 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ErrorMessage: promptResult.ErrorMessage,
                 Output: this.applyStepOutputMapping(task, merged, merged, config?.outputMapping),
                 ChatMessage: promptResult.ChatMessage,
+                // Returned even when the prompt FAILED. A failed prompt still cost tokens, and a
+                // cost rollup that silently omits failures under-reports exactly the runs someone
+                // is most likely to be investigating.
+                PromptRunID: promptResult.PromptRunID,
             };
         }
 
@@ -1333,15 +1358,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 Provider: provider,
                 ContextUser: this.contextUser,
             }), AgentRunID: null }
-            : await this.agentRunner.RunAgentForTask({
-                TaskID: task.ID,
-                AgentID: task.AgentID!,
-                InputPayload: effectiveInput,
-                DependencyOutputs: dependencyOutputs,
-                ContinuationDepth: await this.graphDepth(provider, task),
-                Provider: provider,
-                ContextUser: this.contextUser,
-            });
+            : await this.runAgentNode(task, provider, effectiveInput, dependencyOutputs);
 
         return { ...raw, Output: this.applyStepOutputMapping(task, payload, raw.Output, config?.outputMapping) };
     }
@@ -1440,6 +1457,74 @@ export class TaskGraphDispatcher implements IShutdownable {
         for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${e}`);
 
         return { ...payload, ...updates };
+    }
+
+    /**
+     * Runs an Agent step, telling the runner where in the graph it sits.
+     *
+     * Depth and provenance are read together because they come from the same row: the graph's parent
+     * task knows both how many continuation hops led here and which run submitted it.
+     */
+    private async runAgentNode(
+        task: MJTaskEntity,
+        provider: IMetadataProvider,
+        effectiveInput: unknown,
+        dependencyOutputs: Map<string, unknown>,
+    ): Promise<TaskBodyOutcome> {
+        const context = await this.graphContext(provider, task);
+        return this.agentRunner.RunAgentForTask({
+            TaskID: task.ID,
+            AgentID: task.AgentID!,
+            InputPayload: effectiveInput,
+            DependencyOutputs: dependencyOutputs,
+            ContinuationDepth: context.Depth,
+            SubmittingAgentRunID: context.SubmittingAgentRunID,
+            Provider: provider,
+            ContextUser: this.contextUser,
+        });
+    }
+
+    /**
+     * The step's Configuration with this run's artefacts folded in, or `undefined` to leave it be.
+     *
+     * **Merged into the authored bag, never written over it.** The Configuration column holds the
+     * step's definition — its loop body, its mappings, its policy, the position someone dragged it
+     * to. Writing a fresh object containing only `runtime` would erase all of that the first time a
+     * prompt step completed, which is the kind of loss that surfaces much later as a workflow that
+     * mysteriously stopped mapping its output.
+     *
+     * Returns `undefined` when there is nothing to record, so the guarded write omits the column
+     * rather than rewriting it with what it already held.
+     */
+    private configurationWithRuntime(task: MJTaskEntity, promptRunID: string | undefined): string | undefined {
+        if (!promptRunID) return undefined;
+
+        const existing = this.parseConfiguration(task);
+        const merged: MJTaskEntity_ITaskStepConfiguration = {
+            ...existing,
+            runtime: { ...existing?.runtime, promptRunID },
+        };
+        return JSON.stringify(merged);
+    }
+
+    /**
+     * Reads a step's Configuration bag, tolerating a row whose JSON cannot be parsed.
+     *
+     * Unparseable configuration is logged rather than thrown: the step has already RUN by the time
+     * this is called, and refusing to record its outcome because its definition is malformed would
+     * discard the result of real work and leave the task claimed until the claim lapsed.
+     */
+    private parseConfiguration(task: MJTaskEntity): MJTaskEntity_ITaskStepConfiguration | undefined {
+        if (!task.Configuration) return undefined;
+        try {
+            return JSON.parse(task.Configuration) as MJTaskEntity_ITaskStepConfiguration;
+        } catch (e) {
+            LogError(
+                `[TaskGraphDispatcher] Task ${task.ID} has unparseable Configuration; ` +
+                `recording runtime artefacts against an empty bag. ${e instanceof Error ? e.message : String(e)}`,
+            );
+            return undefined;
+        }
     }
 
     /**
