@@ -1387,12 +1387,32 @@ export class TaskGraphDispatcher implements IShutdownable {
             };
         }
 
+        // A prompt body has no params of its own — it receives the payload (with the loop bindings
+        // merged in) through the placeholder, so an empty mapping is correct rather than missing.
         const bodyMapping = (op.action?.params ?? {}) as Record<string, unknown>;
         const invokeBody: LoopBodyInvoker = async ({ Bindings }) => {
             // Bindings go INTO the payload rather than beside it, so an authored mapping reaches the
             // current item the same way it reaches anything else: `payload.<itemVariable>`.
             const iterationPayload = { ...payload, ...Bindings };
             const resolved = ResolveMappedInput(bodyMapping, { payload: iterationPayload }) as Record<string, unknown>;
+
+            // A prompt body is checked FIRST because it is the only one whose id lives in its own
+            // column: a loop repeating a prompt has PromptID set and both ActionID and AgentID null,
+            // so falling through to the agent branch would dereference a null agent id.
+            if (task.StepType && task.PromptID && !task.ActionID) {
+                if (!this.promptRunner) {
+                    return { Success: false, ErrorMessage: 'No prompt runner is loaded on this host.' };
+                }
+                return this.promptRunner.RunPromptForTask({
+                    TaskID: task.ID,
+                    PromptID: task.PromptID,
+                    InputPayload: resolved,
+                    DependencyOutputs: dependencyOutputs,
+                    TemplateParameters: op.prompt?.templateParameters,
+                    Provider: provider,
+                    ContextUser: this.contextUser,
+                });
+            }
 
             return task.ActionID
                 ? this.actionRunner!.RunActionForTask({

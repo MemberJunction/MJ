@@ -122,6 +122,9 @@ import {
     summarizePipelineStages,
 } from './pipeline';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
+// The ONE payload-mapping dialect. Loop agents and the task-graph dispatcher read the same authored
+// mapping strings, so these must be the same functions rather than two copies that agree today.
+import { GetValueFromPath, SetMappedValue } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
@@ -10760,32 +10763,18 @@ The context is now within limits. Please retry your request with the recovered c
      * @param value - Value to set or append
      * @private
      */
+    /**
+     * Sets a value on a target object, honouring the `[]` array-append suffix.
+     *
+     * Delegates for the same reason as {@link getValueFromPath} — `results[]` must mean append in
+     * both engines, or a workflow accumulates in one and overwrites in the other.
+     */
     private setMappedValue(
         target: Record<string, unknown>,
         key: string,
         value: unknown
     ): void {
-        const isArrayAppend = key.endsWith('[]');
-        const actualKey = isArrayAppend ? key.slice(0, -2) : key;
-
-        if (isArrayAppend) {
-            // Array append operation
-            if (!(actualKey in target)) {
-                target[actualKey] = [];
-            }
-
-            if (!Array.isArray(target[actualKey])) {
-                throw new Error(
-                    `Cannot append to '${actualKey}': target is not an array. ` +
-                    `Use '${actualKey}' without [] suffix for property update.`
-                );
-            }
-
-            (target[actualKey] as unknown[]).push(value);
-        } else {
-            // Normal property assignment
-            target[actualKey] = value;
-        }
+        SetMappedValue(target, key, value);
     }
 
     /**
@@ -14597,44 +14586,16 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Helper to get value from nested object path - extracts from LoopAgentType
+     * Reads a value out of a nested object by dotted path, with `name[0]` array indexing.
+     *
+     * **Delegates to the one implementation.** This used to be a private copy of the same walk the
+     * task-graph dispatcher performs, and the two had to agree exactly: a Loop agent and the
+     * compiled graph of the same workflow read the SAME authored mapping strings, so any divergence
+     * would make a workflow behave differently depending on which engine ran it — silently, and only
+     * for the paths where they differed.
      */
-    protected getValueFromPath(obj: any, path: string): unknown {
-        const parts = path.split('.');
-        let current = obj;
-
-        for (const part of parts) {
-            if (!part) continue;
-
-            // Check for array indexing
-            const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
-
-            if (arrayMatch) {
-                const arrayName = arrayMatch[1];
-                const index = parseInt(arrayMatch[2], 10);
-
-                if (current && typeof current === 'object' && arrayName in current) {
-                    current = current[arrayName];
-
-                    if (Array.isArray(current) && index >= 0 && index < current.length) {
-                        current = current[index];
-                    } else {
-                        return undefined;
-                    }
-                } else {
-                    return undefined;
-                }
-            } else {
-                // Regular property access
-                if (current && typeof current === 'object' && part in current) {
-                    current = current[part];
-                } else {
-                    return undefined;
-                }
-            }
-        }
-
-        return current;
+    protected getValueFromPath(obj: unknown, path: string): unknown {
+        return GetValueFromPath(obj, path);
     }
 
     /**

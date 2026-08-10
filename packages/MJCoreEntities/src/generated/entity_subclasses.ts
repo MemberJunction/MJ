@@ -110569,6 +110569,8 @@ export interface MJTaskEntity_ITaskForEachConfiguration {
     action?: MJTaskEntity_ITaskLoopActionBody;
     /** Run this sub-agent once per iteration. */
     subAgent?: MJTaskEntity_ITaskLoopSubAgentBody;
+    /** A prompt run once per loop iteration. */
+    prompt?: MJTaskEntity_ITaskLoopPromptBody;
 }
 
 /**
@@ -110592,6 +110594,24 @@ export interface MJTaskEntity_ITaskWhileConfiguration {
     action?: MJTaskEntity_ITaskLoopActionBody;
     /** Run this sub-agent once per iteration. */
     subAgent?: MJTaskEntity_ITaskLoopSubAgentBody;
+    /** A prompt run once per loop iteration. */
+    prompt?: MJTaskEntity_ITaskLoopPromptBody;
+}
+
+/**
+ * A prompt run once per loop iteration.
+ *
+ * The cheapest loop body there is — one model call per item, with no agent wrapper, no reasoning
+ * loop and no run record. Right when an iteration is a single transformation (classify this,
+ * describe this column); wrong the moment an iteration has to decide what to do next.
+ */
+export interface MJTaskEntity_ITaskLoopPromptBody {
+    /** Prompt name. Resolved to `Task.PromptID` at submission, so it is a real foreign key. */
+    name: string;
+    /** Values bound into the template, alongside the loop's own item and index bindings. */
+    templateParameters?: Record<string, string>;
+    /** JSON mapping from the prompt's response into the payload, applied per iteration. */
+    outputMapping?: string;
 }
 
 /** An action run once per loop iteration. */

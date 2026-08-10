@@ -420,7 +420,7 @@ function buildLoopBody(
     step: FlowCompilerStep,
     options: FlowCompilerOptions,
     errors: FlowCompileError[],
-): Pick<ForEachOperation, 'action' | 'subAgent'> {
+): Pick<ForEachOperation, 'action' | 'subAgent' | 'prompt'> {
     switch (step.LoopBodyType) {
         case 'Action': {
             const actionName = step.ActionID ? options.ResolveActionName(step.ActionID) : null;
@@ -444,15 +444,24 @@ function buildLoopBody(
             if (!agentName) break;
             return { subAgent: { name: agentName, message: step.Description ?? '' } };
         }
-        case 'Prompt':
-            // The in-run engine fails outright on a Prompt loop body ("not yet fully supported"), so
-            // this is not a parity gap — the capability arrives with the Prompt runner in C1.5.
-            errors.push({
-                Code: 'UnsupportedStepType',
-                Message: `Step "${step.Name}" repeats a prompt, which is not supported yet. Use an action or a sub-agent as the repeated step.`,
-                StepID: step.ID,
-            });
-            return {};
+        case 'Prompt': {
+            // Supported since the Prompt runner landed. Previously refused outright, on the grounds
+            // that the in-run engine could not execute one either — true at the time, and the
+            // refusal outlived the reason for it.
+            const promptName = step.PromptID ? options.ResolvePromptName?.(step.PromptID) ?? null : null;
+            if (!promptName) break;
+            const config = parseJSONObject(step.Configuration);
+            return {
+                prompt: {
+                    name: promptName,
+                    templateParameters: config['templateParameters'] as Record<string, string> | undefined,
+                    // Carried UNRESOLVED, for the same reason an action body's params are: the
+                    // mapping references the item and index this loop binds on each pass, so
+                    // resolving it here would freeze every iteration to the first one's values.
+                    outputMapping: step.ActionOutputMapping ?? undefined,
+                },
+            };
+        }
     }
     errors.push({
         Code: 'UnresolvedReference',
