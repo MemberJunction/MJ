@@ -118,7 +118,23 @@ export class TaskClaimStore {
     public async CompleteClaimed(
         provider: IMetadataProvider,
         taskID: string,
-        outcome: { Status: 'Complete' | 'Failed'; OutputPayload?: string | null; ErrorMessage?: string | null; AgentRunID?: string | null },
+        outcome: {
+            Status: 'Complete' | 'Failed';
+            OutputPayload?: string | null;
+            ErrorMessage?: string | null;
+            AgentRunID?: string | null;
+            /**
+             * The step's Configuration bag, when the run produced something that belongs in it.
+             *
+             * Written in the SAME guarded UPDATE as the rest of the outcome rather than a follow-up
+             * save, because a second write could land after the row was reclaimed and would then
+             * attribute one instance's runtime artefacts to another instance's execution.
+             *
+             * Omitted leaves the column untouched — a step whose run produces no artefacts must not
+             * have its authored configuration blanked as a side effect of finishing.
+             */
+            Configuration?: string | null;
+        },
         contextUser: UserInfo,
     ): Promise<boolean> {
         const db = this.sql(provider);
@@ -134,6 +150,11 @@ export class TaskClaimStore {
         sets.push(`${db.QuoteIdentifier('OutputPayload')} = ${this.literalOrNull(outcome.OutputPayload)}`);
         sets.push(`${db.QuoteIdentifier('ErrorMessage')} = ${this.literalOrNull(outcome.ErrorMessage)}`);
         sets.push(`${db.QuoteIdentifier('AgentRunID')} = ${outcome.AgentRunID ? `'${this.escape(outcome.AgentRunID)}'` : 'NULL'}`);
+        // Only when supplied — see the note on the parameter. `undefined` means "leave it alone",
+        // which is not the same as an explicit null.
+        if (outcome.Configuration !== undefined) {
+            sets.push(`${db.QuoteIdentifier('Configuration')} = ${this.literalOrNull(outcome.Configuration)}`);
+        }
 
         const sql = `
             UPDATE ${this.taskTable(provider)}

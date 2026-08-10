@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ng-task-graph-editor",
   "version": "6.1.0-edge.1",
-  "description": "MemberJunction: View and edit a TaskGraphSpec on a canvas — the one graph contract shared by design-time flows and runtime task graphs",
+  "description": "MemberJunction: View and edit a TaskGraphSpec on a canvas \u2014 the one graph contract shared by design-time flows and runtime task graphs",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
   "files": [
@@ -39,6 +39,7 @@
   "dependencies": {
     "@memberjunction/ai-core-plus": "6.1.0-edge.1",
     "@memberjunction/core": "6.1.0-edge.1",
+    "@memberjunction/core-entities": "6.1.0-edge.1",
     "@memberjunction/global": "6.1.0-edge.1",
     "@memberjunction/ng-base-types": "6.1.0-edge.1",
     "@memberjunction/ng-flow-editor": "6.1.0-edge.1",
