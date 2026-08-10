@@ -1,0 +1,374 @@
+[
+  {
+    "fields": {
+      "Name": "Schema Documentation Sweep",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Demo",
+      "Description": "Finds MemberJunction entity fields that have no description and proposes one for each. A workflow demo that runs entirely on framework metadata — every install has undocumented fields, so it has real work to do on day one without any business data. Deliberately stops at PROPOSALS: applying them needs a human approval step, which a Flow agent cannot yet author (see the workflow guide).",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": false,
+      "IconClass": "fa-solid fa-book-open-reader"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [],
+      "MJ: AI Agent Steps": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Find undocumented fields",
+            "Description": "Reads MJ: Entity Fields for rows with no Description. Capped low on purpose — this is a demo, and a sweep of every undocumented field in a stock install would be thousands of prompt calls.",
+            "StartingStep": 1,
+            "StepType": "Action",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Records",
+            "ActionInputMapping": {
+              "EntityName": "MJ: Entity Fields",
+              "Filter": "Description IS NULL OR LTRIM(RTRIM(Description)) = ''",
+              "OrderBy": "EntityID, Sequence",
+              "MaxRows": 5,
+              "IncludeCount": true
+            },
+            "ActionOutputMapping": {
+              "Records": "fields",
+              "TotalCount": "undocumentedFieldCount"
+            },
+            "Status": "Active",
+            "PositionX": 80,
+            "PositionY": 80,
+            "Width": 220,
+            "Height": 80
+          },
+          "primaryKey": {
+            "ID": "3BE5522D-3BC5-45B0-9E39-DB3B30714BA2"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T00:41:07.267Z",
+            "checksum": "99855f06aa35416404e20b21b6eecbf9faa1238bf3966113fd23ee3f5ca7db81"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Propose a description for each field",
+            "Description": "One prompt call per field. A Prompt step rather than a sub-agent because there is nothing to reason about across turns — it is a single transformation of one field into one sentence, and an agent wrapper would add a reasoning loop, guardrails and a run record for no benefit.",
+            "StartingStep": 0,
+            "StepType": "ForEach",
+            "LoopBodyType": "Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Workflow Demo: Propose Field Description",
+            "Configuration": {
+              "type": "ForEach",
+              "collectionPath": "fields",
+              "itemVariable": "field",
+              "indexVariable": "index",
+              "maxIterations": 5,
+              "continueOnError": true
+            },
+            "ActionOutputMapping": {
+              "description": "proposals[index]"
+            },
+            "Status": "Active",
+            "PositionX": 380,
+            "PositionY": 80,
+            "Width": 220,
+            "Height": 80
+          },
+          "primaryKey": {
+            "ID": "3DE62130-AA87-41A5-AABF-ED936FC450F1"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T00:41:07.461Z",
+            "checksum": "6a819dc73450656ec1628c29d860db89c1fb72cc70a14db12ca6d97c391324ed"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E359CA7B-EDC3-45B8-8E8D-25C84B08ABA8"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T00:41:07.129Z",
+      "checksum": "08fb2cc9202dbdddf0e288ee5d76ea53c8072638653f6e327ec4dd083f1425b2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Content Pipeline",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Demo",
+      "Description": "Researches a topic from two angles, drafts a short piece, and revises it against brand rules until it passes or gives up. A workflow demo of the three graph shapes a linear flow cannot express: an AND-join, a bounded While loop, and an exclusive pair where exactly one branch runs.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": false,
+      "IconClass": "fa-solid fa-pen-nib"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [],
+      "MJ: AI Agent Steps": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Research: broad",
+            "Description": "One half of the research join. Runs in parallel with the focused search — they are independent, so making them sequential would double the wait for no reason.",
+            "StartingStep": 1,
+            "StepType": "Action",
+            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
+            "ActionInputMapping": {
+              "SearchTerms": "what is a directed acyclic graph used for in workflow automation"
+            },
+            "ActionOutputMapping": {
+              "SearchResults": "broadResearch"
+            },
+            "Status": "Active",
+            "PositionX": 80,
+            "PositionY": 40,
+            "Width": 200,
+            "Height": 80
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Step Paths": [
+              {
+                "fields": {
+                  "OriginStepID": "@parent:ID",
+                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Draft the piece&AgentID=@parent:AgentID",
+                  "Condition": null,
+                  "Priority": 100,
+                  "Description": "Half of the AND-join into the draft step."
+                },
+                "primaryKey": {
+                  "ID": "3A773E7E-7C54-40FA-BF6E-E4509A3E01C5"
+                },
+                "sync": {
+                  "lastModified": "2026-08-10T00:41:07.624Z",
+                  "checksum": "e503d57914a77ff8330f450fc7b35f2059293050f21a22c9b14926d8541552ec"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "1E9F8F35-9523-4739-B01C-2025246703D9"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T00:41:07.483Z",
+            "checksum": "8b7187e9a7fe89676357bfc523811b60ac3ea0f66846d2ed9408cea66f4757d0"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Research: focused",
+            "Description": "The other half of the join. A different search angle on purpose — the draft step is told both ran, so it is never writing from half the evidence.",
+            "StartingStep": 1,
+            "StepType": "Action",
+            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+            "ActionInputMapping": {
+              "SearchTerms": "task graph dispatcher durable execution retry semantics"
+            },
+            "ActionOutputMapping": {
+              "SearchResults": "focusedResearch"
+            },
+            "Status": "Active",
+            "PositionX": 80,
+            "PositionY": 180,
+            "Width": 200,
+            "Height": 80
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Step Paths": [
+              {
+                "fields": {
+                  "OriginStepID": "@parent:ID",
+                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Draft the piece&AgentID=@parent:AgentID",
+                  "Condition": null,
+                  "Priority": 100,
+                  "Description": "The other half of the AND-join. The draft waits for BOTH."
+                },
+                "primaryKey": {
+                  "ID": "30BF8477-8297-4C35-A6EE-33FC0C5E05CD"
+                },
+                "sync": {
+                  "lastModified": "2026-08-10T00:41:07.645Z",
+                  "checksum": "43fc4a79e82d0b11a4caf8fecd9c866a16e083000956681affce4433be46741e"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "F98FD583-6CD3-4E41-BF00-C2A097478465"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T00:41:07.350Z",
+            "checksum": "56e57556393b1800923c046952d65dd04d0f813dd5becfc6371da239cfe0a8d7"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Draft the piece",
+            "Description": "The AND-join. Two paths lead here, so the dispatcher holds this step until both research steps have settled — that is what a graph gives you that a linear flow cannot.",
+            "StartingStep": 0,
+            "StepType": "Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Workflow Demo: Draft Content",
+            "Status": "Active",
+            "PositionX": 380,
+            "PositionY": 110,
+            "Width": 200,
+            "Height": 80
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Step Paths": [
+              {
+                "fields": {
+                  "OriginStepID": "@parent:ID",
+                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Review against brand rules&AgentID=@parent:AgentID",
+                  "Condition": null,
+                  "Priority": 100,
+                  "Description": "Every draft is reviewed, however good it looks."
+                },
+                "primaryKey": {
+                  "ID": "EE251343-A1BA-4F75-BC73-50EC1F695918"
+                },
+                "sync": {
+                  "lastModified": "2026-08-10T00:41:07.665Z",
+                  "checksum": "78ef84b51b3d99ee8b6f4c48240a102c6034ead49469f89142ecabd9def14cdf"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "6D5CCA48-833D-46EF-A30D-4DC821F58CE1"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T00:41:07.509Z",
+            "checksum": "bca39656b4c151c7486a6d5169b27cab3a51c6959d715c6e2a2eb099713f6b07"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Review against brand rules",
+            "Description": "A bounded While loop. Its body reviews AND revises in ONE iteration, because a task graph is acyclic and check-then-revise-then-check-again is not drawable. The loop runs again only to re-check the revision, and gives up after three attempts rather than spending forever on a draft that is not converging.",
+            "StartingStep": 0,
+            "StepType": "While",
+            "LoopBodyType": "Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Workflow Demo: Brand Review",
+            "Configuration": {
+              "type": "While",
+              "condition": "payload.brandOK !== true",
+              "maxIterations": 3,
+              "continueOnError": false
+            },
+            "Status": "Active",
+            "PositionX": 660,
+            "PositionY": 110,
+            "Width": 220,
+            "Height": 80
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Step Paths": [
+              {
+                "fields": {
+                  "OriginStepID": "@parent:ID",
+                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Close out: approved&AgentID=@parent:AgentID",
+                  "Condition": "payload.brandOK === true",
+                  "Priority": 200,
+                  "Description": "The winning branch when the draft passed. Higher priority so it is chosen when both conditions could be read as true."
+                },
+                "primaryKey": {
+                  "ID": "C024E6C9-A595-4AAA-BBF5-4864427F7751"
+                },
+                "sync": {
+                  "lastModified": "2026-08-10T00:41:07.703Z",
+                  "checksum": "b839b5bc1e4d91fb3ea814db2ab52c119aae8ee4015416b59cc3b4e633b0d961"
+                }
+              },
+              {
+                "fields": {
+                  "OriginStepID": "@parent:ID",
+                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Close out: gave up&AgentID=@parent:AgentID",
+                  "Condition": "payload.brandOK !== true",
+                  "Priority": 100,
+                  "Description": "The give-up branch. The loop hit its cap without the draft passing, and that has to be SAID — a workflow that gives up quietly is indistinguishable from one that succeeded."
+                },
+                "primaryKey": {
+                  "ID": "41C2AEE5-E5CF-48E3-AFED-C08AC0D30393"
+                },
+                "sync": {
+                  "lastModified": "2026-08-10T00:41:07.722Z",
+                  "checksum": "a1303b38cb73a6ab712eed07188f2c0ad5981c50af196cc6dd29dda9151c2986"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "8B9721A0-3184-465B-B50F-2985E66BCF04"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T00:41:07.532Z",
+            "checksum": "c33ab04353e57591814902d6d68d1ffa9609284c58ca20188c2add86bb96ae72"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Close out: approved",
+            "Description": "One of an exclusive pair — exactly one of these two runs, and the other settles Skipped, which is a normal outcome and never rendered as a failure.",
+            "StartingStep": 0,
+            "StepType": "Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Workflow Demo: Final Note",
+            "Configuration": {
+              "templateParameters": {
+                "outcome": "approved"
+              }
+            },
+            "Status": "Active",
+            "PositionX": 960,
+            "PositionY": 40,
+            "Width": 200,
+            "Height": 80
+          },
+          "primaryKey": {
+            "ID": "C6CA3D22-CF83-4C53-A2A9-9AE29140F99E"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T00:41:07.556Z",
+            "checksum": "109e9b2ad7d9fa82ca0ee72ad7ff6ddac3314550d2bfe881caa9e1628f16eac4"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Close out: gave up",
+            "Description": "The other half of the exclusive pair. Sets needsHuman so the stalled work is findable — the whole point of a give-up branch is that someone learns about it.",
+            "StartingStep": 0,
+            "StepType": "Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Workflow Demo: Final Note",
+            "Configuration": {
+              "templateParameters": {
+                "outcome": "gave-up"
+              }
+            },
+            "Status": "Active",
+            "PositionX": 960,
+            "PositionY": 180,
+            "Width": 200,
+            "Height": 80
+          },
+          "primaryKey": {
+            "ID": "BC28C6F7-3035-4981-8224-64C573806680"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T00:41:07.576Z",
+            "checksum": "3f3158de9d01d8c1a27f4c6664745b81559dc05c5f6d96735f1bbd589947fa76"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C36FA358-CDFD-4443-9CF3-19E194C994EE"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T00:41:07.165Z",
+      "checksum": "1d1386a97b4ba28c5ab2b17c3a83a320295cf70c29df57d124a02f8946c85338"
+    }
+  }
+]

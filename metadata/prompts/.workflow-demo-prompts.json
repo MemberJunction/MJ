@@ -1,0 +1,110 @@
+[
+  {
+    "fields": {
+      "Name": "Workflow Demo: Propose Field Description",
+      "Description": "Proposes a description for one undocumented MemberJunction entity field. Used as a Prompt step inside the Schema Documentation Sweep demo workflow, once per field.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/workflow-demos/propose-field-description.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Default",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    },
+    "primaryKey": {
+      "ID": "394C02C0-5DC7-4E57-B258-CF3C7934F842"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T00:40:43.840Z",
+      "checksum": "aa119931fc5d3e23124660e848f03a2bc4a8cab94943d172b43b258c85c2a515"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Workflow Demo: Draft Content",
+      "Description": "Drafts a short piece from the research two prior steps gathered. Used as a Prompt step inside the Content Pipeline demo workflow, after the research join.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/workflow-demos/draft-content.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Default",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    },
+    "primaryKey": {
+      "ID": "F473E42B-D6FA-44AE-AEB8-F5693415B416"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T00:40:43.400Z",
+      "checksum": "2cd9bdbeda6a86e323d6f0902adc5a7e26e389616684ea70124242b4d3bdd71f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Workflow Demo: Brand Review",
+      "Description": "Reviews a draft against brand rules and returns the corrected version in the same pass, because a task graph is acyclic and cannot loop check-then-revise-then-check. The body of the While loop in the Content Pipeline demo workflow.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/workflow-demos/brand-review.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Default",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    },
+    "primaryKey": {
+      "ID": "63A2CD67-A531-4D26-946D-995E29096304"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T00:40:43.440Z",
+      "checksum": "1a609bea50dfbbe4fc89f89522d965119957197076b2ada3c222c8aca053355d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Workflow Demo: Final Note",
+      "Description": "Writes the closing note for the Content Pipeline demo workflow. Used by BOTH terminal steps of the exclusive pair — the approved branch and the gave-up branch — distinguished by a template parameter, so the two outcomes are one prompt with two truthful voices rather than two near-identical prompts.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/workflow-demos/final-note.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Default",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    },
+    "primaryKey": {
+      "ID": "99CE926D-FEE4-492C-8129-E474B8F5E05C"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T00:40:44.068Z",
+      "checksum": "a65ffaec9195635cf61c450ad37109ba3ac92e4e62787538afd4f5175d7c5fae"
+    }
+  }
+]
