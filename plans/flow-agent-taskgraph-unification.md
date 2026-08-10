@@ -69,10 +69,18 @@ stored query (`GetAgentRunTree`, predicate-bounded, prompt-cost join in final SE
 6. 🟠 XOR race reintroduced for `unreachableTaskIDs` (not in the claim filter); Failed-decides
    unscoped (`{Complete,Failed}` for all graphs contra §5.3); prose prompt responses trigger the
    Chat escape and "successfully" end whole workflows.
-7. 🟠 **R7 NOT implemented** — correction to the 2026-08-09 note: `rollUpCostToSubmittingRun`
-   is still live at every settlement; two cost authorities disagree on prompt-bearing workflows
-   (the rollup is prompt-blind). Remove per R7 or re-rule. (#3698's `ParentRunID` claim was dead
-   code at its own merge; #3710 made it live — and detonated defect 1.)
+7. 🟠 **R7 — RE-RULED as R7-A (AN-BC, 2026-08-10): the run tree is the single authority on
+   cost; the `AIAgentRun …Rollup` columns become its settlement-time cache.** Verified basis for
+   the amendment: `TotalCostRollup` has four live display consumers (`ai-agent-form` execution
+   list incl. its Rollup≠own breakdown, `ai-agent-session-form`, Slack + Teams run-cards — all
+   `Rollup ?? TotalCost`), and the dispatcher write-back is the only writer; strict deletion
+   would blank workflow cost on exactly those surfaces. Implementation contract:
+   `rollUpCostToSubmittingRun` stops doing its own math (mixed-basis, prompt-blind) and writes
+   `SumAgentRunTreeCost(LoadAgentRunTree(submittingRunID))` at settlement — one basis,
+   prompt-aware by construction, structurally identical to the tree. **Must land after the
+   run-tree cycle fix** or it materializes a broken tree. (Historical note stands: #3698's
+   `ParentRunID` claim was dead code at its own merge; #3710 made it live — and detonated
+   defect 1.)
 8. 🟠 Loop bodies are second-class everywhere: no depth/`ParentRunID` stamping (invisible to
    tree + both cost systems; depth chain restarts at 0; **Flow-as-loop-body evades the sub-agent
    refusal**); sub-agent bodies still get `{}`; per-iteration `promptRunID`s lost;
