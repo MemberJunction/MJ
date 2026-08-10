@@ -931,11 +931,20 @@ export class TaskGraphDispatcher implements IShutdownable {
         // is a legitimate "somebody needs to look at this", and a request nobody was notified about
         // is still findable in the inbox — whereas returning early here is how such a step used to
         // become invisible work that stalled a workflow with nothing anywhere saying why.
-        // The marker goes down only once a request is genuinely open. A notification storm is the
-        // failure the marker exists to prevent, but a MISSING request is worse than a repeated
-        // attempt: nothing would appear in anyone's inbox and the workflow would wait forever with
-        // no indication why. Retrying on the next poll is the recoverable choice.
-        if (!(await this.raiseHumanRequest(task, provider))) return;
+        // TRANSIENT failures retry; PERMANENT ones stop. That distinction is the whole point, and
+        // getting it wrong took a server down: retrying unconditionally meant a task whose workflow
+        // has no owning agent — which can never succeed — was re-attempted on every poll forever,
+        // each pass re-reading the graph, until the process was OOM-killed. The marker exists to
+        // prevent exactly that storm; a permanent failure has to set it.
+        const raised = await this.raiseHumanRequest(task, provider);
+        if (raised === 'transient-failure') return;   // try again next poll
+        if (raised === 'permanent-failure') {
+            // Nothing will change on a retry. Mark it so the loop stops, and leave the task Pending
+            // and visible — a person can still see it in the Tasks UI, which is the fallback the
+            // notification was only ever an accelerant for.
+            await this.markHumanTaskNotified(task);
+            return;
+        }
 
         if (!task.UserID) {
             await this.markHumanTaskNotified(task);
@@ -1122,10 +1131,13 @@ export class TaskGraphDispatcher implements IShutdownable {
      * submitted it, so nothing is suspended — the task sits Pending, every other branch keeps
      * running, and answering settles the task. That column staying null is meaningful, not missing.
      */
-    private async raiseHumanRequest(task: MJTaskEntity, provider: IMetadataProvider): Promise<boolean> {
+    private async raiseHumanRequest(
+        task: MJTaskEntity,
+        provider: IMetadataProvider,
+    ): Promise<'raised' | 'permanent-failure' | 'transient-failure'> {
         try {
             const existing = await this.findOpenRequest(provider, task.ID);
-            if (existing) return true;   // already waiting on someone
+            if (existing) return 'raised';   // already waiting on someone
 
             const request = await provider.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests', this.contextUser,
@@ -1137,11 +1149,14 @@ export class TaskGraphDispatcher implements IShutdownable {
             // owns the workflow: the graph's own agent, which is who is asking.
             const owningAgentID = await this.owningAgentOf(provider, task);
             if (!owningAgentID) {
+                // PERMANENT: a graph with no owning agent will not acquire one by being asked
+                // again. Graphs submitted before the provenance stamp landed are all in this state.
                 LogError(
                     `[TaskGraphDispatcher] Task ${task.ID} needs a person, but its workflow has no ` +
-                    `agent to ask on behalf of, so no request could be raised.`,
+                    `agent to ask on behalf of, so no request can be raised. The task stays Pending ` +
+                    `and visible in the Tasks UI; it will not be retried.`,
                 );
-                return false;
+                return 'permanent-failure';
             }
             request.AgentID = owningAgentID;
             request.RequestForUserID = task.UserID;
@@ -1156,14 +1171,15 @@ export class TaskGraphDispatcher implements IShutdownable {
                     `[TaskGraphDispatcher] Could not raise a request for task ${task.ID}: ` +
                     `${request.LatestResult?.CompleteMessage ?? 'unknown error'}`,
                 );
-                return false;
+                // A failed SAVE may be transient (deadlock, contention), so this one earns a retry.
+                return 'transient-failure';
             }
-            return true;
+            return 'raised';
         } catch (e) {
             // Never fatal. The task remains Pending and visible; a missing request is recoverable,
             // whereas throwing here would abort the whole dispatch pass for every other branch.
             LogError(`[TaskGraphDispatcher] Could not raise a request for task ${task.ID}: ${e instanceof Error ? e.message : String(e)}`);
-            return false;
+            return 'transient-failure';
         }
     }
 
