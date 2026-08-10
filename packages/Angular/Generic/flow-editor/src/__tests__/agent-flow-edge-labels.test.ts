@@ -18,7 +18,6 @@ function path(over: Partial<MJAIAgentStepPathEntity> & { ID: string }): MJAIAgen
         Condition: null,
         Description: null,
         Priority: 0,
-        Sequence: 0,
         ...over,
     } as unknown as MJAIAgentStepPathEntity;
 }
@@ -124,12 +123,16 @@ describe('exclusive precedence is visible', () => {
         expect(visualsFor(lose, [win, lose]).label).toMatch(/^2\/2 /);
     });
 
-    it('breaks a priority tie by ascending sequence', () => {
-        const first = path({ ID: 'first', Condition: 'a', Priority: 100, Sequence: 1 });
-        const second = path({ ID: 'second', Condition: 'b', Priority: 100, Sequence: 2 });
+    it('breaks a priority tie by ascending path ID, NOT by declaration order', () => {
+        // Declared high-ID-first on purpose. `Priority` defaults to 0, so a tie is the COMMON case,
+        // and this is exactly where a badge that sorted by array order would quietly disagree with
+        // the engine — the compiler assigns TaskDependency.Sequence by ascending path ID, and a
+        // path row has no Sequence column of its own to sort on.
+        const zulu = path({ ID: 'zulu', Condition: 'a', Priority: 100 });
+        const alpha = path({ ID: 'alpha', Condition: 'b', Priority: 100 });
 
-        expect(visualsFor(first, [first, second]).label).toMatch(/^1\/2 /);
-        expect(visualsFor(second, [first, second]).label).toMatch(/^2\/2 /);
+        expect(visualsFor(alpha, [zulu, alpha]).label).toMatch(/^1\/2 /);
+        expect(visualsFor(zulu, [zulu, alpha]).label).toMatch(/^2\/2 /);
     });
 
     it('explains the ordering on hover', () => {

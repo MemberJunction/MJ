@@ -333,7 +333,7 @@ export class AgentFlowTransformerService {
     const hasAmbiguousAlways = isAlwaysPath && unconditionalSiblings.length > 1;
 
     // Where this path sits in its exclusive group, when it is IN one. Highest Priority wins, ties
-    // broken by Sequence — and none of that precedence is visible on the canvas today, so someone
+    // broken by path ID — and none of that precedence is visible on the canvas today, so someone
     // debugging a fork cannot tell which branch takes it when two conditions are both true.
     const conditionalSiblings = siblingPaths.filter(p => p.Condition && p.Condition.trim().length > 0);
     const rank = hasCondition && conditionalSiblings.length > 1
@@ -393,7 +393,7 @@ export class AgentFlowTransformerService {
       // precedence is exactly what a truncated condition would otherwise hide.
       const prefix = rank ? `${rank.position}/${rank.total} ` : '';
       const precedence = rank
-        ? `\n\nChecked ${ordinal(rank.position)} of ${rank.total}: highest priority wins, ties by sequence.`
+        ? `\n\nChecked ${ordinal(rank.position)} of ${rank.total}: highest priority wins, ties by path ID.`
         : '';
       return {
         label: prefix + this.truncateLabel(condition, rank ? 28 : 32),
@@ -435,16 +435,20 @@ export class AgentFlowTransformerService {
   /**
    * This path's position among its conditional siblings, in the order the dispatcher checks them.
    *
-   * Mirrors ResolveExclusiveGroups: highest `Priority` first, ties broken by ascending `Sequence`.
-   * Kept in lockstep with that rule deliberately — a badge that disagreed with the engine would be
-   * worse than no badge, because it would be believed.
+   * Mirrors the COMPILER, which is where the order is actually decided: `buildDependencies` sorts a
+   * fan-out by `Priority` descending, then path ID ascending, and writes that ordinal into
+   * `TaskDependency.Sequence` — which is what `ResolveExclusiveGroups` then reads at runtime. A path
+   * row has no `Sequence` of its own and deliberately never has: a compiled edge gets a fresh UUID
+   * and needs a stored ordinal to stay deterministic across machines, while a design-time path still
+   * has its own stable ID to break the tie with. Ranking here by anything else would disagree with
+   * the engine precisely on ties — and `Priority` defaults to 0, so ties are the common case.
    */
   private rankWithinGroup(
     path: MJAIAgentStepPathEntity,
     siblings: MJAIAgentStepPathEntity[]
   ): { position: number; total: number } {
     const ordered = [...siblings].sort((a, b) =>
-      (b.Priority ?? 0) - (a.Priority ?? 0) || (a.Sequence ?? 0) - (b.Sequence ?? 0)
+      (b.Priority ?? 0) - (a.Priority ?? 0) || a.ID.localeCompare(b.ID)
     );
     return {
       position: ordered.findIndex(p => UUIDsEqual(p.ID, path.ID)) + 1,
