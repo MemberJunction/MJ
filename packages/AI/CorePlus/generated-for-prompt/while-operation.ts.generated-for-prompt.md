@@ -16,5 +16,10 @@ interface WhileOperation {
         templateParameters?: Record<string, string>;
         context?: unknown;  // Runtime context propagated to the sub-agent.
     };  // Execute sub-agent per iteration
+    prompt?: {
+        name: string;
+        templateParameters?: Record<string, string>;  // Values bound into the prompt's template, alongside the loop's own item and index.
+        outputMapping?: string;  // JSON mapping from the prompt's response into the payload, per iteration.
+    };  // Execute a prompt per iteration.
 }
 ```

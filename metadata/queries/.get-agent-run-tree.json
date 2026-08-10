@@ -6,44 +6,21 @@
       "UserQuestion": "What is the full structure of everything an agent run caused — its steps, any workflows it started, and the runs those workflows spawned?",
       "Description": "Returns one row per node of an agent run's complete execution tree: the run, its steps, task graphs those steps submitted, the tasks inside them, and the agent runs those tasks spawned, recursively to a supplied depth cap. Each row carries ParentNodeID/Depth/Sequence so a caller can assemble the tree in memory, plus per-node status, timing, own-cost and own-tokens.",
       "SQL": "@file:SQL/get-agent-run-tree.sql",
-      "TechnicalDescription": "Replaces the timeline's per-level N+1 (load run, load steps, load graph tasks, load spawned runs, repeat) with a single recursive CTE. Four recursive members: run→steps, task-graph step→its parent Task (linked via JSON_VALUE(OutputData,'$.parentTaskID')), task→child tasks, task→the run it spawned. Depth is bounded by a `Depth < maxDepth` predicate inside every recursive member rather than OPTION(MAXRECURSION), which is T-SQL-only and errors rather than degrading — MAXRECURSION 0 disables the engine limit so the portable predicate is the sole bound. Cost is per-node OWN cost (AIAgentRun.TotalCost, AIPromptRun.Cost), never a rollup, so a caller-side SUM does not double-count nested runs; Prompt tasks reach their cost through Configuration.runtime.promptRunID. Consumed by LoadAgentRunTree + BuildAgentRunTree in @memberjunction/ai-core-plus.",
+      "TechnicalDescription": "Replaces the timeline's per-level N+1 (load run, load steps, load graph tasks, load spawned runs, repeat) with a single recursive CTE. Four recursive members: run→steps, task-graph step→its parent Task (linked via JSON_VALUE(OutputData,'$.parentTaskID')), task→child tasks, task→the run it spawned. Depth is bounded by a `Depth < maxDepth` predicate inside every recursive member rather than OPTION(MAXRECURSION), which is T-SQL-only and errors rather than degrading — MAXRECURSION 0 disables the engine limit so the portable predicate is the sole bound. Cost is per-node OWN cost (AIAgentRun.TotalCost, AIPromptRun.Cost), never a rollup, so a caller-side SUM does not double-count nested runs; Prompt tasks reach their cost through Configuration.runtime.promptRunID. Consumed by LoadAgentRunTree + BuildAgentRunTree in @memberjunction/ai-core-plus. Parameters (agentRunID, maxDepth) are AUTO-DETECTED from the {{ }} placeholders because UsesTemplate is true — declaring them explicitly as well inserts each name twice in one push and violates UQ_QueryParameter_QueryID_Name, which rolls the whole query back.",
       "Status": "Approved",
       "QualityRank": 9,
       "ExecutionCostRank": 3,
       "UsesTemplate": true
     },
     "relatedEntities": {
-      "MJ: Query Fields": [],
-      "MJ: Query Parameters": [
-        {
-          "fields": {
-            "QueryID": "@parent:ID",
-            "Name": "agentRunID",
-            "Type": "string",
-            "IsRequired": true,
-            "Description": "The agent run at the top of the tree."
-          },
-          "primaryKey": {
-            "ID": "6C3F8B22-9A41-4E5D-B7C8-1D2E3F4A5B60"
-          }
-        },
-        {
-          "fields": {
-            "QueryID": "@parent:ID",
-            "Name": "maxDepth",
-            "Type": "number",
-            "IsRequired": true,
-            "DefaultValue": "100",
-            "Description": "Hard depth cap. Matches MAX_AGENT_RUN_TREE_DEPTH in @memberjunction/ai-core-plus; any returned row at this depth means the tree may be truncated."
-          },
-          "primaryKey": {
-            "ID": "7D4E9C33-AB52-4F6E-C8D9-2E3F4A5B6C71"
-          }
-        }
-      ]
+      "MJ: Query Fields": []
     },
     "primaryKey": {
       "ID": "344ADDAD-458B-4FBC-9F2E-34915ED5373A"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T13:08:10.776Z",
+      "checksum": "6fe6c42d746b078a018b2e41ff154e60e2975551bd3321a98494a41f5a86d546"
     }
   }
 ]
