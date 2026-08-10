@@ -75,7 +75,7 @@ export default class TestRegressionRerunFailures extends Command {
     };
 
     // Reuse the running infrastructure — a one-off runner container against the
-    // stack a prior `up` left running. If the stack is down, the runner's DR-E1
+ // stack a prior `up` left running. If the stack is down, the runner's
     // preflight fails fast with a clear "stack unreachable" message.
     const consoleLog = path.join(runDirFor(runId), 'console.log');
     const runArgs = dockerComposeArgs('full', ['run', '--rm', 'test-runner']);

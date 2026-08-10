@@ -1,5 +1,5 @@
 /**
- * Retry policy construction for suite runs (DR-D2).
+ * Retry policy construction for suite runs.
  *
  * Turns the retry decision from "retry every non-passing status N times" into a
  * classified, budgeted policy:
@@ -7,7 +7,8 @@
  *     recheck run showed 27 such failures retried 3× each was the largest waste.
  *   - Non-env classes (`nav-loop`, `assertion`, `unknown`) get at most 1.
  *   - Env/transient classes (`timeout`, `blank-page`, `infra`, `auth-detour`)
- *     get the operator's full `--retries` budget (health-gated in DR-D3).
+ *     get the operator's full `--retries` budget (health-gated by admission
+ *     control).
  *   - A SUITE-WIDE budget caps total extra attempts at ceil(0.15 × suiteSize),
  *     so "34 retries in a 44-test run" can't happen — it's a diagnosis, not a
  *     strategy. When the budget is spent, remaining failures are accepted first-shot.
@@ -198,7 +199,7 @@ export function buildSuiteRetryPolicy(opts: SuiteRetryPolicyOptions): RetryPolic
 }
 
 /**
- * A fixed-count policy (the pre-DR-D2 behavior): retry up to `n` extra times
+ * A fixed-count policy (the legacy behavior): retry up to `n` extra times
  * regardless of category, with no backoff. Used by the standalone/repeat paths
  * and tests.
  */

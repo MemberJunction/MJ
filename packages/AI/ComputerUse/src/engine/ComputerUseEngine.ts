@@ -1,21 +1,15 @@
 /**
- * Core Vision-to-Action engine for browser automation via LLM reasoning.
- *
- * ComputerUseEngine is the orchestrator — it wires together the browser
- * adapter, auth handler, navigation guard, judge, tool provider, and
- * controller prompt into a coherent execution loop:
+ * Core Vision-to-Action engine for browser automation via LLM reasoning. Wires
+ * the browser adapter, auth handler, navigation guard, judge, tool provider, and
+ * controller prompt into one execution loop:
  *
  *   Run(params) → launch browser → auth setup → navigate → step loop → result
  *
- * Each step:
- *   screenshot → build controller request → call LLM → parse response →
- *   execute tool calls → execute browser actions → evaluate judge
+ * Each step: screenshot → build controller request → call LLM → parse response →
+ * execute tool calls → execute browser actions → evaluate judge.
  *
- * Subclasses override four protected virtual methods:
- * - executeControllerPrompt: how the controller LLM is called
- * - executeJudgePrompt: how the judge LLM is called
- * - onStepComplete: hook after each step (logging/persistence)
- * - onRunComplete: hook after run finishes (cleanup/persistence)
+ * Subclasses override `executeControllerPrompt` / `executeJudgePrompt` (how each
+ * LLM is called) and the `onStepComplete` / `onRunComplete` hooks.
  */
 
 import { MJGlobal } from '@memberjunction/global';
@@ -62,11 +56,11 @@ import type { SettleReason } from '../types/app-profile.js';
 import { resolveSettleExit } from './settle-decision.js';
 import { computeStateSignature, detectLoop, stateRepeatThresholdFor } from './loop-detection.js';
 import { evaluateAuthDetour } from './auth-detour.js';
-import { CancellationError, abortableDelay } from './cancellation.js';
+import { CancellationError, abortableDelay, timeBudgetExpiryReason } from './run-limits.js';
 import { serializeInteractiveElements } from './element-serializer.js';
-import { evaluateBatchStop, DEFAULT_MAX_ACTIONS_PER_BATCH } from './batch-control.js';
+import { evaluateBatchStop, DEFAULT_MAX_ACTIONS_PER_BATCH } from './action-batch.js';
 import { gateImpossibleVerdict, DEFAULT_IMPOSSIBLE_QUORUM } from './terminal-verdict.js';
-import { formatDiagnosticsDigest } from './diagnostics-digest.js';
+import { formatDiagnosticsDigest } from './digests.js';
 import { traceUrlMatches } from './trace-url.js';
 import {
     planReplayActions,
@@ -76,10 +70,8 @@ import {
 } from './replay-step.js';
 import type { GuardResult } from './replay-step.js';
 import { reresolveTarget, shouldAcceptHeal, isSelectorHealable } from './heal-decision.js';
-import { executeGoalPostconditions } from './postcondition.js';
-import { evaluatePreludeLanding } from './prelude.js';
+import { executeGoalPostconditions, evaluatePreludeLanding } from './postcondition.js';
 import { makeJudgeCacheKey, JudgeVerdictCache } from './judge-cache.js';
-import { timeBudgetExpiryReason } from './time-budget.js';
 import {
     isCheckpointRun,
     latchDeterministic,
@@ -124,10 +116,10 @@ export class ComputerUseEngine {
     protected toolProvider: ToolProvider;
 
     /** Whether Stop() has been called — checked at the top of each step and at
-     *  the finer-grained checkpoints inside a step (CU-B8). */
+     *  the finer-grained checkpoints inside a step. */
     protected cancelled: boolean = false;
 
-    /** Aborted by Stop() (CU-B8) so in-flight LLM calls and settle/backoff
+    /** Aborted by Stop() so in-flight LLM calls and settle/backoff
      *  delays return promptly instead of holding a worker slot to step's end.
      *  Recreated per Run() so a reused engine instance starts un-aborted. */
     private abortController: AbortController = new AbortController();
@@ -152,14 +144,8 @@ export class ComputerUseEngine {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * Execute a complete Computer Use run.
-     *
-     * This is the main entry point. It:
-     * 1. Initializes the browser adapter with config
-     * 2. Sets up auth (global callback + per-domain bindings)
-     * 3. Navigates to the start URL
-     * 4. Runs the main step loop
-     * 5. Closes the browser and returns results
+     * Execute a complete Computer Use run: initialize the adapter, set up auth,
+     * navigate to the start URL, run the step loop, close the browser.
      *
      * Never throws — all errors are caught and returned in ComputerUseResult.
      */
@@ -197,14 +183,14 @@ export class ComputerUseEngine {
             return result;
         } finally {
             // Stop the trace (if any) BEFORE the context closes, stamping the
-            // path on the result so the caller can retain-or-discard (CU-F4).
+            // path on the result so the caller can retain-or-discard.
             await this.stopTracingIfRequested(params, result);
             await this.closeBrowser();
             this.log('Browser closed');
         }
     }
 
-    /** Start a forensic trace when the caller requested one via TracePath (CU-F4). Best-effort. */
+    /** Start a forensic trace when the caller requested one via TracePath. Best-effort. */
     private async startTracingIfRequested(params: RunComputerUseParams): Promise<void> {
         if (!params.TracePath) {
             return;
@@ -219,7 +205,7 @@ export class ComputerUseEngine {
     /**
      * Stop a trace started for this run and, if a file was written, stamp its
      * path on the result. The caller (driver) owns the retain-or-discard policy
-     * (CU-F4) — the engine only produces the artifact. Best-effort: never throws.
+     * — the engine only produces the artifact. Best-effort: never throws.
      */
     private async stopTracingIfRequested(
         params: RunComputerUseParams,
@@ -249,9 +235,9 @@ export class ComputerUseEngine {
     }
 
     /**
-     * Inject a shared judge-verdict cache (CU-C5.3). When set, the engine reuses
+     * Inject a shared judge-verdict cache. When set, the engine reuses
      * a cached verdict for an identical (goal, URL, visible-state) key instead of
-     * calling the LLM judge — the cross-attempt generalization of CU-G5's
+     * calling the LLM judge — the cross-attempt generalization of
      * within-run gating. The driver owns the instance so verdicts survive attempt
      * boundaries; unset → no cross-attempt caching (behavior unchanged).
      */
@@ -263,7 +249,7 @@ export class ComputerUseEngine {
     /**
      * Request cancellation of a running run. Cooperative: sets the flag the
      * engine's checkpoints observe AND aborts the shared signal so in-flight LLM
-     * calls and settle/backoff delays return promptly (CU-B8). The run unwinds
+     * calls and settle/backoff delays return promptly. The run unwinds
      * to a `Cancelled` result within seconds — at the next checkpoint — rather
      * than running the current step to completion.
      */
@@ -273,7 +259,7 @@ export class ComputerUseEngine {
     }
 
     /**
-     * Cooperative-cancellation checkpoint (CU-B8): throw {@link CancellationError}
+     * Cooperative-cancellation checkpoint: throw {@link CancellationError}
      * if the run has been stopped. Placed after each long await (settle, LLM,
      * actions, judge) so the step unwinds promptly; the main loop maps the throw
      * to a single clean `Cancelled` status.
@@ -285,18 +271,15 @@ export class ComputerUseEngine {
     }
 
     /**
-     * Replay a recorded trace deterministically (CU-C2) — the flagship execution
-     * tier. Same browser lifecycle as {@link Run}, but each step is driven by the
-     * recorded trajectory instead of an LLM: settle → precondition (bounded wait
-     * for the target; **fail the step on timeout — never proceed anyway**) →
-     * locator-based action with Playwright auto-wait → postcondition assert.
-     * Replay steps consume ZERO LLM budget and run at Playwright speed.
+     * Replay a recorded trace deterministically. Same browser lifecycle as
+     * {@link Run}, but each step is driven by the recorded trajectory instead of an
+     * LLM: settle → precondition (bounded wait for the target; **fail the step on
+     * timeout — never proceed anyway**) → locator-based action with Playwright
+     * auto-wait → postcondition assert. Consumes zero LLM budget.
      *
-     * Fail-fast: the first step that can't be satisfied consults the heal seam
-     * ({@link healReplayStep}, a no-op at this layer until CU-C3) and, if it
-     * can't heal, ends the run `Failed` with the divergence recorded on
-     * {@link ComputerUseResult.Replay}. All-steps-hit ends `Completed`. Never
-     * throws — errors return in the result, exactly like {@link Run}.
+     * The first step that can't be satisfied consults {@link healReplayStep} and,
+     * if it can't heal, ends the run `Failed` with the divergence on
+     * {@link ComputerUseResult.Replay}. Never throws, like {@link Run}.
      */
     public async Replay(trace: ComputerUseTrace, params: RunComputerUseParams): Promise<ComputerUseResult> {
         this.cancelled = false;
@@ -368,7 +351,7 @@ export class ComputerUseEngine {
     }
 
     /**
-     * Focused LLM disambiguation seam for a heal (CU-C3, leg 1b). Called ONLY
+     * Focused LLM disambiguation seam for a heal (leg 1b). Called ONLY
      * when the deterministic role+name re-resolution is ambiguous (multiple
      * candidates) or failed. A subclass with an LLM controller overrides this to
      * ask a cheap model "given these elements + this instruction, which index is
@@ -445,7 +428,7 @@ export class ComputerUseEngine {
      * the judge and the engine.
      */
     private initializeJudge(params: RunComputerUseParams): void {
-        // Wire the OnStagnation threshold through to the heuristic judge (CU-B2).
+        // Wire the OnStagnation threshold through to the heuristic judge.
         // Previously this parsed config was dropped on the floor and the judge
         // always used its default threshold.
         const frequency = params.JudgeFrequency;
@@ -483,7 +466,7 @@ export class ComputerUseEngine {
     }
 
     /**
-     * Restore a warm-seed snapshot (CU-G4) into the freshly-launched context,
+     * Restore a warm-seed snapshot into the freshly-launched context,
      * before navigation, so the app doesn't cold-boot its metadata cache. The
      * adapter's SeedContext is best-effort and cold-boot-safe; this wrapper only
      * skips it when no seed was supplied and never lets a seed failure abort the
@@ -546,17 +529,13 @@ export class ComputerUseEngine {
 
     private async closeBrowser(): Promise<void> {
         if (!this._ownsAdapter) {
-            // Shared adapter: between tests, the BrowserContext lives on but
-            // we must clean per-session state (IndexedDB, sessionStorage,
-            // non-auth localStorage, service workers) — otherwise stale
-            // cache from this test deadlocks the next test's app boot.
-            // Auth tokens in localStorage are preserved so the next test
-            // doesn't have to re-login.
+            // Shared adapter: the BrowserContext lives on between tests, so scrub
+            // per-session state (IndexedDB, sessionStorage, non-auth localStorage,
+            // service workers) or stale cache deadlocks the next test's app boot.
+            // Auth tokens are preserved so the next test needn't re-login.
             //
-            // EXCEPTION (CU-G3): when the context is ephemeral (destroyed right
-            // after this run, not recycled), the scrub is pure waste — it
-            // re-navigates to the app origin, triggering another full app boot,
-            // in a context that's about to be thrown away. Skip it.
+            // Skipped for an ephemeral context: the scrub re-navigates to the app
+            // origin, triggering a full app boot in a context about to be discarded.
             const startUrl = this.activeParams?.StartUrl;
             if (startUrl && !this.activeParams?.EphemeralContext) {
                 try {
@@ -620,10 +599,10 @@ export class ComputerUseEngine {
         context.CurrentUrl = this.browserAdapter.CurrentUrl;
     }
 
-    // ─── Deterministic Prelude (CU-C6) ─────────────────────
+    // ─── Deterministic Prelude ─────────────────────────────
 
     /**
-     * Run the scripted deterministic prelude (CU-C6) before the agentic loop:
+     * Run the scripted deterministic prelude before the agentic loop:
      * execute each recorded action straight through the adapter (nav guard +
      * auth via {@link executeSingleBrowserAction}), zero LLM. Then verify it
      * reached the declared landing. Best-effort: a landing miss is logged as a
@@ -684,15 +663,8 @@ export class ComputerUseEngine {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * Execute the main step loop.
-     *
-     * Runs up to MaxSteps times. Each iteration:
-     * 1. Check for cancellation
-     * 2. Execute a single step
-     * 3. Check if the judge says we're done
-     * 4. If not done, continue to the next step
-     *
-     * Returns a result with the appropriate terminal status.
+     * Execute the main step loop, up to MaxSteps iterations of
+     * check-cancellation → run one step → stop if the judge says done.
      */
     /** Max consecutive steps with 0 actions before the engine aborts */
     private static readonly MAX_CONSECUTIVE_EMPTY_STEPS = 3;
@@ -705,9 +677,9 @@ export class ComputerUseEngine {
         let consecutiveEmptySteps = 0;
         let consecutiveJudgeDisagreements = 0;
         // Cumulative engine-side settle wait, excluded from the agent-time budget
-        // so a slow app doesn't consume the agent's reasoning time (CU-B4/A1).
+        // so a slow app doesn't consume the agent's reasoning time.
         let cumulativeSettleMs = 0;
-        // Loop detection (CU-B1): per-step state signatures + an escalating trip counter.
+        // Loop detection: per-step state signatures + an escalating trip counter.
         const loopCfg = context.Params.AppProfile?.Loop ?? new LoopConfig();
         const stateRepeatThreshold = this.effectiveStateRepeatThreshold(context, loopCfg);
         // A multi-section tour alternates hub→section→hub→section, which IS a 2-state
@@ -716,7 +688,7 @@ export class ComputerUseEngine {
         const cycleRepeatThreshold = stateRepeatThreshold > loopCfg.StateRepeatThreshold ? 3 : 2;
         const stateSignatures: string[] = [];
         let loopTrips = 0;
-        // Terminal-verdict guard (CU-D6): concurring Impossible verdicts needed before we accept one.
+        // Terminal-verdict guard: concurring Impossible verdicts needed before we accept one.
         let impossibleCount = 0;
 
         for (let stepNumber = 1; stepNumber <= context.Params.MaxSteps; stepNumber++) {
@@ -725,7 +697,7 @@ export class ComputerUseEngine {
                 return this.buildResult(context, 'Cancelled', false, this.terminalVerdict(context, lastVerdict));
             }
 
-            // Auth-detour watchdog (CU-B7): if the session was invalidated and
+            // Auth-detour watchdog: if the session was invalidated and
             // the page bounced to an identity provider, recover it here —
             // BEFORE perceiving — so the step runs against the recovered app,
             // not the login page. No step and no agent-time is charged for the
@@ -738,12 +710,12 @@ export class ComputerUseEngine {
             }
             cumulativeSettleMs += authResult.recoveryMs;
 
-            // Time budget (CU-B4): never START a step past budget. Two bounds —
+            // Time budget: never START a step past budget. Two bounds —
             // agent-time (settle excluded) AND a wall-clock ceiling that expires a
             // settle-heavy run HERE, gracefully, instead of letting it blow past
             // into the TestEngine watchdog (which abandons it as an unscored infra
             // Error). Graceful expiry runs one forced final judge so the run is
-            // scored on the real end-state, not zeroed (pairs with CU-D4).
+            // scored on the real end-state, not zeroed.
             const budgetExpiry = this.timeBudgetExpiry(context, cumulativeSettleMs);
             if (budgetExpiry) {
                 this.log(`Time budget exceeded — ${budgetExpiry} — before step ${stepNumber}; expiring gracefully`);
@@ -754,7 +726,7 @@ export class ComputerUseEngine {
             }
 
             // Execute one step. A Stop() mid-step unwinds as a CancellationError
-            // (CU-B8) — catch it here and return a single clean Cancelled result
+            // — catch it here and return a single clean Cancelled result
             // rather than letting it surface as an infrastructure Error.
             let step: StepRecord;
             try {
@@ -770,7 +742,7 @@ export class ComputerUseEngine {
             context.AddStep(step);
             this.onStepComplete(step, context.Params);
 
-            // Checkpoint tour (CU-D8): latch sections whose deterministic
+            // Checkpoint tour: latch sections whose deterministic
             // assertions (free, every step) or this step's visual-criteria judge
             // verdict now hold. When every checkpoint is met, the tour is complete
             // — scored on the synthesized latch verdict, not a single end-state judge.
@@ -781,7 +753,7 @@ export class ComputerUseEngine {
                     latchVisualFromVerdict(context.Params.Checkpoints, context.CheckpointState, step.JudgeVerdict, stepNumber);
                 }
                 // A newly-latched checkpoint IS progress, so the loop detectors
-                // must start over (CU-D8 × CU-B1). Without this, a tour dies on
+ // must start over. Without this, a tour dies on
                 // its own script: the detectors define a loop as revisiting a
                 // state "with no progress", but they only perceive pixels + URL,
                 // and a tour legitimately returns to prior states (open→cancel,
@@ -807,7 +779,7 @@ export class ComputerUseEngine {
             // Track consecutive steps where the controller produced NOTHING to do.
             // A step that requested judgement (a deliberate "am I done?" checkpoint)
             // or that errored is NOT a misconfigured/stuck empty step, so it must
-            // not count toward the "controller produced no actions" abort (CU-B3).
+            // not count toward the "controller produced no actions" abort.
             const producedNothing = step.ActionsRequested.length === 0 && step.ToolCalls.length === 0;
             if (producedNothing && !step.RequestedJudgement && !step.CheckpointReached && !step.Error) {
                 consecutiveEmptySteps++;
@@ -822,7 +794,7 @@ export class ComputerUseEngine {
                 lastVerdict = step.JudgeVerdict;
                 context.LastJudgeFeedback = step.JudgeVerdict.Feedback;
 
-                // Judge-driven termination is bypassed in a checkpoint tour (CU-D8):
+                // Judge-driven termination is bypassed in a checkpoint tour:
                 // the judge scores only unlatched visual criteria (latched in the
                 // checkpoint block above), so its Done/Impossible describe those
                 // criteria, NOT the whole tour — completion is decided by the latch
@@ -835,7 +807,7 @@ export class ComputerUseEngine {
                         return result;
                     }
 
-                    // Impossible guard (CU-D6): don't end on a single sample. Require a
+                    // Impossible guard: don't end on a single sample. Require a
                     // quorum of concurring Impossible verdicts across ≥2 steps, and never
                     // accept Impossible while the page is still loading (settle gave up as
                     // 'budget') — a boot screen is not evidence the goal is impossible.
@@ -862,7 +834,7 @@ export class ComputerUseEngine {
             // If the controller keeps parking on "I'm done / it's blocked" (no
             // actions, requested judgement) but the judge keeps disagreeing, that
             // is a genuine, truthful Failed outcome — not an infrastructure Error
-            // and not worth burning the rest of the step budget (CU-B3).
+            // and not worth burning the rest of the step budget.
             if (!isCheckpointRun(context.Params.Checkpoints) &&
                 producedNothing && step.RequestedJudgement && step.JudgeVerdict &&
                 !step.JudgeVerdict.Done && !step.JudgeVerdict.Impossible) {
@@ -877,9 +849,9 @@ export class ComputerUseEngine {
                 consecutiveJudgeDisagreements = 0;
             }
 
-            // Loop detection (CU-B1): every step, free. Suppressed while the page
+            // Loop detection: every step, free. Suppressed while the page
             // is still booting (settle gave up as 'budget') — waiting on a boot
-            // screen is correct recovery, not a loop (the CU-B2 contradiction fix).
+ // screen is correct recovery, not a loop (contradiction fix).
             if (step.SettleReason !== 'budget') {
                 const signature = computeStateSignature(step.UrlAfter, step.ScreenshotHash, loopCfg.VolatileParams);
                 stateSignatures.push(signature);
@@ -907,7 +879,7 @@ export class ComputerUseEngine {
 
         // Exhausted all steps without completion. Force a fresh final judge so
         // the verdict reflects the true end-state (it may be up to a few steps
-        // stale) and the run is scored on evidence (CU-B4.3 / CU-D4).
+        // stale) and the run is scored on evidence.
         this.log(`Run exhausted all ${context.Params.MaxSteps} steps without completion`);
         const finalVerdict = await this.finalVerdictOnTermination(context, context.Params.MaxSteps, lastVerdict);
         const result = this.buildResult(context, 'MaxStepsReached', false, finalVerdict);
@@ -916,26 +888,16 @@ export class ComputerUseEngine {
     }
 
     /**
-     * How many times one page state may recur before it counts as a loop trip.
+     * How many times one page state may recur before it counts as a loop trip:
+     * one revisit per requested item (checkpoints for a tour, validation criteria
+     * otherwise) plus the base tolerance.
      *
-     * Scales with how many distinct things the goal asks for — checkpoints for a
-     * tour, validation criteria otherwise — because revisiting a state is a
-     * STRUCTURAL consequence of a multi-part goal, not evidence of being stuck:
-     *
-     *  - Tours are hub-and-spoke. Walking N sections means returning to the same hub
-     *    up to N times, so at the base threshold of 3 the hub ALONE trips the
-     *    detector on any tour of 4+ sections (T045/T102/T115/T120 died at steps
-     *    13/10/20/29 of budgets of 45/65/90/65).
-     *  - Multi-criteria goals do the same thing without being tours. "Clicking a
-     *    metric card navigates to a different view" means go-and-come-back (T058),
-     *    and "clearing the filter RESTORES the fuller list" (T124) asks the agent to
-     *    return to an earlier state *as the pass condition* — the detector cannot
-     *    tell that apart from spinning.
-     *
-     * So the allowance is one revisit per requested item plus the base tolerance,
-     * which makes the step and time budgets the real backstop — what they are for.
-     * `TerminateAfterTrips` is deliberately left alone so a genuinely wedged run
-     * still ends early instead of burning its whole budget.
+     * Revisiting a state is a structural consequence of a multi-part goal, not
+     * evidence of being stuck — tours are hub-and-spoke, so walking N sections
+     * returns to the hub N times, and goals like "clearing the filter restores the
+     * fuller list" require returning to an earlier state *as the pass condition*.
+     * The step and time budgets are the real backstop. `TerminateAfterTrips` is
+     * left alone so a genuinely wedged run still ends early.
      */
     private effectiveStateRepeatThreshold(context: RunContext, loopCfg: LoopConfig): number {
         const checkpointCount = isCheckpointRun(context.Params.Checkpoints)
@@ -955,7 +917,7 @@ export class ComputerUseEngine {
     }
 
     /**
-     * Why the run must expire now (CU-B4), or null when within budget. Delegates
+     * Why the run must expire now, or null when within budget. Delegates
      * to the pure {@link timeBudgetExpiryReason}: agent-time (settle excluded, so
      * a slow-to-render app doesn't burn reasoning budget) OR a wall-clock ceiling
      * (total elapsed, so a settle-heavy run expires gracefully here instead of
@@ -966,7 +928,7 @@ export class ComputerUseEngine {
         return timeBudgetExpiryReason(context.ElapsedMs, cumulativeSettleMs, context.Params.MaxExecutionTimeMs);
     }
 
-    // ─── Checkpoint Tour (CU-D8) ───────────────────────────
+    // ─── Checkpoint Tour ───────────────────────────────────
 
     /**
      * One-time setup warnings for a checkpoint tour, so a silently-never-latching
@@ -1018,7 +980,7 @@ export class ComputerUseEngine {
     /**
      * The criteria the judge should evaluate this call.
      *
-     * In a checkpoint tour (CU-D8): when the controller signaled a specific
+     * In a checkpoint tour: when the controller signaled a specific
      * checkpoint this step (Phase B), scope to THAT checkpoint's not-yet-latched
      * visual criteria — verified against the frame it's actually on, with no
      * cross-contamination from other sections. Otherwise (a scheduled/cadence
@@ -1040,7 +1002,7 @@ export class ComputerUseEngine {
      * Verdict for a non-completion terminal (MaxSteps/TimeBudget/Loop). A
      * checkpoint tour is scored on its latch state — synthesize it (no LLM);
      * otherwise force a fresh final judge so the verdict reflects the true
-     * end-state (CU-B4.3 / CU-D4).
+     * end-state.
      */
     private async finalVerdictOnTermination(
         context: RunContext,
@@ -1068,7 +1030,7 @@ export class ComputerUseEngine {
     /**
      * Run one forced judge evaluation of the current end-state, used on graceful
      * budget expiry (step or time) so the run is scored on a fresh verdict
-     * rather than a stale/absent one (CU-B4.3 / CU-D4). Never throws — falls
+     * rather than a stale/absent one. Never throws — falls
      * back to the prior verdict on any failure or when no judge is configured.
      */
     private async forceFinalJudge(
@@ -1092,22 +1054,16 @@ export class ComputerUseEngine {
     }
 
     /**
-     * Auth-detour watchdog (CU-B7). Runs at the top of each step, before
-     * perception. If the current URL matches an identity-provider pattern from
-     * the {@link AppProfile}, the session was invalidated mid-run and the page
-     * bounced to login. We recover generically (re-apply auth + re-navigate to
-     * the start URL) so the step then perceives the recovered app — the agent
-     * never sees the login page and burns no steps re-consenting. After
-     * `MaxDetours` detours in one run the recovery clearly isn't holding, so we
-     * terminate the run as an infrastructure `AuthDetour` (a counted, alarmable
-     * signal) rather than grade the agent on a harness/session fault.
+     * Auth-detour watchdog, run at the top of each step before perception. A URL
+     * matching an {@link AppProfile} identity-provider pattern means the session was
+     * invalidated mid-run, so recover generically (re-apply auth + re-navigate) and
+     * let the step perceive the recovered app — the agent never sees the login page.
+     * After `MaxDetours` recovery clearly isn't holding, so terminate as an
+     * infrastructure `AuthDetour` rather than grade the agent on a session fault.
      *
-     * Returns `{ result?, recoveryMs }`. A set `result` means the run
-     * terminated (MaxDetours exceeded) and the caller must return it.
-     * `recoveryMs` is the wall time spent recovering, which the caller folds
-     * into cumulative settle so the detour is excluded from the agent-time
-     * budget. A no-op (no profile / no patterns / URL clean) returns
-     * `{ recoveryMs: 0 }`.
+     * A set `result` means the run terminated and the caller must return it.
+     * `recoveryMs` is folded into cumulative settle so the detour is excluded from
+     * the agent-time budget. A no-op returns `{ recoveryMs: 0 }`.
      */
     private async handleAuthDetour(
         context: RunContext,
@@ -1194,7 +1150,7 @@ export class ComputerUseEngine {
     }
 
     // ═══════════════════════════════════════════════════════════
-    // REPLAY (CU-C2)
+    // REPLAY
     // ═══════════════════════════════════════════════════════════
 
     /** Bounded wait for a replay step's target to become attached+visible. */
@@ -1221,7 +1177,7 @@ export class ComputerUseEngine {
             context.AddStep(step);
             this.onStepComplete(step, context.Params);
 
-            // Checkpoint tour (CU-D8) on the replay tier: latch sections as the
+            // Checkpoint tour on the replay tier: latch sections as the
             // replayed trajectory passes through them. Free, and REQUIRED here —
             // a tour's earlier sections are only on screen mid-trajectory, so
             // latching solely at the end-state would never satisfy them.
@@ -1241,7 +1197,7 @@ export class ComputerUseEngine {
 
         replay.AllStepsSucceeded = true;
 
-        // CU-C5: deterministic fail-fast on the distilled goal postconditions —
+        // deterministic fail-fast on the distilled goal postconditions —
         // free, and a cheap gate before paying for the judge. All steps hitting
         // is necessary but not sufficient; the end-state must also satisfy the
         // goal. A miss short-circuits to Failed so the driver falls back to LLM.
@@ -1253,24 +1209,12 @@ export class ComputerUseEngine {
             this.log(`Replay — all ${trace.GoalPostconditions.length} goal postconditions met (CU-C5)`);
         }
 
-        // Judge the replayed end-state for goal-completion parity with the LLM
-        // tier — but ONLY when a validation rubric was supplied. The judge scores
-        // the goal AGAINST ValidationCriteria, and this is exactly the path (MJ
-        // regression) where the driver returns a 'Completed' replay directly with
-        // no LLM leg, so the goal-completion oracle needs a verdict or the test
-        // auto-fails ("no judge verdict available"). Standalone/mechanics callers
-        // supply no rubric — they keep the deterministic steps-hit result and pay
-        // no judge/LLM cost (nor a settle on a profile-less run). A replay passes
-        // iff the judge confirms the goal; a not-Done/absent verdict returns Failed
-        // so the driver falls back to the LLM tier.
-        // Checkpoint tour (CU-D8): scored on the latch state, NOT a scalar goal
-        // verdict. Sections latched deterministically during the trajectory above;
-        // any still-pending VISUAL criteria get one end-state judge call (skipped
-        // entirely when everything already latched — a URL-anchored tour replays
-        // for free). The synthesized verdict is always returned, so the scoring
-        // oracle can never see "no judge verdict available". Strict by design: the
-        // replay passes iff EVERY checkpoint is met; a partial tour returns Failed
-        // so the driver falls back to the LLM tier rather than false-passing.
+        // Judge the replayed end-state for goal-completion parity with the LLM tier,
+        // but only when a rubric was supplied: the goal-completion oracle needs a
+        // verdict or the test auto-fails ("no judge verdict available"). Callers
+        // supplying no rubric keep the deterministic steps-hit result and pay no
+        // judge cost. A not-Done or absent verdict returns Failed so the driver
+        // falls back to the LLM tier. Tours are scored on latch state instead.
         if (isCheckpointRun(context.Params.Checkpoints)) {
             return await this.buildReplayCheckpointResult(context, replay, trace.Steps.length);
         }
@@ -1293,7 +1237,7 @@ export class ComputerUseEngine {
 
     /**
      * Execute the trace's distilled goal postconditions against the current
-     * end-state (CU-C5) — deterministic, no LLM. Extracts the final element list
+     * end-state — deterministic, no LLM. Extracts the final element list
      * once; a probe failure yields an empty list (postconditions then fail
      * honestly rather than falsely passing).
      */
@@ -1317,19 +1261,15 @@ export class ComputerUseEngine {
     }
 
     /**
-     * Score a fully-replayed checkpoint tour (CU-D8) from its latch state.
+     * Score a fully-replayed checkpoint tour from its latch state. Sections latched
+     * deterministically during replay; any checkpoint with still-pending visual
+     * criteria gets one end-state judge call narrowed to those criteria, skipped
+     * entirely when nothing is pending (so a URL-anchored tour replays with zero LLM
+     * cost). The synthesized verdict is always returned so the goal-completion
+     * oracle can't fall through to "no judge verdict available".
      *
-     * Sections were latched deterministically as the trajectory replayed. Any
-     * checkpoint whose VISUAL criteria are still pending gets one end-state judge
-     * call — `activeJudgeCriteria` narrows that call to exactly those criteria, and
-     * the call is skipped altogether when nothing is pending (a URL-anchored tour
-     * therefore replays with zero LLM cost). The synthesized verdict is ALWAYS
-     * returned so the goal-completion oracle can never fall through to "no judge
-     * verdict available".
-     *
-     * Strict: passes iff every checkpoint is met. A partial tour returns Failed, so
-     * the driver falls back to the LLM tier instead of false-passing — the same
-     * conservative contract the scalar-rubric path uses.
+     * Strict: passes iff every checkpoint is met, so a partial tour returns Failed
+     * and the driver falls back to the LLM tier instead of false-passing.
      */
     private async buildReplayCheckpointResult(
         context: RunContext,
@@ -1457,8 +1397,8 @@ export class ComputerUseEngine {
     }
 
     /**
-     * A replay step failed a guard/action. Consult the heal seam (CU-C3, a no-op
-     * at this layer): a successful heal has already executed the corrected action
+     * A replay step failed a guard/action. Consult the heal seam (a no-op at this
+     * layer): a successful heal has already executed the corrected action
      * and updated `step`, so mark `healed`; otherwise mark `diverged`.
      */
     private async divergeOrHeal(
@@ -1484,16 +1424,15 @@ export class ComputerUseEngine {
     }
 
     /**
-     * Self-heal a diverged replay step (CU-C3) — leg 1 of the ladder. Only
-     * SELECTOR drift is healable here: re-resolve the recorded target's role+name
-     * against a fresh element list (deterministic, no LLM), escalating an
-     * ambiguous case to the {@link healTargetViaLLM} seam. mabl's gate applies —
-     * a low-confidence match fails rather than guesses. On a confident match it
-     * executes the corrected action, verifies the postcondition still holds, and
-     * rewrites the trace step's selector in place (cache rewrite), returning
-     * true. Flow drift (a failed postcondition) is NOT selector-healable — it
-     * returns false so the run falls back to the LLM tier (leg 2, re-derivation,
-     * owned by the driver's retry policy).
+     * Self-heal a diverged replay step. Only selector drift is healable here:
+     * re-resolve the recorded target's role+name against a fresh element list, with
+     * ambiguous cases escalating to the {@link healTargetViaLLM} seam and
+     * low-confidence matches failing rather than guessing. On a confident match,
+     * execute the corrected action, verify the postcondition, rewrite the trace
+     * step's selector in place, and return true.
+     *
+     * Flow drift (a failed postcondition) is not selector-healable and returns
+     * false, so the run falls back to the LLM tier.
      */
     protected async healReplayStep(
         trace: ComputerUseTrace,
@@ -1672,17 +1611,10 @@ export class ComputerUseEngine {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * Execute a single step in the main loop.
-     *
-     * Sequence:
-     * 1. Capture screenshot
-     * 2. Build controller prompt request
-     * 3. Call the controller LLM
-     * 4. Parse the response into actions + tool calls
-     * 5. Execute tool calls (if any)
-     * 6. Execute browser actions (with nav guard + auth)
-     * 7. Evaluate the judge (if frequency says so)
-     * 8. Build and return the StepRecord
+     * Execute a single step: capture screenshot → build and call the controller
+     * prompt → parse into actions + tool calls → execute tool calls → execute
+     * browser actions (nav guard + auth) → evaluate the judge if due → return the
+     * StepRecord.
      */
     private async executeSingleStep(
         context: RunContext,
@@ -1700,11 +1632,11 @@ export class ComputerUseEngine {
             this.log(`Step ${stepNumber}/${context.Params.MaxSteps}`);
 
             // 1. Settle: wait for the page to actually finish rendering after the
-            //    previous step's actions before we perceive (CU-A1/A2). Adaptive —
+            //    previous step's actions before we perceive. Adaptive —
             //    networkidle fast path, then a poll loop over the readiness beacon,
             //    busy markers, and perceptual-hash stability. Timed separately
             //    (SettleMs) so agent-time accounting can exclude environment wait
-            //    (CU-F1/B4). Converts wasted LLM round-trips on a slow load into
+            //    time. Converts wasted LLM round-trips on a slow load into
             //    free engine polling.
             const settle = await this.settleBeforePerception(context);
             step.SettleMs = settle.ms;
@@ -1715,11 +1647,11 @@ export class ComputerUseEngine {
                 this.log(`Step ${stepNumber} — page settled in ${Math.round(settle.ms)}ms (${settle.reason})`);
             }
 
-            // Cancellation checkpoint (CU-B8): a Stop() during settle already
+            // Cancellation checkpoint: a Stop() during settle already
             // broke the poll delay — bail before paying for screenshot + LLM.
             this.ensureNotCancelled();
 
-            // 2. Capture screenshot + perceptual hash (CU-F6)
+            // 2. Capture screenshot + perceptual hash
             const screenshotStart = performance.now();
             const screenshot = await this.captureScreenshot(context);
             step.Screenshot = screenshot;
@@ -1727,13 +1659,13 @@ export class ComputerUseEngine {
             step.ScreenshotMs = performance.now() - screenshotStart;
             this.log(`Step ${stepNumber} — screenshot captured (${Math.round(screenshot.length / 1024)}KB base64)`);
 
-            // 2b. Element-grounded perception (CU-A4): extract the interactive
+            // 2b. Element-grounded perception: extract the interactive
             //     elements, record them on the step (raw material for replayable
             //     traces), and serialize an indexed list for the controller so it
             //     can act by index instead of estimating coordinates.
             const elementList = await this.perceiveInteractiveElements(context, step);
 
-            // 3. Build controller request + call controller LLM (timed — CU-F1)
+            // 3. Build controller request + call controller LLM (timed)
             const request = this.buildControllerRequest(context, stepNumber);
             request.InteractiveElements = elementList;
             const llmStart = performance.now();
@@ -1742,7 +1674,7 @@ export class ComputerUseEngine {
             step.ControllerReasoning = response.Reasoning;
             step.ActionsRequested = response.Actions;
 
-            // Self-tracked agent state (CU-E2): record it, and carry Memory/Plan
+            // Self-tracked agent state: record it, and carry Memory/Plan
             // forward so the next prompt echoes them (history stays self-describing).
             step.Evaluation = response.Evaluation;
             step.Memory = response.Memory;
@@ -1752,14 +1684,14 @@ export class ComputerUseEngine {
 
             // A step that asks for judgement is a deliberate checkpoint, not an
             // empty/stuck step — record it so the main loop's empty-step abort
-            // does not misfire (CU-B3).
+            // does not misfire.
             const controllerRequestedJudgement = response.RequestJudgement ?? false;
             step.RequestedJudgement = controllerRequestedJudgement;
             if (controllerRequestedJudgement) {
                 this.log(`Step ${stepNumber} — controller requested immediate judgement evaluation`);
             }
 
-            // Tour checkpoint signal (CU-D8 Phase B): the controller names a
+ // Tour checkpoint signal (Phase B): the controller names a
             // section it reached. Honored only when it resolves to a DECLARED
             // checkpoint with PENDING visual criteria — then it forces a judge this
             // step scoped to that section, verified on the frame the controller
@@ -1778,17 +1710,17 @@ export class ComputerUseEngine {
 
             this.logControllerResponse(stepNumber, response);
 
-            // Cancellation checkpoint (CU-B8): if Stop() aborted the controller
+            // Cancellation checkpoint: if Stop() aborted the controller
             // call, don't execute its (now-stale, possibly empty) actions.
             this.ensureNotCancelled();
 
-            // 4. Execute tool calls + browser actions (timed — CU-F1); record post-action URL (CU-A8)
+            // 4. Execute tool calls + browser actions (timed); record post-action URL
             const actionStart = performance.now();
             await this.executeStepActions(response, context, step, stepNumber);
             step.ActionMs = performance.now() - actionStart;
             step.UrlAfter = this.browserAdapter.CurrentUrl;
 
-            // 4b. Drain this step's browser diagnostics (CU-A7). GetDiagnostics()
+            // 4b. Drain this step's browser diagnostics. GetDiagnostics()
             //     clears the buffer, so each step gets exactly its own events.
             //     A compact digest goes to the judge (this step) and the next
             //     controller prompt so a blank/broken page becomes explainable
@@ -1800,7 +1732,7 @@ export class ComputerUseEngine {
                 this.log(`Step ${stepNumber} — browser diagnostics: ${diagnosticsDigest.replace(/\n/g, ' | ')}`);
             }
 
-            // 5. Evaluate judge. Gate (CU-G5): if the controller did not explicitly
+            // 5. Evaluate judge. Gate: if the controller did not explicitly
             //    request judgement and the visible state is unchanged since the last
             //    judged step (same perceptual hash) with a non-terminal prior verdict,
             //    skip the (expensive) re-judge — nothing changed, the prior verdict
@@ -1814,7 +1746,7 @@ export class ComputerUseEngine {
                 context.LastJudgeVerdict !== undefined &&
                 !context.LastJudgeVerdict.Done &&
                 !context.LastJudgeVerdict.Impossible;
-            // Checkpoint tour (CU-D8): the judge only scores unlatched VISUAL
+            // Checkpoint tour: the judge only scores unlatched VISUAL
             // criteria. When every remaining checkpoint is deterministic-only,
             // activeJudgeCriteria is undefined → skip the judge entirely (a
             // pure-URL tour costs zero judge calls).
@@ -1830,7 +1762,7 @@ export class ComputerUseEngine {
             }
 
             if (runJudge) {
-                // Cancellation checkpoint (CU-B8): don't start a judge LLM call
+                // Cancellation checkpoint: don't start a judge LLM call
                 // for a run that's already been stopped.
                 this.ensureNotCancelled();
                 if (controllerRequestedJudgement) {
@@ -1847,7 +1779,7 @@ export class ComputerUseEngine {
             }
         } catch (error) {
             // Cancellation is control flow, not a step failure — let it unwind to
-            // the main loop, which maps it to a clean Cancelled status (CU-B8).
+            // the main loop, which maps it to a clean Cancelled status.
             if (error instanceof CancellationError) {
                 throw error;
             }
@@ -1944,7 +1876,7 @@ export class ComputerUseEngine {
         return screenshot;
     }
 
-    // ─── Element-Grounded Perception (CU-A4) ───────────────
+    // ─── Element-Grounded Perception ───────────────────────
 
     /**
      * When element grounding is enabled, extract the page's interactive elements,
@@ -1976,7 +1908,7 @@ export class ComputerUseEngine {
         }
     }
 
-    // ─── Settle Loop (CU-A1/A2) ────────────────────────────
+    // ─── Settle Loop ───────────────────────────────────────
 
     /**
      * Wait for the page to finish rendering before we perceive it. Adaptive:
@@ -1988,7 +1920,7 @@ export class ComputerUseEngine {
      * {@link AppProfile} the caller supplies; the engine only adds its own
      * app-neutral markers and knows how to poll. A probe failure degrades to
      * "keep waiting until budget"; the only throw is a {@link CancellationError}
-     * when the run is stopped mid-settle (CU-B8), which unwinds to Cancelled.
+     * when the run is stopped mid-settle, which unwinds to Cancelled.
      */
     private async settleBeforePerception(context: RunContext): Promise<{ ms: number; reason: SettleReason }> {
         const start = performance.now();
@@ -2015,12 +1947,12 @@ export class ComputerUseEngine {
         let sawBusy = false;
 
         while (performance.now() - start < cfg.MaxWaitMs) {
-            // Cancellation checkpoint (CU-B8): Stop() makes the poll delay below
+            // Cancellation checkpoint: Stop() makes the poll delay below
             // resolve instantly, so without this the loop would busy-spin until
             // MaxWaitMs. Throw to unwind straight to a Cancelled result.
             this.ensureNotCancelled();
 
-            // 1. Readiness beacon (CU-A2) — the declared, deterministic signal.
+            // 1. Readiness beacon — the declared, deterministic signal.
             const beaconPresent = beacon ? (await this.safeQuery(beacon)).Exists : false;
             // 2. Busy markers — any present-and-visible marker means still loading.
             const busy = await this.anyMarkerBusy(markers);
@@ -2085,7 +2017,7 @@ export class ComputerUseEngine {
     }
 
     private delay(ms: number): Promise<void> {
-        // Abortable (CU-B8): a cancelled run's pending settle poll / retry
+        // Abortable: a cancelled run's pending settle poll / retry
         // backoff resolves early instead of holding the worker slot; the caller's
         // next ensureNotCancelled() checkpoint turns that into a clean Cancelled.
         return abortableDelay(ms, this.abortController.signal);
@@ -2117,7 +2049,7 @@ export class ComputerUseEngine {
                 scaled.Button = action.Button;
                 scaled.ClickCount = action.ClickCount;
                 scaled.BoundingBox = this.scaleBoundingBox(action.BoundingBox, scaleX, scaleY);
-                // Pass through the DOM-targeting fields (CU-A6): when Selector is
+                // Pass through the DOM-targeting fields: when Selector is
                 // set the adapter ignores X/Y, and Modifiers apply on both paths.
                 scaled.Selector = action.Selector;
                 scaled.Modifiers = action.Modifiers;
@@ -2129,7 +2061,7 @@ export class ComputerUseEngine {
                 scaled.DeltaX = Math.round(action.DeltaX * scaleX);
                 scaled.DeltaY = Math.round(action.DeltaY * scaleY);
                 scaled.Selector = action.Selector;   // CU-A6: preserve scroll-into-view target
-                // CU-A8: the scroll-at point scales like a click coordinate.
+                // the scroll-at point scales like a click coordinate.
                 if (action.X !== undefined && action.Y !== undefined) {
                     scaled.X = Math.round(action.X * scaleX);
                     scaled.Y = Math.round(action.Y * scaleY);
@@ -2186,7 +2118,7 @@ export class ComputerUseEngine {
         request.Memory = context.LastMemory;   // echo self-tracked state (CU-E2)
         request.Plan = context.LastPlan;
         // Thread the cancellation signal so an in-flight controller call aborts
-        // promptly on Stop() (CU-B8); consumed by Layer 2, not template data.
+        // promptly on Stop(); consumed by Layer 2, not template data.
         request.Signal = this.abortController.signal;
 
         // Include tool definitions if any tools are registered
@@ -2199,12 +2131,12 @@ export class ComputerUseEngine {
             request.JudgeFeedback = context.LastJudgeFeedback;
         }
 
-        // Inject loop evidence when the engine has detected a repeated state (CU-B1)
+        // Inject loop evidence when the engine has detected a repeated state
         if (context.LoopEvidence) {
             request.LoopEvidence = context.LoopEvidence;
         }
 
-        // Inject the previous step's browser-diagnostics digest (CU-A7)
+        // Inject the previous step's browser-diagnostics digest
         if (context.LastDiagnosticsDigest) {
             request.Diagnostics = context.LastDiagnosticsDigest;
         }
@@ -2227,7 +2159,7 @@ export class ComputerUseEngine {
             request.ApplicationContext = context.Params.ApplicationContext;
         }
 
-        // Tour checkpoints (CU-D8 Phase B): expose name + instruction so the
+ // Tour checkpoints (Phase B): expose name + instruction so the
         // controller can signal `checkpointReached` as it passes each section.
         if (isCheckpointRun(context.Params.Checkpoints)) {
             request.Checkpoints = context.Params.Checkpoints.map(cp => {
@@ -2243,29 +2175,18 @@ export class ComputerUseEngine {
 
     // ─── Controller LLM Execution ───────────────────────────
 
-    /**
-     * Call the controller LLM with retry for parse errors.
-     *
-     * If the LLM returns unparseable output, we retry once with
-     * stricter format instructions appended.
-     */
     private static readonly CONTROLLER_MAX_ATTEMPTS = 3;
 
     /**
-     * Call the controller with bounded retry for transient failures (CU-B3).
-     *
-     * The controller LLM is nondeterministic and, under host/provider load,
-     * transiently fails (rate limits, transport errors) or returns an
-     * unparseable response. Previously this method retried nothing — a single
-     * hiccup produced an empty step, and three in a row killed the run as an
-     * infrastructure 'Error' precisely when the environment was worst. Now:
-     *  - a thrown transport/rate-limit error is retried with exponential
-     *    backoff + jitter;
-     *  - an empty response whose reasoning matches a transient/parse signature
-     *    is retried (a fresh sample may parse);
-     *  - a genuine, well-formed empty response (e.g. a config error, or an
-     *    intentional judgement request) is returned immediately — retrying it
-     *    would not help.
+     * Call the controller with bounded retry, so a transient provider hiccup
+     * doesn't produce an empty step (or, three in a row, kill the run as an
+     * infrastructure 'Error') exactly when the environment is worst:
+     *  - a thrown transport/rate-limit error is retried with exponential backoff
+     *    + jitter;
+     *  - an empty response whose reasoning matches a transient/parse signature is
+     *    retried, since a fresh sample may parse;
+     *  - a genuine, well-formed empty response (a config error, or an intentional
+     *    judgement request) is returned immediately — retrying would not help.
      */
     private async executeControllerWithRetry(
         request: ControllerPromptRequest
@@ -2275,7 +2196,7 @@ export class ComputerUseEngine {
         let lastError: unknown;
 
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            // Cancellation checkpoint (CU-B8): don't retry a controller call for a
+            // Cancellation checkpoint: don't retry a controller call for a
             // run that's been stopped — the aborted signal makes the call return
             // fast, and this unwinds before another (pointless) attempt.
             this.ensureNotCancelled();
@@ -2378,7 +2299,7 @@ export class ComputerUseEngine {
         const maxActions = context.Params.MaxActionsPerStep ?? DEFAULT_MAX_ACTIONS_PER_BATCH;
 
         for (const action of actions) {
-            // Cancellation checkpoint (CU-B8): stop between actions so a Stop()
+            // Cancellation checkpoint: stop between actions so a Stop()
             // during a multi-action step releases the slot without running the rest.
             this.ensureNotCancelled();
 
@@ -2386,7 +2307,7 @@ export class ComputerUseEngine {
             const result = await this.executeSingleBrowserAction(action, context);
             results.push(result);
 
-            // Batch guards (CU-B5): after each action decide whether the rest of
+            // Batch guards: after each action decide whether the rest of
             // the batch should still run. Stops on a failed action (so a queued
             // Type can't fire into the wrong place), a mid-batch route change, a
             // page-changing action, or the per-step cap. Partial results are kept
@@ -2512,7 +2433,7 @@ export class ComputerUseEngine {
         currentDiagnosticsDigest: string = '',
         signaledCheckpoint?: string
     ): Promise<JudgeVerdict> {
-        // Cross-attempt judge cache (CU-C5.3): an identical (goal, URL, state)
+        // Cross-attempt judge cache: an identical (goal, URL, state)
         // returns the prior verdict — most valuably, a cached Impossible
         // short-circuits a retry. Only when a shared cache is injected and the
         // frame hashed (an unstable key would poison the cache).
@@ -2917,7 +2838,7 @@ export class ComputerUseEngine {
 
         const sections = [rendered];
 
-        // Rubric (CU-D1): when the run supplied validation criteria, ask the judge
+        // Rubric: when the run supplied validation criteria, ask the judge
         // for a binary per-criterion verdict. Done is then derived as
         // all-criteria-met (the generic prompt has no {{criteria}} slot).
         if (request.ValidationCriteria && request.ValidationCriteria.length > 0) {
@@ -2925,7 +2846,7 @@ export class ComputerUseEngine {
             sections.push(`## Validation Criteria\nEvaluate the end-state against EACH criterion below. In your JSON response, include a "criteria" array of \`{ "criterion": "<text>", "met": true|false, "evidence": "<what you observed>" }\` — one entry per criterion. The goal is "done" only when EVERY criterion is met.\n${list}`);
         }
 
-        // Append the current step's browser-diagnostics digest (CU-A7) so the
+        // Append the current step's browser-diagnostics digest so the
         // judge can explain an infrastructure state instead of guessing.
         if (request.Diagnostics) {
             sections.push(`## Browser Diagnostics (current step)\nThe browser reported the following errors this step — use them to explain the visible state instead of guessing:\n${request.Diagnostics}`);
@@ -2960,7 +2881,7 @@ export class ComputerUseEngine {
         if (failureReason) {
             result.FailureReason = failureReason;
         }
-        // Non-blind-retry memo (CU-B6): on any non-passing terminal, distill a
+        // Non-blind-retry memo: on any non-passing terminal, distill a
         // compact "why it failed / what to avoid" the driver's retry policy can
         // feed back as PreviousAttemptSummary.
         if (!success) {

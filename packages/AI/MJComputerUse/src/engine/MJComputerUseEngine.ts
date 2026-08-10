@@ -67,8 +67,8 @@ export const DEFAULT_CONTROLLER_PROMPT_NAME = 'Computer Use - Controller';
 export const DEFAULT_JUDGE_PROMPT_NAME = 'Computer Use - Judge';
 
 /**
- * Default stored-prompt name for the self-heal LLM disambiguation seam (RI-C2 /
- * CU-C3 leg 1b). Resolved from metadata like the controller/judge prompts;
+ * Default stored-prompt name for the self-heal LLM disambiguation seam.
+ * Resolved from metadata like the controller/judge prompts;
  * absent → {@link MJComputerUseEngine.healTargetViaLLM} keeps the base behavior
  * (deterministic heal only, confidence 0). Only invoked on the replay-with-heal
  * tier when deterministic role+name re-resolution is ambiguous.
@@ -132,7 +132,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     private judgePromptEntity: MJAIPromptEntityExtended | undefined;
     private healPromptEntity: MJAIPromptEntityExtended | undefined;
 
-    /** Per-test controller generation overrides (CU-E6), populated in Run(). */
+    /** Per-test controller generation overrides, populated in Run(). */
     private controllerGeneration?: { temperature?: number; effortLevel?: number };
 
     constructor() {
@@ -145,7 +145,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * Replay a recorded trace on the deterministic tier. The RI-C1 driver
+     * Replay a recorded trace on the deterministic tier. The driver
      * dispatch calls this instead of {@link Run} when a valid trace exists; the
      * base {@link ComputerUseEngine.Replay} owns the full replay/heal/postcondition
      * loop. This override primes the MJ-specific fields the replay tier needs:
@@ -217,7 +217,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         if (!this.judgePromptEntity && !params.JudgeModel) {
             this.judgePromptEntity = await this.resolveDefaultPromptByName(DEFAULT_JUDGE_PROMPT_NAME);
         }
-        // Self-heal disambiguation prompt (RI-C2) — resolved like controller/judge.
+        // Self-heal disambiguation prompt — resolved like controller/judge.
         // Absent is fine: healTargetViaLLM then keeps the base confidence-0 behavior
         // (deterministic heal only). Non-throwing.
         if (!this.healPromptEntity) {
@@ -371,7 +371,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 return response;
             }
 
-            // Track the judge prompt run ID for step-level correlation (CU-F2).
+            // Track the judge prompt run ID for step-level correlation.
             if (result.promptRun?.ID) {
                 this.lastJudgePromptRunId = result.promptRun.ID;
             }
@@ -389,7 +389,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     }
 
     /**
-     * LLM heal disambiguation (RI-C2 / CU-C3 leg 1b). Overrides the base no-op:
+     * LLM heal disambiguation (leg 1b). Overrides the base no-op:
      * when deterministic role+name re-resolution can't uniquely re-find a drifted
      * target, ask the cheap "Computer Use - Heal" prompt which of the CURRENT
      * indexed elements is the intended one, returning `{ index, confidence }`. The
@@ -400,8 +400,8 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      * run, or an unparseable response all return confidence 0 — heal then only
      * succeeds on the deterministic path, exactly as before this override existed.
      *
-     * NOTE (RI-C2): this AIPromptRunner routing mirrors the proven controller/judge
-     * path. It runs on the replay-with-heal tier, which the RI-C1 driver dispatch
+     * NOTE: this AIPromptRunner routing mirrors the proven controller/judge
+     * path. It runs on the replay-with-heal tier, which the driver dispatch
      * now reaches; the MJ {@link Replay} override primes `healPromptEntity` so this
      * override is live rather than the base confidence-0 no-op. The response parser
      * below is pure + tested.
@@ -444,7 +444,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     }
 
     /**
-     * Parse the heal prompt's JSON `{ index, confidence }` response (RI-C2). Pure +
+     * Parse the heal prompt's JSON `{ index, confidence }` response. Pure +
      * static so it is unit-testable without an engine. Tolerant: strips a fenced
      * code block; a missing / non-integer / negative index or non-numeric
      * confidence yields `{ confidence: 0 }` (no disambiguation); confidence is
@@ -475,7 +475,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      * persistence errors are logged but don't fail the run.
      */
     protected override onStepComplete(step: StepRecord, params: MJRunComputerUseParams): void {
-        // Correlate the step with the LLM prompt runs it produced (CU-F2), so
+        // Correlate the step with the LLM prompt runs it produced, so
         // tokens/cost/serving-model can be joined from AIPromptRun. The controller
         // runs every step; the judge only when this step was judged.
         step.ControllerPromptRunId = this.lastPromptRunId;
@@ -484,7 +484,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         }
 
         // Persist the step screenshot as AIPromptRunMedia. Opt-OUT via
-        // PersistStepMedia=false (CU-G1): the regression suite disables this so
+        // PersistStepMedia=false: the regression suite disables this so
         // it stops writing tens of GB of base64 PNGs, mid-run and unthrottled,
         // into the very SQL Server serving the app under test (a direct
         // contributor to second-half render degradation). Default preserves the
@@ -530,7 +530,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         if (ref.PromptId) {
             prompt = AIEngine.Instance.Prompts.find(p => UUIDsEqual(p.ID, ref.PromptId));
         } else if (ref.PromptName) {
-            // Case-insensitive, trimmed match (CU-E6) — mirrors the repo's
+            // Case-insensitive, trimmed match — mirrors the repo's
             // EntityByName convention; a stray case/whitespace difference in a
             // test's PromptName should still resolve.
             const target = ref.PromptName.trim().toLowerCase();
@@ -650,12 +650,12 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         params.data = templateData;
         params.contextUser = this.contextUser;
         params.attemptJSONRepair = true;
-        // Cancellation (CU-B8): let engine.Stop() abort an in-flight LLM call so a
+        // Cancellation: let engine.Stop() abort an in-flight LLM call so a
         // cancelled run releases its worker slot in seconds instead of at step end.
         if (signal) {
             params.cancellationToken = signal;
         }
-        // Per-test generation overrides (CU-E6): determinism knobs (e.g. temp≈0
+        // Per-test generation overrides: determinism knobs (e.g. temp≈0
         // for pinned regression runs). temperature rides additionalParameters;
         // effortLevel is a first-class AIPromptParams field.
         if (generation?.temperature != null) {
@@ -697,7 +697,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         // Include screenshot history if available. The engine's ring buffer ends
         // with the CURRENT frame, which is also sent on its own below — so drop
         // that trailing duplicate to avoid transmitting the current frame twice
-        // (CU-A5: ~25% of image payload at the fleet's history depth).
+        // (~25% of image payload at the fleet's history depth).
         const allHistory = screenshotHistory?.filter(s => s.length > 0) ?? [];
         const historyImages = (currentScreenshot && allHistory.length > 0 && allHistory[allHistory.length - 1] === currentScreenshot)
             ? allHistory.slice(0, -1)

@@ -1,12 +1,12 @@
 /**
- * Trace types for deterministic replay (CU-C1, Theme C flagship).
+ * Trace types for deterministic replay.
  *
  * The strategic frame: **first run = compile; subsequent runs = execute.** A
  * passing, judge-approved run is distilled into a {@link ComputerUseTrace} — a
  * resolved, replayable trajectory. Later runs replay it through the same adapter
- * at Playwright speed with zero LLM cost (CU-C2), self-healing on UI drift
- * (CU-C3), keyed/invalidated by build identity (CU-C4), and scored by
- * deterministic postconditions (CU-C5).
+ * at Playwright speed with zero LLM cost, self-healing on UI drift
+ *, keyed/invalidated by build identity, and scored by
+ * deterministic postconditions.
  *
  * App-agnostic: nothing here names any specific app. Target descriptors, URL
  * patterns, and build identity are all opaque data the recorder derives from a
@@ -38,9 +38,9 @@ export type TraceActionMethod =
 /**
  * A multi-signal locator for a recorded step's target (Momentic's locator-set
  * discipline): a `Selector` is the primary signal, `Role`+`Name` are the
- * self-heal fallback (re-resolve from a fresh element list — CU-C3), and
+ * self-heal fallback (re-resolved from a fresh element list), and
  * `BoundingBox` is the weakest guard, stored only for coordinate-era recordings
- * made before element grounding (CU-A4) was on.
+ * made before element grounding was on.
  */
 export class TraceTarget {
     /** ARIA/semantic role (e.g. 'button', 'link', 'textbox'), when known. */
@@ -97,8 +97,8 @@ export class StepPrecondition {
 
 /**
  * Guard evaluated AFTER a replay step to confirm it advanced the page as the
- * recording did. A failed postcondition marks the step `diverged` (CU-C2) and
- * triggers the heal/re-derive ladder (CU-C3).
+ * recording did. A failed postcondition marks the step `diverged` and
+ * triggers the heal/re-derive ladder.
  */
 export class StepPostcondition {
     /** Expected (normalized) URL pattern after the step's action ran. */
@@ -107,10 +107,10 @@ export class StepPostcondition {
     public ExpectVisible?: TraceTarget;
 }
 
-// ─── Goal Postconditions (CU-C5) ───────────────────────────
+// ─── Goal Postconditions ───────────────────────────────────
 /**
  * A final, goal-level deterministic assertion distilled from a passing run's
- * judge verdict + end-state (CU-C5). The replay tier scores by executing these
+ * judge verdict + end-state. The replay tier scores by executing these
  * — free, deterministic, and more trustworthy than a judge float — so the LLM
  * judge runs only on the LLM tier or when a postcondition is ambiguous/fails.
  */
@@ -135,16 +135,16 @@ export class TraceViewport {
 }
 
 /**
- * A recorded, replayable trajectory for one test (CU-C1). Keyed by
+ * A recorded, replayable trajectory for one test. Keyed by
  * {@link TestId}; validated on load by {@link AppBuildHash} + {@link AppVersion}
- * + {@link GoalHash} (CU-C4). The `steps.json` in a run's artifacts is this in
+ * + {@link GoalHash}. The `steps.json` in a run's artifacts is this in
  * embryo — this is the durable, normalized, variable-disciplined form.
  */
 export class ComputerUseTrace {
     /** Stable per-test identifier the trace is keyed by. */
     public TestId: string = '';
     /**
-     * Opaque build identity at record time (CU-C4). Layer 2 supplies whatever
+     * Opaque build identity at record time. Layer 2 supplies whatever
      * stable build hash it has (e.g. a dist-manifest hash); Layer 1 only
      * compares it to decide the replay tier. Empty when the caller has none.
      */
@@ -154,7 +154,7 @@ export class ComputerUseTrace {
      * own version string, e.g. an MJ package version). Compared, never parsed.
      */
     public AppVersion: string = '';
-    /** Hash of the frozen goal text (CU-C4) — a goal edit demotes to LLM tier. */
+    /** Hash of the frozen goal text — a goal edit demotes to LLM tier. */
     public GoalHash: string = '';
     /** ISO-8601 timestamp when this trace was recorded. */
     public RecordedAt: string = '';
@@ -168,16 +168,16 @@ export class ComputerUseTrace {
     public Variables: string[] = [];
     /** The resolved, ordered replay steps. */
     public Steps: TraceStep[] = [];
-    /** Final goal-level deterministic assertions (CU-C5). */
+    /** Final goal-level deterministic assertions. */
     public GoalPostconditions: GoalPostcondition[] = [];
 }
 
-// ─── Replay Telemetry (CU-C2/C3) ───────────────────────────
+// ─── Replay Telemetry ──────────────────────────────────────
 /**
  * Per-step replay outcome (Momentic's Cache pane vocabulary), which doubles as
  * UI-drift telemetry:
  * - `'hit'`      — replayed deterministically; guards passed as recorded.
- * - `'healed'`   — the recorded target drifted; one focused heal call (CU-C3)
+ * - `'healed'`   — the recorded target drifted; one focused heal call
  *                  re-resolved it and the trace step was rewritten.
  * - `'diverged'` — replay + heal both failed; the run falls back to the LLM tier.
  */
@@ -196,15 +196,15 @@ export class ReplayStepResult {
 
 /**
  * Replay telemetry stamped onto a {@link ComputerUseResult} produced by the
- * replay tier (CU-C2). A suite-wide spike in {@link Healed}/{@link Diverged}
- * after a merge is a free "this PR changed the UI" signal (CU-C3.3).
+ * replay tier. A suite-wide spike in {@link Healed}/{@link Diverged}
+ * after a merge is a free "this PR changed the UI" signal.
  */
 export class ReplayInfo {
     /** Which tier this run executed in. */
     public Tier: 'replay' | 'replay-with-heal' = 'replay';
     /** Per-step outcomes in order. */
     public Steps: ReplayStepResult[] = [];
-    /** Count of steps that self-healed (CU-C3). */
+    /** Count of steps that self-healed. */
     public Healed: number = 0;
     /** Count of steps that diverged (unrecovered). */
     public Diverged: number = 0;
@@ -212,7 +212,7 @@ export class ReplayInfo {
     public AllStepsSucceeded: boolean = false;
 }
 
-/** A recorded, replayable step (CU-C1). */
+/** A recorded, replayable step. */
 export class TraceStep {
     /** Human-readable intent (from the controller's reasoning) — the heal prompt seed. */
     public Instruction: string = '';

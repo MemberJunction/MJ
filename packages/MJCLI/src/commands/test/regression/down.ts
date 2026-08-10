@@ -19,7 +19,7 @@ export default class TestRegressionDown extends Command {
   ];
 
   static flags = {
-    // DR-B2: default is now KEEP (was wipe). --volumes opts into destruction.
+    // default is now KEEP (was wipe). --volumes opts into destruction.
     volumes: Flags.boolean({
       char: 'v',
       description: 'WIPE the DB volume too (docker compose down -v). Destroys the database.',
@@ -43,7 +43,7 @@ export default class TestRegressionDown extends Command {
     const { flags } = await this.parse(TestRegressionDown);
     requireMonorepoRoot();
 
-    // DR-B2: guard against tearing down mid-run. The DR-D5 partial snapshot tells
+ // guard against tearing down mid-run. The partial snapshot tells
     // us whether the most recent run is still Running; refuse unless --force so a
     // stray `down` can't kill an in-flight multi-hour run (and, with --volumes,
     // destroy its DB-resident artifacts).

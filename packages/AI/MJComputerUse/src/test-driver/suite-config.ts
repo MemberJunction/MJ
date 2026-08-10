@@ -1,5 +1,5 @@
 /**
- * Suite-level Computer Use configuration channel (RI-E3 / Decision D7).
+ * Suite-level Computer Use configuration channel.
  *
  * The driver has always read per-test `Configuration`; suite-wide policy — the
  * "regression profile" (element grounding on, temperature 0, trace policy) — had
@@ -22,7 +22,7 @@ import { ComputerUseTestConfig } from './types';
  * The `TestSuite.Configuration.computerUse` block: any subset of the per-test
  * config, applied suite-wide as a default under each test's own config. The
  * regression profile is just `{ elementGrounding: true, generation: { temperature: 0 },
- * trace: 'retain-on-failure' }` (RI-C5).
+ * trace: 'retain-on-failure' }`.
  */
 export type ComputerUseSuiteConfig = Partial<ComputerUseTestConfig>;
 

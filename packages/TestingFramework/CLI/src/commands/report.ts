@@ -1,5 +1,5 @@
 /**
- * @fileoverview Report command implementation (DR-G6)
+ * @fileoverview Report command implementation
  * @module @memberjunction/testing-cli
  */
 

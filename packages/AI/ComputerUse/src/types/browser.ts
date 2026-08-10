@@ -78,7 +78,7 @@ export class TypeAction {
 
 /**
  * Click an interactive element by its index in the current step's serialized
- * element list (CU-A4). The engine resolves the index → the element the
+ * element list. The engine resolves the index → the element the
  * extractor found → a locator-based click with Playwright's native actionability
  * auto-wait — eliminating the LLM's coordinate-estimation error. `Index` refers
  * to the `[N]` markers in the element list rendered into this step's prompt.
@@ -97,7 +97,7 @@ export class ClickElementAction {
 
 /**
  * Type text into an interactive element by its index in the current step's
- * serialized element list (CU-A4). The engine resolves the index → the element
+ * serialized element list. The engine resolves the index → the element
  * → a locator-based fill with actionability auto-wait. `Index` refers to the
  * `[N]` markers in the element list rendered into this step's prompt.
  */
@@ -200,7 +200,7 @@ export class ScrollAction {
      * Optional point (in the 1000x1000 action space) to scroll AT. A wheel event
      * is dispatched wherever the mouse currently is, so without this a delta
      * scroll always hits the main document — an open dropdown, dialog, or any
-     * inner `overflow-y: auto` pane can never be scrolled (CU-A8). When set, the
+     * inner `overflow-y: auto` pane can never be scrolled. When set, the
      * adapter moves the pointer over the point first so the wheel targets the
      * scrollable container under it. Ignored when `Selector` is set.
      */
@@ -390,10 +390,10 @@ export class ElementInfo {
     public BoundingBox?: BoundingBox;
 }
 
-// ─── Interactive Element (CU-A4 element-grounded perception) ──
+// ─── Interactive Element (element-grounded perception) ──
 /**
  * One interactive element discovered by the adapter's extractor for a step —
- * the unit of element-grounded perception (CU-A4). The extractor assigns a
+ * the unit of element-grounded perception. The extractor assigns a
  * stable per-snapshot {@link Index}; the controller references it in a
  * {@link ClickElementAction}/{@link TypeIntoElementAction}, and the engine
  * resolves index → this element → a locator action with actionability auto-wait.
@@ -427,7 +427,7 @@ export class InteractiveElement {
  * Diagnostic event captured from the browser (console errors/warnings, network
  * failures, page errors, crashes). Adapters that capture diagnostics push these
  * into an internal buffer and expose them via `GetDiagnostics()` (which drains
- * the buffer). Timestamped at capture so events can be bucketed per step (CU-A7).
+ * the buffer). Timestamped at capture so events can be bucketed per step.
  */
 export interface BrowserDiagnosticEvent {
     timestamp: string;
@@ -483,7 +483,7 @@ export class BrowserConfig {
     public InitialLocalStorage?: LocalStorageOriginState[];
 
     /**
-     * A warm-seed snapshot (CU-G4) restored into the context after launch —
+     * A warm-seed snapshot restored into the context after launch —
      * localStorage + IndexedDB captured once post-login so the app doesn't
      * cold-boot its metadata cache from the server every test. Restored
      * best-effort; a failure falls back to a cold boot (never corruption).
@@ -535,12 +535,12 @@ export class LocalStorageOriginState {
     public Entries: { name: string; value: string }[] = [];
 }
 
-// ─── Context Seed (CU-G4 warm-seed) ────────────────────────
+// ─── Context Seed (warm-seed) ──────────────────────────
 /**
  * A snapshot of an origin's client-side storage — localStorage + IndexedDB —
  * captured once (e.g. post-login, after the app has warmed its metadata cache)
  * and restored into a fresh context so it doesn't cold-boot that cache from the
- * server on every test (the largest self-inflicted load multiplier per CU-G4).
+ * server on every test (the largest self-inflicted load multiplier).
  *
  * App-agnostic and exactly analogous to Playwright's `storageState`, extended to
  * IndexedDB (where SPA metadata caches live). The adapter knows only HOW to

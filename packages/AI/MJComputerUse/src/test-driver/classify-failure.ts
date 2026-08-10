@@ -1,9 +1,9 @@
 /**
- * Post-run failure classification (CU-F5).
+ * Post-run failure classification.
  *
- * Turns the signals the engine now emits — loop detection (CU-B1), settle-budget
- * exhaustion + hash stability (CU-A1), readiness beacon (CU-A2), browser
- * diagnostics (CU-A7), terminal status (CU-B4/D4) — plus the driver's oracle
+ * Turns the signals the engine now emits — loop detection, settle-budget
+ * exhaustion + hash stability, readiness beacon, browser
+ * diagnostics, terminal status — plus the driver's oracle
  * results into a single machine-readable `failureClass`. The hand-built
  * 44-failure taxonomy becomes a `GROUP BY`, and the retry scheduler can key
  * policy on it (e.g. never retry `assertion`/`app-error`; retry `env-stall`
@@ -53,7 +53,7 @@ export interface FailureSignals {
     settleBudgetExhausted: boolean;
     /** The last few frames were perceptually stable (stuck) vs. changing (progressing). */
     tailHashStable: boolean;
-    /** The run declared a readiness beacon (CU-A2). */
+    /** The run declared a readiness beacon. */
     beaconConfigured: boolean;
     /** The beacon fired at least once during the run. */
     beaconEverReady: boolean;
@@ -111,7 +111,7 @@ export function classifyFailure(s: FailureSignals): ComputerUseFailureClass | nu
     if (s.hasCrash || s.status === 'Error') {
         return 'infra';
     }
-    // 2. Auth detour (CU-B7) — the engine gave up after the session bounced to
+    // 2. Auth detour — the engine gave up after the session bounced to
     //    an identity provider past the watchdog's cap. This is the authoritative
     //    root cause, so it outranks the `app-error` its own 401/403s would
     //    otherwise register as: the failed auth requests are the symptom.
@@ -151,7 +151,7 @@ export function classifyFailure(s: FailureSignals): ComputerUseFailureClass | nu
         return 'env-stall';
     }
     // 10. The engine itself terminated the run Failed (e.g. controller declared
-    //    completion but the judge kept disagreeing — CU-B3).
+    //    completion but the judge kept disagreeing).
     if (s.status === 'Failed') {
         return 'judge-disagreement';
     }

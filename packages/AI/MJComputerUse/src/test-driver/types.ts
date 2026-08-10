@@ -56,7 +56,7 @@ export interface ComputerUseOracleConfig {
 
     /**
      * When true, this oracle is advisory — reported and scored for diagnostics
-     * but non-gating for Passed/Failed (CU-D3). Defaults per oracle type:
+     * but non-gating for Passed/Failed. Defaults per oracle type:
      * `step-count` is advisory by default (it's an efficiency signal, and the
      * engine already caps steps at the same limit, making a gating check a
      * tautology); all other oracles gate by default. Set explicitly to override.
@@ -173,7 +173,7 @@ export interface ComputerUseTestConfig {
 
     /**
      * App-specific readiness/busy signals for the adaptive settle loop
-     * (CU-A1/A2). Optional — the driver applies MJ-Explorer-sensible defaults (a
+     *. Optional — the driver applies MJ-Explorer-sensible defaults (a
      * `[data-mj-ready="true"]` readiness beacon and MJ loading-spinner markers)
      * when omitted. Provide to override when the target app under test isn't MJ
      * Explorer, or to tune settle timing.
@@ -191,7 +191,7 @@ export interface ComputerUseTestConfig {
             minWaitMs?: number;
         };
         /**
-         * Auth-detour watchdog (CU-B7). When the session is invalidated mid-run
+         * Auth-detour watchdog. When the session is invalidated mid-run
          * and the page bounces to an identity provider, the watchdog recovers it
          * (re-auth + re-navigate) without charging the agent a step, and after
          * `maxDetours` ends the run as an infrastructure `AuthDetour` instead of
@@ -207,14 +207,14 @@ export interface ComputerUseTestConfig {
     };
 
     /**
-     * Per-test controller generation overrides (CU-E6) — determinism knobs
+     * Per-test controller generation overrides — determinism knobs
      * threaded into the controller prompt. `temperature` (e.g. 0 for pinned
      * regression runs) and `effortLevel` (1–100). Judge generation is unaffected.
      */
     generation?: { temperature?: number; effortLevel?: number };
 
     /**
-     * Element-grounded perception (CU-A4). When true, each step the engine
+     * Element-grounded perception. When true, each step the engine
      * extracts the page's interactive elements into an indexed list, renders it
      * into the controller prompt, and lets the controller act by index
      * (ClickElement/TypeIntoElement) with locator actionability auto-wait instead
@@ -224,7 +224,7 @@ export interface ComputerUseTestConfig {
     elementGrounding?: boolean;
 
     /**
-     * Failure-artifact trace policy (CU-F4). When enabled, the run records a
+     * Failure-artifact trace policy. When enabled, the run records a
      * Playwright trace (DOM snapshots + network + console) viewable at
      * trace.playwright.dev, retained per this policy as a `File` TestRunOutput:
      * - `off` (default) — no trace, zero overhead.
@@ -236,7 +236,7 @@ export interface ComputerUseTestConfig {
     trace?: ArtifactRetentionPolicy;
 
     /**
-     * Force a replay tier for this test (RI-C1 / RI-C6 canary override), bypassing
+     * Force a replay tier for this test (canary override), bypassing
      * `decideReplayTier`. `'llm'` runs the full agent (the `rerun-failures --llm`
      * / canary escape hatch); `'replay'` / `'replay-with-heal'` force the
      * deterministic tier when a trace exists (no trace ⇒ still falls to LLM).
@@ -256,7 +256,7 @@ export interface ComputerUseTestInput {
     goal: string;
 
     /**
-     * Optional per-test UI hints injected after the goal (CU-E5) — e.g. "the
+     * Optional per-test UI hints injected after the goal — e.g. "the
      * filter panel opens via the funnel icon", "search commits on Enter".
      * Documents the UI contract; harvested from failure triage. When a hint goes
      * stale that is itself a finding — pair each with a linked issue where it
@@ -308,7 +308,7 @@ export interface ComputerUseExpectedOutcomes {
     judgeValidationCriteria?: string[];
 
     /**
-     * Ordered tour checkpoints (CU-D8). When set, the test is verified
+     * Ordered tour checkpoints. When set, the test is verified
      * section-by-section: it passes iff every checkpoint is reached (URL/element
      * assertions latch for free every step; visual criteria via the judge), rather
      * than on a single final-frame judge. Mapped to `RunComputerUseParams.Checkpoints`.

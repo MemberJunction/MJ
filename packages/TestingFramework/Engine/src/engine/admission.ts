@@ -1,9 +1,9 @@
 /**
- * Load-aware admission control at the dispatch point (DR-D3).
+ * Load-aware admission control at the dispatch point.
  *
  * Nothing used to observe host health during a run: worker count was fixed for
  * the whole 7.8 h, and the second-half collapse (hourly pass rate dropping to
- * 33 % as memory declined) had no countermeasure. The DR-G4 health supervisor
+ * 33 % as memory declined) had no countermeasure. Thehealth supervisor
  * now writes `$RUN_DIR/health-state.json` (`{state, recommendedWorkers,
  * reasons}`); this module lets the parallel work queue consult it before each
  * dispatch and back off — file-based, so there is zero in-process coupling to
@@ -16,7 +16,8 @@
  *     (high-index workers shed first) so it converges without a shared counter,
  *     and worker 0 NEVER sheds — the queue always keeps a drainer.
  *   - `critical` → pause dispatch and re-poll until the host recovers, capped so
- *     a permanently-wedged host can't block forever (the real abort is DR-D7).
+ *     a permanently-wedged host can't block forever (the circuit breaker owns
+ *     the real abort).
  *
  * The decision is a pure function of (state, workerIndex); the file read and the
  * pause loop are injected, so everything is unit-testable without a real file or
@@ -86,7 +87,7 @@ export interface AdmissionControllerOptions {
     pollMs?: number;
     /** Sleep primitive (injected for tests). Default a real setTimeout. */
     sleep?: (ms: number) => Promise<void>;
-    /** Fired when a pause hits the cap and we proceed regardless (DR-D7 hook). */
+ /** Fired when a pause hits the cap and we proceed regardless (hook). */
     onPauseCapReached?: (state: HealthState | null) => void;
     /** Optional logger for state transitions. */
     log?: (msg: string) => void;

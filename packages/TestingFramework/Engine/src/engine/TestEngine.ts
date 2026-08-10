@@ -106,7 +106,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     private _suiteFixtures = new Map<string, SuiteFixtureContext>();
 
     /**
-     * Per-suite-run retry policy inputs (DR-D2), keyed by SuiteRunID. The shared
+     * Per-suite-run retry policy inputs, keyed by SuiteRunID. The shared
      * {@link RetryBudget} caps total extra attempts across ALL tests/workers of
      * the run at ceil(0.15 × suiteSize); `requestedMax` is the operator's
      * per-test ceiling. Set in `RunSuite`, removed in its `finally` (same
@@ -115,7 +115,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     private _suiteRetry = new Map<string, { budget: RetryBudget; requestedMax: number; chronicTestIds: ReadonlySet<string> }>();
 
     /**
-     * Per-suite-run circuit breaker (DR-D7), keyed by SuiteRunID. Present only
+     * Per-suite-run circuit breaker, keyed by SuiteRunID. Present only
      * when `options.circuitBreaker.enabled`. Fed every final outcome via
      * `finalizeTestResult`; the dispatch gate polls its `tripped` state to abort
      * a doomed run. Same lifecycle as `_suiteFixtures` / `_suiteRetry`.
@@ -123,7 +123,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     private _suiteBreaker = new Map<string, CircuitBreaker>();
 
     /**
-     * SuiteRunIDs whose `failFast` has tripped (DR-D9) — set on the first hard
+     * SuiteRunIDs whose `failFast` has tripped — set on the first hard
      * failure when `options.failFast` is on, polled by the dispatch gate to drain
      * the run. `failFast` used to be declared but never read.
      */
@@ -395,7 +395,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             const fixtures: SuiteFixtureContext = { SuiteRunID: suiteRun.ID, Data: {}, CreatedRecords: [] };
             this._suiteFixtures.set(suiteRun.ID, fixtures);
 
-            // DR-D2: one shared retry budget for the whole run. ceil(0.15 × N)
+            // one shared retry budget for the whole run. ceil(0.15 × N)
             // total extra attempts across every test/worker, so a degraded host
             // can't trigger a retry storm (the recheck burned 34 retries on 44
             // tests). Deterministic failures additionally get 0 retries by class.
@@ -420,7 +420,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 }
             }
 
-            // DR-D4: suite wall-clock budget. Option override wins; else the
+            // suite wall-clock budget. Option override wins; else the
             // TestSuite.MaxExecutionTimeMS column; else unbounded (historical).
             const maxSuiteMs = options.maxSuiteDurationMs
                 ?? (suite.MaxExecutionTimeMS != null && suite.MaxExecutionTimeMS > 0 ? suite.MaxExecutionTimeMS : undefined);
@@ -429,7 +429,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 this.log(`Suite wall-clock budget: ${Math.round(maxSuiteMs! / 1000)}s — dispatch stops after that, in-flight tests finish`);
             }
 
-            // DR-D7: opt-in circuit breaker — abort a doomed run early rather than
+            // opt-in circuit breaker — abort a doomed run early rather than
             // burning hours on a degrading host or a broken deploy.
             const cbOpts = options.circuitBreaker;
             if (cbOpts?.enabled) {
@@ -459,7 +459,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                     testResults = await this.runTestsSequential(tests, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext, suiteDeadline);
                 }
 
-                // DR-D7: capture the breaker verdict BEFORE the finally deletes it.
+                // capture the breaker verdict BEFORE the finally deletes it.
                 const verdict = this._suiteBreaker.get(suiteRun.ID)?.verdict;
                 if (verdict?.tripped) {
                     aborted = true;
@@ -493,8 +493,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 suiteRunId: suiteRun.ID,
                 suiteId: suite.ID,
                 suiteName: suite.Name,
-                // DR-D7: an aborted run reports as Cancelled (stopped early), with
-                // the reason surfaced so the CLI can exit distinctly (DR-F2).
+                // an aborted run reports as Cancelled (stopped early), with
+                // the reason surfaced so the CLI can exit distinctly.
                 status: aborted ? 'Cancelled' : (suiteRun.Status as 'Completed' | 'Failed' | 'Cancelled' | 'Pending' | 'Running'),
                 passedTests,
                 failedTests,
@@ -540,12 +540,12 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         let testSequence = 1;
 
         for (const test of tests) {
-            // DR-D7/D9: a tripped circuit breaker or failFast aborts the run early.
+            // a tripped circuit breaker or failFast aborts the run early.
             if (this._suiteBreaker.get(suiteRunId)?.tripped || this._suiteFailFast.has(suiteRunId)) {
                 this.log(`Dispatch halted (breaker/failFast) — stopping after ${testResults.length}/${tests.length} tests`);
                 break;
             }
-            // DR-D4: honor the suite wall-clock budget between tests.
+            // honor the suite wall-clock budget between tests.
             if (deadline !== undefined && Date.now() >= deadline) {
                 this.log(`Suite wall-clock budget reached — stopping after ${testResults.length}/${tests.length} tests`);
                 break;
@@ -565,7 +565,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                     testResults.push(r);
                 }
             } catch (error) {
-                // DR-D5: synthesize + emit instead of dropping (see runQueuedItem).
+                // synthesize + emit instead of dropping (see runQueuedItem).
                 this.logError(`Test failed in suite: ${test.Name}`, error as Error);
                 const errResult = this.synthesizeErrorResult(test, error as Error, suiteRunId, testSequence, undefined);
                 this.finalizeTestResult(errResult, undefined, testSequence, options, suiteRunId);
@@ -580,7 +580,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
     /**
      * Stamp cross-cutting fields onto a resolved result and fire the incremental
-     * completion hook (DR-D5). Called for every result the suite produces — the
+     * completion hook. Called for every result the suite produces — the
      * happy path, each iteration of a repeated test, and synthesized Error
      * results — from the one worker that produced it. The hook is invoked inline
      * (so the JSONL/partial write is ordered before the next test starts) and
@@ -600,9 +600,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         if (result.sequence === undefined) {
             result.sequence = sequence;
         }
-        // DR-D7: feed the final outcome to the circuit breaker (if armed).
+        // feed the final outcome to the circuit breaker (if armed).
         this._suiteBreaker.get(suiteRunId)?.record(result);
-        // DR-D9: failFast — drain the run on the first hard (non-flaky) failure.
+        // failFast — drain the run on the first hard (non-flaky) failure.
         if (options.failFast && isRetriableFailure(result) && !this._suiteFailFast.has(suiteRunId)) {
             this._suiteFailFast.add(suiteRunId);
             this.log(`failFast: "${result.testName}" ${result.status} — stopping dispatch of remaining tests`);
@@ -615,7 +615,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     }
 
     /**
-     * Build a stand-in `Error` result for a test whose execution THREW (DR-D5).
+     * Build a stand-in `Error` result for a test whose execution THREW.
      * Before this, a thrown Execute was logged and dropped, so the test vanished
      * from the totals and `compare` misread it as "removed". No TestRun row was
      * persisted (the throw escaped `runSingleTestIteration`), so `testRunId` is
@@ -679,7 +679,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     }
 
     /**
-     * Run tests in parallel across multiple workers (DR-D1). One shared work
+     * Run tests in parallel across multiple workers. One shared work
      * queue is drained by N worker loops with work stealing — whichever worker
      * is free takes the next test — instead of the old static round-robin
      * partition, whose makespan was set by the unluckiest worker's tail. The
@@ -704,11 +704,11 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         // Index tests by ID so the (id, sequence)-based queue can recover the entity.
         const testById = new Map(tests.map(t => [t.ID, t]));
         const items: WorkItem[] = tests.map((t, i) => ({ testId: t.ID, testName: t.Name, sequence: i + 1 }));
-        // Dispatch order (suite | longest-first). Duration history (DR-G6) isn't
+        // Dispatch order (suite | longest-first). Duration history isn't
         // wired yet, so longest-first currently degrades to suite order.
         const seeded = seedWorkItems(items, options.seedOrder ?? 'suite');
 
-        // DR-D3: load-aware admission. When the CLI wired a health-state path,
+        // load-aware admission. When the CLI wired a health-state path,
         // build a gate that sheds workers when degraded / pauses when critical.
         const admissionController = options.healthStatePath
             ? new AdmissionController({
@@ -739,7 +739,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     }
 
     /**
-     * Run one queued test to its final result(s) and finalize each (DR-D1/D5).
+     * Run one queued test to its final result(s) and finalize each.
      * A thrown Execute is synthesized into a counted `Error` result rather than
      * dropped (which `compare` misread as "removed"). Returns the row(s) for the
      * shared collector.
@@ -760,7 +760,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             return [];
         }
         const rows: TestRunResult[] = [];
-        // DR-D4 heartbeat: announce dispatch so the sink can track in-flight tests
+ // heartbeat: announce dispatch so the sink can track in-flight tests
         // and a never-completing (wedged) test stays visible in `status`.
         options.onTestStart?.({ testId: item.testId, testName: item.testName, workerIndex, startedAt: new Date().toISOString() });
         try {
@@ -817,7 +817,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         // passes is marked `flaky` so the flakiness is reported, never masked.
         // Retries get a fresh start time so each attempt's duration is its own.
         //
-        // DR-D2: the retry decision is a CLASSIFIED, BUDGETED policy — deterministic
+        // the retry decision is a CLASSIFIED, BUDGETED policy — deterministic
         // failures (impossible/app-error) get 0 retries, env/transient classes get
         // the operator's ceiling, all bounded by the run's shared budget with
         // exponential backoff. The standalone/repeat paths never reach here.
@@ -957,7 +957,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
      * ONE instance per TypeID is intentionally shared across all parallel workers
      * (and across suites) — SetupSuite/TeardownSuite fire on this shared instance,
      * so it must stay the same one throughout a run. Per-worker/per-run state is
-     * therefore NOT keyed here (DR-D9): drivers MUST be stateless per run and take
+     * therefore NOT keyed here: drivers MUST be stateless per run and take
      * everything they need from the per-`Execute` `DriverExecutionContext` —
      * `workerIndex` (to key browser resources in the HeadlessBrowserEngine
      * singleton), `fixtures`, `resolvedVariables`, `testRun`. A driver that stashes
@@ -1533,12 +1533,12 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         // not throw; this catch is the safety net for a buggy/edge-case driver.
         this.log(`Executing test via ${testType.DriverClass}`, options.verbose);
         let driverResult: DriverExecutionResult;
-        // DR-D4: the engine owns a watchdog set to the driver's OWN effective
+        // the engine owns a watchdog set to the driver's OWN effective
         // timeout + grace, so a driver whose promise never settles (crashed
         // browser, hung network) can't wedge this worker forever. On fire we
         // synthesize a classified `infra` Error and move on; the abandoned
         // promise is handled inside withWatchdog so a late settlement can't crash
-        // the process. (Recycling the worker's browser awaits DR-A2's grid.)
+ // the process. (Recycling the worker's browser awaits grid.)
         const watchdogMs = resolveWatchdogMs(this.computeEffectiveTimeoutMs(test));
         try {
             const outcome = await withWatchdog(
@@ -1643,10 +1643,10 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             startedAt: testRun.StartedAt!,
             completedAt: testRun.CompletedAt!,
             errorMessage: driverResult.errorMessage,
-            // RI-D2: surface the driver's non-blind retry memo so the retry loop
+            // surface the driver's non-blind retry memo so the retry loop
             // can feed it to the next attempt (fed back in as PreviousAttemptSummary).
             failureMemo: driverResult.failureMemo,
-            // RI-C1/RI-D4: carry the execution tier + replay telemetry into the
+ ///carry the execution tier + replay telemetry into the
             // persisted result so results.json/JSONL/report can segment tier mix
             // and surface replay hit/heal/diverge (previously only on actualOutput,
             // which the results.json testResults array never carried).
@@ -1655,9 +1655,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             resolvedVariables
         };
 
-        // DR-D2: classify a non-passing result once, here, so the retry policy,
+        // classify a non-passing result once, here, so the retry policy,
         // the incremental JSONL, and `compare` all read the same category. Prefer
-        // the driver's own `failureClass` (CU-F5); regex-classify as a stopgap.
+        // the driver's own `failureClass`; regex-classify as a stopgap.
         result.failureCategory = classifyFailure(result, driverResult.failureClass);
 
         // Add sequence if this is a repeated test iteration
@@ -1681,7 +1681,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     }
 
     /**
-     * The driver's effective per-test timeout (DR-D4), mirroring
+     * The driver's effective per-test timeout, mirroring
      * `BaseTestDriver.getEffectiveTimeout`'s priority so the engine watchdog
      * fires only AFTER the driver should have returned:
      *   Configuration JSON `maxExecutionTime` → `Test.MaxExecutionTimeMS` → default.

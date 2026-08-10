@@ -1,17 +1,16 @@
 /**
- * Failure classification for retry policy (DR-D2).
+ * Failure classification for retry policy.
  *
  * The recheck run proved that retrying deterministic failures under the same
  * conditions is the single largest waste in the suite: 27 cross-run-deterministic
  * failures were retried 3× each. The fix is to classify a failure BEFORE deciding
  * whether to retry it — `impossible`/`app-error` get zero retries; transient
- * classes get retried (health-gated in DR-D3).
+ * classes get retried (health-gated by admission control).
  *
- * The authoritative source is the driver's own `failureClass` (Computer Use sets
- * one — CU-F5). This module normalizes that free-form string into the canonical
- * {@link FailureCategory}, and — as the plan's explicit stopgap "until the CU
- * taxonomy lands" — regex-classifies the judge/error message when the driver
- * emitted nothing. Pure + engine-free so the taxonomy is unit-testable.
+ * The authoritative source is the driver's own `failureClass`, which Computer Use
+ * sets. This module normalizes that free-form string into the canonical
+ * {@link FailureCategory}, and regex-classifies the judge/error message as a
+ * stopgap when the driver emitted nothing. Pure + engine-free so the taxonomy is unit-testable.
  */
 import { FailureCategory, OracleResult, TestRunResult } from '@memberjunction/testing-engine-base';
 
@@ -85,7 +84,7 @@ function oracleText(oracleResults: OracleResult[] | undefined): string {
 /**
  * Classify a non-passing result into a {@link FailureCategory}.
  *
- * Precedence: (1) the driver's own `failureClass` (authoritative, CU-F5); then
+ * Precedence: (1) the driver's own `failureClass`, which is authoritative; then
  * (2) the stopgap regex over the error message + failing-oracle text; else
  * `unknown`. Returns `undefined` for a passing/skipped result (no failure to
  * classify).

@@ -1,5 +1,5 @@
 /**
- * Ambiguous-selector disambiguation for controller-supplied selectors (CU-A7).
+ * Ambiguous-selector disambiguation for controller-supplied selectors.
  *
  * The controller (an LLM) writes free-form selectors, and the ones it favors are
  * inherently ambiguous: `:has-text()` matches every ANCESTOR containing the text,

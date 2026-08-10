@@ -1,5 +1,5 @@
 /**
- * Failure-artifact retention policy (CU-F4) — pure decisions, no I/O.
+ * Failure-artifact retention policy — pure decisions, no I/O.
  *
  * A forensic trace (DOM snapshots + network + console) turns the "stuck/blank
  * page" and Auth0 investigations from hours of human log-mining into a 5-minute

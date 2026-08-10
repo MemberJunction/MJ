@@ -72,7 +72,7 @@ export default class TestRegressionStatus extends Command {
     if (existsSync(path.join(runDir, 'console.log'))) this.log(`Console: ${path.join(runDir, 'console.log')}`);
   }
 
-  /** DR-G4 health-state.json, when present (best-effort — the supervisor writes it). */
+ /** health-state.json, when present (best-effort — the supervisor writes it). */
   private printHealth(runDir: string): void {
     const p = path.join(runDir, 'health-state.json');
     if (!existsSync(p)) return;

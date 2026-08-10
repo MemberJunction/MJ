@@ -1,6 +1,6 @@
 /**
- * DOM-Assert Oracle (CU-D2) — a deterministic oracle over the interactive
- * elements recorded at the run's final step (CU-A4 element grounding).
+ * DOM-Assert Oracle — a deterministic oracle over the interactive
+ * elements recorded at the run's final step (element grounding).
  *
  * Asserts a recorded postcondition without an LLM: "the end-state contains at
  * least N elements matching role/name". E.g. `{ role: 'button', name: 'Save' }`
@@ -13,7 +13,7 @@
  * - `name: string`  — substring the accessible name must contain (case-insensitive), optional.
  * - `minCount: number` — minimum number of matching elements (default 1).
  *
- * Requires element grounding to have been enabled for the run (CU-A4); when the
+ * Requires element grounding to have been enabled for the run; when the
  * recorded set is absent it returns a clear "no recorded elements" failure
  * rather than a false pass.
  */

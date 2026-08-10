@@ -1,11 +1,8 @@
 /**
- * Pure settle-exit decision (CU-A1/A2).
- *
- * The settle loop's I/O (waiting, probing selectors, capturing screenshots) is
- * inherently effectful, but the *decision* of whether a given poll's signals
- * mean "stop waiting, and for what reason" is pure — extracted here so the
- * priority logic (beacon > busy-markers-cleared+stable > stable/networkidle,
- * all gated by the floor) can be unit-tested without a browser.
+ * Whether a settle poll's signals mean "stop waiting, and for what reason".
+ * Extracted from the effectful settle loop so the priority logic
+ * (beacon > busy-markers-cleared+stable > stable/networkidle, all gated by the
+ * floor) is testable without a browser.
  */
 
 import type { SettleReason } from '../types/app-profile.js';

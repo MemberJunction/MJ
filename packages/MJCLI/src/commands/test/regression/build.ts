@@ -44,7 +44,7 @@ export default class TestRegressionBuild extends Command {
     const { argv, flags } = await this.parse(TestRegressionBuild);
     requireMonorepoRoot();
 
-    // DR-C5: regenerate the entity forms whenever they're missing OR stale vs
+    // regenerate the entity forms whenever they're missing OR stale vs
     // the current schema fingerprint — not just when the directory is absent (the
     // old guard silently baked stale forms after a migration edit). Stamp the
     // fingerprint on success so a later build with an unchanged schema is a no-op.

@@ -1,5 +1,5 @@
 /**
- * Oracle scoring policy for Computer Use tests (CU-D3).
+ * Oracle scoring policy for Computer Use tests.
  *
  * Advisory oracles are reported and scored for diagnostics but do NOT gate the
  * test's Passed/Failed status. This lets efficiency/quality signals — most

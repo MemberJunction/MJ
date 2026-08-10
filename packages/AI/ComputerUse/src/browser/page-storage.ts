@@ -1,10 +1,10 @@
 /**
  * Shared in-page storage capture/restore helpers for the warm-seed feature
- * (CU-G4). These run in the BROWSER context — Playwright serializes them via
+ *. These run in the BROWSER context — Playwright serializes them via
  * `page.evaluate` / `page.addInitScript` — so they are fully self-contained and
  * reference only browser globals (never module scope).
  *
- * Extracted here (RI-C4.1, the CU-A3 pattern) so BOTH browser adapters delegate
+ * Extracted here so BOTH browser adapters delegate
  * to the SAME implementation: `PlaywrightBrowserAdapter` (interactive/CDP path)
  * and `SharedContextBrowserAdapter` (the adapter the regression suite runs on).
  * Previously these lived inline in PBA and SCBA inherited the base no-op, so the
@@ -12,7 +12,7 @@
  * adapter-parity gate exists to catch.
  */
 
-/** Serializable storage snapshot returned by {@link captureStorageInPage} (CU-G4). */
+/** Serializable storage snapshot returned by {@link captureStorageInPage}. */
 export interface StorageSnapshot {
     localStorage: { name: string; value: string }[];
     databases: {
@@ -24,7 +24,7 @@ export interface StorageSnapshot {
 
 /**
  * In-page (BROWSER context): read localStorage + all IndexedDB databases into a
- * serializable snapshot (CU-G4). Read-only — never mutates page storage. Fully
+ * serializable snapshot. Read-only — never mutates page storage. Fully
  * self-contained; references only browser globals. Closes over each IDBRequest
  * (rather than reading `event.target`) so the DOM types stay precise.
  */
@@ -91,7 +91,7 @@ export function captureStorageInPage(): Promise<StorageSnapshot> {
 
 /**
  * In-page (BROWSER context): restore a {@link StorageSnapshot} into fresh
- * storage BEFORE app scripts run (CU-G4). Cold-boot-safe by contract — any
+ * storage BEFORE app scripts run. Cold-boot-safe by contract — any
  * per-database failure DELETES that database so the app cold-boots it clean,
  * never a half-populated (corrupt) cache. Fully self-contained.
  */

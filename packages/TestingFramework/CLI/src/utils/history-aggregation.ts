@@ -1,5 +1,5 @@
 /**
- * @fileoverview Pure aggregation helpers for the `history` and `report` commands (DR-G6).
+ * @fileoverview Pure aggregation helpers for the `history` and `report` commands.
  *
  * These functions turn raw TestRun rows (as loaded via RunView) into the
  * per-test and per-run statistics the CLI renders. They are deliberately
@@ -52,7 +52,7 @@ export function isFailLike(status: TestRunStatus): boolean {
 
 /**
  * One-line note surfaced whenever no cost has been captured. Cost/token capture
- * depends on a CU-plan telemetry item (see DR-G6); until it lands CostUSD is 0
+ * depends on a CU-plan telemetry item; until it lands CostUSD is 0
  * in every row, so cost is shown as "n/a" rather than a fabricated number.
  */
 export const COST_CAPTURE_PENDING_NOTE =
@@ -104,7 +104,7 @@ export interface FlakeStats {
      * Minority-outcome share: min(pass, fail) / (pass + fail). 0 when all runs
      * agree, up to 0.5 for an even split. This is the cross-run flake signal we
      * can derive today; a stricter "passed-only-on-retry" definition needs the
-     * per-attempt lineage column (DR-D8), which isn't in the DB yet.
+     * per-attempt lineage column, which isn't in the DB yet.
      */
     flakeRate: number;
 }

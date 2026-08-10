@@ -1,5 +1,5 @@
 /**
- * Rubric-based judging (CU-D1) — pure, no LLM.
+ * Rubric-based judging — pure, no LLM.
  *
  * Every regression test carries a hand-authored 3–5 item validation-criteria
  * rubric that the judge never saw — so it free-associated against a one-line
@@ -19,7 +19,7 @@ export interface CriterionVerdict {
     criterion: string;
     /** Whether this criterion is satisfied by the observed end-state. */
     met: boolean;
-    /** The judge's evidence for the decision (feeds triage + CU-C5 distillation). */
+ /** The judge's evidence for the decision (feeds triage + distillation). */
     evidence: string;
 }
 
@@ -38,7 +38,7 @@ export interface RubricEvaluation {
 }
 
 /**
- * Derive the Done/coverage signals from per-criterion verdicts (CU-D1).
+ * Derive the Done/coverage signals from per-criterion verdicts.
  * `done` requires ALL criteria met; `coverage` is metCount/total. An empty
  * rubric returns `{done:false, coverage:0, total:0}` so the caller knows there
  * was no rubric and can fall back to the judge's scalar verdict.

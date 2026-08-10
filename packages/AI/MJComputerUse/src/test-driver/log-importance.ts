@@ -1,5 +1,5 @@
 /**
- * Console log filtering for Computer Use test runs (DR-G8).
+ * Console log filtering for Computer Use test runs.
  *
  * A full 155-test suite run emitted a ~4.5MB / 63k-line console log in which the
  * signal (which test, which tier, which checkpoint, why it failed) was buried

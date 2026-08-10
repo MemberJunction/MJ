@@ -6,7 +6,7 @@ import { resolveRunDir, isInsideMonorepo } from '../../../lib/regression/docker-
 /** Committed, `:ro`-mounted replay-trace store (Decision D1), relative to the repo root. */
 const COMMITTED_TRACE_DIR = 'metadata-optional/regression-test/tests/regression/traces';
 
-/** Drift classification for one candidate vs its committed baseline (RI-B3). */
+/** Drift classification for one candidate vs its committed baseline. */
 type DriftKind = 'new' | 'unchanged' | 'selector-drift' | 'meaningful-drift';
 
 /** The subset of a serialized trace this review reads (see @memberjunction/computer-use ComputerUseTrace). */
@@ -26,10 +26,10 @@ interface CandidateReport {
 }
 
 /**
- * `mj test regression promote-traces` (RI-B3) — the human review gate that lands
+ * `mj test regression promote-traces` — the human review gate that lands
  * a run's recorded trace CANDIDATES into the git-committed store.
  *
- * A recording run (RI-B1) writes candidates to `<run>/traces-out/`; they reach
+ * A recording run writes candidates to `<run>/traces-out/`; they reach
  * the repo only here, so UI drift is a reviewed diff instead of a bot commit.
  * For each candidate this classifies the change against the committed baseline —
  * `new` (no baseline), `unchanged`, `selector-drift` (routine, heal-class:
@@ -172,7 +172,7 @@ function symbolFor(kind: DriftKind): string {
 }
 
 /**
- * Structural diff → worst-of-steps classification (RI-B3). A missing baseline is
+ * Structural diff → worst-of-steps classification. A missing baseline is
  * `new`; a step count change or any method / navigate-url / target-identity
  * (role+name) / postcondition-url change is `meaningful-drift`; a bare selector
  * change with role+name intact is `selector-drift`; otherwise `unchanged`.

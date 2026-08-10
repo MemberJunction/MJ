@@ -1,5 +1,5 @@
 /**
- * Perceptual (difference) hashing for screenshots — CU-F6.
+ * Perceptual (difference) hashing for screenshots
  *
  * A 64-bit dHash of a downscaled grayscale frame. Perceptually-similar frames
  * produce hashes with a small Hamming distance; byte-identical frames produce

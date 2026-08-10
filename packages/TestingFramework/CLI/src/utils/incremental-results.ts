@@ -1,5 +1,5 @@
 /**
- * @fileoverview Crash-safe incremental result persistence (DR-D5).
+ * @fileoverview Crash-safe incremental result persistence.
  * @module @memberjunction/testing-cli
  *
  * `results.json` is written once, after the whole suite returns. An OOM at
@@ -11,7 +11,7 @@
  *     durable, append-only truth a crashed run leaves behind.
  *   - `results.partial.json` — an atomically-rewritten snapshot (tmp + rename)
  *     with a `status` of `Running` / `Cancelled` / `Crashed` / `Completed`, so
- *     `status`/`rerun-failures` (DR-F3/F4) and mid-run reporting have a single
+ *     `status`/`rerun-failures` and mid-run reporting have a single
  *     self-consistent view without replaying the JSONL.
  *
  * Both live in the run directory derived from the `--output` path
@@ -38,7 +38,7 @@ interface AttemptLine {
     durationMs: number;
     workerIndex?: number;
     flaky?: boolean;
-    /** Normalized failure category (DR-D2/D8), on non-passing attempts. */
+    /** Normalized failure category, on non-passing attempts. */
     failureCategory?: string;
     error?: string;
     ts: string;
@@ -59,7 +59,7 @@ interface PartialTestRow {
 
 export class IncrementalResultsSink {
     private readonly completed: TestRunResult[] = [];
-    /** Tests a worker has dispatched but not yet completed (DR-D4 heartbeat). */
+ /** Tests a worker has dispatched but not yet completed (heartbeat). */
     private readonly inFlight = new Map<string, TestStartInfo>();
     private finalized = false;
 
@@ -89,7 +89,7 @@ export class IncrementalResultsSink {
     }
 
     /**
-     * Engine `onTestStart` hook (DR-D4). Records the test as in-flight so the
+     * Engine `onTestStart` hook. Records the test as in-flight so the
      * partial snapshot — and thus `status` — shows what each worker is running,
      * and a test that never completes (a wedged worker) stays visible.
      */

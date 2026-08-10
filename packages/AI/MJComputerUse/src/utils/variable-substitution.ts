@@ -149,7 +149,7 @@ export function substituteVariables<T>(obj: T, values: Record<string, unknown>):
 
 /**
  * Return the distinct `{{key}}` placeholder names still present in a string
- * after substitution (CU-F7). A non-empty result means variables the string
+ * after substitution. A non-empty result means variables the string
  * referenced were never provided — the caller can fail fast with the missing
  * keys instead of letting the literal `{{key}}` flow into a URL/goal and
  * surface later as a mysterious navigation error.

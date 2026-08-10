@@ -13,7 +13,7 @@ import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj
 
 /** Result of comparing a single test across two suite runs */
 /**
- * How a test changed between two runs (DR-D8 adds `flaky`).
+ * How a test changed between two runs (adds `flaky`).
  * `flaky` = the test still passes but now only ON RETRY where it used to pass
  * clean (stable-pass → flaky-pass) — an early warning, deliberately distinct
  * from `unchanged` and NOT counted as a regression (doesn't flip the exit code).
@@ -34,7 +34,7 @@ interface TestComparison {
 }
 
 /**
- * Classify how one test changed between two runs (DR-D8). Pure + exported so the
+ * Classify how one test changed between two runs. Pure + exported so the
  * retry-aware logic — especially the stable-pass → flaky-pass early warning —
  * is unit-testable without the DB or the CLI. A real regression / improvement
  * always wins over the flaky signal; flaky only upgrades what would otherwise be
@@ -70,7 +70,7 @@ interface ComparisonResult {
     Unchanged: number;
     NewTests: number;
     RemovedTests: number;
-    /** Stable-pass → flaky-pass early warnings (DR-D8). Not counted as regressions. */
+    /** Stable-pass → flaky-pass early warnings. Not counted as regressions. */
     Flaky: number;
     Tests: TestComparison[];
 }
@@ -90,9 +90,9 @@ interface TestRunSummary {
     Status: string;
     Score: number | null;
     DurationSeconds: number | null;
-    /** Passed only on retry (DR-D8). Sourced from results.json; undefined in DB mode until the schema column lands. */
+    /** Passed only on retry. Sourced from results.json; undefined in DB mode until the schema column lands. */
     Flaky?: boolean;
-    /** Normalized failure category (DR-D2/D8), for reporting tallies. */
+    /** Normalized failure category, for reporting tallies. */
     FailureCategory?: string;
 }
 
@@ -467,7 +467,7 @@ export class CompareCommand {
             const currStatus = curr?.Status ?? null;
             const scoreDelta = (prevScore != null && currScore != null) ? currScore - prevScore : null;
 
-            // DR-D8: retry-aware classification (adds the stable-pass → flaky-pass
+            // retry-aware classification (adds the stable-pass → flaky-pass
             // early warning). Extracted so it's unit-testable in isolation.
             const change = classifyChange(prev, curr);
 

@@ -1,5 +1,5 @@
 /**
- * Shared work queue + work-stealing dispatch for parallel suite execution (DR-D1).
+ * Shared work queue + work-stealing dispatch for parallel suite execution.
  *
  * The engine used to deal tests round-robin into fixed per-worker groups at
  * second zero, so makespan was set by the unluckiest worker: a worker that drew
@@ -13,8 +13,7 @@
  * free takes the next item, so no worker idles while work remains — the classic
  * work-stealing win (LPT literature puts idle-tail waste at 10–25% of makespan
  * for skewed distributions). The queue is also the single dispatch choke point
- * that DR-D2 (deferred retries), DR-D3 (admission control), and DR-D7 (circuit
- * breaker) attach to in later commits.
+ * that deferred retries, admission control, and the circuit breaker attach to.
  *
  * Pure + engine-agnostic (works over plain {@link WorkItem}s and an injected
  * `runItem` callback) so the ordering and drain behavior are unit-testable
@@ -50,7 +49,8 @@ export interface WorkItem {
  *                          the relative magnitude matters) per testId from prior
  *                          runs. Absent/empty ⇒ `longest-first` == `suite`.
  *                          Populating this from `TestRun.DurationSeconds` history
- *                          is DR-G6's job; until then callers pass nothing.
+ *                          is the history command's job; until then callers pass
+ *                          nothing.
  */
 export function seedWorkItems(
     items: WorkItem[],
@@ -77,7 +77,7 @@ export interface DrainOptions {
     /** Fired as each worker begins draining (for logging). */
     onWorkerStart?: (workerIndex: number, workerCount: number) => void;
     /**
-     * Load-aware admission gate (DR-D3), consulted before each item is taken.
+     * Load-aware admission gate, consulted before each item is taken.
      * `'proceed'` → take the next item; `'exit'` → this worker sheds and stops
      * pulling (its already-collected results are kept). The gate must guarantee
      * at least one worker never sheds (see {@link admissionDecision}), or a
@@ -85,7 +85,7 @@ export interface DrainOptions {
      */
     admit?: (workerIndex: number) => Promise<'proceed' | 'exit'>;
     /**
-     * Suite wall-clock deadline as an epoch-ms timestamp (DR-D4). Once reached,
+     * Suite wall-clock deadline as an epoch-ms timestamp. Once reached,
      * workers stop taking NEW items and drain out; the in-flight test finishes
      * and remaining tests are simply left un-run (a graceful partial finish, as
      * a crash would leave them). Injectable clock via {@link DrainOptions.now}.
@@ -94,14 +94,14 @@ export interface DrainOptions {
     /** Clock source (injected for tests). Default `Date.now`. */
     now?: () => number;
     /**
-     * Circuit-breaker abort (DR-D7), polled before each dispatch. When it returns
+     * Circuit-breaker abort, polled before each dispatch. When it returns
      * true, EVERY worker (including worker 0, unlike the {@link admit} floor) stops
      * taking new items — the whole run aborts with partial results.
      */
     shouldAbort?: () => boolean;
     /**
      * Delay (ms) each worker waits AFTER finishing an item before taking the next
-     * (DR-D9). Honors `delayBetweenTests` in parallel mode too (it was silently
+     *. Honors `delayBetweenTests` in parallel mode too (it was silently
      * ignored — only the sequential path respected it), e.g. to space out logins.
      * Default 0.
      */
@@ -142,15 +142,15 @@ export async function drainQueue<R>(
         const now = opts.now ?? Date.now;
         opts.onWorkerStart?.(workerIndex, effectiveWorkers);
         for (;;) {
-            // DR-D7: a tripped circuit breaker aborts EVERY worker.
+            // a tripped circuit breaker aborts EVERY worker.
             if (opts.shouldAbort?.()) {
                 break;
             }
-            // DR-D4: stop dispatching once the suite wall-clock budget is spent.
+            // stop dispatching once the suite wall-clock budget is spent.
             if (opts.deadline !== undefined && now() >= opts.deadline) {
                 break;
             }
-            // DR-D3: consult the load gate BEFORE taking an item, so a shed worker
+            // consult the load gate BEFORE taking an item, so a shed worker
             // never abandons work it already pulled.
             if (opts.admit && (await opts.admit(workerIndex)) === 'exit') {
                 break;
@@ -166,7 +166,7 @@ export async function drainQueue<R>(
                 /* runItem is expected to catch its own errors; this is a backstop
                    so a stray rejection can't strand the rest of the queue. */
             }
-            // DR-D9: honor delayBetweenTests in parallel too (was sequential-only).
+            // honor delayBetweenTests in parallel too (was sequential-only).
             if (opts.interDispatchDelayMs && opts.interDispatchDelayMs > 0) {
                 await new Promise(resolve => setTimeout(resolve, opts.interDispatchDelayMs));
             }

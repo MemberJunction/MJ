@@ -1,20 +1,10 @@
 /**
- * Goal postconditions (CU-C5) — deterministic verification without an LLM.
+ * Deterministic "did we reach the expected state?" checks, used in place of an
+ * LLM judge: goal postconditions distilled from a passing run and executed on the
+ * replay tier, plus prelude landing verification. Pure and app-agnostic.
  *
- * When a run passes the LLM judge, distill its end-state into
- * {@link GoalPostcondition}s (CU-C1's `goalPostconditions`). The replay tier then
- * scores by EXECUTING them: deterministic, free, and more trustworthy than a
- * judge float. The LLM judge then runs only on the LLM tier or when a
- * postcondition is ambiguous/fails (as diagnostician).
- *
- * Distillation is deliberately conservative — the plan warns that over-specific
- * postconditions cause false invalidations, so we prefer role/name PRESENCE
- * over text equality: the final URL (highest signal, cheapest) plus the
- * end-state's landmark headings. This is the automated FIRST DRAFT; whether a
- * distilled postcondition GATES pass/fail vs. merely advises is a Layer-2 policy
- * (the plan's open question on postcondition trust / review bar).
- *
- * Pure and app-agnostic.
+ * Distillation prefers role/name presence over text equality — over-specific
+ * postconditions cause false invalidations.
  */
 
 import { GoalPostcondition, TraceTarget } from '../types/trace.js';
@@ -120,4 +110,30 @@ function elementPresent(target: TraceTarget, elements: InteractiveElement[]): bo
         (!role || (e.Role ?? '').trim().toLowerCase() === role) &&
         (!name || (e.Name ?? '').trim().toLowerCase().includes(name))
     );
+}
+
+/** What the engine observed about where a deterministic prelude landed. */
+export interface PreludeLandingObserved {
+    /** Whether a landing selector was declared. */
+    hasSelector: boolean;
+    /** Whether that selector became visible after the prelude. */
+    selectorVisible: boolean;
+    /** Whether a landing URL pattern was declared. */
+    hasUrl: boolean;
+    /** Whether the post-prelude URL matched that pattern. */
+    urlMatched: boolean;
+}
+
+/**
+ * Whether a prelude reached its declared landing. Declaring nothing trivially
+ * lands — the prelude was fire-and-forget setup with no assertion.
+ */
+export function evaluatePreludeLanding(o: PreludeLandingObserved): { landed: boolean; reason: string } {
+    if (o.hasSelector && !o.selectorVisible) {
+        return { landed: false, reason: 'expected landing element not visible after prelude' };
+    }
+    if (o.hasUrl && !o.urlMatched) {
+        return { landed: false, reason: 'landed on an unexpected URL after prelude' };
+    }
+    return { landed: true, reason: 'prelude landed as expected' };
 }

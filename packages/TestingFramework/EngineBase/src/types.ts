@@ -147,11 +147,11 @@ export interface TestRunOptions {
 }
 
 /**
- * Dispatch ordering for the parallel work queue (DR-D1).
+ * Dispatch ordering for the parallel work queue.
  * - `suite` — original suite sequence (historical behavior; default).
  * - `longest-first` — LPT scheduling: dispatch highest mean-duration tests first
  *   so the long pole starts at t=0 and short tests backfill the tail. Requires
- *   duration history (DR-G6); without it, degrades to `suite`.
+ *   duration history; without it, degrades to `suite`.
  */
 export type SeedOrder = 'suite' | 'longest-first';
 
@@ -165,14 +165,14 @@ export interface SuiteRunOptions extends TestRunOptions {
   parallel?: boolean;
 
   /**
-   * Order tests come off the shared parallel work queue (DR-D1). Does not
+   * Order tests come off the shared parallel work queue. Does not
    * change each test's reporting `sequence` (always its suite position) — only
    * dispatch order. Default `suite`.
    */
   seedOrder?: SeedOrder;
 
   /**
-   * Path to the DR-G4 supervisor's `health-state.json` (DR-D3). When set, the
+   * Path to the supervisor's `health-state.json`. When set, the
    * parallel work queue consults it before each dispatch: sheds workers when the
    * host is `degraded`, pauses when `critical`. Absent (or file missing) ⇒ no
    * admission control — the run proceeds at full concurrency. Typically derived
@@ -222,7 +222,7 @@ export interface SuiteRunOptions extends TestRunOptions {
 
   /**
    * Fired the moment each test resolves its final result (after any retries),
-   * in whichever worker ran it (DR-D5). The suite runner uses this to persist
+   * in whichever worker ran it. The suite runner uses this to persist
    * results incrementally — one JSONL line per attempt + an atomic partial
    * snapshot — so a crashed or OOM-killed run preserves every completed test
    * instead of losing everything (results.json is otherwise written once at the
@@ -233,14 +233,14 @@ export interface SuiteRunOptions extends TestRunOptions {
 
   /**
    * Fired when a worker DISPATCHES a test — before execution, once per test
-   * (not per retry) (DR-D4 heartbeat). Lets the sink record in-flight tests so
+   * (not per retry) (heartbeat). Lets the sink record in-flight tests so
    * `status` can show what each worker is running and surface a test that never
    * completes (a wedged worker) instead of it being invisible. Cheap + non-throwing.
    */
   onTestStart?: (info: TestStartInfo) => void;
 
   /**
-   * Suite wall-clock budget in ms (DR-D4, `--max-suite-duration`). Once elapsed,
+   * Suite wall-clock budget in ms (`--max-suite-duration`). Once elapsed,
    * the runner stops dispatching NEW tests and finalizes gracefully with partial
    * results; the in-flight test still finishes. Falls back to
    * `TestSuite.MaxExecutionTimeMS` when unset; no budget ⇒ unbounded (historical).
@@ -248,7 +248,7 @@ export interface SuiteRunOptions extends TestRunOptions {
   maxSuiteDurationMs?: number;
 
   /**
-   * Suite circuit breaker (DR-D7). Aborts a doomed run early instead of burning
+   * Suite circuit breaker. Aborts a doomed run early instead of burning
    * hours: a sliding window of environment-class failures (degrading host) or a
    * plain failure cap (broken deploy). Opt-in — omitted/`enabled:false` ⇒ off
    * (default). Recommended on for CI.
@@ -256,7 +256,7 @@ export interface SuiteRunOptions extends TestRunOptions {
   circuitBreaker?: CircuitBreakerOptions;
 }
 
-/** Circuit-breaker configuration passed through {@link SuiteRunOptions} (DR-D7). */
+/** Circuit-breaker configuration passed through {@link SuiteRunOptions}. */
 export interface CircuitBreakerOptions {
   /** Master switch. Default false (off). */
   enabled?: boolean;
@@ -268,7 +268,7 @@ export interface CircuitBreakerOptions {
   maxFailures?: number;
 }
 
-/** Heartbeat payload emitted when a worker picks up a test (DR-D4). */
+/** Heartbeat payload emitted when a worker picks up a test. */
 export interface TestStartInfo {
   testId: string;
   testName: string;
@@ -309,7 +309,7 @@ export interface OracleResult {
 
   /**
    * When true, this oracle is *advisory*: its result is reported and scored for
-   * diagnostics but does NOT gate the test's Passed/Failed status (CU-D3). Used
+   * diagnostics but does NOT gate the test's Passed/Failed status. Used
    * for efficiency/quality signals (e.g. step-count) that shouldn't fail an
    * otherwise-successful run. Drivers set this from the oracle's config; absent
    * or false means the oracle gates as normal.
@@ -322,7 +322,7 @@ export interface OracleResult {
  */
 /**
  * Lightweight record of a single retry attempt that was superseded by a later
- * one (CU-F3). Carries just enough to diagnose *why* an earlier attempt failed
+ * one. Carries just enough to diagnose *why* an earlier attempt failed
  * — flakiness is the suite's #1 signal — while deliberately omitting heavy
  * payloads (screenshots, oracle results) so retaining attempt history does not
  * reintroduce a per-run memory ramp.
@@ -339,13 +339,13 @@ export interface PriorAttemptSummary {
   /** Error/diagnostic message from this attempt, if any. */
   errorMessage?: string;
   /**
-   * Normalized failure category of this superseded attempt (RI-D2), when it was
+   * Normalized failure category of this superseded attempt, when it was
    * classified. Lets the next attempt and reporting see *what kind* of failure
    * preceded it without retaining the full result.
    */
   failureCategory?: FailureCategory;
   /**
-   * The driver's non-blind retry memo for this attempt (RI-D2) — a short,
+   * The driver's non-blind retry memo for this attempt — a short,
    * payload-free "here's what went wrong last time" the driver can feed to the
    * next attempt (as `PreviousAttemptSummary`) so attempt 2+ isn't a blind
    * re-roll. Present only when the driver produced one.
@@ -354,7 +354,7 @@ export interface PriorAttemptSummary {
 }
 
 /**
- * Normalized failure taxonomy the retry scheduler keys policy on (DR-D2).
+ * Normalized failure taxonomy the retry scheduler keys policy on.
  * Drivers may emit their own free-form `failureClass`; the engine normalizes it
  * (or regex-classifies the judge/error message as a stopgap) into one of these:
  * - `timeout`     — the run exceeded its time budget.
@@ -493,21 +493,21 @@ export interface TestRunResult {
 
   /**
    * Lightweight summaries of each FAILED attempt that preceded the final
-   * result, oldest first (CU-F3). Present only when the test was retried.
+   * result, oldest first. Present only when the test was retried.
    * Preserves *why* earlier attempts failed so flakiness is diagnosable — the
    * final `result` object no longer silently discards attempt 1's failure.
    */
   priorAttempts?: PriorAttemptSummary[];
 
   /**
-   * Zero-based index of the parallel worker that ran this test (DR-D5).
+   * Zero-based index of the parallel worker that ran this test.
    * Undefined for sequential runs. Enables per-worker swimlane timelines and
-   * "poisoned worker" analysis in reporting (DR-G2).
+   * "poisoned worker" analysis in reporting.
    */
   workerIndex?: number;
 
   /**
-   * Normalized failure classification (DR-D2), present only for non-passing
+   * Normalized failure classification, present only for non-passing
    * results. Sourced from the driver's `failureClass` when it sets one, else
    * regex-classified from the judge/error message. The retry scheduler keys
    * policy on it (`impossible`/`app-error` → 0 retries); reporting and `compare`
@@ -516,7 +516,7 @@ export interface TestRunResult {
   failureCategory?: FailureCategory;
 
   /**
-   * The driver's non-blind retry memo for a non-passing result (RI-D2), surfaced
+   * The driver's non-blind retry memo for a non-passing result, surfaced
    * from the engine (e.g. Computer Use's `ComputerUseResult.FailureMemo`). Copied
    * into each {@link PriorAttemptSummary} so `runWithRetries` can feed it forward
    * to the next attempt. Absent on success or when the driver produced none.
@@ -524,7 +524,7 @@ export interface TestRunResult {
   failureMemo?: string;
 
   /**
-   * Execution-tier label a tiered driver reports (RI-C1) — e.g. Computer Use's
+   * Execution-tier label a tiered driver reports — e.g. Computer Use's
    * `'replay'` / `'replay-with-heal'` / `'llm'`. The tier that PRODUCED this
    * result: a replay that diverged and fell back reports `'llm'`. Reporting
    * segments tier mix / replay share by it. Absent for single-tier drivers.
@@ -532,7 +532,7 @@ export interface TestRunResult {
   tier?: string;
 
   /**
-   * Replay telemetry (RI-C1/RI-D4), present whenever a replay was ATTEMPTED —
+   * Replay telemetry, present whenever a replay was ATTEMPTED —
    * so the drift signal (`diverged` > 0) survives even a green LLM-fallback
    * result. Absent on pure-LLM runs. See {@link ReplayTelemetry}.
    */
@@ -540,7 +540,7 @@ export interface TestRunResult {
 }
 
 /**
- * Compact per-attempt replay outcome a tiered driver may surface (RI-C1/RI-D4).
+ * Compact per-attempt replay outcome a tiered driver may surface.
  * Mirrors the engine's replay counts so the report's replay-health panel and the
  * "is replay lying to us?" check can be computed without the full step list.
  */
@@ -640,13 +640,13 @@ export interface TestSuiteRunResult {
   resolvedVariables?: ResolvedTestVariables;
 
   /**
-   * True when the run was cut short by the circuit breaker (DR-D7) rather than
+   * True when the run was cut short by the circuit breaker rather than
    * dispatching every test. `status` is `Cancelled`; `abortReason` explains why.
-   * Lets the CLI exit with a distinct code (DR-F2) and reports say so.
+   * Lets the CLI exit with a distinct code and reports say so.
    */
   aborted?: boolean;
 
-  /** Human-readable reason for an aborted run (DR-D7). */
+  /** Human-readable reason for an aborted run. */
   abortReason?: string;
 }
 

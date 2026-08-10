@@ -1,13 +1,9 @@
 /**
- * Self-heal decision logic (CU-C3) — pure target re-resolution + confidence gate.
- *
- * UIs drift; a replay tier without healing decays into maintenance burden. The
- * cheapest, highest-value heal needs NO LLM: an element that moved but kept its
- * accessible role + name is re-found deterministically in a fresh element list
- * (CU-A4). This module owns that pure re-resolution and mabl's confidence gate
- * ("a wrong cached click is worse than a slow click" — a low-confidence heal
- * fails the step rather than guessing). The ambiguous case escalates to a
- * focused LLM call, which is a seam on the engine (Layer 2 supplies the model).
+ * Re-resolves a drifted replay target and gates the result on confidence. The
+ * cheapest heal needs no LLM: an element that moved but kept its accessible role +
+ * name is re-found deterministically in a fresh element list. A low-confidence
+ * heal fails the step rather than guessing — a wrong cached click is worse than a
+ * slow one. Ambiguous cases escalate to a focused LLM call via an engine seam.
  *
  * App-agnostic: operates only on the generic InteractiveElement + TraceTarget.
  */

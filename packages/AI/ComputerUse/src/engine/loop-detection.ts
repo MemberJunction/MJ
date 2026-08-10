@@ -1,16 +1,10 @@
 /**
- * Pure loop detection (CU-B1).
+ * Detects the agent returning to the same observable state without progress.
+ * Runs every step over a list of per-step state signatures, each being the
+ * normalized URL plus the step's perceptual hash — the dHash keeps this robust to
+ * animated spinners, which defeat byte-identical screenshot comparison.
  *
- * The agent is "looping" when it keeps returning to the same observable state
- * without progress. Detection runs every step and is free — it operates on a
- * list of per-step *state signatures*, each = normalized URL + the step's
- * perceptual hash (dHash, CU-F6). The dHash makes this robust to animated
- * spinners that defeat byte-identical screenshot comparison — an app's loading
- * screen no longer masquerades as "the page changed".
- *
- * This module is pure so the detection + URL-normalization logic can be
- * unit-tested and replayed offline against recorded runs. The engine owns the
- * effectful parts (capturing signatures, escalating, terminating).
+ * Pure; the engine owns capturing signatures, escalating, and terminating.
  */
 
 /** A detected loop and the evidence for it (prompt/classifier-facing). */

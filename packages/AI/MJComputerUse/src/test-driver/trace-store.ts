@@ -1,14 +1,14 @@
 /**
- * Trace store (RI-B2) — the driver's read/write path for committed replay traces.
+ * Trace store — the driver's read/write path for committed replay traces.
  *
  * Two directories, two roles (Decision D1):
  *  - The COMMITTED store (`resolveTraceDir`) holds one `T{NNN}.trace.json` per
  *    test, git-committed and mounted `:ro` into the runner. The driver REPLAYS
- *    from here (RI-C1). Absent trace ⇒ `loadTrace` returns null ⇒ LLM tier — the
+ *    from here. Absent trace ⇒ `loadTrace` returns null ⇒ LLM tier — the
  *    correct, safe default for a not-yet-recorded test.
  *  - The per-run CANDIDATE dir (`resolveTraceOutDir`) is where a green LLM run
- *    RECORDS a fresh trace (RI-B1). Candidates reach the committed store only
- *    through the human-reviewed `mj test regression promote-traces` step (RI-B3)
+ *    RECORDS a fresh trace. Candidates reach the committed store only
+ *    through the human-reviewed `mj test regression promote-traces` step
  *    — a run never writes the committed store directly.
  *
  * Traces are plain driver-read JSON files, never mj-sync entities — they never
@@ -32,7 +32,7 @@ export interface TraceKeyedTest {
 
 /**
  * The committed store the driver replays FROM. Overridable via `CU_TRACE_DIR`
- * (the DR-E2 env contract entry the runner sets to the `:ro` mount path).
+ * (env contract entry the runner sets to the `:ro` mount path).
  */
 export function resolveTraceDir(): string {
     return process.env.CU_TRACE_DIR || path.join(process.cwd(), DEFAULT_TRACE_DIR);

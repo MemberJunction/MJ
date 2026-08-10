@@ -45,9 +45,9 @@ import {
     clickInteractiveElement,
     typeIntoInteractiveElement,
 } from './element-extraction.js';
-// CU-A7 ambiguous-selector narrowing, shared with SharedContextBrowserAdapter.
+// ambiguous-selector narrowing, shared with SharedContextBrowserAdapter.
 import { resolveActionLocator } from './selector-resolution.js';
-// CU-G4 warm-seed in-page storage helpers, shared with SharedContextBrowserAdapter (RI-C4.1).
+// warm-seed in-page storage helpers, shared with SharedContextBrowserAdapter.
 import { StorageSnapshot, captureStorageInPage, restoreStorageInPage } from './page-storage.js';
 
 /**
@@ -430,7 +430,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
      * a closed adapter).
      */
     // The perception surface is shared with SharedContextBrowserAdapter via
-    // page-perception.ts (CU-A3) — both adapters delegate to one implementation
+    // page-perception.ts — both adapters delegate to one implementation
     // so the suite adapter can't silently inherit no-ops, and the two can't drift.
 
     public override async GetVisibleText(): Promise<string> {
@@ -459,7 +459,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         return queryElement(this.page, selector, this.config.ActionTimeoutMs);
     }
 
-    /** Last extracted element list, cached so ClickElement/TypeIntoElement can resolve an index (CU-A4). */
+    /** Last extracted element list, cached so ClickElement/TypeIntoElement can resolve an index. */
     private lastInteractiveElements: InteractiveElement[] = [];
 
     public override async ExtractInteractiveElements(): Promise<InteractiveElement[]> {
@@ -476,7 +476,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         return element;
     }
 
-    // ─── Failure Artifacts (CU-F4) ─────────────────────────
+    // ─── Failure Artifacts ─────────────────────────────────
 
     public override async StartTracing(): Promise<void> {
         if (!this.context) {
@@ -732,7 +732,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                     // Selector path: click the matched element directly; the
                     // X/Y/BoundingBox coordinates are ignored when a selector
                     // is supplied. Modifiers (e.g. Shift-click) ride along.
-                    // Ambiguous selectors are narrowed first (CU-A7) — strict
+                    // Ambiguous selectors are narrowed first — strict
                     // mode would otherwise throw on a multi-match.
                     const target = await resolveActionLocator(page, action.Selector);
                     await target.click({
@@ -761,7 +761,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
             }
 
             case 'ClickElement':
-                // Element-grounded click (CU-A4): resolve the index to the extracted
+                // Element-grounded click: resolve the index to the extracted
                 // element and click its locator with actionability auto-wait.
                 await clickInteractiveElement(
                     page,
@@ -818,7 +818,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                     const target = await resolveActionLocator(page, action.Selector);
                     await target.scrollIntoViewIfNeeded({ timeout: this.config.ActionTimeoutMs });
                 } else {
-                    // CU-A8: a wheel event lands wherever the pointer is, so move
+                    // a wheel event lands wherever the pointer is, so move
                     // it over the requested point first — that's what lets an open
                     // dropdown or inner scroll pane be scrolled instead of the page.
                     if (action.X !== undefined && action.Y !== undefined) {
@@ -1129,7 +1129,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         }
     }
 
-    // ─── Warm-Seed Context Storage (CU-G4) ─────────────────
+    // ─── Warm-Seed Context Storage ─────────────────────────
 
     public override async CaptureContextSeed(origin: string): Promise<ContextSeed | null> {
         this.requirePage();

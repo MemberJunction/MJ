@@ -138,7 +138,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
      */
     /**
      * The driver's hard Stop() failsafe fires at this multiple of the agent-time
-     * budget. The engine self-expires gracefully at 1× (CU-B4); this outer catch
+     * budget. The engine self-expires gracefully at 1×; this outer catch
      * only trips if the engine is genuinely hung.
      */
     private static readonly TIMEOUT_FAILSAFE_MULTIPLIER = 2;
@@ -147,7 +147,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         ['goal-completion', new GoalCompletionOracle()],
         ['url-match', new UrlMatchOracle()],
         ['step-count', new StepCountOracle()],
-        // Deterministic oracles (CU-D2): pass/fail without the LLM judge.
+        // Deterministic oracles: pass/fail without the LLM judge.
         ['no-console-errors', new NoConsoleErrorsOracle()],
         ['dom-assert', new DomAssertOracle()],
     ]);
@@ -180,7 +180,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             let input = this.parseInputDefinition<ComputerUseTestInput>(context.test);
             let expected = this.parseExpectedOutcomes<ComputerUseExpectedOutcomes>(context.test);
 
-            // 1a. Fold in suite-level Computer Use policy (RI-E3 / Decision D7):
+ // 1a. Fold in suite-level Computer Use policy (/ Decision D7):
             // baked defaults ← suite `computerUse` block ← per-test Configuration.
             // The regression suite sets its profile (grounding on, temperature 0,
             // trace policy) once on the suite instead of on 380 files; per-test
@@ -202,7 +202,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 expected = substituteVariables(expected, variableValues);
             }
 
-            // CU-F7: fail fast on unresolved {{vars}} in the fields that would
+            // fail fast on unresolved {{vars}} in the fields that would
             // otherwise fail silently mid-run — a literal "{{baseUrl}}" left in
             // startUrl becomes a navigation error 30s in, with no hint that a
             // suite variable was simply never provided. Surface it here, up
@@ -227,7 +227,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             // 2. Build engine params
             const runParams = this.buildRunParams(config, input, context);
 
-            // RI-C1: the resolved {{variables}} feed the replay tier's %placeholder%
+            // the resolved {{variables}} feed the replay tier's %placeholder%
             // substitution into recorded Text/Url steps (harmless on the LLM tier,
             // which ignores VariableValues). Fresh values each run, tokens in the trace.
             const runVariableValues = this.coerceVariableValues(variableValues);
@@ -237,23 +237,23 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             if (applicationContext) {
                 runParams.ApplicationContext = applicationContext;
             }
-            // Rubric judging (CU-D1): thread the test's authored validation
+            // Rubric judging: thread the test's authored validation
             // criteria into the in-run judge so Done is derived per-criterion.
             if (expected.judgeValidationCriteria && expected.judgeValidationCriteria.length > 0) {
                 runParams.ValidationCriteria = expected.judgeValidationCriteria;
             }
-            // Checkpoint tour (CU-D8): map the test's declared sections to engine
+            // Checkpoint tour: map the test's declared sections to engine
             // checkpoints so the run is verified section-by-section, not on a single
             // final-frame judge.
             if (expected.checkpoints && expected.checkpoints.length > 0) {
                 runParams.Checkpoints = expected.checkpoints.map(cp => this.toRunCheckpoint(cp));
             }
-            // Per-test UI hints (CU-E5): inject after the goal in the controller prompt.
+            // Per-test UI hints: inject after the goal in the controller prompt.
             if (input.hints && input.hints.length > 0) {
                 runParams.Hints = input.hints;
             }
 
-            // Failure-artifact tracing (CU-F4): when the policy calls for capture,
+            // Failure-artifact tracing: when the policy calls for capture,
             // point the engine at a temp trace file for this run. The engine writes
             // it on completion; retain-or-discard is decided post-run by outcome.
             // Default 'off' → no TracePath → no trace, no overhead.
@@ -269,7 +269,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             this.logToTestRun(context, 'info', `Executing Computer Use: goal="${goalEcho}", startUrl="${input.startUrl ?? 'none'}"`);
 
             // 3. Execute with timeout. The engine owns the agent-time budget
-            // (CU-B4): it self-expires *gracefully* at effectiveTimeout with a
+            //: it self-expires *gracefully* at effectiveTimeout with a
             // forced final judge, so the run is scored on evidence. The driver's
             // own Stop() timer (in executeWithTimeout) is widened to a generous
             // outer failsafe that only fires if the engine is genuinely hung.
@@ -281,7 +281,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             // 4. Build actual output with execution configuration
             const actualOutput = this.buildActualOutput(result);
 
-            // RI-C1/RI-D4: tier telemetry. `tier` is the tier that produced this
+ ///tier telemetry. `tier` is the tier that produced this
             // result (a diverged replay that fell back reports 'llm'); `replay`
             // is present whenever a replay was ATTEMPTED, so the drift signal
             // (Diverged > 0) survives even a green LLM-fallback result.
@@ -340,7 +340,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             const oracleResults = await this.runOracles(config, input, expected, actualOutput, context);
 
             // 6. Calculate score and status. Advisory oracles (e.g. step-count)
-            // are scored for diagnostics but do NOT gate Passed/Failed (CU-D3),
+            // are scored for diagnostics but do NOT gate Passed/Failed,
             // so status is determined only by gating oracles. With no gating
             // oracle, fall back to engine success (the prior zero-oracle rule).
             const { gating, score } = this.scoreOracleResults(oracleResults, config.scoringWeights);
@@ -351,7 +351,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             const passedChecks = oracleResults.filter(r => r.passed).length;
             const totalChecks = oracleResults.length;
 
-            // 6b. Classify the failure (CU-F5) from engine signals + oracle results,
+            // 6b. Classify the failure from engine signals + oracle results,
             //     so deterministic failures can be told apart and the retry policy
             //     can key on the class. Stamped on the result and actualOutput.
             const failureClass = this.computeFailureClass(result, gating, !!runParams.AppProfile?.ReadinessBeacon);
@@ -360,7 +360,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 this.logToTestRun(context, 'info', `Failure class: ${failureClass}`);
             }
 
-            // 6c. Divergence telemetry (CU-D7): keep the controller self-report,
+            // 6c. Divergence telemetry: keep the controller self-report,
             //     the judge verdict, and the deterministic oracle outcome as three
             //     SEPARATE signals + their pairwise agreement, so a suite run can
             //     estimate judge error and alarm on trend shifts.
@@ -375,11 +375,11 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             }
 
             // 7. Build structured outputs (screenshots from each step) + retain the
-            //    forensic trace per policy (CU-F4) — kept on failure, discarded on pass.
+            //    forensic trace per policy — kept on failure, discarded on pass.
             const outputs = this.buildOutputs(result);
             await this.appendTraceArtifact(outputs, result, tracePolicy, status === 'Passed', context);
 
-            // 7b. RI-B1: record a replay-trace CANDIDATE from a green, recordable LLM
+            // 7b. record a replay-trace CANDIDATE from a green, recordable LLM
             //     leg (never from a pure replay — that would launder healed selectors
             //     without fresh derivation). Written to the per-run out dir; a human
             //     lands it in the committed store via `mj test regression promote-traces`.
@@ -526,10 +526,10 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         return cp;
     }
 
-    // ─── Console logging (DR-G8) ───────────────────────────
+    // ─── Console logging ───────────────────────────
 
     /**
-     * Filtered, test-tagged console logging (DR-G8) — overrides the base so BOTH
+     * Filtered, test-tagged console logging — overrides the base so BOTH
      * this driver's lifecycle messages and the engine's per-step stream take one
      * consistent path.
      *
@@ -591,15 +591,15 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         if (config.screenshotHistoryDepth != null) {
             params.ScreenshotHistoryDepth = config.screenshotHistoryDepth;
         }
-        // Element-grounded perception (CU-A4): opt-in per test/suite; default off
+        // Element-grounded perception: opt-in per test/suite; default off
         // (coordinate mode) until baked in across the suite.
         params.ElementGrounding = config.elementGrounding ?? false;
-        // Per-test controller generation overrides (CU-E6): determinism knobs.
+        // Per-test controller generation overrides: determinism knobs.
         if (config.generation) {
             params.ControllerGeneration = config.generation;
         }
 
-        // Adaptive settle profile (CU-A1/A2): MJ-Explorer defaults, config-overridable.
+        // Adaptive settle profile: MJ-Explorer defaults, config-overridable.
         params.AppProfile = this.buildAppProfile(config);
 
         // Browser config
@@ -668,12 +668,12 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         params.AgentRunId = config.agentRunId;
 
         // Wire engine logs to test run logs so they appear in the testing UI.
-        // Console output is filtered (DR-G8) — the record still gets everything.
+        // Console output is filtered — the record still gets everything.
         params.LogCallback = (level: 'info' | 'warn' | 'error', message: string) => {
             this.logToTestRun(context, level, message);
         };
 
-        // RI-D2: non-blind retry. On a retry, feed the most recent failed attempt's
+        // non-blind retry. On a retry, feed the most recent failed attempt's
         // memo to the controller so attempt 2+ isn't a blind re-roll — the engine
         // renders it into the controller prompt (PreviousAttemptSummary). Empty/first
         // attempt → undefined → identical to today's behavior.
@@ -686,12 +686,12 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     }
 
     /**
-     * MJ Explorer defaults for the app-neutral settle loop (CU-A1/A2), overridable
+     * MJ Explorer defaults for the app-neutral settle loop, overridable
      * per test via `config.appProfile`. This is where MJ-specific signals live —
      * the Layer-1 engine never names them.
      *
      * - Readiness beacon: `[data-mj-ready="true"]`, which MJExplorer's shell sets
-     *   on `<html>` when the active route's NotifyLoadComplete fires (CU-A2).
+     *   on `<html>` when the active route's NotifyLoadComplete fires.
      * - Busy markers: MJ's loading component (`mj-loading` / `.mj-loading`),
      *   merged with the engine's app-neutral `[aria-busy]` / `[role=progressbar]`.
      */
@@ -711,7 +711,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             profile.Settle = settle;
         }
 
-        // Auth-detour watchdog (CU-B7). MJ Explorer authenticates via Auth0 or
+        // Auth-detour watchdog. MJ Explorer authenticates via Auth0 or
         // Microsoft Entra (MSAL); when a mid-run session invalidation bounces the
         // page to one of those, the watchdog recovers it without charging the
         // agent and, past MaxDetours, ends the run as an infrastructure
@@ -750,7 +750,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             engine.SetBrowserAdapter(adapter);
         }
 
-        // CU-G3: mark the context ephemeral for the isolated/fresh strategies
+        // mark the context ephemeral for the isolated/fresh strategies
         // ("new" → GetIsolated, released after the run; "new-clean" → engine
         // owns and fully closes its own context). Both are destroyed rather
         // than recycled, so teardown can skip the between-test state scrub
@@ -771,7 +771,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         // The engine self-expires gracefully at timeoutMs (its MaxExecutionTimeMs
         // agent budget) with a forced final judge. This driver-side hard Stop() is
         // now only an OUTER FAILSAFE for a genuinely hung engine, so it fires at
-        // 2× the agent budget (CU-B4). If it ever fires, the engine didn't expire
+        // 2× the agent budget. If it ever fires, the engine didn't expire
         // on its own — a real hang, correctly surfaced as a hard timeout.
         const failsafeMs = timeoutMs > 0 ? timeoutMs * ComputerUseTestDriver.TIMEOUT_FAILSAFE_MULTIPLIER : 0;
         const armFailsafe = (): void => {
@@ -790,7 +790,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         armFailsafe();
 
         try {
-            // RI-C1: replay-first tier dispatch (load trace → decide tier → Replay
+            // replay-first tier dispatch (load trace → decide tier → Replay
             // or Run, with in-attempt LLM fallback on divergence). The failsafe is
             // re-armed when a stale trace forces the LLM restart, so the clean leg
             // gets the whole failsafe window instead of whatever replay left over —
@@ -800,7 +800,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             const result = dispatch.result;
 
             // Collect browser diagnostics (console errors, network failures, crashes).
-            // The engine now drains them per step (CU-A7), so the authoritative
+            // The engine now drains them per step, so the authoritative
             // source is each step's Diagnostics — the adapter's buffer is empty
             // by now. Aggregate across steps (properly typed, no `unknown` cast).
             const browserDiagnostics: BrowserDiagnosticEvent[] = result.Steps.flatMap(s => s.Diagnostics ?? []);
@@ -832,7 +832,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     }
 
     /**
-     * RI-C1 tier dispatch. Loads this test's committed trace, decides the tier
+     * tier dispatch. Loads this test's committed trace, decides the tier
      * (`config.forceTier` override, else `decideReplayTier` over build/goal), and:
      *  - replay/replay-with-heal (trace present) → `engine.Replay`; on divergence
      *    (Status ≠ Completed) fall back to `engine.Run` WITHIN this attempt, feeding
@@ -889,7 +889,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     }
 
     /**
-     * RI-B1: record a replay-trace candidate when a green LLM leg is recordable.
+     * record a replay-trace candidate when a green LLM leg is recordable.
      * Gate (ALL required): the executing leg was LLM (a pure replay is never
      * re-recorded — it would launder healed selectors), status Passed, every
      * gating oracle green (the Layer-2 fact the recorder can't see), and the
@@ -1138,26 +1138,26 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             finalUrl: result.FinalUrl,
             finalScreenshot: result.FinalScreenshot,
             stepCount: result.Steps.length,
-            // Auth-detour watchdog telemetry (CU-B7) — always present so a flaky
+            // Auth-detour watchdog telemetry — always present so a flaky
             // session shows up even on runs that recovered and still passed.
             authDetourCount: result.AuthDetourCount,
         };
 
-        // Engine-named failure reason (CU-B1/B7), when set — surfaced for the
+        // Engine-named failure reason, when set — surfaced for the
         // classifier and for at-a-glance triage of the raw output.
         if (result.FailureReason) {
             output.failureReason = result.FailureReason;
         }
 
-        // Non-blind retry memo (RI-D2 / CU-B6), when the engine produced one. Also
+        // Non-blind retry memo, when the engine produced one. Also
         // surfaced on DriverExecutionResult.failureMemo so the retry loop can feed
         // it to the next attempt as PreviousAttemptSummary.
         if (result.FailureMemo) {
             output.failureMemo = result.FailureMemo;
         }
 
-        // Final-step interactive elements (CU-A4 recording) exposed as a recorded
-        // postcondition for the dom-assert oracle (CU-D2). Present only when
+ // Final-step interactive elements (recording) exposed as a recorded
+        // postcondition for the dom-assert oracle. Present only when
         // element grounding was on; role/name/selector per element.
         const lastElements = result.Steps.length > 0
             ? result.Steps[result.Steps.length - 1].InteractiveElements
@@ -1241,7 +1241,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                         case 'Scroll':
                             rec.deltaX = a.DeltaX; rec.deltaY = a.DeltaY;
                             if (a.Selector) rec.selector = a.Selector;
-                            // CU-A8 scroll-at point: 0 is a legal coordinate, so test presence.
+ // scroll-at point: 0 is a legal coordinate, so test presence.
                             if (a.X !== undefined && a.Y !== undefined) { rec.x = a.X; rec.y = a.Y; }
                             break;
                         case 'Wait':
@@ -1305,7 +1305,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     }
 
     /**
-     * Retain (or discard) the run's forensic trace per the CU-F4 policy. The
+     * Retain (or discard) the run's forensic trace per the policy. The
      * engine already wrote the trace to `result.TracePath` (when tracing was
      * requested); here we decide whether to keep it: on retention we inline the
      * zip as a `File` TestRunOutput (openable at trace.playwright.dev) and then
@@ -1364,7 +1364,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         config: ComputerUseTestConfig,
         context: DriverExecutionContext
     ): Promise<DriverExecutionResult> {
-        // CU-D4: a timeout is not a scoring blackout. The partial actualOutput
+        // a timeout is not a scoring blackout. The partial actualOutput
         // (finalUrl / finalScreenshot / stepHistory) still exists, so run the
         // oracles against it and attach the diagnostic score — a run that
         // completed the goal at step 30 and got stopped mid-judge should not
@@ -1382,14 +1382,14 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
         // The engine hung past its own budget and the driver force-stopped it.
         // Classify as a time overrun (timeout-stuck/progressing) unless an
-        // app-error/crash better explains it (CU-F5). result.Status here is the
+        // app-error/crash better explains it. result.Status here is the
         // forced-Stop 'Cancelled', so override to TimeBudgetExceeded for intent.
         const failureClass = this.computeFailureClass(result, gating, !!config.appProfile?.readinessBeacon, 'TimeBudgetExceeded');
         if (failureClass) {
             (actualOutput as Record<string, unknown>).failureClass = failureClass;
         }
 
-        // A timeout is a failure for retention purposes — keep the trace (CU-F4).
+        // A timeout is a failure for retention purposes — keep the trace.
         const outputs = this.buildOutputs(result);
         await this.appendTraceArtifact(outputs, result, config.trace ?? 'off', false, context);
 
@@ -1424,14 +1424,14 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         context: DriverExecutionContext,
         tracePolicy: ArtifactRetentionPolicy
     ): Promise<DriverExecutionResult> {
-        // Classify (CU-F5): normally 'cancelled', unless an app-error/crash was
+        // Classify: normally 'cancelled', unless an app-error/crash was
         // the real cause before the cancel. (beaconConfigured is don't-care here —
         // a 'Cancelled' status resolves before the beacon branch.)
         const failureClass = this.computeFailureClass(result, [], false);
         if (failureClass) {
             (actualOutput as Record<string, unknown>).failureClass = failureClass;
         }
-        // A cancellation is a non-pass — keep the trace (CU-F4).
+        // A cancellation is a non-pass — keep the trace.
         const outputs = this.buildOutputs(result);
         await this.appendTraceArtifact(outputs, result, tracePolicy, false, context);
         return {
@@ -1636,7 +1636,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
      * Partition oracle results into gating (status-determining) and advisory,
      * and compute the diagnostic score. Advisory results are excluded from the
      * gating score unless *every* oracle is advisory (in which case they're all
-     * we have to score against). (CU-D3)
+     * we have to score against).
      */
     private scoreOracleResults(
         oracleResults: OracleResult[],
@@ -1648,7 +1648,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     }
 
     /**
-     * Classify a finished run into a machine-readable failure class (CU-F5) from
+     * Classify a finished run into a machine-readable failure class from
      * engine signals (loop detection, settle-budget, beacon, diagnostics,
      * terminal status) + the gating oracle results. Returns undefined on success.
      * `gatingOracles` are the status-determining oracles (advisory excluded).

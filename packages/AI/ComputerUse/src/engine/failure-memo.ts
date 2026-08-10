@@ -1,16 +1,10 @@
 /**
- * Failure memo for non-blind retries (CU-B6, part 3).
+ * Builds the compact memo the engine emits on any non-passing terminal status, so
+ * retries aren't blind. The driver's retry policy feeds it back as
+ * `PreviousAttemptSummary` ("previous attempt failed because X; avoid Y").
  *
- * MJ's retries re-run blind with an identical prompt (today: ~32% attempt-2
- * pass rate). Reflexion (arXiv:2303.11366) shows a verbal summary of what failed,
- * fed into the next attempt, materially lifts retry success. On any non-passing
- * terminal status the engine emits a compact memo; the driver's retry policy
- * feeds it back as `PreviousAttemptSummary` so attempt 2 is meaningfully
- * different from attempt 1 ("previous attempt failed because X; avoid Y").
- *
- * Pure and app-agnostic — the caller supplies the facts; this shapes + bounds
- * the memo. Production/consumption is per-test scope (this plan); WHEN a retry
- * is scheduled is the sibling plan's retry policy.
+ * Pure and app-agnostic — the caller supplies the facts; this shapes and bounds
+ * the memo. When a retry is scheduled is the retry policy's concern.
  */
 
 /** The facts a failure memo is distilled from — supplied by the engine at terminal. */

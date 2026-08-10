@@ -1,5 +1,5 @@
 /**
- * @fileoverview History command implementation (DR-G6)
+ * @fileoverview History command implementation
  * @module @memberjunction/testing-cli
  */
 
@@ -32,7 +32,7 @@ interface TestRunQueryRow {
  *
  * Flake is derived from cross-run outcome inconsistency (a test that both
  * passes and fails in the window); the per-attempt "passed-only-on-retry"
- * column (DR-D8) is not yet in the DB. Cost is 0 everywhere until CU-plan
+ * column is not yet in the DB. Cost is 0 everywhere until CU-plan
  * telemetry lands, so it is shown as n/a with a note.
  */
 export class HistoryCommand {

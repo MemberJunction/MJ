@@ -58,7 +58,7 @@ export class LLMJudge extends BaseJudge {
         const request = new JudgePromptRequest();
         request.Goal = context.Goal;
         request.CurrentScreenshot = context.CurrentScreenshot;
-        // Current-frame-only by default (CU-D5): "is the goal visibly done?"
+        // Current-frame-only by default: "is the goal visibly done?"
         // almost always needs only the current frame, and re-uploading the full
         // image history every judge call is the dominant judge cost. The textual
         // step summary (URLs + per-action OK/FAIL + page-state) carries the
@@ -127,7 +127,7 @@ export class LLMJudge extends BaseJudge {
     }
 
     /**
-     * When the judge returned per-criterion rubric verdicts (CU-D1), override
+     * When the judge returned per-criterion rubric verdicts, override
      * the scalar Done/Confidence with the binary rubric derivation: Done =
      * all-criteria-met, Confidence = coverage, Reason lists any unmet criteria.
      * A missing/empty `criteria` array leaves the scalar verdict untouched
@@ -169,12 +169,12 @@ export class LLMJudge extends BaseJudge {
             const actions = step.ActionsRequested
                 .map(a => a.Type)
                 .join(', ');
-            // Per-action OK/FAIL so the judge sees which actions actually landed (CU-D5).
+            // Per-action OK/FAIL so the judge sees which actions actually landed.
             const results = step.ActionResults
                 .map(r => r.Success ? 'OK' : `FAIL:${r.Error ?? 'unknown'}`)
                 .join(', ');
             const resultNote = results ? ` → [${results}]` : '';
-            // Post-action URL (CU-A8) + page-state (CU-A1/A2) so a half-rendered
+            // Post-action URL + page-state so a half-rendered
             // page is distinguishable from a broken one.
             const url = this.compactUrl(step.UrlAfter || step.Url);
             const urlNote = url ? ` [${url}]` : '';
@@ -186,7 +186,7 @@ export class LLMJudge extends BaseJudge {
         }).join('\n');
     }
 
-    /** Compact URL (path + query, origin dropped) for the judge step summary (CU-D5). */
+    /** Compact URL (path + query, origin dropped) for the judge step summary. */
     private compactUrl(url: string): string {
         if (!url) return '';
         try {
@@ -225,6 +225,6 @@ interface JudgeParsedResponse {
     confidence?: number;
     reason?: string;
     feedback?: string;
-    /** Per-criterion rubric verdicts (CU-D1), when a rubric was supplied. */
+    /** Per-criterion rubric verdicts, when a rubric was supplied. */
     criteria?: Array<{ criterion?: string; met?: boolean; evidence?: string }>;
 }

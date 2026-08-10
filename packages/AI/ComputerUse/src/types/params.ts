@@ -1,15 +1,7 @@
 /**
- * Run parameters for the Computer Use engine.
- *
- * RunComputerUseParams is the single entry point for configuring a run.
- * It composes types from other modules (auth, tools, browser, judge)
- * into a unified configuration object.
- *
- * Layer 2 (MJRunComputerUseParams) extends this with MJ-specific fields
- * like prompt entity references, contextUser, and agentRunId.
- *
- * Most fields are optional with sensible defaults — callers only need
- * to set `Goal` (and optionally `StartUrl`) for a basic run.
+ * Run parameters for the Computer Use engine. `RunComputerUseParams` is the
+ * single entry point for configuring a run — only `Goal` is required.
+ * `MJRunComputerUseParams` (Layer 2) extends it with MJ-specific fields.
  */
 
 import { ComputerUseAuthConfig } from './auth.js';
@@ -20,23 +12,15 @@ import type { JudgeFrequency } from './judge.js';
 import type { AppProfile } from './app-profile.js';
 import { GoalPostcondition } from './trace.js';
 
-// ─── Model Config ──────────────────────────────────────────
-/**
- * Lightweight model selection for the controller and judge LLMs.
- *
- * Layer 1 only needs vendor + model name strings — it passes these
- * to the LLM provider without MJ-specific entity resolution.
- * Layer 2 overrides this with MJ prompt entity references.
- */
+/** Model selection for the controller and judge LLMs. */
 export class ModelConfig {
     /** AI vendor identifier (e.g., "anthropic", "openai", "google") */
     public Vendor: string;
     /** Model identifier (e.g., "claude-sonnet-4-5-20250929", "gpt-4o") */
     public Model: string;
     /**
-     * Optional: explicit LLM driver class name (e.g., "AnthropicLLM", "VertexLLM").
-     * When set, the engine uses this directly for ClassFactory instead of
-     * mapping from the Vendor string. Set by Layer 2 from AI Model metadata.
+     * Explicit LLM driver class name (e.g., "AnthropicLLM"). When set, used
+     * directly for ClassFactory instead of mapping from `Vendor`.
      */
     public DriverClass?: string;
 
@@ -47,21 +31,13 @@ export class ModelConfig {
     }
 }
 
-// ─── Deterministic Prelude (CU-C6) ─────────────────────────
 /**
- * A scripted, deterministic prelude run BEFORE the agentic loop (CU-C6) — the
- * "get to the feature under test" navigation that is permanently known and must
- * never be LLM-derived every run. Actions execute straight through the adapter
- * (nav guard + auth honored), consuming zero LLM budget. This removes the
- * app-switcher-hunt archetype and several wasted steps from every test.
- *
- * App-agnostic: the actions + landing checks are opaque data the caller supplies
- * from test metadata. Tests whose SUBJECT is navigation keep the agentic path
- * (no prelude). Deep-link entry is handled by {@link RunComputerUseParams.StartUrl}
- * itself; the prelude covers multi-step scripted setup beyond a single URL.
+ * Scripted navigation run before the agentic loop to reach the feature under
+ * test. Executes straight through the adapter (nav guard + auth honored) and
+ * consumes zero LLM budget.
  */
 export class RunPrelude {
-    /** Ordered deterministic actions run before the agentic loop (zero LLM). */
+    /** Ordered deterministic actions run before the agentic loop. */
     public Actions: BrowserAction[] = [];
     /** Optional: a selector the prelude must reach — verifies it landed. */
     public ExpectSelector?: string;
@@ -69,51 +45,33 @@ export class RunPrelude {
     public ExpectUrlPattern?: string;
 }
 
-// ─── Checkpoint Tours (CU-D8) ──────────────────────────────
 /**
- * One section of a multi-section "tour" test — a sub-goal the run must pass
- * through and verify (CU-D8). A checkpoint is **met** when *all* its declared
- * checks pass: every {@link Assertions} entry (deterministic, latched for free
- * every step) AND every {@link VisualCriteria} entry (latched at a judge call).
- *
- * A tour is defined as an ordered list of these on
- * {@link RunComputerUseParams.Checkpoints}; the run passes iff every checkpoint
- * latches met (latches are sticky — once met, never cleared). This verifies each
- * section was actually reached, without relying on a single final-frame judge
- * that can't see earlier sections. See
+ * One section of a multi-section "tour" test. A checkpoint is **met** when all
+ * its {@link Assertions} and {@link VisualCriteria} pass. See
  * `plans/regression-testing/checkpoint-tours-design.md`.
  */
 export class RunCheckpoint {
     /** Stable label for the section, e.g. "agents-list". */
     public Name: string = '';
     /**
-     * Plan hint appended to the goal so the controller knows to pass through
-     * here. Also the criterion text in the synthesized final verdict.
+     * Plan hint appended to the goal, and the criterion text in the synthesized
+     * final verdict.
      */
     public Instruction?: string;
     /**
-     * Deterministic assertions that latch this checkpoint for FREE, checked every
-     * step (URL always available; `visible`/`absent` require {@link
-     * RunComputerUseParams.ElementGrounding}). Preferred — most sections are
-     * URL-identifiable.
+     * Deterministic assertions, checked every step at no cost. `visible`/`absent`
+     * require {@link RunComputerUseParams.ElementGrounding}. Preferred — most
+     * sections are URL-identifiable.
      */
     public Assertions?: GoalPostcondition[];
     /**
-     * Visual/subjective criteria requiring an LLM judge (e.g. "the chart rendered
-     * with bars"). Latched when a judge call reports all of them met. Optional —
-     * omit when a section is fully verifiable by {@link Assertions}.
+     * Criteria requiring an LLM judge (e.g. "the chart rendered with bars").
+     * Latched when a judge call reports all of them met.
      */
     public VisualCriteria?: string[];
 }
 
-// ─── Run Parameters ────────────────────────────────────────
-/**
- * Complete configuration for a Computer Use engine run.
- *
- * Required: `Goal` (what to accomplish)
- * Recommended: `StartUrl` (where to begin)
- * Everything else has sensible defaults.
- */
+/** Complete configuration for a Computer Use engine run. */
 export class RunComputerUseParams {
     /** Natural-language goal for the agent to accomplish */
     public Goal: string = '';
@@ -124,60 +82,41 @@ export class RunComputerUseParams {
     /** Run browser in headless mode (default: true) */
     public Headless: boolean = true;
 
-    /**
-     * Domains the browser is allowed to visit.
-     * If set, all other domains are blocked.
-     * If empty/undefined, all domains are allowed (open navigation).
-     */
+    /** Domains the browser may visit. When set, all others are blocked. */
     public AllowedDomains?: string[];
 
-    /**
-     * Domains explicitly blocked.
-     * Evaluated AFTER AllowedDomains — blocked always wins.
-     */
+    /** Domains explicitly blocked. Evaluated after AllowedDomains — blocked always wins. */
     public BlockedDomains?: string[];
 
-    /** Maximum number of controller loop steps before forced termination (default: 30) */
+    /** Maximum controller loop steps before forced termination (default: 30) */
     public MaxSteps: number = 30;
 
     /**
-     * Number of recent screenshots to include in controller context.
-     * Acts as a ring buffer — older screenshots are dropped.
+     * Recent screenshots included in controller context, as a ring buffer.
      * Higher values give more context but increase token usage. (default: 20)
      */
     public ScreenshotHistoryDepth: number = 20;
 
     /**
-     * Delay in milliseconds before each screenshot capture.
-     * Gives the page time to render after actions (clicks, navigation, typing)
-     * before the screenshot is taken for the next LLM reasoning step.
-     * Set to 0 to disable. (default: 500)
-     *
-     * With CU-A1's adaptive settle loop this is now the *floor* fallback used
-     * only when no {@link AppProfile} is provided; when a profile is present the
-     * settle loop's `MinWaitMs` governs the floor instead.
+     * Delay before each screenshot capture, giving the page time to render.
+     * (default: 500, 0 disables). Only the floor fallback when no
+     * {@link AppProfile} is supplied — otherwise the settle loop's `MinWaitMs` governs.
      */
     public ScreenshotDelayMs: number = 500;
 
     /**
-     * Application profile (CU-A1/A2): app-specific readiness/busy signals the
-     * adaptive settle loop consults before perceiving — busy-marker selectors,
-     * an optional readiness beacon, and settle tuning. The engine stays
-     * app-agnostic and merges these with its app-neutral defaults; Layer 2
-     * (driver / suite metadata) supplies the concrete values. Omit for
+     * App-specific readiness/busy signals the adaptive settle loop consults
+     * before perceiving. Merged with the engine's app-neutral defaults. Omit for
      * zero-config heuristic settling.
      */
     public AppProfile?: AppProfile;
 
     /**
-     * Maximum *agent* time (ms) before the run gracefully expires with a
-     * `TimeBudgetExceeded` status (CU-B4). "Agent time" excludes engine-side
-     * settle waiting (ΣSettleMs) — a slow app must not consume the agent's
-     * reasoning budget (pairs with CU-A1). The engine checks this at each step
-     * boundary and, on expiry, runs one forced final judge so the run is scored
-     * on real end-state rather than zeroed. Omit/0 to disable engine-side time
-     * budgeting (the caller's outer failsafe still applies). Distinct from
-     * MaxSteps, which bounds decision count.
+     * Maximum *agent* time (ms) before the run expires with `TimeBudgetExceeded`,
+     * excluding engine-side settle waiting so a slow app doesn't consume the
+     * agent's reasoning budget. On expiry one forced final judge runs so the run
+     * is still scored. Omit/0 to disable. Distinct from MaxSteps, which bounds
+     * decision count.
      */
     public MaxExecutionTimeMs?: number;
 
@@ -200,129 +139,101 @@ export class RunComputerUseParams {
     public Auth?: ComputerUseAuthConfig;
 
     /**
-     * Judge evaluation frequency (default: EveryStep).
-     * Use EveryNSteps or OnStagnation to reduce LLM costs.
+     * Judge evaluation frequency (default: EveryStep). Use EveryNSteps or
+     * OnStagnation to reduce LLM costs.
      */
     public JudgeFrequency?: JudgeFrequency;
 
     /** Browser-specific configuration (viewport, user agent, timeouts) */
     public BrowserConfig?: BrowserConfig;
 
-    /**
-     * Optional callback for logging engine messages.
-     * If provided, all log messages will be sent to this callback
-     * in addition to (or instead of) console output.
-     * Useful for test drivers to capture logs for test run records.
-     */
+    /** Receives all engine log messages in addition to console output. */
     public LogCallback?: (level: 'info' | 'warn' | 'error', message: string) => void;
 
     /**
-     * Free-form markdown context about the application being tested. Rendered
-     * into the controller's system prompt under an "## Application Context"
-     * heading so the LLM doesn't rediscover navigation landmarks, route
-     * conventions, etc. on every test. When the engine is driven by the
-     * TestingFramework, this is typically sourced from `TestSuite.Configuration.
-     * applicationContext` and optionally extended per-test.
+     * Free-form markdown about the application under test, rendered into the
+     * controller prompt under "## Application Context" so the LLM doesn't
+     * rediscover navigation landmarks every test. Typically sourced from
+     * `TestSuite.Configuration.applicationContext`.
      */
     public ApplicationContext?: string;
 
     /**
-     * Signals that the browser context backing this run is disposable — it will
-     * be destroyed immediately after the run (e.g. a per-worker isolated context
-     * that the pool releases), rather than recycled for a subsequent test.
-     *
-     * When `true`, teardown skips the between-test state scrub
-     * (`ResetStatePreservingAuth`), which otherwise re-navigates to the app
-     * origin to clear storage — a wasted app boot in a context that is about to
-     * be thrown away (CU-G3). Leave `false`/unset for legacy recycled shared
-     * contexts, where the scrub is required so the next test starts clean.
+     * The browser context will be destroyed right after this run rather than
+     * recycled. Teardown then skips the between-test state scrub, which would
+     * otherwise re-navigate to the app origin — a wasted app boot. Leave
+     * false/unset for recycled shared contexts, where the scrub is required.
      */
     public EphemeralContext?: boolean;
 
     /**
-     * When set, the engine records a forensic browser trace (DOM snapshots +
-     * screenshots + network + console) for the whole run and writes it to this
-     * path on completion (CU-F4). The written path is echoed on
-     * {@link ComputerUseResult.TracePath}. Leave unset to skip tracing entirely
-     * (no overhead). The *retain-or-discard* policy is the caller's — the engine
-     * always writes here when set; the caller keeps or deletes the file based on
-     * the run outcome.
+     * When set, records a forensic browser trace (DOM + screenshots + network +
+     * console) and writes it here on completion, echoed on
+     * {@link ComputerUseResult.TracePath}. Retain-or-discard is the caller's
+     * policy. Unset skips tracing entirely.
      */
     public TracePath?: string;
 
     /**
-     * Element-grounded perception (CU-A4). When true, each step the engine
-     * extracts the page's interactive elements into a stable indexed list,
-     * renders it into the controller prompt, and lets the controller act by
-     * index (ClickElement/TypeIntoElement) with locator-based actionability
-     * auto-wait instead of estimating coordinates. Default off (coordinate/
-     * vision mode) so the change is opt-in per test/suite until baked in.
+     * Extract the page's interactive elements into a stable indexed list each
+     * step so the controller can act by index (ClickElement/TypeIntoElement)
+     * with locator-based auto-wait instead of estimating coordinates. Default
+     * off (coordinate/vision mode).
      */
     public ElementGrounding?: boolean;
 
     /**
-     * Max browser actions the engine executes per step before stopping the batch
-     * (CU-B5). The controller may emit a coherent sequence (fill → Tab → fill →
-     * Enter); the engine runs them in order but halts on a failed action, a
-     * mid-batch route change, a page-changing action, or this cap. Default 4.
+     * Max browser actions executed per step before the batch stops (default 4).
+     * The engine also halts on a failed action, a mid-batch route change, or a
+     * page-changing action.
      */
     public MaxActionsPerStep?: number;
 
     /**
-     * Validation-criteria rubric for the run (CU-D1) — the test's authored pass
-     * criteria. Threaded into the judge, which returns a per-criterion verdict;
-     * `Done` is then derived as all-criteria-met (binary decisions are more
-     * stable than a scalar-confidence cliff). Empty → scalar judging.
+     * The test's authored pass criteria, threaded into the judge, which returns a
+     * per-criterion verdict; `Done` is derived as all-criteria-met. Empty →
+     * scalar judging.
      */
     public ValidationCriteria?: string[];
 
     /**
-     * Per-test UI hints (CU-E5) injected after the goal in the controller prompt
-     * — e.g. "the filter panel opens via the funnel icon". Documentation of the
-     * UI contract harvested from failure triage; empty when none.
+     * Per-test UI hints injected after the goal in the controller prompt — e.g.
+     * "the filter panel opens via the funnel icon".
      */
     public Hints?: string[];
 
     /**
-     * Concrete values for the test's declared variables, keyed by name (CU-C1/C2).
-     * On the replay tier the engine substitutes these into the `%placeholder%`
-     * tokens a recorded trace stores in typed text / navigate URLs — so a
-     * "create record named %recordName%" trace runs with a fresh name each time.
-     * A generic string map; the values themselves are never recorded. Ignored on
-     * the LLM tier.
+     * Values substituted into the `%placeholder%` tokens a recorded trace stores
+     * in typed text / navigate URLs, so a "create record named %recordName%"
+     * trace runs with a fresh name each time. Ignored on the LLM tier.
      */
     public VariableValues?: Record<string, string>;
 
     /**
-     * Deterministic prelude (CU-C6): scripted navigation run before the agentic
-     * loop to reach the feature under test, zero LLM. Omit for tests that begin
-     * at {@link StartUrl}, or whose subject IS navigation.
+     * Scripted navigation run before the agentic loop, zero LLM. Omit for tests
+     * that begin at {@link StartUrl}, or whose subject IS navigation.
      */
     public Prelude?: RunPrelude;
 
     /**
-     * Warm-seed snapshot (CU-G4): localStorage + IndexedDB captured once
-     * post-login and restored into this run's context before the app boots, so
-     * it doesn't cold-boot its metadata cache from the server. Restored
-     * best-effort (cold-boot-safe). Omit to cold-boot as before.
+     * localStorage + IndexedDB captured once post-login and restored before the
+     * app boots, so it doesn't cold-boot its metadata cache. Restored
+     * best-effort. Omit to cold-boot.
      */
     public ContextSeed?: ContextSeed;
 
     /**
-     * A memo from a PRIOR failed attempt at this goal (CU-B6), injected into the
-     * controller prompt so a retry is non-blind ("previous attempt failed
-     * because X; avoid Y"). Typically the {@link ComputerUseResult.FailureMemo}
-     * from the last attempt, fed back by the driver's retry policy. Omit on the
-     * first attempt.
+     * A memo from a prior failed attempt at this goal, injected into the
+     * controller prompt so a retry is non-blind. Typically the previous
+     * attempt's {@link ComputerUseResult.FailureMemo}.
      */
     public PreviousAttemptSummary?: string;
 
     /**
-     * Ordered tour checkpoints (CU-D8). When set, the run passes iff every
-     * checkpoint latches met (sticky), and the final verdict is synthesized from
-     * the latch state rather than a single end-state judge — so a multi-section
-     * tour is verified section-by-section. Empty/undefined → today's
-     * single-end-state judging over {@link ValidationCriteria}.
+     * Ordered tour checkpoints. When set, the run passes iff every checkpoint
+     * latches met (sticky) and the final verdict is synthesized from the latch
+     * state rather than a single end-state judge. Empty → single-end-state
+     * judging over {@link ValidationCriteria}.
      */
     public Checkpoints?: RunCheckpoint[];
 }

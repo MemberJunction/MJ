@@ -1,5 +1,5 @@
 /**
- * Engine-level watchdog for a single test execution (DR-D4).
+ * Engine-level watchdog for a single test execution.
  *
  * The engine awaited `driver.Execute()` with no timeout of its own: a driver
  * whose promise never settles wedged a worker forever, undetectably. Drivers set

@@ -45,14 +45,14 @@ export class HeuristicJudge extends BaseJudge {
     public override async Evaluate(context: JudgeContext): Promise<JudgeVerdict> {
         // Navigation-shape checks (stuck frame, URL loop) describe HOW the run is
         // moving, not whether a criterion is satisfied — so in a checkpoint tour
-        // (CU-D8) they must not answer on the judge's behalf. HybridJudge takes any
+        // they must not answer on the judge's behalf. HybridJudge takes any
         // confidence > 0 as final and skips the LLM, and the LLM judge is the only
         // thing that can latch a tour's visual criteria: a tour that tripped these
         // could never latch another section, no matter what it actually did on
         // screen. Both signals are false-positive-prone on a tour anyway — a
         // section can latch with no visible frame change, and tours are scripted to
         // revisit URLs (open→cancel, A→B→A). The engine still surfaces its own loop
-        // evidence to the controller (CU-B1), so nothing is silently dropped.
+        // evidence to the controller, so nothing is silently dropped.
         if (!context.IsCheckpointTour) {
             // Check stuck state (identical screenshots)
             const stuckVerdict = this.detectStuckState(context);
@@ -80,7 +80,7 @@ export class HeuristicJudge extends BaseJudge {
      * Detect if the page is stuck by comparing recent screenshot fingerprints.
      * N consecutive perceptually-similar frames = stuck.
      *
-     * Uses the shared dHash (CU-F6) rather than raw base64 equality: byte
+     * Uses the shared dHash rather than raw base64 equality: byte
      * equality is defeated by any animated spinner (every frame differs
      * byte-wise), so it silently MISSED genuine stalls behind a spinning
      * loader. dHash treats spinner frames as "unchanged", so a page frozen on a
@@ -124,7 +124,7 @@ export class HeuristicJudge extends BaseJudge {
     private detectNavigationLoop(steps: StepRecord[]): JudgeVerdict | null {
         if (steps.length < MIN_STEPS_FOR_LOOP_DETECTION) return null;
 
-        // Prefer the post-action URL (CU-A8) — it reflects where the step
+        // Prefer the post-action URL — it reflects where the step
         // actually landed, not where it started (which lagged navigation by one
         // step and skewed loop detection). Falls back to Url for older records.
         const urls = steps.map(s => s.UrlAfter || s.Url).filter(u => u.length > 0);

@@ -1,23 +1,16 @@
 /**
- * Trace recorder (CU-C1) — distill a passing run into a replayable trace.
+ * Distills a passing run into a replayable {@link ComputerUseTrace}, piggybacking
+ * on the {@link StepRecord}s the run already produces.
  *
- * The recording side is nearly free: it piggybacks on the {@link StepRecord}s a
- * run already produces and emits the durable, normalized {@link ComputerUseTrace}
- * that everything else in Theme C consumes (replay C2, heal C3, keying C4,
- * postconditions C5).
+ * Pure and app-agnostic — no browser, clock, or I/O. The caller supplies the
+ * timestamp, build identity, variables, goal postconditions, and `volatileParams`.
  *
- * Pure and app-agnostic: no browser, no clock, no I/O. The caller supplies the
- * timestamp, build identity, variables, and (from CU-C5) the goal postconditions;
- * app-specific URL volatility comes in as `volatileParams` (from the AppProfile).
- *
- * Recordable-run gate — which run "counts" (the plan's bar): a clean pass only.
- * Status Completed + judge Done + no FailureReason (no loop trip / auth detour)
- * + no step errors + every essential action is deterministically replayable.
- * Wait/Scroll are dropped (replay's settle + Playwright's action auto-wait /
- * auto-scroll-into-view subsume them); vision-only primitives (drag, raw
- * mouse/key up-down) and tool-call steps make a run NON-recordable rather than
- * yield a lossy trace. Oracle-green is a Layer-2 fact the driver ANDs in before
- * recording — Layer 1 asserts only what a result carries.
+ * Only a clean pass is recordable: status Completed + judge Done + no
+ * FailureReason + no step errors + every essential action deterministically
+ * replayable. Wait/Scroll are dropped, since replay's settle and Playwright's
+ * auto-wait subsume them; vision-only primitives (drag, raw mouse/key up-down)
+ * and tool-call steps make a run non-recordable rather than yield a lossy trace.
+ * Oracle-green is a Layer-2 fact the driver ANDs in before recording.
  */
 
 import { ComputerUseResult } from '../types/results.js';
@@ -42,9 +35,9 @@ export interface RecordTraceOptions {
     result: ComputerUseResult;
     /** Stable per-test identifier the trace is keyed by. */
     testId: string;
-    /** The (frozen) goal text — hashed into the trace for CU-C4 invalidation. */
+ /** The (frozen) goal text — hashed into the trace forinvalidation. */
     goal: string;
-    /** Opaque build identity at record time (CU-C4); '' when the caller has none. */
+    /** Opaque build identity at record time; '' when the caller has none. */
     appBuildHash?: string;
     /** Opaque app/package version string (generic — Layer 2 stamps its own). */
     appVersion?: string;
@@ -62,7 +55,7 @@ export interface RecordTraceOptions {
     volatileParams?: string[];
     /** Viewport at record time; defaults to 1280×720. */
     viewport?: { width: number; height: number };
-    /** Distilled goal-level postconditions (CU-C5); [] when none. */
+    /** Distilled goal-level postconditions; [] when none. */
     goalPostconditions?: GoalPostcondition[];
 }
 
@@ -141,8 +134,8 @@ export function recordTrace(options: RecordTraceOptions): ComputerUseTrace {
 /**
  * A stable, non-cryptographic hash of the goal text (djb2 → hex). The goal is
  * frozen fixture data: a reword changes the hash and demotes the test to the
- * LLM tier (CU-C4). Trivial whitespace differences are collapsed first so
- * reformatting alone doesn't invalidate. Exported so CU-C4 keying reuses it.
+ * LLM tier. Trivial whitespace differences are collapsed first so
+ * reformatting alone doesn't invalidate. Exported sokeying reuses it.
  */
 export function hashGoal(goal: string): string {
     const normalized = (goal ?? '').trim().replace(/\s+/g, ' ');

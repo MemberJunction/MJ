@@ -38,9 +38,9 @@ import {
     clickInteractiveElement,
     typeIntoInteractiveElement,
 } from './element-extraction.js';
-// CU-A7 ambiguous-selector narrowing, shared with PlaywrightBrowserAdapter.
+// ambiguous-selector narrowing, shared with PlaywrightBrowserAdapter.
 import { resolveActionLocator } from './selector-resolution.js';
-// CU-G4 warm-seed in-page storage helpers, shared with PlaywrightBrowserAdapter (RI-C4.1).
+// warm-seed in-page storage helpers, shared with PlaywrightBrowserAdapter.
 import { StorageSnapshot, captureStorageInPage, restoreStorageInPage } from './page-storage.js';
 
 export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
@@ -222,7 +222,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
         return buffer.toString('base64');
     }
 
-    // ─── Perception (CU-A3) ────────────────────────────────
+    // ─── Perception ────────────────────────────────────────
     // Delegated to the shared page-perception helpers so the suite adapter has
     // the SAME perception surface as PlaywrightBrowserAdapter. Before this, SCBA
     // inherited the no-op BaseBrowserAdapter defaults, so every settle/grounding/
@@ -254,7 +254,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
         return queryElement(this.page, selector, this.config.ActionTimeoutMs);
     }
 
-    /** Last extracted element list, cached so ClickElement/TypeIntoElement can resolve an index (CU-A4). */
+    /** Last extracted element list, cached so ClickElement/TypeIntoElement can resolve an index. */
     private lastInteractiveElements: InteractiveElement[] = [];
 
     public override async ExtractInteractiveElements(): Promise<InteractiveElement[]> {
@@ -295,10 +295,10 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
 
         switch (action.Type) {
             case 'Click': {
-                // Selector path (CU-A6): click the matched element directly with
+                // Selector path: click the matched element directly with
                 // actionability auto-wait; coordinates ignored. Mirrors PBA — this
                 // closes the SCBA parity gap so the suite honors Selector clicks.
-                // Ambiguous selectors are narrowed first (CU-A7).
+                // Ambiguous selectors are narrowed first.
                 if (action.Selector) {
                     const target = await resolveActionLocator(page, action.Selector);
                     await target.click({
@@ -333,7 +333,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
                 break;
             }
             case 'ClickElement':
-                // Element-grounded click (CU-A4): resolve the index to the extracted
+                // Element-grounded click: resolve the index to the extracted
                 // element and click its locator with actionability auto-wait.
                 await clickInteractiveElement(
                     page,
@@ -352,7 +352,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
                 );
                 break;
             case 'Type': {
-                // Selector path (CU-A6): focus the matched element first, then type.
+                // Selector path: focus the matched element first, then type.
                 if (action.Selector) {
                     const target = await resolveActionLocator(page, action.Selector);
                     await target.focus({ timeout: this.config.ActionTimeoutMs });
@@ -381,12 +381,12 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
                 await page.mouse.up({ button: action.Button });
                 break;
             case 'Scroll': {
-                // Selector path (CU-A6): bring the matched element into view.
+                // Selector path: bring the matched element into view.
                 if (action.Selector) {
                     const target = await resolveActionLocator(page, action.Selector);
                     await target.scrollIntoViewIfNeeded({ timeout: this.config.ActionTimeoutMs });
                 } else {
-                    // CU-A8: point the wheel at a container (open dropdown, inner
+                    // point the wheel at a container (open dropdown, inner
                     // scroll pane) instead of always hitting the main document.
                     if (action.X !== undefined && action.Y !== undefined) {
                         await page.mouse.move(action.X, action.Y);
@@ -396,7 +396,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
                 break;
             }
             case 'Wait':
-                // Selector path (CU-A6): wait for the element to appear (the preferred
+                // Selector path: wait for the element to appear (the preferred
                 // "wait for the thing, not a duration"); bounded by the action timeout.
                 if (action.Selector) {
                     await page.waitForSelector(action.Selector, { timeout: this.config.ActionTimeoutMs });
@@ -588,7 +588,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
         this.diagnosticBuffer.push(event);
     }
 
-    // ─── Failure Artifacts (CU-F4) ─────────────────────────
+    // ─── Failure Artifacts ─────────────────────────────────
 
     public override async StartTracing(): Promise<void> {
         // Per-run start/stop on the shared (pooled) context — Playwright scopes
@@ -678,7 +678,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
         }
     }
 
-    // ─── Warm-Seed Context Storage (CU-G4 / RI-C4.1) ───────
+    // ─── Warm-Seed Context Storage ─────────────────────
     // The suite adapter previously inherited BaseBrowserAdapter's no-op here, so
     // the warm seed silently did nothing in suite mode. These delegate to the
     // SAME page-storage helpers PlaywrightBrowserAdapter uses, on this adapter's

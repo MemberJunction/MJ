@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { distillGoalPostconditions, executeGoalPostconditions } from '../engine/postcondition.js';
+import { distillGoalPostconditions, executeGoalPostconditions, evaluatePreludeLanding } from '../engine/postcondition.js';
 import { StepRecord } from '../types/judge.js';
 import { InteractiveElement } from '../types/browser.js';
 import { GoalPostcondition, TraceTarget } from '../types/trace.js';
@@ -79,5 +79,25 @@ describe('executeGoalPostconditions (CU-C5)', () => {
         });
         expect(executeGoalPostconditions([absent], { url: 'http://x', elements: [el('heading', 'OK')] }).passed).toBe(true);
         expect(executeGoalPostconditions([absent], { url: 'http://x', elements: [el('alert', 'Error occurred')] }).passed).toBe(false);
+    });
+});
+
+
+describe('evaluatePreludeLanding (CU-C6)', () => {
+    it('lands trivially when nothing is declared', () => {
+        expect(evaluatePreludeLanding({ hasSelector: false, selectorVisible: false, hasUrl: false, urlMatched: false }).landed).toBe(true);
+    });
+    it('fails when a declared selector is not visible', () => {
+        const r = evaluatePreludeLanding({ hasSelector: true, selectorVisible: false, hasUrl: false, urlMatched: false });
+        expect(r.landed).toBe(false);
+        expect(r.reason).toContain('element not visible');
+    });
+    it('fails when a declared URL pattern does not match', () => {
+        const r = evaluatePreludeLanding({ hasSelector: false, selectorVisible: false, hasUrl: true, urlMatched: false });
+        expect(r.landed).toBe(false);
+        expect(r.reason).toContain('unexpected URL');
+    });
+    it('lands when the declared selector is visible and URL matches', () => {
+        expect(evaluatePreludeLanding({ hasSelector: true, selectorVisible: true, hasUrl: true, urlMatched: true }).landed).toBe(true);
     });
 });

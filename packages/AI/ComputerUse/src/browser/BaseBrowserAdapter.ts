@@ -28,7 +28,7 @@ import {
     ContextSeed,
 } from '../types/browser.js';
 
-// Re-exported for back-compat: the type now lives in types/browser.ts (CU-A7)
+// Re-exported for back-compat: the type now lives in types/browser.ts
 // so StepRecord and other pure types can carry it without importing an adapter.
 export type { BrowserDiagnosticEvent } from '../types/browser.js';
 
@@ -162,7 +162,7 @@ export abstract class BaseBrowserAdapter {
     /**
      * Extract the page's interactive elements (buttons/links/inputs/ARIA roles/
      * click affordances) as a stable indexed list for element-grounded
-     * perception (CU-A4). The returned indices are what a subsequent
+     * perception. The returned indices are what a subsequent
      * `ClickElement`/`TypeIntoElement` action resolves against, so an adapter
      * that implements this MUST cache the result to resolve those actions.
      *
@@ -339,12 +339,12 @@ export abstract class BaseBrowserAdapter {
         // No-op by default — adapters that share context across tests override this.
     }
 
-    // ─── Warm-Seed Context Storage (CU-G4) ─────────────────
+    // ─── Warm-Seed Context Storage ─────────────────────────
 
     /**
      * Capture a snapshot of the given origin's client-side storage (localStorage
      * + IndexedDB) for later restore into a fresh context — the warm-seed that
-     * kills the per-test cold-boot metadata refetch (CU-G4). The caller (driver)
+     * kills the per-test cold-boot metadata refetch. The caller (driver)
      * captures once post-login and reuses the seed across contexts.
      *
      * Default returns `null` (nothing to capture) so adapters without a live
@@ -360,7 +360,7 @@ export abstract class BaseBrowserAdapter {
 
     /**
      * Restore a previously-captured {@link ContextSeed} into the current context
-     * BEFORE the app boots (CU-G4). Best-effort and cold-boot-safe by contract:
+     * BEFORE the app boots. Best-effort and cold-boot-safe by contract:
      * any failure must leave the context to refetch from the server, never a
      * half-populated (corrupt) cache.
      *
@@ -382,7 +382,7 @@ export abstract class BaseBrowserAdapter {
         return [];
     }
 
-    // ─── Failure Artifacts (CU-F4) ─────────────────────────
+    // ─── Failure Artifacts ─────────────────────────────────
 
     /**
      * Begin recording a forensic trace of the session (DOM snapshots +

@@ -1,5 +1,5 @@
 /**
- * Shared page-perception helpers (CU-A3).
+ * Shared page-perception helpers.
  *
  * The perception surface — visible text, selection, title, load-state waiting,
  * accessibility snapshot, and single-element introspection — is identical for

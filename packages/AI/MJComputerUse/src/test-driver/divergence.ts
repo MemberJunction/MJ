@@ -1,5 +1,5 @@
 /**
- * Self-report vs judge vs oracle divergence (CU-D7) — pure, no I/O.
+ * Self-report vs judge vs oracle divergence — pure, no I/O.
  *
  * The field's replication crisis (browser-use 89%→60% on re-run; 20–50%
  * self-report inflation) was caught by keeping the controller's self-assessment,
@@ -33,7 +33,7 @@ export interface DivergenceReport extends DivergenceSignals {
     unanimous: boolean;
 }
 
-/** Compute the pairwise-agreement report from the three signals (CU-D7). */
+/** Compute the pairwise-agreement report from the three signals. */
 export function computeDivergence(s: DivergenceSignals): DivergenceReport {
     const selfVsJudgeAgree = s.selfReportDone === s.judgeDone;
     const judgeVsOracleAgree = s.judgeDone === s.oraclesPassed;

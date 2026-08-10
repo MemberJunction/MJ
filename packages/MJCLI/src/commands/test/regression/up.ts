@@ -51,7 +51,7 @@ export default class TestRegressionUp extends Command {
       description: 'Parallel workers (MAX_PARALLEL_WORKERS). Default 3. Size against runner memory — ' +
         'each browser worker needs ~1.5g; 4 workers OOM\'d the default-memory host.',
     }),
-    // DR-F5: resource-sizing flags → the existing compose mem_limit env knobs
+    // resource-sizing flags → the existing compose mem_limit env knobs
     // (shell env wins over --env-file, the same mechanism --workers/--retries use).
     'runner-memory': Flags.string({ description: 'Runner container memory limit (MJ_REGRESSION_RUNNER_MEM_LIMIT), e.g. 8g. Default 7g — sizes the Chromium browser workers.' }),
     'db-memory': Flags.string({ description: 'SQL Server container memory limit (MJ_REGRESSION_SQL_MEM_LIMIT), e.g. 6g. Default 4g.' }),
@@ -85,7 +85,7 @@ export default class TestRegressionUp extends Command {
     const childEnv: NodeJS.ProcessEnv = { ...process.env };
     const overlays: string[] = [];
 
-    // DR-C5: the self-contained stack bakes the generated entity forms into the
+    // the self-contained stack bakes the generated entity forms into the
     // explorer/api images at build time, so `up` cannot fix stale forms itself
     // (already-built images keep the forms they were built with). Refuse to run
     // a stack whose baked forms are missing/stale vs the current schema and point
@@ -105,14 +105,14 @@ export default class TestRegressionUp extends Command {
       }
     }
 
-    // DR-F1: mint the run id host-side (unless the caller pre-set RUN_ID, e.g.
+    // mint the run id host-side (unless the caller pre-set RUN_ID, e.g.
     // a resume) so the host owns the run's identity + output dir from launch.
     const runId = process.env.RUN_ID || mintRunId();
     childEnv.RUN_ID = runId;
     this.log(`▶ Run: ${runId}`);
     this.log(`  Output: ${runDirFor(runId)}`);
 
-    // RI-A1: mint the composite build identity (git SHA + schema fingerprint) and
+    // mint the composite build identity (git SHA + schema fingerprint) and
     // thread it to the runner. The Computer Use replay tier keys on it — an exact
     // match across runs unlocks the zero-heal `replay` fast path; any source or
     // schema change demotes to `replay-with-heal`. Opaque to Layer 1. Honor a
@@ -137,13 +137,13 @@ export default class TestRegressionUp extends Command {
       }
     }
     if (flags.suite) { childEnv.TEST_SUITE_NAME = flags.suite as string; this.log(`  Suite: ${flags.suite}`); }
-    // DR-E2: forward the sizing knobs as env for compose interpolation. Guard on
+    // forward the sizing knobs as env for compose interpolation. Guard on
     // `!== undefined` — `--retries 0` is valid and falsy (it's the whole point:
     // disable retries when re-running known failures).
     if (flags.retries !== undefined) { childEnv.MAX_RETRIES = String(flags.retries); }
     if (flags.workers !== undefined) { childEnv.MAX_PARALLEL_WORKERS = String(flags.workers); }
 
-    // DR-F5: memory-sizing flags → the compose mem_limit env knobs. Validate up
+    // memory-sizing flags → the compose mem_limit env knobs. Validate up
     // front so a typo'd size aborts here (~instant) rather than as a cryptic
     // compose error after infra has started.
     const memFlags: Array<[string, string]> = [
@@ -160,9 +160,9 @@ export default class TestRegressionUp extends Command {
       childEnv[envVar] = val;
     }
 
-    // DR-F5: effective-config banner — one place stating exactly what this run
+    // effective-config banner — one place stating exactly what this run
     // will use, so a mis-set flag is visible before the ~10-min suite. The worker
-    // line carries the DR-A4 suggestion derived from the runner's memory budget:
+ // line carries the suggestion derived from the runner's memory budget:
     // advisory only, it never overrides an explicit --workers.
     const runnerMem = childEnv.MJ_REGRESSION_RUNNER_MEM_LIMIT ?? '7g'; // compose default
     const runnerMemBytes = parseMemoryToBytes(runnerMem);
@@ -173,7 +173,7 @@ export default class TestRegressionUp extends Command {
     this.log(`     retries: ${flags.retries !== undefined ? String(flags.retries) : '2 (default)'}`);
     this.log(`     memory:  runner=${runnerMem}  db=${childEnv.MJ_REGRESSION_SQL_MEM_LIMIT ?? '4g'}  api=${childEnv.MJ_REGRESSION_API_MEM_LIMIT ?? '10g'}`);
 
-    // DR-F2: detached, or bacpac (its own one-shot import flow), keep the classic
+    // detached, or bacpac (its own one-shot import flow), keep the classic
     // single `up`. Plain `--abort-on-container-exit` is unsafe here — the one-shot
     // db-setup exits 0 early and would abort the whole stack — so the exit-code fix
     // uses the up-then-run split below instead.
@@ -185,7 +185,7 @@ export default class TestRegressionUp extends Command {
       return;
     }
 
-    // DR-F2: attached Mode A — start infrastructure detached and wait for health,
+    // attached Mode A — start infrastructure detached and wait for health,
     // then run the test-runner in the FOREGROUND so its exit code (the suite
     // verdict, propagated by the entrypoint's `exit $EXIT_CODE`) reaches the shell
     // verbatim. Plain `docker compose up` swallowed that code and blocked forever

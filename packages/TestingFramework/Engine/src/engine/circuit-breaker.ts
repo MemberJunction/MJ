@@ -1,5 +1,5 @@
 /**
- * Suite circuit breaker (DR-D7).
+ * Suite circuit breaker.
  *
  * A doomed run had no early exit: the OOM run burned 80 min to total loss, and a
  * broken deploy (Explorer serving a blank shell) would burn the full 7.8 h and
@@ -9,7 +9,7 @@
  *   1. ENVIRONMENT tier — a sliding window over the last N final outcomes; if
  *      ≥ `envFailureThreshold` of them failed with an ENVIRONMENT-class category
  *      (timeout / blank-page / infra / auth-detour), the host is degrading, so
- *      abort rather than keep hammering it. (DR-D3 admission already paused on
+ *      abort rather than keep hammering it. (Admission control already paused on
  *      critical health before failures piled up; a full window of env failures
  *      despite that is strong evidence.)
  *   2. MAX-FAILURES tier — a plain cap on total failures of ANY category, set

@@ -219,7 +219,7 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
      * @returns 
      */
     public GetTestsForSuite(suiteId: string): MJTestEntity[] {
-        // DR-D9: index once (O(n)) so membership lookup and the sort comparator
+        // index once (O(n)) so membership lookup and the sort comparator
         // are O(1) each. The previous version called GetTestByID (a linear scan)
         // inside the loop AND ran two `suiteTests.find()` per sort comparison —
         // O(n²·log n) overall for a large suite.

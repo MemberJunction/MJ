@@ -1,14 +1,9 @@
 /**
- * Pure replay-step logic (CU-C2) — action rehydration + guard evaluation.
- *
- * The engine's Replay() loop owns the async work (settle, DOM queries, action
- * execution); this module owns the pure decisions so they're unit-testable
- * without a browser:
+ * The pure half of replay, while the engine's Replay() loop owns the async work:
  *   - planReplayActions: rehydrate a recorded TraceStep into concrete
- *     BrowserAction(s), substituting fresh variable values into %placeholders%.
- *   - evaluatePrecondition / evaluatePostcondition: fail-fast guard decisions
- *     from observed facts (URL match, target visibility). Fail-fast is the
- *     contract — a missed precondition FAILS the step (no proceed-anyway).
+ *     BrowserAction(s), substituting fresh values into %placeholders%.
+ *   - evaluatePrecondition / evaluatePostcondition: guard decisions from observed
+ *     facts. Fail-fast is the contract — a missed precondition FAILS the step.
  *
  * App-agnostic: operates only on the generic trace + browser-action types.
  */
@@ -40,7 +35,7 @@ export function substituteVariables(text: string | undefined, values: Record<str
  * - one action for click/keypress/navigate/scroll/wait/goBack/goForward/refresh,
  * - two for a `type` with PressEnter (`[TypeAction, Keypress Enter]`),
  * - an empty array when the step is NOT deterministically replayable (a click /
- *   type with no recorded selector — heal territory, CU-C3), which the engine
+ *   type with no recorded selector — heal territory), which the engine
  *   treats as a divergence.
  */
 export function planReplayActions(step: TraceStep, values: Record<string, string> = {}): BrowserAction[] {

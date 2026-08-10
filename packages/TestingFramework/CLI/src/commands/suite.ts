@@ -24,7 +24,7 @@ export class SuiteCommand {
     private spinner = new SpinnerManager();
 
     /**
-     * DR-D5: on external termination (docker stop → SIGTERM, Ctrl-C → SIGINT) or
+     * on external termination (docker stop → SIGTERM, Ctrl-C → SIGINT) or
      * an uncaught crash, flush a terminal partial snapshot before exiting so the
      * run dir reflects reality — status `Cancelled`/`Crashed` with counts-so-far —
      * instead of leaving a stale `Running` partial forever. Writes are synchronous
@@ -162,7 +162,7 @@ export class SuiteCommand {
                 process.exit(1);
             }
 
-            // DR-F4: restrict the run to specific tests by NAME (rerun-failures /
+            // restrict the run to specific tests by NAME (rerun-failures /
             // ad-hoc selection). Resolve names → IDs against the engine; the engine
             // filters on selectedTestIds. Unresolved names warn (non-fatal); an
             // all-miss is fatal (the caller expected those tests to run).
@@ -191,7 +191,7 @@ export class SuiteCommand {
             // Note: Suite variables apply to all tests - type conversion happens per-test
             const variables = parseVariableFlags(flags.var);
 
-            // DR-D5: persist results incrementally next to --output so a crash /
+            // persist results incrementally next to --output so a crash /
             // OOM / `docker stop` preserves every completed test (results.json is
             // otherwise written only at the very end). No-op when --output is unset.
             const resultsSink = IncrementalResultsSink.forOutput(flags.output, suite.Name);
@@ -199,7 +199,7 @@ export class SuiteCommand {
                 this.installCrashHandlers(resultsSink);
             }
 
-            // DR-D3: the DR-G4 supervisor writes health-state.json into the same
+ // the supervisor writes health-state.json into the same
             // run directory as --output. Point the engine's admission gate at it
             // so a degrading host can shed/pause dispatch. Absent --output ⇒ no
             // admission control (ad-hoc console runs proceed at full concurrency).
@@ -226,7 +226,7 @@ export class SuiteCommand {
                 parallel: integrationSerial ? false : flags.parallel,
                 maxParallel: integrationSerial ? 1 : flags.maxParallel,
                 maxRetries: flags.maxRetries,
-                // DR-D9: forward failFast — config-loader set it but it was never
+                // forward failFast — config-loader set it but it was never
                 // passed to the engine, so the knob did nothing.
                 failFast: flags.failFast,
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
@@ -236,7 +236,7 @@ export class SuiteCommand {
                 healthStatePath,
                 maxSuiteDurationMs: flags.maxSuiteDuration != null ? flags.maxSuiteDuration * 1000 : undefined,
                 circuitBreaker: flags.circuitBreaker ? { enabled: true, maxFailures: flags.maxFailures } : undefined,
-                // DR-D9: forward the (previously dead) --sequence flag. "1,3,5" →
+                // forward the (previously dead) --sequence flag. "1,3,5" →
                 // run only the tests at those suite positions (engine-supported).
                 sequence: flags.sequence
                     ? flags.sequence.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !Number.isNaN(n))
@@ -244,7 +244,7 @@ export class SuiteCommand {
             }, contextUser);
 
             this.spinner.stop();
-            // DR-D5/D7: stamp the partial terminal — Cancelled if the breaker aborted.
+            // stamp the partial terminal — Cancelled if the breaker aborted.
             if (result.aborted) {
                 console.error(`\n⚠️  Suite aborted early: ${result.abortReason ?? 'circuit breaker tripped'}`);
             }

@@ -48,7 +48,6 @@ export * from './engine/heal-decision.js';
 export * from './engine/postcondition.js';
 export * from './engine/checkpoint.js';
 export * from './engine/judge-cache.js';
-export * from './engine/prelude.js';
 export * from './engine/trace-diff.js';
 export * from './engine/failure-memo.js';
 

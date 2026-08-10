@@ -1,6 +1,6 @@
 /**
- * No-Console-Errors Oracle (CU-D2) — a deterministic oracle over the browser
- * diagnostics already collected during the run (CU-A7).
+ * No-Console-Errors Oracle — a deterministic oracle over the browser
+ * diagnostics already collected during the run.
  *
  * Fails when the run recorded any signal-bearing diagnostic — a console error,
  * an uncaught page error, a failed request, or a renderer crash. This turns the

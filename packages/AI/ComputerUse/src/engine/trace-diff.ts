@@ -1,17 +1,12 @@
 /**
- * Trace diff for the always-explore canary set (CU-C7).
+ * Compares a freshly-derived trace against the stored one for the always-explore
+ * canary set; the divergences are the UI-drift findings. Which runs get the canary
+ * mix is the scheduler's concern, not this module's.
  *
- * A rotating slice of tests runs the LLM tier even when a valid trace exists;
- * the fresh derivation is recorded and compared against the stored trace. Their
- * divergences ARE the UI-drift findings — exploration value preserved at a
- * fraction of its former cost, and drift becomes a scheduled deliverable instead
- * of an accident. This module is the pure comparator ("the drift-diff report");
- * WHICH runs get the canary mix is the sibling plan's scheduler.
- *
- * Drift severity is keyed on SEMANTICS, not raw selectors: a step whose target
- * kept its role+name but changed selector is minor `selector-drift` (exactly
- * what CU-C3 heals); a changed role/name, method, or per-step URL is a
- * meaningful UI change. Pure and app-agnostic.
+ * Severity is keyed on semantics rather than raw selectors: a target that kept its
+ * role+name but changed selector is minor `selector-drift` (what self-heal
+ * handles), while a changed role/name, method, or per-step URL is a meaningful UI
+ * change. Pure and app-agnostic.
  */
 
 import { ComputerUseTrace, TraceStep, TraceTarget } from '../types/trace.js';

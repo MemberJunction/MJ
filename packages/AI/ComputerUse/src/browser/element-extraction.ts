@@ -1,12 +1,12 @@
 /**
- * Shared interactive-element extraction + index-resolved actions (CU-A4).
+ * Shared interactive-element extraction + index-resolved actions.
  *
  * Element-grounded perception replaces the controller's coordinate guessing:
  * the adapter walks the live DOM for interactive elements, hands the engine a
  * stable indexed list, and resolves a chosen index back to a locator-based
  * click/type with Playwright's actionability auto-wait. Because the page can
  * re-render between perception and action, a chosen element's stored selector is
- * tried briefly and then healed by accessible role + name (CU-C3). Extracted here
+ * tried briefly and then healed by accessible role + name. Extracted here
  * so both `PlaywrightBrowserAdapter` and `SharedContextBrowserAdapter` share ONE
  * implementation (mirroring `page-perception.ts`).
  *
@@ -89,7 +89,7 @@ const PRECISE_ATTEMPT_TIMEOUT_MS = 2000;
 
 /**
  * Re-resolve an element whose recorded selector no longer works, by its
- * accessible role + name against a freshly extracted list (CU-C3's heal ladder).
+ * accessible role + name against a freshly extracted list (heal ladder).
  * Confidence-gated: an ambiguous match yields nothing, so we fail the step rather
  * than click the wrong element. Returns a fresh selector, or undefined.
  */
@@ -104,7 +104,7 @@ async function healElementSelector(page: Page, element: InteractiveElement): Pro
 
 /**
  * Run an index-resolved action against an extracted element, healing past a stale
- * selector (CU-A4 + CU-C3).
+ * selector.
  *
  * The element list is perceived, then the controller deliberates, then we act —
  * and an SPA can re-render in that gap. The recorded absolute XPath is exact when
@@ -157,7 +157,7 @@ async function actOnElement(
     }
 }
 
-/** Click an extracted element via its locator, honoring click-count/button/modifiers (CU-A4). */
+/** Click an extracted element via its locator, honoring click-count/button/modifiers. */
 export async function clickInteractiveElement(
     page: Page,
     element: InteractiveElement,
@@ -174,7 +174,7 @@ export async function clickInteractiveElement(
     );
 }
 
-/** Fill text into an extracted element via its locator; optionally press Enter (CU-A4). */
+/** Fill text into an extracted element via its locator; optionally press Enter. */
 export async function typeIntoInteractiveElement(
     page: Page,
     element: InteractiveElement,

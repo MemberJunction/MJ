@@ -103,7 +103,7 @@ Respond in JSON format:
                 };
             }
 
-            // DR-D9: exact-name lookup. The fuzzy `.includes('llm judge')` fallback
+            // exact-name lookup. The fuzzy `.includes('llm judge')` fallback
             // could bind to an unrelated prompt (e.g. a project's own "Custom LLM
             // Judge"); the contract — and this oracle's error message — is the exact
             // name 'Test LLM Judge'.

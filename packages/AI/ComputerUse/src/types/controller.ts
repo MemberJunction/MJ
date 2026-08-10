@@ -38,7 +38,7 @@ export class ControllerPromptRequest {
 
     /**
      * Engine-computed loop evidence for the previous step(s), when a repeated
-     * state has been detected (CU-B1). Injected into the controller prompt so
+     * state has been detected. Injected into the controller prompt so
      * the model can break out of the loop instead of repeating the same
      * ineffective action. Empty/undefined when no loop is active.
      */
@@ -46,14 +46,14 @@ export class ControllerPromptRequest {
 
     /**
      * Compact digest of browser diagnostics from the previous step (console
-     * errors, failed requests, crashes) — CU-A7. Lets the controller see *why*
+     * errors, failed requests, crashes). Lets the controller see *why*
      * a page is blank/broken (e.g. `ChunkLoadError`, `POST /graphql 500`)
      * instead of guessing from pixels. Empty/undefined when the step was clean.
      */
     public Diagnostics?: string;
 
     /**
-     * Serialized interactive-element list for this step (CU-A4), when element
+     * Serialized interactive-element list for this step, when element
      * grounding is on — `[12] button "Save"` / `[13] textbox "Name" (empty)`.
      * The controller targets these by index via ClickElement/TypeIntoElement.
      * Empty/undefined in coordinate/vision mode.
@@ -61,33 +61,33 @@ export class ControllerPromptRequest {
     public InteractiveElements?: string;
 
     /**
-     * Per-test UI hints (CU-E5) injected after the goal — documents the UI
+     * Per-test UI hints injected after the goal — documents the UI
      * contract ("search commits on Enter"). Empty/undefined when none.
      */
     public Hints?: string[];
 
     /**
-     * A memo from a PRIOR failed attempt at this goal (CU-B6) so a retry is
+     * A memo from a PRIOR failed attempt at this goal so a retry is
      * non-blind ("previous attempt failed because X; avoid Y"). Empty/undefined
      * on the first attempt.
      */
     public PreviousAttemptSummary?: string;
 
     /**
-     * Current date (YYYY-MM-DD) injected into the prompt (CU-E3) so the model can
+     * Current date (YYYY-MM-DD) injected into the prompt so the model can
      * reason about "today"/relative dates without hallucinating one.
      */
     public CurrentDate?: string;
 
     /**
-     * The controller's durable memory + plan from the PREVIOUS step (CU-E2),
+     * The controller's durable memory + plan from the PREVIOUS step,
      * echoed back so history is self-describing and intent isn't re-derived.
      */
     public Memory?: string;
     public Plan?: string;
 
     /**
-     * Cancellation signal for the controller LLM call (CU-B8). When the engine's
+     * Cancellation signal for the controller LLM call. When the engine's
      * `Stop()` aborts it, an in-flight prompt returns promptly (Layer 2 threads
      * it into `AIPromptParams.cancellationToken`) instead of holding a worker
      * slot for the rest of a 30s+ call. Not template data — consumed by the
@@ -128,7 +128,7 @@ export class ControllerPromptRequest {
     public ApplicationContext?: string;
 
     /**
-     * Tour checkpoints for this run (CU-D8 Phase B), name + instruction only —
+     * Tour checkpoints for this run, name + instruction only —
      * the assertions are engine-internal. Rendered into the prompt so the
      * controller knows the sections and can echo the exact `checkpointReached`
      * name when it arrives at one, triggering a scoped judge at that frame.
@@ -139,7 +139,7 @@ export class ControllerPromptRequest {
 
 // ─── Controller Checkpoint Info ────────────────────────────
 /**
- * The prompt-facing view of a tour checkpoint (CU-D8) — just what the controller
+ * The prompt-facing view of a tour checkpoint — just what the controller
  * needs to recognize and name a section. Assertions/visual criteria stay
  * engine-internal.
  */
@@ -198,7 +198,7 @@ export class ControllerPromptResponse {
     public RequestJudgement?: boolean;
 
     /**
-     * The exact name of a tour checkpoint (CU-D8 Phase B) the controller believes
+     * The exact name of a tour checkpoint the controller believes
      * it has just reached. When it names a checkpoint with pending visual
      * criteria, the engine forces a judge call this step scoped to THAT
      * checkpoint's criteria — verifying the section against the frame it's
@@ -207,9 +207,9 @@ export class ControllerPromptResponse {
     public CheckpointReached?: string;
 
     /**
-     * Self-tracked agent state (CU-E2), all optional & parser-tolerant:
+     * Self-tracked agent state, all optional & parser-tolerant:
      * - `Evaluation` — did the PREVIOUS step's action achieve its intent
-     *   (self-verification; pairs with Rule 11 / CU-E3).
+     *   (self-verification; pairs with Rule 11).
      * - `Memory` — durable notes the model carries forward (≤~200 chars).
      * - `Plan` — a short checklist with the current item marked.
      * `Memory` and `Plan` are echoed back into the next prompt so history is
@@ -256,21 +256,21 @@ export class JudgePromptRequest {
     /** Current URL */
     public CurrentUrl: string = '';
     /**
-     * Compact browser-diagnostics digest for the current step (CU-A7) — console
+     * Compact browser-diagnostics digest for the current step — console
      * errors, failed requests, crashes. Lets the judge explain an infrastructure
      * state (a blank page = `ChunkLoadError`) instead of hallucinating a reason.
      */
     public Diagnostics?: string;
 
     /**
-     * Validation-criteria rubric for the run (CU-D1). When present, the judge is
+     * Validation-criteria rubric for the run. When present, the judge is
      * asked for a per-criterion `{criterion, met, evidence}` verdict and `Done`
      * is derived as all-criteria-met.
      */
     public ValidationCriteria?: string[];
 
     /**
-     * Cancellation signal for the judge LLM call (CU-B8) — see
+     * Cancellation signal for the judge LLM call — see
      * {@link ControllerPromptRequest.Signal}. Threaded into
      * `AIPromptParams.cancellationToken` by Layer 2; not template data.
      */

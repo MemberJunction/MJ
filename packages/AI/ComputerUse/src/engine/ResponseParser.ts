@@ -80,7 +80,7 @@ export class ResponseParser {
             response.ToolCalls = ResponseParser.parseToolCalls(parsed.toolCalls ?? []);
             response.RequestJudgement = parsed.requestJudgement ?? false;
             response.CheckpointReached = ResponseParser.toStateString(parsed.checkpointReached);   // tour signal (CU-D8)
-            // Self-tracked agent state (CU-E2) — optional, tolerant of absence.
+            // Self-tracked agent state — optional, tolerant of absence.
             response.Evaluation = ResponseParser.toStateString(parsed.evaluation);
             response.Memory = ResponseParser.toStateString(parsed.memory);
             response.Plan = ResponseParser.toStateString(parsed.plan);
@@ -177,7 +177,7 @@ export class ResponseParser {
                 action.DeltaY = ResponseParser.toNumber(raw.DeltaY ?? raw.deltaY, 0);
                 action.DeltaX = ResponseParser.toNumber(raw.DeltaX ?? raw.deltaX, 0);
                 action.Selector = ResponseParser.toSelector(raw.Selector ?? raw.selector);
-                // CU-A8: optional scroll-at point. Only carried when BOTH axes are
+                // optional scroll-at point. Only carried when BOTH axes are
                 // present — a lone X (or Y) can't identify a point, and silently
                 // defaulting the other to 0 would scroll at the page corner.
                 const scrollX = raw.X ?? raw.x;
@@ -302,7 +302,7 @@ export class ResponseParser {
     }
 
     /**
-     * Coerce a self-tracked-state value (CU-E2) into a trimmed non-empty string,
+     * Coerce a self-tracked-state value into a trimmed non-empty string,
      * or undefined. Tolerant: a string is used as-is; an array is joined by
      * newlines (a checklist); any other object is JSON-stringified.
      */
@@ -320,7 +320,7 @@ export class ResponseParser {
         return trimmed.length > 0 ? trimmed : undefined;
     }
 
-    /** Coerce a raw selector value into a trimmed non-empty string, or undefined (CU-A6). */
+    /** Coerce a raw selector value into a trimmed non-empty string, or undefined. */
     private static toSelector(value: unknown): string | undefined {
         if (typeof value === 'string') {
             const trimmed = value.trim();
@@ -332,7 +332,7 @@ export class ResponseParser {
     }
 
     /**
-     * Coerce a raw modifiers value into a `KeyModifier[]`, or undefined (CU-A6).
+     * Coerce a raw modifiers value into a `KeyModifier[]`, or undefined.
      * Accepts an array or a single string; keeps only recognized modifier names
      * (case-insensitively normalized to the canonical spelling).
      */

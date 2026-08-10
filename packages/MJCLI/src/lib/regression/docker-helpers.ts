@@ -43,25 +43,25 @@ export const TARGETS_DIR = `${REGRESSION_DIR}/targets`;
 
 /**
  * Mint a run id host-side, matching the entrypoint's `run-<utc-timestamp>`
- * folder convention (DR-F1). The CLI passes this to compose as `RUN_ID` so the
+ * folder convention. The CLI passes this to compose as `RUN_ID` so the
  * host knows the run's identity — and therefore its `test-results/<RUN_ID>/`
  * directory — from the moment it launches, instead of reverse-engineering it
  * from the `latest` symlink after the fact. `status`/`logs`/`rerun-failures`
- * (DR-F3/F4) all key off this.
+ * all key off this.
  */
 export function mintRunId(): string {
   const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
   return `run-${ts}`;
 }
 
-/** Absolute host path to a run's output directory for a given run id (DR-F1). */
+/** Absolute host path to a run's output directory for a given run id. */
 export function runDirFor(runId: string): string {
   return path.resolve(RESULTS_DIR, runId);
 }
 
 /**
  * Newest `run-*` directory under test-results, or null when none exist
- * (DR-F3). Picked by mtime so it survives a missing `latest` symlink.
+ *. Picked by mtime so it survives a missing `latest` symlink.
  */
 export function latestRunDir(): string | null {
   const base = path.resolve(RESULTS_DIR);
@@ -76,7 +76,7 @@ export function latestRunDir(): string | null {
 
 /**
  * Resolve which run directory a command targets: an explicit `--run` id (or a
- * path), else the newest run (DR-F3). Returns null when nothing resolves.
+ * path), else the newest run. Returns null when nothing resolves.
  */
 export function resolveRunDir(runIdOrPath?: string): string | null {
   if (runIdOrPath) {
@@ -88,7 +88,7 @@ export function resolveRunDir(runIdOrPath?: string): string | null {
   return latestRunDir();
 }
 
-/** A run's incremental snapshot, normalized from results.partial.json (DR-D5). */
+/** A run's incremental snapshot, normalized from results.partial.json. */
 export interface RunSnapshot {
   runId: string;
   status: string;
@@ -100,8 +100,8 @@ export interface RunSnapshot {
 }
 
 /**
- * Read a run's incremental snapshot (DR-F3). Prefers results.partial.json (the
- * DR-D5 live snapshot, present mid-run and after a crash); falls back to a
+ * Read a run's incremental snapshot. Prefers results.partial.json (the
+ * live snapshot, present mid-run and after a crash); falls back to a
  * minimal view derived from a completed results.json; returns a `none` snapshot
  * when neither is parseable. Never throws.
  */
@@ -159,12 +159,12 @@ export const INLINE_REPORT_SCRIPT = `${REGRESSION_DIR}/scripts/inline-report.cjs
 
 /** Directory gen-forms writes the generated Angular entity forms into. */
 export const GENERATED_FORMS_DIR = `${REGRESSION_DIR}/.docker-generated/MJExplorer-forms/Entities`;
-/** Sidecar recording the schema fingerprint the current forms were generated against (DR-C5). */
+/** Sidecar recording the schema fingerprint the current forms were generated against. */
 export const FORMS_FINGERPRINT_FILE = `${REGRESSION_DIR}/.docker-generated/.fingerprint`;
 
-// DR-C5: the generated Angular forms (and the entity classes / resolvers baked
+// the generated Angular forms (and the entity classes / resolvers baked
 // alongside them) are a pure function of the DB schema — i.e. of the same three
-// inputs DR-B1 hashes for the DB snapshot: the migrations, the AssociationDB
+// inputs hashes for the DB snapshot: the migrations, the AssociationDB
 // demo SQL, and the MJ build version (a proxy for CodeGen behavior across
 // releases). We stamp that hash into .docker-generated/.fingerprint when
 // gen-forms runs, so `build`/`up` can tell "the forms match the current schema"
@@ -253,7 +253,7 @@ export interface FormsFingerprintStatus {
 }
 
 /**
- * Compare the generated forms against the current schema inputs (DR-C5). Forms
+ * Compare the generated forms against the current schema inputs. Forms
  * are "fresh" only when the output directory exists AND a fingerprint was
  * recorded AND it matches the current inputs. A missing directory, missing
  * fingerprint, or mismatch all report `fresh: false` with a specific reason.
@@ -278,7 +278,7 @@ export function formsFingerprintStatus(root: string = process.cwd()): FormsFinge
   return { fresh: true, reason: '', current, recorded };
 }
 
-// ─── RI-A1: composite build identity (APP_BUILD_HASH) ────────────────────────
+// ─── composite build identity (APP_BUILD_HASH) ────────────────────────
 
 /**
  * `git rev-parse --short=12 HEAD` for `root`, with a `-dirty` suffix when the
@@ -304,8 +304,8 @@ export function gitRevisionShort(root: string = process.cwd()): string | null {
 }
 
 /**
- * Mint the composite build identity the replay tier keys on (RI-A1 / Decision
- * D2). Layer 1's `decideReplayTier` treats it as an OPAQUE string: an exact match
+ * Mint the composite build identity the replay tier keys on. Layer 1's
+ * `decideReplayTier` treats it as an OPAQUE string: an exact match
  * across runs unlocks the zero-heal `replay` fast path; any change demotes to the
  * safe `replay-with-heal` default. Shape:
  *
@@ -314,7 +314,7 @@ export function gitRevisionShort(root: string = process.cwd()): string | null {
  *     <schemaHash>                   (git unavailable — graceful fallback)
  *
  * where `gitSha` captures source changes (TS logic, prompts) and `schemaHash` is
- * the DR-C5 forms fingerprint.
+ * the forms fingerprint.
  *
  * NOTE: Decision D2 named THREE components — gitSha, the gen-forms fingerprint,
  * and the DB-snapshot hash. In THIS codebase the latter two are the SAME hash by
@@ -329,7 +329,7 @@ export function computeAppBuildHash(root: string = process.cwd()): string {
   return git ? `${git}:${schema}` : schema;
 }
 
-// ─── DR-F5: resource sizing ──────────────────────────────────────────────────
+// ─── resource sizing ──────────────────────────────────────────────────
 
 /**
  * Parse a docker-style memory string ("8g", "512m", "1024k", "4gb", or a bare
@@ -346,7 +346,7 @@ export function parseMemoryToBytes(value: string): number | null {
 }
 
 /**
- * DR-A4 formula: the max number of browser workers a runner container of
+ * formula: the max number of browser workers a runner container of
  * `runnerMemBytes` can hold without OOM. Each Computer-Use worker drives a
  * Chromium context (~1.5 GiB); a fixed reserve covers the node/CLI process
  * itself (the `4 workers OOM'd the default-memory host` note in the plan is why
@@ -379,7 +379,7 @@ export const AGENTIC_TEST_RUNNER_IMAGE = 'memberjunction/agentic-test-runner:lat
  */
 export function requireMonorepoRoot(): void {
   if (existsSync(COMPOSE_FILE)) return; // cwd IS the monorepo root — the happy path
-  // DR-F7 (path hardening): distinguish "in a subdirectory OF a monorepo" — a
+ // (path hardening): distinguish "in a subdirectory OF a monorepo" — a
   // precise, actionable error — from "not in a monorepo at all" (the external
   // message). The old guard printed the generic message in both cases, so the
   // subdir case read like a broken checkout instead of a wrong cwd.
@@ -406,7 +406,7 @@ export function requireMonorepoRoot(): void {
  * the regression compose file — the sentinel that marks an MJ monorepo checkout
  * (present in every checkout, never in an external `npm i -g` install). Returns
  * the directory that contains it (the monorepo root), or null when none is found
- * at or above `startDir`. (DR-F7: the single walk-up root resolver.)
+ * at or above `startDir`. (the single walk-up root resolver.)
  */
 export function findMonorepoRoot(startDir: string = process.cwd()): string | null {
   let dir = path.resolve(startDir);
@@ -459,9 +459,9 @@ export function spawnInherit(
 
 /**
  * Spawn a child and TEE its stdout+stderr to both this process's streams and a
- * file (DR-F2), so an attached run leaves a complete console record on disk —
+ * file, so an attached run leaves a complete console record on disk —
  * host-side, in the run dir, independent of the container-side `runner.log`
- * (DR-F2 Wave-0 slice). Resolves with the exit code; never rejects. A file-open
+ * (Wave-0 slice). Resolves with the exit code; never rejects. A file-open
  * failure degrades to terminal-only (best-effort). stdin is inherited.
  */
 export function spawnTee(
@@ -494,7 +494,7 @@ export function spawnTee(
 
 /**
  * Infrastructure services of the `full` profile — everything except the
- * test-runner (DR-F2). The attached `up` starts these detached + waits for
+ * test-runner. The attached `up` starts these detached + waits for
  * health, then runs the test-runner in the foreground so its exit code (the
  * suite verdict) propagates. Order is informational; compose resolves the
  * dependency graph itself.

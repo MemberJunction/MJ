@@ -1,22 +1,10 @@
 /**
- * Terminal-verdict guards (CU-D6) — pure decisions, no engine state.
+ * Guards on the `Impossible` verdict, which otherwise ends a run on a single
+ * sample from a non-deterministic judge: never accept it while the page is still
+ * loading (a boot screen is not evidence of impossibility), and require a quorum
+ * of concurring verdicts across ≥2 steps.
  *
- * `Impossible` ends a run and decides pass/fail on a single sample from a
- * temp-0-but-not-deterministic judge — and the literature documents GPT-4
- * wrongly declaring 54.9% of *feasible* tasks impossible under an
- * unachievability hint. Two guards cut that class: (1) never accept Impossible
- * while the page is still loading (a boot screen is not evidence of
- * impossibility), and (2) require a quorum of concurring Impossible verdicts
- * across ≥2 steps before ending the run.
- *
- * Pure so the counting + suppression logic is unit-testable; the engine owns
- * the running count and acts on the decision.
- *
- * NOTE: the confirm-Done leg of CU-D6 is deferred — its "free" form is a
- * deterministic postcondition/oracle (CU-D2/C5, driver-side, not yet landed),
- * and the engine-only fallback (a confirming second judge next step) collides
- * with the CU-G5 "skip judge when state unchanged" gate. This module covers the
- * Impossible guards, the documented high-value half.
+ * Pure — the engine owns the running count and acts on the decision.
  */
 
 /** Default number of concurring Impossible verdicts required to end a run. */
@@ -33,7 +21,7 @@ export interface ImpossibleGateResult {
 }
 
 /**
- * Gate an Impossible verdict (CU-D6). `priorCount` is how many concurring
+ * Gate an Impossible verdict. `priorCount` is how many concurring
  * Impossible verdicts have accumulated on prior steps; the caller carries the
  * returned `newCount` forward. A non-Impossible verdict resets the count. While
  * the page is loading the verdict is suppressed and the count is held (not

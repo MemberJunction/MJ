@@ -107,13 +107,13 @@ export interface SuiteFlags extends CommonFlags {
      */
     tests?: string;
     /**
-     * Suite wall-clock budget in SECONDS (DR-D4). Once elapsed, dispatch of new
+     * Suite wall-clock budget in SECONDS. Once elapsed, dispatch of new
      * tests stops and the run finalizes gracefully with partial results. Overrides
      * TestSuite.MaxExecutionTimeMS; unset ⇒ that column (or unbounded).
      */
     maxSuiteDuration?: number;
     /**
-     * Enable the circuit breaker (DR-D7): abort a doomed run early on a window of
+     * Enable the circuit breaker: abort a doomed run early on a window of
      * environment-class failures or a total failure cap. Default off.
      */
     circuitBreaker?: boolean;
@@ -149,7 +149,7 @@ export interface ValidateFlags extends CommonFlags {
 }
 
 /**
- * Flags for report command (DR-G6). Produces a per-run aggregate + cross-run trend.
+ * Flags for report command. Produces a per-run aggregate + cross-run trend.
  */
 export interface ReportFlags extends CommonFlags {
     /** Restrict to the named test suite (matched against the suite-run's denormalized Suite name). */
@@ -159,7 +159,7 @@ export interface ReportFlags extends CommonFlags {
 }
 
 /**
- * Flags for history command (DR-G6). Produces per-test duration/flake history.
+ * Flags for history command. Produces per-test duration/flake history.
  */
 export interface HistoryFlags extends CommonFlags {
     /** Restrict to a single test by name. */

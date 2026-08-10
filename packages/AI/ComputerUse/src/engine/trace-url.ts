@@ -1,21 +1,10 @@
 /**
- * URL normalization for trace keying and replay guards (CU-C1/C4).
+ * URL normalization for trace keying and replay guards, so two visits differing
+ * only by record id, volatile token, param order, or hash fragment compare equal:
+ * UUIDs become the literal token `{uuid}`, the hash fragment is dropped, caller-
+ * named volatile params are dropped, and the rest are sorted by name.
  *
- * Stagehand's field lesson: URL-keyed caches are defeated by per-record UUIDs
- * in URLs (Explorer URLs are full of them). We normalize a URL so two visits
- * that differ only by record id / volatile token / param order / hash fragment
- * compare EQUAL:
- *
- *   1. UUIDs anywhere in the path or query become the literal token `{uuid}`
- *      (case-normalized — the UUID guide's cross-platform casing concern is
- *      moot once the value is a fixed token).
- *   2. The hash fragment is always dropped (SPA in-page anchors aren't identity).
- *   3. Volatile query params (per-visit tokens, timestamps — named by the
- *      caller's AppProfile) are dropped.
- *   4. Remaining query params are sorted by name for order-independence.
- *
- * Pure and app-agnostic: the only app-specific input is the `volatileParams`
- * list the caller threads through from the AppProfile.
+ * Pure and app-agnostic — `volatileParams` is the only app-specific input.
  */
 
 /** Matches a UUID (any version) anywhere in a string; global + case-insensitive. */

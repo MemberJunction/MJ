@@ -1,18 +1,14 @@
 /**
- * Checkpoint tours (CU-D8) — pure, no LLM, no engine/timer coupling.
+ * Scores a "tour" test — an ordered list of {@link RunCheckpoint} sections the run
+ * must pass through. A checkpoint is met when every deterministic assertion
+ * (latched free each step) and every visual criterion (latched at a judge call)
+ * passes.
  *
- * A "tour" test declares an ordered list of {@link RunCheckpoint}s (sections it
- * must pass through). Each checkpoint is **met** when all its declared checks
- * pass: every deterministic assertion (a {@link GoalPostcondition}, latched for
- * free every step) AND every visual criterion (latched at a judge call). Latches
- * are **sticky** — once a sub-condition holds, it stays held even after the agent
- * navigates away, which is exactly what lets a single run verify section 1 and
- * still be scored on it at the end (the gap a final-frame-only judge can't close).
+ * Latches are **sticky**: once a sub-condition holds it stays held even after the
+ * agent navigates away, which is what lets one run verify section 1 and still be
+ * scored on it at the end. The aggregate uses the existing {@link JudgeVerdict}
+ * shape so `GoalCompletionOracle` needs no change.
  *
- * The aggregate is expressed in the existing {@link JudgeVerdict} shape so
- * `GoalCompletionOracle` scores checkpoint runs with no change.
- *
- * Pure so the latch/aggregate logic is unit-testable without a browser or judge.
  * See `plans/regression-testing/checkpoint-tours-design.md`.
  */
 
@@ -184,7 +180,7 @@ export function findCheckpoint(checkpoints: RunCheckpoint[], name: string): RunC
 }
 
 /**
- * The not-yet-latched visual criteria for a SINGLE named checkpoint (CU-D8 Phase
+ * The not-yet-latched visual criteria for a SINGLE named checkpoint (Phase
  * B) — what a controller-signaled judge call should evaluate, scoped to that
  * section so it can't cross-contaminate other sections' criteria. Empty when the
  * name is unknown, the checkpoint has no visual criteria, or they're already latched.
@@ -215,7 +211,7 @@ export function allCheckpointsMet(
 /**
  * How many checkpoints are fully met. The engine samples this before and after
  * each step's latch pass: an increase is TOUR progress, which is the only
- * progress signal a tour has (CU-D8). Pixel-level change is not — a tour section
+ * progress signal a tour has. Pixel-level change is not — a tour section
  * can latch while the frame looks identical (a tree expanding inside a narrow
  * panel, a chip toggling), and returning to a prior state is often *required*
  * (open→cancel, A→B→A). See the loop-reset in the engine's main loop.

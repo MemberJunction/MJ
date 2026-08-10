@@ -1,19 +1,11 @@
 /**
- * Judge-verdict cache (CU-C5.3) — reuse a verdict across attempts on an
- * identical (goal, URL, visible-state) key.
+ * Reuses a judge verdict across attempts on an identical (goal hash, normalized
+ * URL, perceptual state hash) key, avoiding re-scoring unchanged behavior at full
+ * vision price and full verdict variance. A cached `Impossible` short-circuits a
+ * retry to a deterministic re-check.
  *
- * The LLM judge re-scores unchanged behavior every run, at full vision price and
- * with full verdict variance (a top flakiness source). Within a run this is
- * already gated by CU-G5 (skip a scheduled judge when the state hash is
- * unchanged). This cache generalizes that ACROSS attempts: keyed by the goal
- * hash + normalized URL + perceptual state hash, an identical state returns the
- * prior verdict — most valuably, a cached `Impossible` short-circuits a retry to
- * a deterministic re-check.
- *
- * Layer 1 provides the pure cache + key. Cross-attempt/cross-process persistence
- * is the driver's responsibility — it injects a shared instance into the engine
- * ({@link ComputerUseEngine.SetJudgeCache}) so verdicts survive attempt
- * boundaries. Pure and app-agnostic.
+ * Cross-attempt persistence is the driver's responsibility — it injects a shared
+ * instance via {@link ComputerUseEngine.SetJudgeCache}.
  */
 
 import { JudgeVerdict } from '../types/judge.js';

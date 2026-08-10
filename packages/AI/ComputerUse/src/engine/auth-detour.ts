@@ -1,15 +1,11 @@
 /**
- * Auth-detour detection (CU-B7) — pure decisions, no browser or engine state.
+ * Answers the two questions the engine's watchdog needs when a session is
+ * invalidated mid-flight and the page bounces to an identity provider: is this URL
+ * a provider bounce, and — given how many detours already happened — recover or
+ * give up?
  *
- * When a run's session is invalidated mid-flight the page bounces to an
- * identity provider's URL. This module answers two questions the engine's
- * watchdog needs: "is the current URL an identity-provider bounce?" and, given
- * how many detours have already happened, "recover or give up?". Kept pure so
- * the matching and the terminate-after-N policy are unit-testable without a
- * live browser.
- *
- * The engine stays app-agnostic: the provider patterns come from the
- * caller's {@link AppProfile}; this module ships no provider list of its own.
+ * Provider patterns come from the caller's {@link AppProfile}; this module ships
+ * no provider list of its own.
  */
 
 /** The outcome of evaluating the current URL against the watchdog config. */
