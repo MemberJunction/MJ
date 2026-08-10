@@ -133,7 +133,7 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
   /** Info panel data */
   InfoPanelLoading = false;
   InfoDestRecordCount: number | null = null;
-  InfoLastSync: { StartedAt: string | null; EndedAt: string | null; Status: string; TotalRecords: number } | null = null;
+  InfoLastSync: { StartedAt: Date | string | null; EndedAt: Date | string | null; Status: string; TotalRecords: number } | null = null;
 
   /** SVG layout constants */
   readonly FIELD_HEIGHT = 40;
@@ -449,7 +449,7 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
     }
   }
 
-  FormatSyncDate(dateStr: string | null): string {
+  FormatSyncDate(dateStr: Date | string | null): string {
     if (!dateStr) return 'Never';
     const d = new Date(dateStr);
     const now = new Date();
