@@ -11,6 +11,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { DateCellDayKey } from '../../../shared/date-cell';
 import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { TagEngineBase } from '@memberjunction/tag-engine-base';
 import { RegisterClass } from '@memberjunction/global';
@@ -1214,11 +1215,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         for (let i = 13; i >= 0; i--) {
             const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
             const dayStr = d.toISOString().slice(0, 10);
-            const dayRuns = runs.filter(r => {
-                const st = r['StartTime'];
-                if (!st) return false;
-                return String(st).slice(0, 10) === dayStr;
-            });
+            const dayRuns = runs.filter(r => DateCellDayKey(r['StartTime'] as Date | string | null) === dayStr);
             const totalItems = dayRuns.reduce((sum, r) => sum + Number(r['ProcessedItems'] || 0), 0);
             const hasError = dayRuns.some(r => String(r['Status'] || '').toLowerCase().includes('error') || String(r['Status'] || '').toLowerCase().includes('fail'));
 
@@ -1660,10 +1657,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         for (let i = 29; i >= 0; i--) {
             const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
             const dayStr = d.toISOString().slice(0, 10);
-            const dayRuns = runs.filter(r => {
-                const st = r['StartTime'];
-                return st && String(st).slice(0, 10) === dayStr;
-            });
+            const dayRuns = runs.filter(r => DateCellDayKey(r['StartTime'] as Date | string | null) === dayStr);
             const totalItems = dayRuns.reduce((sum, r) => sum + Number(r['ProcessedItems'] || 0), 0);
             const hasError = dayRuns.some(r => {
                 const s = String(r['Status'] || '').toLowerCase();
@@ -2324,10 +2318,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (29 - idx));
         const dayStr = targetDate.toISOString().slice(0, 10);
 
-        const dayRuns = this.rawProcessRuns.filter(r => {
-            const st = r['StartTime'];
-            return st && String(st).slice(0, 10) === dayStr;
-        });
+        const dayRuns = this.rawProcessRuns.filter(r => DateCellDayKey(r['StartTime'] as Date | string | null) === dayStr);
 
         this.DrillDownColumns = ['Run ID', 'Source', 'Status', 'Items', 'Start Time'];
         this.DrillDownHasActions = true;

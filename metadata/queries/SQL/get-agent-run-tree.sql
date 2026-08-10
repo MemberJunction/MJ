@@ -55,8 +55,14 @@ WITH Tree AS (
         r.TotalCost                                          AS Cost,
         r.TotalTokensUsed                                    AS Tokens,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100))           AS SourceEntity,
-        CAST(NULL AS NVARCHAR(50))                           AS PromptRunID
-    FROM ${flyway:defaultSchema}.vwAIAgentRuns r
+        CAST(NULL AS NVARCHAR(50))                           AS PromptRunID,
+        -- What KIND of work this node is, in its own vocabulary: a run step's StepType
+        -- ('Prompt', 'Actions', 'Sub-Agent', 'Validation', …) or a task's ('Agent', 'Action',
+        -- 'ForEach', 'While', 'Human', …). Carried because every visual consumer colours and
+        -- icons by kind — without it a renderer can only draw undifferentiated boxes, which is
+        -- what forced the visualizations to keep reading raw step rows.
+        CAST(NULL AS NVARCHAR(50))                           AS SourceKind
+    FROM [__mj].[vwAIAgentRuns] r
     WHERE r.ID = '{{ agentRunID }}'
 
     UNION ALL
@@ -78,9 +84,10 @@ WITH Tree AS (
         CAST(NULL AS DECIMAL(18, 6)),
         CAST(NULL AS INT),
         CAST('MJ: AI Agent Run Steps' AS NVARCHAR(100)),
-        CAST(NULL AS NVARCHAR(50))
+        CAST(NULL AS NVARCHAR(50)),
+        CAST(s.StepType AS NVARCHAR(50))
     FROM Tree t
-    INNER JOIN ${flyway:defaultSchema}.vwAIAgentRunSteps s
+    INNER JOIN [__mj].[vwAIAgentRunSteps] s
         ON s.AgentRunID = t.NodeID
     WHERE t.NodeType = 'Run'
       AND t.Depth < {{ maxDepth }}
@@ -103,11 +110,12 @@ WITH Tree AS (
         CAST(NULL AS DECIMAL(18, 6)),
         CAST(NULL AS INT),
         CAST('MJ: Tasks' AS NVARCHAR(100)),
-        CAST(NULL AS NVARCHAR(50))
+        CAST(NULL AS NVARCHAR(50)),
+        CAST('TaskGraph' AS NVARCHAR(50))
     FROM Tree t
-    INNER JOIN ${flyway:defaultSchema}.vwAIAgentRunSteps s
+    INNER JOIN [__mj].[vwAIAgentRunSteps] s
         ON s.ID = t.NodeID
-    INNER JOIN ${flyway:defaultSchema}.vwTasks tk
+    INNER JOIN [__mj].[vwTasks] tk
         ON tk.ID = JSON_VALUE(s.OutputData, '$.parentTaskID')
     WHERE t.NodeType = 'Step'
       AND t.Depth < {{ maxDepth }}
@@ -131,11 +139,45 @@ WITH Tree AS (
         CAST(NULL AS DECIMAL(18, 6)),
         CAST(NULL AS INT),
         CAST('MJ: Tasks' AS NVARCHAR(100)),
-        CAST(JSON_VALUE(tk.Configuration, '$.runtime.promptRunID') AS NVARCHAR(50))
+        CAST(JSON_VALUE(tk.Configuration, '$.runtime.promptRunID') AS NVARCHAR(50)),
+        CAST(tk.StepType AS NVARCHAR(50))
     FROM Tree t
-    INNER JOIN ${flyway:defaultSchema}.vwTasks tk
+    INNER JOIN [__mj].[vwTasks] tk
         ON tk.ParentID = t.NodeID
     WHERE t.NodeType IN ('TaskGraph', 'Task')
+      AND t.Depth < {{ maxDepth }}
+
+    UNION ALL
+
+    -- ── The run a SUB-AGENT step started ──────────────────────────────────────────────────────
+    -- The other way a run nests, and the common one: an agent calling a sub-agent directly, with no
+    -- task graph involved. Without this member such a run appears in the tree as a single childless
+    -- Step — which is why a directly-invoked sub-agent rendered as an empty line in the run
+    -- visualizations while its steps sat in the database untouched.
+    --
+    -- Linked through TargetLogID, which is where a Sub-Agent step records the run it started.
+    SELECT
+        CAST(r.ID AS NVARCHAR(50)),
+        t.NodeID,
+        t.Depth + 1,
+        0,
+        CAST('Run' AS NVARCHAR(20)),
+        CAST(COALESCE(r.RunName, r.Agent, 'Agent Run') AS NVARCHAR(500)),
+        CAST(r.Status AS NVARCHAR(50)),
+        r.StartedAt,
+        r.CompletedAt,
+        r.TotalCost,
+        r.TotalTokensUsed,
+        CAST('MJ: AI Agent Runs' AS NVARCHAR(100)),
+        CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(50))
+    FROM Tree t
+    INNER JOIN [__mj].[vwAIAgentRunSteps] s
+        ON s.ID = t.NodeID
+    INNER JOIN [__mj].[vwAIAgentRuns] r
+        ON r.ID = s.TargetLogID
+    WHERE t.NodeType = 'Step'
+      AND s.StepType = 'Sub-Agent'
       AND t.Depth < {{ maxDepth }}
 
     UNION ALL
@@ -156,13 +198,19 @@ WITH Tree AS (
         r.TotalCost,
         r.TotalTokensUsed,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100)),
+        CAST(NULL AS NVARCHAR(50)),
         CAST(NULL AS NVARCHAR(50))
     FROM Tree t
-    INNER JOIN ${flyway:defaultSchema}.vwTasks tk
+    INNER JOIN [__mj].[vwTasks] tk
         ON tk.ID = t.NodeID
-    INNER JOIN ${flyway:defaultSchema}.vwAIAgentRuns r
+    INNER JOIN [__mj].[vwAIAgentRuns] r
         ON r.ID = tk.AgentRunID
-    WHERE t.NodeType IN ('Task', 'TaskGraph')
+    -- 'Task' ONLY — never 'TaskGraph'. A child task's AgentRunID is the run it STARTED, which is
+    -- downward. The graph's own parent row uses the same column for the opposite direction: the run
+    -- that SUBMITTED it. Following that link descends into the run we came from, which re-enters
+    -- this graph, forever — a cycle bounded only by the depth cap, producing a tree a hundred
+    -- levels deep that is the same five nodes repeated.
+    WHERE t.NodeType = 'Task'
       AND t.Depth < {{ maxDepth }}
 )
 SELECT
@@ -189,9 +237,10 @@ SELECT
     COALESCE(t.Cost, pr.Cost)                               AS Cost,
     COALESCE(t.Tokens, pr.TokensUsed)                       AS Tokens,
     t.SourceEntity,
+    t.SourceKind,
     t.NodeID                                                AS SourceID
 FROM Tree t
-LEFT JOIN ${flyway:defaultSchema}.vwAIPromptRuns pr
+LEFT JOIN [__mj].[vwAIPromptRuns] pr
     ON pr.ID = t.PromptRunID
 ORDER BY t.Depth, t.Sequence, t.StartedAt, t.NodeID
 OPTION (MAXRECURSION 0);

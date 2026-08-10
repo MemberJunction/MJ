@@ -194,3 +194,37 @@ describe('handled failures do not block dependents', () => {
         expect(ComputeTasksToBlock([n('f', 'Failed'), n('d')], [e('d', 'f')], new Set(['f']))).toEqual([]);
     });
 });
+
+describe('a handled failure releases its recovery path', () => {
+    it('makes the recovery target eligible when the failure is handled', () => {
+        // Under failureSemantics 'edges', a Failed origin with a satisfied outgoing edge is a
+        // HANDLED failure: the author drew a way out and it is live. Its target was previously
+        // neither Blocked (handled failures are excluded from blocking) nor Skipped nor eligible —
+        // so the graph sat In Progress forever. Before the recovery machinery existed it at least
+        // settled Failed; turning a wrong answer into NO answer is worse.
+        const nodes = [n('risky', 'Failed'), n('recover')];
+        const edges = [e('recover', 'risky')];
+
+        expect(ComputeEligibleTasks(nodes, edges)).toHaveLength(0);
+        expect(ComputeEligibleTasks(nodes, edges, new Set(['risky'])).map((x) => x.id)).toEqual(['recover']);
+    });
+
+    it('leaves an UNhandled failure blocking, which is the whole point of the distinction', () => {
+        // Nobody drew a recovery route here, so the failure is terminal for its dependents. If this
+        // released too, a graph would sail past every failure it never anticipated.
+        const nodes = [n('risky', 'Failed'), n('after')];
+        const edges = [e('after', 'risky')];
+
+        expect(ComputeEligibleTasks(nodes, edges, new Set(['someone-else']))).toHaveLength(0);
+    });
+
+    it('still requires the OTHER prerequisites to be satisfied', () => {
+        // A handled failure satisfies its own edge, not the node's other edges.
+        const nodes = [n('risky', 'Failed'), n('slow', 'Pending'), n('recover')];
+        const edges = [e('recover', 'risky'), e('recover', 'slow')];
+
+        // `slow` is itself eligible — it has no prerequisites. The assertion is about `recover`.
+        const eligible = ComputeEligibleTasks(nodes, edges, new Set(['risky'])).map((x) => x.id);
+        expect(eligible).not.toContain('recover');
+    });
+});

@@ -1,0 +1,1799 @@
+[
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — actions-pipeline",
+      "Description": "Runs the 'actions-pipeline' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "actions-pipeline"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "9779DB72-D458-4C8C-8413-1E35BA5950A1"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.036Z",
+      "checksum": "756d461116dc0103d656c60d8dde2b2cedb2b1f9538deb5f09bb3c6a5da7d322"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — agent-artifact-tools",
+      "Description": "Runs the 'agent-artifact-tools' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "agent-artifact-tools"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "0CECE635-E495-4A91-90E6-36BCE0C3E6F8"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.053Z",
+      "checksum": "e267d2ae5d42f495c055b90b6b0cca61941a47c1ee4b68d27ec7cbca64ec0698"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — agent-carry-forward",
+      "Description": "Runs the 'agent-carry-forward' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "agent-carry-forward"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "F50DA0E5-19B4-4F4B-A29B-21FA1FDA32F1"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.070Z",
+      "checksum": "6a41f9f00a072955542a4cff5529aa4074589ba31d2c710d146acc84a64a718c"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — agent-compaction-e2e",
+      "Description": "Runs the 'agent-compaction-e2e' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "agent-compaction-e2e"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "BDF70BC9-1B5F-4ABA-8BDA-C6A31CEB44CC"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.089Z",
+      "checksum": "0aa6a589490c3a43474e800512f10e3a3c9e624ea775577023b6f501e3ce095b"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — agent-external-harness",
+      "Description": "Runs the 'agent-external-harness' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "agent-external-harness"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "5127A822-85B3-456B-8531-7B9C40853508"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.104Z",
+      "checksum": "74d2c8b0cf28f4564255029be2869b00ead2e36f945c159f41a3882268de2ee1"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — agent-loop-live",
+      "Description": "Runs the 'agent-loop-live' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "agent-loop-live"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "4EEABDB8-F5EA-468E-B331-328EAB7B0C06"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.119Z",
+      "checksum": "7ac21247339214abc287cbe7e0be2d8d3967fe4f6d498c34fa45cea2d603b474"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — agent-loop-standin",
+      "Description": "Runs the 'agent-loop-standin' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "agent-loop-standin"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "140D90E8-CD1D-4C5F-90E1-DB42FC87743B"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.136Z",
+      "checksum": "63b6e2f854b8cf93ce62f11a9e3757423dad5cab98107800009a3109d0e18f2b"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — agent-memory-guards",
+      "Description": "Runs the 'agent-memory-guards' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "agent-memory-guards"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "758D1FC1-152E-4567-81F0-A5F6754393DA"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.150Z",
+      "checksum": "4d73f04ca2755991375a318badf40106c1e5f033f53199ac36c012026cceef83"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — agent-payload-guards",
+      "Description": "Runs the 'agent-payload-guards' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "agent-payload-guards"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "A1C11DF0-1BD2-42EC-A114-AC0CE6BC8504"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.166Z",
+      "checksum": "177ede04edb0a1f27ac4ddf498a10c7a9863510124ab3dcd8d91e5176db3479a"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — agent-plan-mode",
+      "Description": "Runs the 'agent-plan-mode' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "agent-plan-mode"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "080A6EA4-EE93-413D-9BB9-DC0AD697E59A"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.180Z",
+      "checksum": "d7b697ef6d0963937361182529abe491cb37918b02c1319f4d671d88e2922268"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — agent-rag-search",
+      "Description": "Runs the 'agent-rag-search' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "agent-rag-search"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "789AAE7D-CFC0-46BC-9688-17D0E5EDA291"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.210Z",
+      "checksum": "f25eaf394e7e9a9d692dcdf377a61bc6a4866011306900a3326a06095028a23c"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — agent-runner",
+      "Description": "Runs the 'agent-runner' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "agent-runner"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "489770F6-2A5D-4B25-ADAA-D44CE5D3AED2"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.226Z",
+      "checksum": "9dcd90009f91b5307c4da14764fb08fe7130378d363f5739de372923d5c644fb"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — agent-skills-live",
+      "Description": "Runs the 'agent-skills-live' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "agent-skills-live"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "582BC0CE-5FF9-4BCC-86FE-9222451D119F"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.239Z",
+      "checksum": "fd858339a77f0c42254c5c19e542617074bcf3501dc50b5588d86ff51beaa409"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — agent-wire-callback",
+      "Description": "Runs the 'agent-wire-callback' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "agent-wire-callback"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "FDB14B72-89BC-475C-AC40-BB81116741D3"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.254Z",
+      "checksum": "12c8d6d8dcaca698c02242e3f87b08cb073a41e12c94548a503a119eb8fc2568"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — aggregates-cache",
+      "Description": "Runs the 'aggregates-cache' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "aggregates-cache"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "99C47D1E-276F-4568-9DCD-259D7C72E32B"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.267Z",
+      "checksum": "d5507e4dc12329b29527436ae7509f7349b7c36adf232bbb699551f01fbcbff9"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — ai-cost",
+      "Description": "Runs the 'ai-cost' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "ai-cost"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "ED0FC232-6017-4B01-895F-8489B7B393E4"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.281Z",
+      "checksum": "f8056199ab46c6bc823e585129934908ec17cffcc6636f55b1bde704ae3be4ca"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — ai-embeddings",
+      "Description": "Runs the 'ai-embeddings' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "ai-embeddings"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "B5B535E2-AD55-430B-B873-1A53D87ADFE4"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.297Z",
+      "checksum": "7a47aed90649e6ecc185fbd9f7a2d6c702d6051d501b8e630b1bd0c5db9f40ac"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — ai-permissions",
+      "Description": "Runs the 'ai-permissions' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "ai-permissions"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "F5D63AE4-BC67-40EA-AE16-4A97059205F1"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.311Z",
+      "checksum": "f6d59478b423c356830e784a2bcefc6e98b830faf792a8209a1186f7a952b233"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — ai-providers",
+      "Description": "Runs the 'ai-providers' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "ai-providers"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "B580439B-A38A-4FF1-AFEE-7476AAB261AA"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.326Z",
+      "checksum": "5ece34a4b6be8d931c1426d315da9e6c196d7c7175f74e2deeab2709478a28c8"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — ai-skills",
+      "Description": "Runs the 'ai-skills' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "ai-skills"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "056179F6-1425-4A4B-83A0-974D107F4909"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.338Z",
+      "checksum": "0ccb09e6eccb2a023f840237d41e3c9a9eae4b6d6695baf7c731927463bca820"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — api-keys",
+      "Description": "Runs the 'api-keys' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "api-keys"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "9884D21A-2A7F-4C0F-B196-9E7B86A809BC"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.369Z",
+      "checksum": "a4b6af6cdf654ee54b427ebbdd92debee46be5dc4cbee38b631374fcecb34c13"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — app-behavioral",
+      "Description": "Runs the 'app-behavioral' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "app-behavioral"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "24CD0BA9-1A78-4C9B-8579-D75398A82984"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.384Z",
+      "checksum": "71b2ff624120470e18bcb163ec86128f29df73305e1288dacf2f1711bba7796f"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — app-wiring",
+      "Description": "Runs the 'app-wiring' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "app-wiring"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "6094344B-6351-4557-8F56-D3AB7AECA2D6"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.399Z",
+      "checksum": "a1bf119d3214b5db5c2b0f6c8a281b8b43fee886d83b921609da281c2d3d3f3b"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — cache-gauntlet",
+      "Description": "Runs the 'cache-gauntlet' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "cache-gauntlet"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "4A3C5545-F1A7-4D2C-BB87-419FB3FA3686"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.412Z",
+      "checksum": "35bae3db8584293b810e0977290e5a6df3f1f183d6fa4106ae0794aa2c6b3389"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — class-resolution",
+      "Description": "Runs the 'class-resolution' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "class-resolution"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "8F647ECA-5209-4EF7-ABB7-4809E2AFCEFE"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.427Z",
+      "checksum": "3d631f2b60a3237cba33b74314eaebba3fbc9b4d623e75a03795c4226c60b2f2"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — client-cache",
+      "Description": "Runs the 'client-cache' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "client-cache"
+          }
+        ],
+        "tier": "deterministic",
+        "transport": "client"
+      }
+    },
+    "primaryKey": {
+      "ID": "D7BD2F22-21F3-4035-99F7-2FB8AC8B6B5B"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.441Z",
+      "checksum": "7ed95aa28af3ab3839836df2356d5758baf9859cf74252ad330b14646db03ea4"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — codegen-determinism",
+      "Description": "Runs the 'codegen-determinism' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "codegen-determinism"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "5DEE63CA-EC6A-4745-BAE5-11BD188DF7B0"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.455Z",
+      "checksum": "9a06d44cf705b80eeed260740838d394358ad5b2de4e63ed23c84fc8feb05f38"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — communication",
+      "Description": "Runs the 'communication' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "communication"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "B55E6B58-7BA6-410B-A0FB-C2E7E951D0D5"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.469Z",
+      "checksum": "8d6725b62161705d02323c79c50ee5301ec630dffe83e465547deeca52ffc04f"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — concurrent",
+      "Description": "Runs the 'concurrent' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "concurrent"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "0361B22D-E98C-4B86-B111-38F6390A587F"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.483Z",
+      "checksum": "8314cc9af9307afd95f0e977ab54dfb804f3b5d111b62b65804b9f2edf6350d9"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — content-vectorization",
+      "Description": "Runs the 'content-vectorization' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "content-vectorization"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "A07B0739-0B26-4338-98C3-A3CAC0B55F76"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.496Z",
+      "checksum": "c3f40cd464d10527ad9da2759c5c92090694c08d31c9603eb351b330ff87e337"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — conversation-compaction",
+      "Description": "Runs the 'conversation-compaction' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "conversation-compaction"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "A0AFFE9E-A187-48ED-B315-61F12F033D40"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.527Z",
+      "checksum": "8b8b7b9f9949577eab8d15d6b35e9df974a02da67fbd52423b6f18e04d1256cb"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — dataset-cache",
+      "Description": "Runs the 'dataset-cache' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "dataset-cache"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "F7E9DA5E-CDE2-4C2E-BA2B-E29A366EA33C"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.554Z",
+      "checksum": "06ed24d425a6623b6c8cd1ef54f3bc7a15a2bdba5ff458ad34456b8479ead792"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — entity-actions",
+      "Description": "Runs the 'entity-actions' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "entity-actions"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "5B745322-0A03-4E48-B118-1B177012185F"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.569Z",
+      "checksum": "a4f3b36c64108f8305efe114ea7247621e21a189b5ecaa1c676553555ade8b0e"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — entity-graph",
+      "Description": "Runs the 'entity-graph' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "entity-graph"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "2B1C0558-76B4-4D36-AA7C-ED21199D133B"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.583Z",
+      "checksum": "474d2a84556b544dbeebc01c7dae277ce3077e6738f8eaadc5650c6d2f68da0d"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — entity-graph-client",
+      "Description": "Runs the 'entity-graph-client' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "entity-graph-client"
+          }
+        ],
+        "tier": "deterministic",
+        "transport": "client"
+      }
+    },
+    "primaryKey": {
+      "ID": "FA51D663-0E31-40AC-A3FB-8440100BDC6C"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.597Z",
+      "checksum": "1e0fe495498441fdb54a354f50e3ef9078706869bc9957345c69fc39ebc2bfe7"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — entity-server-invariants",
+      "Description": "Runs the 'entity-server-invariants' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "entity-server-invariants"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "C8D0E4E4-0393-415B-8CC5-E3C26C23D515"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.611Z",
+      "checksum": "e19581979be10e64243698c289d710e19ab08d13f47716a94ac9563550a0f94c"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — entity-writes",
+      "Description": "Runs the 'entity-writes' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "entity-writes"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "31E8E79A-1293-41FE-945E-5AD3DF3A6F55"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.625Z",
+      "checksum": "4d54be527da0e0c5eb6101a381b7f4d380a633ce187d34074792f6a2d98b4e6e"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — field-rules-bulk-update",
+      "Description": "Runs the 'field-rules-bulk-update' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "field-rules-bulk-update"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "ACA51672-C8BA-40B1-9F39-BC9FD587C162"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.640Z",
+      "checksum": "953703604694299b2b2333f252132626bf91b13e2a815958e3dc52e783ab4573"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — layered-base-views",
+      "Description": "Runs the 'layered-base-views' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "layered-base-views"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "8ECDDB11-3047-4F27-B676-CF05D605D7B3"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.653Z",
+      "checksum": "5f425f8f1f9ef930b381a5a1c5448f6a2f81edc79d8f440e51409f5c362af5dc"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — lists",
+      "Description": "Runs the 'lists' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "lists"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "04E58DD7-5E44-415A-8206-A5F7BE403BAD"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.665Z",
+      "checksum": "c6bd9260bf7378b4e495bf5d30dbbcd04e8dcf51c3afb7195dcbf82a38ddbbaa"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — metadata-consistency",
+      "Description": "Runs the 'metadata-consistency' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "metadata-consistency"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "E6B045A6-F72C-4774-831C-B41CD73D488A"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.695Z",
+      "checksum": "5755dbe45c847a04353810bcc327db0b6d91a9240894f79762decf09ef8f0810"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — metadata-sync",
+      "Description": "Runs the 'metadata-sync' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "metadata-sync"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "4D195DBC-D119-48A2-837D-46FCA85C8E0D"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.708Z",
+      "checksum": "ad9f24be9d89a92e5befd7b532cdfb145d8dcf1e3607f3d878fce3750828a855"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — open-app-teardown",
+      "Description": "Runs the 'open-app-teardown' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "open-app-teardown"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "FF91BBAB-A29B-4D8C-B1BE-862EEFF9E875"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.723Z",
+      "checksum": "af85f0a151a76ab2c3ce44006f3ed3f9b4c2986bb767bbb86744557f95b7b2ce"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — permission-engine",
+      "Description": "Runs the 'permission-engine' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "permission-engine"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "19CEBF98-BF7C-4D57-956F-68BA857D23B8"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.736Z",
+      "checksum": "ebcb0ee1afe2842bb454130e3f93bfacd036244b6b85e7bd2b04043b9bb13bc3"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — predictive-studio",
+      "Description": "Runs the 'predictive-studio' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "predictive-studio"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "89E3CB84-D2CF-4CFF-9CD4-B0A0B238FC70"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.750Z",
+      "checksum": "ac0d93ea71659012ec084055b52115dca5ab58879c52e39952c0e01ae05df058"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — prompt-runner",
+      "Description": "Runs the 'prompt-runner' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "prompt-runner"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "742F6F0E-51F8-4F6C-B4D9-635A5E05D09C"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.765Z",
+      "checksum": "0a751e534823a726ea73315969ca2ed03098356222d299be4e03cc72643f0ba5"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — realtime-deterministic",
+      "Description": "Runs the 'realtime-deterministic' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "realtime-deterministic"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "B06CEBCC-6E77-44D5-A6F7-22B5280682FB"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.779Z",
+      "checksum": "2a3f43299e9c3c0c70ad374bae962c48e2bd26304d6ef708fc255d717cf7deec"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — record-process",
+      "Description": "Runs the 'record-process' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "record-process"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "50F6847B-8CC8-4A37-A1E9-B5B099A4A624"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.794Z",
+      "checksum": "768cf6645f90b93133b2e99e22f97728fcf9693ca3a9d322788f43613487045b"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — record-process-facade",
+      "Description": "Runs the 'record-process-facade' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "record-process-facade"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "03258BA8-AE20-4CB3-82F3-38FDE3D1F411"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.807Z",
+      "checksum": "9d3d34bca612c624f85b5da4d0f36861a8d7b878a99f6a4bcca6430d38ff53fa"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — remote-op-ai-authoring",
+      "Description": "Runs the 'remote-op-ai-authoring' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "remote-op-ai-authoring"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "DA3F3EEF-7842-4916-8420-03C5AEF590F6"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.819Z",
+      "checksum": "06bc0ec42d7e7154fea063486a3c6cdf66e2227425aca03a2b23ed238a616192"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — remote-op-wire-progress",
+      "Description": "Runs the 'remote-op-wire-progress' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "remote-op-wire-progress"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "5FC2F4F5-E4DC-44DF-8C79-342F30E1BD9F"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.852Z",
+      "checksum": "4d863211e352e257545a4ac93ef8ccd5a528bc7e5db46e9ad58af064e442a0c0"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — remote-operations",
+      "Description": "Runs the 'remote-operations' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "remote-operations"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "35C910E5-D02B-4A80-B55A-79D704F953AC"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.866Z",
+      "checksum": "2af7533bcf1a692a46538e67e7b18438d164bfa7ce10d555557d60635bbec4b9"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — rls-isolation",
+      "Description": "Runs the 'rls-isolation' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "rls-isolation"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "36872673-831A-4674-ADD4-EC845E4D1D35"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.880Z",
+      "checksum": "6cce48acd92e1da5b48106e974ff281d6d84ba2198ce915f7569a4ba1b57040a"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — rls-isolation-client",
+      "Description": "Runs the 'rls-isolation-client' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "rls-isolation-client"
+          }
+        ],
+        "tier": "deterministic",
+        "transport": "client"
+      }
+    },
+    "primaryKey": {
+      "ID": "F4F903C9-6296-408B-BA8F-397EE205C220"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.895Z",
+      "checksum": "a5c26985478598ed83d2fd98cb367f844ed54c4e8e76c576de622bcc3f11a5f0"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — runquery-cache",
+      "Description": "Runs the 'runquery-cache' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "runquery-cache"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "4C91B175-C4D7-4A74-8C70-44E247BA1799"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.909Z",
+      "checksum": "394fa0567341b3242fb21d1aca9a4f4fcbf850defc14b84eb4cfcfdfff2c4761"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — runquery-catalog",
+      "Description": "Runs the 'runquery-catalog' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "runquery-catalog"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "EAAD9641-6DDE-4D2B-88E7-D1CC2E5EEB54"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.924Z",
+      "checksum": "6c9040b908982af382a05960ffb1b33c7924bf75ded223e1da354e905b71663d"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — runquery-features",
+      "Description": "Runs the 'runquery-features' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "runquery-features"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "9D4E86D9-C42C-49D1-88BF-6599F4793259"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.938Z",
+      "checksum": "64ec51f9c85f904d1d2e1ee334d796f2e2a39f033898025308ee3b47e4be7408"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — runquery-params",
+      "Description": "Runs the 'runquery-params' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "runquery-params"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "C8B095F0-C48A-4BDC-B7F5-80AF88D9959C"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.953Z",
+      "checksum": "d69d57a0a13b3c9d254963e7c945bf1c745dc809bcc52cf15570900f959e5a1c"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — runview-features",
+      "Description": "Runs the 'runview-features' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "runview-features"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "C9D5DD5C-EE16-4923-9BA0-13C6BF60A783"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.966Z",
+      "checksum": "0a3c9498e08f813aebc890486b402914005731e091c18df65712e07c8691316e"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — runview-matrix",
+      "Description": "Runs the 'runview-matrix' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "runview-matrix"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "DC4D28A0-1795-4356-B01A-47111091F600"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:29.978Z",
+      "checksum": "67ea3546cf896e606c82f4cbdaab5105acfff5db8917ed690fbad481c200a57c"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — scheduled-jobs",
+      "Description": "Runs the 'scheduled-jobs' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "scheduled-jobs"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "10902F3E-4269-4ADF-9273-AC57B026BA10"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.009Z",
+      "checksum": "4eb0c0758944ecc678bb393f9d4dddcfe7775bb9223ea42b06ffcd55e2e48002"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — scheduling-concurrency",
+      "Description": "Runs the 'scheduling-concurrency' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "scheduling-concurrency"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "3EBBE165-3AB4-45F8-B8F7-685AB208DA53"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.024Z",
+      "checksum": "41db552de325203720ceedd7f79b1e7d4a4d082d6c971daaf141b2b691e7f209"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — scope-enforcement",
+      "Description": "Runs the 'scope-enforcement' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "scope-enforcement"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "1213DA27-4496-4E88-B3F0-1E1F67D6735F"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.038Z",
+      "checksum": "82d66d530475028f780153815164dff11e817931f9ed376bbc3a46c5383da4b6"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — scoped-anon-elevation",
+      "Description": "Runs the 'scoped-anon-elevation' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "scoped-anon-elevation"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "6B084DF6-831F-47F5-8966-68699D46B7D7"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.051Z",
+      "checksum": "9311c4fe1f80ecdf16514107d98c523180ea5a05f89756c950af82f91808cb86"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — search",
+      "Description": "Runs the 'search' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "search"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "49C26709-C626-4786-9A24-F885E4A232B1"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.064Z",
+      "checksum": "fc3d6718183fabaa021a87bc4fe22c2eb901815d89bb87ded685ab380dd8213b"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — self-test",
+      "Description": "Runs the 'self-test' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "self-test"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "D18C4017-812F-4C3D-B806-2947B92C7E24"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.078Z",
+      "checksum": "2f366ebc8a79475cec345107c0f460f06c9ea152eebd31d0f6a110cba09396e9"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — server-cache",
+      "Description": "Runs the 'server-cache' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "server-cache"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "3A4E05E7-040D-480C-A571-FB79D4B14EED"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.092Z",
+      "checksum": "685e4345ae8c39cddf56489e609b43ff799c303eda95bcf57fae364cbae177a0"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — shipped-agents-live",
+      "Description": "Runs the 'shipped-agents-live' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "shipped-agents-live"
+          }
+        ],
+        "tier": "live-model"
+      }
+    },
+    "primaryKey": {
+      "ID": "9013B954-77E8-4085-9300-92306D656210"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.105Z",
+      "checksum": "9a9c746dfb7f84a207eaacfa401b9fb670a2dc4e79fc47da8b3b284d984f9497"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — startup-mode",
+      "Description": "Runs the 'startup-mode' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "startup-mode"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "ECD03116-DACD-4A97-9295-10A076CF5FF6"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.119Z",
+      "checksum": "9a43d4b56d7f792ec150e30b55e4640092708ff2b41c49c8f32dfa57f21ad10f"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — subscription-isolation",
+      "Description": "Runs the 'subscription-isolation' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "subscription-isolation"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "3B73EEEA-6FC8-4053-A0CE-A2C22FBF6FA3"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.132Z",
+      "checksum": "b6f7599c38db26a9d862c6c57162dda9c8af74287e07b09fcd6245ba789bcf81"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — task-graph-execution",
+      "Description": "Runs the 'task-graph-execution' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "task-graph-execution"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "6F9D9FB3-5CE7-45EA-80A2-6D39B32086B4"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.168Z",
+      "checksum": "697fa2e0cf67223a165bb89ea5ba5b67d42a44a4bffec8184097d5fa9fbe51c9"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — task-graph-orchestration",
+      "Description": "Runs the 'task-graph-orchestration' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "task-graph-orchestration"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "51953C1B-9EE4-4AFB-972F-2EBF38CCCA3E"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.183Z",
+      "checksum": "27128035d9397e5abbfc93d868690939178a311843789be6c406d4a96af07428"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — templates",
+      "Description": "Runs the 'templates' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "templates"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "01D3FB65-1CD0-47F7-90AF-1DEFA72C0EC9"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.198Z",
+      "checksum": "6485f1b616d76587a993a07dc51dd28e4e752332481a018ba538821f798bf42c"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — transaction-groups",
+      "Description": "Runs the 'transaction-groups' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "transaction-groups"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "05EDF06F-2D13-464E-AE0A-BA70A07C88E2"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.212Z",
+      "checksum": "07370be75e69ab8940e6fa5c245dba6ad5122348b1c3ba78417104b8c22f2ae2"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — user-routines",
+      "Description": "Runs the 'user-routines' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "user-routines"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "CB5AA463-08E2-48AB-A0A4-3B9E022F028F"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.226Z",
+      "checksum": "6348aae660273b641a13abba2fb1a858574dc526c9354290e0aeb24c816078dd"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — view-execution",
+      "Description": "Runs the 'view-execution' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "view-execution"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "DE1800E9-5EAD-439B-A851-FA0CAE284E69"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.240Z",
+      "checksum": "f9e83b96032843c793d32a172fc5179033c4dd26d4c3f17f9e5ddc375afa1f8f"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — view-security",
+      "Description": "Runs the 'view-security' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "view-security"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "9D99DD47-8443-4A89-B9A7-FD747672B912"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.254Z",
+      "checksum": "544ac39bcfafafd73ad2f299836870b55ebebd3ac28873397a2c8d68d1f8fcae"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT — workflow-demo-agents",
+      "Description": "Runs the 'workflow-demo-agents' integration check bundle. One Test per bundle so a failure names the subsystem, and so a bundle can be run on its own while iterating.",
+      "Status": "Active",
+      "Configuration": {
+        "checks": [
+          {
+            "type": "workflow-demo-agents"
+          }
+        ],
+        "tier": "deterministic"
+      }
+    },
+    "primaryKey": {
+      "ID": "47F34437-E092-40BC-B576-758B1D7BC0C3"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:59:30.269Z",
+      "checksum": "d7784b1c00e2d477f394296ccab443a141e317fe25ef1b37075b3ef1a1ea9a8d"
+    }
+  }
+]

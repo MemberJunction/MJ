@@ -19,8 +19,8 @@ describe('WorkflowPlanCardComponent (DOM)', () => {
         workflowName: 'Quarterly review',
         reasoning: 'research then summarize',
         tasks: [
-            { tempId: 'a', name: 'Gather', description: 'g', agentName: 'Sage', dependsOn: [] },
-            { tempId: 'b', name: 'Summarize', description: 's', agentName: 'Sage', dependsOn: ['a'] },
+            { tempId: 'a', name: 'Gather', description: 'g', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
+            { tempId: 'b', name: 'Summarize', description: 's', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['a'] },
         ],
     };
 
@@ -91,7 +91,7 @@ describe('WorkflowPlanCardComponent (DOM)', () => {
     describe('④ name it inline, then offer the editor', () => {
         const spec: TaskGraphSpec = {
             workflowName: 'Quarterly review',
-            tasks: [{ tempId: 'a', name: 'Pull numbers', description: 'd', agentName: 'Sage', dependsOn: [] }],
+            tasks: [{ tempId: 'a', name: 'Pull numbers', description: 'd', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] }],
         };
 
         it('seeds the name from the plan rather than making the user invent one', () => {

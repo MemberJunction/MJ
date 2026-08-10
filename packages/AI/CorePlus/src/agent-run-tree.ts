@@ -93,6 +93,16 @@ export type AgentRunTreeRow = {
      * is, and re-deriving that in every consumer is how two of them end up disagreeing.
      */
     SourceEntity: string;
+    /**
+     * What KIND of work this node is, in its own vocabulary — a run step's `StepType`
+     * ('Prompt', 'Actions', 'Sub-Agent', 'Validation', …) or a task's ('Agent', 'Action',
+     * 'ForEach', 'While', 'Human', …). Null for a Run node, whose kind is simply "a run".
+     *
+     * Carried because every visual consumer colours and icons by kind. Without it a renderer can
+     * only draw undifferentiated boxes, which is precisely what kept the run visualizations reading
+     * raw step rows instead of this tree.
+     */
+    SourceKind: string | null;
     SourceID: string;
 };
 
