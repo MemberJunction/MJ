@@ -68,6 +68,20 @@ export type OutputMappingResult = {
      * on the Task row, where an operator will actually see them.
      */
     errors: string[];
+    /**
+     * Output parameters the mapping named that the result did not contain.
+     *
+     * **Why this is separate from `errors`.** An absent output is not always a defect — an action may
+     * emit a parameter only on some paths — so it must not fail the step. But it is not nothing
+     * either: a mapping that names a parameter the action never produces means the step ran, cost
+     * real money, and contributed NOTHING to the payload, while reporting Complete.
+     *
+     * That is exactly what happened to the Content Pipeline demo: its research step was pointed at
+     * `Google Custom Search` while its mapping still named Web Search's `SearchResults`, so every
+     * run discarded a whole research pass in silence. Diagnosing it took reading four tables. The
+     * caller can now say so in one line.
+     */
+    unmapped?: string[];
 };
 
 /**
@@ -242,10 +256,13 @@ export function ApplyOutputMapping(
 
     const updates: Record<string, unknown> = {};
     const specialFields: MappedSpecialFields = {};
+    const unmapped: string[] = [];
 
     for (const [outputParam, payloadPath] of Object.entries(mapping)) {
         const value = ResolveMappedOutput(result, outputParam);
-        if (value === undefined) continue;
+        // Recorded rather than ignored. Skipping in silence is what let a step run, succeed, and
+        // contribute nothing — see `unmapped` on OutputMappingResult.
+        if (value === undefined) { unmapped.push(outputParam); continue; }
 
         if (payloadPath.startsWith('$')) {
             applySpecialField(specialFields, payloadPath, value, errors);
@@ -270,6 +287,7 @@ export function ApplyOutputMapping(
         updates,
         specialFields: Object.keys(specialFields).length > 0 ? specialFields : undefined,
         errors,
+        unmapped: unmapped.length > 0 ? unmapped : undefined,
     };
 }
 

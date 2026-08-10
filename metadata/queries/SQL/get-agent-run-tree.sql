@@ -65,6 +65,9 @@ WITH Tree AS (
         r.TotalCompletionTokensUsed                          AS CompletionTokens,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100))           AS SourceEntity,
         CAST(NULL AS NVARCHAR(50))                           AS PromptRunID,
+        -- A loop step's per-pass trace, carried through the recursion and expanded into nodes in a
+        -- second SELECT below (APPLY is illegal inside a recursive member).
+        CAST(NULL AS NVARCHAR(MAX))                          AS Iterations,
         -- What KIND of work this node is, in its own vocabulary: a run step's StepType
         -- ('Prompt', 'Actions', 'Sub-Agent', 'Validation', …) or a task's ('Agent', 'Action',
         -- 'ForEach', 'While', 'Human', …). Carried because every visual consumer colours and
@@ -96,6 +99,7 @@ WITH Tree AS (
         CAST(NULL AS INT),
         CAST('MJ: AI Agent Run Steps' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(MAX)),
         CAST(s.StepType AS NVARCHAR(50))
     FROM Tree t
     INNER JOIN [__mj].[vwAIAgentRunSteps] s
@@ -124,6 +128,7 @@ WITH Tree AS (
         CAST(NULL AS INT),
         CAST('MJ: Tasks' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(MAX)),
         CAST('TaskGraph' AS NVARCHAR(50))
     FROM Tree t
     INNER JOIN [__mj].[vwAIAgentRunSteps] s
@@ -155,6 +160,8 @@ WITH Tree AS (
         CAST(NULL AS INT),
         CAST('MJ: Tasks' AS NVARCHAR(100)),
         CAST(JSON_VALUE(tk.Configuration, '$.runtime.promptRunID') AS NVARCHAR(50)),
+        -- JSON_QUERY, not JSON_VALUE: this is an ARRAY, and JSON_VALUE returns NULL for one.
+        CAST(JSON_QUERY(tk.Configuration, '$.runtime.iterations') AS NVARCHAR(MAX)),
         CAST(tk.StepType AS NVARCHAR(50))
     FROM Tree t
     INNER JOIN [__mj].[vwTasks] tk
@@ -187,6 +194,7 @@ WITH Tree AS (
         r.TotalCompletionTokensUsed,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(MAX)),
         CAST(NULL AS NVARCHAR(50))
     FROM Tree t
     INNER JOIN [__mj].[vwAIAgentRunSteps] s
@@ -218,6 +226,7 @@ WITH Tree AS (
         r.TotalCompletionTokensUsed,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(MAX)),
         CAST(NULL AS NVARCHAR(50))
     FROM Tree t
     INNER JOIN [__mj].[vwTasks] tk
@@ -272,5 +281,54 @@ SELECT
 FROM Tree t
 LEFT JOIN [__mj].[vwAIPromptRuns] pr
     ON pr.ID = t.PromptRunID
-ORDER BY t.Depth, t.Sequence, t.StartedAt, t.NodeID
+
+UNION ALL
+
+-- ── A loop step's individual passes ───────────────────────────────────────────────────────────
+-- Emitted OUTSIDE the recursion on purpose: an iteration is always a leaf (a pass cannot itself
+-- contain the loop), and T-SQL forbids APPLY inside a recursive member, so reading the JSON array
+-- there is not an option. Producing them here costs one pass over the tasks already returned.
+--
+-- Without this a loop is a single childless node. The six recursive members reach nested work
+-- through a run's steps, a task-graph step's graph, a graph's tasks, a Sub-Agent step's run, and a
+-- task's own AgentRunID — a loop iteration is none of them, and AIAgentRun.ParentRunID records
+-- parentage without being a link this query follows. So a While that spent real money over three
+-- passes reported no children and no cost: the timeline had nothing to expand, and the settlement
+-- rollup under-counted every loop-bearing workflow.
+SELECT
+    CAST(t.NodeID + ':' + CAST(it.[index] AS NVARCHAR(10)) AS NVARCHAR(50)) AS NodeID,
+    t.NodeID                                                AS ParentNodeID,
+    t.Depth + 1                                             AS Depth,
+    it.[index]                                              AS Sequence,
+    CAST('Step' AS NVARCHAR(20))                            AS NodeType,
+    CAST('Pass ' + CAST(it.[index] + 1 AS NVARCHAR(10)) AS NVARCHAR(500)) AS Name,
+    CAST(CASE WHEN it.success = 1 THEN 'Complete' ELSE 'Failed' END AS NVARCHAR(50)) AS Status,
+    ipr.RunAt                                               AS StartedAt,
+    ipr.CompletedAt                                         AS CompletedAt,
+    CASE
+        WHEN ipr.RunAt IS NOT NULL AND ipr.CompletedAt IS NOT NULL
+        THEN DATEDIFF(MILLISECOND, ipr.RunAt, ipr.CompletedAt)
+        ELSE NULL
+    END                                                     AS DurationMs,
+    -- Own cost of whichever run the pass produced. A pass has exactly one of the two.
+    COALESCE(ipr.Cost, iar.TotalCost)                       AS Cost,
+    COALESCE(ipr.TokensUsed, iar.TotalTokensUsed)           AS Tokens,
+    COALESCE(ipr.TokensPrompt, iar.TotalPromptTokensUsed)   AS PromptTokens,
+    COALESCE(ipr.TokensCompletion, iar.TotalCompletionTokensUsed) AS CompletionTokens,
+    CAST(CASE WHEN ipr.ID IS NOT NULL THEN 'MJ: AI Prompt Runs' ELSE 'MJ: AI Agent Runs' END AS NVARCHAR(100)) AS SourceEntity,
+    CAST(CASE WHEN ipr.ID IS NOT NULL THEN 'Prompt' ELSE 'Sub-Agent' END AS NVARCHAR(50)) AS SourceKind,
+    CAST(COALESCE(CAST(ipr.ID AS NVARCHAR(50)), CAST(iar.ID AS NVARCHAR(50)), t.NodeID) AS NVARCHAR(50)) AS SourceID
+FROM Tree t
+CROSS APPLY OPENJSON(t.Iterations)
+    WITH (
+        [index]      INT            '$.index',
+        promptRunID  NVARCHAR(50)   '$.promptRunID',
+        agentRunID   NVARCHAR(50)   '$.agentRunID',
+        success      BIT            '$.success'
+    ) AS it
+LEFT JOIN [__mj].[vwAIPromptRuns] ipr ON ipr.ID = it.promptRunID
+LEFT JOIN [__mj].[vwAIAgentRuns]  iar ON iar.ID = it.agentRunID
+WHERE t.Iterations IS NOT NULL
+
+ORDER BY Depth, Sequence, StartedAt, NodeID
 OPTION (MAXRECURSION 0);

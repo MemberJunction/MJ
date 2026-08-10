@@ -167,6 +167,29 @@ describe('ApplyOutputMapping', () => {
         expect('y' in updates).toBe(false);
     });
 
+    it('REPORTS what it skipped, so a step cannot contribute nothing in silence', () => {
+        // Skipping is right — an absent output must not overwrite the payload with undefined, and an
+        // action may emit a parameter only on some paths, so this must not fail the step. Skipping
+        // SILENTLY is what cost a whole research pass on every Content Pipeline run: the step was
+        // pointed at Google Custom Search while its mapping still named Web Search's `SearchResults`,
+        // so it ran, cost money, reported Complete, and wrote nothing.
+        const { updates, unmapped } = ApplyOutputMapping({ Items: [1, 2] }, '{"SearchResults":"research"}');
+
+        expect(updates).toEqual({});
+        expect(unmapped).toEqual(['SearchResults']);
+    });
+
+    it('leaves `unmapped` absent when every mapped output was present', () => {
+        // Absent rather than empty-array, so `if (unmapped?.length)` at the call site reads as
+        // "something to say" instead of always being truthy.
+        expect(ApplyOutputMapping({ a: 1 }, '{"a":"x"}').unmapped).toBeUndefined();
+    });
+
+    it('names every missing output, not just the first', () => {
+        const { unmapped } = ApplyOutputMapping({ a: 1 }, '{"a":"x","p":"y","q":"z"}');
+        expect(unmapped).toEqual(['p', 'q']);
+    });
+
     it('treats an absent mapping as no updates', () => {
         expect(ApplyOutputMapping({ a: 1 }, null).updates).toEqual({});
     });

@@ -172,12 +172,12 @@
             "Description": "The first research angle. Feeds the focused search, which then feeds the draft — a CHAIN, not a parallel pair. A Flow agent compiles with TraversalMode 'sequential' (flow-graph-executor.ts), where any step with two outgoing paths becomes an exclusive choice: exactly one of them runs. So a fan-out from here could not express 'both', it expressed 'either', and the branch that lost was Skipped in silence. The draft still sees both results because each step's output accumulates into the payload.",
             "StartingStep": 1,
             "StepType": "Action",
-            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
             "ActionInputMapping": {
-              "SearchTerms": "what is a directed acyclic graph used for in workflow automation"
+              "Query": "what is a directed acyclic graph used for in workflow automation"
             },
             "ActionOutputMapping": {
-              "SearchResults": "broadResearch"
+              "Items": "broadResearch"
             },
             "Status": "Active",
             "PositionX": 80,
@@ -209,23 +209,23 @@
             "ID": "1E9F8F35-9523-4739-B01C-2025246703D9"
           },
           "sync": {
-            "lastModified": "2026-08-10T22:48:26.307Z",
-            "checksum": "cba3ade2004891f640efe4337fdf81c1ee745ef08b967d155369d079d93f22cc"
+            "lastModified": "2026-08-10T23:37:37.702Z",
+            "checksum": "2838739d342d2672824ed77aa4e8e757d54a8321d2f1677a0975f6223c89ac93"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "Research: focused",
-            "Description": "The other half of the research join, reached from the broad search. NOT a second starting step: a workflow has exactly one entry, and a step marked as a second one is pruned as unreachable — which is how this demo spent its early life drafting from half the evidence.",
+            "Description": "The second research angle, reached from the broad search. NOT a second starting step: a workflow has exactly one entry, and a step marked as a second one is pruned as unreachable — which is how this demo spent its early life drafting from half the evidence. Its mapping names Google Custom Search's OWN parameters (Query in, Items out). It previously used Web Search's names (SearchTerms/SearchResults) against this action, so the output mapping matched nothing, the step reported Complete, and its results were discarded silently — a step that ran, cost money, and contributed nothing.",
             "StartingStep": 0,
             "StepType": "Action",
             "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
             "ActionInputMapping": {
-              "SearchTerms": "task graph dispatcher durable execution retry semantics"
+              "Query": "task graph dispatcher durable execution retry semantics"
             },
             "ActionOutputMapping": {
-              "SearchResults": "focusedResearch"
+              "Items": "focusedResearch"
             },
             "Status": "Active",
             "PositionX": 80,
@@ -257,8 +257,8 @@
             "ID": "F98FD583-6CD3-4E41-BF00-C2A097478465"
           },
           "sync": {
-            "lastModified": "2026-08-10T20:58:57.364Z",
-            "checksum": "a948a6503f63bcdde67f1274aeebd5ee7282065be945368171257d236b4e103c"
+            "lastModified": "2026-08-10T23:37:37.729Z",
+            "checksum": "a359e4b5924ae51228b78796da9faf240384a299461b10cf82864405062900aa"
           }
         },
         {
@@ -428,8 +428,8 @@
       "ID": "C36FA358-CDFD-4443-9CF3-19E194C994EE"
     },
     "sync": {
-      "lastModified": "2026-08-10T20:58:57.226Z",
-      "checksum": "1d1386a97b4ba28c5ab2b17c3a83a320295cf70c29df57d124a02f8946c85338"
+      "lastModified": "2026-08-10T23:37:37.646Z",
+      "checksum": "5a43b146428500ea9528589e341ee821fc337f003b765f9d2d307a92399c8898"
     }
   }
 ]

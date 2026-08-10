@@ -110549,6 +110549,42 @@ export interface MJTaskEntity_ITaskStepRuntime {
      * output the payload actually carries.
      */
     promptRunID?: string;
+
+    /**
+     * One entry per pass of a loop step, in iteration order.
+     *
+     * **Without this a loop's work does not exist anywhere the platform can see it.** The run tree
+     * reaches nested work through exactly six links — a run's steps, a task-graph step's graph, a
+     * graph's tasks, a Sub-Agent step's run, and a task's own `AgentRunID` — and a loop iteration is
+     * none of them. `AIAgentRun.ParentRunID` does not help either: it records parentage but is not a
+     * link the tree traverses. So a `While` that spent real money across three passes reported one
+     * childless node with no cost, the settlement rollup under-counted every loop-bearing workflow,
+     * and the timeline offered nothing to expand — the work had happened and was unreachable.
+     *
+     * Recorded by the dispatcher as each pass completes, so a loop that is still running already has
+     * its finished iterations here.
+     */
+    iterations?: MJTaskEntity_ITaskLoopIteration[];
+}
+
+/**
+ * What one pass of a loop produced.
+ *
+ * Deliberately just pointers plus outcome: the `AIPromptRun` / `AIAgentRun` rows are the durable
+ * record of what happened, and copying their cost here would create a second number to disagree with
+ * the first — the exact failure this whole area has been fixing.
+ */
+export interface MJTaskEntity_ITaskLoopIteration {
+    /** Zero-based pass number, so iterations render in the order they ran. */
+    index: number;
+    /** The `MJ: AI Prompt Runs` row this pass produced, when the loop body is a prompt. */
+    promptRunID?: string;
+    /** The `MJ: AI Agent Runs` row this pass started, when the loop body is a sub-agent. */
+    agentRunID?: string;
+    /** Whether the pass succeeded. A loop with `continueOnError` can have failed passes and still finish. */
+    success?: boolean;
+    /** Why the pass failed, when it did. */
+    errorMessage?: string;
 }
 
 /** A step's position and size on the canvas, in canvas units. */
@@ -110675,6 +110711,19 @@ export interface MJTaskEntity_ITaskLoopSubAgentBody {
 export interface MJTaskEntity_ITaskHumanConfiguration {
     /** What the person is being asked to do. */
     instructions?: string;
+
+    /**
+     * How long the person has to answer before the step gives up, in hours.
+     *
+     * **Without this the deadline machinery is unreachable.** `AIAgentRequest.ExpiresAt` exists, and
+     * the dispatcher already expires overdue requests and fails the step so a give-up edge can route
+     * around it — but nothing ever set the column, so that path had never run outside a test. A
+     * workflow waiting on someone who left the company waited forever.
+     *
+     * Omitted means no deadline, which stays the default: a step that silently expired on a timeout
+     * its author never chose would be worse than one that waits.
+     */
+    expiresInHours?: number;
 }
 
 /** A step completed by a system outside MemberJunction, which reports back when it is done. */

@@ -230,8 +230,13 @@ export function BuildStepConfiguration(node: TaskGraphSpecNode): MJTaskEntity_IT
     const whileOp = ConfigOf(node, 'While');
     if (whileOp) config.while = whileOp;
 
+    // `expiresInHours` as well as instructions: dropping it here is what would leave the deadline in
+    // the spec and out of the row the dispatcher actually reads, so the request would be raised with
+    // no ExpiresAt and the author's timeout would silently not exist.
     const human = ConfigOf(node, 'Human');
-    if (human?.instructions) config.human = { instructions: human.instructions };
+    if (human?.instructions || human?.expiresInHours) {
+        config.human = { instructions: human.instructions, expiresInHours: human.expiresInHours };
+    }
 
     const external = ConfigOf(node, 'External');
     if (external) config.external = external;

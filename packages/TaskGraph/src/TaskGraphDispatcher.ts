@@ -45,7 +45,7 @@ import {
 import { IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { IShutdownable, ShutdownRegistry, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
-import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
+import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
 import { DispatcherConditionEvaluator } from './DispatcherConditionEvaluator';
 import { RunForEachLoop, RunWhileLoop, type LoopBodyInvoker } from './TaskLoopExecutor';
@@ -110,6 +110,16 @@ type TaskBodyOutcome = {
      * omits it. Recorded into the step's `Configuration.runtime` when the outcome is written.
      */
     PromptRunID?: string;
+    /**
+     * One entry per pass, for a loop step.
+     *
+     * A loop's passes are the only work in a graph that produces runs nothing links back to: the
+     * run tree traverses six relationships and an iteration is none of them, and `ParentRunID`
+     * records parentage without being a link the tree follows. Recorded into the step's
+     * `Configuration.runtime` so the passes become reachable — for the timeline, and for the
+     * settlement rollup that was under-counting every loop-bearing workflow.
+     */
+    Iterations?: MJTaskEntity_ITaskLoopIteration[];
 };
 
 /** What a task's position in its graph tells the runner: how deep, and who submitted it. */
@@ -459,7 +469,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     OutputPayload: result.Output != null ? JSON.stringify(result.Output) : null,
                     ErrorMessage: result.ErrorMessage ?? null,
                     AgentRunID: result.AgentRunID ?? null,
-                    Configuration: this.configurationWithRuntime(task, result.PromptRunID),
+                    Configuration: this.configurationWithRuntime(task, result.PromptRunID, result.Iterations),
                 },
                 this.contextUser,
             );
@@ -674,18 +684,21 @@ export class TaskGraphDispatcher implements IShutdownable {
             // that it equals the tree. A known-low number presented as a total is worse than no
             // number: the readers all fall back to TotalCost when this is null, which at least
             // *says* it is the run's own spend rather than claiming to be the whole story.
+            //
+            // Refusing is NOT the same as leaving the column alone. A run that submitted two graphs
+            // has a rollup from the first; if the second cannot be summed, the first graph's total
+            // sits in the authoritative column excluding work that has since happened — stale, not
+            // absent, and `?? TotalCost` cannot save a reader from a non-null wrong number. So a
+            // refusal CLEARS it, restoring the fallback's honest meaning: not settled.
             if (tree.ErrorMessage || !tree.Root) {
-                LogError(
-                    `[TaskGraphDispatcher] Not recording cost for run ${runID}: ` +
-                    `${tree.ErrorMessage ?? 'the run tree came back empty'}.`,
-                );
+                await this.clearStaleRollup(provider, runID,
+                    tree.ErrorMessage ?? 'the run tree came back empty');
                 return;
             }
             if (tree.Truncated) {
-                LogError(
-                    `[TaskGraphDispatcher] Not recording cost for run ${runID}: the run tree hit the depth ` +
-                    `cap, so any total would silently under-report. Graph ${parent.ID} still carries its own costs.`,
-                );
+                await this.clearStaleRollup(provider, runID,
+                    `the run tree hit the depth cap, so any total would silently under-report ` +
+                    `(graph ${parent.ID} still carries its own costs)`);
                 return;
             }
             // The graph that just settled must appear in the tree. If it does not, the tree stopped
@@ -693,10 +706,9 @@ export class TaskGraphDispatcher implements IShutdownable {
             // merely the run's own spend wearing the name of a rollup. That is precisely the silent
             // under-count this rewrite exists to remove, so it is reported rather than written.
             if (!this.treeContainsGraph(tree.Root, parent.ID)) {
-                LogError(
-                    `[TaskGraphDispatcher] Not recording cost for run ${runID}: graph ${parent.ID} is not ` +
-                    `reachable from it, so the tree cannot see the work. Did the submitting step record parentTaskID?`,
-                );
+                await this.clearStaleRollup(provider, runID,
+                    `graph ${parent.ID} is not reachable from it, so the tree cannot see the work. ` +
+                    `Did the submitting step record parentTaskID?`);
                 return;
             }
 
@@ -734,6 +746,48 @@ export class TaskGraphDispatcher implements IShutdownable {
             // it is missing, and a graph marked Failed because its cost could not be summed would be
             // a far worse lie than a cost of null.
             LogError(`[TaskGraphDispatcher] Cost rollup failed for graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * Clears a rollup that can no longer be trusted, and says why.
+     *
+     * **Why clear rather than leave.** The four `…Rollup` columns are a cache of the run tree, and
+     * every reader treats a value there as the total. When the tree cannot be summed, any value
+     * already in the column was computed from an EARLIER settlement — it excludes the graph that
+     * just finished, so it is not merely incomplete, it is a wrong total presented as a right one.
+     * `?? TotalCost` protects a reader from null, not from stale.
+     *
+     * Nulling restores the invariant this whole design rests on: **when the column is present, it
+     * equals the tree.** Absent means not settled, which is exactly what a reader should conclude.
+     * A run with no rollup yet is untouched — there is nothing stale to clear, and writing nulls
+     * over nulls would churn Record Changes for nothing.
+     */
+    private async clearStaleRollup(provider: IMetadataProvider, runID: string, reason: string): Promise<void> {
+        LogError(`[TaskGraphDispatcher] Not recording cost for run ${runID}: ${reason}.`);
+        try {
+            const run = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+            if (!(await run.Load(runID))) return;
+            if (run.TotalCostRollup == null && run.TotalTokensUsedRollup == null) return;   // nothing stale
+
+            run.TotalCostRollup = null;
+            run.TotalTokensUsedRollup = null;
+            run.TotalPromptTokensUsedRollup = null;
+            run.TotalCompletionTokensUsedRollup = null;
+            if (!(await run.Save())) {
+                LogError(
+                    `[TaskGraphDispatcher] Could not clear the now-stale rollup on run ${runID}: ` +
+                    `${run.LatestResult?.CompleteMessage ?? 'unknown error'}. It still shows a total that ` +
+                    `excludes the graph that just settled.`,
+                );
+                return;
+            }
+            LogStatus(
+                `[TaskGraphDispatcher] Cleared the rollup on run ${runID}: it was computed before this ` +
+                `graph settled and can no longer be recomputed, so it would have under-reported.`,
+            );
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not clear the rollup on run ${runID}: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 
@@ -1243,6 +1297,17 @@ export class TaskGraphDispatcher implements IShutdownable {
             // The graph's own run is the provenance a reader follows back to see what led here.
             request.OriginatingAgentRunID = await this.submittingRunOf(provider, task);
 
+            // The deadline, when the author set one. `expireOverdueRequests` has always been able to
+            // enforce this — it expires the request and fails the step so a give-up edge can route
+            // around it — but nothing ever WROTE the column, so that whole path had never run outside
+            // a test and a workflow waiting on someone who left the company waited forever.
+            // Absent means no deadline, deliberately: expiring on a timeout nobody chose would be
+            // worse than waiting.
+            const expiresInHours = this.parseConfiguration(task)?.human?.expiresInHours;
+            if (expiresInHours && expiresInHours > 0) {
+                request.ExpiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
+            }
+
             if (!(await request.Save())) {
                 LogError(
                     `[TaskGraphDispatcher] Could not raise a request for task ${task.ID}: ` +
@@ -1372,8 +1437,16 @@ export class TaskGraphDispatcher implements IShutdownable {
         const waiting = await RunView.FromMetadataProvider(provider).RunView<MJTaskEntity>(
             {
                 EntityName: 'MJ: Tasks',
+                // `StepType` is NULLABLE, and rows predating the column exist (4 in the reference
+                // database at the time of writing). None currently carry a UserID, but a human task
+                // written by any path that set the assignee without the discriminator would be
+                // invisible to a `StepType='Human'` filter and stay dead forever after a cancel —
+                // the exact stall this method exists to end. The notified marker already narrows
+                // this to tasks the dispatcher raised a request for, so the widening cannot pull in
+                // unrelated work.
                 ExtraFilter:
-                    `ParentID='${graphID}' AND StepType='Human' AND Status='Pending' ` +
+                    `ParentID='${graphID}' AND Status='Pending' ` +
+                    `AND (StepType='Human' OR (StepType IS NULL AND UserID IS NOT NULL)) ` +
                     `AND ClaimedBy='${HUMAN_TASK_NOTIFIED_MARKER}'`,
                 ResultType: 'entity_object',
                 BypassCache: true,
@@ -1839,17 +1912,37 @@ export class TaskGraphDispatcher implements IShutdownable {
         // success, and its result was predetermined.
         let livePayload: Record<string, unknown> = { ...payload };
 
-        const invokeBody: LoopBodyInvoker = async ({ Bindings }) => {
+        // One entry per pass, so the loop's work exists somewhere the platform can see it. Without
+        // this a loop is a single childless node: the run tree reaches nested work through six links
+        // and an iteration is none of them, so the passes were invisible to the timeline AND their
+        // spend was missing from the settlement rollup. See ITaskStepRuntime.iterations.
+        const iterationTrace: MJTaskEntity_ITaskLoopIteration[] = [];
+
+        const invokeBody: LoopBodyInvoker = async ({ Index, Bindings }) => {
             // Bindings go INTO the payload rather than beside it, so an authored mapping reaches the
             // current item the same way it reaches anything else: `payload.<itemVariable>`.
             const iterationPayload = { ...livePayload, ...Bindings };
             const resolved = ResolveMappedInput(bodyMapping, { payload: iterationPayload }) as Record<string, unknown>;
 
-            /** Folds an iteration's output into the running payload the next pass will see. */
-            const absorb = <T extends { Success: boolean; Output?: unknown }>(outcome: T): T => {
+            /**
+             * Folds an iteration's output into the running payload the next pass will see, and
+             * records what the pass produced.
+             *
+             * The trace is written HERE rather than after the loop because a loop that fails partway
+             * still ran the passes before it, and their runs are real spend that must not vanish
+             * because the loop as a whole did not finish.
+             */
+            const absorb = <T extends { Success: boolean; Output?: unknown; ErrorMessage?: string; PromptRunID?: string; AgentRunID?: string }>(outcome: T): T => {
                 if (outcome.Output && typeof outcome.Output === 'object' && !Array.isArray(outcome.Output)) {
                     livePayload = deepMergePayload(livePayload, outcome.Output as Record<string, unknown>);
                 }
+                iterationTrace.push({
+                    index: Index,
+                    promptRunID: outcome.PromptRunID,
+                    agentRunID: outcome.AgentRunID,
+                    success: outcome.Success,
+                    errorMessage: outcome.ErrorMessage,
+                });
                 return outcome;
             };
 
@@ -1930,6 +2023,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             Success: outcome.Success,
             AgentRunID: null,
             ErrorMessage: outcome.ErrorMessage,
+            // Every pass that ran, including those before a failure — see `iterationTrace`.
+            Iterations: iterationTrace.length > 0 ? iterationTrace : undefined,
             // The ACCUMULATED payload — everything the iterations established — not the one the
             // loop started with, which would discard the loop's whole effect on the workflow.
             Output: this.applyStepOutputMapping(
@@ -1960,8 +2055,21 @@ export class TaskGraphDispatcher implements IShutdownable {
         if (!outputMapping) return output ?? payload;
 
         const source = output && typeof output === 'object' ? output as Record<string, unknown> : { value: output };
-        const { updates, errors } = ApplyOutputMapping(source, outputMapping);
+        const { updates, errors, unmapped } = ApplyOutputMapping(source, outputMapping);
         for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${e}`);
+
+        // A mapping that names an output the step never produced discards that step's work while
+        // the step reports Complete. It is not fatal — an action may emit a parameter only on some
+        // paths — but it must not be silent, and naming what WAS returned turns a multi-table
+        // forensic exercise into one line. The Content Pipeline demo lost an entire research pass
+        // this way, every run, because its mapping named another action's parameter.
+        if (unmapped?.length) {
+            LogError(
+                `[TaskGraphDispatcher] '${task.Name}' mapped output(s) the step did not return: ` +
+                `${unmapped.join(', ')}. The step returned: ${Object.keys(source).join(', ') || '(nothing)'}. ` +
+                `Those payload values were NOT written, so anything downstream reading them sees nothing.`,
+            );
+        }
 
         return { ...payload, ...updates };
     }
@@ -2003,13 +2111,24 @@ export class TaskGraphDispatcher implements IShutdownable {
      * Returns `undefined` when there is nothing to record, so the guarded write omits the column
      * rather than rewriting it with what it already held.
      */
-    private configurationWithRuntime(task: MJTaskEntity, promptRunID: string | undefined): string | undefined {
-        if (!promptRunID) return undefined;
+    private configurationWithRuntime(
+        task: MJTaskEntity,
+        promptRunID: string | undefined,
+        iterations?: MJTaskEntity_ITaskLoopIteration[],
+    ): string | undefined {
+        if (!promptRunID && !iterations?.length) return undefined;
 
         const existing = this.parseConfiguration(task);
         const merged: MJTaskEntity_ITaskStepConfiguration = {
             ...existing,
-            runtime: { ...existing?.runtime, promptRunID },
+            runtime: {
+                ...existing?.runtime,
+                ...(promptRunID ? { promptRunID } : {}),
+                // Replaced wholesale rather than appended: this is the trace of the loop's LAST
+                // execution, and a retried step that concatenated would report a loop that ran twice
+                // as many passes as it did.
+                ...(iterations?.length ? { iterations } : {}),
+            },
         };
         return JSON.stringify(merged);
     }
