@@ -44,6 +44,26 @@
           "sync": {
             "lastModified": "2026-08-10T00:41:07.267Z",
             "checksum": "99855f06aa35416404e20b21b6eecbf9faa1238bf3966113fd23ee3f5ca7db81"
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Step Paths": [
+              {
+                "fields": {
+                  "OriginStepID": "@parent:ID",
+                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Propose a description for each field&AgentID=@parent:AgentID",
+                  "Condition": null,
+                  "Priority": 100,
+                  "Description": "Feeds the records into the loop. Without this edge the two steps are disconnected and only the starting step is ever compiled — the workflow silently does half its job."
+                },
+                "primaryKey": {
+                  "ID": "0000A923-0586-4175-A8FD-3192EA66FF02"
+                },
+                "sync": {
+                  "lastModified": "2026-08-10T01:34:54.520Z",
+                  "checksum": "af7e117a867a53471dc3a64ddbf2fd70eaadfab70a3d35daa9f5e8347564a5fd"
+                }
+              }
+            ]
           }
         },
         {
@@ -57,7 +77,7 @@
             "PromptID": "@lookup:MJ: AI Prompts.Name=Workflow Demo: Propose Field Description",
             "Configuration": {
               "type": "ForEach",
-              "collectionPath": "fields",
+              "collectionPath": "payload.fields",
               "itemVariable": "field",
               "indexVariable": "index",
               "maxIterations": 5,
@@ -76,8 +96,8 @@
             "ID": "3DE62130-AA87-41A5-AABF-ED936FC450F1"
           },
           "sync": {
-            "lastModified": "2026-08-10T00:41:07.461Z",
-            "checksum": "6a819dc73450656ec1628c29d860db89c1fb72cc70a14db12ca6d97c391324ed"
+            "lastModified": "2026-08-10T02:08:02.552Z",
+            "checksum": "7f58004791e33caac3db85f5946b71c229ee6490ba11d7c489d367291952399d"
           }
         }
       ]

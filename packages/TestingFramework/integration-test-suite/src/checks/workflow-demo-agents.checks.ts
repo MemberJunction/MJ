@@ -222,8 +222,8 @@ export const WorkflowDemoAgentChecks: NamedCheck[] = [
             const loop = loopNode.configuration as { collectionPath?: string; bodyType?: string };
             AssertEqual(
                 loop.collectionPath,
-                'fields',
-                'the ForEach must iterate the collection Get Records wrote, or it loops zero times',
+                'payload.fields',
+                'the ForEach must iterate the collection Get Records wrote — and with the payload. prefix, or the dialect reads it as a literal and the loop runs zero times',
             );
 
             console.log(`      → Get Records → 'fields' → ForEach, body is a prompt`);
