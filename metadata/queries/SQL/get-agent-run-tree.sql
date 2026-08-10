@@ -62,7 +62,7 @@ WITH Tree AS (
         -- icons by kind — without it a renderer can only draw undifferentiated boxes, which is
         -- what forced the visualizations to keep reading raw step rows.
         CAST(NULL AS NVARCHAR(50))                           AS SourceKind
-    FROM ${flyway:defaultSchema}.vwAIAgentRuns r
+    FROM [__mj].[vwAIAgentRuns] r
     WHERE r.ID = '{{ agentRunID }}'
 
     UNION ALL
@@ -87,7 +87,7 @@ WITH Tree AS (
         CAST(NULL AS NVARCHAR(50)),
         CAST(s.StepType AS NVARCHAR(50))
     FROM Tree t
-    INNER JOIN ${flyway:defaultSchema}.vwAIAgentRunSteps s
+    INNER JOIN [__mj].[vwAIAgentRunSteps] s
         ON s.AgentRunID = t.NodeID
     WHERE t.NodeType = 'Run'
       AND t.Depth < {{ maxDepth }}
@@ -113,9 +113,9 @@ WITH Tree AS (
         CAST(NULL AS NVARCHAR(50)),
         CAST('TaskGraph' AS NVARCHAR(50))
     FROM Tree t
-    INNER JOIN ${flyway:defaultSchema}.vwAIAgentRunSteps s
+    INNER JOIN [__mj].[vwAIAgentRunSteps] s
         ON s.ID = t.NodeID
-    INNER JOIN ${flyway:defaultSchema}.vwTasks tk
+    INNER JOIN [__mj].[vwTasks] tk
         ON tk.ID = JSON_VALUE(s.OutputData, '$.parentTaskID')
     WHERE t.NodeType = 'Step'
       AND t.Depth < {{ maxDepth }}
@@ -142,7 +142,7 @@ WITH Tree AS (
         CAST(JSON_VALUE(tk.Configuration, '$.runtime.promptRunID') AS NVARCHAR(50)),
         CAST(tk.StepType AS NVARCHAR(50))
     FROM Tree t
-    INNER JOIN ${flyway:defaultSchema}.vwTasks tk
+    INNER JOIN [__mj].[vwTasks] tk
         ON tk.ParentID = t.NodeID
     WHERE t.NodeType IN ('TaskGraph', 'Task')
       AND t.Depth < {{ maxDepth }}
@@ -168,9 +168,9 @@ WITH Tree AS (
         CAST(NULL AS NVARCHAR(50)),
         CAST(NULL AS NVARCHAR(50))
     FROM Tree t
-    INNER JOIN ${flyway:defaultSchema}.vwTasks tk
+    INNER JOIN [__mj].[vwTasks] tk
         ON tk.ID = t.NodeID
-    INNER JOIN ${flyway:defaultSchema}.vwAIAgentRuns r
+    INNER JOIN [__mj].[vwAIAgentRuns] r
         ON r.ID = tk.AgentRunID
     WHERE t.NodeType IN ('Task', 'TaskGraph')
       AND t.Depth < {{ maxDepth }}
@@ -202,7 +202,7 @@ SELECT
     t.SourceKind,
     t.NodeID                                                AS SourceID
 FROM Tree t
-LEFT JOIN ${flyway:defaultSchema}.vwAIPromptRuns pr
+LEFT JOIN [__mj].[vwAIPromptRuns] pr
     ON pr.ID = t.PromptRunID
 ORDER BY t.Depth, t.Sequence, t.StartedAt, t.NodeID
 OPTION (MAXRECURSION 0);
