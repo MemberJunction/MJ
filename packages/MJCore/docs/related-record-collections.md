@@ -491,6 +491,25 @@ const result = await rv.RunView<OrderEntity>({
 }, user);
 ```
 
+**Loading over unsaved work throws.** `Add()` and `Create()` deliberately do not mark a collection
+loaded — an appended child says nothing about what is on disk — so the "already loaded" early return
+does not cover a collection you have only appended to. Without a guard, a later `Load()` from
+anywhere (a lazy read, a refresh, a sibling component) would replace the items wholesale and take
+your unsaved children with it, silently:
+
+```typescript
+await order.Load(id);
+await order.Lines.Create();     // one unsaved line, collection still IsLoaded === false
+await order.Lines.Load();       // ❌ throws: "cannot load over unsaved changes — 1 unsaved child
+                                //    record(s) and 0 pending removal(s) would be discarded."
+
+await order.Lines.Load(true);   // ✅ discards them, because you said so
+```
+
+Merging was rejected: it invents an ordering and can duplicate. Refusing is the same choice this
+collection makes everywhere else — a load that would produce quietly wrong data throws rather than
+returning something plausible.
+
 ### Read-only collections
 
 Cache-sourced collections default to read-only, and say so clearly when you try:
