@@ -73,8 +73,9 @@ import {
     GeminiRealtime,
 } from '@memberjunction/ai-gemini';
 
-// @memberjunction/ai-groq (1 classes)
+// @memberjunction/ai-groq (2 classes)
 import {
+    GroqAudioGenerator,
     GroqLLM,
 } from '@memberjunction/ai-groq';
 
@@ -656,12 +657,15 @@ import {
     MJEntityDocumentEntityExtended,
 } from '@memberjunction/ai-core-plus';
 
-// @memberjunction/ai-engine-base (4 classes)
+// @memberjunction/ai-engine-base (7 classes)
 import {
     MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
+    PerImagePriceUnitType,
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
+    TimePerHourPriceUnitType,
+    TimePerMinutePriceUnitType,
 } from '@memberjunction/ai-engine-base';
 
 // @memberjunction/ai-recommendations-rex (1 classes)
@@ -1450,6 +1454,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     GeminiImageGenerator,
     GeminiLLM,
     GeminiRealtime,
+    GroqAudioGenerator,
     GroqLLM,
     HeyGenVideoGenerator,
     InworldRealtime,
@@ -1907,8 +1912,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJEntityDocumentEntityExtended,
     MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
+    PerImagePriceUnitType,
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
+    TimePerHourPriceUnitType,
+    TimePerMinutePriceUnitType,
     RexRecommendationsProvider,
     MJCommunicationProviderEntityExtended,
     MSGraphProvider,
@@ -2417,7 +2425,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 979;
+export const CLASS_REGISTRATIONS_COUNT = 983;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
