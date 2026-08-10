@@ -33,7 +33,7 @@
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
-                  "voice": { "type": "string", "description": "Provider voice name/preset (e.g. 'alloy')." },
+                  "voice": { "type": "string", "description": "Provider voice name/preset (e.g. 'alloy'). Overridden by 'voice.default.voice' when one is authored — author this OR the agnostic slot, not both. Use this only when the voice id genuinely differs per vendor." },
                   "voiceId": { "type": "string", "description": "DEPRECATED — never read by any driver; authoring it does nothing. The whole realtime driver family (including ElevenLabs, which maps it to tts.voice_id on the wire) reads the neutral 'voice' key. Retained only so configurations that already carry it still validate; use 'voice' instead." }
                 }
               }

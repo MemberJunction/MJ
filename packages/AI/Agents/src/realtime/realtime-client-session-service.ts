@@ -225,10 +225,14 @@ export interface RealtimeClientSessionPrepResult {
      *
      * Disclosed for OBSERVABILITY — on the default-model path the framework picks the vendor itself, so
      * without this a caller cannot tell which one spoke, and cannot diagnose a voice that did not land
-     * (issue #3530). It is deliberately NOT a pre-prepare resolution API: a caller does not need to know
-     * the vendor in advance, because {@link RealtimeVoicePersona.voice} carries a voice to whichever
-     * vendor is chosen. Re-deriving the vendor in order to pre-file provider-keyed settings duplicates a
-     * decision the framework owns.
+     * (issue #3530). Plumbed all the way to the browser as `StartRealtimeClientSessionResult.DriverClass`
+     * (`RealtimeClientSessionResolver`), because on the client-direct path the caller IS the browser — a
+     * disclosure that stopped at this service boundary would deliver no observability to anyone.
+     *
+     * It is deliberately NOT a pre-prepare resolution API: a caller does not need to know the vendor in
+     * advance, because {@link RealtimeVoicePersona.voice} carries a voice to whichever vendor is chosen.
+     * Re-deriving the vendor in order to pre-file provider-keyed settings duplicates a decision the
+     * framework owns.
      */
     DriverClass?: string;
     /**
@@ -409,6 +413,13 @@ export interface RealtimeModelResolutionOutcome {
  *
  * Shared by BOTH realtime surfaces — the client-direct prepare and `BaseAgent`'s server-bridged
  * session — so neither path can drift back into silence.
+ *
+ * WHY IT LIVES HERE rather than beside {@link MatchProviderVoiceSettings}, which it wraps: this
+ * function LOGS, and `realtime-coagent-config.ts` declares itself deliberately framework-free — no DB,
+ * no metadata provider, no logging imports. Moving it there would breach that constraint; keeping it
+ * here costs `BaseAgent` an import of this module. The placement is the constraint's consequence, not
+ * an accident. (The alternative — returning a diagnostic string for callers to log — was rejected as
+ * it lets one surface silently choose not to log, which is the failure mode being fixed.)
  *
  * @param effectiveConfig The resolved effective configuration.
  * @param driverClass The resolved vendor's `DriverClass`.

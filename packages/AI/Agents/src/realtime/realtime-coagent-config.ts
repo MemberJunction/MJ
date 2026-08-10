@@ -21,10 +21,13 @@
  * ```jsonc
  * { "realtime": {
  *     "modelPreference": "<AI Model name or ID>",
- *     "voice": { "default": { "tone": "…", "speakingStyle": "…" },
+ *     // `default.voice` is PROVIDER-AGNOSTIC: authored without naming a vendor, filed onto whichever
+ *     // driver resolves. Prefer it — and note it WINS the `voice` key over any `providers.<key>.voice`
+ *     // below (see GetProviderVoiceSettings). Pin per-vendor ids under `providers` only when the
+ *     // voice ids genuinely differ by vendor, and then leave `default.voice` unset.
+ *     "voice": { "default": { "tone": "…", "speakingStyle": "…", "voice": "<voice id>" },
  *                "providers": { "openai": { "voice": "alloy" },
  *                               "elevenlabs": { "voice": "<voice id>" },
- *                               "gemini": { "voice": "…" },
  *                               "assemblyai": { "voice": "…" } } },
  *     "allowUserModelOverride": true,
  *     "narration": { "paceMs": 8000 } } }
@@ -987,6 +990,14 @@ function normalizeKey(value: string): string {
  * (opaque) settings still ride along. When no agnostic voice is authored this is byte-for-byte the
  * pre-#3530 behavior.
  *
+ * "Opaque pact" describes what this function and the drivers DO with the bag at runtime — it is not a
+ * statement about what an author may write in agent metadata. The agent type's `ConfigSchema` declares
+ * `providers.<key>` with `additionalProperties: false` and only `voice`/`voiceId`, so a metadata-authored
+ * bag carrying anything else fails validation on save. Keys beyond `voice` therefore reach a driver only
+ * via runtime `ConfigOverridesJson`, which bypasses that validator. (Pre-existing asymmetry, not
+ * introduced here; loosening the schema is a separate call because it would relax validation for every
+ * existing config.)
+ *
  * **Known limitation.** This runs AFTER the cascade has been deep-merged, so it has no layer
  * provenance: "agnostic wins" is absolute, not "the higher layer wins". That is right for the case
  * that exists — every host builder emits the agnostic form, so an agnostic value is always the
@@ -995,6 +1006,14 @@ function normalizeKey(value: string): string {
  * metadata sets `default.voice`: the metadata would outrank the override. Nothing emits that shape
  * today. Making it correct means resolving voice precedence per-layer inside
  * {@link ResolveEffectiveRealtimeConfig}, which is where layer identity still exists.
+ *
+ * The same absoluteness produces a SAME-LAYER specificity inversion, which the schema permits: agent
+ * metadata authoring both `default.voice` (intended as a fallback) and `providers.openai.voice` (a
+ * pin) gets the general beating the specific — the inverse of normal config intuition. Only the
+ * runtime-override case actually NEEDS the agnostic value to win, so "agnostic is a fallback unless it
+ * came from a runtime override" would be more predictable; it is not implemented because it needs the
+ * same per-layer provenance described above. Until then the authoring rule is the one stated on
+ * {@link RealtimeVoicePersona.voice}: pin per-vendor OR author agnostic, not both.
  *
  * Callers that need to know whether an authored provider key actually MATCHED (rather than what the
  * driver should receive) must use {@link MatchProviderVoiceSettings} — this function is truthy for
