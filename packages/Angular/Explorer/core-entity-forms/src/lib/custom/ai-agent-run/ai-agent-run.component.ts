@@ -1,7 +1,13 @@
 import { Component, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
 import { Subject, Subscription } from 'rxjs';
 import { BaseEntity, BaseEntityEvent, CompositeKey, Metadata } from '@memberjunction/core';
-import { MJAIAgentRunEntityExtended, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import {
+    LoadAgentRunTree,
+    MAX_AGENT_RUN_TREE_DEPTH,
+    MJAIAgentRunEntityExtended,
+    MJAIAgentEntityExtended,
+    type AgentRunTreeNode,
+} from '@memberjunction/ai-core-plus';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { MJGlobal, MJEvent, MJEventType, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
@@ -65,12 +71,56 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
 
   // Instance of data helper per component
   public dataHelper = new AIAgentRunDataHelper();
+
+  /**
+   * The run's complete execution tree — loaded ONCE here and shared with every tab.
+   *
+   * **One load, one shape, one refresh.** The timeline, the three flow renderers and analytics all
+   * need the same structure; letting each fetch its own would issue the same recursive query three
+   * times, and — worse — let the tabs disagree, because a tab that loaded a second earlier shows a
+   * different run than the one beside it. Sharing it also means a refresh updates all three at once
+   * rather than whichever one the user happens to open next.
+   */
+  public runTree: AgentRunTreeNode | null = null;
+
+  /** True while the tree is loading, so a tab can say so rather than render an empty run. */
+  public runTreeLoading = false;
+
+  /** Why the tree could not be loaded, or null. Surfaced rather than swallowed. */
+  public runTreeError: string | null = null;
+
+  /**
+   * Loads (or reloads) the shared run tree.
+   *
+   * Errors are held rather than thrown: a run whose tree cannot be read still has fields worth
+   * looking at, and taking the whole form down over one query would hide them.
+   */
+  private async loadRunTree(): Promise<void> {
+    if (!this.record?.ID) return;
+    this.runTreeLoading = true;
+    this.runTreeError = null;
+    try {
+      const result = await LoadAgentRunTree(this.record.ID, this.RunQueryToUse);
+      this.runTree = result.Root;
+      this.runTreeError = result.ErrorMessage;
+      if (result.Truncated) {
+        this.runTreeError =
+          `This run nests deeper than ${MAX_AGENT_RUN_TREE_DEPTH} levels; what is shown is truncated.`;
+      }
+    } catch (e) {
+      this.runTreeError = e instanceof Error ? e.message : String(e);
+      this.runTree = null;
+    } finally {
+      this.runTreeLoading = false;
+    }
+  }
   
   async ngOnInit() {
     await super.ngOnInit();
     
     if (this.record && this.record.ID) {
       await this.dataHelper.loadAgentRunData(this.record.ID);
+      await this.loadRunTree();
       await this.loadAgent();
       await this.loadCostMetrics();
 
@@ -359,6 +409,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
         
         // Reload data through helper - this will update all components (force reload for refresh)
         this.dataHelper.loadAgentRunData(this.record.ID, true);
+        void this.loadRunTree();
         
         // Trigger analytics refresh
         if (this.analyticsComponent) {

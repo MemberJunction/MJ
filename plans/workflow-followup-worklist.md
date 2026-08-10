@@ -104,29 +104,40 @@ Post **one** comment on PR #3692 addressed to the planner agent:
 
 ## Then (previously agreed, still owed)
 
-- [ ] Stored query: recursive CTE, **one row per node**, `Depth < 100` predicate *inside the
-      recursive term* (portable — PG has no `MAXRECURSION`). Task graphs join via
-      `JSON_VALUE(step.OutputData, '$.parentTaskID')` → PG `->> 'parentTaskID'`.
-      **Flag RLS in the PR for @jordanfanapour** — stored queries don't inherit RLS and agent runs
-      are user-scoped.
-- [ ] `LoadAgentRunTree` helper in CorePlus calling that query via `RunQuery`.
-- [ ] Refactor the Agent Run timeline onto the tree (fixes the ordering + indent bug the user saw in
-      the conversation's Associated Tasks); task-graph nodes colour-coded as dispatcher-provenance.
-- [ ] **Revert** the nested-canvas embed under the TaskGraph step — user prefers run-step-style tree
-      nodes, with the canvas in the **right panel on selection**. (Also: my canvas never received
-      computed positions — the editor's `knownPositions` is private with no `@Input`. If the embed
-      survives in any form, that wiring is missing.)
-- [ ] Subway Lines visualization consumes the same tree.
+> **PR #3698** is open for this branch (base `next`). #3692 is MERGED — it was the planner's
+> `feat/workflows-single-editor`, not this branch. Post follow-up comments on **#3698**.
+
+### DONE since the review round
+- [x] Workflows app restored as the **Runs** surface (`09f270b1f9`). Retirement migration KEPT (it is
+      merged to `next`; deleting it would force a from-scratch rebuild on every dev DB). App declared
+      in `metadata/applications/.workflows-application.json` with a NEW id `E29BDE35-…`. No second
+      editor: the front door calls `Workflow.Save` (Draft, no triggers) then opens the agent form.
+- [x] `Configuration.runtime.promptRunID` + `ParentRunID` on spawned runs (`86a23f5ae5`).
+      `ITaskStepConfiguration.ts` → `mj sync push --include=entities` → `mj codegen --skipdb`.
+- [x] Run-tree stored query + `LoadAgentRunTree` (`730e5a459d`). **Verified against the live DB.**
+      Gotcha found: SQL Server forbids an OUTER JOIN in a recursive member — the prompt-cost join
+      lives in the final SELECT and the id is carried through the recursion.
+
+### Remaining
+- [ ] Refactor the Agent Run timeline onto `LoadAgentRunTree` (fixes the ordering + indent bug the
+      user saw in Associated Tasks); task-graph nodes colour-coded as dispatcher-provenance.
+- [ ] **Revert** the nested-canvas embed under the TaskGraph step — run-step-style tree nodes, canvas
+      in the **right panel on selection** (the pattern already built in `workflow-runs-resource`).
+- [ ] Subway Lines visualization consuming the same tree.
+- [ ] #16: consolidate the LIVE `base-agent.ts` Loop-path mapping clones onto `payload-mapping.ts`.
+      The `flow-agent-type.ts` copies STAY (differential oracle) — user confirmed the split.
+- [ ] A3: integration tier `Test`/`TestSuite` records as declarative metadata (user said fix here).
+- [ ] Metadata: **Content Pipeline** flow agent — AND-join of Research + Web Research → Copywriter →
+      `While (payload.brandOK !== true)` `maxIterations: 3`, body reviews+revises in ONE iteration
+      (graphs are acyclic) → HITL → give-up branch → **Create Document (MJ artifact/PDF)**.
+      NO external publish — user ruled that out.
 - [ ] Metadata: **Schema Documentation Sweep** flow agent — `Get Records` on `MJ: Entity Fields`
       filtered to blank Description → `{"Records": "fields"}` → capped `ForEach` → sub-agent proposes
-      → Human approval → `ForEach` → `Update Record`. (2,583 undocumented fields in a stock install.)
-- [ ] Metadata: **Content Pipeline** flow agent — AND-join of Research + Web Research → Copywriter →
-      `While (payload.brandOK !== true)` `maxIterations: 3` whose body **reviews and revises in one
-      iteration** (graphs are acyclic; check→revise→back-to-check is not drawable) → HITL → give-up
-      branch.
+      → Human approval → `ForEach` → `Update Record`.
 - [ ] Integration checks for both, asserting the **run tree** rather than hand-joined tables.
+- [ ] **Fresh DB rebuild**, then verify `Workflow.Draft` end to end + both agents (headless AND
+      Playwright via MJExplorer). User explicitly asked for this.
 
----
 
 ## Standing facts worth not rediscovering
 
@@ -142,6 +153,12 @@ Post **one** comment on PR #3692 addressed to the planner agent:
   (release-time concern, `metadata/CLAUDE.md` rule 1b).
 - **Integration tier cannot run from scratch:** `metadata/test-suites/` has only two suites and
   `metadata/tests/` no `IT##` records. The check *code* is committed; the records that invoke it are
-  not. Pre-existing; reported, not fixed.
+  not. **User asked for this to be fixed on this branch (A3).**
+- **`mj sync push` treats a file with no `sync` block as NEW**, so re-pushing a just-pushed new
+  record hits its unique constraint. Harmless on a DB about to be rebuilt; do not "fix" by adding
+  `sync` blocks (metadata rule 1b — the build engineer stamps those at release).
+- **NEVER `git checkout -- <file>`** (CLAUDE.md rule 2, and the classifier blocks it). Use
+  `git show HEAD:<path> > <path>`. Back up pending edits to the scratchpad FIRST — a blocked
+  compound command will not have run the `cp`.
 - **Servers:** API :4000 (dispatcher), Explorer :4201, DB `MJ_6_1_0_FRESH_0808`. Restart after
   building for UI changes to show.
