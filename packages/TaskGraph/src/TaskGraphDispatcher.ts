@@ -1474,7 +1474,13 @@ export class TaskGraphDispatcher implements IShutdownable {
                 op as WhileOperation,
                 (iteration) => this.conditionEvaluator.Evaluate(
                     (op as WhileOperation).condition,
-                    { ...payload, iteration },
+                    // BOTH forms, because a workflow should not have two condition dialects. An
+                    // EDGE condition is written `payload.brandOK !== true`; a loop condition used
+                    // to see the payload's keys spread at the top level and nothing named `payload`,
+                    // so the same expression that routes an edge failed here with
+                    // "payload is not defined". The spread stays for conditions already written
+                    // against it.
+                    { ...payload, payload, iteration },
                 ),
                 invokeBody,
             );
