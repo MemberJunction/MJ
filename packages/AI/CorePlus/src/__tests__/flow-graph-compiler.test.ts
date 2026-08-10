@@ -293,3 +293,74 @@ describe('the compiled graph is accepted by the engine’s own validator', () =>
         expect(ValidateTaskGraphSpec(res.Spec!)).toEqual({ Valid: true, Errors: [] });
     });
 });
+
+describe('human steps', () => {
+    it('compiles a Human step, carrying its description as the instructions', () => {
+        // The description IS what the person is being asked to do — the same convention a sub-agent
+        // step uses for its message. Losing it leaves someone an inbox item with a title and no
+        // statement of what they are approving.
+        const res = CompileFlowToTaskGraph(
+            [step({
+                ID: 'h', Name: 'Approve', StepType: 'Human', StartingStep: true,
+                Description: 'Approve the proposed descriptions.',
+            })],
+            [],
+            options,
+        );
+
+        expect(res.Success).toBe(true);
+        const node = res.Spec!.tasks.find((t) => t.tempId === 'h')!;
+        expect(node.kind).toBe('Human');
+        expect((node.configuration as { instructions?: string }).instructions)
+            .toBe('Approve the proposed descriptions.');
+    });
+
+    it('compiles an UNASSIGNED human step rather than rejecting it', () => {
+        // "Somebody needs to look at this" is a legitimate step. Requiring an assignee at authoring
+        // time would force a name onto every approval, including the ones whose right owner depends
+        // on what the run produced.
+        const res = CompileFlowToTaskGraph(
+            [step({ ID: 'h', Name: 'Approve', StepType: 'Human', StartingStep: true })],
+            [],
+            options,
+        );
+
+        expect(res.Success).toBe(true);
+        expect((res.Spec!.tasks[0].configuration as { assignToUserID?: string }).assignToUserID).toBeUndefined();
+    });
+
+    it('reads an explicit assignee out of the step configuration', () => {
+        const res = CompileFlowToTaskGraph(
+            [step({
+                ID: 'h', Name: 'Approve', StepType: 'Human', StartingStep: true,
+                Configuration: JSON.stringify({ assignToUserID: 'user-7' }),
+            })],
+            [],
+            options,
+        );
+
+        expect((res.Spec!.tasks[0].configuration as { assignToUserID?: string }).assignToUserID).toBe('user-7');
+    });
+
+    it('lets a human step sit mid-graph with dependents behind it', () => {
+        // The shape that matters: work AFTER a person. If the edge were dropped the downstream step
+        // would have no prerequisites and run immediately — approving nothing.
+        const res = CompileFlowToTaskGraph(
+            [
+                step({ ID: 'a', Name: 'Propose', StartingStep: true }),
+                step({ ID: 'h', Name: 'Approve', StepType: 'Human' }),
+                step({ ID: 'w', Name: 'Write' }),
+            ],
+            [
+                path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'h' }),
+                path({ ID: 'p2', OriginStepID: 'h', DestinationStepID: 'w' }),
+            ],
+            options,
+        );
+
+        expect(res.Success).toBe(true);
+        // Dependencies normalize to objects, so the assertion is on the id they carry.
+        const deps = depsOf(res.Spec!, 'w').map((d) => (typeof d === 'string' ? d : (d as { tempId: string }).tempId));
+        expect(deps).toContain('h');
+    });
+});

@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Schema Documentation Sweep",
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Demo",
-      "Description": "Finds MemberJunction entity fields that have no description and proposes one for each. A workflow demo that runs entirely on framework metadata \u2014 every install has undocumented fields, so it has real work to do on day one without any business data. Deliberately stops at PROPOSALS: applying them needs a human approval step, which a Flow agent cannot yet author (see the workflow guide).",
+      "Description": "Finds MemberJunction entity fields that have no description and proposes one for each, then asks a person to approve them. A workflow demo that runs entirely on framework metadata \u2014 every install has undocumented fields, so it has real work to do on day one without any business data. The approval step is a genuine human-in-the-loop pause: the graph waits, every other branch keeps running, and answering releases it.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
       "Status": "Active",
       "ExecutionOrder": 0,
@@ -86,6 +86,39 @@
           },
           "primaryKey": {
             "ID": "3DE62130-AA87-41A5-AABF-ED936FC450F1"
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Step Paths": [
+              {
+                "fields": {
+                  "OriginStepID": "@parent:ID",
+                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Approve the proposed descriptions&AgentID=@parent:AgentID",
+                  "Condition": null,
+                  "Priority": 100,
+                  "Description": "Proposals go to a person before anything is written."
+                },
+                "primaryKey": {
+                  "ID": "C546274A-30B7-427A-B765-6ACB1A4D0088"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Approve the proposed descriptions",
+            "Description": "Review the proposed field descriptions and approve the ones worth keeping. Each carries a confidence rating; treat anything marked low as a guess that needs checking against the field's real use.",
+            "StartingStep": 0,
+            "StepType": "Human",
+            "Status": "Active",
+            "PositionX": 680,
+            "PositionY": 80,
+            "Width": 220,
+            "Height": 80
+          },
+          "primaryKey": {
+            "ID": "F7EE2A1A-01A5-4592-95ED-DD4A8A974F5D"
           }
         }
       ]

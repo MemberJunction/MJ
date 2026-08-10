@@ -39,7 +39,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { IShutdownable, ShutdownRegistry } from '@memberjunction/global';
-import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
 import { DispatcherConditionEvaluator } from './DispatcherConditionEvaluator';
@@ -486,6 +486,14 @@ export class TaskGraphDispatcher implements IShutdownable {
      */
     private async propagateAndRollup(provider: IMetadataProvider): Promise<void> {
         for (const parentID of await this.findActiveGraphIDs(provider)) {
+            // Human steps settle BEFORE the graph state is read, so an answer given since the last
+            // poll is already reflected when eligibility and rollup are computed. Doing it after
+            // would delay every dependent branch by a full poll interval for no reason — and on a
+            // graph whose only remaining work is downstream of a person, that is the difference
+            // between "answered and moving" and "answered and apparently still stuck".
+            await this.expireOverdueRequests(provider, parentID);
+            await this.settleAnsweredHumanTasks(provider, parentID);
+
             const graph = await this.loadGraphState(provider, parentID);
             if (graph.nodes.length === 0) continue;
 
@@ -918,7 +926,21 @@ export class TaskGraphDispatcher implements IShutdownable {
      */
     private async notifyHumanTaskReady(task: MJTaskEntity, provider: IMetadataProvider): Promise<void> {
         if (task.ClaimedBy === HUMAN_TASK_NOTIFIED_MARKER) return;
-        if (!task.UserID) return; // unassigned human task — nobody to tell
+
+        // The REQUEST is raised whether or not the task names an assignee. An unassigned human step
+        // is a legitimate "somebody needs to look at this", and a request nobody was notified about
+        // is still findable in the inbox — whereas returning early here is how such a step used to
+        // become invisible work that stalled a workflow with nothing anywhere saying why.
+        // The marker goes down only once a request is genuinely open. A notification storm is the
+        // failure the marker exists to prevent, but a MISSING request is worse than a repeated
+        // attempt: nothing would appear in anyone's inbox and the workflow would wait forever with
+        // no indication why. Retrying on the next poll is the recoverable choice.
+        if (!(await this.raiseHumanRequest(task, provider))) return;
+
+        if (!task.UserID) {
+            await this.markHumanTaskNotified(task);
+            return;
+        }
 
         try {
             await NotificationEngine.Instance.Config(false, this.contextUser);
@@ -933,13 +955,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             LogError(`[TaskGraphDispatcher] Could not notify ${task.UserID} about task ${task.ID}: ${e instanceof Error ? e.message : String(e)}`);
         }
 
-        // Marked even when delivery threw. Retrying a notification on every five-second poll is a
-        // worse failure than one that was missed: the task remains visible in the Tasks UI either
-        // way, whereas a notification storm is not self-correcting.
-        task.ClaimedBy = HUMAN_TASK_NOTIFIED_MARKER;
-        if (!(await task.Save())) {
-            LogError(`[TaskGraphDispatcher] Could not mark task ${task.ID} as notified; it may notify again.`);
-        }
+        await this.markHumanTaskNotified(task);
 
         // Emitted once, alongside the marker, so a viewer sees the graph stop on a person rather
         // than appearing to stall for no reason.
@@ -1068,6 +1084,248 @@ export class TaskGraphDispatcher implements IShutdownable {
             }
         }
         return claimable;
+    }
+
+    /**
+     * Marks a human task as notified, so the request is raised exactly once.
+     *
+     * Written even when delivery threw. Retrying on every poll is a worse failure than one missed
+     * notification: the task stays visible in the inbox either way, whereas a notification storm is
+     * not self-correcting.
+     */
+    private async markHumanTaskNotified(task: MJTaskEntity): Promise<void> {
+        task.ClaimedBy = HUMAN_TASK_NOTIFIED_MARKER;
+        if (!(await task.Save())) {
+            LogError(`[TaskGraphDispatcher] Could not mark task ${task.ID} as notified; it may notify again.`);
+        }
+    }
+
+    /**
+     * Raises the `MJ: AI Agent Requests` row a person answers to release this step.
+     *
+     * **Why that entity rather than something new.** It already models everything a workflow's human
+     * step needs — who is being asked, what for, a typed response schema, priority, expiry, and an
+     * inbox surface people already use. A second HITL substrate beside it would split the inbox in
+     * two and leave one of them without expiry or permissions.
+     *
+     * **What it deliberately does NOT set is `ResumingAgentRunID`.** A request normally suspends an
+     * agent run and resumes it. A workflow needs none of that: the graph OUTLIVES the run that
+     * submitted it, so nothing is suspended — the task sits Pending, every other branch keeps
+     * running, and answering settles the task. That column staying null is meaningful, not missing.
+     */
+    private async raiseHumanRequest(task: MJTaskEntity, provider: IMetadataProvider): Promise<boolean> {
+        try {
+            const existing = await this.findOpenRequest(provider, task.ID);
+            if (existing) return true;   // already waiting on someone
+
+            const request = await provider.GetEntityObject<MJAIAgentRequestEntity>(
+                'MJ: AI Agent Requests', this.contextUser,
+            );
+            request.NewRecord();
+            request.OriginatingTaskID = task.ID;
+            // A human task has NO AgentID of its own — that column names what EXECUTES a step, and
+            // a person is not an agent. The request still needs one, so it carries the agent that
+            // owns the workflow: the graph's own agent, which is who is asking.
+            const owningAgentID = await this.owningAgentOf(provider, task);
+            if (!owningAgentID) {
+                LogError(
+                    `[TaskGraphDispatcher] Task ${task.ID} needs a person, but its workflow has no ` +
+                    `agent to ask on behalf of, so no request could be raised.`,
+                );
+                return false;
+            }
+            request.AgentID = owningAgentID;
+            request.RequestForUserID = task.UserID;
+            request.RequestedAt = new Date();
+            request.Status = 'Requested';
+            request.Request = task.Description || `A workflow is waiting on you to complete "${task.Name}".`;
+            // The graph's own run is the provenance a reader follows back to see what led here.
+            request.OriginatingAgentRunID = await this.submittingRunOf(provider, task);
+
+            if (!(await request.Save())) {
+                LogError(
+                    `[TaskGraphDispatcher] Could not raise a request for task ${task.ID}: ` +
+                    `${request.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                );
+                return false;
+            }
+            return true;
+        } catch (e) {
+            // Never fatal. The task remains Pending and visible; a missing request is recoverable,
+            // whereas throwing here would abort the whole dispatch pass for every other branch.
+            LogError(`[TaskGraphDispatcher] Could not raise a request for task ${task.ID}: ${e instanceof Error ? e.message : String(e)}`);
+            return false;
+        }
+    }
+
+    /**
+     * The agent that owns this task's workflow — who the request is asked on behalf of.
+     *
+     * Reads the graph's parent row, falling back to the run that submitted it. A human step has no
+     * agent of its own by design: `AgentID` names what EXECUTES a step, and a person is not an agent.
+     */
+    private async owningAgentOf(provider: IMetadataProvider, task: MJTaskEntity): Promise<string | null> {
+        if (task.AgentID) return task.AgentID;
+        if (!task.ParentID) return null;
+        try {
+            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+            if (!(await parent.Load(task.ParentID))) return null;
+            if (parent.AgentID) return parent.AgentID;
+
+            if (!parent.AgentRunID) return null;
+            const run = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+            return (await run.Load(parent.AgentRunID)) ? run.AgentID : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /** The still-open request for a task, if one exists. */
+    private async findOpenRequest(
+        provider: IMetadataProvider,
+        taskID: string,
+    ): Promise<MJAIAgentRequestEntity | null> {
+        const result = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentRequestEntity>(
+            {
+                EntityName: 'MJ: AI Agent Requests',
+                ExtraFilter: `OriginatingTaskID='${taskID}' AND Status='Requested'`,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            },
+            this.contextUser,
+        );
+        return (result.Success ? result.Results?.[0] : null) ?? null;
+    }
+
+    /**
+     * Settles a human task from the request a person answered.
+     *
+     * Runs on the poll rather than on a save hook, because the answer can arrive through any surface
+     * — the inbox, the API, a conversation — and only the dispatcher knows how to release the rest
+     * of the graph afterwards.
+     *
+     * **`ResponseData` becomes the task's output.** That is what makes a human step useful rather
+     * than a gate: a downstream edge can branch on what the person actually said, typed by the
+     * request's own ResponseSchema. A step that only recorded "approved" would force every decision
+     * back into a separate action.
+     */
+    private async settleAnsweredHumanTasks(provider: IMetadataProvider, graphID: string): Promise<void> {
+        const waiting = await RunView.FromMetadataProvider(provider).RunView<MJTaskEntity>(
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `ParentID='${graphID}' AND StepType='Human' AND Status='Pending'`,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            },
+            this.contextUser,
+        );
+        if (!waiting.Success) return;
+
+        for (const task of waiting.Results ?? []) {
+            const request = await this.answeredRequestFor(provider, task.ID);
+            if (!request) continue;
+
+            const rejected = request.Status === 'Rejected';
+            const expired = request.Status === 'Expired';
+
+            task.Status = rejected || expired ? 'Failed' : 'Complete';
+            task.CompletedAt = new Date();
+            task.PercentComplete = rejected || expired ? 0 : 100;
+            task.ClaimedBy = null;
+            task.ClaimExpiresAt = null;
+            task.OutputPayload = request.ResponseData ?? null;
+            if (rejected) {
+                task.ErrorMessage = request.Comments || 'A person rejected this step.';
+            } else if (expired) {
+                // Stated as a failure rather than left Pending. A workflow blocked forever on
+                // someone who never answered — who may have left the company — is the silent stall
+                // this whole path exists to avoid, and a give-up edge can now route around it.
+                task.ErrorMessage = 'Nobody answered this step before its request expired.';
+            }
+
+            if (!(await task.Save())) {
+                LogError(
+                    `[TaskGraphDispatcher] Could not settle human task ${task.ID}: ` +
+                    `${task.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                );
+            }
+        }
+    }
+
+    /** The answered (or expired) request for a task, if any. */
+    private async answeredRequestFor(
+        provider: IMetadataProvider,
+        taskID: string,
+    ): Promise<MJAIAgentRequestEntity | null> {
+        const result = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentRequestEntity>(
+            {
+                EntityName: 'MJ: AI Agent Requests',
+                // Everything terminal. 'Canceled' is deliberately absent: a cancelled request means
+                // the ASK was withdrawn, not that the step was decided, so the task keeps waiting
+                // for whatever replaces it.
+                ExtraFilter:
+                    `OriginatingTaskID='${taskID}' AND Status IN ('Approved','Rejected','Responded','Expired')`,
+                OrderBy: 'RespondedAt DESC',
+                ResultType: 'entity_object',
+                BypassCache: true,
+            },
+            this.contextUser,
+        );
+        return (result.Success ? result.Results?.[0] : null) ?? null;
+    }
+
+    /**
+     * Expires requests whose deadline has passed.
+     *
+     * A deadline that nothing enforces is a comment. Without this an `ExpiresAt` in the past leaves
+     * the request `Requested` forever and the workflow waiting on it just as long.
+     */
+    private async expireOverdueRequests(provider: IMetadataProvider, graphID: string): Promise<void> {
+        // Scoped by an explicit id list rather than a subquery against a view name, so this reads
+        // the same on any provider rather than assuming a SQL dialect and a physical view.
+        const humanTasks = await RunView.FromMetadataProvider(provider).RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Tasks',
+                Fields: ['ID'],
+                ExtraFilter: `ParentID='${graphID}' AND StepType='Human' AND Status='Pending'`,
+                ResultType: 'simple',
+            },
+            this.contextUser,
+        );
+        const ids = (humanTasks.Results ?? []).map((r) => `'${r.ID}'`);
+        if (ids.length === 0) return;
+
+        const nowISO = new Date().toISOString();
+        const overdue = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentRequestEntity>(
+            {
+                EntityName: 'MJ: AI Agent Requests',
+                ExtraFilter:
+                    `Status='Requested' AND ExpiresAt IS NOT NULL AND ExpiresAt < '${nowISO}' ` +
+                    `AND OriginatingTaskID IN (${ids.join(',')})`,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            },
+            this.contextUser,
+        );
+        if (!overdue.Success) return;
+
+        for (const request of overdue.Results ?? []) {
+            request.Status = 'Expired';
+            if (!(await request.Save())) {
+                LogError(`[TaskGraphDispatcher] Could not expire request ${request.ID}.`);
+            }
+        }
+    }
+
+    /** The agent run that submitted this task's graph, for provenance on the request. */
+    private async submittingRunOf(provider: IMetadataProvider, task: MJTaskEntity): Promise<string | null> {
+        if (!task.ParentID) return null;
+        try {
+            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+            return (await parent.Load(task.ParentID)) ? parent.AgentRunID : null;
+        } catch {
+            return null;
+        }
     }
 
     /** Loads a graph's children and edges in the shapes both the algorithms and mutation need. */
