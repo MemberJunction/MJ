@@ -14139,6 +14139,9 @@ importers:
       '@memberjunction/notifications':
         specifier: 6.1.0-edge.1
         version: link:../Communication/notifications
+      '@memberjunction/sql-dialect':
+        specifier: 6.1.0-edge.1
+        version: link:../SQLDialect
     devDependencies:
       '@types/node':
         specifier: 24.10.11
