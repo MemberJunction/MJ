@@ -593,6 +593,11 @@ export class TaskGraphService {
         parent.ConversationDetailID = context.ConversationDetailID ?? null;
         parent.Status = 'In Progress';
         parent.PercentComplete = 0;
+        // The run that submitted this graph, in the COLUMN and not only in the metadata JSON below.
+        // A json field cannot be joined, so provenance that lives only there is unavailable to any
+        // query — which is how a human step ended up with no agent to ask on behalf of, and how a
+        // dispatched run had no parent to roll its cost up to.
+        parent.AgentRunID = context.AgentRunID ?? null;
         // The parent row carries what happens AFTER the graph settles. It lives here rather than in
         // dispatcher memory because the dispatcher that finishes a graph is frequently not the
         // process that accepted it — a restart, a second instance, or simply a long-running graph

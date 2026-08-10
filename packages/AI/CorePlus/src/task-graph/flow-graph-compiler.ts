@@ -329,6 +329,20 @@ function emitNode(
             if (!promptName) return unresolved('a prompt', step.PromptID);
             return TaskNode.Prompt(base, { promptName });
         }
+        case 'Human': {
+            // A person's step. It compiles with no assignee resolved here on purpose: who should be
+            // asked can be a fixed user OR left open, and an unassigned human step is a legitimate
+            // "somebody needs to look at this" rather than a configuration error. The dispatcher
+            // raises the request when the step becomes eligible, which is the only moment anyone
+            // can act on it.
+            const config = parseJSONObject(step.Configuration);
+            return TaskNode.Human(base, {
+                assignToUserID: typeof config['assignToUserID'] === 'string' ? config['assignToUserID'] : undefined,
+                // The step's description IS what the person is being asked to do — the same
+                // convention a sub-agent step uses for its message.
+                instructions: step.Description ?? undefined,
+            });
+        }
         case 'ForEach':
             return TaskNode.ForEach(base, buildForEach(step, options, errors));
         case 'While':
