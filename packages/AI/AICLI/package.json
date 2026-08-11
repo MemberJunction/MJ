@@ -67,6 +67,7 @@
     "@memberjunction/core-actions": "6.1.0-edge.1",
     "@memberjunction/core-entities": "6.1.0-edge.1",
     "@memberjunction/core-entities-server": "6.1.0-edge.1",
+    "@memberjunction/generic-database-provider": "6.1.0-edge.1",
     "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.1",
     "@oclif/core": "^3.27.0",
     "@oclif/plugin-help": "^6.2.37",

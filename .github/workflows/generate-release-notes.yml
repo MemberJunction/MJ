@@ -29,7 +29,6 @@ jobs:
       contents: read
       pull-requests: write
       issues: read
-      id-token: write
 
     steps:
       - name: Checkout repository
@@ -55,15 +54,71 @@ jobs:
       # consumed the .md files). Note the dispatch path has a pre-existing
       # caveat regardless of this gate: the prompt calls get_pull_request with
       # no PR context, so dispatch runs are only useful alongside an open PR.
-      - name: Generate Release Notes with Claude
-        id: claude-release-notes
+      - name: Generate Release Notes with Gemini
+        id: gemini-release-notes
         if: github.event_name == 'workflow_dispatch' || steps.cs.outputs.count != '0'
-        uses: anthropics/claude-code-action@beta
+        uses: google-github-actions/run-gemini-cli@v0.1.22
+        env:
+          # REQUIRED — without it the CLI exits 1 without running anything:
+          # "Gemini CLI is not running in a trusted directory." It refuses to start
+          # rather than falling back to a safer approval mode. Confirmed empirically
+          # on run 31453795512, where its absence killed the sibling gemini-command
+          # workflow before a single tool call. The action does not set it itself.
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+          # Consumed by the github MCP server declared in `settings` below, via the
+          # ${GITHUB_TOKEN} expansion in its `env` block. Settings values expand $VAR
+          # from the process environment — but an UNSET variable is left as the
+          # literal string "${GITHUB_TOKEN}" rather than erroring, so if the MCP
+          # server starts unauthenticated, suspect this line first.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          model: claude-sonnet-4-6
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
 
-          direct_prompt: |
+          # Pinned explicitly — the CLI's default alias `auto` currently resolves to
+          # the RETIRED gemini-3-pro-preview.
+          gemini_model: gemini-3.6-flash
+
+          # Pinned so the tool-name strings below stay true; `latest` moves.
+          gemini_cli_version: '0.54.4'
+
+          # TOOL SURFACE. Unlike gemini-command.yml this agent is deliberately
+          # powerful — it shells out to git and npx, writes a notes file, and edits
+          # the PR through MCP. That matches what the claude-code-action version was
+          # granted (Bash,Read,Write,Glob,Grep + two GitHub MCP tools).
+          #
+          # `core` is an allowlist and is used in preference to `exclude` because
+          # settings tool names are never validated: a typo in `exclude` silently
+          # leaves a tool enabled, a typo here silently leaves it disabled.
+          #
+          # WHY `allowed` ALSO LISTS THE MCP TOOLS: setting `tools.core` at all emits
+          # a blanket `{toolName: "*", decision: DENY}` policy rule at priority 4.24,
+          # which outranks both MCP grant priorities (trusted 4.2 / allowed 4.1) and
+          # would otherwise swallow the GitHub tools. `tools.allowed` sits at 4.3 and
+          # re-permits them above that deny. `allowed` is an auto-approve list, NOT a
+          # restriction — the actual narrowing is `includeTools` on the server, which
+          # filters at discovery so the model never sees anything else.
+          #
+          # MCP tools are addressed by their fully-qualified `mcp_<server>_<tool>`
+          # name in `allowed`, but by their BARE name in `includeTools` — the include
+          # filter runs before the name is qualified. Both spellings below are load
+          # bearing and are not interchangeable.
+          settings: |
+            {
+              "tools": {
+                "core": ["run_shell_command", "read_file", "read_many_files", "list_directory", "glob", "grep_search", "write_file"],
+                "allowed": ["mcp_github_pull_request_read", "mcp_github_update_pull_request"]
+              },
+              "mcpServers": {
+                "github": {
+                  "command": "docker",
+                  "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server:v0.27.0"],
+                  "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" },
+                  "includeTools": ["pull_request_read", "update_pull_request"]
+                }
+              }
+            }
+
+          prompt: |
             You are a technical analyst working as a release coordinator for MemberJunction. Your task is to create release notes in markdown and update the PR description.
 
             ## Process
@@ -77,9 +132,9 @@ jobs:
             5. Use the GitHub MCP server to update the PR description with the release notes.
 
             ## Steps to complete:
-            1. **Get current PR details**: Use `mcp__github__get_pull_request` to get the current PR description
+            1. **Get current PR details**: Use `mcp_github_pull_request_read` with method `get` to get the current PR description
             2. **Generate release notes**: Follow the process above to create release notes
-            3. **Update PR title and description**: Use `mcp__github__update_pull_request` to:
+            3. **Update PR title and description**: Use `mcp_github_update_pull_request` to:
                - Set the PR title to the version number (e.g., "v2.73.0")
                - Set the PR description to the generated release notes (replace entire description)
 
@@ -104,4 +159,3 @@ jobs:
 
             The generated release notes following the template above should become the entire PR description, not appended to existing content.
 
-          allowed_tools: 'mcp__github__get_pull_request,mcp__github__update_pull_request,Bash,Read,Write,Glob,Grep'

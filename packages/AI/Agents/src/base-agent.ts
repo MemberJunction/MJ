@@ -43,7 +43,8 @@ import {
     RealtimeCoAgentConfig,
     ResolveEffectiveRealtimeConfig
 } from './realtime/realtime-coagent-config';
-import { RealtimeClientSessionService, PrepareClientSessionInput } from './realtime/realtime-client-session-service';
+import { SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
+import { RealtimeClientSessionService, PrepareClientSessionInput, WarnOnUnmatchedProviderVoice } from './realtime/realtime-client-session-service';
 import { BuildRealtimeAgentFraming } from './realtime/realtime-tool-broker';
 import { RealtimeRecordingController, RealtimeRecordingMedia } from './realtime/realtime-recording-capture';
 import { resolveRecordingStorageAccountID, storeRealtimeRecording } from './realtime/realtime-recording-store';
@@ -2029,23 +2030,30 @@ export class BaseAgent {
         // a usable model exists. This mirrors the same fix in RealtimeClientSessionService.
         const candidates = this.selectRealtimeModelCandidates(params.agent, overrideModelID);
         for (const model of candidates) {
-            const vendor = this.selectRealtimeVendor(model.ID);
+            const vendor = SelectRealtimeVendorForModel(model.ID);
             if (!vendor) {
                 continue;
             }
-            const apiKey = GetAIAPIKey(vendor.driverClass);
+            const apiKey = GetAIAPIKey(vendor.DriverClass);
             if (!apiKey) {
                 continue;
             }
             const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
                 BaseRealtimeModel,
-                vendor.driverClass,
+                vendor.DriverClass,
                 apiKey
             );
             if (!instance) {
                 continue;
             }
-            return { model: instance, modelID: model.ID, vendorID: vendor.vendorID, modelVendorID: vendor.modelVendorID, apiName: vendor.apiName, driverClass: vendor.driverClass };
+            return {
+                model: instance,
+                modelID: model.ID,
+                vendorID: vendor.VendorID,
+                modelVendorID: vendor.ModelVendorID,
+                apiName: vendor.APIName,
+                driverClass: vendor.DriverClass
+            };
         }
         return null;
     }
@@ -2119,26 +2127,6 @@ export class BaseAgent {
             typeDefault = null;
         }
         return ResolveEffectiveRealtimeConfig(typeDefault, agent.TypeConfiguration ?? null, null);
-    }
-
-    /**
-     * Selects the highest-priority active vendor for a model whose `DriverClass` has a resolvable
-     * API key. Mirrors the vendor-selection pattern used by prompt execution.
-     *
-     * @param modelID The chosen model's ID.
-     * @returns The vendor driver/api identifiers, or `null` when none has a usable key.
-     */
-    private selectRealtimeVendor(modelID: string): { vendorID: string; modelVendorID: string; driverClass: string; apiName: string } | null {
-        const vendors = AIEngine.Instance.ModelVendors
-            .filter(mv => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
-            .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
-
-        for (const v of vendors) {
-            if (GetAIAPIKey(v.DriverClass!)) {
-                return { vendorID: v.VendorID ?? '', modelVendorID: v.ID, driverClass: v.DriverClass!, apiName: v.APIName ?? '' };
-            }
-        }
-        return null;
     }
 
     /**
@@ -2278,14 +2266,17 @@ export class BaseAgent {
             .join('\n\n');
 
         // Model-catalog defaults (the AIModelType < AIModel < AIModelVendor ModelConfiguration
-        // cascade) merge as the BASE layer, then provider-matched voice settings
-        // (realtime.voice.providers.<provider>) AND session-tuning knobs (realtime.session) flow
-        // into the driver's open Config bag — the same pact every other config entry rides,
-        // mirroring the client-direct builder's cascade exactly.
+        // cascade) merge as the BASE layer, then the voice settings — the agnostic
+        // `realtime.voice.default.voice` plus any matching `realtime.voice.providers.<provider>` bag —
+        // AND session-tuning knobs (realtime.session) flow into the driver's open Config bag: the same
+        // pact every other config entry rides, mirroring the client-direct builder's cascade exactly.
+        // Same unmatched-provider diagnosis too, so this surface cannot drift back into dropping
+        // authored settings silently (#3530).
         const catalogSettings = modelID
             ? GetModelCatalogSessionSettings(AIEngine.Instance.GetEffectiveModelConfiguration(modelID, modelVendorID))
             : null;
         const providerVoice = GetProviderVoiceSettings(effectiveConfig, driverClass ?? null);
+        WarnOnUnmatchedProviderVoice(effectiveConfig, driverClass, 'BaseAgent.buildRealtimeSessionParams');
         const sessionTuning = GetSessionTuningSettings(effectiveConfig);
         const configBag = (catalogSettings || sessionTuning || providerVoice)
             ? (DeepMergeConfigs(catalogSettings, sessionTuning, providerVoice) as JSONObject)
