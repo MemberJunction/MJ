@@ -26,6 +26,13 @@
           <span>{{ selectedTimelineItem.duration || 'N/A' }}</span>
         </div>
       </div>
+      <!-- Why a workflow step has nothing to show: it never ran. Above the tabs, because it explains
+           the emptiness the reader is about to look at. -->
+      @if (StepNotice) {
+        <div class="step-notice">
+          <mj-alert [Variant]="StepNotice.Variant" Size="sm" [Message]="StepNotice.Message"></mj-alert>
+        </div>
+      }
       <!-- Action-specific link -->
       @if (selectedTimelineItem.type === 'action' && selectedTimelineItem.data?.ID) {
         <div class="action-link">
@@ -106,6 +113,7 @@
             <mj-task-graph-editor
               class="detail-graph__canvas"
               [Spec]="stepTaskGraph"
+              [NodePositions]="stepTaskGraphPositions"
               [ReadOnly]="true"
               [ShowPalette]="false">
             </mj-task-graph-editor>
