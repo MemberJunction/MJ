@@ -219,9 +219,24 @@ interface PostMigrationResult {
  * @deprecated Use RSUPipelineInput.PostRestartFiles instead. This type is
  * retained temporarily for backward compatibility with existing callers.
  */
+/** A pending work item together with the file it came from, so the caller can clear or rewrite it. */
+export interface RSUPendingWorkFile {
+  Path: string;
+  Work: RSUPendingWork;
+}
+
 export interface RSUPendingWork {
   CompanyIntegrationID: string;
   SourceObjectNames: string[];
+  /**
+   * How many boots have tried this item and not finished it.
+   *
+   * Resuming forever is its own failure: an item that can never succeed (an object
+   * whose entity CodeGen never produced, say) would otherwise be retried on every
+   * restart for the life of the workspace. Bounded by the consumer, which gives up
+   * loudly rather than silently.
+   */
+  Attempts?: number;
   /** Per-object field selections. Key = source object name, value = field names (null = all fields). */
   SourceObjectFields?: Record<string, string[] | null>;
   SchemaName: string;
@@ -433,20 +448,33 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     return filePath;
   }
 
-  /** Read all pending work files, return them, and delete them. */
-  public async ReadAndClearPendingWork(): Promise<RSUPendingWork[]> {
-    const { readdirSync, readFileSync, unlinkSync, existsSync } = await import('node:fs');
+  /**
+   * Read all pending work files WITHOUT deleting them.
+   *
+   * Reading and deleting used to be one step, which made the hand-off across the
+   * restart a single unrecoverable shot: the file describing what still had to be
+   * done was gone before the first entity map was created, and the consumer runs its
+   * work inside a catch that swallows. Anything that went wrong part way — a throw on
+   * object 200 of 354, an OOM, a second restart — left the tables built, the maps
+   * missing, and no instruction anywhere to finish them. Nothing retried, because
+   * nothing was left to retry from.
+   *
+   * The caller now owns the lifetime: keep the file until the work is genuinely done
+   * ({@link ClearPendingWork}), or write back what remains ({@link RewritePendingWork})
+   * so the next boot resumes instead of starting over or giving up.
+   */
+  public async ReadPendingWork(): Promise<RSUPendingWorkFile[]> {
+    const { readdirSync, readFileSync, existsSync } = await import('node:fs');
     const { join } = await import('node:path');
     const dir = join(rsuConfig.WorkDir, rsuConfig.PendingWorkPath);
     if (!existsSync(dir)) return [];
     const files = readdirSync(dir).filter((f) => f.endsWith('.json'));
-    const results: RSUPendingWork[] = [];
+    const results: RSUPendingWorkFile[] = [];
     for (const file of files) {
       const filePath = join(dir, file);
       try {
         const data = JSON.parse(readFileSync(filePath, 'utf-8')) as RSUPendingWork;
-        results.push(data);
-        unlinkSync(filePath);
+        results.push({ Path: filePath, Work: data });
       } catch {
         /* skip corrupt files */
       }
@@ -455,6 +483,48 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       this.rsuLog(`Found ${results.length} pending work item(s)`);
     }
     return results;
+  }
+
+  /** Delete one pending work file. Call once its work has actually completed. */
+  public async ClearPendingWork(filePath: string): Promise<void> {
+    const { unlinkSync, existsSync } = await import('node:fs');
+    try {
+      if (existsSync(filePath)) unlinkSync(filePath);
+    } catch (e) {
+      // A file we cannot delete is re-read next boot. The consumer's own work is
+      // idempotent, so a repeat is survivable; throwing here is not.
+      this.rsuLog(`Could not delete pending work file ${filePath}: ${e}`);
+    }
+  }
+
+  /**
+   * Replace a pending work file with what is still outstanding, so the next boot picks
+   * up where this one stopped. Written to a temp file and renamed so a crash mid-write
+   * cannot leave a half-written instruction behind.
+   */
+  public async RewritePendingWork(filePath: string, data: RSUPendingWork): Promise<void> {
+    const { writeFileSync, renameSync } = await import('node:fs');
+    try {
+      const tmp = `${filePath}.tmp`;
+      writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8');
+      renameSync(tmp, filePath);
+    } catch (e) {
+      this.rsuLog(`Could not rewrite pending work file ${filePath}: ${e}`);
+    }
+  }
+
+  /**
+   * Read all pending work files, return them, and delete them.
+   *
+   * @deprecated Loses the work on any failure — see {@link ReadPendingWork}. Kept so
+   * existing callers keep compiling; new code should read, then clear or rewrite.
+   */
+  public async ReadAndClearPendingWork(): Promise<RSUPendingWork[]> {
+    const files = await this.ReadPendingWork();
+    for (const f of files) {
+      await this.ClearPendingWork(f.Path);
+    }
+    return files.map((f) => f.Work);
   }
 
   // ─── Generic Post-Restart File Injection ──────────────────────

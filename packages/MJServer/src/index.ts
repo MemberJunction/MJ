@@ -1506,15 +1506,39 @@ async function processRSUPendingWork(): Promise<void> {
   // Dynamic import — schema-engine is not yet published to npm, only exists as a workspace package
   const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
   const rsm = RuntimeSchemaManager.Instance;
-  const pendingItems = await rsm.ReadAndClearPendingWork();
-  if (pendingItems.length === 0) return;
+  // Read WITHOUT clearing. The file is this work's only instruction, and it used to be
+  // deleted before the first entity map was created — so a throw part way through (or a
+  // second restart, or an OOM) left the tables built, the maps missing, and nothing
+  // anywhere that could finish or even report it. The file is now cleared only once the
+  // item is genuinely done, and rewritten with what remains when it is not.
+  const pendingFiles = await rsm.ReadPendingWork();
+  if (pendingFiles.length === 0) return;
 
-  console.log(`[RSU] Processing ${pendingItems.length} pending work item(s) from pre-restart...`);
+  console.log(`[RSU] Processing ${pendingFiles.length} pending work item(s) from pre-restart...`);
 
   // Wait a moment for metadata to be fully loaded
   await new Promise(resolve => setTimeout(resolve, 3000));
 
-  for (const item of pendingItems) {
+  /**
+   * How many boots may try one item before we stop resuming it.
+   *
+   * Resuming forever is its own failure mode: an item that can never succeed would be
+   * retried on every restart for the life of the workspace. When the budget runs out the
+   * file is dropped, but LOUDLY — the silence is what made the original bug so expensive.
+   */
+  const MAX_PENDING_ATTEMPTS = 3;
+
+  for (const pendingFile of pendingFiles) {
+    const item = pendingFile.Work;
+    const attempt = (item.Attempts ?? 0) + 1;
+    // Objects that finished on THIS boot. Anything left over is what a later boot resumes,
+    // so an item that dies on object 200 of 354 does not start again from object 1.
+    const completedObjectNames: string[] = [];
+    // Set only when the whole item ran, including the sync kick-off and schedule below.
+    // Read in `finally`, which also catches the guard clauses' `continue` — those skip
+    // the work just as surely as a throw does, and previously destroyed the instruction
+    // just as completely.
+    let itemCompleted = false;
     try {
       const md = new Metadata(); // global-provider-ok: server startup recovery — runs once before any per-request context exists
       // Get system user for server-side operations
@@ -1669,6 +1693,11 @@ async function processRSUPendingWork(): Promise<void> {
         } catch (fieldErr) {
           console.warn(`[RSU] Field map creation failed for ${objName}: ${fieldErr}`);
         }
+        // Reached the end of this object without throwing out of the loop, so a resume
+        // need not revisit it. Recorded even when field mapping failed above: the entity
+        // map exists, and re-running the object would re-enter the same catch rather than
+        // make progress. Re-selecting the object is the way to retry a field-map failure.
+        completedObjectNames.push(objName);
       }
 
       // Remove-as-disable: entity maps whose object is NOT in this apply's selection
@@ -1776,8 +1805,41 @@ async function processRSUPendingWork(): Promise<void> {
           console.warn(`[RSU] Schedule creation failed: ${schedErr}`);
         }
       }
+      itemCompleted = true;
     } catch (err) {
-      console.error(`[RSU] Failed to process pending work for ${item.CompanyIntegrationID}: ${err}`);
+      console.error(`[RSU] Failed to process pending work for ${item.CompanyIntegrationID} (attempt ${attempt}/${MAX_PENDING_ATTEMPTS}): ${err}`);
+    } finally {
+      if (itemCompleted) {
+        // Done. Only NOW is it safe to destroy the instruction.
+        await rsm.ClearPendingWork(pendingFile.Path);
+      } else {
+        const remaining = item.SourceObjectNames.filter(n => !completedObjectNames.includes(n));
+        if (attempt >= MAX_PENDING_ATTEMPTS) {
+          // Out of budget. Drop the file so it cannot be retried forever — but say so
+          // plainly, naming the objects, because a connector left half-mapped looks
+          // connected and syncs nothing, and silence here is what made this expensive.
+          const shown = remaining.slice(0, 20).join(', ');
+          console.error(
+            `[RSU] GIVING UP on pending work for ${item.CompanyIntegrationID} after ${attempt} attempt(s). ` +
+            `${remaining.length} of ${item.SourceObjectNames.length} object(s) were never mapped` +
+            `${remaining.length > 0 ? `: ${shown}${remaining.length > 20 ? ` (+${remaining.length - 20} more)` : ''}` : ''}. ` +
+            `Re-apply this connector to finish setting it up.`
+          );
+          await rsm.ClearPendingWork(pendingFile.Path);
+        } else {
+          // Keep the instruction, minus what already landed, so the next boot resumes
+          // at object 200 of 354 rather than starting over or giving up.
+          await rsm.RewritePendingWork(pendingFile.Path, {
+            ...item,
+            SourceObjectNames: remaining,
+            Attempts: attempt,
+          });
+          console.warn(
+            `[RSU] ${remaining.length} object(s) still to map for ${item.CompanyIntegrationID} ` +
+            `(${completedObjectNames.length} done this pass) — will resume on next start.`
+          );
+        }
+      }
     }
   }
 
