@@ -498,7 +498,12 @@ describe('GraphQLDataProvider RunView wire behavior', () => {
             ]);
 
             expect(result.Success).toBe(true);
-            expect(result.Results).toEqual([{ ID: 'r1', Name: 'Acme', __mj_UpdatedAt: '2026-03-03T00:00:00Z' }]);
+            // `simple` rows get always-on type normalization on the way back, so a datetime column
+            // arrives as a real Date rather than the ISO string the wire carried. Asserting the
+            // string here would pin the pre-normalization shape and hide the coercion.
+            expect(result.Results).toEqual([
+                { ID: 'r1', Name: 'Acme', __mj_UpdatedAt: new Date('2026-03-03T00:00:00Z') },
+            ]);
         });
 
         it('returns per-index results for a public RunViews batch', async () => {
