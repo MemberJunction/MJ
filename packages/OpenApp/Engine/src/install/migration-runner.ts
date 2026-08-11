@@ -5,8 +5,10 @@
  * to execute app migrations against the app's own schema, using a per-app
  * flyway_schema_history table.
  *
- * Skyway is loaded dynamically at runtime so this module compiles even when
- * `@skyway/core` is not installed (e.g. in CI builds that don't need it).
+ * The skyway packages (`@memberjunction/skyway-core` + the platform providers) are
+ * declared as optionalDependencies of this package but loaded dynamically at runtime,
+ * so this module compiles and loads even when they are not installed (e.g. in CI
+ * builds that don't need them, or installs run with --no-optional).
  */
 import path from 'node:path';
 import type { DatabasePlatform } from '@memberjunction/core';
@@ -14,7 +16,7 @@ import { GetDialect } from '@memberjunction/sql-dialect';
 
 /**
  * Minimal type definition for Skyway config so we don't need
- * `@skyway/core` at compile time.
+ * `@memberjunction/skyway-core` at compile time.
  *
  * `Provider` is typed as `unknown` because it's constructed from a dynamically
  * imported provider package (e.g. `@memberjunction/skyway-sqlserver`). Skyway
@@ -229,25 +231,49 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
  */
 async function CreateSkywayProvider(platform: DatabasePlatform, dbConfig: SkywayConfig['Database']): Promise<unknown> {
     if (platform === 'postgresql') {
-        const postgresProviderModuleId = '@memberjunction/skyway-postgres';
-        try {
-            const { PostgresProvider } = await import(postgresProviderModuleId);
-            return new PostgresProvider(dbConfig);
-        } catch {
+        const PostgresProvider = await ImportProviderClass('@memberjunction/skyway-postgres', 'PostgresProvider', 'PostgreSQL');
+        return new PostgresProvider(dbConfig);
+    }
+    const SqlServerProvider = await ImportProviderClass('@memberjunction/skyway-sqlserver', 'SqlServerProvider', 'SQL Server');
+    return new SqlServerProvider(dbConfig);
+}
+
+/**
+ * Dynamically imports a Skyway provider package and returns the named provider class.
+ * Only a RESOLUTION failure (the package is not installed) is translated into the
+ * "install the provider" guidance — any other error (including a throw from the
+ * provider's own module code, or later from its constructor) surfaces as-is, so a bad
+ * connection config is never misreported as a missing package.
+ */
+async function ImportProviderClass(moduleId: string, exportName: string, platformLabel: string): Promise<new (dbConfig: SkywayConfig['Database']) => unknown> {
+    let mod: Record<string, unknown>;
+    try {
+        mod = await import(moduleId);
+    } catch (error: unknown) {
+        if (IsModuleResolutionFailure(error)) {
             throw new Error(
-                'PostgreSQL provider not found. Install @memberjunction/skyway-postgres to run Open App migrations against PostgreSQL.'
+                `${platformLabel} provider not found. Install ${moduleId} to run Open App migrations against ${platformLabel} ` +
+                    `(it is an optionalDependency of @memberjunction/open-app-engine — check for --no-optional installs or a registry that does not carry it).`,
+                { cause: error },
             );
         }
+        throw error;
     }
-    const sqlServerProviderModuleId = '@memberjunction/skyway-sqlserver';
-    try {
-        const { SqlServerProvider } = await import(sqlServerProviderModuleId);
-        return new SqlServerProvider(dbConfig);
-    } catch {
-        throw new Error(
-            'SQL Server provider not found. Install @memberjunction/skyway-sqlserver to run Open App migrations against SQL Server.'
-        );
+    return mod[exportName] as new (dbConfig: SkywayConfig['Database']) => unknown;
+}
+
+/**
+ * True when the error is a module-resolution failure rather than a module that loaded
+ * and threw. ESM raises ERR_MODULE_NOT_FOUND; CJS resolution raises MODULE_NOT_FOUND;
+ * some ESM loader shims (e.g. ts-node's) throw plain code-less Errors, recognized by
+ * Node's resolver message.
+ */
+function IsModuleResolutionFailure(error: unknown): boolean {
+    const { code, message } = (error as { code?: string; message?: string }) ?? {};
+    if (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND' || code === 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
+        return true;
     }
+    return code === undefined && typeof message === 'string' && /^Cannot find (package|module) /.test(message);
 }
 
 /**
