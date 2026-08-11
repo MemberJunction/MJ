@@ -15,7 +15,7 @@
  */
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { ConfigOf, TaskNode, type TaskGraphSpec, type TaskGraphSpecNode, type TaskNodeBase } from '@memberjunction/ai-core-plus';
-import { GetDependencies, GetTaskNodeType, type TaskGraphNodeType } from './task-graph-canvas-adapter';
+import { GetDependencies, GetTaskNodeType, IsAuthorableNodeType, type TaskGraphNodeType } from './task-graph-canvas-adapter';
 
 /** A requested change to one task. The parent applies it; this panel never writes. */
 export class TaskPropertyChangeRequestedEventArgs {
@@ -79,7 +79,12 @@ export class TaskGraphPropertiesPanelComponent {
      * source of truth, and a parallel field could disagree with it.
      */
     public get Assignment(): TaskGraphNodeType {
-        return this.Draft ? GetTaskNodeType(this.Draft) : 'AgentTask';
+        if (!this.Draft) return 'AgentTask';
+        const type = GetTaskNodeType(this.Draft);
+        // This panel edits the three authorable shapes. A display-only kind (a Prompt, a loop, an
+        // external step — kinds a run can contain but nobody draws here) has no editor, so it falls
+        // back rather than being mis-presented as an agent step with an agent picker.
+        return IsAuthorableNodeType(type) ? type : 'AgentTask';
     }
 
     /**
