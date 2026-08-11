@@ -137,7 +137,18 @@ function makeConfig(type: string, name: string, issuer: string, audience: string
         issuer,
         audience,
         // Never contacted: nothing in this bundle triggers a JWKS fetch.
-        jwksUri: `https://${name}.integration.test/.well-known/jwks.json`
+        jwksUri: `https://${name}.integration.test/.well-known/jwks.json`,
+        // The UNION of every shipped provider's own validateConfig() requirements, because these
+        // checks assert that a "complete" config validates. The base class needs only
+        // name/issuer/audience/jwksUri, so a config carrying just those looked complete and was not:
+        // auth0/okta additionally demand domain, msal tenantId, cognito region + userPoolId, and all
+        // six OAuth providers clientId. Each provider reads only its own fields, so supplying the
+        // superset is what makes ONE fixture genuinely complete for all eight types.
+        clientId: `${name}-client`,
+        domain: `${name}.integration.test`,
+        tenantId: `${name}-tenant`,
+        region: 'us-east-1',
+        userPoolId: `${name}-pool`
     };
 }
 

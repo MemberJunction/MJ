@@ -449,5 +449,90 @@
       "lastModified": "2026-07-07T15:18:40.875Z",
       "checksum": "50fde9e6f83cfae4c3f2e8f70d6f5eda38259f51daafc477f1f16ecac8c016bb"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Queue Tasks",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "5E7BF3A4-6639-4835-85A6-24301BAF41B9"
+    },
+    "sync": {
+      "lastModified": "2026-08-11T06:04:34.452Z",
+      "checksum": "c2cef9edeb0107c7232a8387558949df81559693cf54a99fe55d4ddbc1dd7395"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Queue Tasks",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "E2F619C6-126E-4564-B16D-F24D7F037E16"
+    },
+    "sync": {
+      "lastModified": "2026-08-11T06:04:34.473Z",
+      "checksum": "36ddacaac668c7e01da80d64242d55e54b43dcdfd74a2c7efcd61ec596efa228"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Queues",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "24E99F57-5CC9-4C4C-B86F-7E256C0BB00C"
+    },
+    "sync": {
+      "lastModified": "2026-08-11T06:04:34.491Z",
+      "checksum": "b8383b17670c5b180261a9d3320d3156f8e2e216d25e7836c1ef611805f7953d"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Queues",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "E724004E-7BA3-4CB5-8E80-7137D24323E6"
+    },
+    "sync": {
+      "lastModified": "2026-08-11T06:04:34.519Z",
+      "checksum": "f43234e7aba04b0246b7589d733e3926e6355790ca120454a89520c5208d2e20"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Queue Types",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "0C54ACE1-D81E-446D-B2B9-7D91FD6B55BA"
+    },
+    "sync": {
+      "lastModified": "2026-08-11T06:04:34.538Z",
+      "checksum": "bf0e9cb9af67f5e9c625412a4fedc13051c62a981f357c6cff79b3ff1e6a8851"
+    }
   }
 ]

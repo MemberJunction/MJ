@@ -31,6 +31,7 @@ import {
     type TaskGraphFrame,
     type TaskGraphObserver,
 } from '@memberjunction/task-graph';
+import { NormalizeUUID } from '@memberjunction/global';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -57,6 +58,15 @@ const SETTLE_TIMEOUT_MS = 30_000;
  * narrowing it.
  */
 const SHARED_FAILURES = new Set<string>();
+
+/**
+ * TaskID → task name, populated by `loadChildren` before any dispatcher starts.
+ *
+ * Exists so the stub runner never has to read the database to learn what it is running. Keys are
+ * normalized because the ID arrives from two different paths (the dispatcher's claim and a RunView)
+ * and UUID casing is not guaranteed to agree between them.
+ */
+const NAMES_BY_ID = new Map<string, string>();
 
 /**
  * Stands in for the agent framework.
@@ -91,8 +101,20 @@ class StubAgentRunner implements TaskAgentRunner {
         };
     }
 
-    /** The task's own name, read where the work happens — see SHARED_FAILURES. */
+    /**
+     * The task's own name — see SHARED_FAILURES.
+     *
+     * Served from `NAMES_BY_ID`, which every check populates before it starts a dispatcher, rather
+     * than from a per-task `Load()`. That read shared ONE provider with up to ten concurrently
+     * executing tasks (TX6 runs two dispatchers at MaxConcurrentTasks 5), and when it lost the race
+     * the `catch` recorded the TaskID in place of the name — so `StartedAmong` silently missed the
+     * task and the check failed as "the gate task must still run" or "expected 4, got 0" while the
+     * graph itself had executed perfectly. The database read survives only for a task claimed by a
+     * dispatcher still draining from an earlier check, before its name was ever mapped.
+     */
     private async resolveName(params: TaskAgentRunParams): Promise<string> {
+        const known = NAMES_BY_ID.get(NormalizeUUID(params.TaskID));
+        if (known) return known;
         try {
             const t = await params.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', params.ContextUser);
             if (await t.Load(params.TaskID)) return t.Name;
@@ -194,6 +216,8 @@ async function loadChildren(ctx: IntegrationCheckContext, parentID: string): Pro
         { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentID}'`, ResultType: 'entity_object', BypassCache: true },
         ctx.User,
     );
+    // Feeds the stub runner's name lookup, so execution never needs a database read of its own.
+    for (const t of res.Results ?? []) NAMES_BY_ID.set(NormalizeUUID(t.ID), t.Name);
     return new Map((res.Results ?? []).map((t) => [t.Name, t]));
 }
 
@@ -209,9 +233,28 @@ async function loadTask(ctx: IntegrationCheckContext, id: string): Promise<MJTas
     return t;
 }
 
-/** This graph's task names, for filtering the shared runner's records down to one check. */
-async function taskNames(ctx: IntegrationCheckContext, parentID: string): Promise<string[]> {
-    return [...(await loadChildren(ctx, parentID)).values()].map((t) => t.Name);
+/**
+ * This graph's task names, for filtering the shared runner's records down to one check.
+ *
+ * Waits for the graph's FULL child set rather than trusting the first read. `loadChildren` already
+ * passes `BypassCache` because a stale read here once returned an empty map — but the underlying
+ * read-back window is still observable, and an undercount does not fail here. It fails much later,
+ * in a check whose graph executed perfectly, as "expected 4, got 0" — because these names are the
+ * filter the shared runner's records are matched against. A name the filter never knew about is
+ * indistinguishable from a task that never ran. Failing loudly on the real problem beats that.
+ */
+async function taskNames(ctx: IntegrationCheckContext, parentID: string, expected: number): Promise<string[]> {
+    const deadline = Date.now() + 5_000;
+    let names: string[] = [];
+    while (Date.now() < deadline) {
+        names = [...(await loadChildren(ctx, parentID)).values()].map((t) => t.Name);
+        if (names.length === expected) return names;
+        await settle(100);
+    }
+    Assert(false,
+        `graph ${parentID} exposed ${names.length} of ${expected} child tasks after 5s: [${names.join(', ')}] — ` +
+        `the child read-back never completed, so runner records cannot be attributed to this graph`);
+    return names;
 }
 
 /** Builds a dispatcher wired to the stub, polling fast. */
@@ -284,7 +327,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
                 tasks: [agentTask('a', 'Only Step', agentName)],
             });
 
-            const mine = await taskNames(ctx, parentID);
+            const mine = await taskNames(ctx, parentID, 1);
             const parent = await runUntilSettled(ctx, buildDispatcher(ctx, RUNNER, 'it-tx1'), parentID);
 
             AssertEqual(parent.Status, 'Complete', 'the parent must roll up to Complete');
@@ -322,7 +365,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
 
             // A delay makes the branches genuinely overlap, so a join that did not wait would be
             // caught rather than hidden by tasks completing instantly in submission order.
-            const mine = await taskNames(ctx, parentID);
+            const mine = await taskNames(ctx, parentID, 4);
             RUNNER.DelayMs = 60;
             let parent: MJTaskEntity;
             try {
@@ -332,8 +375,17 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             }
 
             AssertEqual(parent.Status, 'Complete', 'the whole diamond must complete');
+            const children = await loadChildren(ctx, parentID);
             const started = RUNNER.StartedAmong(mine);
-            AssertEqual(started.length, 4, 'every node ran exactly once');
+            // The row dump distinguishes the two ways this can fail: a task the runner executed but
+            // whose name was not recorded (OutputPayload present), versus a task that reached a
+            // terminal status without the runner ever being invoked (OutputPayload null).
+            const rows = [...children.values()]
+                .map((c) => `${c.Name}=${c.Status}/out:${c.OutputPayload ? 'set' : 'null'}/claim:${c.ClaimedBy ?? '-'}/err:${c.ErrorMessage ?? '-'}`)
+                .join(' | ');
+            AssertEqual(started.length, 4,
+                `every node ran exactly once. matched=[${started.join(', ')}] graphTasks=[${mine.join(', ')}] ` +
+                `runnerStarted=[${RUNNER.Started.join(', ')}] rows: ${rows}`);
             AssertEqual(started[0], 'A Root', 'the root must run first');
             AssertEqual(started[3], 'D Join', 'the join must run last');
             Assert(
@@ -342,7 +394,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
                 'the join started before both prerequisites finished — the AND-join did not hold',
             );
 
-            const d = (await loadChildren(ctx, parentID)).get('D Join');
+            const d = children.get('D Join');
             Assert(
                 d!.OutputPayload!.includes('"dependencyCount":2'),
                 'the join must receive BOTH dependency outputs — a task depends on another precisely to consume what it produced',
@@ -374,7 +426,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
 
             // Registered BEFORE the failure policy so no dispatcher can claim the task in the
             // window between the two and run it under the wrong policy.
-            const mine = await taskNames(ctx, parentID);
+            const mine = await taskNames(ctx, parentID, 2);
             const parent = await runUntilSettled(ctx, buildDispatcher(ctx, RUNNER, 'it-tx3'), parentID);
 
             AssertEqual(parent.Status, 'Failed', 'a graph with an unrecoverable failure rolls up Failed');
@@ -412,7 +464,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
                 ],
             } as TaskGraphSpec);
 
-            const mine = await taskNames(ctx, parentID);
+            const mine = await taskNames(ctx, parentID, 2);
             const parent = await runUntilSettled(ctx, buildDispatcher(ctx, RUNNER, 'it-tx4'), parentID);
 
             const started = RUNNER.StartedAmong(mine);
@@ -424,14 +476,16 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             );
 
             const b = (await loadChildren(ctx, parentID)).get('B Conditional');
-            AssertEqual(b!.Status, 'Blocked', 'the untaken branch must be Blocked, not left Pending forever');
+            AssertEqual(b!.Status, 'Skipped', 'the untaken branch must be Skipped, not left Pending forever');
 
-            // Blocked, not Complete: the edge is a Prerequisite, so a graph that can never satisfy it
-            // has genuinely not finished its work. Expressing "skip this branch and still complete"
-            // is what an Optional dependency is for.
-            AssertEqual(parent.Status, 'Blocked', 'the graph settles as Blocked when a prerequisite branch is untaken');
+            // Skipped, not Blocked: `Blocked` is reserved for FAILURE-driven unsatisfiability. A branch
+            // that merely lost its condition is a normal outcome, so ComputeParentRollup counts it as
+            // settled-aside and precedence ignores it — without that, any flow containing a single
+            // fork would settle Blocked every time.
+            AssertEqual(parent.Status, 'Complete', 'a graph whose only outstanding branch was skipped settles Complete');
+            AssertEqual(parent.PercentComplete, 100, 'a skipped branch is finished work, not outstanding work');
 
-            console.log('      → false condition made its branch unreachable; graph settled as Blocked');
+            console.log('      → false condition skipped its branch; graph settled Complete at 100%');
         }
     },
 
@@ -453,15 +507,19 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             });
 
             const observer = new RecordingObserver();
-            await taskNames(ctx, parentID);
-            await runUntilSettled(ctx, buildDispatcher(ctx, RUNNER, 'it-tx5', observer), parentID);
+            await taskNames(ctx, parentID, 2);
+            const settledParent = await runUntilSettled(ctx, buildDispatcher(ctx, RUNNER, 'it-tx5', observer), parentID);
 
             // Only this graph's frames — a concurrent dispatcher may be emitting for others.
             const own = observer.Frames.filter((f) => f.ParentTaskID === parentID);
             const kinds = own.map((f) => f.Kind);
-            Assert(kinds.includes('TaskStarted'), 'no TaskStarted frame was emitted');
-            Assert(kinds.includes('TaskCompleted'), 'no TaskCompleted frame was emitted');
-            Assert(kinds.includes('GraphSettled'), 'no GraphSettled frame was emitted');
+            // Frames are dumped on failure: an empty list means this dispatcher never processed the
+            // graph at all, which is a different defect from processing it and not emitting.
+            const frameDump = `parentStatus=${settledParent.Status} ownFrames=[${kinds.join(', ')}] ` +
+                `allFrames=${observer.Frames.length}`;
+            Assert(kinds.includes('TaskStarted'), `no TaskStarted frame was emitted. ${frameDump}`);
+            Assert(kinds.includes('TaskCompleted'), `no TaskCompleted frame was emitted. ${frameDump}`);
+            Assert(kinds.includes('GraphSettled'), `no GraphSettled frame was emitted. ${frameDump}`);
 
             // Ordering is the property a viewer renders from: a completion before its own start
             // would show a step finishing before it began.
@@ -505,7 +563,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
                 ],
             });
 
-            const mine = await taskNames(ctx, parentID);
+            const mine = await taskNames(ctx, parentID, 4);
             // One recorder for both instances, so a double execution shows up as a duplicate name.
             RUNNER.DelayMs = 40;
             const one = buildDispatcher(ctx, RUNNER, 'it-tx6-instance-one');
@@ -563,7 +621,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             child.ClaimExpiresAt = new Date(Date.now() - 60_000); // lease already expired
             Assert(await child.Save(), `could not stage the orphaned claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
 
-            const mine = await taskNames(ctx, parentID);
+            const mine = await taskNames(ctx, parentID, 1);
             const survivor = buildDispatcher(ctx, RUNNER, 'it-tx7-survivor');
 
             // Reconcile explicitly rather than waiting on a timer — the behavior under test is the

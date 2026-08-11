@@ -1418,8 +1418,22 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // submitted graph — submission would be durable and inert, which is strictly worse than the old
   // client-driven path it replaced. Gated on SQL Server because the provider factory mints
   // SQLServerDataProvider; the PG branch lands with PG parity. Self-registers with ShutdownRegistry.
+  //
+  // MJ_DISABLE_TASK_GRAPH_DISPATCHER opts a server OUT of claiming. A dispatcher claims from the
+  // WHOLE Task table, not from "its own" graphs, so any second dispatcher on the same database is a
+  // competitor: it wins some claims and executes them with ITS runner. That is correct in
+  // production (that is what makes multi-server durable execution work) and wrong for a harness
+  // that injects a stub runner and then asserts which tasks its own runner executed — the tasks
+  // MJAPI wins never reach the stub, so the harness reads them as "never ran". The integration lane
+  // boots MJAPI for the client-transport members, so it must set this or IT74 fails intermittently
+  // on whichever tasks became eligible first.
   const taskGraphPool = dataSources[0]?.dataSource;
-  if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
+  const taskGraphDispatcherDisabled = ['1', 'true', 'yes'].includes(
+    (process.env.MJ_DISABLE_TASK_GRAPH_DISPATCHER ?? '').trim().toLowerCase()
+  );
+  if (taskGraphDispatcherDisabled) {
+    console.log('[TaskGraphDispatcher] Not started — MJ_DISABLE_TASK_GRAPH_DISPATCHER is set.');
+  } else if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
     StartTaskGraphDispatcher(taskGraphPool, resumeUser)
       .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));
   }

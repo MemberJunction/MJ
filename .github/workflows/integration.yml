@@ -216,6 +216,12 @@ jobs:
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
           GRAPHQL_PORT: '4000'
+          # A dispatcher claims from the WHOLE Task table, so MJAPI's own one competes with the
+          # dispatcher IT74 builds — and MJAPI executes what it wins with the REAL agent runner
+          # instead of the bundle's stub, so those tasks never reach the stub's recorder and the
+          # checks read them as "never ran" (expected 4, got 0). Immediately-eligible root tasks
+          # lose this race most often, which is why it presented as an intermittent failure.
+          MJ_DISABLE_TASK_GRAPH_DISPATCHER: '1'
         run: |
           (cd packages/MJAPI && node dist/index.js > /tmp/mjapi.log 2>&1 &)
           echo "Waiting for MJAPI /healthcheck..."

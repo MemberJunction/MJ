@@ -170,6 +170,23 @@ async function waitForPersistedStatus(ctx: IntegrationCheckContext, taskId: stri
     }
 }
 
+/**
+ * Waits for the in-memory task status to reach `expected`.
+ *
+ * StartTask persists the terminal status and only THEN assigns `task.Status`, so a check that
+ * observed the transition through the database — which `waitForPersistedStatus` does — can read the
+ * in-memory value one step before it is written. Asserting it directly is a race the check itself
+ * creates by watching the faster of the two signals; waiting for the slower one removes it without
+ * weakening the claim (the status must still arrive, and quickly).
+ */
+async function waitForInMemoryStatus(task: TaskBase, expected: TaskStatus, timeoutMs: number, label: string): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (task.Status !== expected) {
+        Assert(Date.now() < deadline, `${label}: in-memory task status never reached '${expected}' (last: '${task.Status}')`);
+        await new Promise(resolve => setTimeout(resolve, 25));
+    }
+}
+
 /** Waits until the in-memory queue drains (QueueSize 0) or the deadline passes. */
 async function waitForDrain(stub: MjItStubQueue, timeoutMs: number, label: string): Promise<void> {
     const deadline = Date.now() + timeoutMs;
@@ -249,7 +266,7 @@ export const QueueChecks: NamedCheck[] = [
 
             const persisted = await waitForPersistedStatus(ctx, row.ID, 'Completed', 10000);
             AssertEqual(persisted.Output ?? '', output, 'persisted Output round-trip');
-            AssertEqual(task.Status, TaskStatus.Complete, 'in-memory task status after success');
+            await waitForInMemoryStatus(task, TaskStatus.Complete, 5000, 'QU3');
             await waitForDrain(stub, 5000, 'QU3');
             AssertEqual(stub.QueueSize, 0, 'terminal task must be removed from the in-memory queue');
 
@@ -273,7 +290,7 @@ export const QueueChecks: NamedCheck[] = [
             Assert(!!persisted.ErrorMessage, 'a failed task must persist ErrorMessage');
             const parsed = JSON.parse(persisted.ErrorMessage!) as { code?: string };
             AssertEqual(parsed.code, 'MJ_IT_QU4', 'ErrorMessage carries the JSON-serialized exception');
-            AssertEqual(task.Status, TaskStatus.Failed, 'in-memory task status after failure');
+            await waitForInMemoryStatus(task, TaskStatus.Failed, 5000, 'QU4');
             await waitForDrain(stub, 5000, 'QU4');
             AssertEqual(stub.QueueSize, 0, 'terminal failed task must be removed from the in-memory queue');
 
@@ -312,7 +329,7 @@ export const QueueChecks: NamedCheck[] = [
             const followUp = new TaskBase(followUpRow, { mode: 'ok' }, {});
             Assert(stub.AddTask(followUp), 'AddTask after a throw must still accept tasks');
             await waitForPersistedStatus(ctx, followUpRow.ID, 'Completed', 10000);
-            AssertEqual(followUp.Status, TaskStatus.Complete, 'follow-up task status (the queue provably survived the throw)');
+            await waitForInMemoryStatus(followUp, TaskStatus.Complete, 5000, 'QU5 follow-up (the queue provably survived the throw)');
 
             console.log(`      → throw contained: task Failed in-memory, slot freed, next task on the same queue Completed`);
         }
