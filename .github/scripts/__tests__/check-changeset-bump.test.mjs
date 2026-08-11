@@ -375,6 +375,12 @@ describe('check-changeset-bump', () => {
             }
         }
 
+        it('fails loudly on the empty equals form --base=', () => {
+            const { code, output } = run('--base=');
+            expect(code).toBe(2);
+            expect(output).toContain('--base requires a value');
+        });
+
         it('fails loudly when --base is passed with no value', () => {
             // Regression guard: `explicitBase ?? DEFAULT_BASE` swallowed the undefined and silently
             // applied the Edge rule against origin/next — turning a loud failure into a wrong answer.
@@ -395,6 +401,52 @@ describe('check-changeset-bump', () => {
         ])('recognises %s as a line base', (ref) => {
             const { output } = run('--base', ref);
             expect(output).toContain('certified line');
+        });
+    });
+
+    describe('robustness against real working trees', () => {
+        it('works when invoked from a SUBDIRECTORY, not just the repo root', () => {
+            // git reports paths from the repo root, so reading them relative to process.cwd()
+            // crashed with an uncaught ENOENT anywhere but the top level.
+            const { code } = runOnBranch('subdir', () => {
+                write('migrations/v6/V202601012100__v6.1.x__Sub.sql', 'GO\n');
+                write('.changeset/sub.md', changeset({ '@memberjunction/foo': 'minor' }));
+                mkdirSync(join(repo, 'packages/Foo'), { recursive: true });
+            });
+            expect(code).toBe(0);
+            const out = execFileSync('node', [SCRIPT, '--base', 'next'], {
+                cwd: join(repo, 'packages/Foo'),
+                encoding: 'utf8',
+            });
+            expect(out).toContain('bump levels are correct');
+        });
+
+        it('reads a CRLF changeset (a Windows contributor\'s file)', () => {
+            const { code, output } = runOnBranch('crlf', () => {
+                write('migrations/v6/V202601012200__v6.1.x__Crlf.sql', 'GO\n');
+                write('.changeset/crlf.md', '---\r\n"@memberjunction/foo": minor\r\n---\r\n\r\nSummary.\r\n');
+            });
+            expect(code).toBe(0);
+            expect(output).not.toContain('no front matter');
+        });
+
+        it('sees a trigger path containing non-ASCII characters', () => {
+            // git quotes such paths by default (`"metadata/caf\303\251.json"`), so the trigger
+            // pattern missed them — a real metadata change went unseen and a correct `minor` was
+            // rejected as unjustified.
+            const { code } = runOnBranch('nonascii', () => {
+                write('metadata/café.json', '{}');
+                write('.changeset/uni.md', changeset({ '@memberjunction/foo': 'minor' }));
+            });
+            expect(code).toBe(0);
+        });
+
+        it('sees a trigger path containing a space', () => {
+            const { code } = runOnBranch('spaced', () => {
+                write('metadata/with space/thing.json', '{}');
+                write('.changeset/spaced.md', changeset({ '@memberjunction/foo': 'minor' }));
+            });
+            expect(code).toBe(0);
         });
     });
 

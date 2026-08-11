@@ -22,6 +22,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const DEFAULT_BASE = 'origin/next';
 /**
@@ -56,9 +57,29 @@ const CHANGESET_FILE = /^\.changeset\/(?!README\.md$)[^/]+\.md$/;
 /** Bump levels a changeset entry may declare, worst first. */
 const LEVELS = ['major', 'minor', 'patch'];
 
+/**
+ * Runs git with two invariants this script depends on:
+ *
+ * - `core.quotePath=false` — by default git C-quotes any path with non-ASCII bytes
+ *   (`"metadata/caf\303\251.json"`), which no trigger pattern matches. A real metadata change then
+ *   went unseen, and the correct `minor` was rejected as unjustified.
+ * - `-C REPO_ROOT` — git reports paths from the repo root, so every command is run there and the
+ *   results are resolved against it. Otherwise invoking the script from a subdirectory read those
+ *   paths against `process.cwd()` and crashed with an uncaught ENOENT.
+ */
 function git(args) {
-    return execFileSync('git', args, { encoding: 'utf8' }).trim();
+    const prefix = REPO_ROOT ? ['-C', REPO_ROOT] : [];
+    return execFileSync('git', [...prefix, '-c', 'core.quotePath=false', ...args], { encoding: 'utf8' }).trim();
 }
+
+/** Absolute path to the top of the working tree (set before any other git call). */
+const REPO_ROOT = (() => {
+    try {
+        return execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+    } catch {
+        return '';
+    }
+})();
 
 /** Whether `ancestor` is reachable from `descendant` (false rather than throwing on a miss). */
 function isAncestor(ancestor, descendant) {
@@ -131,18 +152,30 @@ function parseArgs(argv) {
     let explicitBase = equals ? equals.slice('--base='.length) : null;
     if (!equals && flagIndex !== -1) {
         explicitBase = argv[flagIndex + 1];
-        // Without this the missing value became `undefined`, and `?? DEFAULT_BASE` swallowed it —
-        // silently applying the Edge rule against origin/next instead of failing.
-        if (!explicitBase || explicitBase.startsWith('--')) {
-            console.error('❌ --base requires a value, e.g. --base origin/next or --base lts/5.');
-            process.exit(2);
-        }
+    }
+    // An empty value is an ERROR, never a fallback — in either spelling. Letting it fall through to
+    // the default silently applied the Edge rule against origin/next, turning a loud failure into a
+    // confident wrong answer (`--base` alone), or ignoring the flag outright (`--base=`).
+    if ((equals || flagIndex !== -1) && (!explicitBase || explicitBase.startsWith('--'))) {
+        console.error('❌ --base requires a value, e.g. --base origin/next or --base origin/lts/5.');
+        process.exit(2);
     }
     if (explicitBase) {
         // An explicit base is authoritative: the rule follows where the change LANDS. A ref name is
-        // enough on its own; a raw SHA is matched by asking which line, if any, contains it.
-        const onLine = LINE_BRANCH.test(explicitBase) ||
-            knownLineRefs().some((ref) => isAncestor(explicitBase, ref) && !isAncestor(explicitBase, DEFAULT_BASE));
+        // enough on its own; a raw SHA is matched by asking whether it IS a line tip.
+        //
+        // Identity, not ancestry. "Is the base an ancestor of some line?" is true of `next` itself —
+        // every line was cut from it — so that test declared the entire Edge stream a certified
+        // line and applied the patch-only rule to it.
+        const onLine = LINE_BRANCH.test(explicitBase) || (() => {
+            let baseCommit;
+            try {
+                baseCommit = git(['rev-parse', explicitBase]);
+            } catch {
+                return false; // unresolvable; the explicit check below reports it properly
+            }
+            return knownLineRefs().some((ref) => git(['rev-parse', ref]) === baseCommit);
+        })();
         return { base: explicitBase, onLine };
     }
     const line = detectLine();
@@ -176,7 +209,10 @@ function dbTriggers(files) {
  * package names by design, and this script must not acquire a dependency to run in CI.
  */
 function bumpEntries(path) {
-    const lines = readFileSync(path, 'utf8').split('\n');
+    // Repo-root anchored (git reports paths from there) and CRLF-tolerant: splitting on '\n' alone
+    // leaves a trailing '\r' on every line, so `indexOf('---')` missed the front matter entirely
+    // and a perfectly valid changeset from a Windows contributor was reported malformed.
+    const lines = readFileSync(join(REPO_ROOT, path), 'utf8').split(/\r?\n/);
     const start = lines.indexOf('---');
     if (start === -1) {
         return { entries: [], malformed: 'no front matter' };
