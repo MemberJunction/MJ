@@ -58,17 +58,40 @@
     } @else {
       <div class="wfr-split" [class.wfr-split-open]="SelectedRun">
         <div class="wfr-list">
+          <!-- A header row that sorts. Every column a person scans by is sortable, because "the
+               longest run" and "the one that failed this morning" are the two questions this list
+               exists to answer and neither is answerable by scrolling. -->
+          <div class="wfr-head" role="row">
+            <button type="button" class="wfr-head-cell wfr-col-name" (click)="OnSort('Name')">
+              Workflow <i [ngClass]="SortIcon('Name')" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="wfr-head-cell wfr-col-time" (click)="OnSort('StartedAt')">
+              Started <i [ngClass]="SortIcon('StartedAt')" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="wfr-head-cell wfr-col-time" (click)="OnSort('CompletedAt')">
+              Ended <i [ngClass]="SortIcon('CompletedAt')" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="wfr-head-cell wfr-col-duration" (click)="OnSort('Duration')">
+              Duration <i [ngClass]="SortIcon('Duration')" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="wfr-head-cell wfr-col-status" (click)="OnSort('Status')">
+              Status <i [ngClass]="SortIcon('Status')" aria-hidden="true"></i>
+            </button>
+          </div>
+
           @for (run of VisibleRuns; track run.ID) {
             <button
               type="button"
               class="wfr-row"
               [class.wfr-row-selected]="run.ID === SelectedRunID"
               (click)="OnSelectRun(run)">
-              <span class="wfr-row-main">
-                <span class="wfr-row-name">{{ run.Name }}</span>
-                <span class="wfr-row-when">{{ run.Duration }}</span>
-              </span>
-              <span class="wfr-row-status" [attr.data-status]="run.Status">{{ run.Status }}</span>
+              <span class="wfr-col-name wfr-row-name">{{ run.Name }}</span>
+              <!-- An em dash, never a fabricated time: a run that has not started has no start, and
+                   printing one would read as data. -->
+              <span class="wfr-col-time">{{ run.StartedAt ? (run.StartedAt | date:'MMM d, h:mm:ss a') : '—' }}</span>
+              <span class="wfr-col-time">{{ run.CompletedAt ? (run.CompletedAt | date:'MMM d, h:mm:ss a') : '—' }}</span>
+              <span class="wfr-col-duration">{{ run.Duration }}</span>
+              <span class="wfr-col-status wfr-row-status" [attr.data-status]="run.Status">{{ run.Status }}</span>
             </button>
           }
         </div>
@@ -96,13 +119,79 @@
               </div>
             </header>
 
-            <mj-task-graph-run-view
-              [Provider]="ProviderToUse"
-              [ParentTaskID]="selected.ID"
-              [WorkflowName]="selected.Name"
-              [LiveUpdates]="selected.Status === 'Running'"
-              Height="calc(100% - 3rem)">
-            </mj-task-graph-run-view>
+            <div class="wfr-detail-tabs" role="tablist">
+              <button type="button" class="wfr-tab" [class.wfr-tab-active]="DetailTab === 'graph'"
+                      (click)="OnDetailTab('graph')">
+                <i class="fa-solid fa-diagram-project" aria-hidden="true"></i> Workflow
+              </button>
+              <button type="button" class="wfr-tab" [class.wfr-tab-active]="DetailTab === 'json'"
+                      (click)="OnDetailTab('json')">
+                <i class="fa-solid fa-code" aria-hidden="true"></i> JSON
+              </button>
+            </div>
+
+            @if (DetailTab === 'graph') {
+              <!-- The canvas, then whatever step is selected on it. Clicking a node shows that
+                   step's record — the same move the agent-run timeline offers, so a workflow reads
+                   the same way wherever it is opened from. -->
+              <div class="wfr-graph-pane">
+                <mj-task-graph-run-view
+                  [Provider]="ProviderToUse"
+                  [ParentTaskID]="selected.ID"
+                  [WorkflowName]="selected.Name"
+                  [LiveUpdates]="selected.Status === 'Running' || selected.Status === 'In Progress'"
+                  Height="100%"
+                  (NodeSelected)="OnGraphNodeSelected($event)">
+                </mj-task-graph-run-view>
+              </div>
+
+              <div class="wfr-steps-pane">
+                @if (StepsLoading) {
+                  <mj-loading text="Loading steps..."></mj-loading>
+                } @else {
+                  <div class="wfr-step-list">
+                    @for (step of SelectedSteps; track step.ID) {
+                      <button type="button" class="wfr-step"
+                              [class.wfr-step-selected]="step.ID === SelectedStepID"
+                              [attr.data-status]="step.Status"
+                              (click)="OnSelectStep(step)">
+                        <span class="wfr-step-name">{{ step.Name }}</span>
+                        <span class="wfr-step-meta">{{ step.StepType || 'Step' }}</span>
+                        <span class="wfr-row-status" [attr.data-status]="step.Status">{{ step.Status }}</span>
+                      </button>
+                    }
+                  </div>
+
+                  @if (SelectedStep; as step) {
+                    <div class="wfr-step-json">
+                      <div class="wfr-step-json-head">{{ step.Name }}</div>
+                      <mj-code-editor
+                        [ngModel]="SelectedStepJson"
+                        [language]="'json'"
+                        [readonly]="true"
+                        style="width: 100%;">
+                      </mj-code-editor>
+                    </div>
+                  } @else {
+                    <mj-empty-state
+                      Size="compact"
+                      Icon="fa-solid fa-hand-pointer"
+                      Title="Select a step"
+                      Message="Click a step on the canvas or in the list to see everything it recorded.">
+                    </mj-empty-state>
+                  }
+                }
+              </div>
+            } @else {
+              <div class="wfr-json-pane">
+                <mj-code-editor
+                  [ngModel]="SelectedRunJson"
+                  [language]="'json'"
+                  [readonly]="true"
+                  style="width: 100%;">
+                </mj-code-editor>
+              </div>
+            }
           </aside>
         }
       </div>

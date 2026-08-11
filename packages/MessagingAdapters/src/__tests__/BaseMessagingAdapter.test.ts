@@ -14,7 +14,7 @@ import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResp
 
 // ─── Mock external modules ──────────────────────────────────────────────────
 
-vi.mock('@memberjunction/sqlserver-dataprovider', () => {
+vi.mock('@memberjunction/generic-database-provider', () => {
     const users = [
         { ID: 'u1', Email: 'alice@example.com', Name: 'Alice' },
         { ID: 'u2', Email: 'bob@example.com', Name: 'Bob' },

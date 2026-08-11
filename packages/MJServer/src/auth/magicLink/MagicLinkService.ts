@@ -29,7 +29,7 @@ import {
   type MJUserEntityType,
   type MJApplicationRoleEntity,
 } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
 import { configInfo, type MagicLinkConfig } from '../../config.js';

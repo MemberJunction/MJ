@@ -9,7 +9,7 @@ import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContex
 import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { ManageMetadataBase, ViewRegenEntry } from './manage-metadata';
 
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { MJEntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';

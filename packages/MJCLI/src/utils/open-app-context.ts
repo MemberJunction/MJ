@@ -13,7 +13,7 @@ import ora from 'ora-classic';
 import { input, confirm, select, password } from '@inquirer/prompts';
 import { createRequire } from 'node:module';
 import { UserInfo, type DatabaseProviderBase } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { initializeProvider, cleanupProvider } from '@memberjunction/metadata-sync';
 import { getValidatedConfig } from '../config.js';
 

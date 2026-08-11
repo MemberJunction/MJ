@@ -57,7 +57,7 @@ import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnProm
 import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
-import { UserCache } from "@memberjunction/sqlserver-dataprovider";
+import { UserCache } from "@memberjunction/generic-database-provider";
 
 // ─── RSU Pipeline Output Types ──────────────────────────────────────────────
 
