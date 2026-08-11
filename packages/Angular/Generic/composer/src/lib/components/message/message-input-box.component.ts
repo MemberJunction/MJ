@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ComposerTriggerProvider, MentionSuggestion } from '../../composer-trigger-provider';
 import { MentionEditorComponent, PendingAttachment } from '../mention/mention-editor.component';
+import { BeforeSkillsOpenedEventArgs } from '../../events/composer-events';
 
 /**
  * Reusable message input box component (presentational)
@@ -58,6 +59,30 @@ export class MessageInputBoxComponent {
   @Input() enablePlanMode: boolean = false;
   /** Current Plan Mode toggle state (renders the button in its active state). */
   @Input() planModeActive: boolean = false;
+  /**
+   * Shows the in-composer Skills button when true.
+   *
+   * Gated separately from `enableMentions` because a host can have the `/` trigger active and
+   * still not want the button — but the common case is that a composer offering skill commands
+   * should advertise them, since `/` is otherwise invisible.
+   */
+  @Input() enableSkills: boolean = false;
+  /**
+   * True while the skill dropdown is open, driving the button's expanded state.
+   *
+   * Note the ARIA differs from Plan Mode next to it, deliberately: Plan Mode is a toggle BUTTON
+   * (a mode that stays on), so `aria-pressed` is right there. This one opens a popup, so it is
+   * `aria-expanded` + `aria-haspopup`. Using `aria-pressed` here would have a screen reader
+   * announce "pressed" for something that actually just revealed a list.
+   *
+   * DERIVED, not an @Input, and this is the difference from Plan Mode. Plan Mode's active state is
+   * a persisted user preference the host owns and threads down. "Is the skill dropdown open" is
+   * intrinsic to this composer, so an @Input would be an API the host cannot meaningfully answer
+   * and would leave the button permanently unpressed if nobody bound it.
+   */
+  get skillsActive(): boolean {
+    return this.mentionEditor?.IsTriggerOpen('/') ?? false;
+  }
 
   /** Composer lost focus — hosts persist drafts on this. */
   @Output() blurred = new EventEmitter<void>();
@@ -76,6 +101,52 @@ export class MessageInputBoxComponent {
   @Output() voiceOptionsRequested = new EventEmitter<void>();
   /** Emitted when the user clicks the in-composer Plan Mode toggle button. */
   @Output() planModeToggle = new EventEmitter<void>();
+  /**
+   * Fired BEFORE the Skills button opens the dropdown. Flip `Cancel` to veto — a host gating
+   * skills by entitlement, or surfacing them elsewhere, blocks it here.
+   *
+   * A pair rather than a lone emitter because this is an ACTION a host might reasonably refuse
+   * (UI_LAYERING_GUIDE section 6, rule 1). Handlers must be synchronous; `Cancel` travels back
+   * through EventEmitter's synchronous dispatch.
+   */
+  @Output() beforeSkillsOpened = new EventEmitter<BeforeSkillsOpenedEventArgs>();
+  /**
+   * Fired AFTER the dropdown actually opened. Not emitted on the canceled path, and not emitted
+   * when no active provider owns the trigger — so a host counting this counts dropdowns the user
+   * saw, rather than clicks.
+   */
+  @Output() afterSkillsOpened = new EventEmitter<void>();
+
+  /**
+   * Open the skill-command dropdown, the same one `/` opens.
+   *
+   * Routed through the editor's OpenTrigger rather than a parallel menu so permission filtering,
+   * per-skill icons and chip insertion all stay in one implementation.
+   */
+  /**
+   * NOTE: the template pairs this with `(mousedown)="$event.preventDefault()"`. A <button> takes
+   * focus on mousedown, which blurs the editor, and the editor closes its dropdown 200ms after
+   * losing focus — so without that guard the menu opened and then shut itself before it could be
+   * used. Preventing the default keeps focus in the editor, where the trigger lives anyway.
+   */
+  onSkillsClick(): void {
+    // Toggle closed first. A button carrying aria-pressed has to be able to un-press, and without
+    // this a second click re-ran the open path: it re-emitted the Before/After pair (so a host
+    // counting opens over-counted) and re-captured the trigger's baseline at the new caret, which
+    // corrupts the query offset once anything has been typed.
+    if (this.skillsActive) {
+      this.mentionEditor?.closeMentionDropdown();
+      return;
+    }
+    const args = new BeforeSkillsOpenedEventArgs();
+    this.beforeSkillsOpened.emit(args);
+    if (args.Cancel) {
+      return;
+    }
+    if (this.mentionEditor?.OpenTrigger('/')) {
+      this.afterSkillsOpened.emit();
+    }
+  }
 
   onRealtimeClick(): void {
     this.voiceRequested.emit();

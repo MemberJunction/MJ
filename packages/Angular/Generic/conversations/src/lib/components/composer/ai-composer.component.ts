@@ -4,7 +4,8 @@ import { MentionSuggestion,
   ComposerTriggerProvider,
   MentionEditorComponent,
   MessageInputBoxComponent,
-  PendingAttachment
+  PendingAttachment,
+  BeforeSkillsOpenedEventArgs
 } from '@memberjunction/ng-composer';
 import { AgentMentionProvider } from '../../composer-plugins/agent-mention.provider';
 import { RecordMentionProvider } from '../../composer-plugins/record-mention.provider';
@@ -50,6 +51,7 @@ import { SkillCommandProvider } from '../../composer-plugins/skill-command.provi
       [voiceActive]="voiceActive"
       [canStartRealtime]="canStartRealtime"
       [enablePlanMode]="enablePlanMode"
+      [enableSkills]="EnableSkillCommands"
       [planModeActive]="planModeActive"
       (textSubmitted)="textSubmitted.emit($event)"
       (blurred)="blurred.emit()"
@@ -59,7 +61,9 @@ import { SkillCommandProvider } from '../../composer-plugins/skill-command.provi
       (attachmentClicked)="attachmentClicked.emit($event)"
       (voiceRequested)="voiceRequested.emit()"
       (voiceOptionsRequested)="voiceOptionsRequested.emit()"
-      (planModeToggle)="planModeToggle.emit()">
+      (planModeToggle)="planModeToggle.emit()"
+      (beforeSkillsOpened)="beforeSkillsOpened.emit($event)"
+      (afterSkillsOpened)="afterSkillsOpened.emit()">
     </mj-message-input-box>
   `
 })
@@ -163,6 +167,15 @@ export class AiComposerComponent {
   @Output() voiceRequested = new EventEmitter<void>();
   @Output() voiceOptionsRequested = new EventEmitter<void>();
   @Output() planModeToggle = new EventEmitter<void>();
+  /**
+   * Before/After pair for the Skills button, proxied straight through from the input box. Gated on
+   * `EnableSkillCommands` — the button and the keystroke are two doors to the same feature, so one
+   * flag governs both rather than letting a composer advertise skills it will not serve.
+   *
+   * Cancel on `beforeSkillsOpened` vetoes the dropdown; `afterSkillsOpened` then does not fire.
+   */
+  @Output() beforeSkillsOpened = new EventEmitter<BeforeSkillsOpenedEventArgs>();
+  @Output() afterSkillsOpened = new EventEmitter<void>();
 
   onInnerValueChange(newValue: string): void {
     this.value = newValue;

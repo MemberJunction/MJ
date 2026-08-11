@@ -24,8 +24,23 @@
     </mj-mention-editor>
 
     <!-- Attach + voice + plan-mode buttons - Positioned over editor -->
-    @if (enableAttachments || enableRealtime || enablePlanMode) {
+    @if (enableAttachments || enableRealtime || enablePlanMode || enableSkills) {
       <div class="attach-buttons">
+        @if (enableSkills) {
+        <button
+          class="attach-button-icon skills-button-icon"
+          [class.skills-button-icon--active]="skillsActive"
+          [disabled]="disabled"
+          [attr.aria-expanded]="skillsActive"
+          aria-haspopup="true"
+          (mousedown)="$event.preventDefault()"
+          (click)="onSkillsClick(); $event.stopPropagation()"
+          title="Skills, or type / in the message box"
+          aria-label="Show skills"
+          >
+          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+        </button>
+        }
         @if (enablePlanMode) {
         <button
           class="attach-button-icon plan-mode-button-icon"
