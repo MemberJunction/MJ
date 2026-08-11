@@ -82,8 +82,11 @@ on:
 # per-commit group and are NEVER cancelled — every merge's backstop must run to completion
 # (github.ref is refs/heads/next for every merge, so a shared group would let a later merge
 # kill an earlier one's backstop). Mirrors test.yml.
+# EXCEPTION 2: schedule events get a per-cron group so the Sunday weekly cron (30 6 * * 0) does
+# not cancel the in-flight nightly (0 6 * * *) — both fire on refs/heads/next and would otherwise
+# share a group, killing the nightly mutation/rig/drift lanes ~30 min in every Sunday.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}${{ github.event_name == 'schedule' && format('-{0}', github.event.schedule) || '' }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
@@ -284,8 +287,9 @@ jobs:
   # GATED on the INTEGRATION_LIVE_MODEL_KEYS secret: a dotenv-format blob of the provider
   # keys the live tier needs (AI_VENDOR_API_KEY__<DriverClass>=... lines, per
   # packages/TestingFramework/integration-test-suite/docs/build-engineering-runbook.md —
-  # note missing keys FAIL the live tier, they do not skip). Without the secret the job
-  # reports a loud visible skip — never a false green.
+  # note missing keys FAIL the live tier, they do not skip). Without the secret the job's
+  # steps are skipped and it finishes green with a prominent ::warning — loudly flagged, not a
+  # silent pass.
   integration-live-model:
     name: Integration (Live Model, weekly)
     if: (github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || github.event_name == 'workflow_dispatch'
@@ -376,7 +380,11 @@ jobs:
         if: steps.prereq.outputs.READY == 'true'
         env:
           LIVE_KEYS: ${{ secrets.INTEGRATION_LIVE_MODEL_KEYS }}
-        run: printf '%s\n' "$LIVE_KEYS" >> .env
+        run: |
+          printf '%s\n' "$LIVE_KEYS" >> .env
+          # MJAPI boots with cwd packages/MJAPI and loads dotenv cwd-relative, so the keys must also
+          # land there or the server process never sees them (IT63's agent runs server-side).
+          printf '%s\n' "$LIVE_KEYS" >> packages/MJAPI/.env
 
       - name: Boot MJAPI (wire-callback members)
         if: steps.prereq.outputs.READY == 'true'
@@ -423,7 +431,8 @@ jobs:
   # stay green — the failure only manifests when a second server's lookup misses.
   cross-server-invalidation:
     name: Cross-server invalidation rig (nightly)
-    if: github.event_name == 'schedule' && github.event.schedule == '0 6 * * *'
+    # workflow_dispatch also runs it so the rig can be re-run on demand without waiting for the cron.
+    if: (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch'
     timeout-minutes: 45
     runs-on: ubuntu-latest
     env:
@@ -537,7 +546,8 @@ jobs:
   # artifacts are currently in sync; flip to blocking once green.
   codegen-drift:
     name: CodeGen drift gate (nightly)
-    if: github.event_name == 'schedule' && github.event.schedule == '0 6 * * *'
+    # workflow_dispatch also runs it so drift can be checked on demand without waiting for the cron.
+    if: (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch'
     timeout-minutes: 60
     runs-on: ubuntu-latest
     env:

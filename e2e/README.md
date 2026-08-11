@@ -91,12 +91,20 @@ npx playwright test --config e2e/playwright.config.ts --list
   pipeline's `[Drafts]` console signals instead of sleeps; cleans up after
   itself since drafts persist per-user server-side.
 
+- **`specs/a11y.spec.ts`** — Page-level accessibility (axe-core): the signed-in
+  Explorer shell (Home) and the omnibar palette scanned against WCAG 2.0/2.1
+  A+AA rule tags in a real browser (the jsdom widget tier can't evaluate
+  contrast or landmark rules). Known violations are parked in `*_DEBT_RULES`
+  lists with `// A11Y-DEBT:` comments while the rest keep gating. **Not in the CI
+  invocation yet** — run locally with the primed profile.
+
 ## CI wiring
 
 `.github/workflows/release-test.yml` runs `omnibar.spec.ts` + `chat-drafts.spec.ts`
 nightly (and on dispatch with `run_e2e`) when the `E2E_PW_PROFILE_B64` secret — a
 base64'd tar.gz of a primed signed-in `.playwright-cli/profile` — is configured,
 along with the matching `E2E_TENANT_ID`/`E2E_WEB_CLIENT_ID` auth secrets. Without
-the secrets the e2e job skips **visibly** (a warning in the run summary), never
-reporting success for work it didn't do. The live `user-routines` spec and
+the secrets the job's steps are skipped and it finishes **green with a prominent
+`::warning`** in the run summary — it never fails the release, and never silently
+claims to have validated the UI. The live `user-routines` spec and
 `predictive-studio` (needs its metadata synced) remain local-only.

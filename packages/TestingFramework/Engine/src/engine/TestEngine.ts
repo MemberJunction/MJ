@@ -1051,15 +1051,20 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         startTime: number
     ): Promise<void> {
         const passedTests = testResults.filter(r => r.status === 'Passed').length;
-        const hardFailedTests = testResults.filter(r => r.status === 'Failed' || r.status === 'Error' || r.status === 'Timeout').length;
+        const failedTests = testResults.filter(r => r.status === 'Failed').length;
+        const errorTests = testResults.filter(r => r.status === 'Error' || r.status === 'Timeout').length;
+        const skippedTests = testResults.filter(r => r.status === 'Skipped').length;
         const totalTests = testResults.length;
+        const hardFailedTests = failedTests + errorTests;
 
-        // A suite fails only on HARD failures (Failed/Error/Timeout). Skipped tests do
-        // not fail the suite — but they also no longer masquerade as passed: they are
-        // simply absent from both counts (PassedTests + FailedTests < TotalTests).
+        // A suite fails only on HARD failures (Failed/Error/Timeout). Skipped tests do not fail the
+        // suite and no longer masquerade as passed — they land in SkippedTests. The four executed/
+        // non-executed buckets are populated so Passed + Failed + Error + Skipped == Total.
         suiteRun.Status = hardFailedTests === 0 ? 'Completed' : 'Failed';
         suiteRun.PassedTests = passedTests;
-        suiteRun.FailedTests = hardFailedTests;
+        suiteRun.FailedTests = failedTests;
+        suiteRun.ErrorTests = errorTests;
+        suiteRun.SkippedTests = skippedTests;
         suiteRun.TotalTests = totalTests;
         suiteRun.TotalCostUSD = testResults.reduce((sum, r) => sum + r.totalCost, 0);
         suiteRun.TotalDurationSeconds = (Date.now() - startTime) / 1000;

@@ -412,7 +412,7 @@ the reason (e.g. `media/WebRTC → e2e`) — an intentional skip is surfaced, no
 **This is now also a CI gate.** `.github/workflows/test.yml` runs it as a coverage ratchet on every PR:
 
 ```bash
-node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=137    # Generic ratchet
+node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=134    # Generic ratchet (matches .github/workflows/test.yml)
 node scripts/dom-test-report.mjs packages/Angular/Bootstrap --max-none=0    # Bootstrap ratchet
 ```
 

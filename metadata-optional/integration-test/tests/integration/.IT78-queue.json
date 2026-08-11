@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT74 - Queue Engine Lifecycle",
+    "Name": "IT78 - Queue Engine Lifecycle",
     "Description": "Deterministic lifecycle of the MJQueue subsystem (packages/MJQueue) against the real engine loop and the real DB substrate — no LLM calls (the shipped AIActionQueue driver is resolved but never executed). QU1: QueueManager.Config loads the seeded queue-type catalog ('AI Action'/'Entity AI Action') plus the bundle's fixture type from the live DB. QU2: the ClassFactory resolves queue-type names to the shipped drivers, including the priority-1 EntityAIActionQueue subclass chain. QU3: a task fed through the real AddTask/ProcessTasks/StartTask path persists Status=Completed with its Output and frees its concurrency slot. QU4: a failing ProcessTask persists Status=Failed with the JSON-serialized exception. QU5: a THROWING ProcessTask cannot wedge the queue — the slot is freed and a subsequent task on the same queue still completes (the pinned slot-leak fix). QU6: Stop() is idempotent and a stopped queue refuses AddTask. QU7: static AddTask with an unknown type name throws the documented error before any DB write; instance AddTask against an inactive type returns undefined with zero writes. UN-GATED 2026-08-11: the blocking defect is fixed. QueueBase.StartTask ignored the boolean Save() return, so the terminal-status write failed silently while the in-memory task still reported Complete; the underlying failure was that NO role held CanUpdate on 'MJ: Queue Tasks' (or 'MJ: Queues'), so CodeGen never emitted GRANT EXECUTE on spUpdateQueueTask. Developer + Integration CRUD grants were added to metadata/entity-permissions, matching every other engine-written entity. QU1-QU7 pass. The two schema quirks in the bundle header (the 'Pending' default rejected by CK_QueueTask_Status, and nchar(10) truncating 'In Progress') remain documented-and-worked-around, not asserted, so a later schema fix cannot turn this red.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
@@ -20,9 +20,5 @@
   },
   "primaryKey": {
     "ID": "1E2B538E-C01B-4CDE-AA44-43E016E710FA"
-  },
-  "sync": {
-    "lastModified": "2026-08-11T05:43:29.627Z",
-    "checksum": "5f4e683185ac7e1409e6a74abbbd0a1f293bcfe7778836af4d930ca9ecab81f8"
   }
 }

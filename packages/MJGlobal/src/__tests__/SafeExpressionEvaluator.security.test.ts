@@ -9,14 +9,13 @@ import { SafeExpressionEvaluator } from '../SafeExpressionEvaluator';
  * code execution is a regular-expression denylist (DANGEROUS_PATTERNS) plus a
  * property-name filter on the context object. This suite documents, with evidence:
  *
- *   (a) which attacks the denylist DOES stop (the promises the code keeps), and
- *   (b) a CONFIRMED sandbox-escape / remote-code-execution bypass that the denylist
- *       does NOT stop — see the "KNOWN SANDBOX ESCAPE" block below.
+ *   (a) which attacks the denylist stops (the promises the code keeps), and
+ *   (b) the former bracket-string sandbox-escape route (globalThis["Function"](...)),
+ *       now CLOSED by denying the dangerous identifiers as whole words — see the
+ *       "SANDBOX ESCAPE — bracket-string member access" block below.
  *
- * Per task instructions the escape is NOT fixed here; these tests pin the CURRENT
- * (vulnerable) behavior so any future hardening will surface as a failing test that
- * must be updated deliberately. All escape proofs use benign, read-only payloads
- * (arithmetic, `typeof`, reading `process.version`) — none execute harmful code.
+ * The escape tests assert the route is BLOCKED; they are regression guards that the
+ * hole stays closed. Any weakening of the denylist will surface here as a failure.
  */
 describe('SafeExpressionEvaluator - Security', () => {
   let evaluator: SafeExpressionEvaluator;
@@ -170,64 +169,47 @@ describe('SafeExpressionEvaluator - Security', () => {
   });
 
   // ===============================================================
-  // 🚨🚨🚨 KNOWN SANDBOX ESCAPE — CONFIRMED RCE BYPASS 🚨🚨🚨
+  // SANDBOX ESCAPE — bracket-string member access (now CLOSED)
   // ===============================================================
   //
-  // The denylist matches only *textual* forms: `Function(`, `process.`, `require(`,
-  // `constructor`, `__proto__`, etc. It does NOT block:
-  //   - the bare identifiers `globalThis` and `global` (neither is in the denylist), and
-  //   - BRACKET-STRING member access, e.g. globalThis["Function"] or globalThis["process"].
+  // The escape reached host globals two ways the old dotted/call rules missed:
+  //   - the bare identifiers `globalThis` / `global` (host global object), and
+  //   - BRACKET-STRING member access, e.g. globalThis["Function"] or globalThis["process"],
+  //     which contains neither `Function(` nor `process.` and so slipped every rule.
   //
-  // Because `new Function` executes in global scope, `globalThis`/`global` resolve to the
-  // real host global object. Reaching a blocked name via a bracket string sidesteps every
-  // dotted-form rule. The result is a complete escape:
+  // Because `new Function` runs in global scope, `globalThis`/`global` resolved to the real
+  // host global, giving arbitrary code execution and `process` reachability:
   //
-  //     globalThis["Function"]("<attacker JS>")()          // arbitrary code execution
-  //     globalThis["process"]["mainModule"]["require"]("child_process")  // RCE gateway
+  //     globalThis["Function"]("<attacker JS>")()          // was: arbitrary code execution
+  //     globalThis["process"]["mainModule"]["require"]("child_process")  // was: RCE gateway
   //
-  // These tests assert the CURRENT (vulnerable) behavior — success:true — so the hole is
-  // documented and pinned. Payloads here are benign (arithmetic / typeof / reading
-  // process.version). DO NOT treat green tests here as "safe"; they prove the opposite.
+  // Fixed by denying the dangerous identifiers as WHOLE WORDS (\bglobalThis\b, \bglobal\b,
+  // \bFunction\b, \bprocess\b, \beval\b, \brequire\b, …) — a bare-word match also catches the
+  // bracket-string form. These tests pin that the route stays blocked.
   // ===============================================================
-  describe('KNOWN SANDBOX ESCAPE (currently NOT blocked — documented, not fixed)', () => {
-    it('DOCUMENTS HOLE: bare `globalThis` reaches the real host global object', () => {
-      const r = evaluator.evaluate('globalThis', {});
-      expect(r.success).toBe(true);
-      expect(r.value).toBe(true); // Boolean(globalObject) === true
+  describe('sandbox escape via bracket-string member access (blocked)', () => {
+    it('blocks the bare `globalThis` host global', () => {
+      expectBlocked('globalThis');
     });
 
-    it('DOCUMENTS HOLE: the Function constructor is reachable via bracket string and EXECUTES arbitrary code', () => {
-      // Benign proof: construct and run a function that computes 40 + 2.
-      // Replacing "return 40+2" with any string is arbitrary code execution.
-      const r = evaluator.evaluate('globalThis["Function"]("return 40+2")() === 42', {});
-      expect(r.success).toBe(true);
-      expect(r.value).toBe(true);
+    it('blocks the Function constructor reached via bracket string', () => {
+      expectBlocked('globalThis["Function"]("return 40+2")() === 42');
     });
 
-    it('DOCUMENTS HOLE: the Node `process` object is reachable via bracket string on globalThis', () => {
-      const r = evaluator.evaluate('typeof globalThis["process"] === "object"', {});
-      expect(r.success).toBe(true);
-      expect(r.value).toBe(true);
+    it('blocks `process` reached via bracket string on globalThis', () => {
+      expectBlocked('typeof globalThis["process"] === "object"');
     });
 
-    it('DOCUMENTS HOLE: `process` is also reachable via the bare `global` identifier', () => {
-      const r = evaluator.evaluate('typeof global["process"] === "object"', {});
-      expect(r.success).toBe(true);
-      expect(r.value).toBe(true);
+    it('blocks `process` reached via the bare `global` identifier', () => {
+      expectBlocked('typeof global["process"] === "object"');
     });
 
-    it('DOCUMENTS HOLE: process internals readable via bracket string (bypasses the process. rule)', () => {
-      // Reading process.version through brackets — the `/\bprocess\./` rule never sees a "process."
-      const r = evaluator.evaluate('globalThis["process"]["version"].length > 0', {});
-      expect(r.success).toBe(true);
-      expect(r.value).toBe(true);
+    it('blocks chained bracket-string access to process internals', () => {
+      expectBlocked('globalThis["process"]["version"].length > 0');
     });
 
-    it('DOCUMENTS HOLE: single-segment dotted host global (globalThis.process) is not blocked either', () => {
-      // Only `process.` / `global.` are denied; `globalThis.process` contains neither substring.
-      const r = evaluator.evaluate('globalThis.process', {});
-      expect(r.success).toBe(true);
-      expect(r.value).toBe(true);
+    it('blocks single-segment dotted host global (globalThis.process)', () => {
+      expectBlocked('globalThis.process');
     });
   });
 

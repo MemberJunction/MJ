@@ -43,4 +43,26 @@ describe('@memberjunction/ng-bootstrap-lite', () => {
         expect(CLASS_REGISTRATIONS_PACKAGES).not.toContain('@memberjunction/ng-explorer-settings');
         expect(CLASS_REGISTRATIONS_PACKAGES.length).toBeGreaterThan(5);
     });
+
+    it('excludes server-only packages that would poison the browser bundle', () => {
+        // The lite generator's --exclude-packages is a lazy-split guard, NOT a server guard (see
+        // BootstrapLite/CLAUDE.md), so this assertion is the actual server-leak backstop — turning
+        // the June-2026 incident class into a unit failure instead of a cold-build failure.
+        const leaked = SERVER_ONLY_POISON.filter(p => CLASS_REGISTRATIONS_PACKAGES.includes(p));
+        expect(leaked, `server-only packages leaked into the lite browser manifest: ${leaked.join(', ')}`).toEqual([]);
+    });
 });
+
+/** Packages that import Node built-ins — never valid in a browser manifest (Bootstrap/CLAUDE.md). */
+const SERVER_ONLY_POISON = [
+    '@memberjunction/aiengine',
+    '@memberjunction/ai-provider-bundle',
+    '@memberjunction/ai-vectors-pinecone',
+    '@memberjunction/storage',
+    '@memberjunction/templates',
+    '@memberjunction/server',
+    '@memberjunction/ai-agents',
+    '@memberjunction/ai-prompts',
+    '@memberjunction/communication-engine',
+    '@memberjunction/content-autotagging',
+];

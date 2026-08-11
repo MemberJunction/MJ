@@ -422,7 +422,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT31 - Startup Mode",
+            "TestID": "@lookup:MJ: Tests.Name=IT80 - Startup Mode",
             "Sequence": 28,
             "Status": "Active"
           },
@@ -623,7 +623,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT73 - File Storage Provider Seams",
+            "TestID": "@lookup:MJ: Tests.Name=IT77 - File Storage Provider Seams",
             "Sequence": 43,
             "Status": "Active"
           },
@@ -634,7 +634,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT74 - Queue Engine Lifecycle",
+            "TestID": "@lookup:MJ: Tests.Name=IT78 - Queue Engine Lifecycle",
             "Sequence": 44,
             "Status": "Active"
           },
@@ -645,7 +645,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT75 - Auth Provider Token Validation",
+            "TestID": "@lookup:MJ: Tests.Name=IT79 - Auth Provider Token Validation",
             "Sequence": 45,
             "Status": "Active"
           },

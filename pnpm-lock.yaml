@@ -560,9 +560,6 @@ importers:
         specifier: ^15.7.0
         version: 15.7.0
     devDependencies:
-      '@memberjunction/unit-testing':
-        specifier: 6.1.0-edge.1
-        version: link:../../UnitTesting
       '@types/lodash':
         specifier: ^4.17.23
         version: 4.17.23
@@ -1445,9 +1442,6 @@ importers:
         specifier: 6.1.0-edge.1
         version: link:../../../MJGlobal
     devDependencies:
-      '@memberjunction/unit-testing':
-        specifier: 6.1.0-edge.1
-        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -1972,9 +1966,6 @@ importers:
         specifier: 6.18.0
         version: 6.18.0(ws@8.19.0)(zod@4.3.6)
     devDependencies:
-      '@memberjunction/unit-testing':
-        specifier: 6.1.0-edge.1
-        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -2809,9 +2800,6 @@ importers:
         specifier: 6.1.0-edge.1
         version: link:../../MJGlobal
     devDependencies:
-      '@memberjunction/unit-testing':
-        specifier: 6.1.0-edge.1
-        version: link:../../UnitTesting
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11

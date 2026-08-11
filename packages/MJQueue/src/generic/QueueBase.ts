@@ -195,15 +195,19 @@ export abstract class QueueBase implements IShutdownable {
       // Save() returns false on failure — it does not throw. Ignoring that return left the row at
       // whatever status it held before the run while the in-memory task still reported Complete, so
       // anything polling the database for the transition waited for a write that never happened.
-      if (!(await task.TaskRecord.Save())) {
+      const persisted = await task.TaskRecord.Save();
+      if (!persisted) {
         LogError(
           `[QueueBase] Could not persist terminal status for task ${task.ID}: ` +
           `${task.TaskRecord.LatestResult?.CompleteMessage ?? 'unknown error'}`
         );
       }
 
-      // update the task status
-      task.Status = result.success ? TaskStatus.Complete : TaskStatus.Failed;
+      // Only claim Complete when the DB actually recorded it. A terminal status that never persisted
+      // leaves the row at its prior (non-terminal) status, so a caller polling the row would wait
+      // forever — reflecting the persist failure as Failed keeps in-memory state honest. The
+      // dispatcher only re-picks Pending tasks, so this never re-runs the task.
+      task.Status = persisted && result.success ? TaskStatus.Complete : TaskStatus.Failed;
 
       return result;
     }

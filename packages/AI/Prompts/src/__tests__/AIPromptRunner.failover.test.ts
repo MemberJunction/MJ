@@ -17,10 +17,12 @@
  *   updatePromptRunWithFailoverSuccess / Failure → AIPromptRun attempt bookkeeping
  *
  * Only package boundaries are mocked: the AIEngine metadata catalog, credential lookup
- * (GetAIAPIKey + CredentialEngine), and the LLM driver itself — a scripted TestLLM
- * registered through the real MJGlobal ClassFactory, exactly how production drivers are
- * created. Error classification is NOT faked: failed ChatResults carry errorInfo built by
- * the real ErrorAnalyzer, mirroring what GeminiLLM / OpenAILLM / AnthropicLLM etc. return.
+ * (GetAIAPIKey + CredentialEngine), and the LLM driver itself — a scripted TestLLM that
+ * extends the real BaseLLM, injected by stubbing ClassFactory.CreateInstance. (That stub
+ * bypasses driver-class *resolution* by DriverClass string — the failover DECISION logic is
+ * what's under test here, not the string→class lookup.) Error classification is NOT faked:
+ * failed ChatResults carry errorInfo built by the real ErrorAnalyzer, mirroring what
+ * GeminiLLM / OpenAILLM / AnthropicLLM etc. return.
  *
  * Historical bug this suite guards (the reason this file exists): provider drivers catch
  * errors internally and RETURN ChatResult{success:false} instead of throwing, so a failover
@@ -210,7 +212,15 @@ class FakePromptRun {
 }
 let lastPromptRun: FakePromptRun | null = null;
 const fakeProvider = {
-  GetEntityObject: vi.fn(async () => { lastPromptRun = new FakePromptRun(); return lastPromptRun; }),
+  GetEntityObject: vi.fn(async (entityName: string) => {
+    // Assert the MJ:-prefixed name production actually uses. Against real metadata an unprefixed
+    // 'AI Prompt Runs' throws "Entity ... not found"; a name-blind fake would hide that regression.
+    if (entityName !== 'MJ: AI Prompt Runs') {
+      throw new Error(`Unexpected entity '${entityName}' — expected 'MJ: AI Prompt Runs'`);
+    }
+    lastPromptRun = new FakePromptRun();
+    return lastPromptRun;
+  }),
 };
 
 function loadCatalog(catalog: AICatalog, drivers = DEFAULT_CONFIGURED_DRIVERS): void {

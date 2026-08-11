@@ -53,8 +53,9 @@ export class OutputFormatter {
      * Format test result as Markdown
      */
     private static formatMarkdown(result: TestRunResult): string {
-        const passed = result.status === 'Passed';
-        const status = passed ? 'PASSED ✓' : 'FAILED ✗';
+        const status = result.status === 'Passed' ? 'PASSED ✓'
+            : result.status === 'Skipped' ? 'SKIPPED − (not executed)'
+            : 'FAILED ✗';
         const scorePercent = (result.score * 100).toFixed(1);
 
         let md = `# Test Run: ${result.testName}\n`;
@@ -114,9 +115,10 @@ export class OutputFormatter {
 
         // Final status
         lines.push('');
-        const passed = result.status === 'Passed';
-        if (passed) {
+        if (result.status === 'Passed') {
             lines.push(chalk.green.bold(`[TEST_PASS] ${result.testName}`));
+        } else if (result.status === 'Skipped') {
+            lines.push(chalk.yellow.bold(`[TEST_SKIP] ${result.testName} (not executed — gated tier or unreachable dependency)`));
         } else {
             lines.push(chalk.red.bold(`[TEST_FAIL] ${result.testName}`));
         }
@@ -159,13 +161,16 @@ export class OutputFormatter {
         md += '|------|--------|-------|----------|------|\n';
 
         for (const testResult of result.testResults) {
-            const passed = testResult.status === 'Passed';
-            const status = passed ? '✓ PASS' : '✗ FAIL';
+            const status = testResult.status === 'Passed' ? '✓ PASS'
+                : testResult.status === 'Skipped' ? '− SKIP'
+                : '✗ FAIL';
             const cost = `$${testResult.totalCost.toFixed(4)}`;
             md += `| ${testResult.testName} | ${status} | ${testResult.score.toFixed(4)} | ${(testResult.durationMs / 1000).toFixed(1)}s | ${cost} |\n`;
         }
 
-        const failedTests = result.testResults.filter(t => t.status !== 'Passed');
+        // Skipped tests are NOT failures — they never executed. Excluding them keeps the Failures
+        // section (and any consumer that greps it) honest.
+        const failedTests = result.testResults.filter(t => t.status !== 'Passed' && t.status !== 'Skipped');
         if (failedTests.length > 0) {
             md += '\n## Failures\n';
             for (const testResult of failedTests) {
@@ -181,6 +186,16 @@ export class OutputFormatter {
                 if (testResult.errorMessage) {
                     md += `- **Error:** ${testResult.errorMessage}\n`;
                 }
+            }
+        }
+
+        const skippedTests = result.testResults.filter(t => t.status === 'Skipped');
+        if (skippedTests.length > 0) {
+            md += '\n## Skipped (NOT executed)\n';
+            md += '_A green run with skips is NOT full coverage._\n';
+            for (const testResult of skippedTests) {
+                const gate = testResult.oracleResults.find(o => o.oracleType === 'gate');
+                md += `- ${testResult.testName}${gate ? ` — ${gate.message}` : ''}\n`;
             }
         }
 

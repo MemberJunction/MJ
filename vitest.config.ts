@@ -37,12 +37,16 @@ export default defineConfig({
       // why the dormant `test:coverage` script never actually ran).
       'packages/AI/Providers/*/vitest.config.ts',
       'packages/AI/Vectors/*/vitest.config.ts',
-      'packages/AI/Vectors/Memory/*/vitest.config.ts',
+      // Two-level nests need their own glob — `AI/Vectors/*` stops one level short of
+      // Vectors/Providers/<X>, which silently dropped 4 tested packages from coverage.
+      'packages/AI/Vectors/Providers/*/vitest.config.ts',
       'packages/AI/AgentManager/*/vitest.config.ts',
       'packages/AI/Recommendations/*/vitest.config.ts',
       'packages/AI/Reranker',
       // Actions
       'packages/Actions/*/vitest.config.ts',
+      // BizApps is a second level under Actions/ — `Actions/*` alone dropped 5 tested packages.
+      'packages/Actions/BizApps/*/vitest.config.ts',
       // Communication, Templates, Scheduling
       'packages/Communication/*/vitest.config.ts',
       'packages/Communication/providers/*/vitest.config.ts',

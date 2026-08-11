@@ -16,7 +16,7 @@ import { StartupManager, UserInfo } from '@memberjunction/core';
 import { setupSQLServerClient } from '../config';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 import { SQLServerProviderConfigData } from '../types';
-import { UserCache } from '../UserCache';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 const fakeUser = { ID: 'user-1', Name: 'System' } as unknown as UserInfo;
 
@@ -69,13 +69,13 @@ describe('setupSQLServerClient effective refresh intervals (seconds → millisec
   });
 
   it('a 180-second config yields EXACTLY 180,000 ms for both UserCache.Refresh and the metadata timer', async () => {
-    const { config, pool } = makeConfig(180);
+    const { config } = makeConfig(180);
 
     await setupSQLServerClient(config);
 
-    // UserCache.Refresh expects MILLISECONDS
+    // UserCache.Refresh expects MILLISECONDS (first arg is the provider, not the pool)
     expect(refreshSpy).toHaveBeenCalledTimes(1);
-    expect(refreshSpy).toHaveBeenCalledWith(pool, 180 * 1000);
+    expect(refreshSpy).toHaveBeenCalledWith(expect.any(SQLServerDataProvider), 180 * 1000);
 
     // The metadata refresh timer runs on MILLISECONDS
     expect(setIntervalSpy).toHaveBeenCalledTimes(1);
@@ -97,12 +97,12 @@ describe('setupSQLServerClient effective refresh intervals (seconds → millisec
   });
 
   it('a 0-second (disabled) config never starts the metadata refresh timer', async () => {
-    const { config, pool } = makeConfig(0);
+    const { config } = makeConfig(0);
 
     await setupSQLServerClient(config);
 
     // UserCache still refreshes once at startup (0 ms simply disables ITS auto-refresh loop)
-    expect(refreshSpy).toHaveBeenCalledWith(pool, 0);
+    expect(refreshSpy).toHaveBeenCalledWith(expect.any(SQLServerDataProvider), 0);
     expect(setIntervalSpy).not.toHaveBeenCalled();
   });
 

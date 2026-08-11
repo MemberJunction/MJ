@@ -368,7 +368,7 @@ describe('TwitterDeleteTweetAction', () => {
     expect(details.text).toBe('bye');
   });
 
-  it('should map non-owned tweet deletion to NOT_OWNER', async () => {
+  it('deletes a non-owned tweet anyway — the ownership guard is dead code (swallowed by the detail-retrieval catch)', async () => {
     mockGetByUrl({
       '/tweets/t-9': {
         data: { id: 't-9', text: 'not mine', created_at: '2024-06-15T10:00:00Z', author_id: 'someone-else' },

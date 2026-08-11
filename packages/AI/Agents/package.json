@@ -49,8 +49,7 @@
     "@types/safe-regex": "^1.1.6",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18",
-    "@memberjunction/unit-testing": "6.1.0-edge.1"
+    "vitest": "^4.0.18"
   },
   "repository": {
     "type": "git",

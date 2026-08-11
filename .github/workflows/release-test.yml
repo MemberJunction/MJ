@@ -9,8 +9,9 @@ name: Release Validation Suite
 #     which is gated to `next`).
 #   * e2e — the Playwright browser tier (e2e/specs). It needs a live MJAPI +
 #     MJExplorer and a primed signed-in MSAL browser profile, so it only runs
-#     when the repo provides the secrets below; otherwise it SKIPS VISIBLY
-#     (never reports success for work it didn't do). Runs nightly + on dispatch.
+#     when the repo provides the secrets below; otherwise its steps are skipped and
+#     it finishes green with a prominent ::warning (never failing the release, never
+#     silently claiming UI validation). Runs nightly + on dispatch.
 #
 # Secrets the e2e job needs before it arms itself:
 #   E2E_PW_PROFILE_B64   base64 of a tar.gz of a primed .playwright-cli/profile
@@ -167,6 +168,12 @@ jobs:
         if: steps.prereq.outputs.READY == 'true'
         run: pnpm install --frozen-lockfile
 
+      - name: Install Playwright browser
+        if: steps.prereq.outputs.READY == 'true'
+        # Hosted runners ship no Playwright browser cache; the specs launch the bundled chromium,
+        # so without this the first armed run dies with "Executable doesn't exist".
+        run: npx playwright install --with-deps chromium
+
       - name: Restore turbo build cache
         if: steps.prereq.outputs.READY == 'true'
         uses: actions/cache/restore@v4
@@ -235,10 +242,9 @@ jobs:
           GRAPHQL_PORT: 4001
           TENANT_ID: ${{ secrets.E2E_TENANT_ID }}
           WEB_CLIENT_ID: ${{ secrets.E2E_WEB_CLIENT_ID }}
-          AUTO_CREATE_NEW_USERS: 1
         run: |
           node packages/MJCLI/bin/run.js migrate
-          node packages/MJCLI/bin/run.js sync push --dir=metadata
+          node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
           (cd packages/MJAPI && node dist/index.js &> /tmp/mjapi.log &)
           for i in $(seq 1 60); do
             curl -fsS http://localhost:4001/healthcheck >/dev/null 2>&1 && break

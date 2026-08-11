@@ -265,6 +265,7 @@ export function generateSummaryStatistics(results: TestRunResult[]): {
     totalTests: number;
     passedTests: number;
     failedTests: number;
+    skippedTests: number;
     passRate: number;
     averageScore: number;
     totalDuration: number;
@@ -274,22 +275,27 @@ export function generateSummaryStatistics(results: TestRunResult[]): {
 } {
     const totalTests = results.length;
     const passedTests = results.filter(r => r.status === 'Passed').length;
-    const failedTests = totalTests - passedTests;
-    const passRate = totalTests > 0 ? passedTests / totalTests : 0;
+    const skippedTests = results.filter(r => r.status === 'Skipped').length;
+    // Failures are HARD statuses only; a skipped test never executed, so it is neither passed nor
+    // failed. Rates and averages are taken over the EXECUTED set so skips don't drag the score to 0.
+    const failedTests = results.filter(r => r.status === 'Failed' || r.status === 'Error' || r.status === 'Timeout').length;
+    const executed = results.filter(r => r.status !== 'Skipped');
+    const passRate = executed.length > 0 ? passedTests / executed.length : 0;
 
-    const totalScore = results.reduce((sum, r) => sum + r.score, 0);
-    const averageScore = totalTests > 0 ? totalScore / totalTests : 0;
+    const totalScore = executed.reduce((sum, r) => sum + r.score, 0);
+    const averageScore = executed.length > 0 ? totalScore / executed.length : 0;
 
     const totalDuration = results.reduce((sum, r) => sum + r.durationMs, 0);
     const totalCost = results.reduce((sum, r) => sum + r.totalCost, 0);
 
-    const avgDuration = totalTests > 0 ? totalDuration / totalTests : 0;
-    const avgCost = totalTests > 0 ? totalCost / totalTests : 0;
+    const avgDuration = executed.length > 0 ? totalDuration / executed.length : 0;
+    const avgCost = executed.length > 0 ? totalCost / executed.length : 0;
 
     return {
         totalTests,
         passedTests,
         failedTests,
+        skippedTests,
         passRate,
         averageScore,
         totalDuration,

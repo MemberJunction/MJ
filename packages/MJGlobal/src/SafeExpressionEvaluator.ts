@@ -70,15 +70,21 @@ export class SafeExpressionEvaluator {
      * @private
      */
     private static readonly DANGEROUS_PATTERNS = [
-        /\beval\s*\(/i,
+        // Dangerous identifiers are denied as WHOLE WORDS, not just in their dotted/call
+        // forms. A bare-word match also covers bracket-string member access
+        // (globalThis["Function"], x["process"]), which sidesteps every `name.`/`name(` rule
+        // and was a confirmed sandbox-escape route. Consistent with the bare-word denial of
+        // `constructor`/`prototype`/`this` below.
+        /\beval\b/i,
         /\bnew\s+Function/i,
-        /\bFunction\s*\(/i,
+        /\bFunction\b/,
         /\bimport\s+/i,
-        /\brequire\s*\(/i,
-        /\bprocess\./i,
-        /\bglobal\./i,
-        /\bwindow\./i,
-        /\bdocument\./i,
+        /\brequire\b/i,
+        /\bprocess\b/i,
+        /\bglobalThis\b/i,
+        /\bglobal\b/i,
+        /\bwindow\b/i,
+        /\bdocument\b/i,
         /\b__proto__\b/i,
         /\bconstructor\b/i,
         /\bprototype\b/i,
