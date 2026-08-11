@@ -54,8 +54,9 @@ Two consequences worth knowing before you reason about the number:
   schema migrations. The migration-⇒-minor rule is Edge-tuple grammar only, so `6.1.5` → `6.1.6`
   may well contain a migration. On a line the rule **inverts**: `patch` is not merely sufficient, it
   is the only correct level, because a `minor` there consumes the tuple the next certification is
-  targeting. `check:changeset` applies the inverted rule whenever the base is `lts/*`, and refuses
-  to guess a base at all on a line branch rather than silently answering with the Edge rule.
+  targeting. `check:changeset` works this out from **ancestry, not branch names** — a line tip being
+  an ancestor of your HEAD means you are on that line, which holds for `fix/cve-…`-style backport
+  branches and from a detached HEAD, neither of which a name check can see.
 - **The number cannot carry per-package semver.** All ~300 packages share one `fixed` group, so a
   consumer already receives bumps driven entirely by packages they do not use.
 
@@ -107,8 +108,8 @@ pre-existing file using a different level is not yours to fix.
 ## Check before you push
 
 ```bash
-npm run check:changeset                          # vs origin/next (the Edge rule)
-npm run check:changeset -- --base lts/6.1        # a line backport (the inverted, patch-only rule)
+npm run check:changeset                          # picks the rule from the branch's ancestry
+npm run check:changeset -- --base origin/lts/5   # force a line base (the inverted, patch-only rule)
 npm run check:changeset:test                     # its own vitest suite
 ```
 

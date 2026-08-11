@@ -35,7 +35,7 @@ const DEFAULT_BASE = 'origin/next';
  * (`6.1.0 → 6.1.1 → 6.1.2`), so a minor there consumes the tuple the next certification is
  * targeting. Applying the Edge rule here demanded exactly that, on security-driven cert fixes.
  */
-const LINE_BRANCH = /^(?:origin\/)?lts\//;
+const LINE_BRANCH = /(?:^|\/)lts\/[^/]+$/;
 /**
  * Paths whose presence in the branch earns a `minor`.
  *
@@ -60,14 +60,56 @@ function git(args) {
     return execFileSync('git', args, { encoding: 'utf8' }).trim();
 }
 
-/** The branch currently checked out, or `''` when detached (CI checkouts often are). */
-function currentBranch() {
+/** Whether `ancestor` is reachable from `descendant` (false rather than throwing on a miss). */
+function isAncestor(ancestor, descendant) {
     try {
-        const name = git(['rev-parse', '--abbrev-ref', 'HEAD']);
-        return name === 'HEAD' ? '' : name;
+        execFileSync('git', ['merge-base', '--is-ancestor', ancestor, descendant], { stdio: 'ignore' });
+        return true;
     } catch {
-        return '';
+        return false;
     }
+}
+
+/**
+ * Every certified-line ref this clone knows about, local or remote-tracking.
+ *
+ * Both patterns end in `**` deliberately. `git for-each-ref` treats a pattern CONTAINING a glob
+ * character as a full match rather than a prefix, so `refs/remotes/*​/lts/` matches nothing —
+ * while the glob-free `refs/heads/lts/` does prefix-match. A fixture carrying both a local and a
+ * remote ref hides that completely: the local one answers, and the lookup looks fine while being
+ * dead in a real clone, which has only `origin/lts/*`.
+ */
+function knownLineRefs() {
+    const out = git(['for-each-ref', '--format=%(refname:short)', 'refs/heads/lts/**', 'refs/remotes/*/lts/**']);
+    return out.length > 0 ? out.split('\n').filter(Boolean) : [];
+}
+
+/**
+ * The certified line this working tree is built on, or `null` for the `next` stream.
+ *
+ * Determined by ANCESTRY, never by branch name. Real line backports are not called `lts/*` — the
+ * repo's only one to date is `fix/codegen-isa-postgres-lts5` (base `lts/5`), and the backport bot
+ * emits `backport-<n>-to-<target>`. A name-based check therefore misses exactly the branches the
+ * line rule exists for, while a line tip being an ancestor of HEAD is decisive: lines are terminal
+ * (fixes land on `next` first and are cherry-picked over), so a line tip is never an ancestor of a
+ * `next` topic branch. It also works from a detached HEAD, which CI checkouts usually are.
+ *
+ * @returns The most specific matching line ref, or `null`.
+ */
+function detectLine() {
+    const head = git(['rev-parse', 'HEAD']);
+    const candidates = knownLineRefs().filter(
+        // STRICT ancestor: a ref sitting on HEAD is not something this branch is built ON, it is
+        // this branch. Without this, a topic branch that happens to be named `lts/…` resolves to
+        // itself and gets diffed against itself — every change invisible.
+        (ref) => isAncestor(ref, 'HEAD') && git(['rev-parse', ref]) !== head
+    );
+    if (candidates.length === 0) {
+        return null;
+    }
+    // With several (a line cut from another line), the most specific is the one every other match
+    // can reach — i.e. the newest tip.
+    return candidates.reduce((best, ref) => (isAncestor(best, ref) ? ref : best));
 }
 
 /**
@@ -84,18 +126,27 @@ function currentBranch() {
  * script asks rather than answers.
  */
 function parseArgs(argv) {
-    const baseIndex = argv.indexOf('--base');
-    const explicitBase = baseIndex === -1 ? null : argv[baseIndex + 1];
-    if (!explicitBase && LINE_BRANCH.test(currentBranch())) {
-        console.error(
-            `❌ On line branch '${currentBranch()}' there is no safe default base.\n` +
-            `   Pass the line explicitly, e.g. --base lts/6.1 — defaulting to ${DEFAULT_BASE} would\n` +
-            `   apply the Edge rule to a certified line and demand a level lines cannot carry.`
-        );
-        process.exit(2);
+    const equals = argv.find((a) => a.startsWith('--base='));
+    const flagIndex = argv.indexOf('--base');
+    let explicitBase = equals ? equals.slice('--base='.length) : null;
+    if (!equals && flagIndex !== -1) {
+        explicitBase = argv[flagIndex + 1];
+        // Without this the missing value became `undefined`, and `?? DEFAULT_BASE` swallowed it —
+        // silently applying the Edge rule against origin/next instead of failing.
+        if (!explicitBase || explicitBase.startsWith('--')) {
+            console.error('❌ --base requires a value, e.g. --base origin/next or --base lts/5.');
+            process.exit(2);
+        }
     }
-    const base = explicitBase ?? DEFAULT_BASE;
-    return { base, onLine: LINE_BRANCH.test(base) };
+    if (explicitBase) {
+        // An explicit base is authoritative: the rule follows where the change LANDS. A ref name is
+        // enough on its own; a raw SHA is matched by asking which line, if any, contains it.
+        const onLine = LINE_BRANCH.test(explicitBase) ||
+            knownLineRefs().some((ref) => isAncestor(explicitBase, ref) && !isAncestor(explicitBase, DEFAULT_BASE));
+        return { base: explicitBase, onLine };
+    }
+    const line = detectLine();
+    return line ? { base: line, onLine: true } : { base: DEFAULT_BASE, onLine: false };
 }
 
 /**

@@ -230,6 +230,9 @@ describe('check-changeset-bump', () => {
             } catch {
                 git('checkout', '-q', '-b', 'lts/6.1');
                 git('commit', '-q', '--allow-empty', '-m', 'line 6.1 certified');
+                // A remote-tracking ref as well: a real clone discovers lines as origin/lts/*, and
+                // detection reads both.
+                git('update-ref', 'refs/remotes/origin/lts/6.1', 'HEAD');
             }
             git('checkout', '-q', '-b', name);
             build();
@@ -262,17 +265,94 @@ describe('check-changeset-bump', () => {
         });
 
         it('rejects a minor on a line even with NO database change', () => {
-            const { code } = runOnLine('line-code-minor', () => {
+            const { code, output } = runOnLine('line-code-minor', () => {
                 write('packages/Foo/line.ts', 'export const l = 1;\n');
                 write('.changeset/certfix3.md', changeset({ '@memberjunction/core': 'minor' }));
             });
             expect(code).toBe(1);
+            // Asserting the LINE-specific reason, not just the exit code: the pre-line-awareness
+            // rule also rejected a minor on a no-DB branch, so a bare `code === 1` here passed
+            // against the unfixed implementation and tested nothing.
+            expect(output).toContain('patch-only');
+            expect(output).toContain('certified line');
         });
 
-        it('REFUSES to guess a base on a line branch rather than defaulting to next', () => {
-            // The local trap this closes: `npm run check:changeset` on a line branch defaulting to
-            // origin/next is wrong base AND wrong rule at once, reported confidently. Which line a
-            // backport targets is not derivable, so there is no honest default — it asks.
+        /**
+         * The case that matters, and the one a name-based check cannot see: real backport branches
+         * are NOT named `lts/*`. The repo's only line backport to date is
+         * `fix/codegen-isa-postgres-lts5` → base `lts/5`, and korthout/backport-action emits
+         * `backport-<n>-to-<target>`. Detection has to come from ancestry, not the branch's name.
+         */
+        it('detects the line from ANCESTRY on a realistically-named backport branch', () => {
+            const { code, output } = runOnLine(
+                'fix/cve-2026-1234',
+                () => {
+                    write('migrations/v6/V202601011800__v6.1.x__SecFix.sql', 'GO\n');
+                    write('.changeset/sec.md', changeset({ '@memberjunction/core': 'patch' }));
+                },
+                { explicitBase: false }
+            );
+            expect(code).toBe(0);
+            expect(output).toContain('certified line');
+        });
+
+        it('detects the line from a DETACHED HEAD (CI checkouts usually are)', () => {
+            git('checkout', '-q', 'lts/6.1');
+            git('checkout', '-q', '-b', 'detach-src');
+            write('migrations/v6/V202601011900__v6.1.x__Det.sql', 'GO\n');
+            write('.changeset/det.md', changeset({ '@memberjunction/core': 'patch' }));
+            git('add', '-A');
+            git('commit', '-q', '-m', 'detached work');
+            const sha = git('rev-parse', 'HEAD').trim();
+            git('checkout', '-q', sha); // detached
+            try {
+                const output = execFileSync('node', [SCRIPT], { cwd: repo, encoding: 'utf8' });
+                expect(output).toContain('certified line');
+            } finally {
+                git('checkout', '-q', 'next');
+            }
+        });
+
+        it('does not attribute the LINE\'s own pre-existing migration to a code-only backport', () => {
+            // Diffing a line branch against origin/next spans the fork point, so migrations already
+            // certified on the line look like this branch's work.
+            const { code } = runOnLine(
+                'fix/typo-backport',
+                () => {
+                    write('packages/Foo/typo.ts', 'export const t = 1;\n');
+                    write('.changeset/typo.md', changeset({ '@memberjunction/core': 'patch' }));
+                },
+                { explicitBase: false }
+            );
+            expect(code).toBe(0);
+        });
+
+        /**
+         * A real clone has NO local `lts/*` branches — only remote-tracking `origin/lts/*`. The
+         * fixtures elsewhere create both, so a lookup that finds only the local one still passes
+         * them while being dead in production. This case deletes the local branch first.
+         */
+        it('detects the line from a REMOTE-TRACKING ref alone (as a real clone has)', () => {
+            git('checkout', '-q', 'next');
+            git('checkout', '-q', '-b', 'remote-only-src', 'lts/6.1');
+            write('migrations/v6/V202601012000__v6.1.x__RemoteOnly.sql', 'GO\n');
+            write('.changeset/remote.md', changeset({ '@memberjunction/core': 'patch' }));
+            git('add', '-A');
+            git('commit', '-q', '-m', 'remote-only backport');
+            git('update-ref', 'refs/remotes/origin/lts/6.1', 'lts/6.1');
+            git('branch', '-q', '-D', 'lts/6.1'); // only origin/lts/6.1 remains
+            try {
+                const output = execFileSync('node', [SCRIPT], { cwd: repo, encoding: 'utf8' });
+                expect(output).toContain('certified line');
+            } finally {
+                git('checkout', '-q', 'next');
+                git('branch', '-q', 'lts/6.1', 'refs/remotes/origin/lts/6.1');
+            }
+        });
+
+        it('detects the line when the topic branch IS named lts/… too', () => {
+            // The name is not what makes this work — ancestry is — but a conventionally-named
+            // branch must not be a regression just because detection stopped reading names.
             const { code, output } = runOnLine(
                 'lts/6.1-local',
                 () => {
@@ -281,8 +361,40 @@ describe('check-changeset-bump', () => {
                 },
                 { explicitBase: false }
             );
+            expect(code).toBe(0);
+            expect(output).toContain('certified line');
+        });
+    });
+
+    describe('--base argument handling', () => {
+        function run(...args) {
+            try {
+                return { code: 0, output: execFileSync('node', [SCRIPT, ...args], { cwd: repo, encoding: 'utf8' }) };
+            } catch (error) {
+                return { code: error.status, output: `${error.stdout ?? ''}${error.stderr ?? ''}` };
+            }
+        }
+
+        it('fails loudly when --base is passed with no value', () => {
+            // Regression guard: `explicitBase ?? DEFAULT_BASE` swallowed the undefined and silently
+            // applied the Edge rule against origin/next — turning a loud failure into a wrong answer.
+            const { code, output } = run('--base');
             expect(code).toBe(2);
-            expect(output).toContain('no safe default base');
+            expect(output).toContain('--base requires a value');
+        });
+
+        it('accepts the --base=REF equals form', () => {
+            const { code, output } = run('--base=lts/6.1');
+            expect(code).toBe(0);
+            expect(output).toContain('certified line');
+        });
+
+        it.each([
+            ['refs/heads/lts/6.1'],
+            ['origin/lts/6.1'],
+        ])('recognises %s as a line base', (ref) => {
+            const { output } = run('--base', ref);
+            expect(output).toContain('certified line');
         });
     });
 
