@@ -21,6 +21,11 @@ const { mockUserCacheUsers } = vi.hoisted(() => ({
 // Stub external deps before imports
 vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
     SQLServerDataProvider: class {},
+}));
+
+// UserCache moved to the shared provider package, so the mock has to follow it — mocking it on
+// sqlserver-dataprovider silently no-ops and the real (empty) cache answers instead.
+vi.mock('@memberjunction/generic-database-provider', () => ({
     UserCache: {
         get Users() { return mockUserCacheUsers; },
     },
