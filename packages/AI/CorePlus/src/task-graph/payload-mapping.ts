@@ -68,6 +68,20 @@ export type OutputMappingResult = {
      * on the Task row, where an operator will actually see them.
      */
     errors: string[];
+    /**
+     * Output parameters the mapping named that the result did not contain.
+     *
+     * **Why this is separate from `errors`.** An absent output is not always a defect — an action may
+     * emit a parameter only on some paths — so it must not fail the step. But it is not nothing
+     * either: a mapping that names a parameter the action never produces means the step ran, cost
+     * real money, and contributed NOTHING to the payload, while reporting Complete.
+     *
+     * That is exactly what happened to the Content Pipeline demo: its research step was pointed at
+     * `Google Custom Search` while its mapping still named Web Search's `SearchResults`, so every
+     * run discarded a whole research pass in silence. Diagnosing it took reading four tables. The
+     * caller can now say so in one line.
+     */
+    unmapped?: string[];
 };
 
 /**
@@ -223,29 +237,41 @@ export function ResolveMappedOutput(result: Record<string, unknown>, outputParam
  *
  * Values that resolve to `undefined` are skipped rather than written, so a step that did not produce
  * an optional field leaves the payload as it was instead of stamping it with nothing.
+ *
+ * @param into an object to apply the updates ONTO, defaulting to a fresh one. Pass the current
+ *   payload when the mapping must see what is already there — which is the only way `name[]` can
+ *   mean anything, since appending is defined relative to an existing list. A loop applying its
+ *   body's mapping once per pass needs exactly this: with a fresh object each pass, every append
+ *   produces a new one-element array that replaces the last, and the loop keeps only its final
+ *   iteration. **The object is mutated**, so callers that must not disturb the value they hold
+ *   should pass a copy.
  */
 export function ApplyOutputMapping(
     result: Record<string, unknown>,
     mappingJSON: string | null | undefined,
+    into: Record<string, unknown> = {},
 ): OutputMappingResult {
     const errors: string[] = [];
-    if (!mappingJSON?.trim()) return { updates: {}, errors };
+    if (!mappingJSON?.trim()) return { updates: into, errors };
 
     let mapping: PayloadMapping;
     try {
         const parsed: unknown = JSON.parse(mappingJSON);
-        if (!isRecord(parsed)) return { updates: {}, errors: ['Output mapping must be a JSON object.'] };
+        if (!isRecord(parsed)) return { updates: into, errors: ['Output mapping must be a JSON object.'] };
         mapping = parsed as PayloadMapping;
     } catch (e) {
-        return { updates: {}, errors: [`Output mapping is not valid JSON: ${errorText(e)}`] };
+        return { updates: into, errors: [`Output mapping is not valid JSON: ${errorText(e)}`] };
     }
 
-    const updates: Record<string, unknown> = {};
+    const updates: Record<string, unknown> = into;
     const specialFields: MappedSpecialFields = {};
+    const unmapped: string[] = [];
 
     for (const [outputParam, payloadPath] of Object.entries(mapping)) {
         const value = ResolveMappedOutput(result, outputParam);
-        if (value === undefined) continue;
+        // Recorded rather than ignored. Skipping in silence is what let a step run, succeed, and
+        // contribute nothing — see `unmapped` on OutputMappingResult.
+        if (value === undefined) { unmapped.push(outputParam); continue; }
 
         if (payloadPath.startsWith('$')) {
             applySpecialField(specialFields, payloadPath, value, errors);
@@ -270,6 +296,7 @@ export function ApplyOutputMapping(
         updates,
         specialFields: Object.keys(specialFields).length > 0 ? specialFields : undefined,
         errors,
+        unmapped: unmapped.length > 0 ? unmapped : undefined,
     };
 }
 

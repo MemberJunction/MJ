@@ -24,7 +24,7 @@
  * refusal message and the persistence switch both need the same edit.
  */
 import { describe, it, expect } from 'vitest';
-import { BuildStepConfiguration, FindUnrunnableKinds } from '../TaskGraphService';
+import { BuildStepConfiguration, FindCrossUserAssignments, FindUnrunnableKinds } from '../TaskGraphService';
 import { TaskNode, type TaskGraphSpec, type TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 
 const base = (tempId: string, name: string) => ({ tempId, name, description: '', dependsOn: [] });
@@ -137,5 +137,69 @@ describe('BuildStepConfiguration', () => {
         // can still change, and go stale the moment it did.
         const node = { ...TaskNode.Action(base('Emitted'), { actionName: 'X' }), layout: {} };
         expect(BuildStepConfiguration(node)?.layout).toBeUndefined();
+    });
+});
+
+/**
+ * The same rule as `FindUnrunnableKinds`, applied to WHO a step may be assigned to.
+ *
+ * Persist wrote `task.UserID = submitter` unconditionally, so an authored `assignToUserID` was
+ * overwritten without a word. Every layer above accepts the field, which is what made the silence
+ * dangerous: the graph submits, the step lands in the wrong person's inbox, and the person actually
+ * named never learns a workflow was waiting on them.
+ */
+const SUBMITTER = '11111111-1111-1111-1111-111111111111';
+const SOMEONE_ELSE = '22222222-2222-2222-2222-222222222222';
+
+describe('FindCrossUserAssignments', () => {
+    it('accepts a human step with no assignee — the normal case', () => {
+        const result = FindCrossUserAssignments(
+            graph([TaskNode.Human(base('c', 'Approve'), {})]), SUBMITTER,
+        );
+        expect(result).toBeNull();
+    });
+
+    it('accepts an explicit self-assignment, which is what persist does anyway', () => {
+        const result = FindCrossUserAssignments(
+            graph([TaskNode.Human(base('c', 'Approve'), { assignToUserID: SUBMITTER })]), SUBMITTER,
+        );
+        expect(result).toBeNull();
+    });
+
+    it('accepts a self-assignment written in a different case', () => {
+        // UUIDs arrive from metadata, the compiler and hand-authored JSON in whatever case they were
+        // written; a case difference is not a different person.
+        const result = FindCrossUserAssignments(
+            graph([TaskNode.Human(base('c', 'Approve'), { assignToUserID: SUBMITTER.toUpperCase() })]),
+            SUBMITTER,
+        );
+        expect(result).toBeNull();
+    });
+
+    it('REFUSES a step assigned to someone else, and names it', () => {
+        const result = FindCrossUserAssignments(
+            graph([
+                TaskNode.Action(base('a', 'Research'), { actionName: 'Web Search' }),
+                TaskNode.Human(base('c', 'Legal sign-off'), { assignToUserID: SOMEONE_ELSE }),
+            ]),
+            SUBMITTER,
+        );
+
+        // Named, because the person who can fix it is the author — an operator reading Task rows
+        // cannot tell an intended assignment from an overwritten one.
+        expect(result).toContain('Legal sign-off');
+        expect(result).toContain('#3524');
+    });
+
+    it('names every offending step, not just the first', () => {
+        const result = FindCrossUserAssignments(
+            graph([
+                TaskNode.Human(base('c', 'Legal sign-off'), { assignToUserID: SOMEONE_ELSE }),
+                TaskNode.Human(base('d', 'Finance sign-off'), { assignToUserID: SOMEONE_ELSE }),
+            ]),
+            SUBMITTER,
+        );
+        expect(result).toContain('Legal sign-off');
+        expect(result).toContain('Finance sign-off');
     });
 });
