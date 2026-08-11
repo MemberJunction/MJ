@@ -82,8 +82,14 @@ export class TaskGraphPromptRunner implements TaskPromptRunner {
 
         return {
             ...(params.TemplateParameters ?? {}),
-            [CURRENT_PAYLOAD_PLACEHOLDER]: payload,
-            flowContext: { dependencyOutputs },
+            // JSON, not the object. A template writes `{{ _CURRENT_PAYLOAD }}` and expects to SEE
+            // the payload; handing the renderer an object yields "[object Object]", and the model
+            // then answers about a value it was never shown. That failure is invisible from the
+            // outside — the prompt run succeeds, the response is well-formed, and it is about
+            // nothing. It is what kept the Content Pipeline reviewer rejecting a draft it could not
+            // read, on every iteration, forever.
+            [CURRENT_PAYLOAD_PLACEHOLDER]: JSON.stringify(payload, null, 2),
+            flowContext: JSON.stringify({ dependencyOutputs }, null, 2),
         };
     }
 

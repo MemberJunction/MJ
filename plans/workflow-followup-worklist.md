@@ -139,6 +139,43 @@ Post **one** comment on PR #3692 addressed to the planner agent:
       Playwright via MJExplorer). User explicitly asked for this.
 
 
+## CURRENT STATE (2026-08-10) — read this first
+
+**Branch `feat/workflow-hitl` → PR #3716 (OPEN).** #3701 and #3710 are MERGED. `next` is merged in.
+
+### Landed in this wave (all verified live, not inferred)
+- Duplicate workflow on approval — resume hook armed by our own null `ResumingAgentRunID`. DB-confirmed.
+- OOM kill (exit 137) — unraisable request retried every poll forever. Split permanent vs transient.
+- Loop first-classing — accumulating payload (a `While` can now reach its exit), `ContinuationDepth`
+  (recursion hole through loops), `SubmittingAgentRunID`, sub-agent body payload, `prompt.outputMapping`.
+- Recovery deadlock — `handledFailureIDs` now reaches eligibility; `unreachableTaskIDs` in claim filter.
+- `[object Object]` — `_CURRENT_PAYLOAD` now JSON-serialized for templates.
+- Run tree — sub-agent CTE member added; recursion cycle closed; task rows use normal displayers.
+- Edge labels — condition not description, hover detail, `1/2` rank badge, token-based chip.
+- **Behaviour change:** a second unreachable `StartingStep` now FAILS compile (was silent). Flagged in the PR.
+
+### OPEN — next session picks up here
+1. **Content Pipeline still not fully green.** Metadata fixed (single entry; `broad -> focused` path added
+   and pushed) but NOT re-verified end to end — the last run was interrupted. Re-run and confirm the
+   `approved` branch is now reachable. This is the only demo-blocking item.
+2. **R7 decision** — `rollUpCostToSubmittingRun` (prompt-blind, mixed basis) vs the tree query
+   (prompt-aware, own-cost). Two authorities disagree by construction. My vote: delete the write-back.
+   BLOCKED pending confirmation nothing reads `AIAgentRun.TotalCostRollup` for display.
+3. Review items not yet done: #10 envelope truthfulness, #4 input snapshot, #12 hold-aware stall,
+   #14/#15/#17/#18.
+4. **HITL gaps:** `assignToUserID` compiled+tested then discarded at persist; Cancelled = permanent
+   stall (no re-raise path); nothing ever sets `ExpiresAt`; no caller authz on respond; D17 converter
+   still drops `Human`; no Human node in the visual editor.
+5. **Playwright screenshots** — blocked on an expired Auth0 token in `.playwright-cli/profile`.
+   One headed login unblocks `scripts/verification/verify-agent-run-ui.mjs` permanently.
+
+### Pattern worth remembering
+Two of the last three bugs shared a shape: reasoned carefully about a trade-off, wrote the reasoning
+down, got the direction backwards. Both produced SUCCESSFUL runs with wrong results. Run the demo
+agents after each dispatcher change, not at the end of a batch.
+
+---
+
 ## Standing facts worth not rediscovering
 
 - **Stale `dist` trap:** `tsc && tsc-alias -f` — a failed `tsc` skips `tsc-alias`, leaving

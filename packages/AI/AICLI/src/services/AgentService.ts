@@ -402,7 +402,7 @@ Log file: ${logger.getLogFilePath()}${stackInfo}`);
   }
 
   private async getContextUser(): Promise<UserInfo> {
-    const { UserCache } = await import('@memberjunction/sqlserver-dataprovider');
+    const { UserCache } = await import('@memberjunction/generic-database-provider');
     
     if (!UserCache.Users || UserCache.Users.length === 0) {
       throw new Error(`❌ No users found in UserCache

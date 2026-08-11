@@ -149,6 +149,39 @@ WITH Tree AS (
 
     UNION ALL
 
+    -- ── The run a SUB-AGENT step started ──────────────────────────────────────────────────────
+    -- The other way a run nests, and the common one: an agent calling a sub-agent directly, with no
+    -- task graph involved. Without this member such a run appears in the tree as a single childless
+    -- Step — which is why a directly-invoked sub-agent rendered as an empty line in the run
+    -- visualizations while its steps sat in the database untouched.
+    --
+    -- Linked through TargetLogID, which is where a Sub-Agent step records the run it started.
+    SELECT
+        CAST(r.ID AS NVARCHAR(50)),
+        t.NodeID,
+        t.Depth + 1,
+        0,
+        CAST('Run' AS NVARCHAR(20)),
+        CAST(COALESCE(r.RunName, r.Agent, 'Agent Run') AS NVARCHAR(500)),
+        CAST(r.Status AS NVARCHAR(50)),
+        r.StartedAt,
+        r.CompletedAt,
+        r.TotalCost,
+        r.TotalTokensUsed,
+        CAST('MJ: AI Agent Runs' AS NVARCHAR(100)),
+        CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(50))
+    FROM Tree t
+    INNER JOIN [__mj].[vwAIAgentRunSteps] s
+        ON s.ID = t.NodeID
+    INNER JOIN [__mj].[vwAIAgentRuns] r
+        ON r.ID = s.TargetLogID
+    WHERE t.NodeType = 'Step'
+      AND s.StepType = 'Sub-Agent'
+      AND t.Depth < {{ maxDepth }}
+
+    UNION ALL
+
     -- ── The run a task spawned ────────────────────────────────────────────────────────────────
     -- This is what makes the structure genuinely recursive rather than three fixed levels: a task
     -- can run an agent, that agent can submit another graph, and so on.
@@ -172,7 +205,12 @@ WITH Tree AS (
         ON tk.ID = t.NodeID
     INNER JOIN [__mj].[vwAIAgentRuns] r
         ON r.ID = tk.AgentRunID
-    WHERE t.NodeType IN ('Task', 'TaskGraph')
+    -- 'Task' ONLY — never 'TaskGraph'. A child task's AgentRunID is the run it STARTED, which is
+    -- downward. The graph's own parent row uses the same column for the opposite direction: the run
+    -- that SUBMITTED it. Following that link descends into the run we came from, which re-enters
+    -- this graph, forever — a cycle bounded only by the depth cap, producing a tree a hundred
+    -- levels deep that is the same five nodes repeated.
+    WHERE t.NodeType = 'Task'
       AND t.Depth < {{ maxDepth }}
 )
 SELECT

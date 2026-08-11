@@ -4,7 +4,7 @@ import { MJUserNotificationEntity, MJUserNotificationTypeEntity, MJUserNotificat
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { SendNotificationParams, NotificationResult, DeliveryChannels } from './types';
 
 /*

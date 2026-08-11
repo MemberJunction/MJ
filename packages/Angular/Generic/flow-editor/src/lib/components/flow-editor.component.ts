@@ -56,11 +56,13 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   @Input() GridSize = 20;
   @Input() AutoLayoutDirection: FlowLayoutDirection = 'vertical';
   /** Background color for connection labels */
-  @Input() ConnectionLabelBackground = '#fffef5';
+  // Design tokens, not literals — the canvas renders on both themes, and a near-white pill on a
+  // dark canvas made the least important element the most visually dominant thing on screen.
+  @Input() ConnectionLabelBackground = 'var(--mj-bg-surface)';
   /** Border color for connection labels */
-  @Input() ConnectionLabelBorderColor = '#cbd5e1';
+  @Input() ConnectionLabelBorderColor = 'var(--mj-border-default)';
   /** Text color for connection labels */
-  @Input() ConnectionLabelTextColor = '#334155';
+  @Input() ConnectionLabelTextColor = 'var(--mj-text-secondary)';
 
   /** Title for the canvas empty-state overlay — depends on read-only mode. */
   public get EmptyStateTitle(): string {

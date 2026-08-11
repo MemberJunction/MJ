@@ -282,6 +282,41 @@ export class RunViewParams {
      * Result Type is: 'simple', 'entity_object', or 'count_only' and defaults to 'simple'. If 'entity_object' is specified, the Results[] array will contain
      * BaseEntity-derived objects instead of simple objects. This is useful if you want to work with the data in a more strongly typed manner and/or
      * if you plan to do any update/delete operations on the data after it is returned. The 'count_only' option will return no rows, but the TotalRowCount property of the RunViewResult object will be populated.
+     *
+     * ## What `'simple'` rows actually contain — and what `T` does and does not check
+     *
+     * `'simple'` returns plain row objects, but the pipeline normalizes their VALUES to the shapes
+     * the generated entity types declare, identically on every tier: `Date` columns hold real
+     * `Date`s and numeric columns hold `number`s, whether the call ran server-side against the
+     * database or in a browser over GraphQL, and whether it was a fresh query or a cache hit.
+     * (`NULL` stays `NULL`, an unparseable value is left as-is rather than becoming `Invalid
+     * Date`, and integer strings beyond `Number.MAX_SAFE_INTEGER` stay strings to preserve
+     * BIGINT precision.)
+     *
+     * `RunView<T>` still takes a **caller-supplied** `T` the compiler does not verify, so know
+     * what a plain row can and cannot honor when you pass a generated entity type:
+     *
+     * ```typescript
+     * // Date and numeric fields are truthful on simple rows:
+     * const rows = await rv.RunView<OrderEntity>({ EntityName: 'Orders', ResultType: 'simple' });
+     * rows.Results[0].OrderDate.getFullYear();   // works — a real Date on every tier
+     *
+     * // But a plain row is still not an entity:
+     * rows.Results[0].Save();                    // compiles, crashes — no entity methods
+     * // ...and a closed-union column (e.g. Status) holds whatever string the database held.
+     * ```
+     *
+     * Two caveats worth knowing:
+     * - **`Fields` narrowing**: if you narrowed the query with `Fields`, non-selected properties
+     *   simply don't exist on the rows, whatever `T` claims.
+     * - **View-only runs**: a call that passes only `ViewID`/`ViewName` (no `EntityName` and no
+     *   loaded `ViewEntity`) skips normalization, since the entity is not synchronously
+     *   resolvable that deep in the pipeline. Pass `EntityName` alongside the view identifier to
+     *   get normalized rows.
+     *
+     * Rule of thumb: **want entity behavior — methods, validation, save, related records — ask
+     * for entity objects.** Choose `'simple'` for cheap read-only rows; its dates and numbers
+     * are already the types your entity declares.
      */
     ResultType?: 'simple' | 'entity_object' | 'count_only';
 
