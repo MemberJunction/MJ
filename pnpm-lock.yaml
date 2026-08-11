@@ -209,6 +209,9 @@ importers:
       '@memberjunction/encryption':
         specifier: 6.1.0-edge.1
         version: link:../../Encryption
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../MJGlobal
@@ -300,6 +303,9 @@ importers:
       '@memberjunction/core-entities-server':
         specifier: 6.1.0-edge.1
         version: link:../../MJCoreEntitiesServer
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.1
         version: link:../../SQLServerDataProvider
@@ -1138,6 +1144,9 @@ importers:
       '@memberjunction/encryption':
         specifier: 6.1.0-edge.1
         version: link:../../Encryption
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../MJGlobal
@@ -9405,6 +9414,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.1
         version: link:../../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../MJGlobal
@@ -12410,6 +12422,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.1
         version: link:../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../MJGlobal
@@ -12790,6 +12805,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.1
         version: link:../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../MJGlobal
@@ -13017,6 +13035,9 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
     devDependencies:
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.1
         version: link:../../SQLServerDataProvider
@@ -14216,6 +14237,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.1
         version: link:../../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../MJGlobal
@@ -14423,6 +14447,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.1
         version: link:../../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../MJGlobal
@@ -14499,6 +14526,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.1
         version: link:../../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../MJGlobal
