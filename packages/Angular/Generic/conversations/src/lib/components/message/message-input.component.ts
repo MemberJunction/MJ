@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit, TemplateRef } from '@angular/core';
 import { ConnectedPosition } from '@angular/cdk/overlay';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, Metadata } from '@memberjunction/core';
@@ -61,6 +61,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Input() enableEntityMentions: boolean = true;
   @Input() enableSkillCommands: boolean = true;
   @Input() enablePlanMode: boolean = true; // Whether the composer shows the Plan Mode toggle. Hosts that don't expose plan-mode workflows set false.
+  /**
+   * Host-supplied controls for the composer's action strip, proxied through to `mj-ai-composer`
+   * and on to the input box that owns the strip. Sourced from the chat area's `composerActions`
+   * slot; nothing in this component interprets it.
+   */
+  @Input() actionsTemplate: TemplateRef<unknown> | null = null;
   @Input() enableRealtime: boolean = true; // Whether the composer shows the realtime voice-call launcher/options. Hosts without a voice experience set false.
   @Input() maxAttachments: number = 10; // Maximum number of attachments per message
   @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // Maximum size per attachment (20MB default)

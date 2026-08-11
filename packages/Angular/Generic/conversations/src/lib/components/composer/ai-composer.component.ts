@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ViewChild, TemplateRef } from '@angular/core';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MentionSuggestion,
   ComposerTriggerProvider,
@@ -51,6 +51,7 @@ import { SkillCommandProvider } from '../../composer-plugins/skill-command.provi
       [canStartRealtime]="canStartRealtime"
       [enablePlanMode]="enablePlanMode"
       [planModeActive]="planModeActive"
+      [actionsTemplate]="actionsTemplate"
       (textSubmitted)="textSubmitted.emit($event)"
       (blurred)="blurred.emit()"
       (valueChange)="onInnerValueChange($event)"
@@ -151,6 +152,12 @@ export class AiComposerComponent {
   @Input() canStartRealtime: boolean = true;
   @Input() enablePlanMode: boolean = false;
   @Input() planModeActive: boolean = false;
+  /**
+   * Host-supplied controls for the composer's action strip, proxied straight through to
+   * `mj-message-input-box`. Carried here only because this component wraps the input box and
+   * proxies its whole surface — it adds no AI meaning of its own.
+   */
+  @Input() actionsTemplate: TemplateRef<unknown> | null = null;
 
   // ── Proxied outputs ───────────────────────────────────────────────────────────────
   @Output() textSubmitted = new EventEmitter<string>();

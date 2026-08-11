@@ -24,7 +24,10 @@
     </mj-mention-editor>
 
     <!-- Attach + voice + plan-mode buttons - Positioned over editor -->
-    @if (enableAttachments || enableRealtime || enablePlanMode) {
+    <!-- `actionsTemplate` joins the gate on purpose: a host may project a control here with every
+         stock control switched off, and without it the whole strip (and therefore the projected
+         button) would silently not render. -->
+    @if (enableAttachments || enableRealtime || enablePlanMode || actionsTemplate) {
       <div class="attach-buttons">
         @if (enablePlanMode) {
         <button
@@ -71,6 +74,13 @@
           >
           <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
         </button>
+        }
+        <!-- Host-projected actions, ADDITIVE and last — the same ordering contract as the
+             chat header's `headerActions`, so the stock controls keep fixed positions and a
+             host button cannot displace Plan Mode as the composer gains controls. For visual
+             parity a projected button should carry class="attach-button-icon". -->
+        @if (actionsTemplate) {
+          <ng-container *ngTemplateOutlet="actionsTemplate; context: { $implicit: disabled, disabled: disabled }"></ng-container>
         }
       </div>
     }

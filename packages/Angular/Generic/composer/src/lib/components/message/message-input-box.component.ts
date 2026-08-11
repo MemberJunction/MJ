@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
+import { Component, Input, Output, EventEmitter, TemplateRef, ViewChild } from '@angular/core';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ComposerTriggerProvider, MentionSuggestion } from '../../composer-trigger-provider';
 import { MentionEditorComponent, PendingAttachment } from '../mention/mention-editor.component';
@@ -58,6 +58,20 @@ export class MessageInputBoxComponent {
   @Input() enablePlanMode: boolean = false;
   /** Current Plan Mode toggle state (renders the button in its active state). */
   @Input() planModeActive: boolean = false;
+  /**
+   * Host-supplied controls appended to the composer's action strip, after the stock Plan Mode /
+   * attach / voice buttons.
+   *
+   * This component ships no `ng-content`, so before this input a host had no way to place a
+   * control beside Plan Mode — the only routes were to park it elsewhere in the page or to
+   * style-pierce into these internals, which breaks on the next release. Rendering it here keeps
+   * the host's button inside the strip that owns the layout.
+   *
+   * The strip renders whenever this is set, even with every stock control disabled. Template
+   * context: `$implicit` and `disabled` both carry the composer's disabled state, so a projected
+   * button can follow it without the host tracking composer state itself.
+   */
+  @Input() actionsTemplate: TemplateRef<unknown> | null = null;
 
   /** Composer lost focus — hosts persist drafts on this. */
   @Output() blurred = new EventEmitter<void>();

@@ -179,6 +179,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * experience set false to remove the buttons entirely.
    */
   @Input() allowRealtime = true;
+  /**
+   * Host-level cap for consumer-projected `composerActions`. Defaults true, matching every other
+   * `allow*` cap here — the slot is already opt-in (nothing renders unless a template is
+   * projected), so this exists for the case the others exist for: an embedded or read-only
+   * surface switching a capability off centrally, without unwinding the template that projects it.
+   */
+  @Input() allowComposerActions = true;
 
   /**
    * Whether the message list renders its built-in "No messages yet" filler

@@ -34,12 +34,23 @@ import { Directive, Input, TemplateRef } from '@angular/core';
  * ADDITIVE — it renders the projected template inside the DEFAULT header's
  * action strip, after the stock buttons. Projecting `header` suppresses
  * `headerActions` (the replacement owns the whole header, actions included).
+ *
+ * `composerActions` is the composer's equivalent of `headerActions`: ADDITIVE
+ * buttons in the composer's own action strip, rendered after the stock Plan
+ * Mode / attach / voice controls. It exists because that strip was previously
+ * closed — the composer takes booleans (`enablePlanMode`, `enableAttachments`,
+ * …) and emits events, with no `ng-content` anywhere in the chain — so a host
+ * wanting one more control beside Plan Mode had nowhere to put it and had to
+ * either park the control elsewhere in the page or reach into MJ's internals
+ * with CSS. The strip renders whenever this slot is filled, even with every
+ * stock control disabled.
  */
 export type MJChatSlotName =
     | 'emptyState'
     | 'agentPresence'
     | 'header'
     | 'headerActions'
+    | 'composerActions'
     | 'messageExtra'
     | 'demonstrationSurface'
     | 'messageRenderer';

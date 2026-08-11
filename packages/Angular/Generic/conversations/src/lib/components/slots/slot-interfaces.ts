@@ -81,6 +81,31 @@ export interface IMJChatHeaderActionsContext {
 }
 
 /**
+ * Template CONTEXT for the `composerActions` slot — extra host controls rendered
+ * INSIDE the composer's action strip, as the last children after the stock
+ * controls (Plan Mode / attach / voice).
+ *
+ * Like {@link IMJChatHeaderActionsContext} this is a template-context shape, not a
+ * component contract: the slot is purely additive chrome, so consumers project an
+ * ad-hoc `<ng-template mjChatSlot="composerActions" let-disabled>`. For visual
+ * parity, projected buttons should carry `class="attach-button-icon"` so they match
+ * the stock 36x36 icon controls beside them.
+ *
+ * The strip renders whenever this slot is filled, even with every stock control
+ * disabled — otherwise a host projecting into an otherwise-empty strip would get
+ * nothing. Suppressed by `allowComposerActions = false` on the chat area.
+ */
+export interface IMJChatComposerActionsContext {
+    /**
+     * The composer's disabled state — true while a turn is in flight. Exposed so a
+     * projected control can follow it without the host tracking composer state itself.
+     */
+    $implicit: boolean;
+    /** Same value as `$implicit`, named for templates that prefer `let-disabled="disabled"`. */
+    disabled: boolean;
+}
+
+/**
  * Contract for the `messageExtra` slot — per-message inline decoration rendered
  * within the message bubble, after the content.
  */

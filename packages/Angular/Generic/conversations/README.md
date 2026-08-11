@@ -10,7 +10,7 @@ The widget exposes three layers of extension:
 
 | Surface | What it lets you do |
 |---|---|
-| **7 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates — or ADD to the default header with `headerActions` (renders inside the default header's action strip, after the stock buttons; suppressed when a full `header` replacement is projected). Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
+| **8 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates — or ADD to the default chrome with `headerActions` (inside the default header's action strip, after the stock buttons; suppressed when a full `header` replacement is projected) and `composerActions` (inside the composer's action strip, after Plan Mode / attach / voice). Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
 | **Before/After cancelable events** | `(beforeAgentTurn)`, `(beforeToolInvoked)`, `(beforeResponseFormSubmitted)` let you observe AND veto (`event.Cancel = true`) before the action runs. Plus informational `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` for realtime lifecycle. |
 | **`--mj-chat-*` design tokens** | Override bubble colors, composer chrome, character accents, and voice-state hues via standard CSS custom-property overrides. Defaults adapt to dark mode through semantic `--mj-*` tokens. |
 
@@ -190,6 +190,19 @@ Branding applies to **every** export format. HTML gets the full treatment (theme
 Color theming (`brandTokens`) is HTML-only — it has no meaning in the data/plain-text formats, and those formats never serialize the tokens. Without branding the exported file is unchanged from previous releases: the HTML stylesheet reads `var(--mj-…, legacyHex)` so every color resolves to the exact prior value when no `:root` block is emitted, and JSON/markdown/text are byte-identical to before. Programmatic consumers can build export content without a download via `ExportService.BuildExportContent(...)` and snapshot the live theme via `ExportService.SnapshotBrandTokens()`.
 
 Two gating rules are worth knowing:
+
+- The **`composerActions` slot** adds host controls INSIDE the composer's action strip, after the stock Plan Mode / attach / voice buttons — the composer equivalent of `headerActions`. Context carries the composer's `disabled` state so a projected control can follow it. Use `class="attach-button-icon"` for visual parity with the stock 36x36 icon buttons. The strip renders whenever this slot is filled, even with every stock control disabled; set `allowComposerActions="false"` to suppress it centrally:
+
+  ```html
+  <mj-conversation-chat-area [conversationId]="id">
+    <ng-template mjChatSlot="composerActions" let-disabled>
+      <button class="attach-button-icon" [disabled]="disabled" (click)="openSkills()"
+              title="Skills">
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+      </button>
+    </ng-template>
+  </mj-conversation-chat-area>
+  ```
 
 - **`includeCSS` is an HTML-only concern.** In HTML the logo and the trademark footer each need their stylesheet rule, so both are suppressed when `includeCSS` is false — an unstyled full-size logo is worse than none. The `title` override has no stylesheet dependency and always applies. Markdown/text/JSON ignore `includeCSS` entirely.
 - **The theme snapshot captures a CHOSEN mode, not the live one.** `ExportOptions.themeMode` (`'light'` | `'dark'`, default `'light'`; surfaced as a Theme dropdown in the modal) decides which palette is baked in. Without it, exporting from a dark session put dark text on the export's white page. The exported `body` carries `--mj-bg-page` and `--mj-text-primary`, so a dark export is coherent rather than inverted.
