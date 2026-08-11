@@ -2242,8 +2242,9 @@ export class BaseAgent {
             .join('\n\n');
 
         // Model-catalog defaults (the AIModelType < AIModel < AIModelVendor ModelConfiguration
-        // cascade) merge as the BASE layer, then the voice settings — the agnostic
-        // `realtime.voice.default.voice` plus any matching `realtime.voice.providers.<provider>` bag —
+        // cascade) merge as the BASE layer, then the voice settings — the persona's agnostic
+        // wire-level slots (see RealtimeVoicePersona) plus any matching
+        // `realtime.voice.providers.<provider>` bag —
         // AND session-tuning knobs (realtime.session) flow into the driver's open Config bag: the same
         // pact every other config entry rides, mirroring the client-direct builder's cascade exactly.
         // Same unmatched-provider diagnosis too, so this surface cannot drift back into dropping
