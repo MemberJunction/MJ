@@ -323,6 +323,126 @@ describe('HandleMigrations — platform-aware dialect directory', () => {
     });
 });
 
+/**
+ * Rollback of a FAILED install.
+ *
+ * Migrations apply per-migration, so a set that fails partway leaves earlier files
+ * committed — the database will not undo them. The install's all-or-nothing guarantee
+ * therefore has to be a compensating action, and it has to reach everything the install
+ * wrote: the app's own schema AND the rows its migrations seeded into the SHARED core
+ * schema, which dropping the app schema cannot reach.
+ */
+describe('InstallApp — compensation when migrations fail', () => {
+    const withTeardown = JSON.stringify({
+        manifestVersion: 1, name: 'connector-hubspot', displayName: 'HubSpot Connector',
+        description: 'HubSpot connector test app description', version: '1.0.0', publisher: { name: 'Test' },
+        repository: 'https://github.com/MemberJunction/Integrations', mjVersionRange: '>=5.0.0 <6.0.0',
+        schema: { name: 'mj_connector_hubspot', createIfNotExists: true },
+        migrations: { directory: 'migrations', teardownDirectory: 'teardown', engine: 'skyway' },
+        packages: {},
+    });
+    const noTeardown = JSON.stringify({
+        manifestVersion: 1, name: 'connector-hubspot', displayName: 'HubSpot Connector',
+        description: 'HubSpot connector test app description', version: '1.0.0', publisher: { name: 'Test' },
+        repository: 'https://github.com/MemberJunction/Integrations', mjVersionRange: '>=5.0.0 <6.0.0',
+        schema: { name: 'mj_connector_hubspot', createIfNotExists: true },
+        migrations: { directory: 'migrations', engine: 'skyway' },
+        packages: {},
+    });
+    const source = 'https://github.com/MemberJunction/Integrations/CRM/HubSpot';
+    const warnings: string[] = [];
+    const ctx = () => ({
+        ...context,
+        DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver', CanonicalSchemaName: (s: string) => s } },
+        DatabaseConfig: {},
+        Callbacks: { OnWarn: (_phase: string, message: string) => { warnings.push(message); } },
+    } as unknown as OrchestratorContext);
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        warnings.length = 0;
+        vi.mocked(SchemaExists).mockResolvedValue(false);
+        // The schema is created THIS run, which is what licenses tearing it down again.
+        vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true, Created: true });
+        vi.mocked(DropAppSchema).mockResolvedValue({ Success: true });
+        vi.mocked(FindInstalledApp).mockResolvedValue(null);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined as never);
+        // No teardown scripts on disk — enough to prove the teardown path was entered
+        // without needing real files.
+        vi.mocked(DownloadMigrations).mockResolvedValue({ Success: true, LocalPath: '/tmp/m', Files: [] });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: false, ErrorMessage: 'deadlock victim (1205)' });
+    });
+
+    /** The teardown download is the observable signal that step 2 ran. */
+    const teardownAttempted = () =>
+        vi.mocked(DownloadMigrations).mock.calls.some((c) => c[2] === 'teardown');
+
+    it('drops the schema it created when migrations fail', async () => {
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: withTeardown });
+        const r = await InstallApp({ Source: source }, ctx());
+        expect(r.Success).toBe(false);
+        expect(vi.mocked(DropAppSchema)).toHaveBeenCalledWith('mj_connector_hubspot', expect.anything(), expect.anything());
+    });
+
+    it("runs the app's teardown scripts, so rows seeded into the shared core schema do not orphan", async () => {
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: withTeardown });
+        await InstallApp({ Source: source }, ctx());
+        expect(teardownAttempted()).toBe(true);
+    });
+
+    it('still drops the schema even though the teardown step also ran (no step short-circuits another)', async () => {
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: withTeardown });
+        await InstallApp({ Source: source }, ctx());
+        expect(teardownAttempted()).toBe(true);
+        expect(vi.mocked(DropAppSchema)).toHaveBeenCalled();
+    });
+
+    it('warns instead of claiming a clean rollback when the app declares no teardownDirectory', async () => {
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: noTeardown });
+        await InstallApp({ Source: source }, ctx());
+        expect(teardownAttempted()).toBe(false);
+        expect(warnings.some((w) => w.includes('teardownDirectory') && w.includes('WILL remain'))).toBe(true);
+        expect(vi.mocked(DropAppSchema)).toHaveBeenCalled();
+    });
+
+    // The second call site: every migration commits, then recording the installation fails.
+    // Proven end-to-end on a real instance; pinned here so it cannot regress silently.
+    it('compensates when recording the installation fails after migrations succeed', async () => {
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: withTeardown });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true, MigrationsApplied: 7, AppliedFiles: [] });
+        vi.mocked(RecordAppInstallation).mockRejectedValue(new Error('forced record failure'));
+
+        const r = await InstallApp({ Source: source }, ctx());
+
+        expect(r.Success).toBe(false);
+        expect(teardownAttempted()).toBe(true);
+        expect(vi.mocked(DropAppSchema)).toHaveBeenCalledWith('mj_connector_hubspot', expect.anything(), expect.anything());
+    });
+
+    it('warns that a reinstall may fail when an app has migrations but no teardownDirectory', async () => {
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: noTeardown });
+        await InstallApp({ Source: source }, ctx());
+        const warning = warnings.find((w) => w.includes('teardownDirectory'));
+        expect(warning).toBeDefined();
+        expect(warning).toContain('WILL remain');
+        expect(warning).toContain('primary-key violation');
+    });
+
+    it('does NOT tear down a schema it did not create (reused/adopted schema is left alone)', async () => {
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: withTeardown });
+        // An ALREADY-EXISTING schema adopted via createIfNotExists: HandleSchemaCreation returns
+        // Created: false, so this run did not create it and must not tear it down — it may hold
+        // data we did not put there.
+        vi.mocked(SchemaExists).mockResolvedValue(true);
+        const r = await InstallApp({ Source: source }, ctx());
+        expect(r.Success).toBe(false);
+        expect(vi.mocked(CreateAppSchema)).not.toHaveBeenCalled();
+        expect(vi.mocked(DropAppSchema)).not.toHaveBeenCalled();
+        expect(teardownAttempted()).toBe(false);
+    });
+});
+
 /** A connector-profile manifest (no `schema` block — entities come from metadata, not DDL). */
 function manifestJSONNoSchema(name: string): string {
     return JSON.stringify({

@@ -2088,8 +2088,13 @@ export class AIPromptRunner {
       if (configurationId) {
         this.addConfigurationFallbackCandidates(candidates, prompt, configurationId, preferredVendorId, verbose);
       }
+    } else if (this.hasAnyPromptModelBindings(prompt)) {
+      // Bindings exist for this prompt but none are Active/Preview (e.g. deliberately deactivated) —
+      // do NOT silently fall back to the global model pool, which would mask an intentional
+      // "no model available for this prompt" state. Leave candidates empty so the caller surfaces
+      // a "no suitable model found" failure instead of succeeding against an unrelated model.
     } else {
-      // No prompt-specific models, use selection strategy
+      // No prompt-specific bindings were ever configured, use the general selection strategy
       this.addStrategyBasedCandidates(candidates, prompt, preferredVendorName);
     }
 
@@ -2263,6 +2268,15 @@ export class AIPromptRunner {
     }
 
     return candidates;
+  }
+
+  /**
+   * Helper: true if this prompt has any AIPromptModel bindings at all, regardless of Status or
+   * ConfigurationID. Distinguishes "no bindings were ever configured" (general selection strategy
+   * should apply) from "bindings exist but are all Inactive" (no model should be selected).
+   */
+  private hasAnyPromptModelBindings(prompt: MJAIPromptEntityExtended): boolean {
+    return AIEngine.Instance.PromptModels.some(pm => UUIDsEqual(pm.PromptID, prompt.ID));
   }
 
   /**
@@ -2797,6 +2811,12 @@ export class AIPromptRunner {
 
       promptRun.PromptID = prompt.ID;
       promptRun.ModelID = model.ID;
+      // Attribute the run to the agent that caused it, when there is one. PromptID alone cannot do
+      // this: agents share agent-type-level prompts, so a parent and its sub-agent produce runs of
+      // the SAME prompt. See AIPromptParams.agentId for why this was previously always null.
+      if (params.agentId) {
+        promptRun.AgentID = params.agentId;
+      }
 
       // Set ChildPromptID if this is a hierarchical execution with child prompts
       if (params.childPrompts && params.childPrompts.length > 0) {

@@ -362,7 +362,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       if (manifest.migrations && manifest.schema) {
         const migrationResult = await HandleMigrations(manifest, context, subpath);
         if (!migrationResult.Success) {
-          await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks);
+          await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks, subpath);
           return BuildFailureResult('Install', manifest.name, manifest.version, 'Migration', startTime, migrationResult.ErrorMessage ?? 'Migration failed');
         }
       }
@@ -371,7 +371,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       Callbacks?.OnProgress?.('Record', 'Recording app installation...');
       const recordResult = await RecordInstallationAtomically(context.ContextUser, manifest, Callbacks, undefined, subpath);
       if (!recordResult.Success) {
-        await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks);
+        await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks, subpath);
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Record', startTime, recordResult.ErrorMessage ?? 'Failed to record installation');
       }
       createdAppId = recordResult.AppId;
@@ -579,8 +579,30 @@ async function RecordInstallationAtomically(
 }
 
 /**
- * Compensating action: drops the schema if it was newly created during a failed install.
- * Notifies the user via callbacks before and after rollback.
+ * Compensating action for a failed install: undoes everything the install wrote to the
+ * database, in the same order {@link RemoveApp} does it.
+ *
+ * **Why this is a compensation and not a transaction.** Migrations apply per-migration
+ * (see `MigrationRunOptions.TransactionMode`), so a set that fails partway leaves earlier
+ * files committed — the database will not undo them for us, and it cannot: one transaction
+ * spanning a whole app's migrations is not something SQL Server can always host. The
+ * install's all-or-nothing guarantee therefore lives here, at the operation level.
+ *
+ * Three steps, mirroring `RemoveApp`'s database cleanup:
+ *   1. entity metadata + the app's own Application rows in the core schema,
+ *   2. the app's declared teardown scripts — the rows its seed migrations wrote into the
+ *      SHARED core schema, which dropping its own schema cannot reach,
+ *   3. the app's schema, which takes its `flyway_schema_history` with it so a retry starts
+ *      from a clean slate rather than resuming a half-applied set.
+ *
+ * Gated on `schemaWasCreated`: we only tear down a schema this run actually created, never
+ * a reused or adopted one (which may hold data we did not put there). Because we created it,
+ * no other installed app can legitimately share it, so no co-tenant check is needed here —
+ * unlike `RemoveApp`, which can be asked to remove an app from a shared schema.
+ *
+ * Every step is best-effort and reported: one failing step does not skip the others (a
+ * teardown failure must not leave the schema behind), and nothing here converts a failed
+ * install into a successful one — the caller still returns the original failure.
  */
 async function CompensateSchemaOnFailure(
   manifest: MJAppManifest,
@@ -588,17 +610,64 @@ async function CompensateSchemaOnFailure(
   schemaWasCreated: boolean,
   allowDoubleUnderscore: boolean,
   callbacks?: AppInstallCallbacks,
+  subpath?: string,
 ): Promise<void> {
   if (!schemaWasCreated || !manifest.schema) {
     return;
   }
+  const schemaName = manifest.schema.name;
+  callbacks?.OnProgress?.('Rollback', `Rolling back failed install of '${manifest.name}'...`);
+
+  // 1. Entity metadata + Application rows this app's migrations declared, in the core schema.
   try {
-    callbacks?.OnProgress?.('Rollback', `Rolling back: dropping schema '${manifest.schema.name}'...`);
-    await DropAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore });
-    callbacks?.OnProgress?.('Rollback', `Schema '${manifest.schema.name}' dropped successfully`);
+    const declaredApplicationIds = await ExtractDeclaredApplicationIds(manifest, context, subpath).catch(() => []);
+    const metadataResult = await RemoveAppEntityMetadata(schemaName, context.ContextUser, callbacks, context.DatabaseProvider, {
+      DatabaseProvider: context.DatabaseProvider,
+      MJCoreSchema: context.MJCoreSchema,
+      DeclaredApplicationIds: declaredApplicationIds,
+    });
+    if (!metadataResult.Success) {
+      callbacks?.OnError?.('Rollback', `Failed to remove entity metadata for '${schemaName}' during rollback: ${metadataResult.ErrorMessage ?? 'unknown error'}`);
+    }
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    callbacks?.OnError?.('Rollback', `Failed to remove entity metadata for '${schemaName}' during rollback: ${msg}`);
+  }
+
+  // 2. Rows the app's seed migrations wrote into the SHARED core schema. Dropping the app's
+  //    own schema cannot reach these, so without teardown they orphan on a failed install.
+  if (manifest.migrations?.teardownDirectory) {
+    try {
+      const teardownResult = await HandleTeardown(manifest, context, subpath);
+      if (!teardownResult.Success) {
+        callbacks?.OnError?.('Rollback', `Teardown failed during rollback: ${teardownResult.ErrorMessage ?? 'unknown error'}`);
+      }
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      callbacks?.OnError?.('Rollback', `Teardown failed during rollback: ${msg}`);
+    }
+  } else if (manifest.migrations) {
+    // Be explicit rather than silently claiming a clean rollback: an app with migrations but no
+    // teardown directory has no way to retire whatever those migrations seeded into the shared
+    // core schema. State the operational consequence, not just the fact — apps seed those rows
+    // with fixed GUIDs via the generated `spCreate*` procedures, which are unconditional INSERTs
+    // (no existence guard), so re-running the same seed migration against surviving rows raises a
+    // primary-key violation and the reinstall fails there.
+    callbacks?.OnWarn?.(
+      'Rollback',
+      `'${manifest.name}' declares migrations but no teardownDirectory — rows its migrations wrote to the shared core schema WILL remain after this rollback. ` +
+        `If those rows were seeded with fixed IDs, reinstalling this app may fail with a primary-key violation until they are removed manually.`,
+    );
+  }
+
+  // 3. The app's own schema (and with it, its migration history table).
+  try {
+    callbacks?.OnProgress?.('Rollback', `Dropping schema '${schemaName}'...`);
+    await DropAppSchema(schemaName, context.DatabaseProvider, { allowDoubleUnderscore });
+    callbacks?.OnProgress?.('Rollback', `Schema '${schemaName}' dropped successfully`);
   } catch (rollbackError: unknown) {
     const msg = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
-    callbacks?.OnError?.('Rollback', `Failed to drop schema '${manifest.schema.name}' during rollback: ${msg}`);
+    callbacks?.OnError?.('Rollback', `Failed to drop schema '${schemaName}' during rollback: ${msg}`);
   }
 }
 

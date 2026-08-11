@@ -251,4 +251,18 @@ describe('BuildRealtimeConfigOverridesJson', () => {
     expect(json).toBe('{"realtime":{"modelPreference":"model-77"}}');
     expect(JSON.parse(json as string)).toEqual({ realtime: { modelPreference: 'model-77' } });
   });
+
+  it('files a picked voice PROVIDER-AGNOSTICALLY so any vendor can read it (#3530)', () => {
+    // The browser has a model id, never a DriverClass — naming a provider here would be a guess that
+    // silently voided the voice for every non-OpenAI vendor. Must stay in lockstep with the
+    // server-side BuildRealtimeOverridesJson (guarded by realtime-convergence-drift.test.ts).
+    expect(JSON.parse(BuildRealtimeConfigOverridesJson('model-77', 'echo') as string))
+      .toEqual({ realtime: { modelPreference: 'model-77', voice: { default: { voice: 'echo' } } } });
+    expect(JSON.parse(BuildRealtimeConfigOverridesJson(null, '  echo  ') as string))
+      .toEqual({ realtime: { voice: { default: { voice: 'echo' } } } });
+  });
+
+  it('returns null when only blank values are supplied', () => {
+    expect(BuildRealtimeConfigOverridesJson('  ', '  ')).toBeNull();
+  });
 });

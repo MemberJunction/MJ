@@ -280,7 +280,7 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
         await this.loadTaskDependencies(rootId);
 
         // Load agent runs for this hierarchy
-        await this.loadAgentRuns(allHierarchy);
+        this.loadAgentRuns(allHierarchy);
       } else {
         console.error('❌ Failed to load task hierarchy:', hierarchyResult.ErrorMessage);
         this.subTasks = [];
@@ -327,77 +327,20 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
     }
   }
 
-  private async loadAgentRuns(tasks: MJTaskEntity[]): Promise<void> {
-    try {
-      // Clear existing map
-      this.agentRunMap.clear();
-
-      // Get all unique ConversationDetailIDs from tasks (filter out nulls)
-      const conversationDetailIds = tasks
-        .filter(t => t.ConversationDetailID != null)
-        .map(t => t.ConversationDetailID!);
-
-      if (conversationDetailIds.length === 0) {
-        console.log('💡 No tasks with ConversationDetailID');
-        return;
+  /**
+   * Builds the TaskID -> AgentRunID map from each task's own AgentRunID column.
+   *
+   * Previously this joined tasks to runs through the shared ConversationDetailID, which meant
+   * every sibling task in a graph resolved to the SAME agent run — the run link in the Gantt
+   * and detail panel was wrong for all but one task. Each task now records the specific run
+   * that executed it (Task.AgentRunID), so the mapping is direct and needs no query at all.
+   */
+  private loadAgentRuns(tasks: MJTaskEntity[]): void {
+    this.agentRunMap.clear();
+    for (const task of tasks) {
+      if (task.AgentRunID) {
+        this.agentRunMap.set(task.ID, task.AgentRunID);
       }
-
-      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const schema = '__mj';
-
-      // Build filter to find agent runs for these conversation details
-      // Use a subquery to avoid passing large ID lists
-      const taskIds = tasks.map(t => `'${t.ID}'`).join(',');
-
-      const agentRunsResult = await rv.RunView<MJAIAgentRunEntity>(
-        {
-          EntityName: 'MJ: AI Agent Runs',
-          ExtraFilter: `
-            ConversationDetailID IN (
-              SELECT DISTINCT ConversationDetailID
-              FROM [${schema}].[vwTasks]
-              WHERE ID IN (${taskIds})
-              AND ConversationDetailID IS NOT NULL
-            )
-          `,
-          ResultType: 'entity_object'
-        },
-        this.currentUser
-      );
-
-      if (agentRunsResult.Success) {
-        const agentRuns = agentRunsResult.Results || [];
-        console.log(`🤖 Loaded ${agentRuns.length} agent runs`, agentRuns);
-
-        // Build map: ConversationDetailID -> AgentRunID
-        const convoToRunMap = new Map<string, string>();
-        agentRuns.forEach(run => {
-          if (run.ConversationDetailID) {
-            convoToRunMap.set(run.ConversationDetailID, run.ID);
-            console.log(`📝 Mapping ConvoDetailID ${run.ConversationDetailID} -> RunID ${run.ID}`);
-          }
-        });
-
-        // Map TaskID -> AgentRunID using ConversationDetailID as the link
-        tasks.forEach(task => {
-          console.log(`🔍 Task ${task.Name} - ConvoDetailID: ${task.ConversationDetailID}, AgentID: ${task.AgentID}`);
-          if (task.ConversationDetailID) {
-            const agentRunId = convoToRunMap.get(task.ConversationDetailID);
-            if (agentRunId) {
-              this.agentRunMap.set(task.ID, agentRunId);
-              console.log(`✅ Mapped Task ${task.ID} -> AgentRun ${agentRunId}`);
-            } else {
-              console.log(`⚠️ No agent run found for ConvoDetailID ${task.ConversationDetailID}`);
-            }
-          }
-        });
-
-        console.log(`🔗 Mapped ${this.agentRunMap.size} tasks to agent runs`, Array.from(this.agentRunMap.entries()));
-      } else {
-        console.error('❌ Failed to load agent runs:', agentRunsResult.ErrorMessage);
-      }
-    } catch (error) {
-      console.error('Failed to load agent runs:', error);
     }
   }
 

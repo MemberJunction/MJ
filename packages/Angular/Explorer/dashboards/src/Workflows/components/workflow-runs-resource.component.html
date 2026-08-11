@@ -1,0 +1,111 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Runs"
+    Icon="fa-solid fa-timeline"
+    Subtitle="Every workflow that has run — however it was started.">
+
+    <div meta>
+      @if (!IsLoading && Runs.length > 0) {
+        <mj-stat-badge
+          [Count]="VisibleRuns.length"
+          [Total]="Runs.length"
+          Label="runs"></mj-stat-badge>
+      }
+    </div>
+
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="loadData()"></mj-refresh-button>
+    </div>
+
+    <div toolbar>
+      <mj-page-search
+        [Value]="SearchText"
+        Placeholder="Search runs"
+        (ValueChange)="OnSearch($event)"></mj-page-search>
+
+      <div class="wfr-status-filters">
+        @for (status of StatusFilters; track status) {
+          <button
+            type="button"
+            mjButton
+            [variant]="StatusFilter === status ? 'primary' : 'flat'"
+            size="sm"
+            (click)="OnFilterByStatus(status)">
+            {{ status === 'all' ? 'All' : status }}
+          </button>
+        }
+      </div>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    @if (IsLoading) {
+      <mj-loading text="Loading runs..."></mj-loading>
+    } @else if (LoadError) {
+      <mj-alert Variant="error" [Message]="LoadError"></mj-alert>
+    } @else if (Runs.length === 0) {
+      <mj-empty-state
+        Icon="fa-solid fa-timeline"
+        Title="Nothing has run yet"
+        Message="When a workflow runs — started by hand, on a schedule, or by an agent — it will appear here.">
+      </mj-empty-state>
+    } @else if (VisibleRuns.length === 0) {
+      <mj-empty-state
+        Icon="fa-solid fa-filter"
+        Title="No runs match"
+        Message="Nothing matches the current filter. Clear it to see everything that has run.">
+      </mj-empty-state>
+    } @else {
+      <div class="wfr-split" [class.wfr-split-open]="SelectedRun">
+        <div class="wfr-list">
+          @for (run of VisibleRuns; track run.ID) {
+            <button
+              type="button"
+              class="wfr-row"
+              [class.wfr-row-selected]="run.ID === SelectedRunID"
+              (click)="OnSelectRun(run)">
+              <span class="wfr-row-main">
+                <span class="wfr-row-name">{{ run.Name }}</span>
+                <span class="wfr-row-when">{{ run.Duration }}</span>
+              </span>
+              <span class="wfr-row-status" [attr.data-status]="run.Status">{{ run.Status }}</span>
+            </button>
+          }
+        </div>
+
+        @if (SelectedRun; as selected) {
+          <!-- The canvas lives in the RIGHT PANEL on selection, not nested inside the list row.
+               A graph needs room to be read; inlining one per row turns a scannable list into a
+               stack of diagrams. -->
+          <aside class="wfr-detail">
+            <header class="wfr-detail-head">
+              <div class="wfr-detail-title">
+                <span class="wfr-detail-name">{{ selected.Name }}</span>
+                <span class="wfr-row-status" [attr.data-status]="selected.Status">{{ selected.Status }}</span>
+              </div>
+              <div class="wfr-detail-actions">
+                @if (selected.AgentRunID) {
+                  <button mjButton variant="flat" size="sm" (click)="OnOpenAgentRun(selected)">
+                    <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                    Agent run
+                  </button>
+                }
+                <button mjButton variant="flat" size="sm" (click)="OnSelectRun(selected)" aria-label="Close">
+                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+              </div>
+            </header>
+
+            <mj-task-graph-run-view
+              [Provider]="ProviderToUse"
+              [ParentTaskID]="selected.ID"
+              [WorkflowName]="selected.Name"
+              [LiveUpdates]="selected.Status === 'Running'"
+              Height="calc(100% - 3rem)">
+            </mj-task-graph-run-view>
+          </aside>
+        }
+      </div>
+    }
+  </mj-page-body>
+</mj-page-layout>

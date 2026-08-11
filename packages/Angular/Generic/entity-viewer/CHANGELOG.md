@@ -1,5 +1,91 @@
 # @memberjunction/ng-entity-viewer
 
+## 6.1.0-edge.1
+
+### Minor Changes
+
+- 394d276: UI capabilities hoisted from the BizApps accounting app (battle-tested there against live data):
+  - **`mj-left-nav` desktop collapse (opt-in):** `[Collapsible]` + two-way `[(Collapsed)]` + `CollapsedWidth` render a locked-position double-angle toggle chip and an icons-only collapsed strip — labels visually hidden but kept in the a11y tree, section labels folded to divider lines, badges docked on the icon corner, per-item tooltips auto-enabled (`IconOnly` also available standalone for externally-narrowed rails). Consumer owns/persists the state; deliberately no hover-to-peek. Richer rail content is handled rather than assumed away: tree sections fold to their top level while collapsed (with a top-level item standing in as active — `aria-current="true"` — for an active descendant, and `ExpandedIds` untouched so the tree returns intact on expand), icon-less items render a label monogram instead of collapsing to a blank hit-target, and the whole collapsed behavior is viewport-gated to match its ≥701px styling, so a persisted `Collapsed` never follows the user into the ≤700px drawer.
+  - **New `mj-workspace-card` + `mj-workspace-tab-strip` + `MJWorkspaceTabStore`:** the workspace pattern — browser-style draft tabs (open/switch/drag-reorder/close, dirty-dot, rejected/complete states) over a pure, exhaustively unit-tested tab state machine, wrapped in a slotted card frame (identity band, scrolling body, opt-in standardized confirm/draft/discard footer). Plus `mjTip`, a delayed non-interactive truncation tooltip.
+  - **`mj-entity-data-grid`:** new `[FillWidth]` input appends an inert trailing filler column so row banding reaches the container edge without stretching real columns; `width: 'auto'` + `maxWidth` column configs now actually map to AG Grid flex sizing (previously silently ignored) and survive saved-grid-state restores; `computeFieldsList` exported from `record.util` and now takes the host's column list, so a page that declares `[Columns]` gets those fields SELECTed instead of rendering empty cells — including columns declared `visible: false`, which stay in the column model and can be re-shown, and with names resolved to the entity's own casing so a differently-cased column is never requested twice.
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ng-ui-components@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ng-base-types@6.1.0-edge.1
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.1
+  - @memberjunction/ng-export-service@6.1.0-edge.1
+  - @memberjunction/ng-filter-builder@6.1.0-edge.1
+  - @memberjunction/ng-list-management@6.1.0-edge.1
+  - @memberjunction/ng-map-view@6.1.0-edge.1
+  - @memberjunction/ng-notifications@6.1.0-edge.1
+  - @memberjunction/ng-pagination@6.1.0-edge.1
+  - @memberjunction/ng-record-changes@6.1.0-edge.1
+  - @memberjunction/ng-shared-generic@6.1.0-edge.1
+  - @memberjunction/ng-timeline@6.1.0-edge.1
+  - @memberjunction/actions-base@6.1.0-edge.1
+  - @memberjunction/export-engine@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- b895f92: Angular DOM unit-testing — Phase 4 coverage push. Dev-only (test files + test-config/CI-gate scoping); no runtime change.
+
+  Drives the Generic DOM-coverage ratchet (`scripts/dom-test-report.mjs … --max-none`) from **185 → 137** by writing DOM specs, in usage-ranked order, for every Generic Angular component appropriate for a DOM unit test. Highlights:
+  - **Highest-leverage primitives** — `MjFormFieldComponent` (the field renderer behind ~4,000 usages) across its read/edit type matrix; the `ui-components` design system (`MJEmptyStateComponent`, the `mj-page-*` chrome family, `MJDropdown`/`MJCombobox`/`MJFilterPopover` via a new CDK-overlay test helper in `ng-test-utils`, the `mj-dialog` family, tabs, filter panel, left-nav).
+  - **Form host stack** — `MjRecordFormContainer`, `MjFormToolbar`, `MjEntityFormHost`, `MjIsaRelatedPanel`, `FormPanelSlot`, `ExplorerEntityDataGrid`, `InteractiveForm`.
+  - **Viewers, grids & dialogs** — `EntityDataGrid` + `QueryDataGrid` (AG-Grid chrome), `EntityViewer`, `ArtifactViewerPanel`, the ERD component family (`ERDComposite`/`MJEntityERD`/`ERDDiagram`), plus a broad set of panels/editors/dialogs across agents, artifacts, search, composer, list-management, scheduling, record-process-studio, user-routines, entity-action-ux, actions, and testing.
+  - **`Angular/Bootstrap` onboarded** — the last untracked library tree gains a DOM test tier (`MJAuthShell`, `MJBootstrap`) and its own `--max-none=0` CI gate, so every shipped Angular library tree (Explorer, Generic, Bootstrap) is now gated.
+
+  Reusable patterns established for the harder components: drive internal state before the first render (`setup`) rather than mutating post-render (unreliable under zoneless CD); stub the heavy core (AG-Grid, React bridge, SVG layout, plugin viewers) and spy async loaders so specs exercise the component's own chrome/wiring; add each component **and its injected services** to enumerated `tsconfig.spec.json` files (or AOT drops decorator metadata → NG0202).
+
+  Deliberately **not** covered, and left at the 137 floor: five integration/e2e-tier orchestrators (`ConversationChatArea`, `MessageInput`, `RealtimeWhiteboardBoard`, `AITestHarness`, `RealtimeSessionOverlay`) — 1,800–4,600-line components with realtime/WebRTC/canvas cores or 14–30 dependencies, which belong in the browser regression suite rather than DOM units.
+
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+  - @memberjunction/ng-ui-components@6.1.0-edge.0
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.0
+  - @memberjunction/ng-list-management@6.1.0-edge.0
+  - @memberjunction/ng-record-changes@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ng-filter-builder@6.1.0-edge.0
+  - @memberjunction/ng-timeline@6.1.0-edge.0
+  - @memberjunction/ng-base-types@6.1.0-edge.0
+  - @memberjunction/ng-map-view@6.1.0-edge.0
+  - @memberjunction/ng-notifications@6.1.0-edge.0
+  - @memberjunction/ng-shared-generic@6.1.0-edge.0
+  - @memberjunction/ng-export-service@6.1.0-edge.0
+  - @memberjunction/ng-pagination@6.1.0-edge.0
+  - @memberjunction/export-engine@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

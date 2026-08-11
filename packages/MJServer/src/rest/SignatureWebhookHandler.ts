@@ -14,7 +14,7 @@
 import express from 'express';
 import BodyParser from 'body-parser';
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { SignatureEngine } from '@memberjunction/esignature/server';
 
 /**

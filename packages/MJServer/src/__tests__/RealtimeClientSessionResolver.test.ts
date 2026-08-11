@@ -148,7 +148,7 @@ vi.mock('../util.js', () => ({
 // --- Partial mock: control ONLY UserCache.GetSystemUser (the scoped-anonymous elevation seam,
 //     issue #3371); everything else in the data provider stays real ---
 const getSystemUserMock = vi.fn<[], UserInfo | undefined>();
-vi.mock('@memberjunction/sqlserver-dataprovider', async (importOriginal) => {
+vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
     return {
         ...actual,
