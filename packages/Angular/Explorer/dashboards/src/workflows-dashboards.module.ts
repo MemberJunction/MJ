@@ -15,6 +15,7 @@ import {
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { TaskGraphEditorModule } from '@memberjunction/ng-task-graph-editor';
+import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 
 import { WorkflowsDashboardComponent } from './Workflows/workflows-dashboard.component';
 import { CreateWorkflowComponent } from './Workflows/components/create-workflow.component';
@@ -57,6 +58,7 @@ import { WorkflowRunsResourceComponent } from './Workflows/components/workflow-r
         ContainerDirectivesModule,
         SharedGenericModule,
         TaskGraphEditorModule,
+        CodeEditorModule,
     ],
     exports: [
         WorkflowsDashboardComponent,

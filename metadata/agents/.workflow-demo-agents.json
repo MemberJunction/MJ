@@ -155,7 +155,7 @@
     "fields": {
       "Name": "Content Pipeline",
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Demo",
-      "Description": "Researches a topic from two angles, drafts a short piece, and revises it against brand rules until it passes or gives up. A workflow demo of the three graph shapes a linear flow cannot express: an AND-join, a bounded While loop, and an exclusive pair where exactly one branch runs.",
+      "Description": "Researches a topic from two angles, drafts a short piece, and revises it against brand rules until it passes or gives up. A workflow demo of the two graph shapes a linear flow cannot express: a bounded While loop, and an exclusive pair where exactly one branch runs. The two research steps run in SEQUENCE, not in parallel — a Flow agent compiles with sequential traversal, where a step with two outgoing paths becomes an exclusive choice, so a fan-out would have meant 'either' and silently skipped one of them.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
       "Status": "Active",
       "ExecutionOrder": 0,
@@ -169,15 +169,15 @@
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "Research: broad",
-            "Description": "One half of the research join. Runs in parallel with the focused search — they are independent, so making them sequential would double the wait for no reason.",
+            "Description": "The first research angle. Feeds the focused search, which then feeds the draft — a CHAIN, not a parallel pair. A Flow agent compiles with TraversalMode 'sequential' (flow-graph-executor.ts), where any step with two outgoing paths becomes an exclusive choice: exactly one of them runs. So a fan-out from here could not express 'both', it expressed 'either', and the branch that lost was Skipped in silence. The draft still sees both results because each step's output accumulates into the payload.",
             "StartingStep": 1,
             "StepType": "Action",
-            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
             "ActionInputMapping": {
-              "SearchTerms": "what is a directed acyclic graph used for in workflow automation"
+              "Query": "what is a directed acyclic graph used for in workflow automation"
             },
             "ActionOutputMapping": {
-              "SearchResults": "broadResearch"
+              "Items": "broadResearch"
             },
             "Status": "Active",
             "PositionX": 80,
@@ -190,33 +190,17 @@
               {
                 "fields": {
                   "OriginStepID": "@parent:ID",
-                  "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Draft the piece&AgentID=@parent:AgentID",
-                  "Condition": null,
-                  "Priority": 100,
-                  "Description": "Half of the AND-join into the draft step."
-                },
-                "primaryKey": {
-                  "ID": "3A773E7E-7C54-40FA-BF6E-E4509A3E01C5"
-                },
-                "sync": {
-                  "lastModified": "2026-08-10T20:58:57.479Z",
-                  "checksum": "e503d57914a77ff8330f450fc7b35f2059293050f21a22c9b14926d8541552ec"
-                }
-              },
-              {
-                "fields": {
-                  "OriginStepID": "@parent:ID",
                   "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Research: focused&AgentID=@parent:AgentID",
                   "Condition": null,
                   "Priority": 100,
-                  "Description": "Reaches the second research angle. Both still feed the draft, so the join below still waits for BOTH."
+                  "Description": "The ONLY path out of this step, deliberately. A second one would make this a fan-out, which sequential traversal compiles into an exclusive choice — and the loser is Skipped without comment."
                 },
                 "primaryKey": {
                   "ID": "F3F2BAF1-4A77-490D-922D-8E5F4BDEC8D8"
                 },
                 "sync": {
-                  "lastModified": "2026-08-10T20:58:57.495Z",
-                  "checksum": "ca99fd6da072a98fe7d32f51ad5ac84af227961a8d867cf9306ca6194fb6ac08"
+                  "lastModified": "2026-08-10T22:48:26.338Z",
+                  "checksum": "8f73677c4ef75fe2f9ca22f3e62c2e184e2093cdd90340316fcc4175cc334ed3"
                 }
               }
             ]
@@ -225,23 +209,23 @@
             "ID": "1E9F8F35-9523-4739-B01C-2025246703D9"
           },
           "sync": {
-            "lastModified": "2026-08-10T20:58:57.330Z",
-            "checksum": "8b7187e9a7fe89676357bfc523811b60ac3ea0f66846d2ed9408cea66f4757d0"
+            "lastModified": "2026-08-10T23:37:37.702Z",
+            "checksum": "2838739d342d2672824ed77aa4e8e757d54a8321d2f1677a0975f6223c89ac93"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "Research: focused",
-            "Description": "The other half of the research join, reached from the broad search. NOT a second starting step: a workflow has exactly one entry, and a step marked as a second one is pruned as unreachable — which is how this demo spent its early life drafting from half the evidence.",
+            "Description": "The second research angle, reached from the broad search. NOT a second starting step: a workflow has exactly one entry, and a step marked as a second one is pruned as unreachable — which is how this demo spent its early life drafting from half the evidence. Its mapping names Google Custom Search's OWN parameters (Query in, Items out). It previously used Web Search's names (SearchTerms/SearchResults) against this action, so the output mapping matched nothing, the step reported Complete, and its results were discarded silently — a step that ran, cost money, and contributed nothing.",
             "StartingStep": 0,
             "StepType": "Action",
             "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
             "ActionInputMapping": {
-              "SearchTerms": "task graph dispatcher durable execution retry semantics"
+              "Query": "task graph dispatcher durable execution retry semantics"
             },
             "ActionOutputMapping": {
-              "SearchResults": "focusedResearch"
+              "Items": "focusedResearch"
             },
             "Status": "Active",
             "PositionX": 80,
@@ -273,8 +257,8 @@
             "ID": "F98FD583-6CD3-4E41-BF00-C2A097478465"
           },
           "sync": {
-            "lastModified": "2026-08-10T20:58:57.364Z",
-            "checksum": "a948a6503f63bcdde67f1274aeebd5ee7282065be945368171257d236b4e103c"
+            "lastModified": "2026-08-10T23:37:37.729Z",
+            "checksum": "a359e4b5924ae51228b78796da9faf240384a299461b10cf82864405062900aa"
           }
         },
         {
@@ -315,7 +299,7 @@
             "ID": "6D5CCA48-833D-46EF-A30D-4DC821F58CE1"
           },
           "sync": {
-            "lastModified": "2026-08-10T20:58:57.348Z",
+            "lastModified": "2026-08-11T13:29:07.945Z",
             "checksum": "bca39656b4c151c7486a6d5169b27cab3a51c6959d715c6e2a2eb099713f6b07"
           }
         },
@@ -380,7 +364,7 @@
             "ID": "8B9721A0-3184-465B-B50F-2985E66BCF04"
           },
           "sync": {
-            "lastModified": "2026-08-10T20:58:57.381Z",
+            "lastModified": "2026-08-11T13:29:07.961Z",
             "checksum": "c33ab04353e57591814902d6d68d1ffa9609284c58ca20188c2add86bb96ae72"
           }
         },
@@ -444,8 +428,8 @@
       "ID": "C36FA358-CDFD-4443-9CF3-19E194C994EE"
     },
     "sync": {
-      "lastModified": "2026-08-10T20:58:57.226Z",
-      "checksum": "1d1386a97b4ba28c5ab2b17c3a83a320295cf70c29df57d124a02f8946c85338"
+      "lastModified": "2026-08-10T23:37:37.646Z",
+      "checksum": "5a43b146428500ea9528589e341ee821fc337f003b765f9d2d307a92399c8898"
     }
   }
 ]

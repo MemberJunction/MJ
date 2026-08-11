@@ -547,3 +547,9 @@
   flex: 1 1 auto;
   min-height: 0;
 }
+
+/* Explanation for a step that never executed — see StepNotice. Sits above the tabs because it
+   accounts for the emptiness the reader is about to look at. */
+.step-notice {
+  padding: 0 var(--mj-space-3, 12px) var(--mj-space-2, 8px);
+}
