@@ -1,5 +1,48 @@
 # @memberjunction/react-runtime
 
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.1
+  - @memberjunction/interactive-component-types@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Minor Changes
+
+- 5c6e36c: feat(components): theme-aware registry components — viz ramps, spec-level StyleOverrides, hardcoded-color migration.
+
+  `ComponentStyles` gains `sequentialScale`/`divergingScale` visualization ramps (backed by new `--mj-viz-seq-*`/`--mj-viz-div-*` theme tokens with dark-mode re-anchors), plus status text/border and overlay color slots bridged from `--mj-status-*`/`--mj-bg-overlay`, and `secondary`/`secondaryHover` bridged from `--mj-brand-secondary(-hover)`. `ComponentSpec` gains an optional `styleOverrides` field (`chartPalette`, `sequentialScale`, `divergingScale`, `fontScale`, with provenance) so user-requested styling is carried as spec data instead of color literals in generated code; the new `ApplyStyleOverrides` utility in `@memberjunction/react-runtime` layers it above theme-resolved styles. `MJReactComponent` applies overrides over both explicit styles and the bridged live theme (memoized so styles identity stays stable), and restyles in place when a spec change touches only `styleOverrides`. The test harness applies overrides to generation-time screenshots. All 10 generic registry components now read `styles.colors.*`/palette slots with their previous literals kept as no-theme fallbacks.
+
+### Patch Changes
+
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+- Updated dependencies [5c6e36c]
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/interactive-component-types@6.1.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

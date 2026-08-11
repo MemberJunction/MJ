@@ -983,7 +983,13 @@ describe('AutotagBaseEngine', () => {
         if (typeof driverClass === 'string' && driverClass.includes('Embed')) {
           return { EmbedTexts: vi.fn() } as never;
         }
-        return { CreateRecords: mockCreateRecords, DeleteRecords: vi.fn(), BuildProviderDirectives: buildDirectives } as never;
+        return {
+          CreateRecords: mockCreateRecords,
+          DeleteRecords: vi.fn(),
+          BuildProviderDirectives: buildDirectives,
+          // Declares no source-record dependencies — the namespace field lives on the item itself.
+          GetSourceRecordFieldPaths: vi.fn().mockReturnValue([]),
+        } as never;
       });
 
       // Item exposes GetAll() (buildProviderDirectives hands the full field set to the driver) and

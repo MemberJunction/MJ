@@ -194,8 +194,8 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2026-07-22T13:40:35.812Z",
-      "checksum": "45594633d71b1d5b50c871022e803d895a392d8a8f93a9f71a2bbbf43d803efa"
+      "lastModified": "2026-08-10T20:58:53.778Z",
+      "checksum": "0741cdb058f79fefeb3db7dc2d73742385a74c5fa49fbdd7c1dafa24a054d601"
     }
   },
   {
@@ -1493,8 +1493,8 @@
       "ID": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
     },
     "sync": {
-      "lastModified": "2026-05-29T19:49:18.946Z",
-      "checksum": "66de7d9e68815ef4cd617bc560bec197f066b10f7545d877946e0d935d45b0f7"
+      "lastModified": "2026-08-07T23:58:25.751Z",
+      "checksum": "05336250077938bd35a90c40d2c0bdc5fef05ca68d32d370235a25fc447a7cd0"
     }
   },
   {
@@ -1736,6 +1736,67 @@
     "sync": {
       "lastModified": "2026-06-26T21:32:04.364Z",
       "checksum": "b2c8ac82fb635bcd641ce3a7514401c56fe2a1d1c520be06c4fbef24df260b26"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Harness Agent Type: System Prompt",
+      "Description": "Control structure for the Harness Agent Type. Same turn-end JSON contract as the Loop type (a harness turn IS a Loop iteration), plus the sandbox conventions a harness needs: work freely in the workspace, request actions and sub-agents through the turn-end JSON rather than shell commands, and never echo granted credentials.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/harness-agent-type-system-prompt.template.md",
+      "Status": "Active",
+      "ResponseFormat": "Any",
+      "AssistantPrefill": null,
+      "StopSequences": null,
+      "PrefillFallbackMode": "Ignore",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/system/harness-agent-type-system-prompt-output.example.json",
+      "ValidationBehavior": "Warn",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types"
+    },
+    "primaryKey": {
+      "ID": "9721E9AB-5FF4-40C2-A9E9-B28337EDDE09"
+    },
+    "sync": {
+      "lastModified": "2026-08-07T23:58:27.432Z",
+      "checksum": "3d87ed7d685d784f09b179717449e507bb82cbcd87c4e5d24cf8940f495d6fdc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Demo Harness Agent - Main Prompt",
+      "Description": "Agent-specific prompt for the Demo Harness Agent.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/demo-harness/demo-harness-agent.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/demo-harness/demo-harness-agent.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Demo?create&Description=Demo Prompts for Demo Agents"
+    },
+    "primaryKey": {
+      "ID": "F1E4A2C7-9D3B-4A16-8C52-0B7E6D4A9F31"
+    },
+    "sync": {
+      "lastModified": "2026-08-07T23:58:25.816Z",
+      "checksum": "05e7c1f89fec03dbd13514f5e06d769ba71dedaec03bd87869825f4384bfaed6"
     }
   }
 ]

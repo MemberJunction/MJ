@@ -79,10 +79,15 @@
           Filters
         </mj-tab>
         <mj-tab-body>
+          <!-- Explicit Height: the default 'auto' resolves to height:100%, which needs a definite
+               ancestor — the tab body used to hardcode viewport height and provide one, but it now
+               sizes to content (the host owns region sizing), so 100% would resolve to nothing and
+               the grid loses its internal scroll. 600px ≈ the region the old viewport math yielded. -->
           <mj-explorer-entity-data-grid
             [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Action Filters')"
             [NewRecordValues]="NewRecordValues('MJ: Entity Action Filters')"
             [AllowLoad]="IsCurrentTab('MJ: Entity Action Filters')"
+            [Height]="600"
             [ShowToolbar]="false">
           </mj-explorer-entity-data-grid>
         </mj-tab-body>
