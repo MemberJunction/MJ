@@ -23,7 +23,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 isPostgres: false,
             });
             expect(plan).not.toBeNull();
-            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] = ?');
+            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] = ? ORDER BY [__mj_MaterializedRowID]');
             expect(plan!.parameters).toEqual(['Active']);
         });
 
@@ -34,7 +34,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramValues: { status: 'Active' },
                 isPostgres: true,
             });
-            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "Status" = $1');
+            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "Status" = $1 ORDER BY "__mj_MaterializedRowID"');
             expect(plan!.parameters).toEqual(['Active']);
         });
     });
@@ -48,7 +48,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                     paramValues: { c: 42 },
                     isPostgres: false,
                 });
-                expect(plan!.sql).toBe(`SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [ChapterID] ${op} ?`);
+                expect(plan!.sql).toBe(`SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [ChapterID] ${op} ? ORDER BY [__mj_MaterializedRowID]`);
                 expect(plan!.parameters).toEqual([42]);
             });
         }
@@ -62,7 +62,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramValues: { statuses: ['A', 'B', 'C'] },
                 isPostgres: false,
             });
-            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] IN (?, ?, ?)');
+            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] IN (?, ?, ?) ORDER BY [__mj_MaterializedRowID]');
             expect(plan!.parameters).toEqual(['A', 'B', 'C']);
         });
 
@@ -73,7 +73,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramValues: { statuses: ['X', 'Y'] },
                 isPostgres: true,
             });
-            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "Status" NOT IN ($1, $2)');
+            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "Status" NOT IN ($1, $2) ORDER BY "__mj_MaterializedRowID"');
             expect(plan!.parameters).toEqual(['X', 'Y']);
         });
     });
@@ -89,7 +89,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramValues: { minChapter: 10, statuses: ['A', 'B'] },
                 isPostgres: true,
             });
-            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "ChapterID" >= $1 AND "Status" IN ($2, $3)');
+            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "ChapterID" >= $1 AND "Status" IN ($2, $3) ORDER BY "__mj_MaterializedRowID"');
             expect(plan!.parameters).toEqual([10, 'A', 'B']);
         });
 
@@ -129,7 +129,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramValues: { statuses: ["a", "b') OR 1=1 --"] },
                 isPostgres: false,
             });
-            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] IN (?, ?)');
+            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] IN (?, ?) ORDER BY [__mj_MaterializedRowID]');
             expect(plan!.parameters).toEqual(['a', "b') OR 1=1 --"]);
         });
     });
@@ -144,7 +144,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramValues: { p: 1 },
                 isPostgres: false,
             });
-            expect(plan!.sql).toBe('SELECT [Wei]]rd] FROM [__mj].[v] WHERE [Wei]]rd] = ?');
+            expect(plan!.sql).toBe('SELECT [Wei]]rd] FROM [__mj].[v] WHERE [Wei]]rd] = ? ORDER BY [__mj_MaterializedRowID]');
         });
 
         it('PostgreSQL escapes `"` in a column name', () => {
@@ -156,7 +156,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramValues: { p: 1 },
                 isPostgres: true,
             });
-            expect(plan!.sql).toBe('SELECT "Wei""rd" FROM "__mj"."v" WHERE "Wei""rd" = $1');
+            expect(plan!.sql).toBe('SELECT "Wei""rd" FROM "__mj"."v" WHERE "Wei""rd" = $1 ORDER BY "__mj_MaterializedRowID"');
         });
     });
 

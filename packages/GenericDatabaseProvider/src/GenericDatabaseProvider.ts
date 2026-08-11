@@ -3296,6 +3296,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         '=', '!=', '<>', '<', '>', '<=', '>=', 'IN', 'NOT IN',
     ]);
 
+    /**
+     * The stable surrogate row-id column every materialized snapshot table carries (CodeGenLib's
+     * `MATERIALIZATION_SURROGATE_COLUMN`). Duplicated here (not imported) for the same reason as the operator
+     * set above — the provider must not depend on dev-time CodeGenLib. The wrapper view exposes it (`SELECT *`),
+     * so ordering by it gives paged materialized reads a deterministic, refresh-stable order (see
+     * {@link buildMaterializedReadQuery}).
+     */
+    private static readonly MATERIALIZED_SURROGATE_ORDER_COLUMN = '__mj_MaterializedRowID';
+
     /** Quotes a SQL identifier for the target engine (SQL Server `[x]`, PostgreSQL `"x"`), escaping the closer. */
     private static quoteMaterializedIdentifier(name: string, isPostgres: boolean): string {
         return isPostgres ? `"${name.replace(/"/g, '""')}"` : `[${name.replace(/]/g, ']]')}]`;
@@ -3391,7 +3400,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
 
         const cols = outputColumns.map((c) => q(c)).join(', ');
-        const sql = `SELECT ${cols} FROM ${q(schemaName)}.${q(viewName)} WHERE ${predicates.join(' AND ')}`;
+        // Deterministic page order. A materialized read carries no user ORDER BY (an ordered source query falls
+        // back to live), so without an explicit order the paging engine would append `ORDER BY (SELECT NULL)` and
+        // successive pages could skip or duplicate rows whenever the execution plan differs between calls. The
+        // snapshot's stable surrogate row-id — exposed by the wrapper view and unchanged between refreshes — gives
+        // a total, refresh-stable order; it need not appear in the SELECT list to be an ORDER BY target, and
+        // buildDataSQL detects this ORDER BY and pages against it instead of the dialect default.
+        const orderBy = q(GenericDatabaseProvider.MATERIALIZED_SURROGATE_ORDER_COLUMN);
+        const sql = `SELECT ${cols} FROM ${q(schemaName)}.${q(viewName)} WHERE ${predicates.join(' AND ')} ORDER BY ${orderBy}`;
         return { sql, parameters };
     }
 
@@ -3580,10 +3596,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     // pulled from the snapshot. Without this the whole (potentially multi-million-row) filtered
                     // snapshot was loaded into Node and sliced in memory, defeating the large-dataset case
                     // materialization targets. The bound row-filter parameters (matPlan.parameters) are preserved
-                    // in both the data and count SQL; StartRow/MaxRows are inlined by WrapWithPaging; and since the
-                    // materialized read carries no ORDER BY, buildDataSQL supplies the dialect default paging order
-                    // (the live path does the same for unordered queries). No cache layer — materialized reads
-                    // bypass the query cache by design. When no page is requested, keep the full-load path.
+                    // in both the data and count SQL; StartRow/MaxRows are inlined by WrapWithPaging. The materialized
+                    // read carries an explicit `ORDER BY <surrogate row-id>` (buildMaterializedReadQuery), so paging
+                    // is deterministic and refresh-stable across pages rather than relying on the dialect default
+                    // order. No cache layer — materialized reads bypass the query cache by design. When no page is
+                    // requested, keep the full-load path.
                     const matUseSQLPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
                     let rows: Record<string, unknown>[];
                     let matTotalRowCount: number;
