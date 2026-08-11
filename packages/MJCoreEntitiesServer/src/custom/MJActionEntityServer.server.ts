@@ -288,7 +288,7 @@ export class MJActionEntityServer extends MJActionEntityExtended {
 **Parent Description:** ${parentAction.Description || 'No description provided'}
 
 **Parent Parameters:**
-${JSON.stringify(parentAction.Params.map(p => {
+${JSON.stringify(parentAction.Params.Items.map(p => {
     return {
         Name: p.Name,
         Type: p.Type,
@@ -306,7 +306,7 @@ ${JSON.stringify(parentAction.Params.map(p => {
                     Description: parentAction.Description,
                     Category: parentAction.Category
                 };
-                data.actionParams = parentAction.Params.map(p => {
+                data.actionParams = parentAction.Params.Items.map(p => {
                     return {
                         Name: p.Name,
                         Type: p.Type,

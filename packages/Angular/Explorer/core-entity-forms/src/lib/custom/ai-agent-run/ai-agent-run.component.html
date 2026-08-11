@@ -161,6 +161,7 @@
               <mj-ai-agent-run-timeline
                 [aiAgentRunId]="record.ID"
                 [dataHelper]="dataHelper"
+                [RunTree]="runTree"
                 (itemSelected)="selectTimelineItem($event)"
                 (navigateToEntity)="navigateToEntityRecord($event)">
               </mj-ai-agent-run-timeline>
@@ -190,7 +191,8 @@
               [agentName]="agent?.Name || null"
               [runStatus]="record.Status || ''"
               [agentIconClass]="agent?.IconClass || null"
-              [agentLogoUrl]="agent?.LogoURL || null">
+              [agentLogoUrl]="agent?.LogoURL || null"
+              [RunTree]="runTree">
             </mj-ai-agent-run-flow>
           }
         </div>
@@ -203,6 +205,7 @@
             <mj-ai-agent-run-analytics
               #analyticsComponent
               [agentRunId]="record.ID"
+              [RunTree]="runTree"
               >
             </mj-ai-agent-run-analytics>
           }

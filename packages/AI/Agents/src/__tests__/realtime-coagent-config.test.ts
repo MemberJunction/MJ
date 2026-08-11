@@ -10,6 +10,7 @@ import {
     ParseRealtimeTypeConfiguration,
     ResolveEffectiveRealtimeConfig,
     GetProviderVoiceSettings,
+    MatchProviderVoiceSettings,
     GetSessionTuningSettings,
     BuildVoiceMannerSection,
     GetNarrationPaceMs,
@@ -18,6 +19,7 @@ import {
     RealtimeCoAgentConfig,
     GetEffectiveModeratorConfig,
     GetEffectiveTurnMode,
+    GetModelCatalogSessionSettings,
     REALTIME_MODERATOR_DEFAULTS
 } from '../realtime/realtime-coagent-config';
 
@@ -190,7 +192,7 @@ describe('GetProviderVoiceSettings', () => {
             voice: {
                 providers: {
                     openai: { voice: 'alloy' },
-                    elevenlabs: { voiceId: 'el-1' },
+                    elevenlabs: { voice: 'el-1' },
                     gemini: { voice: 'Puck' },
                     assemblyai: { voice: 'nova' }
                 }
@@ -200,7 +202,7 @@ describe('GetProviderVoiceSettings', () => {
 
     it('matches a DriverClass by normalized prefix for every seeded provider', () => {
         expect(GetProviderVoiceSettings(CONFIG, 'OpenAIRealtime')).toEqual({ voice: 'alloy' });
-        expect(GetProviderVoiceSettings(CONFIG, 'ElevenLabsRealtime')).toEqual({ voiceId: 'el-1' });
+        expect(GetProviderVoiceSettings(CONFIG, 'ElevenLabsRealtime')).toEqual({ voice: 'el-1' });
         expect(GetProviderVoiceSettings(CONFIG, 'GeminiRealtime')).toEqual({ voice: 'Puck' });
         expect(GetProviderVoiceSettings(CONFIG, 'AssemblyAIRealtime')).toEqual({ voice: 'nova' });
     });
@@ -210,7 +212,7 @@ describe('GetProviderVoiceSettings', () => {
     });
 
     it('is case- and punctuation-insensitive', () => {
-        expect(GetProviderVoiceSettings(CONFIG, 'eleven-labs-realtime')).toEqual({ voiceId: 'el-1' });
+        expect(GetProviderVoiceSettings(CONFIG, 'eleven-labs-realtime')).toEqual({ voice: 'el-1' });
         expect(GetProviderVoiceSettings(CONFIG, 'OPENAI_REALTIME')).toEqual({ voice: 'alloy' });
     });
 
@@ -227,6 +229,80 @@ describe('GetProviderVoiceSettings', () => {
         expect(GetProviderVoiceSettings(null, 'OpenAIRealtime')).toBeNull();
         expect(GetProviderVoiceSettings(CONFIG, null)).toBeNull();
         expect(GetProviderVoiceSettings(CONFIG, '')).toBeNull();
+    });
+
+    // ── Provider-AGNOSTIC voice (issue #3530) ────────────────────────────────────────────────────
+    // A host authors `realtime.voice.default.voice` without knowing which vendor will run, and the
+    // framework files it onto whichever driver it resolved. Every realtime driver reads the neutral
+    // `voice` bag key, so one authored value is consumable by all of them.
+    describe('provider-agnostic voice', () => {
+        const AGNOSTIC: RealtimeCoAgentConfig = { realtime: { voice: { default: { voice: 'Rachel' } } } };
+
+        it('reaches a driver that has NO provider entry at all', () => {
+            expect(GetProviderVoiceSettings(AGNOSTIC, 'ElevenLabsRealtime')).toEqual({ voice: 'Rachel' });
+            expect(GetProviderVoiceSettings(AGNOSTIC, 'InworldRealtime')).toEqual({ voice: 'Rachel' });
+            expect(GetProviderVoiceSettings(AGNOSTIC, 'OpenAIRealtime')).toEqual({ voice: 'Rachel' });
+        });
+
+        it('WINS the voice key over a matching provider entry (a runtime pick must beat authored metadata)', () => {
+            // The regression this guards: the picker now emits the agnostic slot, so if a co-agent's
+            // pre-existing providers.openai.voice outranked it, the user's explicit choice would be
+            // silently ignored on the most common path.
+            const both: RealtimeCoAgentConfig = {
+                realtime: { voice: { default: { voice: 'verse' }, providers: { openai: { voice: 'alloy' } } } }
+            };
+            expect(GetProviderVoiceSettings(both, 'OpenAIRealtime')).toEqual({ voice: 'verse' });
+        });
+
+        it('leaves the matched provider bag’s OTHER (opaque) keys intact', () => {
+            const both: RealtimeCoAgentConfig = {
+                realtime: {
+                    voice: {
+                        default: { voice: 'verse' },
+                        providers: { openai: { voice: 'alloy', language: 'en', someOpaqueKnob: 3 } }
+                    }
+                }
+            };
+            expect(GetProviderVoiceSettings(both, 'OpenAIRealtime'))
+                .toEqual({ voice: 'verse', language: 'en', someOpaqueKnob: 3 });
+        });
+
+        it('does NOT mask an unmatched provider bag — the match is separately answerable', () => {
+            // The agnostic voice makes GetProviderVoiceSettings truthy for EVERY driver, so it cannot
+            // answer "did an authored provider key match?". Callers that need that question (the
+            // dropped-settings warning) must ask MatchProviderVoiceSettings, or the warning goes dead
+            // on exactly the path that emits an agnostic voice.
+            const both: RealtimeCoAgentConfig = {
+                realtime: {
+                    voice: { default: { voice: 'verse' }, providers: { openai: { voice: 'alloy', language: 'en' } } }
+                }
+            };
+            expect(MatchProviderVoiceSettings(both, 'ElevenLabsRealtime')).toBeNull();
+            expect(GetProviderVoiceSettings(both, 'ElevenLabsRealtime')).toEqual({ voice: 'verse' });
+            expect(MatchProviderVoiceSettings(both, 'OpenAIRealtime')).toEqual({ voice: 'alloy', language: 'en' });
+        });
+
+        it('changes NOTHING when no agnostic voice is authored (every pre-existing config)', () => {
+            expect(GetProviderVoiceSettings(CONFIG, 'OpenAIRealtime')).toEqual({ voice: 'alloy' });
+            expect(GetProviderVoiceSettings(CONFIG, 'AcmeRealtime')).toBeNull();
+            const personaOnly: RealtimeCoAgentConfig = { realtime: { voice: { default: { tone: 'warm' } } } };
+            expect(GetProviderVoiceSettings(personaOnly, 'OpenAIRealtime')).toBeNull();
+        });
+
+        it('survives normalization (trimmed; blank and non-string dropped)', () => {
+            // Normalization runs in the cascade, not in the raw parse — a key normalizeVoice does not
+            // carry through is silently lost, which is the exact failure mode this issue is about.
+            const normalize = (raw: unknown) => ResolveEffectiveRealtimeConfig(null, JSON.stringify(raw), null);
+
+            const parsed = normalize({ realtime: { voice: { default: { tone: 'warm', voice: '  Rachel  ' } } } });
+            expect(parsed.realtime?.voice?.default?.voice).toBe('Rachel');
+            expect(parsed.realtime?.voice?.default?.tone).toBe('warm');
+
+            expect(normalize({ realtime: { voice: { default: { voice: '   ' } } } })
+                .realtime?.voice?.default?.voice).toBeUndefined();
+            expect(normalize({ realtime: { voice: { default: { voice: 7 } } } })
+                .realtime?.voice?.default?.voice).toBeUndefined();
+        });
     });
 });
 
@@ -461,5 +537,92 @@ describe('C1: GetSessionTuningSettings', () => {
         expect(GetSessionTuningSettings({ realtime: { session: {} } })).toBeNull();
         expect(GetSessionTuningSettings({ realtime: { session: { mcpTools: [] } } })).toBeNull();
         expect(GetSessionTuningSettings({ realtime: { session: { inputTranscriptionModel: '   ' } } })).toBeNull();
+    });
+});
+
+describe('turnDetection — the agent/app tuning layer', () => {
+    it('projects a normalized block onto the driver bag', () => {
+        const bag = GetSessionTuningSettings({
+            realtime: { session: { turnDetection: { Mode: 'semanticVad', Eagerness: 'high' } } },
+        });
+        expect(bag).toEqual({ turnDetection: { Mode: 'semanticVad', Eagerness: 'high' } });
+    });
+
+    it('copies rather than aliases, so the projected bag cannot mutate the effective config', () => {
+        const config: RealtimeCoAgentConfig = {
+            realtime: { session: { turnDetection: { Mode: 'serverVad' } } },
+        };
+        const bag = GetSessionTuningSettings(config);
+        expect(bag?.turnDetection).not.toBe(config.realtime?.session?.turnDetection);
+    });
+
+    it('keeps only recognized, correctly-typed knobs when normalizing a raw config layer', () => {
+        const effective = ResolveEffectiveRealtimeConfig(
+            null,
+            JSON.stringify({
+                realtime: {
+                    session: {
+                        turnDetection: {
+                            Mode: 'semanticVad',
+                            Eagerness: 'sideways',
+                            Threshold: 0.7,
+                            SilenceDurationMs: 'soon',
+                            Extra: 'ignored',
+                        },
+                    },
+                },
+            }),
+            null,
+        );
+        expect(effective.realtime?.session?.turnDetection).toEqual({ Mode: 'semanticVad', Threshold: 0.7 });
+    });
+
+    it('drops the block entirely when nothing valid survives normalization', () => {
+        const effective = ResolveEffectiveRealtimeConfig(
+            null,
+            JSON.stringify({ realtime: { session: { turnDetection: { Mode: 'telepathy', Threshold: 'high' } } } }),
+            null,
+        );
+        expect(effective.realtime?.session?.turnDetection).toBeUndefined();
+    });
+
+    it('ignores a non-object turnDetection', () => {
+        const effective = ResolveEffectiveRealtimeConfig(
+            null,
+            JSON.stringify({ realtime: { session: { turnDetection: 'semanticVad' } } }),
+            null,
+        );
+        expect(effective.realtime?.session?.turnDetection).toBeUndefined();
+    });
+});
+
+describe('GetModelCatalogSessionSettings — the model-catalog BASE layer', () => {
+    it('projects Realtime.TurnDetection onto the flat driver bag key', () => {
+        expect(GetModelCatalogSessionSettings({ Realtime: { TurnDetection: { Mode: 'semanticVad', Eagerness: 'auto' } } })).toEqual({
+            turnDetection: { Mode: 'semanticVad', Eagerness: 'auto' },
+        });
+    });
+
+    it('returns null when the catalog contributes nothing', () => {
+        expect(GetModelCatalogSessionSettings(null)).toBeNull();
+        expect(GetModelCatalogSessionSettings(undefined)).toBeNull();
+        expect(GetModelCatalogSessionSettings({})).toBeNull();
+        expect(GetModelCatalogSessionSettings({ Realtime: {} })).toBeNull();
+        expect(GetModelCatalogSessionSettings({ LLM: { effortLevel: 'high' } })).toBeNull();
+    });
+
+    it('copies rather than aliases the cached catalog entity\'s object', () => {
+        const config = { Realtime: { TurnDetection: { Mode: 'serverVad' as const } } };
+        const bag = GetModelCatalogSessionSettings(config);
+        expect(bag?.turnDetection).not.toBe(config.Realtime.TurnDetection);
+    });
+
+    it('the catalog layer sits UNDER the agent/app tuning layer per key', () => {
+        // This is the precedence the session builders rely on: catalog < realtime.session.
+        const catalog = GetModelCatalogSessionSettings({ Realtime: { TurnDetection: { Mode: 'serverVad', Threshold: 0.4 } } });
+        const tuning = GetSessionTuningSettings({ realtime: { session: { turnDetection: { Mode: 'semanticVad' } } } });
+        expect(DeepMergeConfigs(catalog, tuning)).toEqual({
+            turnDetection: { Mode: 'semanticVad', Threshold: 0.4 },
+        });
     });
 });

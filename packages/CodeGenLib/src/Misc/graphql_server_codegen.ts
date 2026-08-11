@@ -488,7 +488,14 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
       for (let i = 0; i < entity.PrimaryKeys.length; i++) {
         const pk = entity.PrimaryKeys[i];
         graphQLPKEYArgs += graphQLPKEYArgs.length > 0 ? ', ' : '';
-        graphQLPKEYArgs += `@Arg('${pk.CodeName}', () => ${pk.GraphQLType}) `;
+        // GraphQL forbids arg/field names starting with '__' (reserved for introspection). A PK whose DB
+        // column starts with '__mj' — e.g. the materialization surrogate '__mj_MaterializedRowID' (the first
+        // and only '__'-prefixed primary key in the system) — must have its GraphQL ARG name sanitized the
+        // same way field names are (see the '_mj_' + substring(4) rule for field CodeNames above); otherwise
+        // buildSchemaSync throws "Name ... must not begin with __" and the ENTIRE API fails to boot. The TS
+        // parameter name, WHERE clause, bound value, and composite key all keep pk.CodeName (the real column).
+        const pkGraphQLArgName = pk.CodeName.startsWith('__mj') ? '_mj_' + pk.CodeName.substring(4) : pk.CodeName;
+        graphQLPKEYArgs += `@Arg('${pkGraphQLArgName}', () => ${pk.GraphQLType}) `;
         graphQLPKEYArgs += `${pk.CodeName}: ${pk.TSType}`;
 
         whereClause += whereClause.length > 0 ? ' AND ' : '';
@@ -722,7 +729,11 @@ export class ${classPrefix}${typeNameBase}Input {`;
       for (let i = 0; i < entity.PrimaryKeys.length; i++) {
         const pk = entity.PrimaryKeys[i];
         graphQLPKEYArgs += graphQLPKEYArgs.length > 0 ? ', ' : '';
-        graphQLPKEYArgs += `@Arg('${pk.CodeName}', () => ${pk.GraphQLType}) `;
+        // Sanitize a '__mj'-prefixed PK's GraphQL arg name (same rule as the read resolver above). Read-only
+        // virtual entities (the only ones with a '__mj_MaterializedRowID' PK) don't reach this Delete path,
+        // but keep the handling uniform so no '__'-prefixed arg can ever leak into the schema.
+        const pkGraphQLArgName = pk.CodeName.startsWith('__mj') ? '_mj_' + pk.CodeName.substring(4) : pk.CodeName;
+        graphQLPKEYArgs += `@Arg('${pkGraphQLArgName}', () => ${pk.GraphQLType}) `;
         graphQLPKEYArgs += `${pk.CodeName}: ${pk.TSType}`;
 
         compositeKeyString += compositeKeyString.length > 0 ? ', ' : '';

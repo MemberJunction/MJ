@@ -67,7 +67,9 @@ function registerAgentCatalogTool(addTool: AddToolFn, sessionContext: MCPSession
         parameters: z.object({
             pattern: z.string().optional().default('*').describe('Name pattern to match agents (supports wildcards: *, prefix*, *suffix, *contains*)'),
             topLevelOnly: z.boolean().optional().default(false).describe('When true, exclude child sub-agents (agents with a ParentID)'),
-            status: z.enum(['Active', 'Inactive', 'Pending', 'all']).optional().default('Active').describe('Filter by agent status')
+            // 'Disabled', not 'Inactive' — AIAgent.Status has never accepted 'Inactive', so that
+            // filter option could only ever return an empty list.
+            status: z.enum(['Active', 'Disabled', 'Pending', 'all']).optional().default('Active').describe('Filter by agent status')
         }),
         scopeInfo: { scopePath: 'agent:read', resource: '*' },
         async execute(props) {

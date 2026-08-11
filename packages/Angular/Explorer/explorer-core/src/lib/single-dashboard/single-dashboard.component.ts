@@ -345,7 +345,6 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     
     // Map resource types to appropriate FontAwesome icons
     const iconMap: {[key: string]: string} = {
-      'Reports': 'fa-solid fa-chart-line',
       'UserViews': 'fa-solid fa-table',
       'Dashboards': 'fa-solid fa-grip',
       'Lists': 'fa-solid fa-list',

@@ -1,5 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
+import { AIModelConfiguration, ParseModelConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
@@ -82,6 +83,37 @@ const DEFAULT_MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 const DEFAULT_MAX_COUNT_PER_MESSAGE = 10;
 const DEFAULT_MAX_DIMENSION = 4096;
 
+/**
+ * The client+server AI metadata engine — the base of the AI catalog surface (models, model types,
+ * vendors, prompts, agents, modalities) and the home of every metadata-only helper.
+ *
+ * 🚨 **ADDING A PUBLIC MEMBER HERE IS ONLY HALF THE JOB — PROXY IT IN `AIEngine`.**
+ *
+ * `AIEngine` (`@memberjunction/aiengine`, `packages/AI/Engine/src/AIEngine.ts`) is the SERVER-SIDE
+ * engine, and it deliberately **does NOT extend this class**. It is a `BaseSingleton` facade that
+ * holds `AIEngineBase.Instance` as {@link AIEngine.Base} and re-exposes the base surface member by
+ * member. That is intentional: the two engines have different load profiles and dependency graphs
+ * (the server engine pulls in actions/sub-agent domain objects this class must not depend on, so it
+ * stays usable in the browser), and composition keeps the server-only concerns from leaking down.
+ *
+ * The cost of that design is that inheritance does **not** carry new members across. A getter or
+ * method added here is invisible to every caller that reaches the engine as `AIEngine.Instance` —
+ * and most server-side callers do. It fails at COMPILE time, not at runtime
+ * (`Property 'X' does not exist on type 'AIEngine'`), so it is cheap to catch but easy to be
+ * surprised by if you assumed a subclass relationship.
+ *
+ * So when you add a public member to this class, add the one-line delegate alongside the others in
+ * `AIEngine`:
+ *
+ * ```typescript
+ * // in packages/AI/Engine/src/AIEngine.ts
+ * public get MyNewThing(): MyType[] { return this.Base.MyNewThing; }
+ * public MyNewHelper(id: string): MyResult | null { return this.Base.MyNewHelper(id); }
+ * ```
+ *
+ * (Members intended to be reached ONLY through `AIEngineBase.Instance` — e.g. internals another
+ * base-layer package consumes — need no delegate; the rule is about the server-side call path.)
+ */
 @RegisterForStartup()
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _models: MJAIModelEntityExtended[] = [];
@@ -465,14 +497,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             });
         }
 
-        // handle association agent actions, models, and notes with agents
+        // Agent ACTIONS are no longer associated here. `agent.Actions` is a generated
+        // related-record collection declared `Source: 'cache'` / `Load: 'lazy'`, so it filters this
+        // same engine's cached AI Agent Actions by AgentID on first read — generically, and without
+        // this loop having to know the shape. Notes have no collection declared, so they still are.
         for(const agent of this._agents){
-            this._agentActions.filter((action: MJAIAgentActionEntity) => {
-                return UUIDsEqual(action.AgentID, agent.ID);
-            }).forEach((action: MJAIAgentActionEntity) => {
-                agent.Actions.push(action);
-            });
-
             this._agentNotes.filter((note: MJAIAgentNoteEntity) => {
                 return UUIDsEqual(note.AgentID, agent.ID);
             }).forEach((note: MJAIAgentNoteEntity) => {
@@ -1072,6 +1101,39 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get ModelTypes(): MJAIModelTypeEntity[] {
         return this.GetConfigData<MJAIModelTypeEntity>('_modelTypes');
+    }
+
+    /**
+     * Resolves the EFFECTIVE {@link AIModelConfiguration} for a model (optionally scoped to one of
+     * its vendor rows) by walking the catalog cascade base-first:
+     *
+     * `AIModelType.ModelConfiguration` < `AIModel.ModelConfiguration` < `AIModelVendor.ModelConfiguration`
+     *
+     * Each layer's JSON column is parsed TOLERANTLY (a malformed/absent layer contributes nothing)
+     * and the layers deep-merge per key, so a vendor row overriding one knob inherits everything
+     * else from its model and type. This is the ONE canonical read path for model-catalog
+     * configuration — realtime session builders, prompt runners, and any future modality consumer
+     * call this rather than re-implementing the cascade.
+     *
+     * @param modelID The `MJ: AI Models` ID.
+     * @param vendorModelVendorID Optional `MJ: AI Model Vendors` ID (the model-vendor ROW id, not
+     *   the vendor id) — supplies the most-specific layer when the caller has resolved a vendor.
+     * @returns The merged configuration, or `null` when no layer contributes anything.
+     */
+    public GetEffectiveModelConfiguration(modelID: string, vendorModelVendorID?: string): AIModelConfiguration | null {
+        const model = this.ModelsByID.get(NormalizeUUID(modelID));
+        if (!model) {
+            return null;
+        }
+        const modelType = model.AIModelTypeID ? this.ModelTypesByID.get(NormalizeUUID(model.AIModelTypeID)) : undefined;
+        const vendor = vendorModelVendorID
+            ? (this.ModelVendorsByModelID.get(NormalizeUUID(model.ID)) ?? []).find(mv => UUIDsEqual(mv.ID, vendorModelVendorID))
+            : undefined;
+        return ResolveEffectiveModelConfiguration(
+            ParseModelConfiguration(modelType?.ModelConfiguration),
+            ParseModelConfiguration(model.ModelConfiguration),
+            ParseModelConfiguration(vendor?.ModelConfiguration),
+        );
     }
 
     public get Prompts(): MJAIPromptEntityExtended[] {

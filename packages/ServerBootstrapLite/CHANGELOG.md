@@ -1,5 +1,219 @@
 # @memberjunction/server-bootstrap-lite
 
+## 6.1.0-edge.1
+
+### Minor Changes
+
+- 394d276: Phase 0 of the unified workflow DAG engine program (plan: PR #3456) — retires three dead or superseded subsystems so the **Workflow** name is freed for the program's user-facing vocabulary, and so the task-graph engine isn't built alongside a parallel, non-functioning orchestration model.
+
+  **Eleven tables dropped** — the Skip v1-era workflow schema (`Workflow`, `WorkflowRun`, `WorkflowEngine`), the Skip v1-era report artifact (`Report`, `ReportCategory`, `ReportSnapshot`, `ReportUserState`, `ReportVersion`), the legacy `ScheduledAction` / `ScheduledActionParam` pair, and the report-era `OutputTriggerType`. All were verified dead or superseded: nothing outside generated code read the workflow tables, the `Reports` resource type named a `DriverClass` (`ReportResource`) that exists nowhere in the repo, and the legacy scheduled-action cron due-check is mathematically always-false so authored schedules could never fire.
+
+  **Breaking — the report execution surface is gone.** `RunReport` was already marked `@deprecated` ("Reports are no longer supported... Interactive Components and Artifacts are replacements") and read `vwReports`, which this migration drops. Removed: `IRunReportProvider`, the `RunReport` class, `RunReportParams` / `RunReportResult`, `BaseEntity.RunReportProviderToUse`, `BaseAngularComponent.RunReportToUse`, `GraphQLDataProvider.GetReportData`, the `GetReportData` GraphQL query and `CreateReportFromConversationDetailID` mutation, and the `GET /reports/:reportId` REST endpoint. Accepted deliberately in the open v6 breaking-change window. Consumers should use Interactive Components and Artifacts.
+
+  **Scheduled Actions are superseded by Scheduled Jobs, and the UI moved with them.** Contrary to the original plan's read, the entities were live authoring surface: four Knowledge Hub / AI dashboards created and read them. Those surfaces now author a `MJ: Scheduled Jobs` row of type **Action** — the same work, executed by `ActionScheduledJobDriver`, with the action and its parameters carried in the job's `Configuration` JSON rather than in child parameter rows. `ContentSource.ScheduledActionID` becomes `ContentSource.ScheduledJobID`. A shared `action-scheduled-job` helper in `ng-dashboards` owns the mapping so it isn't triplicated across surfaces.
+
+  **Also removed:** the `@memberjunction/scheduled-actions` and `@memberjunction/scheduled-actions-server` packages (nothing depended on either), the `MJScheduledActionEntityExtended` subclass, the "coming soon" Scheduled Actions placeholder dashboard, and the Explorer report wiring (route, `TabService.OpenReport`, `NavigationService.OpenReport`, resource-type map entry, home-pin matcher, and the dashboard add-item Reports branch).
+
+### Patch Changes
+
+- 394d276: Register the external agent harness adapters in the server bootstraps
+
+  Without this, an agent of type `Harness` **silently runs as an ordinary prompt agent** in MJAPI.
+
+  `@memberjunction/ai-agent-harness` was not a dependency of either server bootstrap, so its
+  `@RegisterClass` decorators never executed in the server process. `AgentRunner` resolves the agent
+  type's `DriverClass` against the `BaseAgent` registry and falls back to plain `BaseAgent` when it
+  finds nothing — which does not error. The agent runs, reports success, and has no harness, no
+  sandbox and no credentials.
+
+  Adds the dependency to both bootstraps and regenerates the manifests, so `HarnessAgentType`,
+  `HarnessAgentBase` and all six adapters are registered where the server actually runs.
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/actions@6.1.0-edge.1
+  - @memberjunction/storage@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/ai-agent-harness@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ai-agents@6.1.0-edge.1
+  - @memberjunction/ai-mistral@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/task-graph@6.1.0-edge.1
+  - @memberjunction/scheduling-engine@6.1.0-edge.1
+  - @memberjunction/scheduling-actions@6.1.0-edge.1
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.1
+  - @memberjunction/content-autotagging@6.1.0-edge.1
+  - @memberjunction/ai-agent-manager@6.1.0-edge.1
+  - @memberjunction/ai-form-builder@6.1.0-edge.1
+  - @memberjunction/predictive-studio@6.1.0-edge.1
+  - @memberjunction/actions-apollo@6.1.0-edge.1
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.1
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.1
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.1
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.1
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.1
+  - @memberjunction/core-actions@6.1.0-edge.1
+  - @memberjunction/record-set-processor@6.1.0-edge.1
+  - @memberjunction/search-engine@6.1.0-edge.1
+  - @memberjunction/ai-engine-base@6.1.0-edge.1
+  - @memberjunction/tag-engine-base@6.1.0-edge.1
+  - @memberjunction/ai-prompts@6.1.0-edge.1
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.1
+  - @memberjunction/ai-reranker@6.1.0-edge.1
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.1
+  - @memberjunction/ai-vectors-qdrant@6.1.0-edge.1
+  - @memberjunction/ai-vectors-sqlserver@6.1.0-edge.1
+  - @memberjunction/ai-vectors-pgvector@6.1.0-edge.1
+  - @memberjunction/actions-base@6.1.0-edge.1
+  - @memberjunction/communication-types@6.1.0-edge.1
+  - @memberjunction/doc-utils@6.1.0-edge.1
+  - @memberjunction/encryption@6.1.0-edge.1
+  - @memberjunction/core-entities-server@6.1.0-edge.1
+  - @memberjunction/data-context-server@6.1.0-edge.1
+  - @memberjunction/queue@6.1.0-edge.1
+  - @memberjunction/react-linter@6.1.0-edge.1
+  - @memberjunction/record-comparison@6.1.0-edge.1
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.1
+  - @memberjunction/templates@6.1.0-edge.1
+  - @memberjunction/testing-engine@6.1.0-edge.1
+  - @memberjunction/geo-core@6.1.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.1
+  - @memberjunction/ai-anthropic@6.1.0-edge.1
+  - @memberjunction/ai-assemblyai@6.1.0-edge.1
+  - @memberjunction/ai-azure@6.1.0-edge.1
+  - @memberjunction/ai-bedrock@6.1.0-edge.1
+  - @memberjunction/ai-betty-bot@6.1.0-edge.1
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.1
+  - @memberjunction/ai-cerebras@6.1.0-edge.1
+  - @memberjunction/ai-cohere@6.1.0-edge.1
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.1
+  - @memberjunction/ai-fireworks@6.1.0-edge.1
+  - @memberjunction/ai-gemini@6.1.0-edge.1
+  - @memberjunction/ai-groq@6.1.0-edge.1
+  - @memberjunction/ai-heygen@6.1.0-edge.1
+  - @memberjunction/ai-inception@6.1.0-edge.1
+  - @memberjunction/ai-inworld@6.1.0-edge.1
+  - @memberjunction/ai-lmstudio@6.1.0-edge.1
+  - @memberjunction/ai-llamacpp@6.1.0-edge.1
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.1
+  - @memberjunction/ai-minimax@6.1.0-edge.1
+  - @memberjunction/ai-ollama@6.1.0-edge.1
+  - @memberjunction/ai-openai@6.1.0-edge.1
+  - @memberjunction/ai-openrouter@6.1.0-edge.1
+  - @memberjunction/ai-vertex@6.1.0-edge.1
+  - @memberjunction/ai-zhipu@6.1.0-edge.1
+  - @memberjunction/ai-xai@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [24b22c9]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+- Updated dependencies [0acf96e]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [1100077]
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/search-engine@6.1.0-edge.0
+  - @memberjunction/core-actions@6.1.0-edge.0
+  - @memberjunction/react-linter@6.1.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.0
+  - @memberjunction/ai-agent-manager@6.1.0-edge.0
+  - @memberjunction/ai-agents@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/ai-form-builder@6.1.0-edge.0
+  - @memberjunction/tag-engine-base@6.1.0-edge.0
+  - @memberjunction/predictive-studio@6.1.0-edge.0
+  - @memberjunction/ai-prompts@6.1.0-edge.0
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.0
+  - @memberjunction/ai-reranker@6.1.0-edge.0
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.0
+  - @memberjunction/actions-apollo@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.0
+  - @memberjunction/communication-types@6.1.0-edge.0
+  - @memberjunction/content-autotagging@6.1.0-edge.0
+  - @memberjunction/doc-utils@6.1.0-edge.0
+  - @memberjunction/encryption@6.1.0-edge.0
+  - @memberjunction/core-entities-server@6.1.0-edge.0
+  - @memberjunction/queue@6.1.0-edge.0
+  - @memberjunction/storage@6.1.0-edge.0
+  - @memberjunction/record-comparison@6.1.0-edge.0
+  - @memberjunction/record-set-processor@6.1.0-edge.0
+  - @memberjunction/scheduling-actions@6.1.0-edge.0
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.0
+  - @memberjunction/scheduling-engine@6.1.0-edge.0
+  - @memberjunction/templates@6.1.0-edge.0
+  - @memberjunction/testing-engine@6.1.0-edge.0
+  - @memberjunction/geo-core@6.1.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.0
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.0
+  - @memberjunction/ai-vectors-qdrant@6.1.0-edge.0
+  - @memberjunction/ai-vectors-sqlserver@6.1.0-edge.0
+  - @memberjunction/ai-vectors-pgvector@6.1.0-edge.0
+  - @memberjunction/data-context-server@6.1.0-edge.0
+  - @memberjunction/ai-anthropic@6.1.0-edge.0
+  - @memberjunction/ai-assemblyai@6.1.0-edge.0
+  - @memberjunction/ai-azure@6.1.0-edge.0
+  - @memberjunction/ai-bedrock@6.1.0-edge.0
+  - @memberjunction/ai-betty-bot@6.1.0-edge.0
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.0
+  - @memberjunction/ai-cerebras@6.1.0-edge.0
+  - @memberjunction/ai-cohere@6.1.0-edge.0
+  - @memberjunction/ai-fireworks@6.1.0-edge.0
+  - @memberjunction/ai-gemini@6.1.0-edge.0
+  - @memberjunction/ai-groq@6.1.0-edge.0
+  - @memberjunction/ai-heygen@6.1.0-edge.0
+  - @memberjunction/ai-inception@6.1.0-edge.0
+  - @memberjunction/ai-inworld@6.1.0-edge.0
+  - @memberjunction/ai-lmstudio@6.1.0-edge.0
+  - @memberjunction/ai-llamacpp@6.1.0-edge.0
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.0
+  - @memberjunction/ai-minimax@6.1.0-edge.0
+  - @memberjunction/ai-mistral@6.1.0-edge.0
+  - @memberjunction/ai-ollama@6.1.0-edge.0
+  - @memberjunction/ai-openai@6.1.0-edge.0
+  - @memberjunction/ai-openrouter@6.1.0-edge.0
+  - @memberjunction/ai-vertex@6.1.0-edge.0
+  - @memberjunction/ai-zhipu@6.1.0-edge.0
+  - @memberjunction/ai-xai@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

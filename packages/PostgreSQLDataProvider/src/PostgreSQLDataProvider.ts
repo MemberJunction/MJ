@@ -436,14 +436,30 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         let pushedSavepoint = false;
         let bumpedCounter = false;
         let depthIncreased = false;
+        let acquiredClient = false;
 
         this._transactionDepth++;
         depthIncreased = true;
 
         try {
             if (this._transactionDepth === 1) {
-                this._transaction = await this._connectionManager.AcquireClient();
-                await this._transaction.query('BEGIN');
+                // Acquire and BEGIN on a LOCAL client, publishing to the shared `_transaction`
+                // field only once the transaction is genuinely open. `_transaction` is what every
+                // subsequent query on this provider uses, so a client published before BEGIN
+                // succeeds is a client that silently runs statements OUTSIDE the transaction.
+                // The SQL Server counterpart of this ordering caused a permanently-poisoned
+                // provider during the 6.1 release; see SQLServerDataProvider.BeginTransaction.
+                const client = await this._connectionManager.AcquireClient();
+                try {
+                    await client.query('BEGIN');
+                } catch (e) {
+                    // Release the client we just took — otherwise a failed BEGIN leaks it out of
+                    // the pool for the process's lifetime.
+                    try { client.release(); } catch { /* swallow — surfacing the primary error */ }
+                    throw e;
+                }
+                this._transaction = client;
+                acquiredClient = true;
             } else {
                 if (!this._transaction) {
                     // Defensive: depth got out of sync with client state. Reset and surface.
@@ -465,6 +481,15 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             if (pushedSavepoint) this._savepointStack.pop();
             if (bumpedCounter) this._savepointCounter--;
             if (depthIncreased) this._transactionDepth--;
+            // If we got as far as publishing the client but a later staged step failed, unpublish
+            // and release it: a non-null `_transaction` at depth 0 is a client every later query
+            // would use believing a transaction is open.
+            if (acquiredClient && this._transactionDepth === 0 && this._transaction) {
+                const client = this._transaction;
+                this._transaction = null;
+                try { await client.query('ROLLBACK'); } catch { /* swallow — surfacing primary error */ }
+                try { client.release(); } catch { /* swallow — surfacing primary error */ }
+            }
             throw e;
         }
     }

@@ -13,12 +13,8 @@ import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
 import { configInfo, dbDatabase, mj_core_schema } from '../../../Config/config';
 import { MSSQLConnection, getSqlConfig } from '../../../Config/db-connection';
 import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
-import {
-    SQLServerDataProvider,
-    SQLServerProviderConfigData,
-    UserCache,
-    setupSQLServerClient,
-} from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerCodeGenConnection } from './SQLServerCodeGenConnection';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -79,7 +75,7 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         if (cfg.options?.instanceName) connectionInfo += '\\' + cfg.options.instanceName;
         connectionInfo += '/' + cfg.database;
 
-        await UserCache.Instance.Refresh(pool);
+        await UserCache.Instance.Refresh(provider);
         const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
         const currentUser = userMatch ?? UserCache.Users[0];
 
@@ -1440,6 +1436,12 @@ NumberedRows AS (
    SELECT
       sf.EntityID,
       ISNULL(ms.MaxSequence, 0) + 100000 + sf.Sequence AS Sequence,
+      -- The RAW schema ordinal, carried alongside the temporary Sequence above. The INSERT emitter
+      -- adds it to an apply-time MAX(), so the ordering of newly discovered fields is encoded in the
+      -- emitted VALUE rather than depending on the order the INSERT statements happen to execute.
+      -- (Sequence above stays as-is: it is what this query ORDERs BY, and what the renumber pass
+      -- later overwrites from the schema.)
+      sf.Sequence AS SourceOrdinal,
       sf.FieldName,
       sf.Description,
       sf.Type,

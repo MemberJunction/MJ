@@ -744,8 +744,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       this.navigationService.OpenDashboard(recordId, 'Dashboard');
     } else if (entityName === 'user views') {
       this.navigationService.OpenView(recordId, 'View');
-    } else if (entityName === 'reports') {
-      this.navigationService.OpenReport(recordId, 'Report');
     } else if (entityName?.includes('artifact')) {
       this.navigationService.OpenArtifact(recordId, 'Artifact');
     } else {
@@ -773,9 +771,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         break;
       case 'artifact':
         this.navigationService.OpenArtifact(item.recordId, name || 'Artifact');
-        break;
-      case 'report':
-        this.navigationService.OpenReport(item.recordId, name || 'Report');
         break;
       default: {
         // Regular record

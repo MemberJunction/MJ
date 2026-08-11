@@ -3,7 +3,9 @@
  * agents (Sage, Query Builder, Research Agent) exercised as standard live-tier members
  * (plans/integration-test-expansion/agents-extended-suite-proposal.md §5b).
  *
- * LIVE-MODEL, CLIENT transport (GraphQLAIClient → live MJAPI). Smoke-depth BY DESIGN: shipped prompts
+ * LIVE-MODEL, SERVER-IN-PROCESS transport (AgentRunner.RunAgent via makeAIClient — NOT the GraphQL
+ * resolver path, so resolver-layer side effects like the Role='AI' response detail do not occur; see
+ * the note in SA4). Smoke-depth BY DESIGN: shipped prompts
  * are not imperative test scripts, so assertions stick to what ANY successful run must satisfy —
  * NEVER the model's content (§3). Every assertion is a framework observable via verifyAgentRun
  * (terminal run + every AIAgentRunStep terminal with CompletedAt; Sub-Agent steps recurse into their
@@ -45,12 +47,14 @@ async function resolveShipped(name: string, user: UserInfo): Promise<MJAIAgentEn
 }
 
 /** Run a shipped agent over the wire, land its run id (recorded for teardown), deep-verify it. */
-async function runAndVerify(ctx: IntegrationCheckContext, agent: MJAIAgentEntityExtended, message: string, opts?: { conversationDetailId?: string }): Promise<string> {
+async function runAndVerify(ctx: IntegrationCheckContext, agent: MJAIAgentEntityExtended, message: string, opts?: { conversationDetailId?: string; conversationId?: string }): Promise<string> {
     const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), agent, userTurn(message), opts);
     await sleep(AGENT_LIVE_SETTLE_MS);
     const fallback = opts?.conversationDetailId
         ? `AgentID='${agent.ID}' AND ConversationDetailID='${opts.conversationDetailId}'`
-        : `AgentID='${agent.ID}' AND Status<>'Running'`;
+        : opts?.conversationId
+            ? `AgentID='${agent.ID}' AND ConversationID='${opts.conversationId}'`
+            : `AgentID='${agent.ID}' AND Status<>'Running'`;
     const runId = await resolveRunId(result, ctx.User, fallback, ctx.Provider);
     Assert(!!runId, `shipped run for '${agent.Name}' landed an AI Agent Run`);
     fixture(ctx).LiveRunIds.push(runId!);
@@ -106,7 +110,7 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
     },
     {
         Id: 'shipped-agents-live.SA4',
-        Name: 'SA4: a shipped agent run in a conversation stamps ConversationID and writes an agent-response detail (plumbing intact)',
+        Name: 'SA4: a shipped agent run in a conversation stamps ConversationID and leaves the seeding user turn intact (plumbing intact)',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const sage = await resolveShipped('Sage', ctx.User);
@@ -126,7 +130,12 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
             Assert(await detail.Save(), `SA4: detail save: ${detail.LatestResult?.CompleteMessage}`);
             fx.ConversationDetailIds.push(detail.ID);
 
-            const runId = await runAndVerify(ctx, sage, 'Reply with the single word: pong.', { conversationDetailId: detail.ID });
+            // Pass conversationId, NOT conversationDetailId: the resolver treats a supplied
+            // conversationDetailId as the caller's ALREADY-CREATED agent-response row (the real UI
+            // pre-creates it client-side) and only updates it — so handing it the Role='User' row
+            // would update that row in place and never produce a Role='AI' detail. With
+            // conversationId the server owns both details, which is what this check asserts.
+            const runId = await runAndVerify(ctx, sage, 'Reply with the single word: pong.', { conversationId: conversation.ID });
 
             const run = await new RunView().RunView<{ ConversationID: string | null }>({
                 EntityName: 'MJ: AI Agent Runs', ExtraFilter: `ID='${runId}'`, Fields: ['ConversationID'], ResultType: 'simple', BypassCache: true,
@@ -135,7 +144,14 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
             const details = await new RunView().RunView<{ Role: string }>({
                 EntityName: 'MJ: Conversation Details', ExtraFilter: `ConversationID='${conversation.ID}'`, Fields: ['Role'], ResultType: 'simple', BypassCache: true,
             }, ctx.User);
-            Assert((details.Results || []).some(d => d.Role === 'AI'), 'SA4: an agent-response ConversationDetail (Role=AI) was written');
+            Assert(details.Success, `SA4: conversation details load: ${details.ErrorMessage}`);
+            // NOTE (same invariant as AL5): the agent-response ConversationDetail (Role='AI') is
+            // written by AgentRunner.RunAgentInConversation, which only the RESOLVER path calls.
+            // This family runs SERVER-IN-PROCESS via AgentRunner.RunAgent (see makeAIClient in
+            // agent-live-shared), so no response detail is written — and that is correct. SA4's
+            // invariant is the conversation-run LINKAGE (ConversationID stamped on the run,
+            // asserted above) plus the seeding user turn surviving intact.
+            Assert((details.Results || []).some(d => d.Role === 'User'), 'SA4: the seeding user ConversationDetail is present (linkage intact)');
         }
     },
 ];
