@@ -126,9 +126,24 @@ for (const path of changesets) {
     }
 }
 
+// The MIRROR of the per-entry check above, and the direction that actually costs a release: a DB
+// branch declaring only `patch` ships a schema change under-versioned. It stays invisible whenever
+// some other changeset in the same release happens to carry a `minor`, so it fails rarely and
+// unpredictably rather than immediately. One `minor` anywhere in the branch's changesets is enough
+// — the `fixed` group moves every package to the highest bump regardless.
+if (triggers.length > 0 && violations.length === 0) {
+    const declaresMinor = changesets.some((path) => bumpEntries(path).entries.some((e) => e.level === 'minor'));
+    if (!declaresMinor) {
+        violations.push({
+            path: changesets.join(', '),
+            reason: `this branch changes ${triggers.join(' + ')}, but no entry declares minor`,
+        });
+    }
+}
+
 console.log(
     triggers.length > 0
-        ? `Branch touches ${triggers.join(' + ')} — minor is allowed.`
+        ? `Branch touches ${triggers.join(' + ')} — minor is required.`
         : 'Branch touches no migration and no metadata — every entry must be patch.'
 );
 

@@ -115,6 +115,39 @@ describe('check-changeset-bump', () => {
         expect(output).toContain('@memberjunction/bar');
     });
 
+    /**
+     * The mirror of the first case, and the more damaging direction. Over-bumping costs a version
+     * number; UNDER-bumping ships a real database change below the level the release train expects,
+     * and it only bites when no other changeset in the release happens to be `minor` — so it fails
+     * rarely and unpredictably.
+     */
+    it('rejects an all-patch changeset on a branch that adds a migration', () => {
+        const { code, output } = runOnBranch('migration-patch', () => {
+            write('migrations/v6/V202601011300__v6.1.x__Other.sql', 'GO\n');
+            write('.changeset/i.md', changeset({ '@memberjunction/foo': 'patch' }));
+        });
+        expect(code).toBe(1);
+        expect(output).toContain('migration');
+    });
+
+    it('rejects an all-patch changeset on a branch that changes metadata', () => {
+        const { code } = runOnBranch('metadata-patch', () => {
+            write('metadata/other.json', '{"c":3}');
+            write('.changeset/j.md', changeset({ '@memberjunction/foo': 'patch' }));
+        });
+        expect(code).toBe(1);
+    });
+
+    it('accepts a mixed changeset on a DB branch as long as SOMETHING carries the minor', () => {
+        // The release train only needs the highest bump to be right; every package in a `fixed`
+        // group moves together anyway, so demanding minor on every entry would be noise.
+        const { code } = runOnBranch('metadata-mixed', () => {
+            write('metadata/other.json', '{"d":4}');
+            write('.changeset/k.md', changeset({ '@memberjunction/foo': 'minor', '@memberjunction/bar': 'patch' }));
+        });
+        expect(code).toBe(0);
+    });
+
     it('passes when the branch adds no changeset at all', () => {
         const { code } = runOnBranch('no-changeset', () => {
             write('packages/Foo/g.ts', 'export const g = 1;\n');

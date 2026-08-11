@@ -18,6 +18,11 @@ file is that **you cannot infer it from the neighbouring files**.
 | `patch` | Everything else — TypeScript, tests, docs, guides, CI, refactors |
 | `major` | **Never** without explicit user approval |
 
+It reads as an equivalence and is checked as one, in both directions. A `minor` with no database
+change over-bumps the workspace; a database change with only `patch` entries **under**-bumps it,
+which is worse — a real schema change ships below the level the release train expects, and it only
+misbehaves when no other changeset in that release happens to carry a `minor`.
+
 **Metadata counts as a migration** because it becomes one. A PR contributes declarative JSON only;
 at release the build engineer's `mj sync push` turns every accumulated metadata edit into one
 consolidated metadata-sync migration. The database change is real — it is just deferred. See

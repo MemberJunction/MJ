@@ -350,6 +350,7 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
         mcpTools?: unknown;
         voice?: unknown;
         disableAutoResponse?: unknown;
+        firstMessage?: unknown;
     };
 
     // The provider-native key is an explicit override; the normalized key is the standard channel.
@@ -385,6 +386,13 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
 
     const disableAutoResponse = rest.disableAutoResponse === true;
     delete rest.disableAutoResponse;
+
+    // `firstMessage` is the neutral opening-utterance key (issue #3557). This protocol family has
+    // no equivalent — the agent speaks when prompted — so there is nothing to translate, and the
+    // key is scrubbed rather than forwarded. Unconsumed is NOT the same as harmless: everything
+    // left in `rest` is spread into the session payload on BOTH topologies, and per the protected-
+    // wire-fields note below this endpoint rejects a malformed session object wholesale.
+    delete rest.firstMessage;
 
     // Normalized turn-detection request — validated structurally (only recognized, correctly-typed
     // knobs survive) and ALWAYS scrubbed: the normalized shape is MJ vocabulary, not a wire field.
