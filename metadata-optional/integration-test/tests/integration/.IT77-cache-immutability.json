@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT72 - Cache Immutability (freeze-on-write)",
+    "Name": "IT77 - Cache Immutability (freeze-on-write)",
     "Description": "Runtime half of the LocalCacheManager freeze-on-write contract, against the real stack. F1 proves the freeze is ARMED in this process (storage provider reports SharesReferences) and that a cache MISS freezes the caller's own array \u2014 the half copy-on-read designs never close. F2 proves a HIT hands back frozen rows. F3 replays the shipped P1 (renaming __mj_CreatedAt to the _mj__ transport alias in place) and asserts it is refused AND that the next reader still sees the DB shape. F4 covers array-identity mutation (push/splice/reverse) plus the supported copy-then-sort. F5 covers nested values. F6/F7 prove entity_object results stay MUTABLE so the load-mutate-Save workflow and hydration from frozen cache rows both still work. F8 proves BypassCache results are not frozen. F9 covers the server auto-cache path, F10 the RunQuery cache. F11 proves narrow-Fields requests get fresh per-caller projections, not the shared frozen rows. F12 (mutation tier) proves the second write funnel \u2014 storeCachedResults, used by in-place slot maintenance on save \u2014 freezes the freshly upserted row. F13 proves the write funnels tolerate binary payloads (varbinary rows arrive as Buffers, which Object.freeze cannot handle) without throwing. F14 proves the ProviderInternalScaffolding exemption is scoped to MJ_Metadata: other datasets' cached rows are frozen shared state while metadata scaffolding stays mutable. Server transport; read-only except F12, which self-cleans.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

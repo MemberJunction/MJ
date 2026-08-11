@@ -498,7 +498,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT03 - Client GraphQL Cache Integrity",
-            "Sequence": 36,
+            "Sequence": 34,
             "Status": "Active"
           },
           "primaryKey": {
@@ -513,7 +513,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT15 - Remote Operations Over-The-Wire Progress",
-            "Sequence": 37,
+            "Sequence": 35,
             "Status": "Active"
           },
           "primaryKey": {
@@ -919,8 +919,8 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT72 - Cache Immutability (freeze-on-write)",
-            "Sequence": 35,
+            "TestID": "@lookup:MJ: Tests.Name=IT77 - Cache Immutability (freeze-on-write)",
+            "Sequence": 33,
             "Status": "Active"
           },
           "primaryKey": {

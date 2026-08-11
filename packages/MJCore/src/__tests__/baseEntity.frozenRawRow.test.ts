@@ -10,7 +10,7 @@
  * rtrimmed fixed-width string). On a frozen row that write throws, so merely READING such a
  * field turned into a `TypeError` — which is exactly how `Cannot assign to read only property
  * 'Currency'` broke AI cost calculation (`Currency` is a fixed-width column). Found by the live
- * IT72 integration run, not by any unit test, so it gets one here.
+ * IT77 integration run, not by any unit test, so it gets one here.
  *
  * `Get()` now memoizes into a per-instance side table instead of the row, so the source row is
  * never written to at all — frozen or not. See `baseEntity.rawConversionMemo.test.ts` for why the

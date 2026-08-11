@@ -518,7 +518,7 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
             );
 
             const stamp = Date.now();
-            const fingerprint = `IT72-F13-binary-probe|${stamp}`;
+            const fingerprint = `IT77-F13-binary-probe|${stamp}`;
             const nowIso = new Date().toISOString();
             const rows: Record<string, unknown>[] = [
                 { ID: 'f13-1', Name: 'binary probe', PromptEmbedding: new Uint8Array([1, 2, 3]), __mj_UpdatedAt: nowIso },
@@ -528,7 +528,7 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
             try {
                 await LocalCacheManager.Instance.SetRunViewResult(
                     fingerprint,
-                    { EntityName: 'IT72 F13 Probe Entity' },
+                    { EntityName: 'IT77 F13 Probe Entity' },
                     rows,
                     nowIso,
                     undefined, undefined, undefined,
@@ -549,8 +549,8 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
             let queryThrew: unknown = null;
             try {
                 await LocalCacheManager.Instance.SetRunQueryResult(
-                    `IT72-F13-binary-query|${stamp}`,
-                    'IT72 F13 binary probe query',
+                    `IT77-F13-binary-query|${stamp}`,
+                    'IT77 F13 binary probe query',
                     [{ ID: 'q1', Vector: new Uint8Array([4, 5]) }],
                     nowIso,
                     1, undefined, 60_000
