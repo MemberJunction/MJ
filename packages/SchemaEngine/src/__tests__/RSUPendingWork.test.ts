@@ -14,6 +14,8 @@ import type { RSUPendingWork } from '../RuntimeSchemaManager.js';
 let mockRunViewFn: ReturnType<typeof vi.fn>;
 let mockGetEntityObjectFn: ReturnType<typeof vi.fn>;
 let loggedErrors: string[];
+/** Providers handed to `new RunView(...)`, so we can prove reads go through the caller's provider. */
+let runViewProviders: unknown[];
 
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
@@ -21,6 +23,9 @@ vi.mock('@memberjunction/core', async () => {
         ...actual,
         LogError: (msg: string) => { loggedErrors.push(msg); },
         RunView: class MockRunView {
+            constructor(provider?: unknown) {
+                runViewProviders.push(provider);
+            }
             RunView(...args: unknown[]) {
                 return mockRunViewFn(...args);
             }
@@ -74,6 +79,7 @@ describe('RuntimeSchemaManager durable pending work', () => {
 
     beforeEach(() => {
         loggedErrors = [];
+        runViewProviders = [];
         mockRunViewFn = vi.fn().mockResolvedValue({ Success: true, Results: [] });
         mockGetEntityObjectFn = vi.fn();
         vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -155,6 +161,14 @@ describe('RuntimeSchemaManager durable pending work', () => {
             expect(warning).not.toContain('pw-fresh');
         });
 
+        it('reads through the provider it was given, not the global one', async () => {
+            const provider = { tag: 'caller-provider' } as unknown as Parameters<typeof rsm.ReadPendingWork>[2];
+            await rsm.ReadPendingWork(mockContextUser, undefined, provider);
+            // Reading through the default provider would look in a different connection
+            // than WritePendingWork just wrote to — the rows would simply not be there.
+            expect(runViewProviders).toEqual([provider]);
+        });
+
         it('says nothing about staleness when no threshold is supplied', async () => {
             mockRunViewFn.mockResolvedValue({
                 Success: true,
@@ -196,6 +210,31 @@ describe('RuntimeSchemaManager durable pending work', () => {
             mockGetEntityObjectFn.mockResolvedValue(createMockRow({ Save: vi.fn().mockResolvedValue(false) }));
             await expect(rsm.CompletePendingWork('pw-1', mockContextUser)).resolves.toBe(false);
             expect(loggedErrors.join('\n')).toContain('save blew up');
+        });
+    });
+
+    /**
+     * `RuntimeSchemaManager` is exported from this package's public index and
+     * `@memberjunction/schema-engine` is published (5.44 → 6.1.0-edge.1), so the
+     * pending-work move from `.rsu_pending` files to a table must not break a consumer
+     * taking a MINOR upgrade. The old entry points keep their exact original signatures.
+     */
+    describe('published API compatibility', () => {
+        // One test, not two: the manager is a singleton and the warn-once dedupe lives on it,
+        // so the first caller anywhere in the file is the only one that ever sees the warning.
+        it('still exposes ReadAndClearPendingWork() unchanged, returning empty and warning exactly once that it is inert', async () => {
+            await expect(rsm.ReadAndClearPendingWork()).resolves.toEqual([]);
+            await expect(rsm.ReadAndClearPendingWork()).resolves.toEqual([]);
+
+            const deprecationWarnings = loggedErrors.filter(e => e.includes('ReadAndClearPendingWork'));
+            expect(deprecationWarnings).toHaveLength(1);
+            expect(deprecationWarnings[0]).toContain('ReadPendingWork');
+        });
+
+        it('rejects the old 1-argument WritePendingWork rather than silently dropping the work', async () => {
+            // Compiles (contextUser is optional purely for signature compatibility) but must
+            // never look like it persisted anything — this queue exists for durability.
+            await expect(rsm.WritePendingWork(samplePayload())).rejects.toThrow(/requires a contextUser/);
         });
     });
 });

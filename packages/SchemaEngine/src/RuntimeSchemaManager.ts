@@ -238,6 +238,12 @@ interface PostMigrationResult {
   CodeGenSucceeded?: boolean;
   /** Durable `MJ: RSU Pending Works` row IDs registered per input (successful migrations only). */
   PendingWorkIDs?: Map<RSUPipelineInput, string[]>;
+  /**
+   * Pending-work rows that could NOT be registered, per input. Non-empty means the
+   * migration applied but its post-restart work was never persisted, so the restart
+   * discards it — the caller's result is failed rather than silently successful.
+   */
+  PendingWorkErrors?: Map<RSUPipelineInput, string[]>;
   /** The RunCodeGen failure message, surfaced when CodeGenSucceeded is false. */
   CodeGenError?: string;
 }
@@ -459,9 +465,19 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    */
   public async WritePendingWork(
     data: RSUPendingWork,
-    contextUser: UserInfo,
+    contextUser?: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<string> {
+    // `contextUser` is optional only to keep the published 1-arg signature compiling
+    // (see the deprecation note above the class). A durable row cannot be written
+    // without a user, and silently pretending to have persisted the work would defeat
+    // the entire point of this queue — so the 1-arg form fails loudly instead.
+    if (!contextUser) {
+      throw new Error(
+        'RuntimeSchemaManager.WritePendingWork now persists to `MJ: RSU Pending Works` and requires a contextUser. ' +
+          'Call WritePendingWork(data, contextUser) — the previous 1-argument form wrote a .rsu_pending file and no longer exists.',
+      );
+    }
     const md = provider ?? new Metadata();
     const row = await md.GetEntityObject<MJRSUPendingWorkEntity>('MJ: RSU Pending Works', contextUser);
     row.NewRecord();
@@ -488,7 +504,10 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     staleAfterMinutes?: number,
     provider?: IMetadataProvider,
   ): Promise<Array<{ ID: string; Work: RSUPendingWork; CreatedAt: Date }>> {
-    const rv = new RunView();
+    // Read through the SAME provider the caller writes through. Defaulting to the global
+    // provider here would read a different connection's rows than WritePendingWork just
+    // wrote, which is the whole reason the provider is threaded through these methods.
+    const rv = new RunView(provider as DatabaseProviderBase | undefined);
     const result = await rv.RunView<MJRSUPendingWorkEntity>(
       {
         EntityName: 'MJ: RSU Pending Works',
@@ -531,6 +550,35 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     if (items.length > 0) this.rsuLog(`Found ${items.length} pending work item(s)`);
     return items;
+  }
+
+  /**
+   * @deprecated Use {@link ReadPendingWork} instead, and mark each item terminal with
+   * {@link CompletePendingWork} / {@link FailPendingWork} once you have processed it.
+   *
+   * Retained with its original signature so consumers taking this minor upgrade still
+   * compile. It is NO LONGER FUNCTIONAL: pending work lives in `MJ: RSU Pending Works`
+   * rather than in `.rsu_pending` files, and reading it requires a context user this
+   * signature has no way to supply. Returns an empty array — the value that previously
+   * meant "no pending work" — rather than pretending to have drained a queue.
+   */
+  public async ReadAndClearPendingWork(): Promise<RSUPendingWork[]> {
+    this.warnDeprecatedOnce(
+      'ReadAndClearPendingWork',
+      'RuntimeSchemaManager.ReadAndClearPendingWork() is deprecated and no longer functional. ' +
+        'Pending work is now durable in `MJ: RSU Pending Works`; call ReadPendingWork(contextUser) and then ' +
+        'CompletePendingWork/FailPendingWork per item. Returning an empty array.',
+    );
+    return [];
+  }
+
+  /** Names of deprecated members already warned about, so a hot path logs once, not per call. */
+  private readonly warnedDeprecations = new Set<string>();
+
+  private warnDeprecatedOnce(member: string, message: string): void {
+    if (this.warnedDeprecations.has(member)) return;
+    this.warnedDeprecations.add(member);
+    LogError(`[RSU] ${message}`);
   }
 
   /** Mark a pending work row Completed. Call ONLY after the work actually succeeded. */
@@ -578,13 +626,27 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   /**
    * Register every input's PendingWork rows. Called for successful migrations only,
    * before the restart. Returns row IDs keyed by the input's index within `inputs`.
+   *
+   * Registration failures are collected, NOT swallowed. This step is the durability
+   * boundary: once the restart fires, work that never became a row is gone, and the
+   * post-restart consumer has nothing to find. A run whose rows failed to register
+   * therefore reports the failure on its result instead of appearing to have succeeded.
    */
-  private async registerPendingWork(inputs: RSUPipelineInput[]): Promise<Map<RSUPipelineInput, string[]>> {
+  private async registerPendingWork(
+    inputs: RSUPipelineInput[],
+  ): Promise<{ IDs: Map<RSUPipelineInput, string[]>; Errors: Map<RSUPipelineInput, string[]> }> {
     const registered = new Map<RSUPipelineInput, string[]>();
+    const errors = new Map<RSUPipelineInput, string[]>();
+    const addError = (input: RSUPipelineInput, message: string) => {
+      LogError(`[RSU] ${message}`);
+      const list = errors.get(input) ?? [];
+      list.push(message);
+      errors.set(input, list);
+    };
     for (const input of inputs) {
       if (!input.PendingWork?.length) continue;
       if (!input.ContextUser) {
-        LogError(`[RSU] PendingWork supplied without ContextUser for "${input.Description}" — skipping registration`);
+        addError(input, `PendingWork supplied without ContextUser for "${input.Description}" — nothing was registered, so this work will NOT run after the restart`);
         continue;
       }
       const ids: string[] = [];
@@ -592,12 +654,16 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         try {
           ids.push(await this.WritePendingWork(work, input.ContextUser));
         } catch (err) {
-          LogError(`[RSU] ${err instanceof Error ? err.message : String(err)}`);
+          addError(
+            input,
+            `Failed to register post-restart work for company integration ${work.CompanyIntegrationID}: ` +
+              `${err instanceof Error ? err.message : String(err)} — this work will NOT run after the restart`,
+          );
         }
       }
       registered.set(input, ids);
     }
-    return registered;
+    return { IDs: registered, Errors: errors };
   }
 
   // ─── Generic Post-Restart File Injection ──────────────────────
@@ -879,7 +945,9 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     // Register durable pending work for successful migrations. Rows stay Pending
     // until the post-restart consumer completes them, so a crash between here and
     // consumption leaves the work visible instead of losing it.
-    result.PendingWorkIDs = await this.registerPendingWork(successfulInputs);
+    const pendingWork = await this.registerPendingWork(successfulInputs);
+    result.PendingWorkIDs = pendingWork.IDs;
+    result.PendingWorkErrors = pendingWork.Errors;
 
     // Restart LAST — PM2 restart kills this process, nothing runs after this
     if (!inputs.every((i) => i.SkipRestart)) {
@@ -908,19 +976,30 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       // A migration that executed but whose run-wide CodeGen failed is NOT a success —
       // the entity may have no spCreate/spUpdate procs and would silently skip on sync.
       const codeGenFailedThisCaller = codeGenFailed && item.Success;
+      // Same reasoning as the CodeGen case above: the migration ran, but work the caller
+      // asked to happen after the restart was never persisted, so the restart drops it.
+      // Reporting success here would tell the caller their sync is coming when it is not.
+      const pendingWorkErrors = postResult.PendingWorkErrors?.get(item.Input) ?? [];
+      const pendingWorkFailedThisCaller = pendingWorkErrors.length > 0 && item.Success;
       const result: RSUPipelineResult = {
-        Success: item.Success && successfulItems.length > 0 && !codeGenFailed,
+        Success: item.Success && successfulItems.length > 0 && !codeGenFailed && !pendingWorkFailedThisCaller,
         MigrationFilePath: item.FilePath,
         APIRestarted: postResult.ApiRestarted,
         GitCommitSuccess: postResult.GitCommitSuccess,
         BranchName: postResult.BranchName,
         Steps: allSteps,
-        ErrorMessage: codeGenFailedThisCaller ? postResult.CodeGenError ?? item.Error : item.Error,
+        ErrorMessage: codeGenFailedThisCaller
+          ? postResult.CodeGenError ?? item.Error
+          : pendingWorkFailedThisCaller
+            ? pendingWorkErrors.join('; ')
+            : item.Error,
         ErrorStep: codeGenFailedThisCaller
           ? 'RunCodeGen'
-          : item.Error
-            ? item.Steps.find((s) => s.Status === 'failed')?.Name
-            : undefined,
+          : pendingWorkFailedThisCaller
+            ? 'RegisterPendingWork'
+            : item.Error
+              ? item.Steps.find((s) => s.Status === 'failed')?.Name
+              : undefined,
         PendingWorkIDs: postResult.PendingWorkIDs?.get(item.Input),
       };
 
