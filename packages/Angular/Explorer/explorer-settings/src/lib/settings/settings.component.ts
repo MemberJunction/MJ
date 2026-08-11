@@ -77,8 +77,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       id: 'appearance',
       label: 'Appearance',
       icon: 'fa-solid fa-palette',
-      description: 'Theme and display settings',
-      disabled: true
+      description: 'Theme and display settings'
     }
   ];
 
@@ -115,7 +114,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       id: 'applications',
       tabId: 'applications',
       sectionId: 'applications',
-      label: 'MJ: Application Settings',
+      label: 'Applications',
       keywords: ['applications', 'apps', 'switcher', 'order', 'visibility', 'menu'],
       description: 'Choose which applications appear in your app switcher'
     },

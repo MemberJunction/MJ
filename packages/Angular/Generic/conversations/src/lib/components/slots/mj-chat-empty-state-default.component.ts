@@ -30,9 +30,9 @@ import type { IMJChatEmptyStateComponent } from './slot-interfaces';
             @if (Subtext) {
                 <div class="mj-chat-empty-state-default__subtext">{{ Subtext }}</div>
             }
-            @if (SuggestedPrompts && SuggestedPrompts.length > 0) {
+            @if (EffectiveSuggestedPrompts.length > 0) {
                 <div class="mj-chat-empty-state-default__prompts">
-                    @for (prompt of SuggestedPrompts; track prompt) {
+                    @for (prompt of EffectiveSuggestedPrompts; track prompt) {
                         <button
                             type="button"
                             class="mj-chat-empty-state-default__prompt-chip"
@@ -86,9 +86,31 @@ import type { IMJChatEmptyStateComponent } from './slot-interfaces';
     ],
 })
 export class MJChatEmptyStateDefaultComponent implements IMJChatEmptyStateComponent {
+    /**
+     * Generic, deployment-agnostic starter prompts shown out-of-the-box so a business
+     * user never faces a blank box. Intentionally broad (they work regardless of what
+     * data or agents a deployment has). A host overrides them by binding `SuggestedPrompts`
+     * to its own list, or suppresses them entirely by binding an empty array.
+     */
+    public static readonly DefaultSuggestedPrompts: readonly string[] = [
+        'What can you help me with?',
+        'Summarize my recent activity',
+        'Help me find a record',
+        'What should I focus on today?',
+    ];
+
     @Input() public Greeting: string = 'How can I help you?';
     @Input() public Subtext?: string;
     @Input() public SuggestedPrompts?: string[];
 
     @Output() public PromptSelected = new EventEmitter<string>();
+
+    /**
+     * The prompts actually rendered: the host-supplied list when provided (including an
+     * explicit empty array to suppress), otherwise the built-in defaults. `??` only falls
+     * back on null/undefined, so `[]` correctly renders nothing.
+     */
+    public get EffectiveSuggestedPrompts(): readonly string[] {
+        return this.SuggestedPrompts ?? MJChatEmptyStateDefaultComponent.DefaultSuggestedPrompts;
+    }
 }

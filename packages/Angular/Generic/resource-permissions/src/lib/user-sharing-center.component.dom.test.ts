@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ComponentFixture } from '@angular/core/testing';
 import { NormalizedPermission } from '@memberjunction/core';
 import { renderComponentFixture, query, queryAll, text, hasClass, click, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
-import { UserSharingCenterComponent, SharingCenterDomainGroup, SharingCenterTab } from './user-sharing-center.component';
+import { UserSharingCenterComponent, SharingCenterDomainGroup, SharingCenterTab, sharingDomainDisplayLabel } from './user-sharing-center.component';
 
 /**
  * DOM-level spec for <mj-user-sharing-center> — a standalone, data-bound component with
@@ -33,8 +33,13 @@ function permission(overrides: Partial<NormalizedPermission> = {}): NormalizedPe
 }
 
 function group(overrides: Partial<SharingCenterDomainGroup> = {}): SharingCenterDomainGroup {
+  const domainName = overrides.DomainName ?? 'Dashboard Permissions';
   return {
-    DomainName: 'Dashboard Permissions',
+    DomainName: domainName,
+    // Mirror production: groupByDomain sets Label to the business-friendly heading
+    // while leaving DomainName as the lookup key. Deriving it here keeps the two in
+    // step when a test overrides DomainName.
+    Label: sharingDomainDisplayLabel(domainName),
     Icon: 'fa-solid fa-gauge',
     Rows: [permission()],
     Expanded: true,
@@ -75,7 +80,9 @@ describe('UserSharingCenterComponent (DOM, data-bound)', () => {
     const f = render({}, (c) => {
       c.SharedWithMe = [group({ Rows: [permission(), permission({ SourceRecordID: 'perm2' })] })];
     });
-    expect(text(f, '.group-name')).toBe('Dashboard Permissions');
+    // The section heading shows the business-friendly label ("Dashboards"), NOT the raw
+    // domain lookup key ("Dashboard Permissions").
+    expect(text(f, '.group-name')).toBe('Dashboards');
     // The per-group row count now renders as the accordion title's badge.
     expect(text(f, '.mj-accordion-badge')).toBe('2');
   });
@@ -166,5 +173,24 @@ describe('UserSharingCenterComponent (DOM, data-bound)', () => {
       c.SharedWithMe = [group({ Rows: [permission({ Actions: ['Read', 'Update'] })] })];
     });
     expect(text(f, '.row .actions')).toBe('Read, Update');
+  });
+});
+
+describe('sharingDomainDisplayLabel', () => {
+  it('maps each built-in permission domain to a business-friendly heading', () => {
+    expect(sharingDomainDisplayLabel('Dashboard Permissions')).toBe('Dashboards');
+    expect(sharingDomainDisplayLabel('Artifact Permissions')).toBe('Files');
+    expect(sharingDomainDisplayLabel('Collection Permissions')).toBe('Collections');
+    expect(sharingDomainDisplayLabel('Access Control Rules')).toBe('Rules');
+    expect(sharingDomainDisplayLabel('Resource Permissions')).toBe('Shared items');
+  });
+
+  it('falls back to the domain name with a trailing " Permissions" stripped', () => {
+    // An unmapped custom domain still reads cleanly instead of showing "… Permissions".
+    expect(sharingDomainDisplayLabel('Widget Permissions')).toBe('Widget');
+  });
+
+  it('falls back to the raw domain name when there is nothing to strip', () => {
+    expect(sharingDomainDisplayLabel('Something Custom')).toBe('Something Custom');
   });
 });

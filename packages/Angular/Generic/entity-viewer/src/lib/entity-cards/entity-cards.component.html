@@ -107,7 +107,7 @@
       <mj-empty-state
         class="no-results"
         Variant="no-results"
-        Title="No records to display" />
+        [Title]="entity ? 'No ' + entity.DisplayNamePlural + ' to display' : 'No records to display'" />
     }
     </div>
   }

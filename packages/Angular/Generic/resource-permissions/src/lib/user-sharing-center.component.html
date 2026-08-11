@@ -46,7 +46,7 @@
                     (ExpandedChange)="OnGroupExpandedChange(group, $event)">
                     <ng-template mjAccordionTitle>
                         <span class="group-icon"><i [class]="group.Icon"></i></span>
-                        <span class="group-name">{{ group.DomainName }}</span>
+                        <span class="group-name">{{ group.Label }}</span>
                         <span class="mj-accordion-badge mj-accordion-badge--right">{{ group.Rows.length }}</span>
                     </ng-template>
                     <ng-template mjAccordionBody>
@@ -83,7 +83,7 @@
                     (ExpandedChange)="OnGroupExpandedChange(group, $event)">
                     <ng-template mjAccordionTitle>
                         <span class="group-icon"><i [class]="group.Icon"></i></span>
-                        <span class="group-name">{{ group.DomainName }}</span>
+                        <span class="group-name">{{ group.Label }}</span>
                         <span class="mj-accordion-badge mj-accordion-badge--right">{{ group.Rows.length }}</span>
                     </ng-template>
                     <ng-template mjAccordionBody>
