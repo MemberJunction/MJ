@@ -36,12 +36,25 @@ The level is about **what the branch does to the database**, not how big or user
 feature is. A 2,000-line feature with no migration and no metadata is a `patch`. A one-line
 metadata edit is a `minor`.
 
-**This is a release-train convention, not semver** — deliberately. Because every package shares one
-`fixed` group, all ~300 move to the same version whether or not they changed, so the number cannot
-carry per-package semver meaning; that possibility ended when the fixed group was adopted. Given it
-cannot mean "new API", it is put to work meaning something MJ actually needs: *this release requires
-you to run migrations*. The operator-facing half of that contract is in
-[`VERSIONING.md`](../../VERSIONING.md) — a signal nobody outside this file can read is not a signal.
+**Why the level is tied to the database at all** — and it is *not* so operators can read migrations
+off the version number. That job belongs to `dbImpact`, which
+[`plans/lts-process.md`](../../plans/lts-process.md) §12 calls "the honest replacement for smuggling
+that signal into version digits".
+
+It is the **Edge tuple grammar** (§3.1). Edge runs in changesets prerelease mode permanently and
+bumps do not compound, so every Edge release is `X.Y.0-edge.N` — the tuple comes from the highest
+level accumulated since the last certification. The invariant that has to hold is *migrations only
+ever ship in a minor-or-higher-tupled release*, and a cycle whose changesets were all `patch` would
+target `X.Y.Z+1` instead. Your `minor` is what keeps the accumulated tuple correct; it does **not**
+visibly bump anything mid-stream.
+
+Two consequences worth knowing before you reason about the number:
+
+- **On a certified line, everything is a patch** — metadata migrations, CodeGen repairs and even
+  schema migrations. The migration-⇒-minor rule is Edge-tuple grammar only, so `6.1.5` → `6.1.6`
+  may well contain a migration.
+- **The number cannot carry per-package semver.** All ~300 packages share one `fixed` group, so a
+  consumer already receives bumps driven entirely by packages they do not use.
 
 ## Why one stray `minor` matters
 
