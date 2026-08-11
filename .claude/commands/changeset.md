@@ -47,7 +47,7 @@ Summary of changes based on commit messages
 ## Versioning Rules
 
 The full rule, with its rationale, lives in [`.claude/rules/changesets.md`](../rules/changesets.md)
-and is enforced by `npm run check:changeset`. In short:
+and can be self-checked with `npm run check:changeset` (local only — nothing gates it in CI). In short:
 
 - **Minor bump**: the branch changes the DATABASE — it adds a migration under a `migrations/vN`
   folder, **or** it changes anything under `metadata/`. Metadata counts because it BECOMES a

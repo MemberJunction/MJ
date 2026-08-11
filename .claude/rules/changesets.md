@@ -53,11 +53,11 @@ pre-existing file using a different level is not yours to fix.
 
 ```bash
 npm run check:changeset          # judges the changesets THIS branch adds, vs origin/next
-npm run check:changeset:test     # the gate's own vitest suite
+npm run check:changeset:test     # its own vitest suite
 ```
 
-This mirrors the PR gate exactly. It also runs in CI on any PR touching `.changeset/`,
-`migrations/`, or `metadata/`.
+**Nothing enforces this in CI** — no PR fails on a wrong bump level. This rule and that command
+are the only checks, so run it whenever you add a changeset.
 
 ## Format
 
