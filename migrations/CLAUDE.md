@@ -348,6 +348,26 @@ Two related points:
   unrelated regenerations (validator functions, form fields) from the fresh-install state. Exclude
   those from the appended section and say so in the header block.
 
+#### 🚨 Commit the CodeGen **tail** with the migration — CI now checks this
+
+A migration that adds a core-schema table has a tail: the entity subclass in
+`packages/MJCoreEntities/src/generated/entity_subclasses.ts`, the MJServer resolvers, and the
+Explorer form component. Committing the migration without it — or with only *part* of it — is
+silent. Nothing fails to build; the runtime falls back to `BaseEntity`, and every downstream
+clean-environment CodeGen run turns into a diff nobody can tell apart from real drift. That is
+exactly how issue #3737 was reported: by a provisioning tripwire, days later.
+
+`.github/workflows/ci-codegen-tail.yml` gates it on every PR touching `migrations/**` or any of the
+three generated artifacts. Run it yourself before pushing — it needs no database and no build:
+
+```bash
+npm run check:codegen-tail          # your PR's migrations vs origin/next
+npm run check:codegen-tail:all      # sweep the full migration history
+```
+
+A core-schema table that is deliberately *not* an entity goes in `NON_ENTITY_TABLES` in
+`.github/scripts/check-codegen-tail.mjs`, with a comment saying why.
+
 **The MemberJunction CodeGen system automatically handles:**
 - Creating/updating all views based on schema changes
 - Updating EntityField records for new columns
