@@ -3,7 +3,7 @@
  */
 
 import { UserInfo } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 /**
  * Get the system user from UserCache

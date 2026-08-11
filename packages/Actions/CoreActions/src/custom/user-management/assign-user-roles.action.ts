@@ -3,7 +3,7 @@ import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
 import { DatabaseProviderBase, Metadata } from "@memberjunction/core";
 import { MJUserRoleEntity } from "@memberjunction/core-entities";
-import { UserCache } from "@memberjunction/sqlserver-dataprovider";
+import { UserCache } from "@memberjunction/generic-database-provider";
 
 /**
  * Assigns one or more roles to a user by creating UserRole associations.

@@ -26,6 +26,7 @@
     "@memberjunction/templates": "6.1.0-edge.1",
     "@memberjunction/communication-engine": "6.1.0-edge.1",
     "@memberjunction/communication-types": "6.1.0-edge.1",
+    "@memberjunction/generic-database-provider": "6.1.0-edge.1",
     "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.1"
   },
   "repository": {

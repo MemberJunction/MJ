@@ -201,9 +201,14 @@ export function BuildRealtimeModelOptions(models: ReadonlyArray<VoiceModelCandid
 /**
  * Builds the `configOverridesJson` payload for the `StartRealtimeClientSession` mint from
  * what the (authorization-gated) pickers chose — an explicit realtime model preference and/or a
- * per-provider voice. The envelope (`{"realtime":{"modelPreference":"<id>","voice":{"providers":
- * {"openai":{"voice":"<v>"}}}}}`) is the pinned server contract, merged into the effective config
- * server-side (highest precedence).
+ * voice. The envelope (`{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}}}}`)
+ * is the pinned server contract, merged into the effective config server-side (highest precedence).
+ *
+ * The voice is filed PROVIDER-AGNOSTICALLY: the browser has a model id, never a vendor `DriverClass`
+ * (`GetRealtimeModelVoices` does not return one), so naming a provider here would be a guess that
+ * silently voided the setting for every non-OpenAI vendor. The server files it onto whichever driver
+ * it resolves. Kept in lockstep with the server-side `BuildRealtimeOverridesJson` in
+ * `@memberjunction/ai-agents` by `realtime-convergence-drift.test.ts`. See issue #3530.
  *
  * @param preferredModelId The explicit `MJ: AI Models` id, or null/empty for none.
  * @param preferredVoice The provider-native voice id (e.g. `echo`), or null/empty for none.
@@ -218,13 +223,12 @@ export function BuildRealtimeConfigOverridesJson(
   if (modelId.length === 0 && voice.length === 0) {
     return null;
   }
-  const realtime: { modelPreference?: string; voice?: { providers: Record<string, { voice: string }> } } = {};
+  const realtime: { modelPreference?: string; voice?: { default: { voice: string } } } = {};
   if (modelId.length > 0) {
     realtime.modelPreference = modelId;
   }
   if (voice.length > 0) {
-    // Per-provider voice shape matches GetProviderVoiceSettings; `openai` is the realtime provider today.
-    realtime.voice = { providers: { openai: { voice } } };
+    realtime.voice = { default: { voice } };
   }
   return JSON.stringify({ realtime });
 }

@@ -21,10 +21,13 @@
  * ```jsonc
  * { "realtime": {
  *     "modelPreference": "<AI Model name or ID>",
- *     "voice": { "default": { "tone": "…", "speakingStyle": "…" },
+ *     // `default.voice` is PROVIDER-AGNOSTIC: authored without naming a vendor, filed onto whichever
+ *     // driver resolves. Prefer it — and note it WINS the `voice` key over any `providers.<key>.voice`
+ *     // below (see GetProviderVoiceSettings). Pin per-vendor ids under `providers` only when the
+ *     // voice ids genuinely differ by vendor, and then leave `default.voice` unset.
+ *     "voice": { "default": { "tone": "…", "speakingStyle": "…", "voice": "<voice id>" },
  *                "providers": { "openai": { "voice": "alloy" },
  *                               "elevenlabs": { "voice": "<voice id>" },
- *                               "gemini": { "voice": "…" },
  *                               "assemblyai": { "voice": "…" } } },
  *     "allowUserModelOverride": true,
  *     "narration": { "paceMs": 8000 } } }
@@ -48,12 +51,35 @@ export const REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION = 'Realtime: Advan
 /** A plain JSON object (string-keyed bag of JSON values). */
 export type JSONObjectLike = Record<string, unknown>;
 
-/** The default voice persona — folded into the session system prompt at mint. */
+/**
+ * The default voice persona — how the agent sounds, independent of who is speaking it.
+ *
+ * Two halves with two destinations: {@link tone} / {@link speakingStyle} are PROMPT-level (folded into
+ * the session system prompt at mint by {@link BuildVoiceMannerSection}), while {@link voice} is
+ * WIRE-level (filed onto the resolved driver's config bag by {@link GetProviderVoiceSettings}).
+ */
 export interface RealtimeVoicePersona {
     /** Overall vocal tone (e.g. "warm and upbeat"). */
     tone?: string;
     /** Speaking style guidance (e.g. "concise sentences, no filler words"). */
     speakingStyle?: string;
+    /**
+     * The provider-AGNOSTIC voice id — the voice used by whichever vendor ends up running the session.
+     *
+     * This is the slot a host authors when it does NOT know (and should not have to know) which vendor
+     * will run: the framework resolves the model first, then files this onto that driver. It works because
+     * the entire realtime driver family reads the same driver-neutral `voice` key out of the config bag
+     * (ElevenLabs maps it to `tts.voice_id`, Inworld/AssemblyAI to `output.voice`, HuggingFace to
+     * `audio.output.voice`, OpenAI/Gemini consume it directly).
+     *
+     * Precedence: this WINS the `voice` key over a matching {@link RealtimeVoiceConfig.providers} entry —
+     * a session-scoped pick must beat a vendor-pinned value authored lower in the cascade. The matching
+     * provider bag still contributes all of its OTHER keys.
+     *
+     * The value is still provider-native (an `alloy` means nothing to ElevenLabs), so a config that must
+     * name different voices per vendor should pin them under `providers.<key>` and leave this unset.
+     */
+    voice?: string;
 }
 
 /** Voice configuration: a persona plus per-provider native voice settings. */
@@ -904,6 +930,9 @@ function normalizeVoice(raw: unknown): RealtimeVoiceConfig | null {
         if (typeof rawDefault['speakingStyle'] === 'string' && rawDefault['speakingStyle'].trim().length > 0) {
             persona.speakingStyle = rawDefault['speakingStyle'].trim();
         }
+        if (typeof rawDefault['voice'] === 'string' && rawDefault['voice'].trim().length > 0) {
+            persona.voice = rawDefault['voice'].trim();
+        }
         if (Object.keys(persona).length > 0) {
             voice.default = persona;
         }
@@ -944,20 +973,82 @@ function normalizeKey(value: string): string {
 }
 
 /**
- * Picks the provider-specific voice settings for a resolved realtime driver.
+ * Resolves the voice settings for a resolved realtime driver — the ONE place authored voice becomes a
+ * driver config bag, and the reason a host never has to know which vendor will run.
  *
- * Provider keys (`openai`, `elevenlabs`, `gemini`, `assemblyai`, …) are matched against the
- * vendor `DriverClass` (e.g. `OpenAIRealtime`, `ElevenLabsRealtime`) by normalized-prefix:
- * both sides are lowercased and stripped of non-alphanumerics, then the driver class must START
- * WITH the provider key (`openairealtime`.startsWith(`openai`)). A bare provider name (e.g.
- * `'openai'` from `ClientRealtimeSessionConfig.Provider`) matches the same way. The LONGEST
- * matching key wins when several match.
+ * Two sources, merged key-level:
+ * 1. **Provider-specific** ({@link RealtimeVoiceConfig.providers}) — keys (`openai`, `elevenlabs`,
+ *    `gemini`, `assemblyai`, …) are matched against the vendor `DriverClass` (e.g. `OpenAIRealtime`)
+ *    by normalized-prefix: both sides are lowercased and stripped of non-alphanumerics, then the driver
+ *    class must START WITH the provider key (`openairealtime`.startsWith(`openai`)). A bare provider
+ *    name (e.g. `'openai'` from `ClientRealtimeSessionConfig.Provider`) matches the same way. The
+ *    LONGEST matching key wins when several match.
+ * 2. **Provider-agnostic** ({@link RealtimeVoicePersona.voice}) — supplies the `voice` key for whatever
+ *    driver resolved, and OVERRIDES a matched provider entry's `voice`.
+ *
+ * The agnostic value wins the `voice` key. The merge is per-key, so a matched provider bag's other
+ * (opaque) settings still ride along. When no agnostic voice is authored this is byte-for-byte the
+ * pre-#3530 behavior.
+ *
+ * "Opaque pact" describes what this function and the drivers DO with the bag at runtime — it is not a
+ * statement about what an author may write in agent metadata. The agent type's `ConfigSchema` declares
+ * `providers.<key>` with `additionalProperties: false` and only `voice`/`voiceId`, so a metadata-authored
+ * bag carrying anything else fails validation on save. Keys beyond `voice` therefore reach a driver only
+ * via runtime `ConfigOverridesJson`, which bypasses that validator. (Pre-existing asymmetry, not
+ * introduced here; loosening the schema is a separate call because it would relax validation for every
+ * existing config.)
+ *
+ * **Known limitation.** This runs AFTER the cascade has been deep-merged, so it has no layer
+ * provenance: "agnostic wins" is absolute, not "the higher layer wins". That is right for the case
+ * that exists — every host builder emits the agnostic form, so an agnostic value is always the
+ * session-scoped pick and must beat a vendor-pinned value authored in agent metadata. It is wrong
+ * for a config that HAND-AUTHORS a `providers.<key>.voice` in a RUNTIME override while agent
+ * metadata sets `default.voice`: the metadata would outrank the override. Nothing emits that shape
+ * today. Making it correct means resolving voice precedence per-layer inside
+ * {@link ResolveEffectiveRealtimeConfig}, which is where layer identity still exists.
+ *
+ * The same absoluteness produces a SAME-LAYER specificity inversion, which the schema permits: agent
+ * metadata authoring both `default.voice` (intended as a fallback) and `providers.openai.voice` (a
+ * pin) gets the general beating the specific — the inverse of normal config intuition. Only the
+ * runtime-override case actually NEEDS the agnostic value to win, so "agnostic is a fallback unless it
+ * came from a runtime override" would be more predictable; it is not implemented because it needs the
+ * same per-layer provenance described above. Until then the authoring rule is the one stated on
+ * {@link RealtimeVoicePersona.voice}: pin per-vendor OR author agnostic, not both.
+ *
+ * Callers that need to know whether an authored provider key actually MATCHED (rather than what the
+ * driver should receive) must use {@link MatchProviderVoiceSettings} — this function is truthy for
+ * every driver once an agnostic voice is set, so it cannot answer that question.
  *
  * @param config The effective configuration.
  * @param driverClassOrProvider The vendor `DriverClass` or the provider key itself.
- * @returns The matched settings object (opaque driver pact), or `null` when none match.
+ * @returns The settings object (opaque driver pact), or `null` when nothing applies.
  */
 export function GetProviderVoiceSettings(
+    config: RealtimeCoAgentConfig | null | undefined,
+    driverClassOrProvider: string | null | undefined
+): JSONObjectLike | null {
+    const matched = MatchProviderVoiceSettings(config, driverClassOrProvider);
+    const agnosticVoice = config?.realtime?.voice?.default?.voice;
+    if (!agnosticVoice) {
+        return matched;
+    }
+    return { ...(matched ?? {}), voice: agnosticVoice };
+}
+
+/**
+ * The provider-key half of {@link GetProviderVoiceSettings}: the longest normalized-prefix match
+ * between the authored `realtime.voice.providers` keys and the resolved driver, or `null` when none
+ * match.
+ *
+ * Exported because "did any authored provider key match this driver?" is a question
+ * {@link GetProviderVoiceSettings} cannot answer — it returns settings for every driver once an
+ * agnostic voice is set. Diagnosing dropped per-provider settings needs THIS.
+ *
+ * @param config The effective configuration.
+ * @param driverClassOrProvider The vendor `DriverClass` or the provider key itself.
+ * @returns The matched provider settings (opaque driver pact), or `null` when none match.
+ */
+export function MatchProviderVoiceSettings(
     config: RealtimeCoAgentConfig | null | undefined,
     driverClassOrProvider: string | null | undefined
 ): JSONObjectLike | null {
@@ -1012,11 +1103,16 @@ export function BuildVoiceMannerSection(config: RealtimeCoAgentConfig | null | u
  * Builds the runtime-override `ConfigOverridesJson` envelope (the highest-precedence cascade layer) from a
  * per-session model and/or voice choice — the **single, surface-agnostic** shape every realtime host uses
  * to carry a dev's pick into {@link ResolveEffectiveRealtimeConfig}. The native-chat picker produces the
- * same shape client-side (`BuildRealtimeConfigOverridesJson` in `@memberjunction/ng-conversations`); the
+ * same shape client-side (`BuildRealtimeConfigOverridesJson` in `@memberjunction/ng-conversations` — the
+ * two are kept in lockstep by `realtime-convergence-drift.test.ts`); the
  * server-bridged hosts (LiveKit, Zoom/Teams) build it here so both funnel into the one override slot.
  *
- * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"providers":{"openai":{"voice":"<v>"}}}}}`.
- * `openai` is the realtime provider today; add providers here when others ship realtime voices.
+ * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}}}}`.
+ *
+ * The voice is filed PROVIDER-AGNOSTICALLY, which is what lets a host carry a voice at all: the vendor
+ * is not known here (and on the default-model path is not known to the caller at any point before the
+ * session is prepared), so naming one would be a guess. {@link GetProviderVoiceSettings} files this onto
+ * whichever driver the framework resolves. See issue #3530.
  *
  * @param modelId The `MJ: AI Models` Name or ID to prefer, or null/empty for none.
  * @param voice The provider-native voice id (e.g. `echo`), or null/empty for none.
@@ -1031,12 +1127,12 @@ export function BuildRealtimeOverridesJson(
     if (m.length === 0 && v.length === 0) {
         return null;
     }
-    const realtime: { modelPreference?: string; voice?: { providers: Record<string, { voice: string }> } } = {};
+    const realtime: { modelPreference?: string; voice?: { default: { voice: string } } } = {};
     if (m.length > 0) {
         realtime.modelPreference = m;
     }
     if (v.length > 0) {
-        realtime.voice = { providers: { openai: { voice: v } } };
+        realtime.voice = { default: { voice: v } };
     }
     return JSON.stringify({ realtime });
 }

@@ -1,7 +1,8 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
 import { TimelineItem } from './ai-agent-run-timeline.component';
 import { MJAIAgentRunStepEntity, MJAIAgentRunStepEntity_AgentSkillInvocation } from '@memberjunction/core-entities';
-import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
+import { ResolveTaskGraphPositions, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
+import type { FlowPosition } from '@memberjunction/ng-flow-editor';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 
 interface ScratchpadSnapshotView {
@@ -62,6 +63,51 @@ export class AIAgentRunStepDetailComponent {
       }
       this.scratchpadSubTab = 'diff';
       this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * What to say about a step that never executed, or null when it ran.
+   *
+   * **Why this needs saying at all.** A workflow persists every step at submission, before anything
+   * runs — the rows are the dispatcher's work queue, and the skip cascade is computed from the graph
+   * they form. So a branch the workflow did not take still has a row, and opening it shows a
+   * perfectly normal record with empty payloads. Without a word of explanation the reader is left to
+   * work out whether that emptiness is a branch that was not chosen, work still queued, or a step
+   * that broke silently — three very different situations that look identical in JSON.
+   *
+   * The distinction between Skipped and Blocked is load-bearing and deliberately preserved here:
+   * `Skipped` means the workflow chose another route, `Blocked` means something upstream failed. The
+   * dispatcher separated them precisely because conflating them made every conditional workflow look
+   * half-broken.
+   */
+  get StepNotice(): { Variant: 'info' | 'warning' | 'error'; Message: string } | null {
+    const item = this.selectedTimelineItem;
+    if (!item?.data?.IsWorkflowStep) return null;
+
+    switch (item.status) {
+      case 'Skipped':
+        return {
+          Variant: 'info',
+          Message: 'This step never ran — the workflow took another route. Its row exists because ' +
+                   'every step is created when the workflow is submitted, so the record of the branch ' +
+                   'that was not taken survives. Nothing went wrong here.',
+        };
+      case 'Blocked':
+        return {
+          Variant: 'error',
+          Message: 'This step could not run: something it depended on failed, so no path to it was ' +
+                   'left. It is not a branch that lost — it is work that became unreachable.',
+        };
+      case 'Pending':
+        return {
+          Variant: 'warning',
+          Message: 'This step has not started yet. A workflow runs on the dispatcher and outlives the ' +
+                   'agent run that submitted it, so a finished run can still contain steps that are ' +
+                   'queued or in flight.',
+        };
+      default:
+        return null;
     }
   }
 
@@ -248,6 +294,21 @@ export class AIAgentRunStepDetailComponent {
       }
     }
     return null;
+  }
+
+  /**
+   * Where the recorded graph's nodes go on the canvas.
+   *
+   * Without this the editor receives a spec and no geometry, so every node projects to the origin —
+   * all of them, in one place. The canvas then rescues it with a deferred layout pass whose
+   * zoom-to-fit measures a bounding box one node wide, and a four-step workflow renders as a single
+   * enormous box at 265%. The positions exist the whole time: a workflow compiled from a Flow agent
+   * carries the arrangement its author dragged into place, on every node.
+   */
+  get stepTaskGraphPositions(): Map<string, FlowPosition> | null {
+    const spec = this.stepTaskGraph;
+    if (!spec) return null;
+    return ResolveTaskGraphPositions(spec);
   }
 
   /** True when the recorded graph was constant-folded rather than dispatched (D9). */

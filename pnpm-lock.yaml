@@ -31,6 +31,11 @@ overrides:
   '@codemirror/commands': 6.10.4
   jsdom: 26.1.0
 
+patchedDependencies:
+  type-graphql@2.0.0-beta.3:
+    hash: 4d3544a1e64ad80b22832bb91021718c73db40ae6c6ac140b86d22cacaab8c67
+    path: patches/type-graphql@2.0.0-beta.3.patch
+
 importers:
 
   .:
@@ -204,6 +209,9 @@ importers:
       '@memberjunction/encryption':
         specifier: 6.1.0-edge.1
         version: link:../../Encryption
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../MJGlobal
@@ -295,6 +303,9 @@ importers:
       '@memberjunction/core-entities-server':
         specifier: 6.1.0-edge.1
         version: link:../../MJCoreEntitiesServer
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.1
         version: link:../../SQLServerDataProvider
@@ -1133,6 +1144,9 @@ importers:
       '@memberjunction/encryption':
         specifier: 6.1.0-edge.1
         version: link:../../Encryption
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../MJGlobal
@@ -9400,6 +9414,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.1
         version: link:../../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../MJGlobal
@@ -12254,7 +12271,7 @@ importers:
         version: 7.8.2
       type-graphql:
         specifier: 2.0.0-beta.3
-        version: 2.0.0-beta.3(class-validator@0.14.3)(graphql-scalars@1.25.0(graphql@16.12.0))(graphql@16.12.0)
+        version: 2.0.0-beta.3(patch_hash=4d3544a1e64ad80b22832bb91021718c73db40ae6c6ac140b86d22cacaab8c67)(class-validator@0.14.3)(graphql-scalars@1.25.0(graphql@16.12.0))(graphql@16.12.0)
       typedi:
         specifier: ^0.10.0
         version: 0.10.0
@@ -12405,6 +12422,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.1
         version: link:../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../MJGlobal
@@ -12785,6 +12805,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.1
         version: link:../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../MJGlobal
@@ -13012,6 +13035,9 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
     devDependencies:
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.1
         version: link:../../SQLServerDataProvider
@@ -14208,6 +14234,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.1
         version: link:../../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../MJGlobal
@@ -14415,6 +14444,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.1
         version: link:../../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../MJGlobal
@@ -14491,6 +14523,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.1
         version: link:../../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../../MJGlobal
@@ -47953,7 +47988,7 @@ snapshots:
 
   type-fest@4.41.0: {}
 
-  type-graphql@2.0.0-beta.3(class-validator@0.14.3)(graphql-scalars@1.25.0(graphql@16.12.0))(graphql@16.12.0):
+  type-graphql@2.0.0-beta.3(patch_hash=4d3544a1e64ad80b22832bb91021718c73db40ae6c6ac140b86d22cacaab8c67)(class-validator@0.14.3)(graphql-scalars@1.25.0(graphql@16.12.0))(graphql@16.12.0):
     dependencies:
       '@types/node': 24.10.11
       '@types/semver': 7.7.1

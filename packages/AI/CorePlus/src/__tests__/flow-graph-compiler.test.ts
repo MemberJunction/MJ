@@ -71,15 +71,22 @@ describe('phase 1 — exclusion', () => {
 });
 
 describe('phase 2 — single entry', () => {
-    it('takes the alphabetically-first starting step, matching the walker', () => {
+    it('takes the alphabetically-first starting step, and REFUSES the orphaned one', () => {
         const res = CompileFlowToTaskGraph(
             [step({ ID: 'z', Name: 'Zebra', StartingStep: true }), step({ ID: 'a', Name: 'Apple', StartingStep: true })],
             [],
             options,
         );
         // Apple is the entry; Zebra is not reachable from it and is pruned rather than becoming a
-        // second root that runs work the flow never ran.
-        expect(res.Spec!.tasks.map((t) => t.tempId)).toEqual(['a']);
+        // second root that runs work the flow never ran. That much is unchanged.
+        //
+        // What changed is that this now FAILS to compile. It used to succeed, quietly shipping a
+        // workflow missing a step its author had explicitly marked as an entry — which is how the
+        // Content Pipeline demo drafted from half its research for its entire life, with nothing
+        // anywhere reporting a problem. Refusing at submission, before anything runs, is strictly
+        // better than running half a workflow and reporting success.
+        expect(res.Success).toBe(false);
+        expect(res.Errors.map((e) => e.Code)).toContain('UnreachableStartingStep');
         expect(res.Excluded).toContainEqual({ StepID: 'z', Reason: 'Unreachable' });
     });
 
@@ -362,5 +369,44 @@ describe('human steps', () => {
         // Dependencies normalize to objects, so the assertion is on the id they carry.
         const deps = depsOf(res.Spec!, 'w').map((d) => (typeof d === 'string' ? d : (d as { tempId: string }).tempId));
         expect(deps).toContain('h');
+    });
+});
+
+describe('a second starting step is reported, not silently dropped', () => {
+    it('names the step that would never run', () => {
+        // A workflow has ONE entry. A step flagged as a second one is pruned as unreachable — and
+        // pruning it in silence is how a workflow ships with half its work missing while looking
+        // complete on the canvas. The Content Pipeline demo lived that: its second research step
+        // was dropped, the join it fed had one input instead of two, and every draft was written
+        // from half the evidence with nothing anywhere saying so.
+        const res = CompileFlowToTaskGraph(
+            [
+                step({ ID: 'a', Name: 'A first', StartingStep: true }),
+                step({ ID: 'b', Name: 'B second', StartingStep: true }),
+            ],
+            [],
+            options,
+        );
+
+        const unreachable = res.Errors.filter((e) => e.Code === 'UnreachableStartingStep');
+        expect(unreachable).toHaveLength(1);
+        expect(unreachable[0].Message).toContain('B second');
+        expect(unreachable[0].Message).toContain('A first');   // says where it DOES begin
+    });
+
+    it('stays quiet when the second starting step is reachable from the entry', () => {
+        // Wired into the flow, it runs — the flag is redundant but harmless, and warning here would
+        // train people to ignore the message that matters.
+        const res = CompileFlowToTaskGraph(
+            [
+                step({ ID: 'a', Name: 'A first', StartingStep: true }),
+                step({ ID: 'b', Name: 'B second', StartingStep: true }),
+            ],
+            [path({ ID: 'p', OriginStepID: 'a', DestinationStepID: 'b' })],
+            options,
+        );
+
+        expect(res.Errors.filter((e) => e.Code === 'UnreachableStartingStep')).toHaveLength(0);
+        expect(res.Spec!.tasks.map((t) => t.tempId).sort()).toEqual(['a', 'b']);
     });
 });

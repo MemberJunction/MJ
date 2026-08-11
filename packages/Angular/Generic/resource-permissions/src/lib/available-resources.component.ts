@@ -5,6 +5,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { ResourceData } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJ_AG_GRID_THEME_PARAMS } from '@memberjunction/ng-shared-generic';
+import { FormatSimpleRowCell } from './format-cell';
 import {
   ColDef,
   GridReadyEvent,
@@ -168,7 +169,7 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
             cols.push({
                 headerName: col.DisplayNameOrName,
                 valueGetter: (params) => {
-                    return params.data?.Configuration?.[col.Name] ?? '';
+                    return FormatSimpleRowCell(params.data?.Configuration?.[col.Name]);
                 }
             });
         }
