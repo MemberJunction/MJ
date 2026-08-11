@@ -264,17 +264,43 @@ export class IntegrationTestDriver extends BaseTestDriver {
             if (lifecycle) {
                 await lifecycle.Setup(checkCtx);
             }
+            let gatedOut = 0;
             for (const check of bundle) {
                 if (isTimedOut()) {
                     break;
                 }
                 if (check.RequiresMutation && !mutationEnabled) {
+                    gatedOut++;
                     continue;
                 }
                 if (check.RequiresLiveModel && !liveModelEnabled) {
+                    gatedOut++;
                     continue;
                 }
                 await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes, deadline);
+            }
+
+            // A bundle whose every check was gated out ran NOTHING, and reported PASS for it.
+            //
+            // That is not a harmless quirk. `task-graph-execution` is entirely RequiresMutation, so
+            // the deterministic tier showed it green — 0/0, score 0.0000, "PASSED" — while one of
+            // its assertions had contradicted the live engine since R6. The suite was reporting
+            // coverage it did not have, which is the one thing a test suite must never do.
+            //
+            // Recorded as an explicit skip result rather than a pass: the run still succeeds (the
+            // gate is a deliberate choice, not a failure), but the bundle can no longer claim to
+            // have verified anything, and the reason names the flag that would run it.
+            if (bundle.length > 0 && outcomes.length === 0 && gatedOut > 0) {
+                const message =
+                    `${bundleType}: all ${gatedOut} check(s) were gated out — nothing ran. ` +
+                    `Set RUN_MUTATION_TESTS=1 (or the live-model gate) to execute them. This bundle ` +
+                    `verified NOTHING on this run.`;
+                oracleResults.push({
+                    oracleType: `${bundleType}.gated`, passed: true, score: 0, message,
+                    details: { DurationMs: 0, GatedOut: gatedOut, Executed: 0 },
+                });
+                outcomes.push({ Name: `${bundleType}.gated`, Passed: true, DurationMs: 0, Error: message });
+                this.logToTestRun(context, 'warn', message);
             }
         } catch (fxErr) {
             // The only throw reachable here is from lifecycle.Setup — runCheck swallows per-check

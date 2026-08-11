@@ -166,7 +166,15 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
                 {
                     EntityName: 'MJ: Tasks',
                     ExtraFilter: `ParentID='${this.parentTaskID}'`,
-                    OrderBy: '__mj_CreatedAt ASC',
+                    // Started work in the order it ran, unstarted last, persist order as the
+                    // tiebreak — the same rule GetAgentRunTree uses, so a graph reads identically
+                    // wherever it is shown.
+                    //
+                    // `__mj_CreatedAt ASC` alone was persist order, which is the COMPILER's walk
+                    // order, not the author's numbering and not what actually happened: a settled
+                    // graph listed its steps in an order unrelated to their execution, and a skipped
+                    // step could sit above work that ran.
+                    OrderBy: 'CASE WHEN StartedAt IS NULL THEN 1 ELSE 0 END, StartedAt, __mj_CreatedAt',
                     ResultType: 'entity_object',
                     BypassCache: true,
                 },
