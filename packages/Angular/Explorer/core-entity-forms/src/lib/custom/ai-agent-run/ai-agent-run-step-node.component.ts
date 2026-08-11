@@ -27,10 +27,11 @@ export class AIAgentRunStepNodeComponent {
   }
 
   get isParentStep(): boolean {
-    // Check if this step has children via ParentID relationships (non-Sub-Agent hierarchy)
-    return this.item.type === 'step' &&
-           this.item.data?.StepType !== 'Sub-Agent' &&
-           this.hasChildren;
+    // STRUCTURAL, not type-gated. Anything holding children can be opened — a loop's iterations, a
+    // workflow's steps, a nested run. The old test required `type === 'step'`, so a ForEach that
+    // came from a task graph rendered its children into the model and then offered no way to reach
+    // them: the work existed, was loaded, and was unreachable.
+    return !this.isSubAgent && this.hasChildren;
   }
 
   get canExpand(): boolean {

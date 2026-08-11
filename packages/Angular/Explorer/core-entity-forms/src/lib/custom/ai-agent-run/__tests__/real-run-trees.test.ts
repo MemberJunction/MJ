@@ -43,9 +43,14 @@ describe('real Content Pipeline run', () => {
         const items = ProjectRunTreeToTimeline(treeFor('Content Pipeline'));
         const byTitle = new Map(items.map((i) => [i.title, i]));
 
-        // These are MJ: Tasks rows. Before the tree they appeared in NO timeline at all.
-        expect(byTitle.get('Draft the piece')?.type).toBe('task');
-        expect(byTitle.get('Review against brand rules')?.type).toBe('task');
+        // These are MJ: Tasks rows. Before the tree they appeared in NO timeline at all — and when
+        // they first did, they all rendered as a generic 'task', throwing away the action and prompt
+        // displayers every other row gets. A workflow step that runs a prompt IS a prompt.
+        expect(byTitle.get('Draft the piece')?.type).toBe('prompt');
+        expect(byTitle.get('Research: broad')?.type).toBe('action');
+        // What marks them as dispatcher work is provenance, not a different row type.
+        expect(byTitle.get('Draft the piece')?.provenance).toBe('workflow');
+        expect(byTitle.get('Review against brand rules')?.provenance).toBe('workflow');
         expect(byTitle.get('Draft the piece')!.level).toBeGreaterThan(byTitle.get('Content Pipeline')!.level);
     });
 

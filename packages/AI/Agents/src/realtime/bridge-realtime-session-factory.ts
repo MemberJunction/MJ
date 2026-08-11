@@ -24,6 +24,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from '../base-agent';
 import { RealtimeClientSessionService } from './realtime-client-session-service';
+import { SelectRealtimeVendorForModel } from './realtime-vendor-resolution';
 
 /**
  * The context a bridge passes to {@link CreateBridgeRealtimeSession}. Structurally compatible with the
@@ -204,7 +205,7 @@ export async function GetRealtimeModelVoices(
 
     const out: RealtimeModelVoices[] = [];
     for (const model of models) {
-        const driverClass = resolveRealtimeDriverClass(model.ID);
+        const driverClass = SelectRealtimeVendorForModel(model.ID)?.DriverClass ?? null;
         if (!driverClass) {
             continue; // no active vendor with a resolvable key — not runnable, so omit
         }
@@ -214,19 +215,6 @@ export async function GetRealtimeModelVoices(
         out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: instance?.SupportedVoices ?? [] });
     }
     return out;
-}
-
-/** The DriverClass of the highest-priority Active vendor (with a resolvable API key) for a model, or null. */
-function resolveRealtimeDriverClass(modelID: string): string | null {
-    const vendors = AIEngine.Instance.ModelVendors
-        .filter((mv) => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
-        .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
-    for (const v of vendors) {
-        if (GetAIAPIKey(v.DriverClass!)) {
-            return v.DriverClass!;
-        }
-    }
-    return null;
 }
 
 /** Resolves the agent entity from the engine cache by id (preferred), then by case-insensitive name. */

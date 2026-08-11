@@ -931,11 +931,20 @@ export class TaskGraphDispatcher implements IShutdownable {
         // is a legitimate "somebody needs to look at this", and a request nobody was notified about
         // is still findable in the inbox — whereas returning early here is how such a step used to
         // become invisible work that stalled a workflow with nothing anywhere saying why.
-        // The marker goes down only once a request is genuinely open. A notification storm is the
-        // failure the marker exists to prevent, but a MISSING request is worse than a repeated
-        // attempt: nothing would appear in anyone's inbox and the workflow would wait forever with
-        // no indication why. Retrying on the next poll is the recoverable choice.
-        if (!(await this.raiseHumanRequest(task, provider))) return;
+        // TRANSIENT failures retry; PERMANENT ones stop. That distinction is the whole point, and
+        // getting it wrong took a server down: retrying unconditionally meant a task whose workflow
+        // has no owning agent — which can never succeed — was re-attempted on every poll forever,
+        // each pass re-reading the graph, until the process was OOM-killed. The marker exists to
+        // prevent exactly that storm; a permanent failure has to set it.
+        const raised = await this.raiseHumanRequest(task, provider);
+        if (raised === 'transient-failure') return;   // try again next poll
+        if (raised === 'permanent-failure') {
+            // Nothing will change on a retry. Mark it so the loop stops, and leave the task Pending
+            // and visible — a person can still see it in the Tasks UI, which is the fallback the
+            // notification was only ever an accelerant for.
+            await this.markHumanTaskNotified(task);
+            return;
+        }
 
         if (!task.UserID) {
             await this.markHumanTaskNotified(task);
@@ -1047,8 +1056,17 @@ export class TaskGraphDispatcher implements IShutdownable {
             // a satisfied prerequisite on a Complete origin. A poll landing in that window would
             // claim and execute the branch the workflow chose NOT to take — irreversibly, since the
             // action has already run by the time Skipped is written over it.
-            const eligible = ComputeEligibleTasks(graph.nodes, graph.edges)
-                .filter((n) => !graph.holdTaskIDs.has(n.id) && !graph.skipSeedTaskIDs.has(n.id));
+            // `unreachableTaskIDs` joins the filter for exactly the reason above. R6 made a
+            // definite-false ordinary edge seed the skip cascade rather than Block its target — but
+            // until that Skipped write lands, the target has no unsatisfied prerequisite and is
+            // vacuously eligible. That is the same race the XOR fix closed, reopened on the new
+            // path: a branch the workflow decided against, claimed and executed irreversibly in the
+            // window before it was marked.
+            const eligible = ComputeEligibleTasks(graph.nodes, graph.edges, graph.handledFailureIDs)
+                .filter((n) =>
+                    !graph.holdTaskIDs.has(n.id) &&
+                    !graph.skipSeedTaskIDs.has(n.id) &&
+                    !graph.unreachableTaskIDs.has(n.id));
             for (const node of eligible) {
                 const entity = graph.entityById.get(node.id);
                 if (!entity) continue;
@@ -1113,10 +1131,13 @@ export class TaskGraphDispatcher implements IShutdownable {
      * submitted it, so nothing is suspended — the task sits Pending, every other branch keeps
      * running, and answering settles the task. That column staying null is meaningful, not missing.
      */
-    private async raiseHumanRequest(task: MJTaskEntity, provider: IMetadataProvider): Promise<boolean> {
+    private async raiseHumanRequest(
+        task: MJTaskEntity,
+        provider: IMetadataProvider,
+    ): Promise<'raised' | 'permanent-failure' | 'transient-failure'> {
         try {
             const existing = await this.findOpenRequest(provider, task.ID);
-            if (existing) return true;   // already waiting on someone
+            if (existing) return 'raised';   // already waiting on someone
 
             const request = await provider.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests', this.contextUser,
@@ -1128,11 +1149,14 @@ export class TaskGraphDispatcher implements IShutdownable {
             // owns the workflow: the graph's own agent, which is who is asking.
             const owningAgentID = await this.owningAgentOf(provider, task);
             if (!owningAgentID) {
+                // PERMANENT: a graph with no owning agent will not acquire one by being asked
+                // again. Graphs submitted before the provenance stamp landed are all in this state.
                 LogError(
                     `[TaskGraphDispatcher] Task ${task.ID} needs a person, but its workflow has no ` +
-                    `agent to ask on behalf of, so no request could be raised.`,
+                    `agent to ask on behalf of, so no request can be raised. The task stays Pending ` +
+                    `and visible in the Tasks UI; it will not be retried.`,
                 );
-                return false;
+                return 'permanent-failure';
             }
             request.AgentID = owningAgentID;
             request.RequestForUserID = task.UserID;
@@ -1147,14 +1171,15 @@ export class TaskGraphDispatcher implements IShutdownable {
                     `[TaskGraphDispatcher] Could not raise a request for task ${task.ID}: ` +
                     `${request.LatestResult?.CompleteMessage ?? 'unknown error'}`,
                 );
-                return false;
+                // A failed SAVE may be transient (deadlock, contention), so this one earns a retry.
+                return 'transient-failure';
             }
-            return true;
+            return 'raised';
         } catch (e) {
             // Never fatal. The task remains Pending and visible; a missing request is recoverable,
             // whereas throwing here would abort the whole dispatch pass for every other branch.
             LogError(`[TaskGraphDispatcher] Could not raise a request for task ${task.ID}: ${e instanceof Error ? e.message : String(e)}`);
-            return false;
+            return 'transient-failure';
         }
     }
 
@@ -1671,11 +1696,36 @@ export class TaskGraphDispatcher implements IShutdownable {
         // A prompt body has no params of its own — it receives the payload (with the loop bindings
         // merged in) through the placeholder, so an empty mapping is correct rather than missing.
         const bodyMapping = (op.action?.params ?? {}) as Record<string, unknown>;
+
+        // Where this step sits in its graph, resolved ONCE rather than per iteration. A loop body is
+        // dispatched exactly like a one-shot step and needs the same two things: the run that
+        // submitted the graph (so a spawned run gets a ParentRunID and is visible to the tree and to
+        // cost), and the continuation depth (so the recursion cap still applies). Omitting them made
+        // loop bodies second-class in every dimension — and reopened the unbounded-recursion hole
+        // THROUGH loops, since each spawned run restarted the chain at zero.
+        const graphContext = await this.graphContext(provider, task);
+
+        // THE LOOP'S PAYLOAD ACCUMULATES. Each iteration's output merges in, and the next iteration
+        // — and the While condition — sees it. Without this the condition closure re-read the
+        // payload as it was when the loop STARTED, so a `while payload.brandOK !== true` could never
+        // become false: the loop burned every iteration re-examining the original input and always
+        // took the give-up branch, making the other branch unreachable. The loop ran, reported
+        // success, and its result was predetermined.
+        let livePayload: Record<string, unknown> = { ...payload };
+
         const invokeBody: LoopBodyInvoker = async ({ Bindings }) => {
             // Bindings go INTO the payload rather than beside it, so an authored mapping reaches the
             // current item the same way it reaches anything else: `payload.<itemVariable>`.
-            const iterationPayload = { ...payload, ...Bindings };
+            const iterationPayload = { ...livePayload, ...Bindings };
             const resolved = ResolveMappedInput(bodyMapping, { payload: iterationPayload }) as Record<string, unknown>;
+
+            /** Folds an iteration's output into the running payload the next pass will see. */
+            const absorb = <T extends { Success: boolean; Output?: unknown }>(outcome: T): T => {
+                if (outcome.Output && typeof outcome.Output === 'object' && !Array.isArray(outcome.Output)) {
+                    livePayload = deepMergePayload(livePayload, outcome.Output as Record<string, unknown>);
+                }
+                return outcome;
+            };
 
             // A prompt body is checked FIRST because it is the only one whose id lives in its own
             // column: a loop repeating a prompt has PromptID set and both ActionID and AgentID null,
@@ -1684,7 +1734,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 if (!this.promptRunner) {
                     return { Success: false, ErrorMessage: 'No prompt runner is loaded on this host.' };
                 }
-                return this.promptRunner.RunPromptForTask({
+                return absorb(await this.promptRunner.RunPromptForTask({
                     TaskID: task.ID,
                     PromptID: task.PromptID,
                     // The ITERATION payload, not the mapped params. An action body declares its
@@ -1704,26 +1754,33 @@ export class TaskGraphDispatcher implements IShutdownable {
                     TemplateParameters: { ...stringifyBindings(Bindings), ...op.prompt?.templateParameters },
                     Provider: provider,
                     ContextUser: this.contextUser,
-                });
+                }));
             }
 
-            return task.ActionID
-                ? this.actionRunner!.RunActionForTask({
+            if (task.ActionID) {
+                return absorb(await this.actionRunner!.RunActionForTask({
                     TaskID: task.ID,
                     ActionID: task.ActionID,
                     InputPayload: resolved,
                     DependencyOutputs: dependencyOutputs,
                     Provider: provider,
                     ContextUser: this.contextUser,
-                })
-                : this.agentRunner.RunAgentForTask({
-                    TaskID: task.ID,
-                    AgentID: task.AgentID!,
-                    InputPayload: resolved,
-                    DependencyOutputs: dependencyOutputs,
-                    Provider: provider,
-                    ContextUser: this.contextUser,
-                });
+                }));
+            }
+
+            return absorb(await this.agentRunner.RunAgentForTask({
+                TaskID: task.ID,
+                AgentID: task.AgentID!,
+                // The ITERATION payload when the body declares no inputs of its own. A sub-agent
+                // body has no `params`, so the mapped result is `{}` — every iteration was handing
+                // the agent nothing and asking it to work from that.
+                InputPayload: Object.keys(resolved).length > 0 ? resolved : iterationPayload,
+                DependencyOutputs: dependencyOutputs,
+                ContinuationDepth: graphContext.Depth,
+                SubmittingAgentRunID: graphContext.SubmittingAgentRunID,
+                Provider: provider,
+                ContextUser: this.contextUser,
+            }));
         };
 
         const outcome = task.StepType === 'ForEach'
@@ -1738,7 +1795,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     // so the same expression that routes an edge failed here with
                     // "payload is not defined". The spread stays for conditions already written
                     // against it.
-                    { ...payload, payload, iteration },
+                    { ...livePayload, payload: livePayload, iteration },
                 ),
                 invokeBody,
             );
@@ -1747,7 +1804,12 @@ export class TaskGraphDispatcher implements IShutdownable {
             Success: outcome.Success,
             AgentRunID: null,
             ErrorMessage: outcome.ErrorMessage,
-            Output: this.applyStepOutputMapping(task, payload, outcome.Output, op.action?.outputMapping ?? config?.outputMapping),
+            // The ACCUMULATED payload — everything the iterations established — not the one the
+            // loop started with, which would discard the loop's whole effect on the workflow.
+            Output: this.applyStepOutputMapping(
+                task, livePayload, outcome.Output,
+                op.action?.outputMapping ?? op.prompt?.outputMapping ?? config?.outputMapping,
+            ),
         };
     }
 

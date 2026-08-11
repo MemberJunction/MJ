@@ -31,6 +31,11 @@ overrides:
   '@codemirror/commands': 6.10.4
   jsdom: 26.1.0
 
+patchedDependencies:
+  type-graphql@2.0.0-beta.3:
+    hash: 4d3544a1e64ad80b22832bb91021718c73db40ae6c6ac140b86d22cacaab8c67
+    path: patches/type-graphql@2.0.0-beta.3.patch
+
 importers:
 
   .:
@@ -12254,7 +12259,7 @@ importers:
         version: 7.8.2
       type-graphql:
         specifier: 2.0.0-beta.3
-        version: 2.0.0-beta.3(class-validator@0.14.3)(graphql-scalars@1.25.0(graphql@16.12.0))(graphql@16.12.0)
+        version: 2.0.0-beta.3(patch_hash=4d3544a1e64ad80b22832bb91021718c73db40ae6c6ac140b86d22cacaab8c67)(class-validator@0.14.3)(graphql-scalars@1.25.0(graphql@16.12.0))(graphql@16.12.0)
       typedi:
         specifier: ^0.10.0
         version: 0.10.0
@@ -47975,7 +47980,7 @@ snapshots:
 
   type-fest@4.41.0: {}
 
-  type-graphql@2.0.0-beta.3(class-validator@0.14.3)(graphql-scalars@1.25.0(graphql@16.12.0))(graphql@16.12.0):
+  type-graphql@2.0.0-beta.3(patch_hash=4d3544a1e64ad80b22832bb91021718c73db40ae6c6ac140b86d22cacaab8c67)(class-validator@0.14.3)(graphql-scalars@1.25.0(graphql@16.12.0))(graphql@16.12.0):
     dependencies:
       '@types/node': 24.10.11
       '@types/semver': 7.7.1

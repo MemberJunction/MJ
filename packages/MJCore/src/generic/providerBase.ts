@@ -3604,6 +3604,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param contextUser - The user context for permissions
      */
     protected async TransformSimpleObjectToEntityObject(param: RunViewParams, result: RunViewResult, contextUser?: UserInfo) {
+        // Mutually exclusive with the entity branch below: entity objects get real types from
+        // BaseEntity's Get/Set conversion, so normalization applies only to non-entity results.
+        this.NormalizeSimpleRowTypes(param, result);
+
         if (param.ResultType === 'entity_object' && result && result.Success && result.Results?.length > 0) {
             result.Results = await TransformSimpleObjectToEntityObject(this, param.EntityName, result.Results, contextUser);
 
@@ -3620,6 +3624,180 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 );
             }
         }
+    }
+
+    /**
+     * Normalizes non-entity (`'simple'`) result rows so `Date` and numeric columns hold real
+     * `Date`s and `number`s on EVERY tier, matching what the generated entity types declare.
+     *
+     * ## Why this is unconditional
+     *
+     * Before this existed, the value a simple read returned for a `DATETIME` column depended on
+     * where the code happened to run: a fresh server-side query yields real `Date` objects (the
+     * driver parses them and `AdjustDatetimeFields` timezone-adjusts them), a server-side Redis
+     * cache hit yields ISO strings (`JSON.parse` with no reviver), and a browser client over
+     * GraphQL yields ISO strings (rows are `JSON.stringify`'d on the wire). Same call, three
+     * shapes. MJ's contract is a unified programming interface on both sides of the wire, so the
+     * one representation the platform's own generated types declare — `Date` — is enforced here,
+     * at the one choke point every provider's RunView pipeline flows through.
+     *
+     * ## What it does NOT do
+     *
+     * It makes date and number VALUES match the generated types; it does not make a caller's `T`
+     * honest in general. A `Status` column typed as a closed union still holds whatever string the
+     * database held, and plain rows never have entity methods. If you need the type to be fully
+     * true, use `ResultType: 'entity_object'`.
+     *
+     * ## Cost and cache safety
+     *
+     * The field-key lists are computed once per view from `EntityInfo`, not per cell. Rows already
+     * in the right shape — the common server-side case, where the driver returned `Date`s — are
+     * detected and the ORIGINAL array is kept untouched: same array identity, same row objects,
+     * zero copying. A row is shallow-copied only when a cell actually converts, and that copy is
+     * load-bearing: on a cache hit the rows handed back can be the cache's OWN objects (the
+     * in-memory server store holds them by reference), so converting in place would write `Date`s
+     * into the cache entry itself and corrupt it for serialization and for later readers.
+     *
+     * Per-cell rules:
+     * - `Date` instances pass through untouched, so the pass is idempotent on every path.
+     * - `NULL`/`undefined` cells are left alone rather than becoming epoch-1970 dates.
+     * - An unparseable value is left as-is rather than written as `Invalid Date`, which renders
+     *   as that literal string and destroys the evidence of what the database actually held.
+     * - An integer string outside `Number.MAX_SAFE_INTEGER` stays a string: the PostgreSQL
+     *   provider deliberately returns unsafe-range BIGINTs as strings to avoid precision loss,
+     *   and `Number('9007199254740993')` "succeeds" while silently corrupting the value.
+     *
+     * View-based runs (`ViewID`/`ViewName` with neither `EntityName` nor a loaded `ViewEntity`)
+     * skip normalization: resolving the entity would take an async User Views read this late in
+     * the pipeline. Pass `EntityName` alongside the view identifier to get normalized rows.
+     */
+    protected NormalizeSimpleRowTypes(param: RunViewParams, result: RunViewResult): void {
+        if (param.ResultType === 'entity_object' || param.ResultType === 'count_only') {
+            return;
+        }
+        if (!result?.Success || !result.Results?.length) {
+            return;
+        }
+
+        const entity = this.resolveEntityForNormalization(param);
+        if (!entity) {
+            // An unresolvable entity name is already a failed query elsewhere; normalization is
+            // not the place to raise it, and guessing field types would be worse than raw rows.
+            return;
+        }
+
+        // Once per view, not once per cell. Each entry lists the row keys one field can appear
+        // under: the batch transport keys rows by Name, the singular transport adds CodeName.
+        const dateKeys = this.normalizationKeys(entity, EntityFieldTSType.Date);
+        const numberKeys = this.normalizationKeys(entity, EntityFieldTSType.Number);
+        if (!dateKeys.length && !numberKeys.length) {
+            return;
+        }
+
+        let anyRowChanged = false;
+        const normalized = (result.Results as Array<Record<string, unknown>>).map(row => {
+            const converted = this.normalizeSimpleRow(row, dateKeys, numberKeys);
+            if (converted) {
+                anyRowChanged = true;
+                return converted;
+            }
+            return row;
+        });
+        if (anyRowChanged) {
+            result.Results = normalized;
+        }
+    }
+
+    /**
+     * Resolves the {@link EntityInfo} normalization should read field types from, using only
+     * synchronously available information on the params.
+     */
+    private resolveEntityForNormalization(param: RunViewParams): EntityInfo | undefined {
+        if (param.EntityName) {
+            return this.EntityByName(param.EntityName);
+        }
+        if (param.ViewEntity) {
+            // Weak typing mirrors RunView.GetEntityNameFromRunViewParams: MJCore cannot import
+            // the core-entities UserView subclass without creating a circular dependency.
+            const entityID: string | null = param.ViewEntity.Get('EntityID');
+            return entityID ? this.EntityByID(entityID) : undefined;
+        }
+        return undefined;
+    }
+
+    /**
+     * The row keys each field of the given TSType can appear under, one entry per field.
+     */
+    private normalizationKeys(entity: EntityInfo, tsType: EntityFieldTSType): string[][] {
+        return entity.Fields
+            .filter(f => f.TSType === tsType)
+            .map(f => (f.CodeName && f.CodeName !== f.Name ? [f.Name, f.CodeName] : [f.Name]));
+    }
+
+    /**
+     * Returns a converted shallow copy of the row, or null when no cell needed converting —
+     * so untouched rows keep their identity and cached rows are never written to.
+     */
+    private normalizeSimpleRow(
+        row: Record<string, unknown>,
+        dateKeys: string[][],
+        numberKeys: string[][],
+    ): Record<string, unknown> | null {
+        if (!row || typeof row !== 'object') {
+            return null;
+        }
+        let copy: Record<string, unknown> | null = null;
+        for (const keys of dateKeys) {
+            for (const key of keys) {
+                const date = this.parseDateCell((copy ?? row)[key]);
+                if (date) {
+                    copy = copy ?? { ...row };
+                    copy[key] = date;
+                }
+            }
+        }
+        for (const keys of numberKeys) {
+            for (const key of keys) {
+                const num = this.parseNumericCell((copy ?? row)[key]);
+                if (num !== null) {
+                    copy = copy ?? { ...row };
+                    copy[key] = num;
+                }
+            }
+        }
+        return copy;
+    }
+
+    /**
+     * A real Date for a convertible cell, or null to leave the cell untouched. Existing Date
+     * instances, NULLs, and unparseable values all return null — see the per-cell rules on
+     * {@link NormalizeSimpleRowTypes}.
+     */
+    private parseDateCell(value: unknown): Date | null {
+        if (typeof value !== 'string' && typeof value !== 'number') {
+            return null;
+        }
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    /**
+     * A number for a convertible string cell, or null to leave the cell untouched.
+     */
+    private parseNumericCell(value: unknown): number | null {
+        if (typeof value !== 'string' || value.trim() === '') {
+            return null;
+        }
+        const num = Number(value);
+        if (!Number.isFinite(num)) {
+            return null;
+        }
+        // An integer string beyond the safe range is a deliberate driver choice (PostgreSQL
+        // returns unsafe BIGINTs as strings): converting would silently corrupt the value.
+        if (Number.isInteger(num) && !Number.isSafeInteger(num)) {
+            return null;
+        }
+        return num;
     }
 
     /**
