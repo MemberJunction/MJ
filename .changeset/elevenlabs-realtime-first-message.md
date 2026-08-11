@@ -1,7 +1,7 @@
 ---
-"@memberjunction/ai-elevenlabs": minor
-"@memberjunction/ai-assemblyai": minor
-"@memberjunction/ai-agents": minor
+"@memberjunction/ai-elevenlabs": patch
+"@memberjunction/ai-assemblyai": patch
+"@memberjunction/ai-agents": patch
 ---
 
 Realtime voice agents can now **speak first**.
