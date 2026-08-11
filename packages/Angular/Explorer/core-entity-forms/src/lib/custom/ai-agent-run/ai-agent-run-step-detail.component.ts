@@ -1,7 +1,8 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
 import { TimelineItem } from './ai-agent-run-timeline.component';
 import { MJAIAgentRunStepEntity, MJAIAgentRunStepEntity_AgentSkillInvocation } from '@memberjunction/core-entities';
-import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
+import { ResolveTaskGraphPositions, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
+import type { FlowPosition } from '@memberjunction/ng-flow-editor';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 
 interface ScratchpadSnapshotView {
@@ -293,6 +294,21 @@ export class AIAgentRunStepDetailComponent {
       }
     }
     return null;
+  }
+
+  /**
+   * Where the recorded graph's nodes go on the canvas.
+   *
+   * Without this the editor receives a spec and no geometry, so every node projects to the origin —
+   * all of them, in one place. The canvas then rescues it with a deferred layout pass whose
+   * zoom-to-fit measures a bounding box one node wide, and a four-step workflow renders as a single
+   * enormous box at 265%. The positions exist the whole time: a workflow compiled from a Flow agent
+   * carries the arrangement its author dragged into place, on every node.
+   */
+  get stepTaskGraphPositions(): Map<string, FlowPosition> | null {
+    const spec = this.stepTaskGraph;
+    if (!spec) return null;
+    return ResolveTaskGraphPositions(spec);
   }
 
   /** True when the recorded graph was constant-folded rather than dispatched (D9). */

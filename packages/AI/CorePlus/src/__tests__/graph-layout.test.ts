@@ -8,7 +8,7 @@
  * re-projects on every status change), or a cycle in hand-built input hanging the renderer.
  */
 import { describe, it, expect } from 'vitest';
-import { GraphLayoutBounds, LayoutGraphNodes, LayoutTaskGraph, RankGraphNodes } from '../task-graph/graph-layout';
+import { GraphLayoutBounds, LayoutGraphNodes, LayoutTaskGraph, RankGraphNodes, ResolveTaskGraphPositions } from '../task-graph/graph-layout';
 import { TaskNode, type TaskGraphSpec, type TaskGraphSpecNode } from '../task-graph/task-graph-spec';
 
 const node = (tempId: string, dependsOn: string[] = []): TaskGraphSpecNode =>
@@ -226,5 +226,54 @@ describe('RankGraphNodes', () => {
 
     it('returns nothing for no nodes', () => {
         expect(RankGraphNodes([], []).size).toBe(0);
+    });
+});
+
+/**
+ * Position resolution for a STORED graph.
+ *
+ * A workflow compiled from a Flow agent carries the arrangement its author dragged into place, on
+ * every node. `LayoutTaskGraph` ignores that and lays the graph out from scratch — right for a graph
+ * an agent emitted, wrong for one a person drew. A viewer with no positions at all leaves every node
+ * at the origin, and a canvas asked to fit a graph whose nodes are all in one place zooms until that
+ * point fills the viewport.
+ */
+describe('ResolveTaskGraphPositions', () => {
+    // Reuses the file's own node/graph builders; `layout` is what a Flow agent's compiler stamps on.
+    const spec = graph;
+    const task = (tempId: string, layout?: { x: number; y: number }): TaskGraphSpecNode =>
+        layout ? { ...node(tempId), layout } : node(tempId);
+
+    it('keeps the arrangement its author drew, exactly', () => {
+        const positions = ResolveTaskGraphPositions(spec([
+            task('a', { x: -1200, y: -240 }),
+            task('b', { x: -860, y: 220 }),
+        ]));
+        expect(positions.get('a')).toEqual({ X: -1200, Y: -240 });
+        expect(positions.get('b')).toEqual({ X: -860, Y: 220 });
+    });
+
+    it('computes positions for a graph nobody arranged', () => {
+        const positions = ResolveTaskGraphPositions(spec([task('a'), task('b')]));
+        expect(positions.size).toBe(2);
+        // Distinct, so the canvas is not asked to fit a single point.
+        expect(new Set([...positions.values()].map((p) => `${p.X},${p.Y}`)).size).toBe(2);
+    });
+
+    it('mixes the two per node, so a partly-arranged graph keeps what it has', () => {
+        const positions = ResolveTaskGraphPositions(spec([task('a', { x: 42, y: 7 }), task('b')]));
+        expect(positions.get('a')).toEqual({ X: 42, Y: 7 });
+        expect(positions.get('b')).toBeDefined();
+        expect(positions.get('b')).not.toEqual({ X: 42, Y: 7 });
+    });
+
+    it('gives every node a position, so none is left at the origin by default', () => {
+        const positions = ResolveTaskGraphPositions(spec([task('a'), task('b'), task('c', { x: 1, y: 2 })]));
+        expect(positions.size).toBe(3);
+    });
+
+    it('returns nothing for an empty or absent spec', () => {
+        expect(ResolveTaskGraphPositions(null).size).toBe(0);
+        expect(ResolveTaskGraphPositions(spec([])).size).toBe(0);
     });
 });
